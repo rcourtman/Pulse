@@ -50,16 +50,10 @@ func TestAISettingsHandler_SettersAndGetters(t *testing.T) {
 		t.Fatalf("GetTriggerManager returned unexpected manager")
 	}
 
-	coordinator := ai.NewIncidentCoordinator(ai.IncidentCoordinatorConfig{})
-	handler.SetIncidentCoordinator(coordinator)
-	if handler.GetIncidentCoordinator() != coordinator {
-		t.Fatalf("GetIncidentCoordinator returned unexpected coordinator")
-	}
-
-	recorder := &metrics.IncidentRecorder{}
-	handler.SetIncidentRecorder(recorder)
-	if handler.GetIncidentRecorder() != recorder {
-		t.Fatalf("GetIncidentRecorder returned unexpected recorder")
+	recorder := &metrics.IncidentArchive{}
+	handler.SetIncidentArchive(recorder)
+	if handler.GetIncidentArchive() != recorder {
+		t.Fatalf("GetIncidentArchive returned unexpected recorder")
 	}
 
 	handler.WireOrchestratorAfterChatStart()
@@ -82,15 +76,19 @@ func TestAISettingsHandler_IntelligenceServicesAreOrgScoped(t *testing.T) {
 		t.Fatalf("expected nil correlator for unrelated org, got %#v", got)
 	}
 
-	defaultRecorder := &metrics.IncidentRecorder{}
-	tenantRecorder := &metrics.IncidentRecorder{}
-	handler.SetIncidentRecorderForOrg("default", defaultRecorder)
-	handler.SetIncidentRecorderForOrg("acme", tenantRecorder)
-	if got := handler.GetIncidentRecorder(); got != defaultRecorder {
-		t.Fatalf("expected default recorder, got %#v", got)
+	defaultArchive := &metrics.IncidentArchive{}
+	tenantArchive := &metrics.IncidentArchive{}
+	handler.SetIncidentArchiveForOrg("default", defaultArchive)
+	handler.SetIncidentArchiveForOrg("acme", tenantArchive)
+	if got := handler.GetIncidentArchive(); got != defaultArchive {
+		t.Fatalf("expected default archive, got %#v", got)
 	}
-	if got := handler.GetIncidentRecorderForOrg("acme"); got != tenantRecorder {
-		t.Fatalf("expected tenant recorder, got %#v", got)
+	if got := handler.GetIncidentArchiveForOrg("acme"); got != tenantArchive {
+		t.Fatalf("expected tenant archive, got %#v", got)
+	}
+
+	if got := handler.GetIncidentArchiveForOrg("unrelated"); got != nil {
+		t.Fatalf("unrelated org received an archive: %#v", got)
 	}
 
 	defaultLearningStore := learning.NewLearningStore(learning.LearningStoreConfig{})
@@ -201,13 +199,12 @@ func TestAISettingsHandler_IntelligenceServicesAreOrgScoped(t *testing.T) {
 
 func TestAISettingsHandler_RemoveTenantService_TrimsOrgID(t *testing.T) {
 	handler := &AISettingsHandler{
-		aiServices:           map[string]*ai.Service{"acme": nil},
-		investigationStores:  map[string]aicontracts.InvestigationStore{"acme": nil},
-		proxmoxCorrelators:   map[string]*proxmox.EventCorrelator{"acme": nil},
-		alertBridges:         map[string]*unified.AlertBridge{"acme": nil},
-		triggerManagers:      map[string]*ai.TriggerManager{"acme": nil},
-		incidentCoordinators: map[string]*ai.IncidentCoordinator{"acme": nil},
-		incidentRecorders:    map[string]*metrics.IncidentRecorder{"acme": nil},
+		aiServices:          map[string]*ai.Service{"acme": nil},
+		investigationStores: map[string]aicontracts.InvestigationStore{"acme": nil},
+		proxmoxCorrelators:  map[string]*proxmox.EventCorrelator{"acme": nil},
+		alertBridges:        map[string]*unified.AlertBridge{"acme": nil},
+		triggerManagers:     map[string]*ai.TriggerManager{"acme": nil},
+		incidentArchives:    map[string]*metrics.IncidentArchive{"acme": nil},
 	}
 
 	handler.RemoveTenantService("  acme  ")
@@ -227,10 +224,7 @@ func TestAISettingsHandler_RemoveTenantService_TrimsOrgID(t *testing.T) {
 	if _, ok := handler.triggerManagers["acme"]; ok {
 		t.Fatalf("expected trigger manager entry to be removed")
 	}
-	if _, ok := handler.incidentCoordinators["acme"]; ok {
-		t.Fatalf("expected incident coordinator entry to be removed")
-	}
-	if _, ok := handler.incidentRecorders["acme"]; ok {
+	if _, ok := handler.incidentArchives["acme"]; ok {
 		t.Fatalf("expected incident recorder entry to be removed")
 	}
 }

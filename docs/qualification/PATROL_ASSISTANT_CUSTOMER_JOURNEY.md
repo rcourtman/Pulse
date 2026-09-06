@@ -65,7 +65,7 @@ reproduction evidence, not a representative customer success rate.
 | 2. Shared evidence | Preserve canonical risk reasons and SMART counters, source/time semantics and history across tools/turns. | Regression tests preserve unknown versus zero and all canonical evidence. Real responses can inspect the same facts as the product. | Implemented and qualified for the named shared-evidence defects. Canonical disk detail, risk and cadence pass real data-path proof. Affected package and concurrency checks pass. Integrated CI later exposed remaining query and allocation regressions. The final bounded query-reuse correction passes complete selected exact-base worker comparisons and full metrics/database and focused race checks. Final landing CI passed and PRs #1928 and #1929 merged. Real-model interpretation failures remain tracked in step 5. |
 | 3. Diagnostic orchestration | Correct proposal-as-proof. Audit triage budgets, unmatched-signal evaluation, assessment completion and investigation cutoffs. | No code-written causal conclusion. No quality inferred from tool, flag or finding counts. Each retained pass has an objective reason. Safety boundaries and incomplete outcomes remain explicit. | Proposal promotion and capture inference were removed in c5d2f56dda. Commit 668af3fe6b removes investigation success-call floors, checkpoint instructions and generic call-count wrap-up rules. The detection slice removes contextless follow-up passes, flag/report-count policy and first-finding completion modes. Full chat and AI suites, focused API and conversation race tests pass. Real-model/action outcome qualification remains open. |
 | 4. Issue through verified outcome | Follow existing issue/investigation/action records into Assistant, approval, execution and independent readback. | Accepted proposal is visibly distinct from execution and verification. Rejected or unsupported actions do not become success. Uncertainty can survive an action proposal. | Existing foundation, full journey qualification pending. |
-| 5. Ground-truth qualification and landing | Extend existing qualification tooling only where necessary. Exercise healthy/unhealthy, dependency, missing-access, storage/backup and approved/rejected action cases. Inspect the final browser journey at desktop and narrow widths. | Record exact source/model/permissions, evidence, decisions, faults/misses, latency and verification. Fix in-scope failures, pass appropriate proofs and land scoped commits. | Pending. |
+| 5. Ground-truth qualification and landing | Extend existing qualification tooling only where necessary. Exercise healthy/unhealthy, dependency, missing-access, storage/backup and approved/rejected action cases. Inspect the final browser journey at desktop and narrow widths. | Record exact source/model/permissions, evidence, decisions, faults/misses, latency and verification. Fix in-scope failures, pass appropriate proofs and land scoped commits. | Partial. Regression, controlled browser and live collector evidence are recorded below. Real-model diagnosis, linked approval/action outcomes and installed collector qualification remain open. |
 
 Use one shared runtime and the existing qualification runner, not a second
 product intelligence engine or a new parallel lifecycle. Preserve independent
@@ -93,12 +93,13 @@ Each removal must run its focused regression and affected complete journey.
 ### Completion and external dependencies
 
 The local implementation goal remains open until required qualification is
-performed. Ordinary Assistant requests work with the current subscription route,
-but autonomous Patrol has an explicit provider-policy refusal and remains
-blocked. Do not rephrase the refused probe, bypass the readiness boundary or
-count an interactive request as an autonomous Patrol pass. A supported provider
-path is required for that qualification. Prepare other work while resolving the
-provider dependency through supported configuration.
+performed. The maintainer authorized Gemini 3.8 Flash through OpenRouter with a
+US$5 key limit and one-day expiry on 2026-09-06. That supported route passes the
+streaming readiness and initial live Watch and dependency cases recorded below.
+The earlier Claude subscription refusal belongs to the exact synthetic
+continuation request. It does not establish a blanket restriction on autonomous
+monitoring. The refused request has not been retried or rephrased. Readiness is
+not evidence that diagnosis, action execution or independent recovery succeeds.
 
 Release publication and wider product readiness are separate. Independent
 volunteered Pro environments are still required before claiming repeatable
@@ -1408,3 +1409,849 @@ correction above is a separate scoped change and requires its own landing checks
 The redesign remains open for reliable interpretation, the config-read contract,
 storage/backup, approved/rejected action outcomes and supported autonomous Patrol
 qualification. Wider customer readiness still requires independent Pro environments.
+
+### Docker measurement correction plan, 2026-09-06
+
+The next shared-source correction distinguishes absent block-I/O observations
+from measured idle zero and removes the Docker layer-size ratio from filesystem
+capacity. Counter presence uses the existing rate tracker contract. Missing
+reports must not reset the baseline or fabricate samples. Container layer sizes
+remain descriptive metadata.
+
+Persisted Docker-family disk series previously mixed invalid capacity ratios and
+unobserved I/O zeros with real measurements. New disk observations use separate
+physical series keys while public metric names remain unchanged. Retained reads
+exclude ambiguous legacy disk series without deleting or relabelling them. The
+shared app-container storage family also serves non-Docker providers, so new
+valid capacity observations must remain supported. Non-Docker series retain
+existing behavior. Explicit zero must survive every retained-read API and rollup.
+
+Browser verification is required after the final backend build. Interaction
+matrix: `/docker` at 1440x1000, 900x1000 and 390x1000, container selection,
+resource drawer open/close, current metrics, history expansion, measured idle,
+unavailable readings, and reload. Inspect actual pixels, scrolling, focus and
+Escape dismissal. `/patrol` evidence rendering must preserve absent versus zero
+in current-resource and retained-history tool results. Controlled responses may
+qualify rendering but cannot qualify diagnosis. Live read-only API observations
+must bind to the rebuilt backend. No autonomous subscription retry or paid-model
+request is authorized by this correction.
+
+Collection also carries optional presence for each I/O direction. Explicit zero
+entries survive the report JSON. For older reports without presence, only
+positive counters establish an observation, so ambiguous zeros remain unavailable
+until the agent is updated or a positive baseline exists. This does not require
+re-enrollment. Docker-host first-disk history and network-counter presence are
+adjacent limits outside this container block-I/O correction.
+
+The final browser matrix also covers the shared host I/O table, Docker host
+Overview and Machines table/tooltip at the same three widths. Partial read/write
+observations must show a missing marker for the absent direction, retain measured
+zero, and remain excluded from sums used for sorting and comparison. Exercise
+column selection, hover/focus, tooltip dismissal and scrolling where present.
+
+### Docker correction qualification and scope
+
+The implementation carries per-direction presence from collection and report
+JSON into the existing rate tracker, canonical resource metrics, persisted
+history and resource-to-browser conversion. REST resource adaptation also
+preserves optional rates. Shared rate formatting keeps missing values distinct
+from zero in Machines and Docker host details. Incomplete rates do not become
+complete throughput totals for sorting or comparison. A browser-discovered
+first-user column migration bug is corrected in the shared preference hook, so
+showing Disk I/O survives the first reload.
+
+Legacy workload conversion in `frontend-modern/src/hooks/useWorkloads.ts` still
+uses numeric direction fields with grouped availability. Its direction-level
+modernization remains a separate consumer follow-up. Docker-host first-disk
+history and network presence are also outside this container measurement slice.
+The correction must not be represented as complete coverage of all metrics or
+all monitoring surfaces. No new model competence or autonomous action result is
+claimed.
+
+Affected Go package checks and targeted race checks ran on pulse-dev with
+Go1.26.8. The changed websocket assertion now expects observed read zero with
+absent write omitted. Targeted frontend suites and type checking cover optional
+rates, REST conversion, sorting, formatting and column persistence. Ten paired
+read-benchmark rounds used the unchanged parent store via Go overlay. The
+canonical >10%, p<0.05 regression gate passed, with +0.82% timing geomean in this
+scoped comparison. This is not a fleet-load or full-product performance claim.
+
+The Pro backend was cross-built on pulse-dev from the changed source and
+installed into the existing local dev runtime. Binary SHA256:
+`59f05f954ff8080bd3e8f3054b2b059281c49172ee771b2e454c255241158a4a`.
+No production agent was replaced. Older agents remain compatible and treat
+ambiguous zero counters conservatively.
+
+Private receipts: `/Volumes/Development/pulse/tmp/patrol-docker-observed-metrics/`.
+Worker logs: `/opt/pulse-release-worker/patrol-docker-observed-proof/`.
+PR1934's preceding identity correction merged at
+`6b0abc3bee9ffa81f6ab298b5b67ee11369688a0` with all checks passing. The current
+measurement slice passed final-source Playwright inspection on `/docker`,
+`/standalone/machines` and `/patrol` at 1440x1000, 900x1000 and 390x1000.
+Live history, controlled absence/idle/loading/error, partial host rates, column
+persistence, nested picker dismissal, tooltip focus, and expanded Assistant
+evidence were exercised. The source-bound receipt is
+`frontend-modern/browser-verification.json`. The unused shared host table card
+has type and selector coverage, not an active-route browser claim. Controlled
+responses qualify rendering only. Landing checks remain separate from the
+unperformed diagnosis, approved/rejected action and recovery qualifications.
+
+### Configuration-read correction plan
+
+A successful canonical container get followed by a false config `not found`
+result is a source contract defect. Native configuration reads must use current
+canonical inventory for identity and provider capability. Optional session
+resolution preserves continuity for later actions, not proof of existence.
+Explicit query restrictions must be checked before registering or refreshing a
+resource. Unsupported adapters, missing configuration providers, unavailable
+placement and empty provider responses remain distinct from missing inventory.
+No action validation or native log-read authority changes in this slice.
+
+Regression matrix: TrueNAS config with absent, empty and existing session
+context, canonical identity across aliases, explicit query denial without a
+provider call, Docker unsupported capability, genuinely missing inventory,
+unavailable placement, provider failure and nil provider response. Reproduce
+the failing cases before changing runtime code. Run affected Go tools checks
+and focused race coverage on pulse-dev.
+
+Browser matrix after the final build: `/patrol` Assistant tool result details
+at 1440x1000, 900x1000 and 390x1000, available configuration, unsupported
+capability, true missing resource and denied/provider-failed results. Exercise
+open/closed details, hover and keyboard focus, Enter/Space, deepest output
+scrolling, Escape, and persisted/reloaded evidence. Use captured actual tool
+results to qualify rendering without claiming model diagnosis or native
+provider integration. No autonomous subscription retry or separately billed
+provider request is part of this correction.
+
+### Configuration-read correction qualification
+
+The baseline reproduced absent/empty session failures, stale session placement
+and false not-found results after successful canonical gets. The corrected
+read path uses canonical resource identity and current provider placement. It
+checks explicit query restrictions before registration and preserves an existing
+query-only session's action limits. Unsupported configuration, unavailable
+provider/placement and nil provider responses carry explicit reasons and the
+tool error bit. Unavailable inventory and missing read state also remain failures
+rather than evidence of resource absence. Actual inventory absence remains the
+existing not-found lookup result.
+
+Fourteen focused contract cases pass with strict resolution enabled. The
+existing native-config regression, full tools package and focused race proof
+passed on pulse-dev with Go1.26.8. The final-source Pro binary SHA256 is
+`552699cdf2e61a4ca1cea2ac5ef4e065735cbd1dbca01665456e184bd4fc3533`.
+It is installed only in the existing local dev stack. No production agent or
+provider configuration was changed.
+
+Playwright passed on `/patrol` at 1440x1000, 900x1000 and 390x1000. Eight actual
+tool results were replayed and inspected, including successful, unavailable,
+missing, denied and failed reads. Expanded inputs/outputs, keyboard toggles,
+scrolling, Escape, reload and controlled session restoration preserve exact
+evidence and error state. Controlled session responses prove rendering and
+reload behavior, not server persistence or a new model/native-provider result.
+The source-bound browser receipt records those limits. Private artifacts are
+under `/Volumes/Development/pulse/tmp/patrol-config-read-contract/` and worker
+logs under `/opt/pulse-release-worker/patrol-config-read-proof/`.
+
+PR1935's Docker correction required two legacy partial-total test expectations
+to be updated in `0fcb2ee147354de770dfc4b0b9672d8c2c9dceb2`. The focused 55-test
+file and scoped hook passed. Its latest CI has no failures and remains pending
+completion. The configuration correction still requires its own landing checks.
+Real-model retest, temporal/storage interpretation, approved and rejected
+action outcomes and independent recovery proof remain open. Autonomous
+subscription refusal and separately billed provider approval boundaries remain
+unchanged.
+
+
+### Corrected storage evidence, ordinary Assistant retest
+
+The Docker observation and canonical configuration corrections are pushed to
+PR #1935 at `355ac1f0a481d6dbc9a7ff3977bced0956711979`. Their exact staged
+worker pre-commit checks passed without source changes. Remote checks remain
+pending. The current configuration runtime also passed all fourteen contract
+cases, the complete tools package and focused race checks.
+
+One ordinary read-only storage assessment ran on 2026-09-06 from
+12:27:05.857Z to 12:30:03.726Z, an HTTP window of 177.869s. It used the existing
+`claude-subscription:claude-opus-5` route, explicit `autonomous_mode=false`,
+read-only control and thirteen successful tool reads. No infrastructure change,
+paid-model request or autonomous readiness retry occurred. This is a single
+assessment, not a success-rate or latency estimate.
+
+The answer identified the backup datastore at 90.6% utilisation and its active
+capacity warning affecting seven workloads. It used the corrected container I/O
+history, separated cumulative device counters from rates, acknowledged missing
+container filesystem usage, and retained the reason for missing older history
+as unknown. It did not attribute older host I/O peaks to the container whose
+returned I/O window starts later. These are useful observations.
+
+The complete diagnosis still does not qualify. Its opening assurance that the
+container is not short of space contradicts the later acknowledgement that
+container filesystem usage is unavailable. It treats high retained host rates
+as bucket/counter artifacts without establishing that mechanism. It includes a
+host CPU maximum timestamped 21:00 the previous evening in a 03:00-04:00 window.
+The suggested retention explanation is not established by capacity alone, and
+available PBS job reads were not performed. Its rough growth extrapolation uses
+retained extrema, not a measured first-to-last slope, and must retain that limit.
+Corrected observations have not established reliable interpretation.
+
+The run also highlights a tool-context distinction to review: Docker-host
+`agent_connected` describes the command connection, while telemetry may still
+arrive through other collection paths. The model treated current telemetry and
+that false connection flag as an unresolved inconsistency. Its storage-pools
+request supplied `host`, although the tool schema only advertises that filter
+for RAID and Ceph detail. That call returned all pools. Neither observation
+justifies fabricating resource absence or collection downtime.
+
+Playwright exercised `/patrol` at 1440x1000 and 390x1000, the actual answer,
+all thirteen expanded tool records, keyboard activation, deepest output
+scrolling, Escape, reload and the persisted session. Every displayed input and
+output matches the persisted tool records. Pixel review includes the answer,
+evidence and the mobile table scrolled to its rightmost state. The table's
+400-pixel content is reachable inside its 309-pixel horizontal viewport.
+The artificial selected-route warning comes from blocked non-GET route checks,
+so this does not qualify the unmodified provider-readiness UI.
+
+The runtime binary SHA256 stayed
+`552699cdf2e61a4ca1cea2ac5ef4e065735cbd1dbca01665456e184bd4fc3533`
+through the request and browser pass. Private request, source, binary, tool,
+persistence, evaluation and pixel receipts are under workspace-relative
+`tmp/patrol-storage-assistant-check/`. No native config action was requested,
+so this assessment does not qualify model use of that corrected action.
+Storage-fault ground truth, reliable diagnosis, approved/rejected actions and
+independent recovery remain open. The supported autonomous provider dependency
+and wider independent-Pro-environment gate remain unchanged.
+
+
+### Command connection evidence correction plan
+
+Live command connectivity and retained monitoring observations are independent
+facts. The shared tool contract will name command-agent connections explicitly,
+including parent-node connections, without changing routing or execution policy.
+Topology built without a command-connection snapshot must omit connection flags,
+execution hints and connected counts rather than manufacture false/zero values.
+An observed empty snapshot still reports disconnected/zero. Assistant inventory
+context must preserve the same observation boundary. Existing permission,
+approval and invocation checks remain authoritative.
+
+Regression matrix: current Docker inventory and metrics with disconnected and
+connected command transport, read-only control with a connected agent, parent
+node versus guest connection, topology without a connection observation versus
+an observed empty set, and Assistant's seeded inventory. Run affected tools/chat
+packages and focused race proof on pulse-dev.
+
+Browser matrix after rebuilding the local Pro backend: `/patrol` at 1440x1000,
+900x1000 and 390x1000, actual captured query results showing disconnected and
+connected command transport beside unchanged monitored workload evidence.
+Exercise tool details open/closed, keyboard focus/activation, deepest output
+scrolling, Escape, reload and persisted result presentation. Inspect pixels and
+bind receipts to the final source and binary. Controlled rendering proof does
+not qualify model interpretation, autonomous Patrol or infrastructure actions.
+
+
+### Command connection evidence qualification
+
+The original projection failed the new regression because it labelled command
+transport as generic agent connectivity and emitted connected-agent counts from
+an inventory-only seed. Canonical guest search also promoted a parent-node
+connection into a direct guest connection. The shared projection now retains
+those distinctions. Existing host aliases remain available for non-guest
+resources. No routing, approval, execution or provider policy boundary changes.
+
+Four canonical query cases pass: no command connection, connected read-only
+transport, a direct guest connection without a parent connection, and connected
+transport with control enabled. Current workload state and CPU remain available
+in every case and no command is executed. Separate checks prove that topology
+without a command snapshot omits connection and execution hints and connected
+counts, while an observed empty snapshot retains false/zero. Assistant inventory
+context inherits that same unobserved state.
+
+Final source proof on pulse-dev used Go1.26.8 and GOMAXPROCS4. The full tools
+package passed in 59.456s and chat in 6.402s. Focused race checks passed in 1.048s
+and 1.030s. The Pro runtime cross-build passed and the installed local binary
+SHA256 is `bcaf748107211ee733a6dc0f4d17220d9b4d1ce1918c25bde27cf3d10c0d6379`.
+The managed development process restarted onto that artifact and `/api/health`
+reported healthy. No production agent was replaced.
+
+Playwright exercised nine captured results at `/patrol`, 1440x1000, 900x1000
+and 390x1000. Inputs, outputs and completed states match exactly before and after
+controlled session reload. Hover, keyboard focus/activation, expansion/collapse,
+deepest output scrolling, Escape and session selection passed. Pixel inspection
+covered each distinct connection state, unchanged workload metrics and restored
+mobile results. Backend and renderer hashes remained unchanged. The artificial
+route-check warning and controlled persistence fixtures retain their earlier
+qualification limits. No model request was part of this proof.
+A read-only settings check confirms the cached `provider_refusal` still carries
+its original `2026-09-05T19:46:39Z` timestamp and `patrol_capable=false`.
+
+Private source bindings, logs, captured outputs, runtime process/health receipts
+and browser proof are at workspace-relative `tmp/patrol-command-context/`.
+The change still requires its scoped pre-commit and landing checks. The preceding
+PR #1935 head `4d302109cee0758a132ff150935630b50114cc05` has no reported failures
+but its Build and Test and Core E2E runs are pending behind live earlier runs
+on the same branch. Those workflows are not restarted or cancelled.
+
+This correction establishes the connection evidence contract, not reliable
+interpretation. Native configuration-read model use, storage-fault diagnosis,
+approved/rejected action outcomes and independent recovery remain open, as do
+the supported autonomous provider dependency and independent-environment gate.
+
+
+### Ordinary Assistant storage fault and recovery, 2026-09-06
+
+The command-connection correction passed the exact nine-file worker pre-commit
+and was pushed as `f5f440dbad18d83557104d2cf6197d8319949e44` in PR #1935.
+Required CI remains in progress. This is not a release or a completed goal.
+
+An owned DockerLab run used the checked-in storage-pressure manifest on Tower.
+Independent observations established a healthy worker with 8,347,648 free bytes,
+then a real ENOSPC fault with zero free bytes, a running/unhealthy worker and a
+healthy control. Pulse collection converged to both states before the request.
+The ordinary read-only Assistant used the configured subscription Opus 5 route.
+It was not an autonomous Patrol request and did not retry the cached refusal.
+
+The diagnosis took 114.847 seconds and ten tool calls. It identified the worker's
+unhealthy state, the control's current healthy state and a failed command-route
+log read. It did not retry that unavailable capability. However, it falsely
+ruled out resource pressure using low CPU, memory, network and disk-read values.
+Filesystem capacity was absent from its evidence and was independently full.
+This is a failed diagnosis, despite its otherwise useful uncertainty statement
+and suggested diagnostic read. No model-directed mutation occurred.
+
+After the answer, the independent oracle still found zero available bytes and
+an unhealthy worker. Removing only the owned fill file restored 8,220,672 bytes
+and healthy status. Pulse collected recovery and resolved the health alert.
+A follow-up in the same Assistant session took 91.358 seconds and five new reads.
+It correctly identified current recovery and the resolved alert, distinguished
+symptom recovery from an unknown cause and did not invent an intervention.
+It overstated continuous control health and non-impact from sparse observations.
+The recovery assessment is partial, not a complete incident explanation.
+An independent post-answer check confirmed healthy worker/control, no container restart
+and 7,639,040 free bytes. Both cleanup passes passed, with no second-pass work
+and unchanged unrelated inventory. The disposable resources are removed.
+
+Playwright exercised `/patrol` and Assistant at 1440x1000 and 390x1000, all fifteen
+retained tool input/output pairs, keyboard expansion/collapse, deepest output
+scrolling, complete answers, Escape, reload and the same retained conversation.
+Rendered inputs/outputs match persisted records. Pixel inspection covered both
+answers and the failed-access result on desktop and mobile. Runtime and source
+hashes remained unchanged across both requests, with binary
+`bcaf748107211ee733a6dc0f4d17220d9b4d1ce1918c25bde27cf3d10c0d6379`.
+The route warning was an artifact of blocking non-chat POSTs in the proof browser.
+The original autonomous refusal timestamp remained `2026-09-05T19:46:39Z`.
+Private fixtures, source bindings, observations, screenshots and assessments
+are at workspace-relative `tmp/patrol-storage-fault-case/`.
+
+### Next canonical correction: tmpfs inventory
+
+Before implementation, source and native inspection establish a collection gap:
+Docker reports the owned scratch mount in `HostConfig.Tmpfs`, while `Mounts` is
+empty. `internal/dockeragent/collect.go` copies only `Mounts`, so shared resource
+queries falsely present an empty mount inventory. Preserve these native tmpfs
+entries through the existing report mount type. Keep destination, type and
+reported options, derive read/write from those options, preserve authoritative
+existing mount records and deterministic ordering. Do not infer used/free space
+from a configured size. No enrollment, permission or production agent change is
+part of this collection correction.
+
+Proof plan: reproduce the captured tmpfs-only inspect shape through the actual
+collector, then cover existing mounts, overlapping representations, read-only
+options and absent host configuration. Run targeted/full collector checks on
+pulse-dev and verify the report through the existing shared projection. Browser
+proof after the final change must exercise mount evidence in resource details
+and Assistant tool results, desktop and mobile, including deepest expansion and
+reload. A captured-result rendering check is not installed-agent or model
+qualification. Leave those limits explicit until the new collector is exercised
+through a supported installed path.
+
+The incident lookup also needs an identity audit: the canonical container ID
+returned no incident recording while the observed health alert used its legacy
+Docker resource ID. This is a concrete lookup discrepancy to investigate, not
+yet proof that a recording exists. Model inference from unmeasured capacity and
+sparse health history remains an open quality failure. Supported autonomous
+provider, approved/rejected actions and independent environments remain open.
+
+Further shared-projection inspection before editing found that `MountInfo` drops
+native mount type/options and that canonical app-container queries derive write
+access from equality with the single string `ro`, misreporting compound read-only
+options. The same slice must preserve type/options and the canonical `RW` boolean
+through both canonical-provider and typed read-state query paths. Add a query
+regression and capture its actual output for final Assistant browser proof.
+This remains mount configuration evidence, not measured filesystem capacity.
+
+
+### Tmpfs collection and query contract proof
+
+The captured tmpfs-only and mixed-mount regressions failed against the previous
+collector, then passed after the collection correction. The full dockeragent
+package passed in 18.883s and focused race proof in 1.030s. Existing monitor report
+mount propagation and discovery mount regressions passed. Both query paths
+failed because type/options were lost, then passed after projection correction.
+The full tools package passed in 59.473s and focused race proof in 1.030s.
+A final output-only capture rerun passed in 0.013s. All proof used Go1.26.8 and
+GOMAXPROCS4 on pulse-dev. The final Pro cross-build passed and the installed
+local binary SHA256 is
+`0a21dca4106c2ddc6873a3aca3b23378dccef35383ca00d7e9292b966de7c200`.
+The managed local backend restarted and `/api/health` reported healthy.
+No production collector was replaced.
+
+Final Playwright proof used captured canonical resources at `/docker`, widths
+1920, 1440, 900 and 390 with height 1080. It exercised mount summary/title,
+keyboard row expansion/collapse, mobile row tapping, adjacent detail state,
+mount-destination search, Escape and reloaded search state. The existing wide
+mount column is truncated with a full title. Responsive details have no dedicated
+mount section. This is an existing presentation limitation, not full mobile
+mount inspection qualification. Assistant's complete mount evidence is readable
+at `/patrol`, 1440x1000, 900x1000 and 390x1000. Both actual query projections
+passed exact input/output comparison, hover/focus, keyboard expansion/collapse,
+deepest scrolling, controlled session reload and reopening retained records.
+Pixels were inspected on desktop and mobile. Source/binary hashes stayed fixed.
+The original autonomous refusal timestamp is unchanged.
+
+These browser fixtures qualify rendering of the corrected shared fields. They
+do not qualify an installed collector, actual model interpretation of tmpfs
+configuration, or durable backend persistence of those fixture sessions. The
+ordinary live diagnosis/recovery records above have real server persistence
+and retain their failed/partial judgments. Exact scoped hook and landing remain
+required. Required model/action qualification and independent environments are
+still open. The typed compatibility get path also does not accept the canonical
+ID returned by its list path, so its mount regression uses an existing accepted
+name. That identity residual is recorded for modernization, not silently fixed
+through this mount projection.
+
+## Canonical incident history, 2026-09-06
+
+The tmpfs correction passed the exact worker hook and was pushed as
+`6e18777d30f30b498def39d30016a697cabc4ea7` in PR #1935. That scoped
+delivery does not change the failed storage diagnosis or partial recovery verdict.
+
+The incident audit found a source-of-truth mismatch, not evidence that an existing
+recording merely needed an ID alias. The legacy five-second recorder has no
+production alert callback connected to its coordinator. It samples cached values
+using recorder time without preserving their source measurement time. Connecting
+that recorder would not supply trustworthy higher-frequency history.
+
+The canonical resource timeline already stores observed changes, alert lifecycle
+events and executed actions. Assistant handoffs use a bounded excerpt of this
+same store. The shared `pulse_knowledge` incidents action now reads that
+organization-pinned timeline directly, using the supplied canonical resource ID.
+It does not require the resource still to exist in current inventory, infer
+identity from names, include related resources implicitly, or reconstruct events
+from current metrics. The response preserves canonical source, observation and
+optional occurrence timestamps, state transitions and metadata. `since` filters
+on observation time, and bounded results report `has_more`. Empty retained history
+does not establish health. Missing or failed storage is a failed read.
+
+Explicit legacy `window_id` lookups remain isolated archive reads, must match the
+requested resource, and explain that sample timestamps do not establish source
+freshness. The primary incidents action no longer uses those recordings. The
+legacy recorder/coordinator startup and API active-count plumbing still exist.
+Their retirement is a separate cleanup in this redesign and must preserve any
+saved archives. Do not connect them as a replacement incident truth source.
+
+Qualification uses the real SQLite resource store with a fired/resolved lifecycle,
+an older excluded record, a related-resource negative control, absent occurrence
+time, truncation and empty history. Unavailable/failed storage, invalid input and
+archive resource isolation are separate negative controls. Captured actual tool
+responses must pass the Assistant expansion, scrolling and reload matrix at
+`/patrol`, 1440x1000, 900x1000 and 390x1000. This is contract and rendering proof,
+not a new real-model or continuous-coverage claim.
+
+Read-only API inspection of the actual removed storage fixture confirmed a
+remaining canonical write-boundary defect. The canonical app-container timeline
+returns its creation and removal, while the fired event at 13:14:28.59485Z and
+resolved event at 13:17:58.634095Z remain under its legacy Docker resource ID.
+The resource API includes related network changes by design. The new tool uses
+direct resource history only. `recordAlertTimelineChange` passes the alert's
+source ID directly to `BuildAlertTimelineChange`, and `MonitorAdapter.RecordChange`
+forwards it without canonical resolution. Consequently this read-path change is
+only partial incident-history remediation. The next required owning fix must
+resolve event identity before persistence and preserve access to retained prior
+identity records, including removed resources, through the shared identity/history
+contract. It must not add a Docker string rewrite inside the Assistant tool.
+The shared writer and retained-identity correction remain required in this goal.
+Private raw API receipts are in `tmp/patrol-canonical-history/live-timeline.json`
+and `live-legacy-alert-timeline.json`. No model call or infrastructure mutation
+was made during these reads.
+
+The history regression passes through the registered tool dispatcher. The full
+tools package passed in 59.856s, the final focused capture passed in 0.036s, and the
+focused race check passed in 1.189s on pulse-dev with Go1.26.8 and GOMAXPROCS4.
+The final Pro build passed and was installed into the local development stack.
+Its SHA256 is `4929aeb869db54122bc5525352d3126c0e9fa7c4847e3fdfa741500600b5e00d`.
+The managed backend restarted healthy. Final Playwright proof passed all five
+registered-tool cases at `/patrol`, 1440x1000, 900x1000 and 390x1000, including
+hover/focus, Enter/Space, deepest output scrolling, Escape and controlled session
+reload with exact input/output and success/failure comparison. Root inspected
+actual pixels at all three widths. Source and binary hashes remained fixed.
+The provider warning stayed visible and no retry, route switch or provider
+request was made. This is captured-response rendering, not real-model diagnosis
+or server persistence qualification. The exact scoped worker hook gates delivery
+through PR #1935.
+
+
+## Shared Docker history identity, 2026-09-06
+
+The preceding incident-read correction was pushed as
+`580a246981c76b401e9007f5ac65c89355b64c6d` in PR #1935. Its live retained
+records established the identity split addressed here.
+
+The canonical fix belongs to the shared monitor/store boundary. Exact full
+Docker container references resolve through current registry identity. Retained
+bindings survive inventory removal, and deterministic source-specific identities
+allow legacy records to be found after restart. Names and abbreviated IDs are
+not sufficient evidence. A small organization-scoped history alias index joins
+readable records without rewriting event IDs, timestamps or metadata. Existing
+canonical succession machinery was deliberately not used for these aliases
+because it also moves operator state and action indexes. History matching must
+not transfer authority. The alias index follows journal retention and separate
+store connections read fresh bindings.
+
+Focused regression and race proofs passed on pulse-dev with Go1.26.8 and
+GOMAXPROCS4. Full unifiedresources, monitoring and tools packages passed in
+37.826s, 79.866s and 59.584s. They cover real alert-manager callbacks, recovery
+after inventory removal, restart, replay, same-name controls, tenant isolation,
+unchanged operator/approval records and registered Assistant tool reads. Scoped
+history lookup measured 0.261–0.275ms with one alias and 0.317–0.336ms with
+20,000 unrelated aliases, at 6,280 bytes and 94 allocations per read. These are
+worker microbenchmarks, not fleet or frontend performance qualification.
+
+The verified worker Pro binary has SHA256
+`bb6d1508a5b4d23943c37dfc42198f132c0139805dcd1891ee18aca0a9f9dd54`.
+It was installed into the local development stack and restarted healthy. Both
+canonical and legacy timeline API queries now return the same seven retained
+records for the removed storage fixture, including the original fired/resolved
+records with exact unchanged content. The complete registered-tool rendering
+matrix passed at `/patrol`, 1440x1000, 900x1000 and 390x1000. Six captured cases
+include migrated history, bounded and empty results, and unavailable/failed
+reads. Hover/focus, Enter/Space, deepest scrolling, Escape and controlled-session
+reload preserved exact inputs, outputs and completed/failed states. Pixels were
+inspected at all three widths. Source and binary hashes remained fixed. Private
+receipts are `tmp/patrol-history-identity/browser/receipt.json` and
+`live-history-proof.json`. Controlled session responses qualify rendering, not
+server persistence or model diagnosis. The cached provider refusal remained
+unchanged. No model request or infrastructure fault was made. The exact scoped
+worker hook remains the delivery gate for PR #1935.
+
+This history correction does not qualify the failed ordinary storage diagnosis,
+partial recovery claim, installed tmpfs collector, autonomous provider, approved
+and rejected action outcomes, or independent Pro environments. The unused legacy
+recorder/coordinator still needs retirement with its archives preserved.
+
+
+The history identity change passed the exact thirteen-file worker hook and was
+pushed as `919331d5b3f6076f8616b07eb8e9ca611f26ee52` in PR #1935. Integration
+with main `11a8cc2180aae886ec7f92e2333002b57cf1b9a3` preserves both sides of
+three additive subsystem-contract conflicts. The host-ingestion auto-merge
+retains Docker observation corrections alongside incoming host-link provenance.
+Unrelated registry indentation was restored without changing its decoded data.
+
+The combined monitoring, unifiedresources, tools, config and models packages
+passed in 85.894s, 41.931s, 59.609s, 18.381s and 0.098s. Focused history,
+Assistant, host-link and lifecycle race checks passed. Frontend type checking
+and four alert suites passed all 42 tests. The incoming delivery-log component
+browser proof passed at 1440x900 and 390x900, including reordered success/failure,
+held events, pending state and newest failure. Pixels were inspected. This is
+scripted component proof, not installed notification delivery.
+
+The final merged-source Pro binary has SHA256
+`234f625cb74be3d300facfed1bb17b17e20c44c06037a1f8f4fffc1c4f49d621`.
+Its local restart was healthy. The complete six-case Assistant matrix was
+repeated at `/patrol`, 1440x1000, 900x1000 and 390x1000, with exact tool records,
+keyboard expansion/collapse, deep scrolling and controlled-session reload.
+Pixels and source/binary bindings were checked after this final build. Both
+actual removed-container timeline queries still return the same seven retained
+records with the original fired/resolved content. No model request, route
+switch, infrastructure fault or production collector replacement was made.
+The autonomous provider refusal remains enforced. Integration receipts are in
+`tmp/patrol-history-integration/`. The full integration hook gates its merge
+commit and push. All previously recorded model and wider-readiness gaps remain
+open.
+
+## Legacy recorder retirement, 2026-09-06
+
+The disconnected incident coordinator, five-second cached-metrics sampler,
+pre-incident buffers, archive writer and unused adapters are removed. They had
+no production alert trigger. Canonical resource history remains the primary
+incident evidence for Assistant. No replacement diagnosis or scheduling policy
+was added.
+
+Explicit archive lookup now requires exact organization, resource and window
+binding. The reader is lazy and read-only. Saved file contents, modification
+time, mode, old observations, metadata and summary values survive reads. Missing
+archives, malformed files and missing windows remain distinct outcomes. Legacy
+`recording` status is historical, and the response discloses that the old
+`summary.duration_ms` field contains nanoseconds. An old file is never rewritten
+to make its evidence appear current.
+
+The incidents API now reports `active_count: null` with
+`active_count_status: not_measured`. The retired coordinator's empty map never
+established a measured zero. Its legacy incident-memory listing still needs a
+canonical query design covering aliases, canonical-only events, honest bounds
+and propagated projection-read errors. This is recorded as an open modernization
+residual rather than treating that listing as complete.
+
+Final-source registered archive-tool receipts pass Playwright at `/patrol`,
+1440x1000, 900x1000 and 390x1000. The five cases cover a saved observation,
+unavailable/malformed archives, the wrong resource and a missing window.
+Verification includes hover/focus, Enter expansion, exact tool input/output,
+deep scrolling, Space collapse, Escape, reload and controlled session reopening.
+Actual pixels were inspected. Incoming main alert dispatch wording also passes
+its isolated real Overview browser script at all three widths. These controlled
+responses prove rendering, not model diagnosis, installed delivery or server
+persistence.
+
+The final worker Pro binary is
+`bd29e6f27be7b3ad4cfbc37842f4da90f08c6a48c9fc23b12c9c597b67346c9b`.
+After the managed local restart, canonical and legacy queries still return the
+same seven retained homelab records with the original fired/resolved events
+unchanged. The live incidents API reports an unmeasured count. Cached provider
+refusal remains enforced. No model request, paid spend, provider retry,
+production collector change or fault injection occurred in this slice.
+
+Archive, tools, chat, AI runtime and targeted API/race checks passed on the
+worker. One full API run as root invalidated its mode-bit persistence-failure
+fixture. That fixture passes unchanged under the normal worker account. The
+full API rerun passes under that account (286.960s), as do the incoming
+startup-replay and legacy-boundary source checks. Frontend type checks and all
+29 incoming alert tests pass. The exact staged hook gates landing.
+Private receipts are under `tmp/patrol-archive-retirement/` in the workspace.
+
+### Live collector storage evidence, 2026-09-06
+
+`TestCollectContainerStorageFaultLive` calls the production Docker client and
+`collectContainer` implementation against the existing storage-pressure lab.
+The opt-in command, run on the worker beside its Docker Unix socket, is:
+
+```sh
+PULSE_QUALIFY_ORACLE_DOCKER_CONTEXT=default go test ./internal/dockeragent -run '^TestCollectContainerStorageFaultLive$' -count=1 -timeout=240s -v
+```
+
+The final test passed in 8.694s on Docker 29.8.0 against the runtime source tree
+of `186ce504c8f0fa6e0174f3b10f3d99f6278f10fc`. Its SHA256 is
+`cdf303f4de23c020690c81b0b57190c728319788cb0aaff906b0d4d9d864541e`.
+Independent filesystem observations measured 8,380,416 available bytes before
+the fault, zero during it and 8,380,416 after recovery. The service stayed
+running. Collected and JSON-decoded health followed healthy, unhealthy, healthy,
+while the unrelated control remained healthy. Docker returned zero native
+`Mounts` throughout. The report retained the single tmpfs destination, type,
+8 MiB configuration options and writable setting from `HostConfig.Tmpfs`.
+Configured size is not a measured capacity counter in the report.
+
+The test targets exact run-owned container IDs and labels. Existing fixture
+cleanup passed, its second cleanup was a no-op and inventory matched the
+pre-run snapshot. The test skips without explicit opt-in. All four existing
+mount regression cases also pass. Private logs are in
+`tmp/patrol-storage-collector-live/` in the workspace.
+
+This proves live collection and report serialization only. It does not send a
+report to Pulse, enroll or replace a production agent, call a provider, or
+qualify approval, execution, diagnosis or model recovery. No runtime or frontend
+source changed in this slice, so no new browser claim is made. Prior storage
+diagnosis failures and the cached autonomous-provider refusal remain open.
+
+
+## Funded Gemini qualification, 2026-09-06
+
+The maintainer authorized `openrouter:google/gemini-3.8-flash` with a provider-side
+US$5 key limit expiring on 2026-09-07. The provider key endpoint confirmed both
+constraints. Credentials remain in runtime configuration, not these receipts.
+Synthetic readiness passed in 9.034 seconds: three streaming tool scenarios,
+two context fixtures and multi-turn continuation. This supports the readiness
+claims for Watch only and Ask first. It does not qualify autonomous fixes.
+
+The first unhealthy-container run, `q-20260906-172952-3cccbf34`, detected the
+correct fault and left the healthy control alone, but failed overall. The exact
+Gemini route had no price entry, and the model attempted unsupported Docker
+configuration access. The shared price table now records the reviewed standard
+rates of US$0.75 input and US$3.75 output per million tokens for direct Gemini
+and OpenRouter. Variant routes remain unknown. These introductory rates must be
+reviewed on 2027-01-01. The query capability description now explicitly names
+TrueNAS as the supported app-container configuration adapter and directs Docker
+collected health/mount/port/network reads to `get`. Runtime permissions and
+qualification gates are unchanged.
+
+The following runs used the worker-built Pro binary
+`74464e75977caf55cda092c8cf56c24967616c8c24d770872fbea5d86e31a1dc`,
+core base `b0b39f00dc6685ad9ed63e8a6e91b954338073e4` plus the pricing and
+capability-description changes, and canonical enterprise base
+`3d9f4e3051d38027355a2a1f36b8c7f672a09b65`. The worker archive commit
+`d9cb84e15d1acc377341129bdda5c28176e7128c` has identical contents for all
+87 tracked enterprise files. The existing runner created disposable
+resources on Tower, waited for normal collection, and used independent fault,
+recovery and cleanup oracles.
+
+| Case / run | Result | Evidence |
+|---|---|---|
+| Unhealthy, `q-20260906-174546-a7a9810b` | Pass | 9.709s detection phase, two tools, no failed/duplicate calls, healthy sibling unflagged. |
+| Unhealthy, `q-20260906-174708-81f8d655` | Pass | 10.541s detection phase, exact unhealthy resource found. |
+| Unhealthy, `q-20260906-174758-14deaa15` | Pass | 9.395s detection phase, exact unhealthy resource found. |
+| Unhealthy, `q-20260906-174853-71cf894f` | Pass | 25.673s detection phase, exact unhealthy resource found. |
+| Healthy mixed, `q-20260906-180144-381874a6` | Pass | 5.200s detection phase, no false findings. |
+| Dependency, `q-20260906-175058-de5e350d` | Pass | Starting from only the client symptom, identified the stopped dependency and affected client. Investigation completed in 18.970s with three evidence calls and no mutation. |
+| Storage, `q-20260906-175232-3ce6fbfa` | Fail before inference | Normal collection never converged to the required resource projection. No model diagnosis was attempted. |
+| Approved restart, `q-20260906-175812-0593b9b7` | Fail before approval | Detection and investigation completed, but no exact action reference existed. The broker refused because Tower's Docker command agent was disconnected. Nothing executed. |
+| Rejected restart, `q-20260906-175940-bff6992a` | Fail before rejection | No exact action was available to reject. This does not qualify rejected-action handling. |
+
+Every listed run passed cleanup, including second-cleanup no-op and unchanged
+inventory. Individual Watch run estimates were about US$0.007 to US$0.014.
+Those scorecard estimates cover the Patrol detection phase, not the separate
+investigation calls. Provider-side aggregate spend is the budget authority for
+this temporary key. The fixed route price does not turn an estimate into a
+reconciled bill or establish a hard Pulse budget for unpriced history.
+
+Live qualification exposed two additional shared contract defects. The
+investigation orchestrator logged action-broker refusal but completed the
+record without retaining the error, leaving the model's captured-proposal prose
+visible without the later refusal. The current enterprise change retains the
+original diagnosis, persists the broker refusal as a failed investigation with
+`needs_attention`, and creates no action reference. The product history adapter
+also projected result-bearing transcript calls back into provider request calls,
+dropping observed output and success/failure. The current core change uses one
+shared transcript type for stored chat and product history, preserving the
+separate explicit provider projection.
+
+The live review exposed duplicate detail IDs, duplicate unformatted conclusions,
+paused history made unclickable by the scheduling switch, and narrow filter/sort
+overlap. The shared finding/investigation surfaces now preserve one detail target,
+render sanitized Markdown once for identical summaries, retain distinct summaries,
+keep history available while paused, and wrap controls. Result-bearing tool calls
+use the same expandable evidence component as Assistant. Historical calls without
+a result status retain their evidence without invented success or failure. An
+investigation outcome of `cannot_fix` or `needs_attention` does not identify who
+resolved the finding, so the shared resolution copy no longer infers manual review.
+
+Private run receipts and source/binary bindings are under
+`tmp/patrol-gemini-38/` in the workspace. The original failed runs remain failed.
+Installed storage collection and a temporary command-enabled lab agent remain
+prerequisites for real storage and approved/rejected recovery qualification.
+No production agent has been replaced. Full action outcomes, remaining backup
+coverage and independent volunteered Pro environments remain open.
+
+
+### Final refusal and evidence-retention proof
+
+Two further approved-remediation attempts remain **failed**:
+`q-20260906-181839-6cbdc711` and `q-20260906-182952-6acfb739`. Both retained the
+broker error separately from the original model summary, saved `status=failed`
+and `outcome=needs_attention`, and created no action reference. Both passed
+cleanup. The final run used Pro binary SHA256
+`24de8c9ea0020067d298c489f0d99a272b5ec4b00afab7a40dff55aabb244061`,
+including the proposal-response clarification, and detected its exact unhealthy
+container with no false positives. Its saved investigation is
+`48a16b05-50f0-4605-847c-0a71b3435975` for finding `ca3af29ac54d540f`.
+The original failed scorecards have not been reclassified as action passes.
+
+The restored history API retains observed outputs and explicit `success=false`
+for historical `pulse_read` failures. Live browser review at `/patrol` exercises
+successful query output, both `ACTION_NOT_ALLOWED` and `NO_AGENT` failures,
+original diagnosis, one broker error, paused history and review focus return.
+The settings proof at `/settings/pulse-intelligence/patrol` checks the exact
+model, reviewed rates, synthetic readiness limits and reload. The current
+source-bound browser receipt records desktop, intermediate and mobile results.
+GET response fixtures cover unknown historical result status only, without
+claiming new persisted model evidence or action execution.
+
+Remaining qualification requires a current installed collector and a temporary
+command-enabled lab agent. A Linux amd64 agent has been built on the worker,
+SHA256 `ae2ed8b97709ec6e71af979c293ca9d3634662767ec1b59629baf4933c90cf5d`,
+without installing it or changing Tower credentials. Tower's separate production
+reporting agent is untouched. Any agent enrollment must use the canonical scoped
+installation flow, preserve explicit identity and revoke temporary execution
+access after qualification. Detection success does not satisfy this prerequisite
+or the remaining backup and independent-environment cases.
+
+
+## Installed agent and governed action qualification, 2026-09-06
+
+The maintainer explicitly approved a temporary update and scoped command token
+for Tower's separate development agent, followed by restoration. The installed
+agent artifact was `ae2ed8b97709ec6e71af979c293ca9d3634662767ec1b59629baf4933c90cf5d`.
+Both host and Docker modules reported running, and the command connection
+registered the same agent identity. The production agent retained PID 752388.
+The tests used Ask first with manual triggers. Scheduled Patrol ended paused in
+Watch only. No autonomous-mode qualification is claimed.
+
+The first installed storage attempt, `q-20260906-192435-f0d7eebf`, failed before
+inference. Inspection established a qualification-client pagination defect:
+`/api/resources?limit=1000` returned a maximum of 100 records from an inventory
+of 104, leaving the exact worker on page two. This was not an absence of normal
+collection. The client now follows the API pages and rejects partial results
+when a later page fails. A regression finds an unhealthy resource beyond the
+first 100, and the complete qualification package passes. Fault oracles and
+score thresholds were not weakened. The corrected runner hash is
+`a27f9ab0bf4786b670db3e8a989e974c8c43c5084d9524474ee694735d2e7df9`.
+
+| Case / run | Automated result | Reviewed outcome |
+|---|---|---|
+| Approved restart, `q-20260906-193013-12d25545` | Pass | Correct unhealthy container, exact finding/investigation/resource and plan-hash binding, explicit approval before execution, completed restart, independent healthy/running readback and lifecycle verification. Detection 8.893s, fault-to-remediation phase total 78.490s. |
+| Rejected restart, `q-20260906-193207-7095dad5` | Pass | Exact plan rejected, no restart, independent unchanged unhealthy fault until teardown. Detection 10.838s, fault-to-decision phase total 37.795s. |
+| Storage, `q-20260906-193613-556ef23d` | Pass from existing scorecard | **Fails semantic diagnosis review.** Collection converged and logs exposed ENOSPC, but the model incorrectly asserted that Tower was out of disk space and implicated its array. Only an 8 MiB container tmpfs was exhausted. |
+
+The approved action is `act_dcc3b52e5451810e49466daf9a6fccb0`, linked to finding
+`566515f71129ce73` and investigation `aae05717-c9b0-4aac-8439-ba78f46c28e9`.
+The rejected action is `act_ee0b736f0430e472e896a456ba3cb6eb`, linked to finding
+`a17940552206e1ca` and investigation `955f4f47-0b6f-404b-b513-70a1d226f111`.
+Each case passed independent teardown, second-cleanup no-op and restored
+inventory. Per-case detection estimates were $0.012123, $0.012283 and $0.014915.
+These exclude investigation calls and are not provider-account spend.
+
+Storage remains unqualified. The model had the collected tmpfs mount and its
+configured size. Its canonical-resource log call failed, the fallback host and
+container log call succeeded, and its `df -h` command required approval. It then
+promoted unrelated host/array warnings into a definite capacity diagnosis.
+The scorecard's required terms and narrow forbidden phrases missed that false
+claim. Its raw pass is retained as evidence of a qualification limitation, not
+accepted as product success. The next storage slice needs canonical, authorized
+filesystem-capacity evidence and explicit semantic review against the bounded
+fault. Do not permit arbitrary commands merely to make that case pass, add a
+benchmark-specific diagnosis rule, or treat identifier/phrase matches as proof
+of causal correctness. Backup coverage and independent Pro environments remain
+unqualified as well.
+
+Real outcome review exposed stale durable records: the finding and investigation
+could say `fix_verified` while the embedded product record still said
+`fix_queued`. Action reconciliation now refreshes that record through the same
+canonical builder used at investigation completion, preserving original model
+prose, evidence and retained rollback. Read-time hydration repairs existing
+records even when the top-level outcome already matches. Unchanged hydration
+must not republish state or repeat outcome notifications. Resolved findings keep
+their exact action-history link, and Assistant handoff preserves resolved status.
+Investigation completion replaces an earlier partial action projection with its
+final evidence. Subsequent action transitions preserve that completed evidence,
+including impact and confidence that the current finding may no longer retain.
+An intermediate proof build exposed that loss of retained impact. The regression
+now preserves it, while already absent historical fields remain unassessed.
+Final runtime and browser verification of these corrections is recorded below.
+
+After qualification, both original development binaries were restored separately
+because they differed: runtime `e5a2b60e52e35c37f68daa348c642757b56a64b40ca1d72f4db843ce69eb5db4`,
+persistent `73c224dfd750c41b2cbd883c3ce7e352071862bc6a60e59fe6ed4dd3de312bc6`.
+The original protected token was restored, temporary issued tokens were revoked
+and checked absent, temporary backups were removed after comparison, and no
+owned fault containers remained. The restored v6.2.0-rc.8 development agent
+reported fresh telemetry. Its original token lacks command scope, so its command
+connection is again absent by design. Production PID 752388 remained unchanged.
+
+Final action-history proof uses Pro Darwin arm64 binary
+`859d5d2de84cfd2264caa7dbcf5f080e3b1d06b5876df2c81dc0e00872f5e779`.
+Worker proof passes the API action reconciliation selection and investigation,
+record, rollback and early-projection completion regressions. The full API suite
+passed in 310.353s before the final evidence-preservation refinement, followed
+by the final targeted regressions. The three affected action component suites
+pass 30 tests. The complete qualification package and pagination regressions
+also pass. The exact final staged hook gates landing.
+
+Playwright exercises `/patrol` Activity/All and both exact `/actions?action=...`
+links above at 1440, 900 and 390 by 1000. Final-content checks cover resolved
+record retention, outcome agreement, safety disclosure, completed/rejected
+headers, planning-time copy, absent settled execution controls, independent
+verification, policy/evidence/delivery disclosures, keyboard toggles, Escape,
+close controls, deep-link reload, scroll fit and retained review focus. Actual
+pixels were inspected at desktop, intermediate and phone sizes. Assistant
+handoff opens the same finding with completed/rejected context and read-only
+control. Provider readiness POST was deliberately blocked during that rendering
+proof and no prompt was sent. Earlier browser attempts encountered an
+intermittent bootstrap connection screen. The complete final matrix passed
+after removing redundant immediate navigations from the proof driver, without
+claiming a bootstrap fix. Source bindings are in
+`frontend-modern/browser-verification.json`.

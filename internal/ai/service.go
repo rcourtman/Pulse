@@ -184,13 +184,12 @@ func (m ChatMessage) NormalizeCollections() ChatMessage {
 	return m
 }
 
-// ChatToolCall represents a provider-facing tool invocation in an API-facing
-// chat message. It aliases the shared Pulse Intelligence provider-call shape so
-// API chat history and provider turns do not drift on tool-call JSON.
-type ChatToolCall = agentcapabilities.ProviderToolCall
+// ChatToolCall retains observed output and result status in product history.
+// Provider turns use the explicit ProviderToolCall projection.
+type ChatToolCall = agentcapabilities.TranscriptToolCall
 
 func EmptyChatToolCall() ChatToolCall {
-	return agentcapabilities.EmptyProviderToolCall()
+	return ChatToolCall{}.NormalizeCollections()
 }
 
 // ChatToolResult represents the result of a tool invocation. It aliases the

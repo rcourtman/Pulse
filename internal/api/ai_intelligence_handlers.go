@@ -1420,20 +1420,14 @@ func (h *AISettingsHandler) HandleGetRecentIncidents(w http.ResponseWriter, r *h
 		}
 	}
 
-	// Get coordinator status
-	coordinator := h.GetIncidentCoordinatorForOrg(GetOrgID(r.Context()))
-	var activeCount int
-	if coordinator != nil {
-		activeCount = coordinator.GetActiveIncidentCount()
-	}
-
 	// Get incident data from patrol service
 	svc := h.GetAIService(r.Context())
 	if svc == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
-			"incidents":    []interface{}{},
-			"active_count": activeCount,
-			"message":      "Pulse Patrol service not available",
+			"incidents":           []interface{}{},
+			"active_count":        nil,
+			"active_count_status": "not_measured",
+			"message":             "Pulse Patrol service not available",
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write incidents response")
 		}
@@ -1443,9 +1437,10 @@ func (h *AISettingsHandler) HandleGetRecentIncidents(w http.ResponseWriter, r *h
 	patrol := svc.GetPatrolService()
 	if patrol == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
-			"incidents":    []interface{}{},
-			"active_count": activeCount,
-			"message":      "Patrol service not available",
+			"incidents":           []interface{}{},
+			"active_count":        nil,
+			"active_count_status": "not_measured",
+			"message":             "Patrol service not available",
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write incidents response")
 		}
@@ -1456,9 +1451,10 @@ func (h *AISettingsHandler) HandleGetRecentIncidents(w http.ResponseWriter, r *h
 	incidentStore := patrol.GetIncidentStore()
 	if incidentStore == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
-			"incidents":    []interface{}{},
-			"active_count": activeCount,
-			"message":      "Incident store not available",
+			"incidents":           []interface{}{},
+			"active_count":        nil,
+			"active_count_status": "not_measured",
+			"message":             "Incident store not available",
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write incidents response")
 		}
@@ -1476,9 +1472,10 @@ func (h *AISettingsHandler) HandleGetRecentIncidents(w http.ResponseWriter, r *h
 		// This is a limitation - we may want to add ListRecentIncidents to the store
 		incidentSummary := incidentStore.FormatForPatrol(limit)
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
-			"incidents":        []interface{}{},
-			"incident_summary": incidentSummary,
-			"active_count":     activeCount,
+			"incidents":           []interface{}{},
+			"incident_summary":    incidentSummary,
+			"active_count":        nil,
+			"active_count_status": "not_measured",
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write incidents response")
 		}
@@ -1486,8 +1483,9 @@ func (h *AISettingsHandler) HandleGetRecentIncidents(w http.ResponseWriter, r *h
 	}
 
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{
-		"incidents":    incidents,
-		"active_count": activeCount,
+		"incidents":           incidents,
+		"active_count":        nil,
+		"active_count_status": "not_measured",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write incidents response")
 	}

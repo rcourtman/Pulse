@@ -43,7 +43,7 @@ export const ActionDecisionPacket: Component<{
         class="rounded-lg border border-border bg-surface p-4"
       >
         <h3 id="action-intent-heading" class="text-sm font-semibold text-base-content">
-          What will happen
+          Action plan
         </h3>
         <dl class="mt-3 grid gap-3 text-sm sm:grid-cols-2">
           <div>
@@ -69,7 +69,7 @@ export const ActionDecisionPacket: Component<{
           </Show>
           <Show when={props.audit.plan.preflight?.currentState}>
             <div>
-              <dt class="text-muted">Current state</dt>
+              <dt class="text-muted">State when planned</dt>
               <dd>{props.audit.plan.preflight?.currentState}</dd>
             </div>
           </Show>
@@ -80,7 +80,7 @@ export const ActionDecisionPacket: Component<{
             </div>
           </Show>
           <div>
-            <dt class="text-muted">Approval expires</dt>
+            <dt class="text-muted">Plan expiry</dt>
             <dd>{expiry()}</dd>
           </div>
           <div>
@@ -90,7 +90,7 @@ export const ActionDecisionPacket: Component<{
         </dl>
         <Show when={blastRadiusEntries().length > 0}>
           <div class="mt-3">
-            <div class="text-sm text-muted">Also affected</div>
+            <div class="text-sm text-muted">Potentially affected</div>
             <ul class="mt-1 list-disc pl-5 text-sm">
               <For each={blastRadiusEntries()}>
                 {(entry) => (

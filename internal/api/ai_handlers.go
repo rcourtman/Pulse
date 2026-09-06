@@ -92,22 +92,20 @@ type AISettingsHandler struct {
 	alertBridge       *unified.AlertBridge          // Bridge between alerts and unified store
 
 	// Event-driven patrol (Phase 7)
-	triggerManager       *ai.TriggerManager        // Event-driven patrol trigger manager
-	incidentCoordinator  *ai.IncidentCoordinator   // Incident recording coordinator
-	incidentRecorder     *metrics.IncidentRecorder // High-frequency incident recorder
-	intelligenceMu       sync.RWMutex
-	proxmoxCorrelators   map[string]*proxmox.EventCorrelator
-	learningStores       map[string]*learning.LearningStore
-	forecastServices     map[string]*forecast.Service
-	remediationEngines   map[string]aicontracts.RemediationEngine
-	incidentStores       map[string]*memory.IncidentStore
-	circuitBreakers      map[string]*circuit.Breaker
-	discoveryStores      map[string]*servicediscovery.Store
-	unifiedStores        map[string]*unified.UnifiedStore
-	alertBridges         map[string]*unified.AlertBridge
-	triggerManagers      map[string]*ai.TriggerManager
-	incidentCoordinators map[string]*ai.IncidentCoordinator
-	incidentRecorders    map[string]*metrics.IncidentRecorder
+	triggerManager     *ai.TriggerManager       // Event-driven patrol trigger manager
+	incidentArchive    *metrics.IncidentArchive // Read-only legacy incident archive
+	intelligenceMu     sync.RWMutex
+	proxmoxCorrelators map[string]*proxmox.EventCorrelator
+	learningStores     map[string]*learning.LearningStore
+	forecastServices   map[string]*forecast.Service
+	remediationEngines map[string]aicontracts.RemediationEngine
+	incidentStores     map[string]*memory.IncidentStore
+	circuitBreakers    map[string]*circuit.Breaker
+	discoveryStores    map[string]*servicediscovery.Store
+	unifiedStores      map[string]*unified.UnifiedStore
+	alertBridges       map[string]*unified.AlertBridge
+	triggerManagers    map[string]*ai.TriggerManager
+	incidentArchives   map[string]*metrics.IncidentArchive
 
 	// Investigation orchestration (Patrol Autonomy)
 	chatHandler         *AIHandler                                // Chat service handler for investigations
@@ -318,25 +316,24 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 	}
 
 	handler := &AISettingsHandler{
-		mtPersistence:        mtp,
-		mtMonitor:            mtm,
-		defaultConfig:        defaultConfig,
-		defaultPersistence:   defaultPersistence,
-		hostedMode:           hostedMode,
-		aiServices:           make(map[string]*ai.Service),
-		agentServer:          agentServer,
-		proxmoxCorrelators:   make(map[string]*proxmox.EventCorrelator),
-		learningStores:       make(map[string]*learning.LearningStore),
-		forecastServices:     make(map[string]*forecast.Service),
-		remediationEngines:   make(map[string]aicontracts.RemediationEngine),
-		incidentStores:       make(map[string]*memory.IncidentStore),
-		circuitBreakers:      make(map[string]*circuit.Breaker),
-		discoveryStores:      make(map[string]*servicediscovery.Store),
-		unifiedStores:        make(map[string]*unified.UnifiedStore),
-		alertBridges:         make(map[string]*unified.AlertBridge),
-		triggerManagers:      make(map[string]*ai.TriggerManager),
-		incidentCoordinators: make(map[string]*ai.IncidentCoordinator),
-		incidentRecorders:    make(map[string]*metrics.IncidentRecorder),
+		mtPersistence:      mtp,
+		mtMonitor:          mtm,
+		defaultConfig:      defaultConfig,
+		defaultPersistence: defaultPersistence,
+		hostedMode:         hostedMode,
+		aiServices:         make(map[string]*ai.Service),
+		agentServer:        agentServer,
+		proxmoxCorrelators: make(map[string]*proxmox.EventCorrelator),
+		learningStores:     make(map[string]*learning.LearningStore),
+		forecastServices:   make(map[string]*forecast.Service),
+		remediationEngines: make(map[string]aicontracts.RemediationEngine),
+		incidentStores:     make(map[string]*memory.IncidentStore),
+		circuitBreakers:    make(map[string]*circuit.Breaker),
+		discoveryStores:    make(map[string]*servicediscovery.Store),
+		unifiedStores:      make(map[string]*unified.UnifiedStore),
+		alertBridges:       make(map[string]*unified.AlertBridge),
+		triggerManagers:    make(map[string]*ai.TriggerManager),
+		incidentArchives:   make(map[string]*metrics.IncidentArchive),
 	}
 
 	defaultAIService = ai.NewService(defaultPersistence, tenantAgentServerForOrganization(agentServer, "default"))
@@ -1198,11 +1195,8 @@ func (h *AISettingsHandler) ensureIntelligenceMapsLocked() {
 	if h.triggerManagers == nil {
 		h.triggerManagers = make(map[string]*ai.TriggerManager)
 	}
-	if h.incidentCoordinators == nil {
-		h.incidentCoordinators = make(map[string]*ai.IncidentCoordinator)
-	}
-	if h.incidentRecorders == nil {
-		h.incidentRecorders = make(map[string]*metrics.IncidentRecorder)
+	if h.incidentArchives == nil {
+		h.incidentArchives = make(map[string]*metrics.IncidentArchive)
 	}
 }
 
@@ -1505,96 +1499,49 @@ func (h *AISettingsHandler) GetTriggerManagerForOrg(orgID string) *ai.TriggerMan
 	return nil
 }
 
-// SetIncidentCoordinator sets the incident recording coordinator
-func (h *AISettingsHandler) SetIncidentCoordinator(coordinator *ai.IncidentCoordinator) {
-	h.SetIncidentCoordinatorForOrg("default", coordinator)
+// SetIncidentArchive sets the read-only legacy incident archive
+func (h *AISettingsHandler) SetIncidentArchive(archive *metrics.IncidentArchive) {
+	h.SetIncidentArchiveForOrg("default", archive)
 }
 
-// SetIncidentCoordinatorForOrg sets the incident recording coordinator for an org.
-func (h *AISettingsHandler) SetIncidentCoordinatorForOrg(orgID string, coordinator *ai.IncidentCoordinator) {
+// SetIncidentArchiveForOrg sets the read-only legacy incident archive for an org.
+func (h *AISettingsHandler) SetIncidentArchiveForOrg(orgID string, archive *metrics.IncidentArchive) {
 	if h == nil {
 		return
 	}
 	orgID = normalizeAIIntelligenceOrgID(orgID)
 	h.intelligenceMu.Lock()
 	h.ensureIntelligenceMapsLocked()
-	if coordinator == nil {
-		delete(h.incidentCoordinators, orgID)
+	if archive == nil {
+		delete(h.incidentArchives, orgID)
 	} else {
-		h.incidentCoordinators[orgID] = coordinator
+		h.incidentArchives[orgID] = archive
 	}
 	h.intelligenceMu.Unlock()
 	if orgID == "default" {
-		h.incidentCoordinator = coordinator
+		h.incidentArchive = archive
 	}
 }
 
-// GetIncidentCoordinator returns the incident recording coordinator
-func (h *AISettingsHandler) GetIncidentCoordinator() *ai.IncidentCoordinator {
-	return h.GetIncidentCoordinatorForOrg("default")
+// GetIncidentArchive returns the read-only legacy incident archive
+func (h *AISettingsHandler) GetIncidentArchive() *metrics.IncidentArchive {
+	return h.GetIncidentArchiveForOrg("default")
 }
 
-// GetIncidentCoordinatorForOrg returns the incident recording coordinator for an org.
-func (h *AISettingsHandler) GetIncidentCoordinatorForOrg(orgID string) *ai.IncidentCoordinator {
+// GetIncidentArchiveForOrg returns the read-only legacy incident archive for an org.
+func (h *AISettingsHandler) GetIncidentArchiveForOrg(orgID string) *metrics.IncidentArchive {
 	if h == nil {
 		return nil
 	}
 	orgID = normalizeAIIntelligenceOrgID(orgID)
 	h.intelligenceMu.RLock()
-	if coordinator := h.incidentCoordinators[orgID]; coordinator != nil {
+	if archive := h.incidentArchives[orgID]; archive != nil {
 		h.intelligenceMu.RUnlock()
-		return coordinator
+		return archive
 	}
 	h.intelligenceMu.RUnlock()
 	if orgID == "default" {
-		return h.incidentCoordinator
-	}
-	return nil
-}
-
-// SetIncidentRecorder sets the high-frequency incident recorder
-func (h *AISettingsHandler) SetIncidentRecorder(recorder *metrics.IncidentRecorder) {
-	h.SetIncidentRecorderForOrg("default", recorder)
-}
-
-// SetIncidentRecorderForOrg sets the high-frequency incident recorder for an org.
-func (h *AISettingsHandler) SetIncidentRecorderForOrg(orgID string, recorder *metrics.IncidentRecorder) {
-	if h == nil {
-		return
-	}
-	orgID = normalizeAIIntelligenceOrgID(orgID)
-	h.intelligenceMu.Lock()
-	h.ensureIntelligenceMapsLocked()
-	if recorder == nil {
-		delete(h.incidentRecorders, orgID)
-	} else {
-		h.incidentRecorders[orgID] = recorder
-	}
-	h.intelligenceMu.Unlock()
-	if orgID == "default" {
-		h.incidentRecorder = recorder
-	}
-}
-
-// GetIncidentRecorder returns the high-frequency incident recorder
-func (h *AISettingsHandler) GetIncidentRecorder() *metrics.IncidentRecorder {
-	return h.GetIncidentRecorderForOrg("default")
-}
-
-// GetIncidentRecorderForOrg returns the high-frequency incident recorder for an org.
-func (h *AISettingsHandler) GetIncidentRecorderForOrg(orgID string) *metrics.IncidentRecorder {
-	if h == nil {
-		return nil
-	}
-	orgID = normalizeAIIntelligenceOrgID(orgID)
-	h.intelligenceMu.RLock()
-	if recorder := h.incidentRecorders[orgID]; recorder != nil {
-		h.intelligenceMu.RUnlock()
-		return recorder
-	}
-	h.intelligenceMu.RUnlock()
-	if orgID == "default" {
-		return h.incidentRecorder
+		return h.incidentArchive
 	}
 	return nil
 }
@@ -1652,44 +1599,6 @@ func (h *AISettingsHandler) ListTriggerManagers() map[string]*ai.TriggerManager 
 	h.intelligenceMu.RUnlock()
 	if _, ok := out["default"]; !ok && h.triggerManager != nil {
 		out["default"] = h.triggerManager
-	}
-	return out
-}
-
-// ListIncidentCoordinators returns incident coordinators keyed by org.
-func (h *AISettingsHandler) ListIncidentCoordinators() map[string]*ai.IncidentCoordinator {
-	out := make(map[string]*ai.IncidentCoordinator)
-	if h == nil {
-		return out
-	}
-	h.intelligenceMu.RLock()
-	for orgID, coordinator := range h.incidentCoordinators {
-		if coordinator != nil {
-			out[orgID] = coordinator
-		}
-	}
-	h.intelligenceMu.RUnlock()
-	if _, ok := out["default"]; !ok && h.incidentCoordinator != nil {
-		out["default"] = h.incidentCoordinator
-	}
-	return out
-}
-
-// ListIncidentRecorders returns incident recorders keyed by org.
-func (h *AISettingsHandler) ListIncidentRecorders() map[string]*metrics.IncidentRecorder {
-	out := make(map[string]*metrics.IncidentRecorder)
-	if h == nil {
-		return out
-	}
-	h.intelligenceMu.RLock()
-	for orgID, recorder := range h.incidentRecorders {
-		if recorder != nil {
-			out[orgID] = recorder
-		}
-	}
-	h.intelligenceMu.RUnlock()
-	if _, ok := out["default"]; !ok && h.incidentRecorder != nil {
-		out["default"] = h.incidentRecorder
 	}
 	return out
 }
@@ -1760,10 +1669,8 @@ func (h *AISettingsHandler) RemoveTenantIntelligence(orgID string) {
 	}
 
 	var (
-		bridge      *unified.AlertBridge
-		trigger     *ai.TriggerManager
-		coordinator *ai.IncidentCoordinator
-		recorder    *metrics.IncidentRecorder
+		bridge  *unified.AlertBridge
+		trigger *ai.TriggerManager
 	)
 
 	h.intelligenceMu.Lock()
@@ -1775,13 +1682,10 @@ func (h *AISettingsHandler) RemoveTenantIntelligence(orgID string) {
 	delete(h.discoveryStores, orgID)
 	bridge = h.alertBridges[orgID]
 	trigger = h.triggerManagers[orgID]
-	coordinator = h.incidentCoordinators[orgID]
-	recorder = h.incidentRecorders[orgID]
 	delete(h.unifiedStores, orgID)
 	delete(h.alertBridges, orgID)
 	delete(h.triggerManagers, orgID)
-	delete(h.incidentCoordinators, orgID)
-	delete(h.incidentRecorders, orgID)
+	delete(h.incidentArchives, orgID)
 	delete(h.proxmoxCorrelators, orgID)
 	h.intelligenceMu.Unlock()
 
@@ -1790,12 +1694,6 @@ func (h *AISettingsHandler) RemoveTenantIntelligence(orgID string) {
 	}
 	if trigger != nil {
 		trigger.Stop()
-	}
-	if coordinator != nil {
-		coordinator.Stop()
-	}
-	if recorder != nil {
-		recorder.Stop()
 	}
 }
 
@@ -7843,6 +7741,10 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 
 // updateFindingOutcome updates the investigation outcome on a finding
 func (h *AISettingsHandler) updateFindingOutcome(ctx context.Context, orgID, findingID, outcome string) {
+	h.updateFindingInvestigationOutcome(ctx, orgID, findingID, outcome, nil)
+}
+
+func (h *AISettingsHandler) updateFindingInvestigationOutcome(ctx context.Context, orgID, findingID, outcome string, investigation *ai.InvestigationSession) {
 	// Get AI service for this org
 	svc := h.GetAIService(ctx)
 	if svc == nil {
@@ -7861,15 +7763,20 @@ func (h *AISettingsHandler) updateFindingOutcome(ctx context.Context, orgID, fin
 		log.Warn().Str("orgID", orgID).Msg("Findings store not available for finding update")
 		return
 	}
-	if existing := findingsStore.Get(findingID); existing != nil && existing.InvestigationOutcome == outcome {
+	existing := findingsStore.Get(findingID)
+	if existing == nil {
 		return
 	}
-
-	if !findingsStore.UpdateInvestigationOutcome(findingID, outcome) {
+	outcomeChanged := existing.InvestigationOutcome != outcome
+	if outcomeChanged && !findingsStore.UpdateInvestigationOutcome(findingID, outcome) {
 		log.Warn().Str("findingID", findingID).Msg("Finding not found for outcome update")
 		return
 	}
-	patrol.PublishFindingLifecycleUpdate(findingID)
+	recordChanged := investigation != nil && patrol.RefreshFindingInvestigationRecord(findingID, investigation)
+	if !outcomeChanged && !recordChanged {
+		return
+	}
+	patrol.PublishFindingLifecycleUpdate(findingID, outcomeChanged)
 
 	log.Info().Str("findingID", findingID).Str("outcome", outcome).Msg("Updated finding investigation outcome")
 }

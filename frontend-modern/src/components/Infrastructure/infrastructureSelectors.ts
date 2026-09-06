@@ -86,7 +86,9 @@ const getSortValue = (resource: Resource, key: string): number | string | null =
     case 'network':
       return resource.network ? resource.network.rxBytes + resource.network.txBytes : null;
     case 'diskio':
-      return resource.diskIO ? resource.diskIO.readRate + resource.diskIO.writeRate : null;
+      return resource.diskIO?.readRate !== undefined && resource.diskIO?.writeRate !== undefined
+        ? resource.diskIO.readRate + resource.diskIO.writeRate
+        : null;
     case 'source':
       return getInfrastructureSystemIdentitySortLabel(resource);
     case 'temp':
@@ -349,9 +351,8 @@ export const computeIOScale = (
       networkValues.push(networkTotal);
     }
 
-    const diskIOTotal = (resource.diskIO?.readRate ?? 0) + (resource.diskIO?.writeRate ?? 0);
-    if (resource.diskIO) {
-      diskIOValues.push(diskIOTotal);
+    if (resource.diskIO?.readRate !== undefined && resource.diskIO?.writeRate !== undefined) {
+      diskIOValues.push(resource.diskIO.readRate + resource.diskIO.writeRate);
     }
   }
 

@@ -4,12 +4,14 @@ import ArrowUpRightIcon from 'lucide-solid/icons/arrow-up-right';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 import { Button, ButtonLink } from '@/components/shared/Button';
 import { Dialog } from '@/components/shared/Dialog';
+import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { notificationStore } from '@/stores/notifications';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import type { ActionDetailResponse } from '@/types/actionAudit';
 import { ActionDecisionPacket } from './ActionDecisionPacket';
 import {
   formatActionName,
+  getActionInboxStatePresentation,
   getActionOriginDestination,
   getActionResourcePresentation,
 } from './actionPresentation';
@@ -244,9 +246,14 @@ export const ActionReviewDialog: Component<{
                 <p class="text-xs font-semibold uppercase tracking-wide text-muted">
                   Governed action review
                 </p>
-                <h2 id="action-review-title" class="mt-1 text-xl font-semibold">
-                  {formatActionName(record().request.capabilityName)}
-                </h2>
+                <div class="mt-1 flex flex-wrap items-center gap-2">
+                  <h2 id="action-review-title" class="text-xl font-semibold">
+                    {formatActionName(record().request.capabilityName)}
+                  </h2>
+                  <MetadataBadge tone={getActionInboxStatePresentation(record().state).tone}>
+                    {getActionInboxStatePresentation(record().state).label}
+                  </MetadataBadge>
+                </div>
                 <p class="mt-1 text-sm text-muted">
                   {resource().label}
                   <Show when={resource().detail}> · {resource().detail}</Show>

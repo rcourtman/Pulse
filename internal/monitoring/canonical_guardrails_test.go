@@ -211,15 +211,15 @@ func TestProxmoxActionObserverUsesDirectControlPlaneClient(t *testing.T) {
 }
 
 func TestBroadcastResourceDiskIOUsesUnifiedResourceMetrics(t *testing.T) {
-	hasDiskIO, readRate, writeRate := monitorDiskIOMetricInput(&unifiedresources.ResourceMetrics{
+	readRate, writeRate := monitorDiskIOMetricInput(&unifiedresources.ResourceMetrics{
 		DiskRead:  &unifiedresources.MetricValue{Value: 4096.4, Unit: "bytes/s", Source: unifiedresources.SourceAgent},
 		DiskWrite: &unifiedresources.MetricValue{Value: 8191.6, Unit: "bytes/s", Source: unifiedresources.SourceAgent},
 	})
-	if !hasDiskIO {
+	if readRate == nil || writeRate == nil {
 		t.Fatal("expected disk I/O metrics to be projected")
 	}
-	if readRate != 4096 || writeRate != 8192 {
-		t.Fatalf("unexpected projected disk I/O rates: read=%d write=%d", readRate, writeRate)
+	if *readRate != 4096 || *writeRate != 8192 {
+		t.Fatalf("unexpected projected disk I/O rates: read=%d write=%d", *readRate, *writeRate)
 	}
 }
 

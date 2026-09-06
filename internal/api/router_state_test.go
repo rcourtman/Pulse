@@ -175,7 +175,7 @@ func TestRouterHandleStatePreservesNumericIdleRatesAndOmitsUnknownRates(t *testi
 		byName[resource.Name] = resource
 	}
 	idle := byName["idle-vm"]
-	if idle.DiskIO == nil || idle.DiskIO.ReadRate != 0 || idle.DiskIO.WriteRate != 0 {
+	if idle.DiskIO == nil || idle.DiskIO.ReadRate == nil || idle.DiskIO.WriteRate == nil || *idle.DiskIO.ReadRate != 0 || *idle.DiskIO.WriteRate != 0 {
 		t.Fatalf("valid idle rates were not emitted as numeric zero: %+v", idle.DiskIO)
 	}
 	if unknown := byName["unknown-vm"]; unknown.DiskIO != nil {

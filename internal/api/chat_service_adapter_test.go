@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 	"time"
 
@@ -99,8 +98,8 @@ func TestChatServiceAdapter_GetMessages(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestAdaptChatMessageUsesSharedProviderToolCallShape(t *testing.T) {
-	success := true
+func TestAdaptChatMessagePreservesObservedToolResult(t *testing.T) {
+	success := false
 	msg := adaptChatMessage(chat.Message{
 		ID:        "msg-1",
 		Role:      "assistant",
@@ -109,7 +108,7 @@ func TestAdaptChatMessageUsesSharedProviderToolCallShape(t *testing.T) {
 		ToolCalls: []chat.ToolCall{{
 			ID:               "call-1",
 			Name:             "diagnose",
-			Output:           "in-app only",
+			Output:           "NO_AGENT: command agent unavailable",
 			Success:          &success,
 			ThoughtSignature: json.RawMessage(`{"provider":"gemini"}`),
 		}},
@@ -121,7 +120,7 @@ func TestAdaptChatMessageUsesSharedProviderToolCallShape(t *testing.T) {
 	})
 
 	require.Len(t, msg.ToolCalls, 1)
-	var shared agentcapabilities.ProviderToolCall = msg.ToolCalls[0]
+	var shared agentcapabilities.TranscriptToolCall = msg.ToolCalls[0]
 	assert.Equal(t, "call-1", shared.ID)
 	assert.Equal(t, "diagnose", shared.Name)
 	assert.NotNil(t, shared.Input)
@@ -131,8 +130,8 @@ func TestAdaptChatMessageUsesSharedProviderToolCallShape(t *testing.T) {
 	text := string(payload)
 	assert.Contains(t, text, `"input":{}`)
 	assert.Contains(t, text, `"thought_signature":{"provider":"gemini"}`)
-	assert.False(t, strings.Contains(text, `"output"`), text)
-	assert.False(t, strings.Contains(text, `"success"`), text)
+	assert.Contains(t, text, `"output":"NO_AGENT: command agent unavailable"`)
+	assert.Contains(t, text, `"success":false`)
 
 	require.NotNil(t, msg.ToolResult)
 	var sharedResult agentcapabilities.ProviderToolResult = *msg.ToolResult

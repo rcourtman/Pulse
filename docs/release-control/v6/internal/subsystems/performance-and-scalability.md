@@ -15,6 +15,20 @@
 
 ## Purpose
 
+The Docker/app-container history families `dockercontainer` and `docker` use
+separate physical `.observed` series for new disk capacity and block-I/O
+measurements. Older disk series lack the required presence/capacity semantics
+and remain stored unchanged, but retained reads exclude them from current
+evidence. All four shared read APIs expose corrected series under the existing
+public metric names. Valid capacity from other providers sharing this storage
+family remains writable. `NormalizedSeriesKey` describes physical storage for
+coverage/backfill matching. Rollups aggregate each physical generation separately.
+Projection happens once per returned series, not per observation, and adds no
+query, schema migration, or per-row work for other resource families.
+`pkg/metrics/store_docker_observation_contract_test.go` pins legacy coexistence,
+zero retention, selected/fleet read parity, rollup separation and unaffected
+resource families.
+
 Retained reads use one shared query contract in `pkg/metrics/store.go` for
 `Query`, `QueryAll`, `QueryAllBatch` and `QueryMetricTypesBatch`. A non-empty
 preferred resolution no longer hides a newer raw tail, an older uncovered
@@ -3116,3 +3130,9 @@ candidate on the same worker with alternating samples, and retains full-route
 and middleware controls. Identical source or instruction sequences alone do not
 prove identical timing. The recorded final ten-pair check passes the unchanged
 time/bytes/allocation gate with no adjacent request-path regression.
+
+The disconnected incident recorder and its fleet metrics adapter are retired.
+Router initialization no longer launches their five-second cached-metrics loop
+or allocates per-resource pre-incident buffers. Explicit legacy archive reads
+are lazy and bounded to the existing 16 MiB file limit. Canonical resource
+history supplies current diagnostic evidence without a second sampling loop.

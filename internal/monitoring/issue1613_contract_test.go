@@ -138,7 +138,7 @@ func TestIssue1613NodeDoesNotGreyBetweenNinetySecondPolls(t *testing.T) {
 	}
 }
 
-func TestIssue1613WebsocketStateKeepsUnknownRatesNumeric(t *testing.T) {
+func TestIssue1613WebsocketStateKeepsObservedZeroAndOmitsUnknownRates(t *testing.T) {
 	monitor := &Monitor{
 		state: models.NewState(),
 		resourceStore: &resourceOnlyStore{resources: []unifiedresources.Resource{
@@ -168,7 +168,7 @@ func TestIssue1613WebsocketStateKeepsUnknownRatesNumeric(t *testing.T) {
 		t.Fatal(err)
 	}
 	wire := string(payload)
-	if !strings.Contains(wire, `"diskIO":{"readRate":0,"writeRate":0}`) {
+	if !strings.Contains(wire, `"diskIO":{"readRate":0}`) {
 		t.Fatalf("websocket payload does not contain numeric valid zero disk rate: %s", wire)
 	}
 	if strings.Count(wire, `"diskIO"`) != 1 {

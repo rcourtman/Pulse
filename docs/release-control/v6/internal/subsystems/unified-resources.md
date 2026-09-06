@@ -15,6 +15,25 @@
 
 ## Purpose
 
+Action review distinguishes the recorded plan from live or executed facts. The
+shared decision packet labels its state and expiry as planning-time evidence,
+including when opened from a resolved Patrol finding. Potential blast radius
+does not claim every related resource was affected. Actual execution and
+verification remain in the recorded outcome section. The review header uses the
+shared action-state presentation, so rejected actions remain identifiable even
+without an execution receipt. The rejected-state regression and live
+completed/rejected deep-link browser proof cover these historical journeys.
+
+Docker container writable/root layer bytes describe image composition, not
+used/total filesystem capacity, and cannot populate `ResourceMetrics.Disk`.
+Optional valid block-I/O rate pointers preserve measured zero. Missing, negative
+and non-finite rates remain unavailable. Raw layer metadata remains available.
+`TestMetricsFromDockerContainerDistinguishesAbsentAndIdleIO` and the container
+I/O projection proof in `internal/unifiedresources/metrics_test.go` pin this
+boundary.
+The frontend resource contract likewise makes read and write rates independently
+optional, preserving this distinction through current-history labels.
+
 Physical disk source freshness preserves the collector-authored
 `expectedUpdateIntervalSeconds` alongside the actual last observation. Registry
 ingest, merge, cloning and typed disk views preserve it. Staleness uses the
@@ -4802,6 +4821,17 @@ recent-change slice plus facet counts it actually renders. The store now also
 owns a `resource_changes` persistence table with `RecordChange` and
 `GetRecentChanges` methods so change history is queryable by canonical ID and
 time window.
+Docker alert source references containing an exact full container ID resolve at
+`MonitorAdapter.RecordChange` through the current registry, then a retained
+history binding, then the deterministic source-specific container identity.
+Names and shortened IDs cannot establish this binding. `history_identity.go`
+owns a history-only alias index in the organization-scoped resource store.
+Legacy event rows retain their IDs, resource references and timestamps. Reads
+expand aliases and canonical predecessor eras without changing operator state,
+action requests, approvals, links or exclusions. Separate monitor, API and
+Assistant store handles must see current persisted aliases. Missing identity
+storage is an error, not evidence of empty history. Retention removes an alias
+only after neither identity has retained journal records.
 That same shared timeline vocabulary now includes the `activity` change kind
 for provider-read breadcrumbs such as VMware tasks and events, plus the
 `vmware_adapter` source-adapter token for canonical provenance drill-down.

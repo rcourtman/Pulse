@@ -124,8 +124,27 @@ type ContainerNetwork struct {
 
 // ContainerBlockIO summarises high-level block I/O metrics for a container.
 type ContainerBlockIO struct {
-	ReadBytes  uint64 `json:"readBytes,omitempty"`
-	WriteBytes uint64 `json:"writeBytes,omitempty"`
+	ReadBytes         uint64 `json:"readBytes,omitempty"`
+	WriteBytes        uint64 `json:"writeBytes,omitempty"`
+	ReadBytesPresent  *bool  `json:"readBytesPresent,omitempty"`
+	WriteBytesPresent *bool  `json:"writeBytesPresent,omitempty"`
+}
+
+// CounterPresence distinguishes observed zero from an omitted direction. Older
+// agents omitted zero values and presence, so only their positive counters are
+// unambiguous. New agents carry explicit presence independently of counter value.
+func (io *ContainerBlockIO) CounterPresence() (read, write bool) {
+	if io == nil {
+		return false, false
+	}
+	read, write = io.ReadBytes > 0, io.WriteBytes > 0
+	if io.ReadBytesPresent != nil {
+		read = *io.ReadBytesPresent
+	}
+	if io.WriteBytesPresent != nil {
+		write = *io.WriteBytesPresent
+	}
+	return
 }
 
 // PodmanContainer carries metadata extracted from Podman-specific annotations.

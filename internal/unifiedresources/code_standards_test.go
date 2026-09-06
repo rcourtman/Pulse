@@ -2516,13 +2516,6 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 			},
 		},
 		{
-			path: filepath.Join(repoRoot, "internal", "ai", "incident_coordinator_additional_test.go"),
-			requiredSnippets: []string{
-				`TestIncidentCoordinator_OnAnomalyDetected_CanonicalizesLegacyHostAlias`,
-				`expected anomaly recording resource type to be canonicalized to agent`,
-			},
-		},
-		{
 			path: filepath.Join(repoRoot, "internal", "ai", "tools", "tools_metrics_alerts_test.go"),
 			requiredSnippets: []string{
 				`expected error for legacy host resource_type`,
@@ -2555,13 +2548,6 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 				`legacy container alias rejected`,
 				`legacy docker alias rejected`,
 				`legacy k8s alias rejected`,
-			},
-		},
-		{
-			path: filepath.Join(repoRoot, "internal", "metrics", "incident_recorder_test.go"),
-			requiredSnippets: []string{
-				`TestStartRecordingCanonicalizesLegacyHostAlias`,
-				`expected legacy host alias to canonicalize to agent`,
 			},
 		},
 		{

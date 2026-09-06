@@ -25,6 +25,104 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+Action reconciliation refreshes the durable product investigation record from
+the authoritative session/action even when the finding outcome already matches.
+The same builder owns initial completion and later refresh. Completion replaces
+an early action projection with the final investigation evidence. Later action
+refresh preserves original prose, impact, confidence, evidence and rollback. Unchanged hydration is a no-op, and a
+record-only repair does not repeat outcome notifications. Resolved findings
+retain the canonical action-history link and resolved status in Assistant context.
+Live approved and rejected recovery cases pass, but storage's lexical scorecard
+pass fails semantic review because an exhausted container tmpfs was incorrectly
+attributed to host capacity. Storage and broader product qualification stay open.
+
+The live qualification client follows the canonical resource API's pagination.
+The API caps each page at 100, so a larger requested limit cannot establish a
+complete inventory. A later-page failure returns an error rather than partial
+inventory. Regression proof covers an unhealthy resource beyond the first 100
+and failure while reading a later page. This changes collection coverage, not
+fault oracles, model context policy or outcome scoring.
+
+Stored chat and product history share the result-bearing `TranscriptToolCall`
+contract. API adapters preserve observed output and the explicit success/error
+bit. Only provider-request projections remove those display fields. A failed
+read must not become an invocation with no visible result on the way to Patrol
+or Assistant history. The adapter regression includes a `NO_AGENT` result and
+`success: false`, and provider serialization retains its existing narrower shape.
+
+Capturing a typed proposal does not create an action. The proposal response
+discloses that broker validation is still pending, without forcing the model to
+stop investigating. If the broker later refuses submission, the enterprise
+orchestrator retains the model's diagnosis unchanged and records the broker
+error as a failed investigation needing attention, with no action reference.
+The real disconnected-agent case must remain unsuccessful until its actual
+transport prerequisite is satisfied. A successful model turn or recorded
+proposal is not approval, execution or recovery.
+
+The shared investigation review renders sanitized Markdown and does not repeat
+an identical persisted/fetched conclusion or error. Distinct evidence remains
+visible. Pausing scheduled Patrol does not disable history review. The review
+control has one detail target and returns keyboard focus when closed. Merged tool
+results use Assistant's shared expandable evidence component. Historical calls
+without an explicit result bit do not gain an inferred success/failure state.
+Resolution copy cannot infer manual review from `needs_attention` or `cannot_fix`.
+
+The shared pricing table includes reviewed standard Gemini 3.8 Flash rates for
+the exact direct and OpenRouter routes. OpenRouter variants and aliases remain
+unpriced until independently reviewed. Rates carry the review date and are
+estimates, not reconciled provider charges. The introductory rates require a
+new review on 2027-01-01. `TestGemini38FlashReviewedRoutePricing` covers real
+qualification token counts and request-route preservation, and
+`TestGemini38OpenRouterPricingDoesNotGuessVariantRates` preserves unknown variants.
+
+The canonical query tool describes the app-container configuration boundary
+explicitly: TrueNAS supports `config`, while Docker/Podman expose their collected
+health, mounts, ports and networks through `get`. This communicates the existing
+adapter contract to the model. It does not add configuration access, suppress
+tool errors or weaken qualification gates. The existing
+`TestAppContainerConfigObservationContract` retains unsupported-adapter and
+provider/identity boundaries.
+
+Shared app-container query mount evidence preserves native type, source,
+destination, options and canonical read/write access. Compound options such as
+`ro,noexec` cannot become writable through string equality heuristics. Both the
+canonical provider and typed read-state projection preserve the same fields.
+Configured size in mount options does not establish filesystem usage or free
+space. `TestQueryPreservesMountConfigurationEvidence` covers these contracts.
+The ordinary live storage case still failed diagnosis by excluding resource
+pressure without capacity evidence. Mount fidelity alone does not qualify model
+interpretation. Incident-record lookup across canonical and legacy Docker IDs
+and typed compatibility lookup of canonical IDs remain explicit identity gaps.
+
+Shared query projections name command transport explicitly through
+`command_agent_connected`, `node_command_agent_connected` and the corresponding
+topology counts. These observations do not establish monitoring freshness or
+installation state. A topology built without a connection snapshot omits command
+flags, execution hints and connected counts. An observed empty snapshot preserves
+false/zero. Assistant's inventory seed carries that same absence semantics.
+The parent node's connection cannot become a direct guest connection merely
+because provider placement names that node. Existing command routing, control,
+approval and invocation enforcement remain authoritative. A `can_execute` hint
+reflects connected transport with control enabled, not approval for an operation.
+`TestCommandConnectivityDoesNotReplaceMonitoringEvidence`,
+`TestTopologyOmitsUnobservedCommandConnections` and
+`TestAssistantInventoryDoesNotInventCommandConnectionObservations` cover these
+projection and continuity boundaries. Existing persisted tool records are not
+rewritten, and this contract does not qualify model diagnosis or recovery.
+
+Native app-container configuration reads resolve identity, provider and placement
+from current canonical inventory. Optional session discovery cannot fabricate a
+not-found result or replace current placement with a stale execution target.
+Query restrictions on both the supplied reference and canonical identity are
+checked before registration, and an existing session's allowed actions are not
+expanded by a read. Unsupported adapters, missing providers, incomplete placement
+and nil provider observations retain known resource identity and an explicit
+unavailability reason with the shared tool error bit. They cannot count as a
+successful configuration read. Actual inventory absence remains distinct.
+`TestAppContainerConfigObservationContract` exercises these boundaries with
+strict resolution enabled. This read correction does not relax action or native
+log validation and does not qualify autonomous diagnosis or recovery.
+
 The published Patrol qualification schema must accept the fault injectors used
 by the executable catalogue. `TestCatalogFaultInjectorsMatchPublishedSchema`
 checks the actual scenario faults against the schema enum, including the
@@ -797,6 +895,7 @@ cheap local detection into model-owned diagnosis and governed action.
 31. `internal/agentcapabilities/tool_names.go` shared with `api-contracts`: the Pulse Intelligence registry tool-name vocabulary is both the native Assistant execution/display contract and the canonical API/agent tool identity contract for MCP-facing external-agent adapters.
 32. `internal/agentcapabilities/tool_response.go` shared with `api-contracts`: the shared tool response envelope, tool error-code vocabulary, and tool-result error-code and verification evidence parsers are both the Assistant structured tool-result contract and the canonical API/agent branching contract for Pulse Intelligence tool failures, recovery tracking, and write self-verification.
 33. `internal/agentcapabilities/tool_result.go` shared with `api-contracts`: the Pulse Intelligence shared tool-result content/result envelope, structuredContent projection, result constructors, HTTP response-to-result mapping, text projection, and result interpretation helpers are both the Assistant registry result contract and the canonical API/agent result projection contract for governed tool outcomes.
+34. `internal/agentcapabilities/transcript.go` shared with `api-contracts`: Stored Assistant tool results and product history share one result-bearing transcript contract, with an explicit narrower provider-request projection. Observed failures and absent historical result status must survive the API boundary.
 34. `internal/agentcapabilities/types.go` shared with `api-contracts`: the agent capabilities manifest wire type, manifest-owned external-adapter surface tool contract field, capability display title and structured output schema fields, approval-policy vocabulary, capability governance normalization, and tool-governance descriptor shape are both the canonical API payload contract and the AI runtime projection contract for Pulse Assistant and MCP-facing agent tools.
 35. `internal/agentcapabilities/workflow_prompt.go` shared with `api-contracts`: the Pulse Intelligence workflow prompt catalogue, manifest-owned `workflowPrompts` projection, MCP prompt title projection, presentation kind hints, shared resource-context and finding argument vocabulary, Patrol issue-handling capability gating, argument validation, and manifest-gated shared prompt rendering rules are both the AI runtime starter contract for Assistant-compatible surfaces and the canonical API/agent prompt projection contract for MCP-facing clients.
 36. `internal/api/ai_handler.go` shared with `api-contracts`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.
@@ -3564,6 +3663,22 @@ has a single definition in the canonical resource contract.
 3. Treating AI transport files as payload-only boundaries when they also define live runtime control behavior
 
 ## Completion Obligations
+
+The `pulse_knowledge` incidents action reads the organization-pinned canonical
+resource timeline used by resource history and Assistant handoffs. It preserves
+resource identity, observation and optional occurrence time, source and event
+metadata. Reads use explicit observation-time bounds and a bounded event count
+with truncation disclosure. Empty retained history is not continuous healthy
+coverage, and an unavailable or failed history store is a failed tool read.
+Legacy recording IDs are isolated archive lookups bound to the requested
+resource. Their recorder timestamps cannot establish source measurement time.
+The primary history path must not restore the legacy recorder as a parallel
+incident authority or derive fresh history by resampling cached metrics.
+`TestIncidentHistoryRetainsCanonicalEvidence` uses SQLite lifecycle records,
+time/resource negative controls, missing occurrence time and bounded reads.
+The corresponding unavailable/invalid and archive tests cover failure semantics
+and resource isolation. Live model interpretation remains governed by the
+customer journey qualification plan.
 
 Every per-organization Assistant or legacy AI service that can discover or
 dispatch through the host-agent command transport must receive an
@@ -8061,3 +8176,30 @@ unchanged pre-existing inventory. The ordinary package run skips live Docker
 work unless explicitly enabled. A direct fixture restart is teardown and must
 never be counted as a Pulse approval, execution, rejection or outcome. Model-led
 and canonical-action qualification remain separate required evidence.
+
+### Legacy incident recording retirement
+
+`internal/metrics/incident_archive.go` owns the historical recording format and
+explicit, organization-pinned archive reads. `IncidentArchiveProvider` exposes
+only a resource-bound window lookup with an error result. The primary
+`pulse_knowledge` incident action reads the canonical resource timeline. An
+explicit `window_id` reads saved legacy observations and labels their timestamp
+and historical-status limits. It must never start a recorder or infer source
+freshness from a recording timestamp. The disconnected incident coordinator,
+fleet sampling adapter, timer loop, retention writer and duplicate tool adapter
+are retired. There is no replacement incident scheduler or diagnosis policy.
+
+The archive reader preserves saved timestamps, resource labels, metadata and
+summary values, including records older than the former retention period. The response explicitly
+identifies the nanosecond encoding of the historical `summary.duration_ms` field. It
+distinguishes unavailable archives, failed reads and absent exact resource/window
+pairs. Proof lives in `internal/metrics/incident_archive_test.go` and the
+registered-tool cases in `internal/ai/tools/incident_history_test.go`.
+
+The legacy incidents listing still exposes incident memory and is not a complete
+canonical incident query. Its old sampler-derived `active_count` is now null with
+`active_count_status=not_measured`. Canonical-only events, alias-aware listing,
+query bounds and projection-read errors remain an explicit modernization gap in
+`patrol-assistant-customer-outcome-qualification`. The shared resource timeline
+remains the evidence owner. Do not invent another incident lifecycle to repair
+this listing.

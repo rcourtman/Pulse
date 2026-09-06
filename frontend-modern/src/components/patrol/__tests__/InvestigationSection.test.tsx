@@ -133,4 +133,46 @@ describe('InvestigationSection', () => {
     expect(screen.queryByText(/No investigation data available/)).not.toBeInTheDocument();
     expect(screen.queryByText('systemctl restart workload.service')).not.toBeInTheDocument();
   });
+
+  it.each([false, true])(
+    'preserves readable evidence and distinct summaries (different: %s)',
+    async (different) => {
+      const conclusion =
+        '### Root cause\n\nThe cause is **unknown**.\n\n- The health check failed.\n- Logs are unavailable.';
+      getInvestigationMock.mockResolvedValue({
+        id: 'inv-markdown',
+        finding_id: 'finding-markdown',
+        session_id: 'session-markdown',
+        status: 'completed',
+        started_at: '2026-09-06T17:00:00Z',
+        turn_count: 2,
+        summary: different
+          ? '### Follow-up\n\nAdditional evidence remains unavailable.'
+          : conclusion,
+      } satisfies Investigation);
+      render(() => (
+        <InvestigationSection
+          findingId="finding-markdown"
+          investigationRecord={{
+            id: 'record-markdown',
+            finding_id: 'finding-markdown',
+            subject: { resource_id: 'container-1' },
+            trigger: { title: 'Health check failed', detected_at: '2026-09-06T17:00:00Z' },
+            status: 'completed',
+            conclusion,
+            started_at: '2026-09-06T17:00:00Z',
+            evidence: [],
+            verification: [],
+            rollback: [],
+            tools_used: [],
+          }}
+        />
+      ));
+      await screen.findByRole('button', { name: 'Show investigation thread' });
+      expect(screen.getAllByRole('heading', { name: 'Root cause' })).toHaveLength(1);
+      expect(screen.getByText('unknown').tagName).toBe('STRONG');
+      expect(screen.getAllByRole('listitem')).toHaveLength(2);
+      expect(screen.queryByRole('heading', { name: 'Follow-up' }) !== null).toBe(different);
+    },
+  );
 });

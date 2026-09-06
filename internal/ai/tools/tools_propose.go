@@ -178,7 +178,7 @@ func (e *PulseToolExecutor) executeProposeAction(ctx context.Context, args map[s
 		return NewErrorResult(err), nil
 	}
 	return NewTextResult(fmt.Sprintf(
-		"Proposal recorded: capability %q on resource %q. It will be planned and routed for governed approval; nothing has executed. Conclude the investigation with your diagnosis.",
+		"Proposal recorded: capability %q on resource %q. The action broker still needs to validate it after this investigation. No action has been created or executed.",
 		capabilityName, resourceID)), nil
 }
 

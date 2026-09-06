@@ -23,6 +23,7 @@ import type { ActionAuditState, PatrolActionReference } from '@/types/actionAudi
 
 interface ApprovalSectionProps {
   findingId: string;
+  findingStatus?: string;
   investigationOutcome?: string;
   findingTitle?: string;
   resourceName?: string;
@@ -127,7 +128,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
         current?.plan.message ||
         investigation()?.summary ||
         'Review the current Patrol finding and its governed action state.',
-      findingStatus: 'active',
+      findingStatus: props.findingStatus ?? 'active',
       investigationOutcome: props.investigationOutcome,
       loopState: props.investigationOutcome || current?.state,
       resourceId: props.resourceId || current?.resource_id,

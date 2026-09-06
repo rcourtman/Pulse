@@ -67,6 +67,14 @@ export function formatSpeed(bytesPerSecond: number, decimals: number | 'auto' = 
   return `${formatBytes(bytesPerSecond, decimals)}/s`;
 }
 
+export function formatObservedSpeed(bytesPerSecond: number | null | undefined): string {
+  return typeof bytesPerSecond === 'number' &&
+    Number.isFinite(bytesPerSecond) &&
+    bytesPerSecond >= 0
+    ? formatSpeed(bytesPerSecond)
+    : '-';
+}
+
 export function formatPercent(value: number): string {
   if (!Number.isFinite(value)) return '0%';
   const abs = Math.abs(value);

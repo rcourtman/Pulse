@@ -111,6 +111,33 @@ func (a *MonitorAdapter) RecordChange(change ResourceChange) error {
 	if registry == nil || registry.store == nil {
 		return nil
 	}
+	sourceRef := change.ResourceID
+	if sourceID, derivedID, ok := legacyDockerHistoryIdentity(sourceRef); ok {
+		// Use exact source identity when inventory is present, including any
+		// canonical identity merge. Full Docker IDs remain derivable after removal.
+		registry.mu.RLock()
+		resolvedID := registry.bySource[SourceDocker][sourceID]
+		registry.mu.RUnlock()
+		if resolvedID != "" {
+			change.ResourceID = resolvedID
+		} else {
+			change.ResourceID = derivedID
+			if history, ok := registry.store.(resourceHistoryIdentityWriter); ok {
+				id, found, err := history.ResolveHistorySourceIdentity(sourceRef)
+				if err != nil {
+					return err
+				}
+				if found {
+					change.ResourceID = id
+				}
+			}
+		}
+	}
+	if sourceRef != change.ResourceID {
+		if writer, ok := registry.store.(resourceHistoryIdentityWriter); ok {
+			return writer.RecordChangeWithSourceIdentity(change, sourceRef)
+		}
+	}
 	return registry.store.RecordChange(change)
 }
 

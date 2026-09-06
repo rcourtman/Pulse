@@ -493,8 +493,8 @@ export const getAgentMachineNetworkInterfaceDetails = (
 export const getAgentMachineDiskIOTotal = (machine: Resource): number | undefined => {
   const read = getPlatformTableFiniteMetric(machine.diskIO?.readRate);
   const write = getPlatformTableFiniteMetric(machine.diskIO?.writeRate);
-  if (read === undefined && write === undefined) return undefined;
-  return (read ?? 0) + (write ?? 0);
+  if (read === undefined || write === undefined) return undefined;
+  return read + write;
 };
 
 export const getAgentMachineDiskIODetails = (machine: Resource): AgentMachineDiskIODetail[] => {

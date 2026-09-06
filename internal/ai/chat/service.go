@@ -60,7 +60,7 @@ type (
 	AgentProfileManager                 = tools.AgentProfileManager
 	FindingsManager                     = tools.FindingsManager
 	MetadataUpdater                     = tools.MetadataUpdater
-	IncidentRecorderProvider            = tools.IncidentRecorderProvider
+	IncidentArchiveProvider             = tools.IncidentArchiveProvider
 	EventCorrelatorProvider             = tools.EventCorrelatorProvider
 	KnowledgeStoreProvider              = tools.KnowledgeStoreProvider
 	AssistantDiscoveryProvider          = tools.DiscoveryProvider
@@ -1418,15 +1418,15 @@ func marshalAssistantInventoryTopologyContext(topology tools.TopologyResponse) (
 	}
 	for _, node := range topology.Proxmox.Nodes {
 		nodeContext := assistantInventoryProxmoxNode{
-			AnswerLabel:    assistantInventoryNodeAnswerLabel(node.Name),
-			Name:           node.Name,
-			Status:         node.Status,
-			AgentConnected: node.AgentConnected,
-			CanExecute:     node.CanExecute,
-			VMCount:        node.VMCount,
-			ContainerCount: node.ContainerCount,
-			VMs:            make([]assistantInventoryWorkload, 0, len(node.VMs)),
-			Containers:     make([]assistantInventoryWorkload, 0, len(node.Containers)),
+			AnswerLabel:           assistantInventoryNodeAnswerLabel(node.Name),
+			Name:                  node.Name,
+			Status:                node.Status,
+			CommandAgentConnected: node.CommandAgentConnected,
+			CanExecute:            node.CanExecute,
+			VMCount:               node.VMCount,
+			ContainerCount:        node.ContainerCount,
+			VMs:                   make([]assistantInventoryWorkload, 0, len(node.VMs)),
+			Containers:            make([]assistantInventoryWorkload, 0, len(node.Containers)),
 		}
 		for _, vm := range node.VMs {
 			nodeContext.VMs = append(nodeContext.VMs, assistantInventoryWorkload{
@@ -1452,14 +1452,14 @@ func marshalAssistantInventoryTopologyContext(topology tools.TopologyResponse) (
 	}
 	for _, host := range topology.Docker.Hosts {
 		hostContext := assistantInventoryDockerHost{
-			AnswerLabel:    firstNonEmptyString(host.DisplayName, host.Hostname),
-			Hostname:       host.Hostname,
-			DisplayName:    host.DisplayName,
-			AgentConnected: host.AgentConnected,
-			CanExecute:     host.CanExecute,
-			ContainerCount: host.ContainerCount,
-			RunningCount:   host.RunningCount,
-			Containers:     make([]assistantInventoryAppContainer, 0, len(host.Containers)),
+			AnswerLabel:           firstNonEmptyString(host.DisplayName, host.Hostname),
+			Hostname:              host.Hostname,
+			DisplayName:           host.DisplayName,
+			CommandAgentConnected: host.CommandAgentConnected,
+			CanExecute:            host.CanExecute,
+			ContainerCount:        host.ContainerCount,
+			RunningCount:          host.RunningCount,
+			Containers:            make([]assistantInventoryAppContainer, 0, len(host.Containers)),
 		}
 		for _, container := range host.Containers {
 			hostContext.Containers = append(hostContext.Containers, assistantInventoryAppContainer{
@@ -1547,15 +1547,15 @@ type assistantInventoryKubernetesTopology struct {
 }
 
 type assistantInventoryProxmoxNode struct {
-	AnswerLabel    string                       `json:"answer_label"`
-	Name           string                       `json:"name"`
-	Status         string                       `json:"status"`
-	AgentConnected bool                         `json:"agent_connected,omitempty"`
-	CanExecute     bool                         `json:"can_execute,omitempty"`
-	VMCount        int                          `json:"vm_count"`
-	ContainerCount int                          `json:"container_count"`
-	VMs            []assistantInventoryWorkload `json:"vms"`
-	Containers     []assistantInventoryWorkload `json:"containers"`
+	AnswerLabel           string                       `json:"answer_label"`
+	Name                  string                       `json:"name"`
+	Status                string                       `json:"status"`
+	CommandAgentConnected *bool                        `json:"command_agent_connected,omitempty"`
+	CanExecute            *bool                        `json:"can_execute,omitempty"`
+	VMCount               int                          `json:"vm_count"`
+	ContainerCount        int                          `json:"container_count"`
+	VMs                   []assistantInventoryWorkload `json:"vms"`
+	Containers            []assistantInventoryWorkload `json:"containers"`
 }
 
 type assistantInventoryWorkload struct {
@@ -1568,14 +1568,14 @@ type assistantInventoryWorkload struct {
 }
 
 type assistantInventoryDockerHost struct {
-	AnswerLabel    string                           `json:"answer_label"`
-	Hostname       string                           `json:"hostname"`
-	DisplayName    string                           `json:"display_name,omitempty"`
-	AgentConnected bool                             `json:"agent_connected,omitempty"`
-	CanExecute     bool                             `json:"can_execute,omitempty"`
-	ContainerCount int                              `json:"container_count"`
-	RunningCount   int                              `json:"running_count"`
-	Containers     []assistantInventoryAppContainer `json:"containers"`
+	AnswerLabel           string                           `json:"answer_label"`
+	Hostname              string                           `json:"hostname"`
+	DisplayName           string                           `json:"display_name,omitempty"`
+	CommandAgentConnected *bool                            `json:"command_agent_connected,omitempty"`
+	CanExecute            *bool                            `json:"can_execute,omitempty"`
+	ContainerCount        int                              `json:"container_count"`
+	RunningCount          int                              `json:"running_count"`
+	Containers            []assistantInventoryAppContainer `json:"containers"`
 }
 
 type assistantInventoryAppContainer struct {
@@ -3598,11 +3598,11 @@ func (s *Service) SetMetadataUpdater(updater MetadataUpdater) {
 	}
 }
 
-func (s *Service) SetIncidentRecorderProvider(provider IncidentRecorderProvider) {
+func (s *Service) SetIncidentArchiveProvider(provider IncidentArchiveProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.executor != nil {
-		s.executor.SetIncidentRecorderProvider(provider)
+		s.executor.SetIncidentArchiveProvider(provider)
 	}
 }
 

@@ -270,17 +270,8 @@ func metricsFromDockerContainer(ct models.DockerContainer, hostCPUs ...int) *Res
 		percent := percentFromReportedPercent(ct.MemoryPercent)
 		metrics.Memory = &MetricValue{Used: &ct.MemoryUsage, Total: &ct.MemoryLimit, Percent: percent, Unit: "bytes", Source: SourceDocker}
 	}
-	if ct.RootFilesystemBytes > 0 {
-		used := ct.WritableLayerBytes
-		if used < 0 {
-			used = 0
-		}
-		if used > ct.RootFilesystemBytes {
-			used = ct.RootFilesystemBytes
-		}
-		percent := clampMetricValue((float64(used)/float64(ct.RootFilesystemBytes))*100, 0, 100)
-		metrics.Disk = &MetricValue{Used: &used, Total: &ct.RootFilesystemBytes, Percent: percent, Unit: "bytes", Source: SourceDocker}
-	}
+	// Writable and root layer sizes are image metadata, not used/total
+	// filesystem capacity. Docker does not supply a capacity observation here.
 	if ct.NetInRate > 0 {
 		metrics.NetIn = &MetricValue{Value: ct.NetInRate, Unit: "bytes/s", Source: SourceDocker}
 	}
@@ -288,10 +279,10 @@ func metricsFromDockerContainer(ct models.DockerContainer, hostCPUs ...int) *Res
 		metrics.NetOut = &MetricValue{Value: ct.NetOutRate, Unit: "bytes/s", Source: SourceDocker}
 	}
 	if ct.BlockIO != nil {
-		if ct.BlockIO.ReadRateBytesPerSecond != nil && *ct.BlockIO.ReadRateBytesPerSecond > 0 {
+		if ct.BlockIO.ReadRateBytesPerSecond != nil && *ct.BlockIO.ReadRateBytesPerSecond >= 0 && !math.IsInf(*ct.BlockIO.ReadRateBytesPerSecond, 0) {
 			metrics.DiskRead = &MetricValue{Value: *ct.BlockIO.ReadRateBytesPerSecond, Unit: "bytes/s", Source: SourceDocker}
 		}
-		if ct.BlockIO.WriteRateBytesPerSecond != nil && *ct.BlockIO.WriteRateBytesPerSecond > 0 {
+		if ct.BlockIO.WriteRateBytesPerSecond != nil && *ct.BlockIO.WriteRateBytesPerSecond >= 0 && !math.IsInf(*ct.BlockIO.WriteRateBytesPerSecond, 0) {
 			metrics.DiskWrite = &MetricValue{Value: *ct.BlockIO.WriteRateBytesPerSecond, Unit: "bytes/s", Source: SourceDocker}
 		}
 	}

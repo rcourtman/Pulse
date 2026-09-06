@@ -168,7 +168,7 @@ func TestChatMessage_UsesCanonicalEmptyCollections(t *testing.T) {
 		Name:             "diagnose",
 		ThoughtSignature: json.RawMessage(`{"provider":"gemini"}`),
 	}
-	var sharedProviderCall agentcapabilities.ProviderToolCall = sharedCall.NormalizeCollections()
+	var sharedProviderCall agentcapabilities.TranscriptToolCall = sharedCall.NormalizeCollections()
 	if sharedProviderCall.ID != "call-1" || sharedProviderCall.Input == nil {
 		t.Fatalf("shared chat tool call = %+v", sharedProviderCall)
 	}

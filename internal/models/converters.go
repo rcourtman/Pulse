@@ -1163,9 +1163,8 @@ type ResourceConvertInput struct {
 	NetworkRX             int64
 	NetworkTX             int64
 	HasNetwork            bool
-	DiskReadRate          int64
-	DiskWriteRate         int64
-	HasDiskIO             bool
+	DiskReadRate          *int64
+	DiskWriteRate         *int64
 	Temperature           *float64
 	Uptime                *int64
 	Tags                  []string
@@ -1343,7 +1342,7 @@ func ConvertResourceToFrontend(input ResourceConvertInput) ResourceFrontend {
 		}
 	}
 
-	if input.HasDiskIO {
+	if input.DiskReadRate != nil || input.DiskWriteRate != nil {
 		rf.DiskIO = &ResourceDiskIOFrontend{
 			ReadRate:  input.DiskReadRate,
 			WriteRate: input.DiskWriteRate,

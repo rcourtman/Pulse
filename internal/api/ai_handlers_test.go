@@ -3754,14 +3754,10 @@ func TestPatrolModelReadinessBudgetScalesWithRequestTimeout(t *testing.T) {
 	assert.Equal(t, 4*600*time.Second+time.Minute, patrolModelReadinessBudget(&config.AIConfig{RequestTimeoutSeconds: 600}))
 }
 
-// TestOrchestratorAndChatAdaptersMapTheSameMessageFields keeps the deliberate
-// GetMessages mirror between orchestratorChatAdapter (ai_handlers.go) and
-// chatServiceAdapter (chat_service_adapter.go) honest: both convert the same
-// chat-service messages onto separate output contracts, and a field mapped by
-// one must be mapped by the other. chatServiceAdapter routes through
-// adaptChatMessage so its API-facing tool calls stay on the shared provider
-// shape instead of hand-copying a local duplicate.
-func TestOrchestratorAndChatAdaptersMapTheSameMessageFields(t *testing.T) {
+// The adapters share base message fields but have distinct tool-call contracts.
+// Orchestrator turns project provider arguments. Product history retains the
+// observed result through the canonical result-bearing transcript type.
+func TestOrchestratorAndChatAdaptersMapTheirMessageContracts(t *testing.T) {
 	for _, tc := range []struct {
 		file     string
 		fn       string
@@ -3793,7 +3789,7 @@ func TestOrchestratorAndChatAdaptersMapTheSameMessageFields(t *testing.T) {
 				"Content:",
 				"ReasoningContent:",
 				"Timestamp:",
-				"tc.ProviderToolCall()",
+				"tc.NormalizeCollections()",
 				"toolResult := *m.ToolResult",
 				".NormalizeCollections()",
 			},
