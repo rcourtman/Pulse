@@ -2616,3 +2616,17 @@ Unit reproduction and focused race tests are source-level evidence only, not
 installed-provider, restart transport or off-host recipient qualification of
 this changed candidate. Any promoted RC must bind the new revision and begin
 its own required soak; the former exact-candidate qualification cannot transfer.
+
+### Release/v6.4: PBS observation-gap transport regression coverage
+
+Backport the test-only PBS webhook receipt coverage from main commits
+`4d87bd37c5` and `7425089632` (final file at merge `9b4fa52d84e6196108e961ccba2b317df497268b`).
+This protects the candidate's existing missing-metric recovery repair
+`7a5b535a43`, without adding production code or widening patch scope.
+The test exercises monitor callbacks and generic webhook rendering through a
+local HTTP receiver: firing, missing observations, manager restart on persisted
+state, genuine recovery, a second restart, and recurrence. It checks retained
+incident identity and resolved history, plus bounded no-extra-receipt windows.
+Manager recreation is not an installed process restart, and loopback receipts
+are not independent provider/device delivery evidence. Those qualification
+requirements and exact-candidate soak remain outstanding.
