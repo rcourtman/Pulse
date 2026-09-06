@@ -1693,3 +1693,126 @@ This correction establishes the connection evidence contract, not reliable
 interpretation. Native configuration-read model use, storage-fault diagnosis,
 approved/rejected action outcomes and independent recovery remain open, as do
 the supported autonomous provider dependency and independent-environment gate.
+
+
+### Ordinary Assistant storage fault and recovery, 2026-09-06
+
+The command-connection correction passed the exact nine-file worker pre-commit
+and was pushed as `f5f440dbad18d83557104d2cf6197d8319949e44` in PR #1935.
+Required CI remains in progress. This is not a release or a completed goal.
+
+An owned DockerLab run used the checked-in storage-pressure manifest on Tower.
+Independent observations established a healthy worker with 8,347,648 free bytes,
+then a real ENOSPC fault with zero free bytes, a running/unhealthy worker and a
+healthy control. Pulse collection converged to both states before the request.
+The ordinary read-only Assistant used the configured subscription Opus 5 route.
+It was not an autonomous Patrol request and did not retry the cached refusal.
+
+The diagnosis took 114.847 seconds and ten tool calls. It identified the worker's
+unhealthy state, the control's current healthy state and a failed command-route
+log read. It did not retry that unavailable capability. However, it falsely
+ruled out resource pressure using low CPU, memory, network and disk-read values.
+Filesystem capacity was absent from its evidence and was independently full.
+This is a failed diagnosis, despite its otherwise useful uncertainty statement
+and suggested diagnostic read. No model-directed mutation occurred.
+
+After the answer, the independent oracle still found zero available bytes and
+an unhealthy worker. Removing only the owned fill file restored 8,220,672 bytes
+and healthy status. Pulse collected recovery and resolved the health alert.
+A follow-up in the same Assistant session took 91.358 seconds and five new reads.
+It correctly identified current recovery and the resolved alert, distinguished
+symptom recovery from an unknown cause and did not invent an intervention.
+It overstated continuous control health and non-impact from sparse observations.
+The recovery assessment is partial, not a complete incident explanation.
+An independent post-answer check confirmed healthy worker/control, no container restart
+and 7,639,040 free bytes. Both cleanup passes passed, with no second-pass work
+and unchanged unrelated inventory. The disposable resources are removed.
+
+Playwright exercised `/patrol` and Assistant at 1440x1000 and 390x1000, all fifteen
+retained tool input/output pairs, keyboard expansion/collapse, deepest output
+scrolling, complete answers, Escape, reload and the same retained conversation.
+Rendered inputs/outputs match persisted records. Pixel inspection covered both
+answers and the failed-access result on desktop and mobile. Runtime and source
+hashes remained unchanged across both requests, with binary
+`bcaf748107211ee733a6dc0f4d17220d9b4d1ce1918c25bde27cf3d10c0d6379`.
+The route warning was an artifact of blocking non-chat POSTs in the proof browser.
+The original autonomous refusal timestamp remained `2026-09-05T19:46:39Z`.
+Private fixtures, source bindings, observations, screenshots and assessments
+are at workspace-relative `tmp/patrol-storage-fault-case/`.
+
+### Next canonical correction: tmpfs inventory
+
+Before implementation, source and native inspection establish a collection gap:
+Docker reports the owned scratch mount in `HostConfig.Tmpfs`, while `Mounts` is
+empty. `internal/dockeragent/collect.go` copies only `Mounts`, so shared resource
+queries falsely present an empty mount inventory. Preserve these native tmpfs
+entries through the existing report mount type. Keep destination, type and
+reported options, derive read/write from those options, preserve authoritative
+existing mount records and deterministic ordering. Do not infer used/free space
+from a configured size. No enrollment, permission or production agent change is
+part of this collection correction.
+
+Proof plan: reproduce the captured tmpfs-only inspect shape through the actual
+collector, then cover existing mounts, overlapping representations, read-only
+options and absent host configuration. Run targeted/full collector checks on
+pulse-dev and verify the report through the existing shared projection. Browser
+proof after the final change must exercise mount evidence in resource details
+and Assistant tool results, desktop and mobile, including deepest expansion and
+reload. A captured-result rendering check is not installed-agent or model
+qualification. Leave those limits explicit until the new collector is exercised
+through a supported installed path.
+
+The incident lookup also needs an identity audit: the canonical container ID
+returned no incident recording while the observed health alert used its legacy
+Docker resource ID. This is a concrete lookup discrepancy to investigate, not
+yet proof that a recording exists. Model inference from unmeasured capacity and
+sparse health history remains an open quality failure. Supported autonomous
+provider, approved/rejected actions and independent environments remain open.
+
+Further shared-projection inspection before editing found that `MountInfo` drops
+native mount type/options and that canonical app-container queries derive write
+access from equality with the single string `ro`, misreporting compound read-only
+options. The same slice must preserve type/options and the canonical `RW` boolean
+through both canonical-provider and typed read-state query paths. Add a query
+regression and capture its actual output for final Assistant browser proof.
+This remains mount configuration evidence, not measured filesystem capacity.
+
+
+### Tmpfs collection and query contract proof
+
+The captured tmpfs-only and mixed-mount regressions failed against the previous
+collector, then passed after the collection correction. The full dockeragent
+package passed in 18.883s and focused race proof in 1.030s. Existing monitor report
+mount propagation and discovery mount regressions passed. Both query paths
+failed because type/options were lost, then passed after projection correction.
+The full tools package passed in 59.473s and focused race proof in 1.030s.
+A final output-only capture rerun passed in 0.013s. All proof used Go1.26.8 and
+GOMAXPROCS4 on pulse-dev. The final Pro cross-build passed and the installed
+local binary SHA256 is
+`0a21dca4106c2ddc6873a3aca3b23378dccef35383ca00d7e9292b966de7c200`.
+The managed local backend restarted and `/api/health` reported healthy.
+No production collector was replaced.
+
+Final Playwright proof used captured canonical resources at `/docker`, widths
+1920, 1440, 900 and 390 with height 1080. It exercised mount summary/title,
+keyboard row expansion/collapse, mobile row tapping, adjacent detail state,
+mount-destination search, Escape and reloaded search state. The existing wide
+mount column is truncated with a full title. Responsive details have no dedicated
+mount section. This is an existing presentation limitation, not full mobile
+mount inspection qualification. Assistant's complete mount evidence is readable
+at `/patrol`, 1440x1000, 900x1000 and 390x1000. Both actual query projections
+passed exact input/output comparison, hover/focus, keyboard expansion/collapse,
+deepest scrolling, controlled session reload and reopening retained records.
+Pixels were inspected on desktop and mobile. Source/binary hashes stayed fixed.
+The original autonomous refusal timestamp is unchanged.
+
+These browser fixtures qualify rendering of the corrected shared fields. They
+do not qualify an installed collector, actual model interpretation of tmpfs
+configuration, or durable backend persistence of those fixture sessions. The
+ordinary live diagnosis/recovery records above have real server persistence
+and retain their failed/partial judgments. Exact scoped hook and landing remain
+required. Required model/action qualification and independent environments are
+still open. The typed compatibility get path also does not accept the canonical
+ID returned by its list path, so its mount regression uses an existing accepted
+name. That identity residual is recorded for modernization, not silently fixed
+through this mount projection.

@@ -15,6 +15,12 @@
 
 ## Purpose
 
+Docker mount reports include tmpfs configuration from `HostConfig.Tmpfs`
+through the existing optional mount array. This adds collection evidence only.
+It does not change admission, enrollment, execution permissions or agent
+lifecycle authority. Existing agents continue to report their existing mount
+coverage. Deploying an updated collector is a separate installed-path proof.
+
 Docker block-I/O report presence fields are optional measurement metadata.
 They preserve zero and omitted directions independently without changing report
 admission, enrollment, identity, command permission or agent lifecycle state.

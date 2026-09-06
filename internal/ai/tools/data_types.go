@@ -883,8 +883,10 @@ type PortInfo struct {
 
 // MountInfo describes a volume mount
 type MountInfo struct {
+	Type        string `json:"type,omitempty"`
 	Source      string `json:"source"`
 	Destination string `json:"destination"`
+	Mode        string `json:"mode,omitempty"`
 	ReadWrite   bool   `json:"rw"`
 }
 

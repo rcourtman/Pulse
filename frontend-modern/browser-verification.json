@@ -1,25 +1,44 @@
 {
   "version": 1,
-  "base_sha": "4d302109cee0758a132ff150935630b50114cc05",
-  "verified_at": "2026-09-06T12:57:13.096Z",
+  "base_sha": "f5f440dbad18d83557104d2cf6197d8319949e44",
+  "verified_at": "2026-09-06T13:39:36.848659+00:00",
   "result": "passed",
   "changed_paths": [],
   "content_sha256": {},
   "backend_content_sha256": {
-    "internal/ai/tools/data_types.go": "00200b1366ee4bf1e541e3acf6618f56993b05b05fa08122b91cd2db320969ec",
-    "internal/ai/tools/tools_query.go": "69bd79091bc8892043b900ca8475d1ee9d25c9613cf0ca86e36e41a0e468e2f8",
-    "internal/ai/chat/service.go": "7b4a7696eb0a3ca2a99427d98f991740ff362bfc0c738c36f45f80549d7c2744"
+    "internal/dockeragent/collect.go": "869eb906ac8d6fe57304a296bc81bc689f72a07b5a76267982b81228d147852d",
+    "internal/ai/tools/data_types.go": "91fff7a17735c9f9f4bf64c7fe42c7d4c5cf9e436af36ac07dec92feb952afc6",
+    "internal/ai/tools/tools_query.go": "5ba1f2c8ec7aadb21d594c967a5b2858db3471b02174889b7f78472e3a33235b"
   },
-  "binary_sha256": "bcaf748107211ee733a6dc0f4d17220d9b4d1ce1918c25bde27cf3d10c0d6379",
+  "binary_sha256": "0a21dca4106c2ddc6873a3aca3b23378dccef35383ca00d7e9292b966de7c200",
   "rendering_content_sha256": {
     "frontend-modern/src/components/AI/Chat/hooks/useChat.ts": "0b56b7a56e35d51ca96f0e126dd493b3164aa9e0ad4d8ae24bcf3af7a574b97c",
     "frontend-modern/src/components/AI/Chat/ChatMessages.tsx": "9672f7608d1e3a531c73cba20fd4a78752316783212afd0c292ddfd11d2bf371",
-    "frontend-modern/src/components/AI/Chat/ToolExecutionBlock.tsx": "cc7bd548a418c3863486f0fe987c5c3110c2f6cdfa70b630b2ec05fb794d60d6"
+    "frontend-modern/src/components/AI/Chat/ToolExecutionBlock.tsx": "cc7bd548a418c3863486f0fe987c5c3110c2f6cdfa70b630b2ec05fb794d60d6",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "af58fb901b55b188be084105e78c71084af5a594d1a7dde2647959eb00cc6131",
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts": "48bf66fe7e3bacf6352c48d7ccd568dd337e9d27670da435f30c3caabccf79bc"
   },
   "routes": [
+    "/docker",
     "/patrol"
   ],
   "viewports": [
+    {
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "width": 1440,
+      "height": 1080
+    },
+    {
+      "width": 900,
+      "height": 1080
+    },
+    {
+      "width": 390,
+      "height": 1080
+    },
     {
       "width": 1440,
       "height": 1000
@@ -34,13 +53,13 @@
     }
   ],
   "states": [
-    "Nine actual regression outputs: disconnected transport beside current workload metrics, connected transport under read-only control, distinct parent and guest connections, control-enabled transport, unqueried topology and an observed empty connection snapshot.",
-    "Each captured input and output is preserved by the Assistant stream renderer and restored through controlled session responses after reload. Unobserved fields remain absent and observed false/zero remains explicit. This is rendering proof, not native integration or model diagnosis.",
-    "Local Pro backend cross-built on pulse-dev with Go1.26.8. Source and binary hashes matched before and after Playwright. Browser interception blocks provider and infrastructure writes. Its selected-route warning does not qualify provider readiness."
+    "Captured canonical app-container and parent agent with tmpfs and bind mounts. Existing mount summary is a wide-table column, with no dedicated mount section in responsive detail views.",
+    "Two captured shared query results preserve native type, options, source, destination and RW. They establish mount configuration, not measured capacity.",
+    "Final Pro source/binary binding and original cached refusal preserved. No provider or production mutation in rendering proof."
   ],
   "interactions": [
-    "Tool details open/closed, hover, keyboard focus, Enter and Space, exact complete input/output comparison, deepest output scrolling and pixel inspection at desktop, intermediate and narrow widths.",
-    "Escape, full reload, session picker selection, reopening all nine restored tool records with exact output and completed-state assertions. Controlled session fixtures do not qualify server persistence.",
-    "Private evidence: /Volumes/Development/pulse/tmp/patrol-command-context/browser, tool-evidence.json, runtime-binding.json and final.log."
+    "Docker mount summary/title hover, keyboard expansion/collapse, mobile row tap, adjacent detail state, mount destination search, Escape and reloaded search.",
+    "Assistant exact input/output comparison, hover/focus, Enter/Space, deepest output scrolling, Escape, full reload and controlled session selection/reopening.",
+    "Pixel inspection at desktop/mobile. Private receipts: tmp/patrol-storage-fault-case/browser and docker-browser. Captured REST/SSE fixtures do not qualify installed collector, model diagnosis or server persistence."
   ]
 }

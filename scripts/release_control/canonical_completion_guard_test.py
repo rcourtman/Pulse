@@ -356,6 +356,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/dockeragent/agent_cpu_test.go",
                         "internal/dockeragent/agent_internal_test.go",
                         "internal/dockeragent/blockio_presence_test.go",
+                        "internal/dockeragent/collect_tmpfs_test.go",
                         "internal/dockeragent/swarm_coverage_test.go",
                     ],
                 }

@@ -10,6 +10,7 @@ import (
 	"net/netip"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -695,6 +696,36 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 				Propagation: string(mount.Propagation),
 				Name:        mount.Name,
 				Driver:      mount.Driver,
+			})
+		}
+	}
+	// Docker's --tmpfs mounts can exist only in HostConfig.Tmpfs. Preserve
+	// their configuration alongside inspected mounts without inventing usage.
+	if inspect.HostConfig != nil && len(inspect.HostConfig.Tmpfs) > 0 {
+		reported := make(map[string]bool, len(mounts))
+		for _, mount := range mounts {
+			reported[mount.Destination] = true
+		}
+		destinations := make([]string, 0, len(inspect.HostConfig.Tmpfs))
+		for destination := range inspect.HostConfig.Tmpfs {
+			if !reported[destination] {
+				destinations = append(destinations, destination)
+			}
+		}
+		sort.Strings(destinations)
+		for _, destination := range destinations {
+			options := inspect.HostConfig.Tmpfs[destination]
+			writable := true
+			for _, option := range strings.Split(options, ",") {
+				switch strings.TrimSpace(option) {
+				case "ro":
+					writable = false
+				case "rw":
+					writable = true
+				}
+			}
+			mounts = append(mounts, agentsdocker.ContainerMount{
+				Type: "tmpfs", Destination: destination, Mode: options, RW: writable,
 			})
 		}
 	}

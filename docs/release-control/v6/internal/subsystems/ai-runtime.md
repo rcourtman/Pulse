@@ -25,6 +25,17 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+Shared app-container query mount evidence preserves native type, source,
+destination, options and canonical read/write access. Compound options such as
+`ro,noexec` cannot become writable through string equality heuristics. Both the
+canonical provider and typed read-state projection preserve the same fields.
+Configured size in mount options does not establish filesystem usage or free
+space. `TestQueryPreservesMountConfigurationEvidence` covers these contracts.
+The ordinary live storage case still failed diagnosis by excluding resource
+pressure without capacity evidence. Mount fidelity alone does not qualify model
+interpretation. Incident-record lookup across canonical and legacy Docker IDs
+and typed compatibility lookup of canonical IDs remain explicit identity gaps.
+
 Shared query projections name command transport explicitly through
 `command_agent_connected`, `node_command_agent_connected` and the corresponding
 topology counts. These observations do not establish monitoring freshness or

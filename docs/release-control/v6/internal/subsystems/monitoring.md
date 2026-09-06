@@ -17,6 +17,14 @@
 
 ## Purpose
 
+Docker mount collection preserves both native `Mounts` records and entries
+reported only in `HostConfig.Tmpfs`. Existing reported destinations remain
+authoritative. Additional tmpfs destinations are ordered deterministically,
+retain their options and read/write setting, and use the existing mount report
+shape. Configured tmpfs size is configuration, not measured used/free space.
+`TestCollectContainerPreservesTmpfsMounts` reproduces a live tmpfs-only inspect
+shape and covers mixed mounts, read-only options, overlap and absent host config.
+
 Docker collection records read and write counter presence independently,
 including explicit zero, in optional report fields. Older reports without those
 fields establish only positive counters. Container reports propagate this

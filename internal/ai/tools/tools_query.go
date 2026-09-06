@@ -5057,9 +5057,11 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 				}
 				for _, m := range resource.Docker.Mounts {
 					response.Mounts = append(response.Mounts, MountInfo{
+						Type:        m.Type,
 						Source:      m.Source,
 						Destination: m.Destination,
-						ReadWrite:   !strings.EqualFold(strings.TrimSpace(m.Mode), "ro"),
+						Mode:        m.Mode,
+						ReadWrite:   m.RW,
 					})
 				}
 			}
@@ -5164,8 +5166,10 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 
 			for _, m := range container.Mounts() {
 				response.Mounts = append(response.Mounts, MountInfo{
+					Type:        m.Type,
 					Source:      m.Source,
 					Destination: m.Destination,
+					Mode:        m.Mode,
 					ReadWrite:   m.RW,
 				})
 			}
