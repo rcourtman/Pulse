@@ -68,17 +68,21 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
     Record<string, AlertDeliveryDiagnosis>
   >({});
   let diagnosisStateDisposed = false;
+  let diagnosisRequestVersion = 0;
   onCleanup(() => {
     diagnosisStateDisposed = true;
   });
   const refreshDeliveryDiagnoses = async () => {
+    // A slower previous refresh must not replace a newer notification state.
+    // Increment even for an empty alert set to invalidate outstanding requests.
+    const requestVersion = ++diagnosisRequestVersion;
     if (activeAlerts().length === 0) {
       setDeliveryDiagnoses({});
       return;
     }
     try {
       const list = await AlertsAPI.getDeliveryDiagnoses();
-      if (diagnosisStateDisposed) return;
+      if (diagnosisStateDisposed || requestVersion !== diagnosisRequestVersion) return;
       const next: Record<string, AlertDeliveryDiagnosis> = {};
       for (const diagnosis of list) {
         next[diagnosis.alertIdentifier || diagnosis.alertId] = diagnosis;

@@ -1,0 +1,80 @@
+
+> pulse-modern@1.0.0 test
+> vitest run src/features/alerts/__tests__/OverviewTab.deliverystatus.test.tsx src/features/alerts/__tests__/useAlertOverviewState.test.tsx
+
+
+ RUN  v3.2.7 /var/lib/pulse-maintainer/team-worktrees/20260906T163509Z-release-line/pulse@release_v6.4/frontend-modern
+
+ ❯ src/features/alerts/__tests__/useAlertOverviewState.test.tsx (8 tests | 1 failed) 47ms
+   × useAlertOverviewState > invalidates pending diagnosis reads when the active set becomes empty 13ms
+     → expected { a1: { alertIdentifier: 'a1', …(1) } } to deeply equal {}
+   ✓ useAlertOverviewState > owns overview stats, filtering, and acknowledge flows outside the tab shell 4ms
+   ✓ useAlertOverviewState > keeps a stable id order for alerts sharing a startTime (#1218) 1ms
+   ✓ useAlertOverviewState > counts alerts with missing startTime in total24h 1ms
+   ✓ useAlertOverviewState > groups only explicit shared-system correlations across resources 1ms
+   ✓ useAlertOverviewState > groups explicit infrastructure synthesis without hiding the supporting detector 1ms
+   ✓ useAlertOverviewState > does not infer correlation by truncating resource paths 1ms
+   ✓ useAlertOverviewState > still groups multiple detector signals for the exact same resource 1ms
+ ❯ src/features/alerts/__tests__/OverviewTab.deliverystatus.test.tsx (5 tests | 1 failed) 167ms
+   ✓ OverviewTab delivery status line > renders held-notification status from the bulk diagnosis endpoint 95ms
+   ✓ OverviewTab delivery status line > does not turn dispatch evidence into receipt for 'ready' 16ms
+   ✓ OverviewTab delivery status line > does not turn dispatch evidence into receipt for 'cooldown' 17ms
+   × OverviewTab delivery status line > ignores an older diagnosis response after the active alert set changes 24ms
+     → expected <span …(2)></span> to be null
+   ✓ OverviewTab delivery status line > renders no delivery line when the diagnosis fetch fails 10ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/features/alerts/__tests__/OverviewTab.deliverystatus.test.tsx > OverviewTab delivery status line > ignores an older diagnosis response after the active alert set changes
+AssertionError: expected <span …(2)></span> to be null
+
+- Expected:
+null
+
++ Received:
+<span
+  class="text-xs text-muted"
+  title="Alert delivery is currently eligible for notification delivery."
+>
+  Dispatch requested 11:15 AM
+</span>
+
+ ❯ src/features/alerts/__tests__/OverviewTab.deliverystatus.test.tsx:145:56
+    143|     finishOlder([makeDiagnosis('a1', { lastNotified: '2026-08-26T10:15…
+    144|     await Promise.resolve();
+    145|     expect(screen.queryByText(/^Dispatch requested /)).toBeNull();
+       |                                                        ^
+    146|     expect(screen.getByText('Notifications are turned off')).toBeTruth…
+    147|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/features/alerts/__tests__/useAlertOverviewState.test.tsx > useAlertOverviewState > invalidates pending diagnosis reads when the active set becomes empty
+AssertionError: expected { a1: { alertIdentifier: 'a1', …(1) } } to deeply equal {}
+
+- Expected
++ Received
+
+- {}
++ {
++   "a1": {
++     "alertIdentifier": "a1",
++     "reason": "ready",
++   },
++ }
+
+ ❯ src/features/alerts/__tests__/useAlertOverviewState.test.tsx:85:40
+     83|     finish([{ alertIdentifier: 'a1', reason: 'ready' } as AlertDeliver…
+     84|     await Promise.resolve();
+     85|     expect(result.deliveryDiagnoses()).toEqual({});
+       |                                        ^
+     86|   });
+     87|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  2 failed | 11 passed (13)
+   Start at  17:37:40
+   Duration  1.88s (transform 1.03s, setup 143ms, collect 1.24s, tests 214ms, environment 607ms, prepare 329ms)

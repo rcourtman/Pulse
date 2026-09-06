@@ -1,0 +1,1 @@
+{"result":"passed","viewports":[1440,900,390],"scope":"Real Overview and Chromium; scripted diagnoses, not installed delivery or receipt"}
