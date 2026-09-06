@@ -164,15 +164,58 @@ describe('OverviewTab delivery health actions', () => {
       expect(screen.getByRole('button', { name: action.name })).not.toBeDisabled();
     });
 
+    it(`keeps health visibly unknown after ${action.name} succeeds but refresh fails`, async () => {
+      getHealth
+        .mockResolvedValueOnce(degradedHealth())
+        .mockRejectedValueOnce(new Error('health unavailable'));
+      action.api.mockResolvedValue({ affected: 85 });
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      render(() => <OverviewTab {...defaultProps()} />);
+      fireEvent.click(await screen.findByRole('button', { name: action.name }));
+
+      const refresh = await screen.findByRole('button', { name: 'Refresh delivery status' });
+      expect(screen.getByRole('alert')).toBeTruthy();
+      expect(notificationStore.success).toHaveBeenCalledOnce();
+      expect(notificationStore.error).not.toHaveBeenCalled();
+
+      const healthy = degradedHealth();
+      healthy.overallHealthy = true;
+      healthy.queue = {
+        ...healthy.queue,
+        status: 'healthy',
+        healthy: true,
+        attentionRequired: 0,
+        deadLetter: 0,
+      };
+      getHealth.mockResolvedValueOnce(healthy);
+      await waitFor(() => expect(refresh).not.toBeDisabled());
+      fireEvent.click(refresh);
+      await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+      expect(getHealth).toHaveBeenCalledTimes(3);
+      expect(action.api).toHaveBeenCalledOnce();
+    });
+
     it(`keeps both actions disabled until ${action.name} and its health refresh finish`, async () => {
       const healthy = degradedHealth();
       healthy.overallHealthy = true;
-      healthy.queue = { ...healthy.queue, status: 'healthy', healthy: true, attentionRequired: 0, deadLetter: 0 };
+      healthy.queue = {
+        ...healthy.queue,
+        status: 'healthy',
+        healthy: true,
+        attentionRequired: 0,
+        deadLetter: 0,
+      };
       let completeAction!: (value: { affected: number }) => void;
       let completeHealth!: (value: NotificationHealth) => void;
-      action.api.mockReturnValue(new Promise(resolve => { completeAction = resolve; }));
+      action.api.mockReturnValue(
+        new Promise((resolve) => {
+          completeAction = resolve;
+        }),
+      );
       getHealth.mockResolvedValueOnce(degradedHealth()).mockReturnValueOnce(
-        new Promise(resolve => { completeHealth = resolve; }),
+        new Promise((resolve) => {
+          completeHealth = resolve;
+        }),
       );
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       render(() => <OverviewTab {...defaultProps()} />);
@@ -197,5 +240,4 @@ describe('OverviewTab delivery health actions', () => {
       expect(notificationStore.error).not.toHaveBeenCalled();
     });
   }
-
 });

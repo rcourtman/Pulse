@@ -20,6 +20,12 @@
 
 ## Purpose
 
+The alerts overview offers the existing delivery-status refresh control when
+health is unavailable, including after a successful retained-queue action whose
+follow-up health read fails. The warning remains until a verified healthy read;
+a successful queue action alone is not evidence of delivery health. Normal
+degraded summary presentation continues to omit refresh.
+
 Proxmox backup presentation treats every manifestless PBS artifact as
 non-recoverable. It renders the artifact as `Running` when current writer
 visibility is absent or a matching writer is active, and as danger-tone
