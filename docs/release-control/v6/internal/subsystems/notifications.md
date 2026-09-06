@@ -247,7 +247,18 @@ That same ownership includes webhook retry classification. The canonical
 retry gate in `webhook_enhanced.go` must parse provider failures from both
 `status 429`-style and `HTTP 429`-style error strings before it decides
 whether to retry, so a non-retryable `HTTP 400` result cannot be retried just
-because the transport changed its error wording.
+because the transport changed its error wording. Explicit HTTP status also
+wins over network-like diagnostic text in the response body: a terminal 403
+mentioning "authentication timeout" must stop transport retries, retain the
+403 in delivery history, and record zero retries when rejected on the first
+attempt. The existing transient HTTP exceptions and retryable fallback for
+network or unclassified failures remain unchanged.
+`TestIsRetryableWebhookError_StatusOverridesBody` and
+`TestWebhookRetryRejectsForbiddenTimeoutBody` in
+`internal/notifications/webhook_retry_test.go` pin this precedence with a
+status/body matrix and a queue-free loopback receiver that checks request
+count and delivery history. These are synthetic transport proofs, not installed
+recipient receipts or a change to persistent-queue retry policy.
 That same notification transport boundary also owns outbound Apprise HTTP URL
 normalization. Server URLs must be validated as absolute HTTP(S) endpoints
 without userinfo before request construction, and the `/notify` plus optional
