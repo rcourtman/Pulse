@@ -225,14 +225,13 @@ test.describe("TrueNAS alert resource links", () => {
     await expect(
       page.getByRole("heading", { name: "Resource incidents" }),
     ).toBeVisible();
-    const incidentsPanel = page
-      .locator("div")
-      .filter({
-        has: page.getByRole("heading", { name: "Resource incidents" }),
-      })
-      .last();
-    await expect(page.getByText("TrueNAS Main").first()).toBeVisible();
-    await expect(page.getByText("· 1 incident")).toBeVisible();
+    // Mobile keeps the underlying history mounted behind the investigation
+    // sheet, so a page-wide count can match both surfaces.
+    const investigation = isMobile
+      ? page.getByTestId("mobile-alert-investigation-scroll")
+      : page.locator("#main");
+    await expect(investigation.getByText("TrueNAS Main").first()).toBeVisible();
+    await expect(investigation.getByText("· 1 incident", { exact: true })).toBeVisible();
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
   });

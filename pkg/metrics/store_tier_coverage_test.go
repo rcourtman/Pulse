@@ -179,7 +179,7 @@ func TestRetainedReadStatementsReadCurrentSnapshot(t *testing.T) {
 			db.SetMaxOpenConns(1)
 			store := &Store{db: pdb.Wrap(db, "presence-snapshot")}
 			end := time.Unix(2000000040, 0)
-			start := end.Add(-time.Hour)
+			start := end.Add(-3 * time.Hour)
 			query := func(id string) []MetricPoint {
 				t.Helper()
 				points, err := store.Query("node", id, "cpu", start, end, step)
@@ -190,6 +190,15 @@ func TestRetainedReadStatementsReadCurrentSnapshot(t *testing.T) {
 			}
 			if points := query("a"); len(points) != 0 {
 				t.Fatalf("empty inventory: %+v", points)
+			}
+			// Warm the fallback query while the preferred minute tier is absent.
+			// A later preferred bucket must replace its overlapping raw point,
+			// even when the same SQL template and statement are reused.
+			if _, err := db.Exec(`INSERT INTO metrics(resource_type,resource_id,metric_type,tier,timestamp,value) VALUES ('node','a','cpu','raw',?,23)`, end.Add(-40*time.Second).Unix()); err != nil {
+				t.Fatal(err)
+			}
+			if points := query("a"); len(points) != 1 || points[0].Value != 23 {
+				t.Fatalf("raw fallback was hidden: %+v", points)
 			}
 			if _, err := db.Exec(`INSERT INTO metrics(resource_type,resource_id,metric_type,tier,timestamp,value) VALUES ('node','a','cpu','minute',?,17)`, end.Add(-time.Minute).Unix()); err != nil {
 				t.Fatal(err)
@@ -221,6 +230,43 @@ func TestRetainedReadStatementsReadCurrentSnapshot(t *testing.T) {
 			if len(store.readStatements) > maxRetainedReadStatements {
 				t.Fatalf("unbounded compiled SQL retention: %d", len(store.readStatements))
 			}
+			if len(store.readQueryShapes) > maxRetainedReadStatements {
+				t.Fatalf("unbounded SQL template retention: %d", len(store.readQueryShapes))
+			}
 		})
+	}
+}
+
+func TestRetainedQueryTemplatesBindCurrentWindowAndStep(t *testing.T) {
+	db := newPlanTestDB(t)
+	db.SetMaxOpenConns(1)
+	store := &Store{db: pdb.Wrap(db, "query-template-bindings")}
+	base := time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC)
+	for _, row := range []struct {
+		family, metric string
+		offset         time.Duration
+		value          float64
+	}{{"node", "cpu", 10 * time.Second, 5}, {"node", "cpu", 70 * time.Second, 15}, {"vm", "cpu", 70 * time.Second, 91}, {"node", "memory", 70 * time.Second, 99}} {
+		if _, err := db.Exec(`INSERT INTO metrics(resource_type,resource_id,metric_type,tier,timestamp,value) VALUES (?,'a',?,'raw',?,?)`, row.family, row.metric, base.Add(row.offset).Unix(), row.value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		family, metric string
+		start          time.Duration
+		step           int64
+		values         []float64
+	}{{"node", "cpu", 0, 60, []float64{5, 15}}, {"node", "cpu", 0, 120, []float64{10}}, {"node", "cpu", time.Minute, 120, []float64{15}}, {"vm", "cpu", 0, 120, []float64{91}}, {"node", "memory", 0, 120, []float64{99}}} {
+		points, err := store.Query(tc.family, "a", tc.metric, base.Add(tc.start), base.Add(3*time.Minute), tc.step)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var values []float64
+		for _, point := range points {
+			values = append(values, point.Value)
+		}
+		if !reflect.DeepEqual(values, tc.values) {
+			t.Fatalf("%+v returned stale bindings: %+v", tc, points)
+		}
 	}
 }

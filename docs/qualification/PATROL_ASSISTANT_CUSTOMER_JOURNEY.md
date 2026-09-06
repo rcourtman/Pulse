@@ -62,7 +62,7 @@ reproduction evidence, not a representative customer success rate.
 | Step | Work | Acceptance | Current state |
 |---|---|---|---|
 | 1. Product contract and baseline | Map the current loop and sources of judgment. Record telemetry populations and gaps. | Every identified decision has an owner. Activity is not labelled usefulness. | Complete for this redesign scope. Contract, ownership decisions and baseline limits are recorded. |
-| 2. Shared evidence | Preserve canonical risk reasons and SMART counters, source/time semantics and history across tools/turns. | Regression tests preserve unknown versus zero and all canonical evidence. Real responses can inspect the same facts as the product. | Implemented and qualified for the named shared-evidence defects. Canonical disk detail, risk and cadence pass real data-path proof. Affected package and concurrency checks pass. Commit f01db995ed corrects the PR benchmark regressions. Exact-base worker comparisons and full metrics/database and focused race checks pass. Final landing CI remains open. Real-model interpretation failures remain tracked in step 5. |
+| 2. Shared evidence | Preserve canonical risk reasons and SMART counters, source/time semantics and history across tools/turns. | Regression tests preserve unknown versus zero and all canonical evidence. Real responses can inspect the same facts as the product. | Implemented and qualified for the named shared-evidence defects. Canonical disk detail, risk and cadence pass real data-path proof. Affected package and concurrency checks pass. Integrated CI later exposed remaining query and allocation regressions. The final bounded query-reuse correction passes complete selected exact-base worker comparisons and full metrics/database and focused race checks. Final landing CI remains open. Real-model interpretation failures remain tracked in step 5. |
 | 3. Diagnostic orchestration | Correct proposal-as-proof. Audit triage budgets, unmatched-signal evaluation, assessment completion and investigation cutoffs. | No code-written causal conclusion. No quality inferred from tool, flag or finding counts. Each retained pass has an objective reason. Safety boundaries and incomplete outcomes remain explicit. | Proposal promotion and capture inference were removed in c5d2f56dda. Commit 668af3fe6b removes investigation success-call floors, checkpoint instructions and generic call-count wrap-up rules. The detection slice removes contextless follow-up passes, flag/report-count policy and first-finding completion modes. Full chat and AI suites, focused API and conversation race tests pass. Real-model/action outcome qualification remains open. |
 | 4. Issue through verified outcome | Follow existing issue/investigation/action records into Assistant, approval, execution and independent readback. | Accepted proposal is visibly distinct from execution and verification. Rejected or unsupported actions do not become success. Uncertainty can survive an action proposal. | Existing foundation, full journey qualification pending. |
 | 5. Ground-truth qualification and landing | Extend existing qualification tooling only where necessary. Exercise healthy/unhealthy, dependency, missing-access, storage/backup and approved/rejected action cases. Inspect the final browser journey at desktop and narrow widths. | Record exact source/model/permissions, evidence, decisions, faults/misses, latency and verification. Fix in-scope failures, pass appropriate proofs and land scoped commits. | Pending. |
@@ -910,3 +910,52 @@ corresponding independent lab probe. The ordinary homelab file-read failure
 proof remains useful but does not close that autonomous qualification gap.
 Those cases require suitable independent ground truth through the existing
 qualification framework before the overall goal can complete.
+
+## Retained-read performance correction, 2026-09-06
+
+Build and Test run `34008823529` for integration `f779bf064ab4` failed its
+benchmark comparison against exact main `3f74c0c27304`. All other jobs passed,
+and Core E2E run `34008823534` passed all eight browser shards. The benchmark
+failure comprised fifteen time/allocation comparisons, including batch reads
+up to 59% slower and small-read bytes about 198% higher. Earlier narrow worker
+comparisons omitted the actual QueryAllBatch cases and did not establish this
+integrated performance result. The initial status report calling that CI job
+passed was incorrect and was explicitly corrected.
+
+The canonical reader now reuses bounded SQL templates and numbered bindings,
+checks absent preferred tiers once within the current statement, and appends
+consecutive results directly to their series. It retains tier reconciliation,
+current snapshots, scope isolation and output semantics. No benchmark threshold
+was relaxed. An initial correction still regressed the plain raw-read case by
+11% and was revised before landing.
+
+Final production `pkg/metrics/store.go` SHA-256:
+`9a66d1acea82c17ca540abe9a9ee66e089a36420620e2ebb8ca7e6d102191a8d`.
+Ten alternating 100ms samples on pulse-dev, Go 1.26.8 and GOMAXPROCS=4,
+compare the final implementation with exact base `3f74c0c27304`. The complete
+selected Query, QueryAllBatch, RollupCandidate, fleet dashboard, history API,
+chart batch and NormalizeRoute benchmark families have no statistically
+significant greater-than-10% regression in time, bytes or allocations. Plain
+raw reads show no significant time change. Batch reads improve 16–42%, with
+bytes reduced 28–34%. Single-metric downsampling is 5.66% slower and the
+1,000-point rollup candidate is 6.04% slower, both inside the unchanged gate.
+The bounded history API shows no significant time change. These are selected
+worker comparisons, not a claim that final remote CI has passed.
+
+Private raw samples and benchstat outputs are under
+`tmp/patrol-f779-v2-selected/` and `tmp/patrol-f779-v2-normalize/` at the
+workspace root. Focused tests cover newly appearing preferred buckets after a
+cached absent-tier read, current resource family, metric, window and display
+step bindings, per-series overlap and batch parity. Integration with main
+`6c000837e27b` brings three test-only changes and no additional runtime changes.
+Full metrics and database packages pass on pulse-dev in 77.265s and 0.272s.
+Focused retained coverage, fresh bindings and batch identity race proof passes
+in 5.349s. The two latency-based concurrent SLO tests run in the ordinary suite
+but explicitly skip under the race detector. A separate canonical hot-path
+regression exercises eight concurrent query scopes and mixed display steps
+through a one-connection pool without latency assertions. It passes normally
+(0.043s) and under race (2.106s), with no cross-query binding leakage or lock
+inversion. Its worker log is `patrol-retained-concurrent-bindings.log`.
+Private full/race logs are under
+`tmp/patrol-f779-final-proof/`. Exact staged hook and remote landing remain
+pending. This correction does not close the outstanding real-model/action outcome gap.

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -1249,4 +1250,54 @@ func TestCommercialHistoryRetentionNeverExpandsOperatorPolicy(t *testing.T) {
 	if got := store.effectiveRetention(7*24*time.Hour, now); got != 7*24*time.Hour {
 		t.Fatalf("commercial ceiling expanded shorter operator retention: %v", got)
 	}
+}
+
+// Exercise shared query reuse under race detection without latency assertions.
+// A one-connection pool also exposes preparation/read-transaction lock inversion.
+func TestStoreRetainedConcurrentQueryBindings(t *testing.T) {
+	db := newPlanTestDB(t)
+	db.SetMaxOpenConns(1)
+	store := &Store{db: pdb.Wrap(db, "concurrent-retained-bindings")}
+	base := time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC)
+	type scope struct {
+		family, id, metric string
+		value              float64
+	}
+	var scopes []scope
+	for i := 0; i < 8; i++ {
+		item := scope{family: "node", id: strconv.Itoa(i / 2), metric: "cpu", value: float64(i + 1)}
+		if i%2 != 0 {
+			item.family = "vm"
+		}
+		if i%4 >= 2 {
+			item.metric = "memory"
+		}
+		if _, err := db.Exec(`INSERT INTO metrics(resource_type,resource_id,metric_type,tier,timestamp,value) VALUES (?,?,?,'raw',?,?)`, item.family, item.id, item.metric, base.Add(70*time.Second).Unix(), item.value); err != nil {
+			t.Fatal(err)
+		}
+		scopes = append(scopes, item)
+	}
+	start := make(chan struct{})
+	var workers sync.WaitGroup
+	for _, item := range scopes {
+		workers.Add(1)
+		go func(item scope) {
+			defer workers.Done()
+			<-start
+			for i := 0; i < 12; i++ {
+				step := []int64{0, 60, 120}[i%3]
+				points, err := store.Query(item.family, item.id, item.metric, base.Add(time.Duration(i)*time.Second), base.Add(3*time.Minute), step)
+				if err != nil {
+					t.Errorf("scope %+v step %d: %v", item, step, err)
+					return
+				}
+				if len(points) != 1 || points[0].Value != item.value {
+					t.Errorf("scope %+v step %d received another query's values: %+v", item, step, points)
+					return
+				}
+			}
+		}(item)
+	}
+	close(start)
+	workers.Wait()
 }
