@@ -3104,3 +3104,15 @@ The signal survives transport loss and resets on organisation URL changes.
 
 On admission-request failure retain the existing facet without extra retries,
 polling or full-estate reads. A later successful refresh replaces that facet.
+
+
+### ASCII route-label classification
+
+HTTP metric route normalization classifies numeric IDs and UUID-like labels
+using ASCII byte checks. Unicode decoding is unnecessary for this alphabet.
+Preserve numeric-before-token precedence and ordinary Unicode or invalid UTF-8
+names while optimizing this shared path. Qualification compares exact base and
+candidate on the same worker with alternating samples, and retains full-route
+and middleware controls. Identical source or instruction sequences alone do not
+prove identical timing. The recorded final ten-pair check passes the unchanged
+time/bytes/allocation gate with no adjacent request-path regression.
