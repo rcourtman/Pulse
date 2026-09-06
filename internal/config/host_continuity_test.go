@@ -308,3 +308,49 @@ func TestHostContinuityNodeLinkReplacesDormantOwner(t *testing.T) {
 		t.Fatal("replacement reservation incorrect")
 	}
 }
+
+// Replacing a dormant owner changes two entries even though the caller supplies
+// only the new owner. A failed transaction must roll both back, including the
+// reservation used by automatic matching before either host reconnects.
+func TestHostContinuityNodeLinkReplacementRollback(t *testing.T) {
+	dir := t.TempDir()
+	s := NewHostContinuityStore(dir, nil)
+	for _, entry := range []HostContinuityEntry{
+		{HostID: "owner", LinkedNodeID: "node", NodeLinkSource: "manual", ReportStreamID: "owner-stream", ReportSequence: 42},
+		{HostID: "replacement", NodeLinkSource: "unlinked", ReportStreamID: "replacement-stream", ReportSequence: 17},
+	} {
+		if err := s.Upsert(entry); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertOwner := func(store *HostContinuityStore, ownerID string) {
+		t.Helper()
+		for id, sequence := range map[string]uint64{"owner": 42, "replacement": 17} {
+			entry, ok := store.Get(id)
+			wantNode, wantSource := "", "unlinked"
+			if id == ownerID {
+				wantNode, wantSource = "node", "manual"
+			}
+			if !ok || entry.LinkedNodeID != wantNode || entry.NodeLinkSource != wantSource || entry.ReportSequence != sequence {
+				t.Fatalf("%s ownership or report watermark changed: %+v", id, entry)
+			}
+			if got := store.NodeLinkReservedByOther(id, "node"); got != (id != ownerID) {
+				t.Fatalf("reservation for %s = %v, owner %s", id, got, ownerID)
+			}
+		}
+	}
+	s.fs = &mockFSError{FileSystem: defaultFileSystem{}, writeError: errors.New("synthetic journal failure")}
+	links := []HostContinuityEntry{{HostID: "replacement", LinkedNodeID: "node", NodeLinkSource: "manual"}}
+	if err := s.SetNodeLinkIntents(links); err == nil {
+		t.Fatal("replacement acknowledged despite failed persistence")
+	}
+	assertOwner(s, "owner")
+	assertOwner(NewHostContinuityStore(dir, nil), "owner")
+	// Retry on the same store, not a reload that could conceal memory corruption.
+	s.fs = defaultFileSystem{}
+	if err := s.SetNodeLinkIntents(links); err != nil {
+		t.Fatal(err)
+	}
+	assertOwner(s, "replacement")
+	assertOwner(NewHostContinuityStore(dir, nil), "replacement")
+}
