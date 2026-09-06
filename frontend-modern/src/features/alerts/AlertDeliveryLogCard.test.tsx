@@ -92,33 +92,36 @@ describe('AlertDeliveryLogCard', () => {
     ['failed', 'Failed'],
     ['dead_letter', 'Failed, retries exhausted'],
     ['cancelled', 'Cancelled'],
-  ] as const)('replaces a previous successful row with %s evidence on refresh', (outcome, label) => {
-    const [currentLog, setCurrentLog] = createSignal<NotificationDeliveryLog>({
-      ...log,
-      entries: [log.entries[1]],
-    });
-    render(() => (
-      <AlertDeliveryLogCard
-        log={currentLog()}
-        unavailable={false}
-        refreshing={false}
-        onRefresh={vi.fn()}
-        webhooks={webhooks}
-      />
-    ));
-    expect(screen.getByText('Delivered')).toBeInTheDocument();
+  ] as const)(
+    'replaces a previous successful row with %s evidence on refresh',
+    (outcome, label) => {
+      const [currentLog, setCurrentLog] = createSignal<NotificationDeliveryLog>({
+        ...log,
+        entries: [log.entries[1]],
+      });
+      render(() => (
+        <AlertDeliveryLogCard
+          log={currentLog()}
+          unavailable={false}
+          refreshing={false}
+          onRefresh={vi.fn()}
+          webhooks={webhooks}
+        />
+      ));
+      expect(screen.getByText('Delivered')).toBeInTheDocument();
 
-    setCurrentLog({
-      ...log,
-      entries: [{ ...log.entries[0], outcome }],
-    });
+      setCurrentLog({
+        ...log,
+        entries: [{ ...log.entries[0], outcome }],
+      });
 
-    expect(screen.getByText(label)).toBeInTheDocument();
-    expect(screen.queryByText('Delivered')).not.toBeInTheDocument();
-    expect(screen.queryByText('disk-critical-1')).not.toBeInTheDocument();
-    expect(screen.getByText('Ops Discord')).toBeInTheDocument();
-    expect(screen.getAllByRole('listitem')).toHaveLength(1);
-  });
+      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(screen.queryByText('Delivered')).not.toBeInTheDocument();
+      expect(screen.queryByText('disk-critical-1')).not.toBeInTheDocument();
+      expect(screen.getByText('Ops Discord')).toBeInTheDocument();
+      expect(screen.getAllByRole('listitem')).toHaveLength(1);
+    },
+  );
 
   it('renders an honest empty state when no deliveries were attempted', () => {
     render(() => (
