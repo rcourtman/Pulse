@@ -39,6 +39,54 @@ ambiguous-name tests remain required. These checks prevent a reproduced
 synthetic misassociation, not all private-address collisions or unknown
 custom bridge names, and do not prove the cause of #1930.
 
+### Host/node associations retain durable operator intent
+
+Monitoring owns the provenance used to distinguish an operator selection from
+an automatic association. The host continuity journal records `manual`,
+`unlinked` or `automatic`; an absent value is legacy/unknown, not evidence that
+the link was automatic. This internal provenance does not add a public API or
+frontend field.
+
+The existing link/unlink APIs hold the host lifecycle write lock and persist
+the complete affected intent transaction under the state lock before publishing
+either direction of the association. Missing storage or a failed journal write
+must return an error without changing visible links or the journal's in-memory
+entries. Replacing a node's owner persists the displaced owner's explicit unlink
+too, including an owner which has not yet reconnected after restart. Link writes
+preserve identity, report watermarks, credential and removal evidence.
+
+A manual selection remains pinned to the selected provider ID through unmatched
+reports, provider refresh and restart before another report. A replacement
+provider ID must not inherit that selection by name: intent remains dormant
+until the original ID returns or the operator explicitly selects another ID.
+The persisted reservation prevents another host's automatic match taking that
+node before its owner reconnects. Explicit unlink survives restart and suppresses
+automatic node reassociation even when the next report supplies matching evidence.
+
+Automatic name matching uses the provider's node name, never the display name
+merged from an already-linked agent. Known automatic associations may be
+re-evaluated and cleared; provenance-bearing host updates remove obsolete
+reverse links without clearing another agent's link. Unmarked legacy forward
+links are retained during report ingestion, and unmarked one-way reverse links
+must survive host updates because SMART fallback also consumes them. Legacy
+provider reconciliation otherwise keeps its existing behaviour. This deliberately
+does not claim to repair every persisted v6.4.1 association or resolve #1930.
+
+Verification:
+- `internal/monitoring/host_manual_link_regression_test.go` covers immediate
+  restart, explicit unlink with positive matching evidence, provider-ID
+  replacement/return, failed writes, automatic versus unknown provenance,
+  dormant reservations and concurrent reports/provider refresh.
+- `internal/config/host_continuity_test.go` pins journal preservation and
+  replacement of a dormant owner.
+- `internal/models/state_additional_test.go` pins transaction rollback,
+  obsolete reverse-link cleanup and retention of unknown legacy reverse links.
+- `TestMaybePollPhysicalDisksAsync_AgentFallbackWhenDiskQueryFails` in
+  `internal/monitoring/monitor_pve_disk_fallback_test.go` remains required:
+  association cleanup must not remove the one-way link used by SMART fallback.
+
+### Physical-disk observation cadence
+
 Physical disk inventory has an independent collector schedule. The PVE poller
 carries its default five-minute or configured interval with each disk record,
 while keeping the last successful observation timestamp on retained records.

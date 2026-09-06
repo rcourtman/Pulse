@@ -7861,29 +7861,38 @@ symmetric bridges would miss removal of filtering from one inventory.
 This proof does not establish safety for arbitrarily renamed Docker bridges
 or repair persisted links, and is not reporter or installed-release validation.
 
-### Manual host/node association safety boundary (6 September 2026)
+### Durable host/node association intent (6 September 2026)
 
-`TestManualHostLinkSurvivesUnmatchedReportsAndProviderRefresh` protects an
-operator-created association between `nas.example` and an otherwise unmatched
-`pve` node through repeated reports, `UpdateNodesForInstance`, and explicit
-unlink. Reapplying the rejected stale-link cleanup plus provider-name matcher
-change makes the first report fail this regression. Neither change is included
-with this test.
+The earlier restart reproduction showed that the link API only changed memory,
+and that provider-name cleanup erased unmatched manual links. The replacement
+uses internal `NodeLinkSource` provenance in the host continuity journal:
+`manual`, `unlinked`, `automatic`, or empty (legacy/unknown). This is not a new
+API or UI surface.
 
-Restart remains an independently reproduced gap, not a supported invariant:
-using `newHostRemovalLifecycleMonitor` with a temporary data directory, submit
-`hostRemovalLifecycleReport("machine", "machine", "agent", "nas.example",
-"linux", now)`, populate the unmatched `pve-node`, and call `LinkHostAgent`.
-Reconstructing the monitor from the same directory immediately yields a host
-without the link. Sending another report before reconstruction persists the
-link, but refreshing the provider on the reconstructed monitor and submitting
-the next report still returns an empty `LinkedNodeID`.
+Link and unlink take the host lifecycle write lock and commit all affected
+journal entries while holding the state lock, before publishing visible state.
+A failed write (or unavailable store) returns an error without changing either
+direction of the link. Reassigning an occupied node writes the displaced host's
+explicit unlink in the same transaction. Identity, report ordering and removal
+metadata are preserved.
 
-`LinkHostAgent` currently changes state only. `HostContinuityEntry` stores the
-target ID but no manual/automatic provenance. Legacy manual and automatic links
-can therefore have identical persisted representations. A repair must not
-classify every unmarked legacy link as automatic. Durable operator intent,
-failed-write handling, provider identity changes, and explicit unlink across
-restart need coverage before enabling destructive stale-link cleanup. This is
-maintenance evidence, not demand for a new user-visible linking surface or a
-claim of resolution of issue #1930.
+Manual links are pinned to the operator-selected provider ID, including through
+unmatched reports and restart before another report. Provider identity replacement
+does not authorise redirection: intent stays dormant if that ID disappears and
+reattaches if it returns. A persisted reservation also prevents another host's
+automatic match from taking the node before its owner reconnects. Replacing a
+dormant owner explicitly persists that owner's unlink too. Explicit unlink persists and suppresses automatic node
+reassociation even when a subsequent report matches. An explicit link can select
+a replacement ID.
+
+Only known automatic associations are re-evaluated destructively against provider
+names and network evidence. Obsolete reverse links are removed with host updates.
+An unmarked persisted link is not assumed automatic: report ingestion retains it,
+so this is deliberately **not** a blanket repair of existing v6.4.1 associations.
+Legacy provider reconciliation otherwise retains its previous behaviour.
+
+`host_manual_link_regression_test.go` covers immediate restart, unlink with
+positive matching evidence, provider replacement/return, write failure and
+automatic versus unknown-provenance cleanup. State and config tests cover atomic
+replacement and preservation of lifecycle evidence. These are synthetic local
+proofs, not reporter confirmation or installed-release resolution of #1930.
