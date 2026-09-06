@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "base_sha": "2a833eccdfecf7248eed63eabf5b9184a9fa2390",
-  "verified_at": "2026-09-05T23:57:09.414504Z",
+  "base_sha": "4cc53d10950f2effae720d251f92bf7d143d2093",
+  "verified_at": "2026-09-06T00:55:06.543758Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts"
+    "frontend-modern/src/features/alerts/OverviewTab.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts": "1eadf6df30b4f1130f868b8f139561ea60fdb87e1823deeeaaf2f8fbc699a00c"
+    "frontend-modern/src/features/alerts/OverviewTab.tsx": "8f7fdc04bd0546f86152c8bb392ff3e3fb755f1f0a1c28d1ee85da3e9fe23582"
   },
   "routes": [
-    "/qualification (isolated caller/card fixture, not application routing)"
+    "/qualification (actual OverviewTab in isolated Solid Router fixture; not application shell)"
   ],
   "viewports": [
     {
@@ -23,12 +23,11 @@
     }
   ],
   "states": [
-    "Real Chromium with current useAlertDestinationsTabState, useNotificationDeliveryHealth and AlertDeliveryHealthCard; scripted API promises and queue actions. No installed backend or provider receipt.",
-    "Older healthy/newer degraded, older degraded/newer healthy, older error/newer healthy, older healthy/newer error. Warning presence and rendered state remain owned by newer request. Desktop and narrow screenshots inspected; this is not a full-shell or accessibility audit."
+    "Actual OverviewTab and delivery-health hook/card in Chromium, scripted API promises, empty active alerts. Not installed backend or recipient qualification.",
+    "Degraded health, successful Retry or Dismiss followed by unavailable health, pending manual refresh, verified healthy response. Desktop and narrow unavailable screenshots visually inspected; Refresh fits without clipping. Not a full accessibility or shell audit."
   ],
   "interactions": [
-    "pulse-heavy-run -- node scripts/check-delivery-health-ordering.mjs: 12 cases passed.",
-    "Configuration Retry overlaps pending mount health. Resolve newer then older and compare rendered main text and alert presence.",
-    "Retry retained deliveries and Dismiss retained failures each start post-action refresh while another read is pending. Older completion leaves loading true; latest healthy response clears warning. Confirmations and API responses are scripted."
+    "pulse-heavy-run -- node scripts/check-overview-health-refresh.mjs: four cases passed (two actions at two widths).",
+    "Retry and Dismiss each accepted once; failed health read preserves unavailable warning and offers Refresh; Refresh disabled while pending; healthy read removes warning without another queue action."
   ]
 }

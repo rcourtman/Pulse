@@ -15,6 +15,12 @@
 
 ## Purpose
 
+The alerts overview offers the existing delivery-status refresh control when
+health is unavailable, including after a successful retained-queue action whose
+follow-up health read fails. The warning remains until a verified healthy read;
+a successful queue action alone is not evidence of delivery health. Normal
+degraded summary presentation continues to omit refresh.
+
 Confirmed canonical metric recovery publishes the clearing evaluation's value,
 observation time, and resolved metric wording in the snapshot consumed by
 recent-resolution reads and notification callbacks. It must not reuse the last
