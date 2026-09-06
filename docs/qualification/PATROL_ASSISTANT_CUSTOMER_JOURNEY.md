@@ -93,12 +93,13 @@ Each removal must run its focused regression and affected complete journey.
 ### Completion and external dependencies
 
 The local implementation goal remains open until required qualification is
-performed. Ordinary Assistant requests work with the current subscription route,
-but autonomous Patrol has an explicit provider-policy refusal and remains
-blocked. Do not rephrase the refused probe, bypass the readiness boundary or
-count an interactive request as an autonomous Patrol pass. A supported provider
-path is required for that qualification. Prepare other work while resolving the
-provider dependency through supported configuration.
+performed. The maintainer authorized Gemini 3.8 Flash through OpenRouter with a
+US$5 key limit and one-day expiry on 2026-09-06. That supported route passes the
+streaming readiness and initial live Watch and dependency cases recorded below.
+The earlier Claude subscription refusal belongs to the exact synthetic
+continuation request. It does not establish a blanket restriction on autonomous
+monitoring. The refused request has not been retried or rephrased. Readiness is
+not evidence that diagnosis, action execution or independent recovery succeeds.
 
 Release publication and wider product readiness are separate. Independent
 volunteered Pro environments are still required before claiming repeatable
@@ -2047,3 +2048,114 @@ report to Pulse, enroll or replace a production agent, call a provider, or
 qualify approval, execution, diagnosis or model recovery. No runtime or frontend
 source changed in this slice, so no new browser claim is made. Prior storage
 diagnosis failures and the cached autonomous-provider refusal remain open.
+
+
+## Funded Gemini qualification, 2026-09-06
+
+The maintainer authorized `openrouter:google/gemini-3.8-flash` with a provider-side
+US$5 key limit expiring on 2026-09-07. The provider key endpoint confirmed both
+constraints. Credentials remain in runtime configuration, not these receipts.
+Synthetic readiness passed in 9.034 seconds: three streaming tool scenarios,
+two context fixtures and multi-turn continuation. This supports the readiness
+claims for Watch only and Ask first. It does not qualify autonomous fixes.
+
+The first unhealthy-container run, `q-20260906-172952-3cccbf34`, detected the
+correct fault and left the healthy control alone, but failed overall. The exact
+Gemini route had no price entry, and the model attempted unsupported Docker
+configuration access. The shared price table now records the reviewed standard
+rates of US$0.75 input and US$3.75 output per million tokens for direct Gemini
+and OpenRouter. Variant routes remain unknown. These introductory rates must be
+reviewed on 2027-01-01. The query capability description now explicitly names
+TrueNAS as the supported app-container configuration adapter and directs Docker
+collected health/mount/port/network reads to `get`. Runtime permissions and
+qualification gates are unchanged.
+
+The following runs used the worker-built Pro binary
+`74464e75977caf55cda092c8cf56c24967616c8c24d770872fbea5d86e31a1dc`,
+core base `b0b39f00dc6685ad9ed63e8a6e91b954338073e4` plus the pricing and
+capability-description changes, and canonical enterprise base
+`3d9f4e3051d38027355a2a1f36b8c7f672a09b65`. The worker archive commit
+`d9cb84e15d1acc377341129bdda5c28176e7128c` has identical contents for all
+87 tracked enterprise files. The existing runner created disposable
+resources on Tower, waited for normal collection, and used independent fault,
+recovery and cleanup oracles.
+
+| Case / run | Result | Evidence |
+|---|---|---|
+| Unhealthy, `q-20260906-174546-a7a9810b` | Pass | 9.709s detection phase, two tools, no failed/duplicate calls, healthy sibling unflagged. |
+| Unhealthy, `q-20260906-174708-81f8d655` | Pass | 10.541s detection phase, exact unhealthy resource found. |
+| Unhealthy, `q-20260906-174758-14deaa15` | Pass | 9.395s detection phase, exact unhealthy resource found. |
+| Unhealthy, `q-20260906-174853-71cf894f` | Pass | 25.673s detection phase, exact unhealthy resource found. |
+| Healthy mixed, `q-20260906-180144-381874a6` | Pass | 5.200s detection phase, no false findings. |
+| Dependency, `q-20260906-175058-de5e350d` | Pass | Starting from only the client symptom, identified the stopped dependency and affected client. Investigation completed in 18.970s with three evidence calls and no mutation. |
+| Storage, `q-20260906-175232-3ce6fbfa` | Fail before inference | Normal collection never converged to the required resource projection. No model diagnosis was attempted. |
+| Approved restart, `q-20260906-175812-0593b9b7` | Fail before approval | Detection and investigation completed, but no exact action reference existed. The broker refused because Tower's Docker command agent was disconnected. Nothing executed. |
+| Rejected restart, `q-20260906-175940-bff6992a` | Fail before rejection | No exact action was available to reject. This does not qualify rejected-action handling. |
+
+Every listed run passed cleanup, including second-cleanup no-op and unchanged
+inventory. Individual Watch run estimates were about US$0.007 to US$0.014.
+Those scorecard estimates cover the Patrol detection phase, not the separate
+investigation calls. Provider-side aggregate spend is the budget authority for
+this temporary key. The fixed route price does not turn an estimate into a
+reconciled bill or establish a hard Pulse budget for unpriced history.
+
+Live qualification exposed two additional shared contract defects. The
+investigation orchestrator logged action-broker refusal but completed the
+record without retaining the error, leaving the model's captured-proposal prose
+visible without the later refusal. The current enterprise change retains the
+original diagnosis, persists the broker refusal as a failed investigation with
+`needs_attention`, and creates no action reference. The product history adapter
+also projected result-bearing transcript calls back into provider request calls,
+dropping observed output and success/failure. The current core change uses one
+shared transcript type for stored chat and product history, preserving the
+separate explicit provider projection.
+
+The live review exposed duplicate detail IDs, duplicate unformatted conclusions,
+paused history made unclickable by the scheduling switch, and narrow filter/sort
+overlap. The shared finding/investigation surfaces now preserve one detail target,
+render sanitized Markdown once for identical summaries, retain distinct summaries,
+keep history available while paused, and wrap controls. Result-bearing tool calls
+use the same expandable evidence component as Assistant. Historical calls without
+a result status retain their evidence without invented success or failure. An
+investigation outcome of `cannot_fix` or `needs_attention` does not identify who
+resolved the finding, so the shared resolution copy no longer infers manual review.
+
+Private run receipts and source/binary bindings are under
+`tmp/patrol-gemini-38/` in the workspace. The original failed runs remain failed.
+Installed storage collection and a temporary command-enabled lab agent remain
+prerequisites for real storage and approved/rejected recovery qualification.
+No production agent has been replaced. Full action outcomes, remaining backup
+coverage and independent volunteered Pro environments remain open.
+
+
+### Final refusal and evidence-retention proof
+
+Two further approved-remediation attempts remain **failed**:
+`q-20260906-181839-6cbdc711` and `q-20260906-182952-6acfb739`. Both retained the
+broker error separately from the original model summary, saved `status=failed`
+and `outcome=needs_attention`, and created no action reference. Both passed
+cleanup. The final run used Pro binary SHA256
+`24de8c9ea0020067d298c489f0d99a272b5ec4b00afab7a40dff55aabb244061`,
+including the proposal-response clarification, and detected its exact unhealthy
+container with no false positives. Its saved investigation is
+`48a16b05-50f0-4605-847c-0a71b3435975` for finding `ca3af29ac54d540f`.
+The original failed scorecards have not been reclassified as action passes.
+
+The restored history API retains observed outputs and explicit `success=false`
+for historical `pulse_read` failures. Live browser review at `/patrol` exercises
+successful query output, both `ACTION_NOT_ALLOWED` and `NO_AGENT` failures,
+original diagnosis, one broker error, paused history and review focus return.
+The settings proof at `/settings/pulse-intelligence/patrol` checks the exact
+model, reviewed rates, synthetic readiness limits and reload. The current
+source-bound browser receipt records desktop, intermediate and mobile results.
+GET response fixtures cover unknown historical result status only, without
+claiming new persisted model evidence or action execution.
+
+Remaining qualification requires a current installed collector and a temporary
+command-enabled lab agent. A Linux amd64 agent has been built on the worker,
+SHA256 `ae2ed8b97709ec6e71af979c293ca9d3634662767ec1b59629baf4933c90cf5d`,
+without installing it or changing Tower credentials. Tower's separate production
+reporting agent is untouched. Any agent enrollment must use the canonical scoped
+installation flow, preserve explicit identity and revoke temporary execution
+access after qualification. Detection success does not satisfy this prerequisite
+or the remaining backup and independent-environment cases.

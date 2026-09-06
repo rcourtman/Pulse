@@ -2166,7 +2166,7 @@ func (e *PulseToolExecutor) registerQueryTools() {
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "Resource type. For get/search, prefer canonical values: 'agent', 'vm', 'system-container', 'app-container', 'storage', 'physical-disk', and 'docker-host'. For get, 'node' resolves to 'agent'. For search, 'node' filters Proxmox nodes. Compatibility aliases 'system' and 'storage-pool' are still accepted. For config: 'vm', 'system-container', or supported API-backed 'app-container'.",
+						Description: "Resource type. For get/search, prefer canonical values: 'agent', 'vm', 'system-container', 'app-container', 'storage', 'physical-disk', and 'docker-host'. For get, 'node' resolves to 'agent'. For search, 'node' filters Proxmox nodes. Compatibility aliases 'system' and 'storage-pool' are still accepted. For config: 'vm', 'system-container', or TrueNAS 'app-container'. Docker and Podman app-container configuration reads are not supported. Their collected health, mounts, ports, and networks are available through get.",
 						Enum:        []string{"agent", "system", "vm", "system-container", "app-container", "node", "docker-host", "storage", "storage-pool", "physical-disk"},
 					},
 					"resource_id": {

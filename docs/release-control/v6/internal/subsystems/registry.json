@@ -780,6 +780,14 @@
       ]
     },
     {
+      "path": "internal/agentcapabilities/transcript.go",
+      "rationale": "Stored Assistant tool results and product history share one result-bearing transcript contract, with an explicit narrower provider-request projection. Observed failures and absent historical result status must survive the API boundary",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
       "path": "internal/agentcapabilities/types.go",
       "rationale": "the agent capabilities manifest wire type, manifest-owned external-adapter surface tool contract field, capability display title and structured output schema fields, approval-policy vocabulary, capability governance normalization, and tool-governance descriptor shape are both the canonical API payload contract and the AI runtime projection contract for Pulse Assistant and MCP-facing agent tools",
       "subsystems": [

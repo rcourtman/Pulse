@@ -285,6 +285,16 @@ describe('patrol api — uncovered branch coverage', () => {
             role: 'assistant',
             content: 'logs in /var/log grew 40GB',
             reasoning_content: 'checked du output',
+            tool_calls: [
+              {
+                id: 'read-1',
+                name: 'pulse_read',
+                input: { resource_id: 'container-1' },
+                output: 'NO_AGENT',
+                success: false,
+              },
+              { id: 'query-1', name: 'pulse_query', input: { action: 'metrics' } },
+            ],
             timestamp: '2026-07-18T00:00:05Z',
           },
         ],
@@ -299,6 +309,9 @@ describe('patrol api — uncovered branch coverage', () => {
       expect(result).toEqual(envelope);
       expect(result.messages).toHaveLength(2);
       expect(result.messages[1]?.reasoning_content).toBe('checked du output');
+      expect(result.messages[1]?.tool_calls?.[0]?.output).toBe('NO_AGENT');
+      expect(result.messages[1]?.tool_calls?.[0]?.success).toBe(false);
+      expect(result.messages[1]?.tool_calls?.[1]?.success).toBeUndefined();
     });
 
     it('URL-encodes the finding id segment (separate from the messages suffix)', async () => {

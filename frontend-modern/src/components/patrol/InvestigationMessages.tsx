@@ -10,6 +10,7 @@ import { getInvestigationMessages, formatTimestamp, type ChatMessage } from '@/a
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { getInvestigationMessagesState } from '@/utils/patrolEmptyStatePresentation';
 import { renderMarkdown } from '@/components/AI/aiChatUtils';
+import { ToolExecutionBlock } from '@/components/AI/Chat/ToolExecutionBlock';
 
 // Compact variant of the Assistant chat's markdown styling, scaled for the
 // investigation thread's text-xs bubbles.
@@ -110,16 +111,35 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                       <div class="space-y-1">
                         <For each={msg.tool_calls}>
                           {(tc) => (
-                            <div class="text-xs rounded border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900 px-2 py-1">
-                              <span class="font-semibold text-indigo-700 dark:text-indigo-300">
-                                {tc.name}
-                              </span>
-                              <Show when={tc.input && Object.keys(tc.input).length > 0}>
-                                <pre class="mt-1 text-[10px] text-muted overflow-x-auto max-h-24 overflow-y-auto">
-                                  {JSON.stringify(tc.input, null, 2)}
-                                </pre>
-                              </Show>
-                            </div>
+                            <Show
+                              when={typeof tc.success === 'boolean'}
+                              fallback={
+                                <div class="text-xs rounded border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900 px-2 py-1">
+                                  <span class="font-semibold text-indigo-700 dark:text-indigo-300">
+                                    {tc.name}
+                                  </span>
+                                  <Show when={tc.input && Object.keys(tc.input).length > 0}>
+                                    <pre class="mt-1 text-[10px] text-muted overflow-x-auto max-h-24 overflow-y-auto">
+                                      {JSON.stringify(tc.input, null, 2)}
+                                    </pre>
+                                  </Show>
+                                  <Show when={tc.output}>
+                                    <pre class="mt-1 text-[10px] text-muted overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap break-words">
+                                      {tc.output}
+                                    </pre>
+                                  </Show>
+                                </div>
+                              }
+                            >
+                              <ToolExecutionBlock
+                                tool={{
+                                  name: tc.name,
+                                  input: JSON.stringify(tc.input),
+                                  output: tc.output ?? '',
+                                  success: tc.success!,
+                                }}
+                              />
+                            </Show>
                           )}
                         </For>
                       </div>

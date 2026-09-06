@@ -995,19 +995,19 @@ describe('getFindingResolutionReason', () => {
       ).toBe('Resolved after investigation timeout now');
     });
 
-    it('returns "Resolved manually" for cannot_fix', () => {
+    it('does not infer manual resolution from cannot_fix', () => {
       expect(
         getFindingResolutionReason({ ...patrolBase, investigationOutcome: 'cannot_fix' }, 'now'),
-      ).toBe('Resolved manually now');
+      ).toBe('Resolved now');
     });
 
-    it('returns "Resolved after manual review" for needs_attention', () => {
+    it('does not infer manual review from needs_attention', () => {
       expect(
         getFindingResolutionReason(
           { ...patrolBase, investigationOutcome: 'needs_attention' },
           'now',
         ),
-      ).toBe('Resolved after manual review now');
+      ).toBe('Resolved now');
     });
 
     it('returns "Fix applied by Patrol" for fix_executed even when autoResolved is false', () => {

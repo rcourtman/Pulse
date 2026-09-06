@@ -194,6 +194,21 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const [filter, setFilter] = createSignal<FindingsPanelFilter>(props.filterOverride ?? 'active');
   const [sortBy, setSortBy] = createSignal<'severity' | 'time'>('severity');
   const [expandedId, setExpandedId] = createSignal<string | null>(null);
+  let panelRoot: HTMLDivElement | undefined;
+  const closeReviewPanel = () => {
+    const findingId = expandedId();
+    setExpandedId(null);
+    setManageOpenId(null);
+    if (findingId) {
+      queueMicrotask(() => {
+        panelRoot
+          ?.querySelector<HTMLButtonElement>(
+            `button[aria-controls="${CSS.escape(`finding-${findingId}-details`)}"]`,
+          )
+          ?.focus();
+      });
+    }
+  };
   const [manageOpenId, setManageOpenId] = createSignal<string | null>(null);
   const [actionLoading, setActionLoading] = createSignal<string | null>(null);
   const [lastHashScrolled, setLastHashScrolled] = createSignal<string | null>(null);
@@ -1467,7 +1482,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       manualControls.dismiss;
 
     return (
-      <div id={`finding-${finding.id}-details`} class="mt-3 pt-3 border-t border-border-subtle">
+      <div
+        id={isPatrolFindingsSource() ? undefined : `finding-${finding.id}-details`}
+        class="mt-3 pt-3 border-t border-border-subtle"
+      >
         <Show when={hasTriggeringAlert(finding)}>
           <div class="text-xs text-amber-700 dark:text-amber-300 mb-2">
             Triggered by alert{finding.alertType ? ` (${finding.alertType})` : ''} • Identifier{' '}
@@ -2108,10 +2126,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   };
 
   return (
-    <div class="space-y-4">
+    <div ref={panelRoot} class="space-y-4">
       {/* Controls */}
       <Show when={showFilterControls()}>
-        <div class="flex items-center justify-between">
+        <div class="flex flex-wrap items-center justify-between gap-2">
           <FilterSegmentedControl
             aria-label="Filter findings"
             value={filter()}
@@ -2298,10 +2316,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                     <button
                       type="button"
                       aria-label={`Close review panel for ${title().label}`}
-                      onClick={() => {
-                        setExpandedId(null);
-                        setManageOpenId(null);
-                      }}
+                      onClick={closeReviewPanel}
                       class="rounded p-1.5 text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                     >
                       <XIcon class="h-4 w-4" />

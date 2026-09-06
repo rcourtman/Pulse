@@ -19839,7 +19839,7 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 	chatTypesSrc := string(chatTypesSource)
 	for _, fragment := range []string{
 		`func ToolCallFromProvider(tc agentcapabilities.ProviderToolCall) ToolCall`,
-		`func (t ToolCall) ProviderToolCall() agentcapabilities.ProviderToolCall`,
+		`type ToolCall = agentcapabilities.TranscriptToolCall`,
 		`type ToolResult = agentcapabilities.ProviderToolResult`,
 	} {
 		if !strings.Contains(chatTypesSrc, fragment) {
@@ -19853,8 +19853,8 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 	}
 	aiServiceSrc := string(aiServiceSource)
 	for _, fragment := range []string{
-		`type ChatToolCall = agentcapabilities.ProviderToolCall`,
-		`return agentcapabilities.EmptyProviderToolCall()`,
+		`type ChatToolCall = agentcapabilities.TranscriptToolCall`,
+		`return ChatToolCall{}.NormalizeCollections()`,
 		`type ChatToolResult = agentcapabilities.ProviderToolResult`,
 		`return agentcapabilities.ApprovalRequiredToolMarker(`,
 		`return agentcapabilities.PolicyBlockedToolMarker(command, reason)`,
@@ -20087,11 +20087,11 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 	chatServiceAdapterSrc := string(chatServiceAdapterSource)
 	for _, fragment := range []string{
 		`func adaptChatMessage(m chat.Message) ai.ChatMessage`,
-		`msg.ToolCalls = append(msg.ToolCalls, tc.ProviderToolCall())`,
+		`msg.ToolCalls = append(msg.ToolCalls, tc.NormalizeCollections())`,
 		`toolResult := *m.ToolResult`,
 	} {
 		if !strings.Contains(chatServiceAdapterSrc, fragment) {
-			t.Errorf("chat service adapter must bridge messages through shared provider tool shapes; missing %s", fragment)
+			t.Errorf("chat service adapter must retain result-bearing transcript calls; missing %s", fragment)
 		}
 	}
 

@@ -135,36 +135,11 @@ func (m Message) ClientSafe() Message {
 	return m
 }
 
-// ToolCall represents a tool invocation
-type ToolCall struct {
-	ID               string                 `json:"id"`
-	Name             string                 `json:"name"`
-	Input            map[string]interface{} `json:"input"`
-	Output           string                 `json:"output,omitempty"`
-	Success          *bool                  `json:"success,omitempty"`
-	ThoughtSignature json.RawMessage        `json:"thought_signature,omitempty"`
-}
+// ToolCall is the canonical result-bearing product transcript call.
+type ToolCall = agentcapabilities.TranscriptToolCall
 
 func EmptyToolCall() ToolCall {
 	return ToolCall{}.NormalizeCollections()
-}
-
-func (t ToolCall) NormalizeCollections() ToolCall {
-	providerCall := agentcapabilities.ProviderToolCall{
-		ID:               t.ID,
-		Name:             t.Name,
-		Input:            t.Input,
-		ThoughtSignature: t.ThoughtSignature,
-	}.NormalizeCollections()
-	t.ID = providerCall.ID
-	t.Name = providerCall.Name
-	t.Input = providerCall.Input
-	t.ThoughtSignature = providerCall.ThoughtSignature
-	if t.Success != nil {
-		success := *t.Success
-		t.Success = &success
-	}
-	return t
 }
 
 // ToolCallFromProvider stores a provider-facing tool call in the richer
@@ -180,19 +155,6 @@ func ToolCallFromProvider(tc agentcapabilities.ProviderToolCall) ToolCall {
 		// canonical durable home.
 		Input:            agentcapabilities.RedactToolCallArgumentsForExposure(tc.Name, tc.Input),
 		ThoughtSignature: tc.ThoughtSignature,
-	}.NormalizeCollections()
-}
-
-// ProviderToolCall projects a stored Assistant transcript call back to the
-// shared provider-facing shape, deliberately excluding in-app output/success
-// display fields.
-func (t ToolCall) ProviderToolCall() agentcapabilities.ProviderToolCall {
-	t = t.NormalizeCollections()
-	return agentcapabilities.ProviderToolCall{
-		ID:               t.ID,
-		Name:             t.Name,
-		Input:            t.Input,
-		ThoughtSignature: t.ThoughtSignature,
 	}.NormalizeCollections()
 }
 

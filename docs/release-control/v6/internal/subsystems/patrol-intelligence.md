@@ -15,6 +15,16 @@
 
 ## Purpose
 
+Pausing the Patrol schedule does not disable investigation history review.
+The finding review control owns one detail target and regains keyboard focus on
+close. Investigation conclusions use sanitized Markdown, deduplicate identical
+stored/fetched text, and retain distinct evidence. Merged tool results render
+through Assistant's shared expandable evidence component with their explicit
+success/failure bit. Unknown historical status stays unknown. A broker refusal
+remains visible separately from the original diagnosis and cannot be presented
+as an accepted action. An attention/cannot-fix outcome does not establish manual
+review or identify who resolved a later finding.
+
 Detection retains one model conversation for evidence gathering and finding
 decisions. Recording one finding does not establish diagnostic sufficiency or
 remove its evidence tools. Missing assessments and provider failures remain

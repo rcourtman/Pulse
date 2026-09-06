@@ -1,39 +1,49 @@
 {
   "version": 1,
-  "base_sha": "ab6d21400074393379a78350249ba4f5412941c0",
-  "verified_at": "2026-09-06T16:30:47.586Z",
+  "base_sha": "b0b39f00dc6685ad9ed63e8a6e91b954338073e4",
+  "verified_at": "2026-09-06T18:44:39.842657Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/deliveryDiagnosisPresentation.ts"
+    "frontend-modern/src/api/patrol.ts",
+    "frontend-modern/src/components/AI/FindingsPanel.tsx",
+    "frontend-modern/src/components/Login.tsx",
+    "frontend-modern/src/components/patrol/InvestigationMessages.tsx",
+    "frontend-modern/src/components/patrol/InvestigationSection.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
+    "frontend-modern/src/useAppRuntimeState.ts",
+    "frontend-modern/src/utils/aiFindingPresentation.ts",
+    "frontend-modern/src/utils/localStorage.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/deliveryDiagnosisPresentation.ts": "bc3eadf8f790517b377430a42eb67e8fdfcadb53bb13b87cd971d6a9ab91d607"
+    "frontend-modern/src/api/patrol.ts": "3e5bec5d29d9218450c3fb5b531fd17652759c325e049bde497e3fb96544a622",
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "1063492593361f29a88109641d76fc2492027cd23b470452dfa4f437fa325700",
+    "frontend-modern/src/components/Login.tsx": "621f0b97d775aacaa521a3c72ed02db3fde5ad3eda06d55950a32107723eb44c",
+    "frontend-modern/src/components/patrol/InvestigationMessages.tsx": "4518f4755ff3d7dcdd0d8030372011e3481726db27ef695a9afc1d4ea6af3976",
+    "frontend-modern/src/components/patrol/InvestigationSection.tsx": "32669694f6dc959c3c3684f17a4ecb4c3d9411f7fc2ae20f1192d68b1d87e52b",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "1e52d00e61fb6affb9365cee74eb6820135d1d6d8a20161d02499ab3d6084da5",
+    "frontend-modern/src/useAppRuntimeState.ts": "5a1d343d92c441e1302dab129be7256dd9a287c6a60fb0e17c6f9fa13fe20900",
+    "frontend-modern/src/utils/aiFindingPresentation.ts": "c716d8b61501acec2bfde253febd4ddce6e9dfee9eef77a3230a2512326dfd7c",
+    "frontend-modern/src/utils/localStorage.ts": "182ed45685228781fd32725db50611b1115f9ee4fb1af23aeedcf41ca707bdbc"
   },
   "backend_content_sha256": {
-    "internal/ai/adapters/adapters.go": "487245a52e1ae85ffecd38c6e4f006bfd6c8efff6568c92c19688a8db56d7ecc",
-    "internal/ai/chat/service.go": "4f130864717c5141ce974b8a367aeca19d49baa02a4906ecb65591d8b4c02bd6",
-    "internal/ai/tools/executor.go": "3a30f7720d30be6fdd75f3224d2da937881e77fee76fb819347f83e247fccb65",
-    "internal/ai/tools/tools_knowledge.go": "12c16ed7893dd49c18a7db1dd3fe3224c266102e9a23c37bc6b86fe5b33b9e4c",
-    "internal/api/ai_handler.go": "a407a5e55320b8e5d41d121193dc654ef02f70bd7b4566948bf4cd0a5763470a",
-    "internal/api/ai_handlers.go": "e3963c5a564432e9ee590f3c3db4a2220abc435cd78f6b14213559423a0283f6",
-    "internal/api/ai_intelligence_handlers.go": "f3864f8a53a1adaa2f64983279c3349dfff1e3095fe2ee8843ea22afe3dab577",
-    "internal/api/router.go": "cb5a99f8d12a7b576bf606f76fb4dfe6d1db888305249879268e6464efcb7c3f",
-    "internal/metrics/incident_archive.go": "2843483fca0bbafa4c6ff14b419bd599f6aeac7e20025b604cadbf16bddeed7a"
+    "internal/agentcapabilities/transcript.go": "356c4ca201470407988ff9b2c1fb848619ed38e9d8db844e7390adce0f93ec19",
+    "internal/ai/chat/types.go": "1f624daf7e511eb971e2d81b787dcd72b2a82d0e0ecd775aa4e580c59d915382",
+    "internal/ai/service.go": "25dca2a70a985e8ab07443444a9f05f01a569c62ff7bc068a0b587d500831de6",
+    "internal/api/chat_service_adapter.go": "6d0ab14456b1901c5020a408de95796ece1aa8d1057dd58737ea2637777d6ccb",
+    "internal/ai/cost/pricing.go": "7b64bc881311ee0a7c1c8a319fcd162974f5a307ced1679e614ff20ac1ac532c",
+    "internal/ai/tools/tools_query.go": "3e074b204a8c8c4f8b66eaf147c269a2e57739bfc69d03ea36ee8c47cf8b908a",
+    "internal/ai/tools/tools_propose.go": "43d720c78a010b72f53f7e4e9e1b7b2a763e7f1ac555edb921b7cdca3e82fd51"
   },
-  "removed_backend_paths": [
-    "internal/ai/incident_coordinator.go",
-    "internal/metrics/incident_recorder.go"
-  ],
-  "binary_sha256": "bd29e6f27be7b3ad4cfbc37842f4da90f08c6a48c9fc23b12c9c597b67346c9b",
-  "rendering_content_sha256": {
-    "frontend-modern/src/components/AI/Chat/ChatMessages.tsx": "9672f7608d1e3a531c73cba20fd4a78752316783212afd0c292ddfd11d2bf371",
-    "frontend-modern/src/components/AI/Chat/ToolExecutionBlock.tsx": "cc7bd548a418c3863486f0fe987c5c3110c2f6cdfa70b630b2ec05fb794d60d6",
-    "frontend-modern/src/components/AI/Chat/hooks/useChat.ts": "0b56b7a56e35d51ca96f0e126dd493b3164aa9e0ad4d8ae24bcf3af7a574b97c",
-    "frontend-modern/src/features/alerts/deliveryDiagnosisPresentation.ts": "bc3eadf8f790517b377430a42eb67e8fdfcadb53bb13b87cd971d6a9ab91d607"
+  "enterprise_base_sha": "3d9f4e3051d38027355a2a1f36b8c7f672a09b65",
+  "enterprise_content_sha256": {
+    "internal/investigation/orchestrator.go": "d56fd512dc47f8a2453559e89863da5d24dffc0a5977abb8f1ea7a82655cd9e8"
   },
+  "binary_sha256": "24de8c9ea0020067d298c489f0d99a272b5ec4b00afab7a40dff55aabb244061",
   "routes": [
     "/patrol",
-    "http://127.0.0.1:5198/qualification (isolated real OverviewTab)"
+    "/settings/pulse-intelligence/patrol",
+    "/settings/pulse-intelligence/provider",
+    "/"
   ],
   "viewports": [
     {
@@ -50,13 +60,15 @@
     }
   ],
   "states": [
-    "Five captured registered-tool archive cases: saved observation with historical status and nanosecond duration disclosure, unavailable archive, malformed archive, wrong resource and missing window. Failed reads remain failed.",
-    "Incoming Overview dispatch wording: ready/cooldown records show Dispatch requested, cooldown identifies next eligibility, and missing dispatch timestamp stays Notification pending. No delivery success is inferred.",
-    "Live canonical and legacy homelab timeline queries retain the same seven records and preserve the exact original alert fired/resolved records. The incidents endpoint returns active_count=null and active_count_status=not_measured. Provider refusal remains enforced."
+    "Live successful dependency diagnosis renders sanitized headings once, with distinct summaries retained. Paused history remains interactive and narrow finding controls wrap. Resolution does not infer manual review from an attention outcome.",
+    "Live broker refusal appears once alongside original diagnosis, needs_attention and no action. Historical successful query and failed ACTION_NOT_ALLOWED/NO_AGENT results retain actual input, output and status.",
+    "Controlled GET transcript fixture retains output with absent success status without inventing completion or failure. This proves rendering only.",
+    "Selected exact Gemini 3.8 Flash route, known $0.75/$3.75 rates, readiness for Watch only/Ask first and unassessed autonomous modes survive reload. Provider card read only. Browser interception blocks automatic preflight POST, so provider health was verified separately through the live API.",
+    "Incoming unchanged demo login source rechecked at 1440/390: loading, automatic demo payload, authenticated shell, logout/reload suppression, manual re-entry and rejected-login fallback. GET demo-presentation fixture with authorized local login exchange, no runtime demo configuration mutation."
   ],
   "interactions": [
-    "At /patrol, hover/focus and Enter expansion, exact input/output comparison, deepest output scrolling, Space collapse, Escape, full reload, controlled session selection and reopening each result. Actual pixels inspected for successful and failed outcomes at desktop, intermediate and narrow widths.",
-    "The incoming real Overview component was exercised through scripts/check-alert-dispatch-copy.mjs at all three widths. Status text stays within the viewport and no page errors occurred. Actual pixels inspected. No delivery action invoked.",
-    "Final worker Pro build installed locally and managed restart recovered healthy. Private source/binary binding and receipts: tmp/patrol-archive-retirement/runtime-binding.json, browser/receipt.json and live-history-proof.json. Zero provider calls or faults in this proof. Controlled tool/session replay proves rendering only, not model diagnosis or server persistence."
+    "Activity, Finding options and history, All while Patrol paused. Review via hover/focus and Enter, unique aria-controls target, close returns focus, reopen, nested investigation disclosure open/closed, keyboard Enter/Space tool expansion/collapse and deep output scrolling. Actual desktop/intermediate/mobile pixels inspected after final source changes.",
+    "Patrol model settings and rates/readiness scrolled into view and reloaded at all three widths. No model setting change, action execution or approval request during browser proof.",
+    "Private receipts and interaction matrix under tmp/patrol-gemini-38/browser. Real run q-20260906-182952-6acfb739 remains failed: broker refused disconnected command agent, exact diagnosis retained and cleanup passed. No successful approval or recovery claim."
   ]
 }

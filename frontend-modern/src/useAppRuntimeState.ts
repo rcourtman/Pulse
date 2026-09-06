@@ -14,7 +14,7 @@ import {
   PRIMARY_PLATFORM_NAV_IDS,
   type PlatformNavigationVisibility,
 } from '@/features/platformNavigation/platformNavigationModel';
-import { STORAGE_KEYS } from '@/utils/localStorage';
+import { SESSION_STORAGE_KEYS, STORAGE_KEYS } from '@/utils/localStorage';
 import type { VersionInfo } from '@/api/updates';
 import type { Organization } from '@/api/orgs';
 import { OrgsAPI } from '@/api/orgs';
@@ -828,6 +828,11 @@ export const useAppRuntimeState = () => {
     ];
     keysToRemove.forEach((key) => localStorage.removeItem(key));
     sessionStorage.clear();
+    try {
+      sessionStorage.setItem(SESSION_STORAGE_KEYS.DEMO_AUTO_LOGIN, 'suppressed');
+    } catch (_err) {
+      // Storage may be unavailable; the demo login page then simply signs in again.
+    }
     localStorage.setItem('just_logged_out', 'true');
     aiChatStore.setEnabled(false);
 

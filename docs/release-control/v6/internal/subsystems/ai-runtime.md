@@ -25,6 +25,46 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+Stored chat and product history share the result-bearing `TranscriptToolCall`
+contract. API adapters preserve observed output and the explicit success/error
+bit. Only provider-request projections remove those display fields. A failed
+read must not become an invocation with no visible result on the way to Patrol
+or Assistant history. The adapter regression includes a `NO_AGENT` result and
+`success: false`, and provider serialization retains its existing narrower shape.
+
+Capturing a typed proposal does not create an action. The proposal response
+discloses that broker validation is still pending, without forcing the model to
+stop investigating. If the broker later refuses submission, the enterprise
+orchestrator retains the model's diagnosis unchanged and records the broker
+error as a failed investigation needing attention, with no action reference.
+The real disconnected-agent case must remain unsuccessful until its actual
+transport prerequisite is satisfied. A successful model turn or recorded
+proposal is not approval, execution or recovery.
+
+The shared investigation review renders sanitized Markdown and does not repeat
+an identical persisted/fetched conclusion or error. Distinct evidence remains
+visible. Pausing scheduled Patrol does not disable history review. The review
+control has one detail target and returns keyboard focus when closed. Merged tool
+results use Assistant's shared expandable evidence component. Historical calls
+without an explicit result bit do not gain an inferred success/failure state.
+Resolution copy cannot infer manual review from `needs_attention` or `cannot_fix`.
+
+The shared pricing table includes reviewed standard Gemini 3.8 Flash rates for
+the exact direct and OpenRouter routes. OpenRouter variants and aliases remain
+unpriced until independently reviewed. Rates carry the review date and are
+estimates, not reconciled provider charges. The introductory rates require a
+new review on 2027-01-01. `TestGemini38FlashReviewedRoutePricing` covers real
+qualification token counts and request-route preservation, and
+`TestGemini38OpenRouterPricingDoesNotGuessVariantRates` preserves unknown variants.
+
+The canonical query tool describes the app-container configuration boundary
+explicitly: TrueNAS supports `config`, while Docker/Podman expose their collected
+health, mounts, ports and networks through `get`. This communicates the existing
+adapter contract to the model. It does not add configuration access, suppress
+tool errors or weaken qualification gates. The existing
+`TestAppContainerConfigObservationContract` retains unsupported-adapter and
+provider/identity boundaries.
+
 Shared app-container query mount evidence preserves native type, source,
 destination, options and canonical read/write access. Compound options such as
 `ro,noexec` cannot become writable through string equality heuristics. Both the
@@ -837,6 +877,7 @@ cheap local detection into model-owned diagnosis and governed action.
 31. `internal/agentcapabilities/tool_names.go` shared with `api-contracts`: the Pulse Intelligence registry tool-name vocabulary is both the native Assistant execution/display contract and the canonical API/agent tool identity contract for MCP-facing external-agent adapters.
 32. `internal/agentcapabilities/tool_response.go` shared with `api-contracts`: the shared tool response envelope, tool error-code vocabulary, and tool-result error-code and verification evidence parsers are both the Assistant structured tool-result contract and the canonical API/agent branching contract for Pulse Intelligence tool failures, recovery tracking, and write self-verification.
 33. `internal/agentcapabilities/tool_result.go` shared with `api-contracts`: the Pulse Intelligence shared tool-result content/result envelope, structuredContent projection, result constructors, HTTP response-to-result mapping, text projection, and result interpretation helpers are both the Assistant registry result contract and the canonical API/agent result projection contract for governed tool outcomes.
+34. `internal/agentcapabilities/transcript.go` shared with `api-contracts`: Stored Assistant tool results and product history share one result-bearing transcript contract, with an explicit narrower provider-request projection. Observed failures and absent historical result status must survive the API boundary.
 34. `internal/agentcapabilities/types.go` shared with `api-contracts`: the agent capabilities manifest wire type, manifest-owned external-adapter surface tool contract field, capability display title and structured output schema fields, approval-policy vocabulary, capability governance normalization, and tool-governance descriptor shape are both the canonical API payload contract and the AI runtime projection contract for Pulse Assistant and MCP-facing agent tools.
 35. `internal/agentcapabilities/workflow_prompt.go` shared with `api-contracts`: the Pulse Intelligence workflow prompt catalogue, manifest-owned `workflowPrompts` projection, MCP prompt title projection, presentation kind hints, shared resource-context and finding argument vocabulary, Patrol issue-handling capability gating, argument validation, and manifest-gated shared prompt rendering rules are both the AI runtime starter contract for Assistant-compatible surfaces and the canonical API/agent prompt projection contract for MCP-facing clients.
 36. `internal/api/ai_handler.go` shared with `api-contracts`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.

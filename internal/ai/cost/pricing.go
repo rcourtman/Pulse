@@ -82,11 +82,17 @@ var providerPrices = map[string][]modelPrice{
 		flatPriceAsOf("anthropic/claude-opus-4.8", 5.00, 25.00, "2026-07-14"),
 		flatPriceAsOf("anthropic/claude-sonnet-5", 2.00, 10.00, "2026-07-14"),
 		flatPriceAsOf("deepseek/deepseek-v4-flash", 0.09, 0.18, "2026-07-14"),
+		// Introductory standard rates through 2026-12-31. Recheck when the
+		// published standard price changes on 2027-01-01. Batch/alias routes
+		// are deliberately not covered by this exact model ID.
+		flatPriceAsOf("google/gemini-3.8-flash", 0.75, 3.75, "2026-09-06"),
 		flatPriceAsOf("nvidia/nemotron-3.5-lightning:free", 0, 0, "2026-08-14"),
 		flatPriceAsOf("nvidia/nemotron-3-super-120b-a12b:free", 0, 0, "2026-08-14"),
 		flatPriceAsOf("nvidia/nemotron-3-ultra-550b-a55b:free", 0, 0, "2026-08-15"),
 	},
 	"gemini": {
+		// Standard introductory rates, verified 2026-09-06. Recheck 2027-01-01.
+		flatPriceAsOf("gemini-3.8-flash", 0.75, 3.75, "2026-09-06"),
 		// Gemini Developer API standard paid-tier pricing, checked from
 		// https://ai.google.dev/gemini-api/docs/pricing on 2026-06-04.
 		flatPrice("gemini-3.5-flash*", 1.50, 9.00),
