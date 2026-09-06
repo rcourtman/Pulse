@@ -8,6 +8,14 @@ WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "${WORK_DIR}"' EXIT
 
 mkdir -p "${WORK_DIR}/bin" "${WORK_DIR}/candidate" "${WORK_DIR}/baseline"
+cat > "${WORK_DIR}/bin/fixture.test" <<'EOF'
+#!/usr/bin/env bash
+[[ "$1" == '-test.bench=.' ]] || exit 91
+[[ "${FAKE_BINARY_FAIL:-0}" == 0 ]] || exit 23
+echo 'BenchmarkExample-4  1  100 ns/op  0 B/op  0 allocs/op'
+EOF
+chmod +x "${WORK_DIR}/bin/fixture.test"
+export FAKE_BINARY="${WORK_DIR}/bin/fixture.test"
 cat > "${WORK_DIR}/bin/go" <<'EOF'
 #!/usr/bin/env bash
 if [[ "$*" == version ]]; then
@@ -15,6 +23,12 @@ if [[ "$*" == version ]]; then
   exit 0
 fi
 printf '%s\t%s\n' "$PWD" "$*" >> "${FAKE_GO_LOG}"
+args=("$@")
+for ((i=0; i<${#args[@]}; i++)); do
+  if [[ "${args[i]}" == -exec ]]; then
+    exec "${args[i+1]}" "${FAKE_BINARY}" '-test.bench=.'
+  fi
+done
 cat <<'RESULT'
 goos: linux
 goarch: amd64
@@ -56,6 +70,12 @@ grep -qFx 'candidate.commit=unavailable' "${metadata}"
 grep -qFx 'baseline.go=go version go1.26.7 linux/amd64' "${metadata}"
 [[ "$(grep -c '^sample=' "${metadata}")" == 4 ]]
 ! grep -qF "${WORK_DIR}" "${metadata}"
+digest="$(sha256sum "${FAKE_BINARY}")"
+digest="${digest%% *}"
+[[ "$(grep -c '^binary=' "${metadata}")" == 4 ]]
+for tuple in baseline,1 candidate,1 candidate,2 baseline,2; do
+  grep -qFx "binary=${tuple},fixture.test,${digest}" "${metadata}"
+done
 
 # Real Git roots retain exact identities; a repeated run replaces old metadata.
 for tree in candidate baseline; do
@@ -79,6 +99,20 @@ PATH="${WORK_DIR}/bin:${PATH}" FAKE_GO_LOG="${WORK_DIR}/go.log" \
   bash "${ROOT_DIR}/scripts/run-ci-benchmarks.sh" >/dev/null
 grep -qFx 'candidate.commit=unavailable' "${WORK_DIR}/candidate/archive/bench-metadata.txt"
 ! grep -q '^baseline\.' "${WORK_DIR}/candidate/archive/bench-metadata.txt"
+
+grep -qFx "binary=candidate,unpaired,fixture.test,${digest}" \
+  "${WORK_DIR}/candidate/archive/bench-metadata.txt"
+
+# The wrapper must not turn a failed executable into successful evidence.
+set +e
+PATH="${WORK_DIR}/bin:${PATH}" FAKE_GO_LOG="${WORK_DIR}/go.log" \
+  FAKE_BINARY_FAIL=1 PULSE_BENCH_CURRENT_DIR="${WORK_DIR}/candidate" \
+  PULSE_BENCH_BASELINE_DIR='' PULSE_BENCH_SAMPLE_COUNT=1 \
+  bash "${ROOT_DIR}/scripts/run-ci-benchmarks.sh" >/dev/null
+status=$?
+set -e
+[[ "${status}" == 23 ]]
+grep -qFx "binary=candidate,unpaired,fixture.test,${digest}" "${metadata}"
 
 cat > "${WORK_DIR}/adequate.txt" <<'EOF'
 Example-4  100.0n ± 1%  111.0n ± 1%  +11.00% (p=0.001 n=10)
