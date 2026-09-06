@@ -8043,3 +8043,15 @@ when no command connection is available. Failure is distinct from an established
 permission denial. Do not infer an installation requirement or guest capability
 from this absence. Advertised hypervisor lifecycle capabilities remain governed
 by their canonical action path, independently of diagnostic command access.
+
+
+### Independent dependency and restart fault proof
+
+The opt-in live dependency/restart oracle uses the checked-in investigation
+and action manifests through the existing DockerLab. It requires an explicit
+Docker context, preserves fault state while observing and refusing duplicate
+injection, verifies fixture recovery, and requires exact run cleanup plus
+unchanged pre-existing inventory. The ordinary package run skips live Docker
+work unless explicitly enabled. A direct fixture restart is teardown and must
+never be counted as a Pulse approval, execution, rejection or outcome. Model-led
+and canonical-action qualification remain separate required evidence.

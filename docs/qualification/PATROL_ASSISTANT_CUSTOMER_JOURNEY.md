@@ -1212,3 +1212,40 @@ remains open for real-model diagnosis and approved/rejected action outcomes.
 On head `1f41fa174d7d`, governance, all eight Core E2E shards and CodeQL pass.
 Build and Test run `34015148620` is still pending with no jobs, so omitted PR
 checks are not treated as success. PR #1928 remains open with auto-merge enabled.
+
+
+### Live dependency and restart fault contracts
+
+The missing-access slice is committed and pushed as `58caeda69ba3` to PR #1928.
+Its exact eight-file staged hook passes all 163 tests in 127.706s with unchanged
+hashes. The first hook environment lacked PyYAML. The complete rerun used
+PyYAML 6.0.3 and jsonschema 4.26.0, with the initial failure retained separately.
+This supersedes the pending-hook statement above. Remote CI remains open.
+
+The existing dependency and action scenarios had schema/mocked-command coverage
+but no explicit live Docker oracle regression alongside the storage oracle.
+`TestDockerDependencyAndRestartOraclesLive` now exercises the checked-in
+investigation dependency manifest and all three approved/rejected/autonomous
+service-restart manifests. It shares the existing DockerLab, explicit daemon
+selection and exact run-scoped cleanup. It never contacts Pulse or a model.
+
+On pulse-dev with Go 1.26.8 and pre-existing Alpine 3.20 image digest
+`sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc`,
+the live package run passes in 65.080s. The dependency case takes 12.53s, and
+the three service cases take 17.51s, 17.51s and 17.52s. Each records baseline,
+fault, unchanged fault after refused duplicate injection, explicit fixture
+recovery and restored baseline. Stopping the dependency makes its running
+client unhealthy, and starting it restores both. Stopping the service health
+process leaves its container running and unhealthy until explicit restart.
+Every cleanup passes, second cleanup is a no-op, and pre-existing containers,
+volumes, networks and images are unchanged. No image was pulled.
+
+This proves the fault/oracle contracts, including that observation does not
+repair the fixture. Direct fixture recovery is teardown. It is not a Pulse
+approval, rejected-action execution, autonomous action or verified customer
+outcome. The required real-model and canonical action journeys remain open.
+Raw log: `/opt/pulse-release-worker/patrol-dependency-action-oracles-live.log`,
+copied to `tmp/patrol-dependency-action-oracles/` at the workspace root.
+The live test source SHA-256 is
+`78b72dc44231cd3ecbd0b2ee925d53a5836af3141e695152046aa032580f1e48`.
+The ordinary qualification and CLI packages pass in 4.224s and 0.008s on Go 1.26.8 with the explicit live environment unset. The test hash is unchanged. The exact staged hook remains pending for this slice.
