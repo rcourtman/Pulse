@@ -1248,4 +1248,45 @@ Raw log: `/opt/pulse-release-worker/patrol-dependency-action-oracles-live.log`,
 copied to `tmp/patrol-dependency-action-oracles/` at the workspace root.
 The live test source SHA-256 is
 `78b72dc44231cd3ecbd0b2ee925d53a5836af3141e695152046aa032580f1e48`.
-The ordinary qualification and CLI packages pass in 4.224s and 0.008s on Go 1.26.8 with the explicit live environment unset. The test hash is unchanged. The exact staged hook remains pending for this slice.
+The ordinary qualification and CLI packages pass in 4.224s and 0.008s on Go 1.26.8 with the explicit live environment unset. The test hash is unchanged. Commit `173d74a8e422` is pushed to PR #1928 after the exact four-file staged hook passed all 163 tests in 129.364s with unchanged source hashes. Remote landing remains pending.
+
+
+### Current ordinary Assistant diagnosis remains unqualified
+
+One read-only ordinary Assistant request on 2026-09-06 ran from
+06:49:50.441Z to 06:53:26.724Z, taking 216.283s with 15 tool calls. The
+configured `claude-subscription:claude-opus-5` route returned HTTP 200. The
+request explicitly used `autonomous_mode=false`. No alternate paid provider,
+Patrol readiness retry or infrastructure mutation was performed. This single
+request establishes neither an aggregate success rate nor a latency SLO.
+
+The missing-access correction works in this real run. One diagnostic read
+returns failed `NO_AGENT` while preserving the monitored node identity, and
+the answer correctly retains that access limit without retrying the read.
+Diagnosis still fails factual review. The answer quotes the tool contract that
+returned timestamps cannot establish collection uptime or missing-history cause,
+then claims that a coincident alert timestamp identifies observation start. It
+calls 181 seven-day returned points hourly even though their returned span is
+under twelve hours. It moves the 83.3% memory minimum from the previous evening
+at 20:34 to around 04:20, and uses low average CPU as evidence against pressure
+without direct pressure measurements. Correct tool metadata did not prevent
+these unsupported interpretations. Do not count a completed request or an
+accurate missing-access message as successful diagnosis.
+
+Private receipts, persisted tool outputs, request/source/binary bindings and
+factual evaluation are at workspace-relative
+`tmp/patrol-current-assistant-check/`. The backend binary hash remains
+`1e1c3a9c0c758a4a751afa16200c6fba793acc93fd56ea62e7eb432edcf5f6c8`
+before and after the request. The Playwright run exercised the persisted answer
+and expanded failed-tool input/output at `/patrol`, 1440x1000 and 390x1000,
+including reload. Pixel inspection confirms readable answer and error evidence.
+The test intercepted non-GET requests other than the one ordinary chat. Its
+blocked readiness check caused the selected-route warning in the screenshots,
+so those screenshots do not establish the route's unmodified readiness UI.
+
+The supported alternate-provider test remains awaiting its separately billed
+US$20 maximum approval. The cached subscription refusal for autonomous Patrol
+remains enforced. Further prompt or orchestration rules are not justified merely
+because this response ignored already explicit evidence limitations. Real-model
+diagnosis, approved/rejected action outcomes and wider customer readiness remain
+open qualification requirements.
