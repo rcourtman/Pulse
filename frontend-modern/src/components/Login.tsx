@@ -1,8 +1,17 @@
-import { Component, createSignal, Show, For, onMount, lazy, Suspense } from 'solid-js';
+import {
+  Component,
+  createEffect,
+  createSignal,
+  Show,
+  For,
+  onMount,
+  lazy,
+  Suspense,
+} from 'solid-js';
 import { logger } from '@/utils/logger';
 import { PulseBrandMark } from '@/components/Brand/PulseBrandMark';
 import { apiClient, apiFetchJSON } from '@/utils/apiClient';
-import { STORAGE_KEYS } from '@/utils/localStorage';
+import { SESSION_STORAGE_KEYS, STORAGE_KEYS } from '@/utils/localStorage';
 import { TROUBLESHOOTING_DOC_URL } from '@/utils/docsLinks';
 import Globe from 'lucide-solid/icons/globe';
 import Key from 'lucide-solid/icons/key';
@@ -17,6 +26,10 @@ interface LoginProps {
 }
 
 import type { SecurityStatus, SSOProviderInfo } from '@/types/config';
+
+// The public demo's credentials. They are shown on the login page, so there
+// is nothing to protect by making the visitor type them.
+const DEMO_CREDENTIALS = { username: 'demo', password: 'demo' } as const;
 
 function getBrowserStorage(kind: 'localStorage' | 'sessionStorage'): Storage | undefined {
   if (typeof window === 'undefined') return undefined;
@@ -68,8 +81,12 @@ export const Login: Component<LoginProps> = (props) => {
   const [oidcLoading] = createSignal(false);
   const [oidcError, setOidcError] = createSignal('');
   const [oidcMessage, setOidcMessage] = createSignal('');
+  const [demoAutoLogin, setDemoAutoLogin] = createSignal(false);
 
   const ssoProviders = () => authStatus()?.ssoProviders || [];
+  const demoModeEnabled = () =>
+    authStatus()?.presentationPolicy?.demoMode === true ||
+    authStatus()?.sessionCapabilities?.demoMode === true;
 
   const resolveSSOError = (reason?: string | null) => {
     switch (reason) {
@@ -214,6 +231,15 @@ export const Login: Component<LoginProps> = (props) => {
       return;
     }
 
+    await submitCredentials(usernameValue, passwordValue, rememberLogin);
+  };
+
+  const submitCredentials = async (
+    usernameValue: string,
+    passwordValue: string,
+    rememberLogin: boolean,
+  ) => {
+    setLoading(true);
     try {
       // Use the new login endpoint for better feedback
       const response = await apiClient.fetch('/api/login', {
@@ -280,6 +306,26 @@ export const Login: Component<LoginProps> = (props) => {
     }
   };
 
+  // Demo mode: the public demo is read-only and its credentials are printed on
+  // this page anyway, so sign the visitor in instead of making them type
+  // demo/demo. Once per browser tab, and never straight after a sign-out.
+  createEffect(() => {
+    if (loadingAuth() || !demoModeEnabled() || showFirstRunSetup()) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('oidc') || params.has('saml')) return;
+    const storage = getBrowserStorage('sessionStorage');
+    if (storage?.getItem(SESSION_STORAGE_KEYS.DEMO_AUTO_LOGIN)) return;
+    try {
+      storage?.setItem(SESSION_STORAGE_KEYS.DEMO_AUTO_LOGIN, 'attempted');
+    } catch (_err) {
+      // If the marker cannot be stored the sign-in still runs once for this render.
+    }
+    setDemoAutoLogin(true);
+    void submitCredentials(DEMO_CREDENTIALS.username, DEMO_CREDENTIALS.password, false).finally(
+      () => setDemoAutoLogin(false),
+    );
+  });
+
   // Debug logging
   logger.debug('[Login] Render', {
     loadingAuth: loadingAuth(),
@@ -323,9 +369,8 @@ export const Login: Component<LoginProps> = (props) => {
               oidcLoading,
               oidcError,
               oidcMessage,
-              demoModeEnabled:
-                authStatus()?.presentationPolicy?.demoMode === true ||
-                authStatus()?.sessionCapabilities?.demoMode === true,
+              demoModeEnabled: demoModeEnabled(),
+              demoAutoLogin,
               showLocalLogin: shouldShowLocalLogin(),
               ssoProviders: ssoProviders(),
             }}
@@ -369,6 +414,7 @@ const LoginForm: Component<{
   oidcError: () => string;
   oidcMessage: () => string;
   demoModeEnabled: boolean;
+  demoAutoLogin: () => boolean;
   showLocalLogin: boolean;
   ssoProviders: SSOProviderInfo[];
 }> = (props) => {
@@ -386,6 +432,7 @@ const LoginForm: Component<{
     oidcError,
     oidcMessage,
     demoModeEnabled,
+    demoAutoLogin,
     showLocalLogin,
     ssoProviders,
   } = props;
@@ -414,16 +461,25 @@ const LoginForm: Component<{
               </div>
               <div class="flex-1">
                 <div class="font-semibold text-sm text-base-content">Demo Mode</div>
-                <div class="text-sm text-muted">
-                  Login with{' '}
-                  <code class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">
-                    demo
-                  </code>{' '}
-                  /{' '}
-                  <code class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">
-                    demo
-                  </code>
-                </div>
+                <Show
+                  when={demoAutoLogin()}
+                  fallback={
+                    <div class="text-sm text-muted">
+                      Login with{' '}
+                      <code class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">
+                        demo
+                      </code>{' '}
+                      /{' '}
+                      <code class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">
+                        demo
+                      </code>
+                    </div>
+                  }
+                >
+                  <div class="text-sm text-muted" role="status">
+                    Signing you in to the demo…
+                  </div>
+                </Show>
               </div>
             </div>
           </div>

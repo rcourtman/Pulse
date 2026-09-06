@@ -1,35 +1,44 @@
 {
   "version": 1,
-  "base_sha": "5000e0409b5795f732f32882d7c6929e7eff16b1",
-  "verified_at": "2026-09-06T16:16:58.486143Z",
+  "base_sha": "f4dc1e69a0e214dd0085c7696f42444b8fd91fa3",
+  "verified_at": "2026-09-06T16:58:13Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/useAlertOverviewState.ts"
+    "frontend-modern/src/components/Login.tsx",
+    "frontend-modern/src/useAppRuntimeState.ts",
+    "frontend-modern/src/utils/localStorage.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "64d0b891e7ad228e8590da859dc25e825b6164c8cf76a01983a219d6cd079b23"
+    "frontend-modern/src/components/Login.tsx": "621f0b97d775aacaa521a3c72ed02db3fde5ad3eda06d55950a32107723eb44c",
+    "frontend-modern/src/useAppRuntimeState.ts": "5a1d343d92c441e1302dab129be7256dd9a287c6a60fb0e17c6f9fa13fe20900",
+    "frontend-modern/src/utils/localStorage.ts": "182ed45685228781fd32725db50611b1115f9ee4fb1af23aeedcf41ca707bdbc"
   },
   "routes": [
-    "/qualification (isolated real OverviewTab, not installed /alerts)"
+    "/"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 1000
-    },
-    {
-      "width": 900,
-      "height": 1000
+      "width": 1280,
+      "height": 800
     },
     {
       "width": 390,
-      "height": 1000
+      "height": 844
     }
   ],
   "states": [
-    "First diagnosis request pending; active set expanded; newer notifications-disabled response visible; older dispatch response completes without replacing current status."
+    "demo-mode login page with the \"Signing you in to the demo\u2026\" status while the automatic sign-in is in flight",
+    "application shell after the automatic demo sign-in (Demo instance banner, Proxmox overview)",
+    "login form with printed demo credentials after an explicit Logout, session marker \"suppressed\"",
+    "login form still shown after a reload following the Logout",
+    "login form with the \"Invalid username or password\" error after a rejected automatic sign-in (401 stub), Sign in button enabled"
   ],
   "interactions": [
-    "Ran pulse-heavy-run -- node scripts/check-alert-diagnosis-ordering.mjs in Chromium. Clicked Add alert fixture control, completed older response after current warning rendered, asserted warning retained, dispatch absent, new alert present, status text fits viewport and no page errors. Inspected desktop and phone screenshots. Synthetic API only; no delivery action or recipient receipt."
+    "load / in a fresh browser context at 1280x800 and at 390x844; automatic POST /api/login with demo/demo, no typing",
+    "click the Logout control in the app header at both widths",
+    "reload the page after Logout",
+    "type demo/demo into the form and submit after Logout",
+    "open / in a second fresh context: automatic sign-in again",
+    "stub /api/login with 401 and load /: form fallback"
   ]
 }
