@@ -17,6 +17,28 @@
 
 ## Purpose
 
+### PBS datastore alert evaluation belongs to the live poll
+
+After publishing freshly polled PBS datastore storage rows, the poller invokes
+the existing storage alert evaluator with capacity-trend evidence. It must not
+depend on mock ticks or unified metric evaluation: that path does not evaluate
+PBS storage thresholds. Existing storage policy, aliases, suppression and
+connectivity semantics remain alerts-owned; this wiring adds no new policy.
+
+Absent or partial capacity counters must not resolve an existing usage
+incident. Explicit empty-store counters (positive total, zero used, free equal
+to total) may recover it. Repeated polls and subsequent unified alert sync must
+preserve the usage incident identity, including recurrence with alternate PBS
+counter names. Independent backup-posture incidents remain separate.
+
+Verification: `TestPBSPolledCapacityRequiresObservedRecovery` in
+`internal/monitoring/monitor_pbs_coverage_test.go` crosses synthetic HTTP
+decoding, live polling and unified sync. It checks an 80% threshold at 85%,
+missing counter retention, confirmed-empty recovery and 86% recurrence with an
+explicit one-point minimum delta. This is local capacity-path evidence, not
+installed recipient receipt, restart qualification or exhaustive connectivity
+validation.
+
 ### Host-local addresses are not PVE identity
 
 Automatic host/PVE network matching excludes non-global-unicast addresses,
