@@ -1394,6 +1394,8 @@ Storage connectivity status is trimmed and case-normalised before evaluation.
 Empty or `unknown` status is absent connectivity evidence: it must not advance
 recovery or replace an existing incident's identity/start time. Capacity and
 pool-health evaluation remain independent and may still use valid observations.
+Normalised `offline` and `unavailable` observations do not feed capacity
+evaluation, preserving the existing rule that offline capacity is not actionable.
 The existing non-failing treatment of available, online, active, inactive and
 disabled statuses remains unchanged; explicit connectivity-disable policy still
 clears the incident. `TestStorageUnknownConnectivityDoesNotRecover` and

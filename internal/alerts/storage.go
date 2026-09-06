@@ -108,7 +108,7 @@ func (m *Manager) CheckStorageWithCapacityTrend(storage models.Storage, trend Ca
 	// confirm an empty store. A default zero from missing capacity telemetry
 	// must not resolve an existing incident.
 	confirmedEmpty := storage.Usage == 0 && storage.Total > 0 && storage.Used == 0 && storage.Free == storage.Total
-	if storage.Status != "offline" && storage.Status != "unavailable" && (storage.Usage > 0 || confirmedEmpty) {
+	if connectivityStatus != "offline" && connectivityStatus != "unavailable" && (storage.Usage > 0 || confirmedEmpty) {
 		m.evaluateStorageCapacity(storage, thresholds, trend)
 	}
 

@@ -21096,3 +21096,25 @@ func TestStorageKnownConnectivityRecoveryCompatibility(t *testing.T) {
 		})
 	}
 }
+
+func TestStorageNormalizedOfflineSkipsCapacityEvaluation(t *testing.T) {
+	for _, status := range []string{" OFFLINE ", " UnAvAiLaBlE "} {
+		t.Run(status, func(t *testing.T) {
+			m := newTestManager(t)
+			disableTestTimeThresholds(m)
+			m.mu.Lock()
+			m.config.StorageDefault = HysteresisThreshold{Trigger: 80, Clear: 70}
+			m.mu.Unlock()
+
+			s := models.Storage{ID: "storage-normalized-offline", Name: "backups", Status: status, Usage: 99}
+			for range 3 {
+				m.CheckStorage(s)
+			}
+
+			testRequireActiveAlert(t, m, canonicalConnectivityStateID(s.ID))
+			if testHasActiveAlert(t, m, canonicalMetricStateID(s.ID, "usage")) {
+				t.Fatal("offline storage produced a capacity alert")
+			}
+		})
+	}
+}
