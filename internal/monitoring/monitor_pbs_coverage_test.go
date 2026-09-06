@@ -599,8 +599,9 @@ func TestPBSPolledCapacityRequiresObservedRecovery(t *testing.T) {
 	defer server.Close()
 	manager := alerts.NewManagerWithDataDir(t.TempDir())
 	defer manager.Stop()
-	manager.UpdateConfig(alerts.AlertConfig{Enabled: true, ActivationState: alerts.ActivationActive, MinimumDelta: 1,
-		TimeThresholds: map[string]int{"storage": 0}, StorageDefault: alerts.HysteresisThreshold{Trigger: 80, Clear: 70}})
+	basePolicy := alerts.AlertConfig{Enabled: true, ActivationState: alerts.ActivationActive, MinimumDelta: 1,
+		TimeThresholds: map[string]int{"storage": 0}, StorageDefault: alerts.HysteresisThreshold{Trigger: 80, Clear: 70}}
+	manager.UpdateConfig(basePolicy)
 	instance := config.PBSInstance{Name: "pbs-capacity", Host: server.URL, MonitorDatastores: true}
 	monitor := newPBSHealthAuthorityMonitor([]config.PBSInstance{instance})
 	monitor.alertManager = manager
@@ -614,6 +615,35 @@ func TestPBSPolledCapacityRequiresObservedRecovery(t *testing.T) {
 			monitor.syncUnifiedResourceAlertsToState(adapter.GetAll())
 		}
 	}
+	// Exercise the production poll-to-storage conversion, not just the
+	// manager's alias resolver: UI-written datastore policy must gate the
+	// new direct evaluation before it can create a capacity incident.
+	for _, policy := range []struct {
+		name      string
+		configure func(*alerts.AlertConfig)
+	}{
+		{"alerts disabled", func(c *alerts.AlertConfig) { c.Enabled = false }},
+		{"storage disabled", func(c *alerts.AlertConfig) { c.DisableAllStorage = true }},
+		{"canonical datastore disabled", func(c *alerts.AlertConfig) {
+			c.Overrides = map[string]alerts.ThresholdConfig{"pbs-pbs-capacity/backups": {Disabled: true}}
+		}},
+		{"canonical datastore threshold", func(c *alerts.AlertConfig) {
+			c.Overrides = map[string]alerts.ThresholdConfig{"pbs-pbs-capacity/backups": {
+				Usage: &alerts.HysteresisThreshold{Trigger: 90, Clear: 80},
+			}}
+		}},
+	} {
+		t.Run(policy.name, func(t *testing.T) {
+			cfg := basePolicy
+			policy.configure(&cfg)
+			manager.UpdateConfig(cfg)
+			poll()
+			if active := manager.GetActiveAlerts(); len(active) != 0 {
+				t.Fatalf("poll bypassed capacity policy: %+v", active)
+			}
+		})
+	}
+	manager.UpdateConfig(basePolicy)
 	poll()
 	active := manager.GetActiveAlerts()
 	if len(active) != 1 || active[0].Type != "usage" || active[0].Value != 85 {
