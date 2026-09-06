@@ -17,6 +17,27 @@
 
 ## Purpose
 
+### Host-local addresses are not PVE identity
+
+Automatic host/PVE network matching excludes non-global-unicast addresses
+and lo/docker*/br-* interfaces from both reported-host and provider-node
+address inventories. A Docker bridge address seen on only one PVE node can
+still exist on an unrelated NAS; provider-only owner counts cannot make it
+machine identity. Management bridges such as vmbr0, unnamed legacy interfaces,
+private IPv4 and IPv6/ULA remain eligible. Explicit unicast report-IP hints
+remain eligible independently of inferred interface evidence. No blanket
+private-subnet exclusion is permitted.
+
+Verification in `internal/monitoring/monitor_host_agents_test.go`:
+`TestFindLinkedProxmoxEntityWithHints_RejectsHostLocalNetworkIdentity` covers
+seven previously false associations; `TestAgentLinkNetworkIdentityFiltering`
+pins both-side exclusions and positive management controls;
+`TestApplyHostReportDoesNotLinkUnrelatedDockerBridge` requires repeated
+ingestion to leave both link directions absent. Existing endpoint and
+ambiguous-name tests remain required. These checks prevent a reproduced
+synthetic misassociation, not all private-address collisions or unknown
+custom bridge names, and do not prove the cause of #1930.
+
 Physical disk inventory has an independent collector schedule. The PVE poller
 carries its default five-minute or configured interval with each disk record,
 while keeping the last successful observation timestamp on retained records.

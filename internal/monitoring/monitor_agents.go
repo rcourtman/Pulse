@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"slices"
 	"strings"
 	"sync"
@@ -4389,18 +4390,38 @@ func (m *Monitor) findLinkedProxmoxEntity(hostname string) (nodeID, vmID, contai
 	return m.findLinkedProxmoxEntityWithHints(hostname, "", nil)
 }
 
+// Host-local addresses may be unique among the monitored PVE nodes while also
+// existing on an unrelated agent host. They are not machine identity evidence.
+func normalizeAgentLinkIP(address string) string {
+	normalized := unifiedresources.NormalizeIP(address)
+	if ip := net.ParseIP(normalized); ip != nil && ip.IsGlobalUnicast() {
+		return normalized
+	}
+	return ""
+}
+
+// Do not discard all bridges: Proxmox management addresses commonly use vmbr0.
+// Explicit report-IP and endpoint hints remain usable for routable addresses.
+func isHostLocalAgentLinkInterface(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	return name == "lo" || strings.HasPrefix(name, "docker") || strings.HasPrefix(name, "br-")
+}
+
 func collectReportedHostIPs(
 	reportIP string,
 	network []agentshost.NetworkInterface,
 ) map[string]struct{} {
 	ips := make(map[string]struct{})
-	if normalized := unifiedresources.NormalizeIP(reportIP); normalized != "" {
+	if normalized := normalizeAgentLinkIP(reportIP); normalized != "" {
 		ips[normalized] = struct{}{}
 	}
 
 	for _, nic := range network {
+		if isHostLocalAgentLinkInterface(nic.Name) {
+			continue
+		}
 		for _, address := range nic.Addresses {
-			if normalized := unifiedresources.NormalizeIP(address); normalized != "" {
+			if normalized := normalizeAgentLinkIP(address); normalized != "" {
 				ips[normalized] = struct{}{}
 			}
 		}
@@ -4412,8 +4433,11 @@ func collectReportedHostIPs(
 func collectNodeNetworkIPs(network []unifiedresources.NetworkInterface) map[string]struct{} {
 	ips := make(map[string]struct{})
 	for _, nic := range network {
+		if isHostLocalAgentLinkInterface(nic.Name) {
+			continue
+		}
 		for _, address := range nic.Addresses {
-			if normalized := unifiedresources.NormalizeIP(address); normalized != "" {
+			if normalized := normalizeAgentLinkIP(address); normalized != "" {
 				ips[normalized] = struct{}{}
 			}
 		}
