@@ -581,6 +581,21 @@ the queue nor any destination type may keep its own list. This generalises to
 every destination the decision webhook delivery already made for HTTP 4xx in
 `isRetryableWebhookError`.
 
+The SMTP transport's inner retry loop must apply that same classifier after
+an unsuccessful send, before sleeping or attempting another connection.
+Permanent authentication, configuration, and rejection failures return on that
+attempt; transient failures retain up to `MaxRetries + 1` transport attempts.
+The returned error preserves the structured cause and reports the actual
+attempt count, not the configured maximum. This applies equally to ordinary,
+threaded, and attachment email through `sendEmailWithOptions`.
+
+`internal/notifications/email_retry_class_test.go` exercises the real sender
+with in-memory SMTP handshake failures: permanent 550/535/554/501 replies stop
+at one attempt, while transient 421 retains three configured attempts even
+when its prose mentions authentication. It checks classification and the
+reported attempt count. This is transport-only proof, not queue persistence,
+post-DATA acceptance, or an installed recipient receipt.
+
 Dead-lettering early must not lose the notification: `RetryTerminalFailures`
 remains the operator's recovery path, returning eligible retained terminal
 failures to the queue with a fresh budget once the credentials or configuration

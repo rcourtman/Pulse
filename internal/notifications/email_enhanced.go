@@ -474,10 +474,10 @@ func NewEnhancedEmailManager(config EmailProviderConfig) *EnhancedEmailManager {
 
 // SendEmailWithRetry sends email with retry logic
 // Note: When used with the persistent queue, retry behavior is layered:
-// - Transport retries (this function): up to MaxRetries attempts with RetryDelay between
+// - Transport retries (this function): up to MaxRetries+1 attempts with RetryDelay between
 // - Queue retries: up to MaxAttempts (default 3) with exponential backoff
-// Total attempts = MaxRetries * MaxAttempts (e.g., 3 * 3 = 9 SMTP calls for a single notification)
-// This ensures delivery even during transient failures at either layer.
+// Total attempts = (MaxRetries+1) * MaxAttempts for transient failures.
+// Deterministic failures stop at the first attempt in both layers.
 func (e *EnhancedEmailManager) SendEmailWithRetry(subject, htmlBody, textBody string) error {
 	return e.sendEmailWithOptions(subject, htmlBody, textBody, nil, "")
 }
@@ -528,6 +528,10 @@ func (e *EnhancedEmailManager) sendEmailWithOptions(subject, htmlBody, textBody 
 			Int("attempt", attempt).
 			Str("provider", e.config.Provider).
 			Msg("email send attempt failed")
+
+		if !ClassifyNotificationFailureError(err).Retryable() {
+			return fmt.Errorf("email failed after %d attempts: %w", attempt+1, err)
+		}
 	}
 
 	return fmt.Errorf("email failed after %d attempts: %w", e.config.MaxRetries+1, lastErr)
