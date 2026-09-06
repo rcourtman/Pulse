@@ -127,6 +127,15 @@ func newPBSHealthTestServer(t *testing.T) *pbsHealthTestServer {
 					"avail": 750,
 				}},
 			})
+		case "/api2/json/admin/datastore/backups/status":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"status": "available",
+					"total":  1000,
+					"used":   250,
+					"avail":  750,
+				},
+			})
 		case "/api2/json/admin/datastore/backups/namespace":
 			_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{}})
 		default:
