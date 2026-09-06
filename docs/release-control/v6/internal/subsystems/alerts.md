@@ -15,6 +15,15 @@
 
 ## Purpose
 
+Overview delivery diagnoses use latest-started refresh ownership. Older bulk
+responses cannot overwrite newer card notification status, and an empty active
+alert set invalidates outstanding reads. Disposal also prevents updates. Failed
+refreshes retain the existing snapshot; this ordering repair does not add a
+freshness indicator or establish recipient receipt. Verify response overlap in
+`OverviewTab.deliverystatus.test.tsx`, empty-set invalidation in
+`useAlertOverviewState.test.tsx`, and rendered ordering at three widths using
+`scripts/check-alert-diagnosis-ordering.mjs`.
+
 Confirmed canonical metric recovery publishes the clearing evaluation's value,
 observation time, and resolved metric wording in the snapshot consumed by
 recent-resolution reads and notification callbacks. Clone that snapshot before

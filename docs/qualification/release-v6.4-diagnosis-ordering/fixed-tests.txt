@@ -1,0 +1,14 @@
+
+> pulse-modern@1.0.0 test
+> vitest run src/features/alerts/__tests__/OverviewTab.deliverystatus.test.tsx src/features/alerts/__tests__/useAlertOverviewState.test.tsx
+
+
+ RUN  v3.2.7 /var/lib/pulse-maintainer/team-worktrees/20260906T163509Z-release-line/pulse@release_v6.4/frontend-modern
+
+ ✓ src/features/alerts/__tests__/useAlertOverviewState.test.tsx (8 tests) 41ms
+ ✓ src/features/alerts/__tests__/OverviewTab.deliverystatus.test.tsx (5 tests) 156ms
+
+ Test Files  2 passed (2)
+      Tests  13 passed (13)
+   Start at  17:38:05
+   Duration  1.84s (transform 964ms, setup 109ms, collect 1.18s, tests 197ms, environment 658ms, prepare 123ms)

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import type { Alert, AlertDeliveryDiagnosis } from '@/types/api';
@@ -122,6 +123,27 @@ describe('OverviewTab delivery status line', () => {
     await waitFor(() => expect(screen.getByText(/^Dispatch requested /)).toBeTruthy());
     expect(screen.queryByText(/^Notified /)).toBeNull();
     if (state.reason === 'cooldown') expect(screen.getByText(/next eligible/)).toBeTruthy();
+  });
+
+  it('ignores an older diagnosis response after the active alert set changes', async () => {
+    let finishOlder!: (value: AlertDeliveryDiagnosis[]) => void;
+    getDeliveryDiagnoses.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishOlder = resolve;
+      }),
+    );
+    getDeliveryDiagnoses.mockResolvedValueOnce([
+      makeDiagnosis('a1', { status: 'suppressed', reason: 'notifications_disabled' }),
+    ]);
+    const [alerts, setAlerts] = createSignal<Record<string, Alert>>({ a1: makeAlert('a1') });
+    render(() => <OverviewTab {...defaultProps()} activeAlerts={alerts()} />);
+    await waitFor(() => expect(getDeliveryDiagnoses).toHaveBeenCalledTimes(1));
+    setAlerts({ a1: makeAlert('a1'), a2: makeAlert('a2') });
+    await waitFor(() => expect(screen.getByText('Notifications are turned off')).toBeTruthy());
+    finishOlder([makeDiagnosis('a1', { lastNotified: '2026-08-26T10:15:00Z' })]);
+    await Promise.resolve();
+    expect(screen.queryByText(/^Dispatch requested /)).toBeNull();
+    expect(screen.getByText('Notifications are turned off')).toBeTruthy();
   });
 
   it('renders no delivery line when the diagnosis fetch fails', async () => {

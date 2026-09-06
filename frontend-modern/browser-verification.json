@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "base_sha": "2d550da942c6f0a7e7896e7aca86493983f90b84",
-  "verified_at": "2026-09-06T15:54:59.817913Z",
+  "base_sha": "101bae33963ee65a5a83bc229d081b43825de889",
+  "verified_at": "2026-09-06T16:42:39.585210Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/deliveryDiagnosisPresentation.ts"
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/deliveryDiagnosisPresentation.ts": "bc3eadf8f790517b377430a42eb67e8fdfcadb53bb13b87cd971d6a9ab91d607"
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "64d0b891e7ad228e8590da859dc25e825b6164c8cf76a01983a219d6cd079b23"
   },
   "routes": [
     "/qualification (loopback synthetic Overview, not production routing)"
@@ -27,11 +27,11 @@
     }
   ],
   "states": [
-    "Ready and cooldown show Dispatch requested; cooldown says next eligible; missing timestamp shows Notification pending. Scripted diagnoses, not recipient receipt.",
-    "390px screenshot visually inspected: longer status wraps within card and controls remain visible."
+    "Newer notifications-disabled response remains visible after older dispatch response completes. Synthetic diagnoses, not recipient receipt.",
+    "Desktop and phone screenshots visually inspected: current warning and card controls remain visible within viewport."
   ],
   "interactions": [
-    "pulse-heavy-run -- node scripts/check-alert-dispatch-copy.mjs passed at all three widths; two dispatch labels, no Notified labels, one pending label, text fits viewport, no page errors.",
-    "Evidence: /var/lib/pulse-maintainer/queue/staging/20260906T155036Z-release-line/browser-dispatch.log and browser-dispatch/*.png."
+    "pulse-heavy-run -- node scripts/check-alert-diagnosis-ordering.mjs passed at 1440, 900 and 390 pixels: retained warning, absent stale dispatch, new alert present, text within viewport, no page errors.",
+    "Exact-parent failing and patched passing evidence: docs/qualification/release-v6.4-diagnosis-ordering/."
   ]
 }

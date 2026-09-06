@@ -4,12 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AlertsAPI } from '@/api/alerts';
 import { notificationStore } from '@/stores/notifications';
-import type { Alert } from '@/types/api';
+import type { Alert, AlertDeliveryDiagnosis } from '@/types/api';
 
 import { useAlertOverviewState } from '../useAlertOverviewState';
 
 vi.mock('@/api/alerts', () => ({
   AlertsAPI: {
+    getDeliveryDiagnoses: vi.fn(),
     acknowledge: vi.fn(),
     bulkAcknowledge: vi.fn(),
     unacknowledge: vi.fn(),
@@ -47,6 +48,7 @@ describe('useAlertOverviewState', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-22T12:00:00Z'));
+    vi.mocked(AlertsAPI.getDeliveryDiagnoses).mockReset().mockResolvedValue([]);
     vi.mocked(AlertsAPI.acknowledge).mockReset();
     vi.mocked(AlertsAPI.unacknowledge).mockReset();
     vi.mocked(AlertsAPI.bulkAcknowledge).mockReset();
@@ -56,6 +58,31 @@ describe('useAlertOverviewState', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('invalidates pending diagnosis reads when the active set becomes empty', async () => {
+    let finish!: (value: AlertDeliveryDiagnosis[]) => void;
+    vi.mocked(AlertsAPI.getDeliveryDiagnoses).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const [activeAlerts, setActiveAlerts] = createSignal<Record<string, Alert>>({
+      a1: makeAlert('a1', new Date().toISOString()),
+    });
+    const { result } = renderHook(() =>
+      useAlertOverviewState({
+        activeAlerts,
+        overrides: () => [],
+        showAcknowledged: () => true,
+        updateAlert: vi.fn(),
+      }),
+    );
+    expect(AlertsAPI.getDeliveryDiagnoses).toHaveBeenCalledOnce();
+    setActiveAlerts({});
+    finish([{ alertIdentifier: 'a1', reason: 'ready' } as AlertDeliveryDiagnosis]);
+    await Promise.resolve();
+    expect(result.deliveryDiagnoses()).toEqual({});
   });
 
   it('owns overview stats, filtering, and acknowledge flows outside the tab shell', async () => {
