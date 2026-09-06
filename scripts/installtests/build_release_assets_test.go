@@ -2119,7 +2119,8 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 		`helm repo index "${index_work}"`,
 		`git -C gh-pages push origin HEAD:gh-pages`,
 		`grep -q "version: ${VERSION}"`,
-		`helm show chart pulse-public/pulse --version "${VERSION}"`,
+		`helm pull pulse-public/pulse --version "${VERSION}" --destination "${public_work}"`,
+		`cmp -s "${qualified_chart}" "${public_work}/pulse-${VERSION}.tgz"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(helmPages, needle) {
@@ -3656,6 +3657,26 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	} {
 		if !strings.Contains(validationWorkflow, needle) {
 			t.Fatalf("validate-release-assets.yml missing fast digest contract: %s", needle)
+		}
+	}
+}
+
+func TestReleaseTrainCITriggersIncludeBuildAndE2E(t *testing.T) {
+	for _, workflow := range []string{"build-and-test.yml", "test-e2e.yml"} {
+		content, err := os.ReadFile(repoFile(".github", "workflows", workflow))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, event := range []string{"push", "pull_request"} {
+			t.Run(workflow+"/"+event, func(t *testing.T) {
+				// Limit the assertion to this event's branch list, not another
+				// trigger or a job comment mentioning the same pattern.
+				expression := regexp.MustCompile(`(?m)^  ` + event + `:\n    branches:\n((?:      - [^\n]+\n)+)`)
+				match := expression.FindStringSubmatch(string(content))
+				if len(match) != 2 || !strings.Contains(match[1], "      - 'release/v*'\n") || !strings.Contains(match[1], "      - main\n") {
+					t.Fatal("CI must admit main and release/v* branches for this event")
+				}
+			})
 		}
 	}
 }

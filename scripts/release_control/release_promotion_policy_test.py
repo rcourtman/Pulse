@@ -2424,7 +2424,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('helm repo index "${index_work}"', helm_pages)
         self.assertIn('git -C gh-pages push origin HEAD:gh-pages', helm_pages)
         self.assertIn('grep -q "version: ${VERSION}"', helm_pages)
-        self.assertIn('helm show chart pulse-public/pulse --version "${VERSION}"', helm_pages)
+        self.assertIn('helm pull pulse-public/pulse --version "${VERSION}"', helm_pages)
+        self.assertIn('cmp -s "${qualified_chart}" "${public_work}/pulse-${VERSION}.tgz"', helm_pages)
         self.assertNotIn("helm status pulse || true", helm_pages)
         self.assertNotIn("kubectl describe pods", helm_pages)
         self.assertIn("release-convergence.yml/dispatches", release_workflow)
@@ -2434,6 +2435,13 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("sync_chart_release_metadata.py", helm)
         self.assertNotIn("sync_chart_release_metadata.py", helm_pages)
         self.assertIn("--chart deploy/helm/pulse/Chart.yaml", helm)
+        version_guard = 'if [ "$APP_VERSION" != "$CHART_VERSION" ]; then'
+        self.assertIn(version_guard, helm)
+        self.assertLess(helm.index(version_guard), helm.index("      - name: Package chart"))
+        self.assertIn(
+            "python3 scripts/release_control/helm_publish_version_test.py",
+            (Path(__file__).resolve().parents[2] / ".github/workflows/canonical-governance.yml").read_text(),
+        )
         self.assertIn('git checkout --detach "refs/tags/${RELEASE_TAG}"', helm)
         self.assertIn("Verify public GHCR chart identity and provenance", helm)
         self.assertIn("helm registry logout ghcr.io || true", helm)

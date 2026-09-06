@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -3367,8 +3368,8 @@ func TestProcessQueuedNotification_SkipsDisabledEmailDelivery(t *testing.T) {
 		Alerts: []*alerts.Alert{{ID: "alert-1"}},
 	}
 
-	if err := nm.ProcessQueuedNotification(notif); err != nil {
-		t.Fatalf("expected queued email notification to be skipped without error, got %v", err)
+	if err := nm.ProcessQueuedNotification(notif); !errors.Is(err, ErrNotificationDeliverySkipped) {
+		t.Fatalf("expected queued email notification to report a policy skip, got %v", err)
 	}
 }
 
@@ -3414,8 +3415,8 @@ func TestProcessQueuedNotification_SkipsWhenNotificationsDisabled(t *testing.T) 
 		Alerts: []*alerts.Alert{{ID: "alert-1"}},
 	}
 
-	if err := nm.ProcessQueuedNotification(notif); err != nil {
-		t.Fatalf("expected queued webhook notification to be skipped without error, got %v", err)
+	if err := nm.ProcessQueuedNotification(notif); !errors.Is(err, ErrNotificationDeliverySkipped) {
+		t.Fatalf("expected queued webhook notification to report a policy skip, got %v", err)
 	}
 }
 

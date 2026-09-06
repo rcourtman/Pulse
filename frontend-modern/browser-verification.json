@@ -1,53 +1,34 @@
 {
   "version": 1,
-  "base_sha": "75976c60be5e156be46fca344a02b7df5f573416",
-  "verified_at": "2026-09-05T17:45:39.915245Z",
+  "base_sha": "2a833eccdfecf7248eed63eabf5b9184a9fa2390",
+  "verified_at": "2026-09-05T23:57:09.414504Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/AI/Chat/hooks/useExplanationRequest.ts",
-    "frontend-modern/src/components/AI/Chat/index.tsx",
-    "frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx",
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
-    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts",
-    "frontend-modern/src/stores/aiChat.ts",
-    "frontend-modern/src/utils/aiChatPresentation.ts"
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/AI/Chat/hooks/useExplanationRequest.ts": "8606c79c11b0197ed5a55ed1d2ec83e0cd7dd0adda182937e5aad9144571cb17",
-    "frontend-modern/src/components/AI/Chat/index.tsx": "6b1d6243d9a99d688229dea9e954ae6aa770a8b6e07e7f0ce75316b486090f09",
-    "frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx": "f373ff21a1c54304d63b92498c39fa45f5ffb036a2b02e93de64fafbbf8ee52e",
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "f098cddd58823d2df7687f0db7774363fc9c81a7a8845a917e73415a7f5aae10",
-    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts": "4152a3bec5412b4d744436128e8e038be349d9b6419fc58d3b7527908ffc982f",
-    "frontend-modern/src/stores/aiChat.ts": "d0b1ef69bcb454e6f0ce17a157c98bdd34d68d90f607b76081e9cd1bd6778e4c",
-    "frontend-modern/src/utils/aiChatPresentation.ts": "4b05f663110ec6c789f8ff050993a945e3e9d41c6e3fee4047500e979a48531d"
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts": "1eadf6df30b4f1130f868b8f139561ea60fdb87e1823deeeaaf2f8fbc699a00c"
   },
   "routes": [
-    "/patrol",
-    "/alerts"
+    "/qualification (isolated caller/card fixture, not application routing)"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 1000
-    },
-    {
-      "width": 900,
-      "height": 1000
+      "height": 900
     },
     {
       "width": 390,
-      "height": 1000
+      "height": 900
     }
   ],
   "states": [
-    "Current hot-dev frontend with mock monitoring backend. Scripted attention evidence and inference responses. Other non-GET requests blocked. No real model or infrastructure outcome qualification.",
-    "Patrol selected item, expanded evidence, scoped explanation, streamed response, failed provider request and successful retry. Draft preserved across Escape and context-only reopen.",
-    "Active alert secondary menu at desktop and narrow widths. Open, Escape dismissal, outside click dismissal, reopen, select explanation, menu closes and alert context sent. Screenshots inspected for menu placement, readable response, reachable composer and error controls."
+    "Real Chromium with current useAlertDestinationsTabState, useNotificationDeliveryHealth and AlertDeliveryHealthCard; scripted API promises and queue actions. No installed backend or provider receipt.",
+    "Older healthy/newer degraded, older degraded/newer healthy, older error/newer healthy, older healthy/newer error. Warning presence and rendered state remain owned by newer request. Desktop and narrow screenshots inspected; this is not a full-shell or accessibility audit."
   ],
   "interactions": [
-    "node scripts/check-patrol-assistant-journey.mjs",
-    "Patrol at 1440/900/390: keyboard focus and Enter on Explain, exactly one selected-issue request, correct evidence/resource, autonomous false, no generic workflow starters, close/reopen preserves draft without inference.",
-    "Alerts at 1440/390: More alert actions, Escape, reopen, outside click, reopen, Explain. Selected alert evidence and resource attached with autonomous false. No Patrol trigger or configuration mutation.",
-    "Provider failure, Try again retains original handoff, reload does not resubmit. No page errors or unexpected non-GET requests."
+    "pulse-heavy-run -- node scripts/check-delivery-health-ordering.mjs: 12 cases passed.",
+    "Configuration Retry overlaps pending mount health. Resolve newer then older and compare rendered main text and alert presence.",
+    "Retry retained deliveries and Dismiss retained failures each start post-action refresh while another read is pending. Older completion leaves loading true; latest healthy response clears warning. Confirmations and API responses are scripted."
   ]
 }

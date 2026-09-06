@@ -260,6 +260,22 @@ command-capable profile.
 
 ## Shared Boundaries
 
+### Shared Docker-update verification boundary
+
+The shared API result converter classifies independent Docker update readback
+using replacement identity, state/running agreement and running health, rather
+than identity alone. Both immediate execution and durable receipt reconciliation
+use this converter. Contradictory observations affect verification only;
+missing agent readback is inconclusive. Execution and compensation records
+remain unchanged: container backup-rename compensation is not a storage backup,
+recovery point, or independently verified restore. No storage selection,
+retention or recovery authority is added. The focused
+`TestDockerContainerUpdateIndependentObservationMustMatchState` in
+`internal/api/docker_container_action_result_test.go` asserts that independent
+verification changes never rewrite successful execution history, including
+stopped replacements and missing readback.
+
+
 Recovery consumers of security status must distinguish currentUsername (the validated caller identity) from privileged authUsername (administrator configuration). Presence of currentUsername in a scoped response does not authorise export, import, recovery or unprotected backup transfer; existing settings capabilities and backend enforcement still gate those operations.
 
 The Patrol action broker and shared policy-writer wiring under `internal/api/`
@@ -2103,6 +2119,22 @@ take a correctness dependency on its contents.
 21. Treating an `AvailabilityData` facet on a storage resource as backup, protection, or recovery evidence; an agentless probe attached to a NAS, PBS, or datastore resource is monitoring reachability, not backup success, snapshot health, or restore readiness. Storage and recovery must read protection status from the canonical backup and storage resources, not from the availability probe facet.
 
 ## Completion Obligations
+
+### Recovered Docker update evidence preserves health uncertainty
+
+The shared API action-result boundary must not turn a matching replacement ID
+into confirmed running health when the agent readback reports unhealthy,
+health-check starting or restarting. Unknown running health remains
+inconclusive, while the recorded completed execution and compensation facts
+remain unchanged. This rule does not settle missing receipts, prove intended
+stopped state, or authorise redispatch of a recovered update.
+
+Verification: `TestDockerContainerUpdateAgentReadbackMustSupportRunningClaim`
+in `internal/api/docker_container_action_result_test.go` pins these result
+distinctions. Existing `TestIssue1649StrandedDockerUpdateReconcilesWithoutRedispatch`
+and `TestRouterRecoverExecutingDockerUpdateAfterCapabilityDisappears` exercise
+reconciliation without treating the verification correction as a new mutation.
+
 
 Coverage rows reconcile replacement recovery-model snapshots by their logical
 `key` before windowing. Refreshed names must render without discarding expanded

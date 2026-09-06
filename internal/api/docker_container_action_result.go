@@ -115,7 +115,15 @@ func dockerContainerUpdateExecutionResult(resourceID, agentID string, facts agen
 			}
 			status := unified.ActionVerificationContradicted
 			reason := "postcondition_contradicted"
-			if dockerUpdateFactsMatch(facts, facts.After.ContainerID) {
+			// A running replacement must also have a usable running/health
+			// readback; identity alone must not confirm an unhealthy update.
+			// Preserve updates of containers intentionally left stopped.
+			if facts.After.Running && !agentexec.IsDockerContainerHealth(facts.After.Health) {
+				status = unified.ActionVerificationInconclusive
+				reason = "container_health_unknown"
+			} else if dockerUpdateFactsMatch(facts, facts.After.ContainerID) &&
+				(!facts.After.Running || (facts.After.State == "running" &&
+					agentexec.DockerContainerHealthAllowsVerifiedRunningState(facts.After.Health))) {
 				status = unified.ActionVerificationConfirmed
 				reason = ""
 			}
@@ -145,7 +153,18 @@ func dockerContainerUpdateExecutionResult(resourceID, agentID string, facts agen
 		}
 		status := unified.ActionVerificationContradicted
 		reason := "postcondition_contradicted"
-		if dockerUpdateFactsMatch(facts, independent.Snapshot.ContainerID) {
+		// Identity is necessary but not sufficient: a replacement can exit or
+		// become unhealthy after the agent reported success. Compare against
+		// its readback rather than requiring running unconditionally, because
+		// updates deliberately preserve stopped containers.
+		if !facts.ReadbackRan || facts.After.State == "" {
+			status = unified.ActionVerificationInconclusive
+			reason = "agent_readback_unavailable"
+		} else if dockerUpdateFactsMatch(facts, independent.Snapshot.ContainerID) &&
+			independent.Snapshot.State == facts.After.State &&
+			independent.Snapshot.Running == facts.After.Running &&
+			(!independent.Snapshot.Running || (independent.Snapshot.State == "running" &&
+				agentexec.DockerContainerHealthAllowsVerifiedRunningState(independent.Snapshot.Health))) {
 			status = unified.ActionVerificationConfirmed
 			reason = ""
 		}
@@ -254,8 +273,8 @@ func dockerActionEvidenceTimes(observedAt, receivedAt time.Time) (time.Time, tim
 }
 
 // dockerUpdateFactsMatch confirms the observed container is the replacement
-// the agent claims to have created. A stopped original is recreated without
-// being started, so run-state is not part of the postcondition; identity is.
+// the agent claims to have created. Independent verification additionally
+// compares its state with the agent readback, preserving stopped updates.
 func dockerUpdateFactsMatch(facts agentexec.DockerContainerUpdateResultPayload, observedContainerID string) bool {
 	if facts.NewContainerID == "" || observedContainerID == "" {
 		return false

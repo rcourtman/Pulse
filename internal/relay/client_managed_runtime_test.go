@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"io"
 	"net"
@@ -52,7 +54,7 @@ func TestManagedRuntimeRelayRegistrationReconnectDrain(t *testing.T) {
 	pulseRoot, pulseProRelayDir := managedRelayWorkspaceRoots(t)
 	relayBinary := buildManagedRelayBinary(t, pulseProRelayDir)
 	const revocationFeedToken = "managed-runtime-revocation-feed-token"
-	revocationFeed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	revocationFeed := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/revocations" {
 			http.NotFound(w, r)
 			return
@@ -69,6 +71,16 @@ func TestManagedRuntimeRelayRegistrationReconnectDrain(t *testing.T) {
 		})
 	}))
 	defer revocationFeed.Close()
+	revocationCertificate, err := x509.ParseCertificate(revocationFeed.TLS.Certificates[0].Certificate[0])
+	if err != nil {
+		t.Fatalf("parse revocation feed certificate: %v", err)
+	}
+	revocationCAPath := filepath.Join(t.TempDir(), "revocation-feed-ca.pem")
+	revocationCAPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: revocationCertificate.Raw})
+	if err := os.WriteFile(revocationCAPath, revocationCAPEM, 0o600); err != nil {
+		t.Fatalf("write revocation feed CA: %v", err)
+	}
+	t.Setenv("SSL_CERT_FILE", revocationCAPath)
 	t.Setenv("PULSE_RELAY_LICENSE_SERVER_URL", revocationFeed.URL)
 	t.Setenv("PULSE_RELAY_REVOCATION_FEED_TOKEN", revocationFeedToken)
 

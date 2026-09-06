@@ -130,14 +130,8 @@ def validate_marker(
     return int(owner)
 
 
-def latest_failed_runs(
-    releases: Iterable[object],
-    runs: Iterable[object],
-    *,
-    workflow_id: int,
-    default_branch: str,
-) -> list[int]:
-    """Return the latest failed convergence for each current immutable channel."""
+def current_channel_heads(releases: Iterable[object]) -> dict[bool, dict[str, Any]]:
+    """Select published server heads before applying retry eligibility."""
     latest_release: dict[bool, tuple[datetime, dict[str, Any]]] = {}
     for index, value in enumerate(releases):
         if not isinstance(value, dict) or value.get("draft") is not False:
@@ -154,12 +148,23 @@ def latest_failed_runs(
         if prerelease not in latest_release or published > latest_release[prerelease][0]:
             latest_release[prerelease] = (published, value)
 
+    return {channel: value for channel, (_, value) in latest_release.items()}
+
+
+def latest_failed_runs(
+    releases: Iterable[object],
+    runs: Iterable[object],
+    *,
+    workflow_id: int,
+    default_branch: str,
+) -> list[int]:
+    """Return the latest failed convergence for each current immutable channel."""
     # Never fall back to an older release when the advertised channel head is
     # mutable. That is continuity debt requiring a replacement, not a target
     # whose aliases should be promoted again.
     current_tags = {
         str(release["tag_name"])
-        for _, release in latest_release.values()
+        for release in current_channel_heads(releases).values()
         if release.get("immutable") is True
     }
     newest: dict[str, tuple[datetime, dict[str, Any]]] = {}
@@ -679,6 +684,14 @@ def discover(github: GitHub) -> list[int]:
     releases = flatten_pages(
         github.pages(f"repos/{repository}/releases?per_page=100")
     )
+    for prerelease, release in current_channel_heads(releases).items():
+        if release.get("immutable") is not True:
+            channel = "preview" if prerelease else "stable"
+            report_decision(
+                f"Current {channel} head {release['tag_name']} has no confirmed "
+                "immutable activation commit; continuity debt remains. "
+                "No retry or fallback to an older release is authorised by this check."
+            )
     runs = flatten_pages(
         github.pages(
             f"repos/{repository}/actions/workflows/release-convergence.yml/runs"

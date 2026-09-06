@@ -106,5 +106,56 @@ class HelmPagesRetryTests(unittest.TestCase):
                 self.assertIn("--latest=false", calls[-1])
 
 
+class PublicReceiptTests(unittest.TestCase):
+    def receipt(self, mode):
+        workflow = (ROOT / '.github/workflows/helm-pages.yml').read_text()
+        step = workflow.split('      - name: Verify public Pages chart\n', 1)[1]
+        script = textwrap.dedent(step.split('        run: |\n', 1)[1])
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'dist').mkdir()
+            (root / 'dist/pulse-6.4.3.tgz').write_bytes(b'qualified')
+            programs = {
+                'curl': '''#!/usr/bin/env python3
+import pathlib, sys
+pathlib.Path(sys.argv[sys.argv.index('-o')+1]).write_text('version: 6.4.3\\n')
+''',
+                'helm': '''#!/usr/bin/env python3
+import os, pathlib, sys
+args = sys.argv[1:]
+if args[0] == 'pull':
+    mode = os.environ['MODE']
+    if mode == 'unavailable': sys.exit(1)
+    if mode != 'missing':
+        dest = pathlib.Path(args[args.index('--destination')+1])
+        (dest / 'pulse-6.4.3.tgz').write_bytes(b'qualified' if mode == 'match' else b'wrong')
+''',
+                'sleep': '#!/bin/sh\nexit 0\n',
+            }
+            for name, body in programs.items():
+                path = root / name
+                path.write_text(body)
+                path.chmod(0o755)
+            return subprocess.run(['bash', '-c', script], cwd=root,
+                                  env={'PATH': f"{root}:{os.environ['PATH']}",
+                                       'VERSION': '6.4.3', 'MODE': mode},
+                                  capture_output=True, text=True)
+
+    def test_matching_public_package_passes(self):
+        result = self.receipt('match')
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_same_version_wrong_bytes_fail(self):
+        result = self.receipt('wrong')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn('[OK]', result.stdout)
+
+    def test_missing_download_fails(self):
+        self.assertNotEqual(self.receipt('missing').returncode, 0)
+
+    def test_unavailable_download_fails(self):
+        self.assertNotEqual(self.receipt('unavailable').returncode, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
