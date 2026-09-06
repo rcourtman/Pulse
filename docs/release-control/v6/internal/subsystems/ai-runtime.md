@@ -25,6 +25,19 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+Native app-container configuration reads resolve identity, provider and placement
+from current canonical inventory. Optional session discovery cannot fabricate a
+not-found result or replace current placement with a stale execution target.
+Query restrictions on both the supplied reference and canonical identity are
+checked before registration, and an existing session's allowed actions are not
+expanded by a read. Unsupported adapters, missing providers, incomplete placement
+and nil provider observations retain known resource identity and an explicit
+unavailability reason with the shared tool error bit. They cannot count as a
+successful configuration read. Actual inventory absence remains distinct.
+`TestAppContainerConfigObservationContract` exercises these boundaries with
+strict resolution enabled. This read correction does not relax action or native
+log validation and does not qualify autonomous diagnosis or recovery.
+
 The published Patrol qualification schema must accept the fault injectors used
 by the executable catalogue. `TestCatalogFaultInjectorsMatchPublishedSchema`
 checks the actual scenario faults against the schema enum, including the

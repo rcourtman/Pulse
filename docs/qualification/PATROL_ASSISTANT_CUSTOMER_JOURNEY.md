@@ -1494,3 +1494,68 @@ evidence were exercised. The source-bound receipt is
 has type and selector coverage, not an active-route browser claim. Controlled
 responses qualify rendering only. Landing checks remain separate from the
 unperformed diagnosis, approved/rejected action and recovery qualifications.
+
+### Configuration-read correction plan
+
+A successful canonical container get followed by a false config `not found`
+result is a source contract defect. Native configuration reads must use current
+canonical inventory for identity and provider capability. Optional session
+resolution preserves continuity for later actions, not proof of existence.
+Explicit query restrictions must be checked before registering or refreshing a
+resource. Unsupported adapters, missing configuration providers, unavailable
+placement and empty provider responses remain distinct from missing inventory.
+No action validation or native log-read authority changes in this slice.
+
+Regression matrix: TrueNAS config with absent, empty and existing session
+context, canonical identity across aliases, explicit query denial without a
+provider call, Docker unsupported capability, genuinely missing inventory,
+unavailable placement, provider failure and nil provider response. Reproduce
+the failing cases before changing runtime code. Run affected Go tools checks
+and focused race coverage on pulse-dev.
+
+Browser matrix after the final build: `/patrol` Assistant tool result details
+at 1440x1000, 900x1000 and 390x1000, available configuration, unsupported
+capability, true missing resource and denied/provider-failed results. Exercise
+open/closed details, hover and keyboard focus, Enter/Space, deepest output
+scrolling, Escape, and persisted/reloaded evidence. Use captured actual tool
+results to qualify rendering without claiming model diagnosis or native
+provider integration. No autonomous subscription retry or separately billed
+provider request is part of this correction.
+
+### Configuration-read correction qualification
+
+The baseline reproduced absent/empty session failures, stale session placement
+and false not-found results after successful canonical gets. The corrected
+read path uses canonical resource identity and current provider placement. It
+checks explicit query restrictions before registration and preserves an existing
+query-only session's action limits. Unsupported configuration, unavailable
+provider/placement and nil provider responses carry explicit reasons and the
+tool error bit. Unavailable inventory and missing read state also remain failures
+rather than evidence of resource absence. Actual inventory absence remains the
+existing not-found lookup result.
+
+Fourteen focused contract cases pass with strict resolution enabled. The
+existing native-config regression, full tools package and focused race proof
+passed on pulse-dev with Go1.26.8. The final-source Pro binary SHA256 is
+`552699cdf2e61a4ca1cea2ac5ef4e065735cbd1dbca01665456e184bd4fc3533`.
+It is installed only in the existing local dev stack. No production agent or
+provider configuration was changed.
+
+Playwright passed on `/patrol` at 1440x1000, 900x1000 and 390x1000. Eight actual
+tool results were replayed and inspected, including successful, unavailable,
+missing, denied and failed reads. Expanded inputs/outputs, keyboard toggles,
+scrolling, Escape, reload and controlled session restoration preserve exact
+evidence and error state. Controlled session responses prove rendering and
+reload behavior, not server persistence or a new model/native-provider result.
+The source-bound browser receipt records those limits. Private artifacts are
+under `/Volumes/Development/pulse/tmp/patrol-config-read-contract/` and worker
+logs under `/opt/pulse-release-worker/patrol-config-read-proof/`.
+
+PR1935's Docker correction required two legacy partial-total test expectations
+to be updated in `0fcb2ee147354de770dfc4b0b9672d8c2c9dceb2`. The focused 55-test
+file and scoped hook passed. Its latest CI has no failures and remains pending
+completion. The configuration correction still requires its own landing checks.
+Real-model retest, temporal/storage interpretation, approved and rejected
+action outcomes and independent recovery proof remain open. Autonomous
+subscription refusal and separately billed provider approval boundaries remain
+unchanged.

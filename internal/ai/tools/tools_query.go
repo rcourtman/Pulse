@@ -5276,110 +5276,117 @@ func (e *PulseToolExecutor) executeGetResourceConfig(ctx context.Context, args m
 }
 
 func (e *PulseToolExecutor) executeNativeAppContainerConfig(ctx context.Context, resourceRef string) (CallToolResult, error) {
-	if e.appContainerConfigProvider == nil {
-		return NewTextResult("App-container configuration not available."), nil
+	validation := e.validateResolvedResource(resourceRef, "query", true)
+	if validation.ErrorMsg != "" {
+		return NewErrorResult(fmt.Errorf("%s", validation.ErrorMsg)), nil
+	}
+	if validation.Resource != nil && validation.Resource.GetKind() != "app-container" {
+		return NewErrorResult(fmt.Errorf("resource '%s' is %q, not app-container", resourceRef, validation.Resource.GetKind())), nil
+	}
+	if e.unifiedResourceProvider == nil {
+		return NewErrorResult(fmt.Errorf("current app-container inventory is unavailable")), nil
 	}
 
 	rs, err := e.readStateForControl()
 	if err != nil {
-		return NewTextResult("State information not available."), nil
+		return NewErrorResult(fmt.Errorf("current app-container state is unavailable: %w", err)), nil
 	}
 	governance := newGovernedQueryMetadataResolver(rs)
 
-	var resource unifiedresources.Resource
-	var found bool
-	if validation := e.validateResolvedResource(resourceRef, "query", true); validation.Resource != nil {
-		if matched, _, ok := findCanonicalAppContainerResource(e.unifiedResourceProvider, resourceRef); ok {
-			resource = matched
-			found = true
-		}
-	}
+	resource, providerID, found := findCanonicalAppContainerResource(e.unifiedResourceProvider, resourceRef)
 	if !found {
-		var containerID string
-		resource, containerID, found = findCanonicalAppContainerResource(e.unifiedResourceProvider, resourceRef)
-		if !found {
-			return NewJSONResult(map[string]interface{}{
-				"error":       "not_found",
-				"resource_id": resourceRef,
-				"type":        "app-container",
-			}), nil
-		}
-		if reg, ok := resolvedAppContainerRegistration(resource); ok {
-			e.registerResolvedResourceWithExplicitAccess(reg)
-		}
-		_ = containerID
+		return NewJSONResult(map[string]interface{}{
+			"error":       "not_found",
+			"resource_id": resourceRef,
+			"type":        "app-container",
+		}), nil
 	}
 
-	validation := e.validateResolvedResource(resourceRef, "query", true)
-	if validation.Resource == nil {
-		if validation.ErrorMsg != "" {
-			return NewErrorResult(fmt.Errorf("%s", validation.ErrorMsg)), nil
-		}
-		return NewErrorResult(fmt.Errorf("app-container not found: %s", resourceRef)), nil
+	// Inventory owns read identity and capability. Optional session discovery
+	// supplies restrictions and continuity, not proof that the resource exists.
+	resourceID := canonicalAppContainerID(resource)
+	canonicalValidation := e.validateResolvedResource(resourceID, "query", true)
+	if canonicalValidation.ErrorMsg != "" {
+		return NewErrorResult(fmt.Errorf("%s", canonicalValidation.ErrorMsg)), nil
 	}
-	if validation.ErrorMsg != "" {
-		return NewErrorResult(fmt.Errorf("%s", validation.ErrorMsg)), nil
+	if canonicalValidation.Resource != nil && canonicalValidation.Resource.GetKind() != "app-container" {
+		return NewErrorResult(fmt.Errorf("resource '%s' is %q, not app-container", resourceID, canonicalValidation.Resource.GetKind())), nil
 	}
-	resolved := validation.Resource
-	if resolved.GetKind() != "app-container" {
-		return NewErrorResult(fmt.Errorf("resource '%s' is %q, not app-container", resourceRef, resolved.GetKind())), nil
+	platform := canonicalAppContainerAdapter(resource)
+	unavailable := func(reason, message string) CallToolResult {
+		return NewJSONResultWithIsError(map[string]interface{}{
+			"available": false, "reason": reason, "message": message,
+			"resource_id": resourceID, "type": "app-container", "platform": platform,
+		}, true)
 	}
-	if !strings.EqualFold(strings.TrimSpace(resolved.GetAdapter()), "truenas") {
-		return NewTextResult("App-container configuration not available."), nil
+	if platform != "truenas" {
+		return unavailable("unsupported_adapter", "The resource exists, but its adapter does not support configuration reads."), nil
+	}
+	if e.appContainerConfigProvider == nil {
+		return unavailable("provider_unavailable", "The resource exists, but its configuration provider is unavailable."), nil
+	}
+	reg, ok := resolvedAppContainerRegistration(resource)
+	if !ok {
+		return unavailable("resource_context_unavailable", "The resource exists, but its current provider identity or placement is incomplete."), nil
+	}
+	// Do not overwrite an existing session's allowed actions during a read.
+	if validation.Resource == nil && canonicalValidation.Resource == nil {
+		e.registerResolvedResourceWithExplicitAccess(reg)
 	}
 
 	result, err := e.appContainerConfigProvider.GetConfig(ctx, AppContainerConfigRequest{
 		OrgID:       e.orgID,
-		ResourceID:  strings.TrimSpace(resolved.GetResourceID()),
-		ProviderUID: strings.TrimSpace(resolved.GetProviderUID()),
+		ResourceID:  resourceID,
+		ProviderUID: providerID,
 		Name:        resourceDisplayName(resource),
-		Host:        strings.TrimSpace(resolved.GetTargetHost()),
-		Platform:    "truenas",
+		Host:        canonicalAppContainerHost(resource),
+		Platform:    platform,
 	})
 	if err != nil {
 		return NewErrorResult(err), nil
 	}
+	if result == nil {
+		return unavailable("empty_provider_response", "The resource exists, but the provider returned no configuration observation."), nil
+	}
 
 	response := EmptyAppContainerConfigResponse()
-	if result != nil {
-		response.GovernedResourceMetadata = governance.Resolve(result.Name, result.ResourceID, result.ProviderUID)
-		response.Type = "app-container"
-		response.ID = result.ProviderUID
-		if response.ID == "" {
-			response.ID = strings.TrimSpace(result.ResourceID)
-		}
-		response.Name = result.Name
-		response.Host = result.Host
-		response.Platform = result.Platform
-		response.Status = result.Status
-		response.Version = result.Version
-		response.HumanVersion = result.HumanVersion
-		response.Notes = result.Notes
-		response.CustomApp = result.CustomApp
-		response.UpgradeAvailable = result.UpgradeAvailable
-		response.ImageUpdatesAvailable = result.ImageUpdatesAvailable
-		response.ContainerCount = result.ContainerCount
-		response.UsedHostIPs = append([]string{}, result.UsedHostIPs...)
-		response.Images = append([]string{}, result.Images...)
-		response.Ports = append([]PortInfo{}, result.Ports...)
-		response.Networks = append([]NetworkInfo{}, result.Networks...)
-		response.Mounts = append([]MountInfo{}, result.Mounts...)
-		response.Containers = append([]AppContainerConfigContainer{}, result.Containers...)
-	}
+	response.GovernedResourceMetadata = governance.Resolve(result.Name, result.ResourceID, result.ProviderUID)
+	response.Type = "app-container"
+	response.ID = result.ProviderUID
 	if response.ID == "" {
-		response.ID = strings.TrimSpace(resolved.GetProviderUID())
+		response.ID = strings.TrimSpace(result.ResourceID)
+	}
+	response.Name = result.Name
+	response.Host = result.Host
+	response.Platform = result.Platform
+	response.Status = result.Status
+	response.Version = result.Version
+	response.HumanVersion = result.HumanVersion
+	response.Notes = result.Notes
+	response.CustomApp = result.CustomApp
+	response.UpgradeAvailable = result.UpgradeAvailable
+	response.ImageUpdatesAvailable = result.ImageUpdatesAvailable
+	response.ContainerCount = result.ContainerCount
+	response.UsedHostIPs = append([]string{}, result.UsedHostIPs...)
+	response.Images = append([]string{}, result.Images...)
+	response.Ports = append([]PortInfo{}, result.Ports...)
+	response.Networks = append([]NetworkInfo{}, result.Networks...)
+	response.Mounts = append([]MountInfo{}, result.Mounts...)
+	response.Containers = append([]AppContainerConfigContainer{}, result.Containers...)
+	if response.ID == "" {
+		response.ID = providerID
 	}
 	if response.Name == "" {
-		response.Name = resolvedResourceDisplayName(resolved)
+		response.Name = resourceDisplayName(resource)
 	}
 	if response.Host == "" {
-		response.Host = strings.TrimSpace(resolved.GetTargetHost())
+		response.Host = canonicalAppContainerHost(resource)
 	}
 	if response.Platform == "" {
-		response.Platform = strings.TrimSpace(resolved.GetAdapter())
+		response.Platform = platform
 	}
 	if response.GovernedResourceMetadata.Policy == nil && response.AISafeSummary == "" {
-		response.GovernedResourceMetadata = governance.Resolve(response.Name, strings.TrimSpace(resolved.GetResourceID()), response.ID)
+		response.GovernedResourceMetadata = governance.Resolve(response.Name, resourceID, response.ID)
 	}
 
 	return NewJSONResult(response.NormalizeCollections()), nil

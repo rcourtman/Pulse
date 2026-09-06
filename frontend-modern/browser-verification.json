@@ -1,34 +1,21 @@
 {
   "version": 1,
-  "base_sha": "6b0abc3bee9ffa81f6ab298b5b67ee11369688a0",
-  "verified_at": "2026-09-06T11:20:14.502Z",
+  "base_sha": "0fcb2ee147354de770dfc4b0b9672d8c2c9dceb2",
+  "verified_at": "2026-09-06T12:13:06.548Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx",
-    "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
-    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx",
-    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
-    "frontend-modern/src/features/standalone/agentMachineTableModel.ts",
-    "frontend-modern/src/hooks/useColumnVisibility.ts",
-    "frontend-modern/src/hooks/useUnifiedResources.ts",
-    "frontend-modern/src/types/resource.ts",
-    "frontend-modern/src/utils/format.ts"
-  ],
-  "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx": "f183ef158f646d52b9b2ff6c3af028d7b9b993a27542690ad664ab84f93d0d73",
-    "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts": "a3ff0b74581e769db70b12dba94e30324aa52ccbb7242b7513cf82b8f8e2fd5e",
-    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx": "8957154b965f4e4240e7c19888fada63dcaf518a9e0e3a0e384b184ebaf4e716",
-    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "4342ba59fe9dbd33ae85131a2da45ac7ebeb7efe61457b43ce32640109bd3214",
-    "frontend-modern/src/features/standalone/agentMachineTableModel.ts": "ae419b49a1d761910612bf95b82e9c6226374c648d48d252259ed70b30b955c0",
-    "frontend-modern/src/hooks/useColumnVisibility.ts": "0112d88ca35fc0f1f3866070aa0913c706370bd6c0fb954afb7a89a34bd25cf3",
-    "frontend-modern/src/hooks/useUnifiedResources.ts": "4a434a0c0d2f42c1ee9dbed9ca3353ee5978821df2d9d725db1f4904f7a77b9e",
-    "frontend-modern/src/types/resource.ts": "a4d45afd0a4797ffe7075e8c4b0890e59f573ea8503a31eee68e22d2843cedd8",
-    "frontend-modern/src/utils/format.ts": "e0db6c68c1219481a9a3562239b35027916a04b1af6ec8df6fce0534a54ef8db"
+  "changed_paths": [],
+  "content_sha256": {},
+  "backend_content_sha256": {
+    "internal/ai/tools/tools_query.go": "e9411606cdf96dec84882d0649ee69fb935b36086f0b5682d98fe3ee184f6841"
+  },
+  "binary_sha256": "552699cdf2e61a4ca1cea2ac5ef4e065735cbd1dbca01665456e184bd4fc3533",
+  "rendering_content_sha256": {
+    "frontend-modern/src/components/AI/Chat/hooks/useChat.ts": "0b56b7a56e35d51ca96f0e126dd493b3164aa9e0ad4d8ae24bcf3af7a574b97c",
+    "frontend-modern/src/components/AI/Chat/ChatMessages.tsx": "9672f7608d1e3a531c73cba20fd4a78752316783212afd0c292ddfd11d2bf371",
+    "frontend-modern/src/components/AI/Chat/ToolExecutionBlock.tsx": "cc7bd548a418c3863486f0fe987c5c3110c2f6cdfa70b630b2ec05fb794d60d6"
   },
   "routes": [
-    "/docker",
-    "/patrol",
-    "/standalone/machines"
+    "/patrol"
   ],
   "viewports": [
     {
@@ -45,15 +32,13 @@
     }
   ],
   "states": [
-    "Live Docker container Overview and retained History against rebuilt Pro backend 59f05f954ff8080bd3e8f3054b2b059281c49172ee771b2e454c255241158a4a. Public history excludes legacy capacity and ambiguous I/O, while new observed rates remain available. Binary hash checked before and after.",
-    "Controlled Docker history loading, empty/unavailable, observed read zero with absent write, and error states. Controlled host partial read/write in Docker Overview and Machines. Missing directions display a dash and observed zero displays 0 B/s.",
-    "Controlled Assistant history tool completion on /patrol preserves zero read samples and an empty write series. This qualifies rendering only. Provider calls and infrastructure mutations were blocked. The artificial route warning is not provider health evidence.",
-    "Machines Disk I/O column enabled from fresh preferences, tooltip open/closed and persisted after reload at desktop. Existing responsive policy hides the column at 900 and 390 pixels. The unused UnifiedResourceHostTableCard has type and selector coverage, not an active-route browser claim."
+    "Actual configuration tool results captured from the final Go regression run: available config without session context, unsupported adapter, actual missing inventory resource, explicit query denial, nil provider response, provider failure, incomplete placement and unavailable inventory. This backend-only change preserves the tool error bit and exact known resource identity.",
+    "Eight captured results replayed through the current Assistant stream renderer and restored through controlled session responses after a full page reload. This is rendering and reload proof, not server persistence, native provider integration, model diagnosis or action qualification.",
+    "The local Pro backend was rebuilt on pulse-dev with Go1.26.8. Binary and source hashes matched before and after Playwright. Non-GET provider and infrastructure requests were blocked. The route warning in this controlled browser does not qualify provider readiness."
   ],
   "interactions": [
-    "Container selection, Overview/History switching, keyboard focus, chart hover, scroll to deepest history, collapse and reopen, reload and history re-entry at 1440, 900 and 390 pixels. Inspected actual pixels for placement, wrapping and scrolling.",
-    "Machines View > Columns > Disk I/O, selected state, Escape from nested picker and parent, hover and keyboard focus on I/O tooltip, Escape and outside dismissal, reload preserving enabled column. Docker host Overview inspected at all three widths.",
-    "Assistant tool details expanded and collapsed with Enter and Space, output scrolled and inspected, and Escape dismissal at all widths. No action or model diagnosis was simulated as qualification.",
-    "Private final-source evidence: /Volumes/Development/pulse/tmp/patrol-docker-observed-metrics/browser, evidence-states and host-states. All three Playwright scripts passed after the final source edit. Runtime source hashes are recorded in runtime-binding.json."
+    "Tool details open/closed, hover, keyboard focus, Enter and Space, complete input/output comparison, deepest output scrolling and pixel inspection at desktop, intermediate and narrow widths. Successful reads show completed and unavailable or denied reads show failed.",
+    "Escape, full reload, session picker selection, reopening each restored result and exact output comparison with preserved success/error state. No model call or infrastructure action was attempted.",
+    "Private final-source evidence: /Volumes/Development/pulse/tmp/patrol-config-read-contract/browser, tool-evidence.json and runtime-binding.json."
   ]
 }
