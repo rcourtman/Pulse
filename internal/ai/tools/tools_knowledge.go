@@ -3,9 +3,11 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // IncidentRecorderProvider provides access to incident recording data
@@ -87,7 +89,7 @@ func (e *PulseToolExecutor) registerKnowledgeTools() {
 Actions:
 - remember: Save a note about a resource for future reference
 - recall: Retrieve saved notes about a resource
-- incidents: Get high-resolution incident recording data
+- incidents: Read retained canonical resource history, including observed state changes, alerts and executed actions. Records preserve observation time, source and any known occurrence time. This is not continuous health or filesystem-capacity coverage. Use pulse_summarize for retained metrics.
 - correlate: Get correlated events around a timestamp
 
 Examples:
@@ -105,7 +107,7 @@ Examples:
 					},
 					"resource_id": {
 						Type:        "string",
-						Description: "Resource ID to operate on",
+						Description: "Resource ID to operate on. For incidents use the canonical resource ID returned by pulse_query, including for a resource no longer in current inventory.",
 					},
 					"note": {
 						Type:        "string",
@@ -117,7 +119,11 @@ Examples:
 					},
 					"window_id": {
 						Type:        "string",
-						Description: "For incidents: specific incident window ID",
+						Description: "For incidents: optional legacy recording ID, read as an archive only. Omit to read canonical resource history.",
+					},
+					"since": {
+						Type:        "string",
+						Description: "For incidents: earliest observation timestamp (RFC3339, default 24 hours ago). Retention and collection gaps still apply.",
 					},
 					"timestamp": {
 						Type:        "string",
@@ -129,7 +135,7 @@ Examples:
 					},
 					"limit": {
 						Type:        "integer",
-						Description: "For incidents: max windows to return (default: 5)",
+						Description: "For incidents: maximum retained events to return, newest first (default 50, range 1-200)",
 					},
 				},
 				Required: []string{"action", "resource_id"},
@@ -168,38 +174,77 @@ func (e *PulseToolExecutor) executeKnowledge(ctx context.Context, args map[strin
 
 func (e *PulseToolExecutor) executeGetIncidentWindow(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	resourceID, _ := args["resource_id"].(string)
+	resourceID = strings.TrimSpace(resourceID)
 	windowID, _ := args["window_id"].(string)
-	limit := intArg(args, "limit", 5)
 
 	if resourceID == "" {
 		return NewErrorResult(fmt.Errorf("resource_id is required")), nil
 	}
 
-	if e.incidentRecorderProvider == nil {
-		return NewTextResult("Incident recording data not available. The incident recorder may not be enabled."), nil
-	}
-
-	// If a specific window ID is requested
+	// Isolate legacy recordings from the canonical timeline. Their sample times
+	// are recorder timestamps, not verified source observation timestamps.
 	if windowID != "" {
+		if e.incidentRecorderProvider == nil {
+			return NewErrorResult(fmt.Errorf("legacy incident recording archive is unavailable")), nil
+		}
 		window := e.incidentRecorderProvider.GetWindow(windowID)
-		if window == nil {
-			return NewTextResult(fmt.Sprintf("Incident window '%s' not found.", windowID)), nil
+		if window == nil || window.ResourceID != resourceID {
+			return NewErrorResult(fmt.Errorf("legacy incident recording not found for the requested resource")), nil
 		}
 		return NewJSONResult(map[string]interface{}{
-			"window": window,
+			"source":         "legacy_incident_recording",
+			"window":         window,
+			"evidence_limit": "Recording timestamps do not establish when the source measured each value. Repeated values may be cached observations. This archive is not the canonical incident timeline.",
 		}), nil
 	}
 
-	// Get windows for the resource
-	windows := e.incidentRecorderProvider.GetWindowsForResource(resourceID, limit)
-	if len(windows) == 0 {
-		return NewTextResult(fmt.Sprintf("No incident recording data found for resource '%s'. Incident data is captured when alerts fire.", resourceID)), nil
+	limit := intArg(args, "limit", 50)
+	if limit < 1 || limit > 200 {
+		return NewErrorResult(fmt.Errorf("limit must be between 1 and 200")), nil
+	}
+	queriedAt := time.Now().UTC()
+	since := queriedAt.Add(-24 * time.Hour)
+	if value, exists := args["since"]; exists {
+		text, ok := value.(string)
+		if !ok {
+			return NewErrorResult(fmt.Errorf("since must be an RFC3339 timestamp")), nil
+		}
+		var err error
+		since, err = time.Parse(time.RFC3339, text)
+		if err != nil || since.After(queriedAt) {
+			return NewErrorResult(fmt.Errorf("since must be an RFC3339 timestamp no later than now")), nil
+		}
+	}
+	if e.actionAuditStore == nil {
+		return NewErrorResult(fmt.Errorf("canonical resource history is unavailable")), nil
+	}
+	// This organization-pinned store is also used by the resource history API
+	// and Assistant handoffs. Do not reconstruct history from current metrics,
+	// match resource names, or include adjacent resources implicitly.
+	events, err := e.actionAuditStore.GetRecentChanges(resourceID, since, limit+1)
+	if err != nil {
+		return NewErrorResult(fmt.Errorf("read canonical resource history: %w", err)), nil
+	}
+	hasMore := len(events) > limit
+	if hasMore {
+		events = events[:limit]
+	}
+	if events == nil {
+		events = []unifiedresources.ResourceChange{}
 	}
 
 	return NewJSONResult(map[string]interface{}{
-		"resource_id": resourceID,
-		"windows":     windows,
-		"count":       len(windows),
+		"resource_id":    resourceID,
+		"source":         "canonical_resource_timeline",
+		"since":          since,
+		"queried_at":     queriedAt,
+		"time_basis":     "observed_at",
+		"events":         events,
+		"count":          len(events),
+		"limit":          limit,
+		"has_more":       hasMore,
+		"coverage":       "retained_records_only",
+		"evidence_limit": "These are retained observations, not continuous coverage. Empty history does not establish health or absence of incidents. ObservedAt is when Pulse observed a change, while OccurredAt is present only when its occurrence time is known. An alert resolving establishes that alert's recovery, not its cause or a verified action outcome.",
 	}), nil
 }
 

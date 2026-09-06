@@ -1816,3 +1816,73 @@ still open. The typed compatibility get path also does not accept the canonical
 ID returned by its list path, so its mount regression uses an existing accepted
 name. That identity residual is recorded for modernization, not silently fixed
 through this mount projection.
+
+## Canonical incident history, 2026-09-06
+
+The tmpfs correction passed the exact worker hook and was pushed as
+`6e18777d30f30b498def39d30016a697cabc4ea7` in PR #1935. That scoped
+delivery does not change the failed storage diagnosis or partial recovery verdict.
+
+The incident audit found a source-of-truth mismatch, not evidence that an existing
+recording merely needed an ID alias. The legacy five-second recorder has no
+production alert callback connected to its coordinator. It samples cached values
+using recorder time without preserving their source measurement time. Connecting
+that recorder would not supply trustworthy higher-frequency history.
+
+The canonical resource timeline already stores observed changes, alert lifecycle
+events and executed actions. Assistant handoffs use a bounded excerpt of this
+same store. The shared `pulse_knowledge` incidents action now reads that
+organization-pinned timeline directly, using the supplied canonical resource ID.
+It does not require the resource still to exist in current inventory, infer
+identity from names, include related resources implicitly, or reconstruct events
+from current metrics. The response preserves canonical source, observation and
+optional occurrence timestamps, state transitions and metadata. `since` filters
+on observation time, and bounded results report `has_more`. Empty retained history
+does not establish health. Missing or failed storage is a failed read.
+
+Explicit legacy `window_id` lookups remain isolated archive reads, must match the
+requested resource, and explain that sample timestamps do not establish source
+freshness. The primary incidents action no longer uses those recordings. The
+legacy recorder/coordinator startup and API active-count plumbing still exist.
+Their retirement is a separate cleanup in this redesign and must preserve any
+saved archives. Do not connect them as a replacement incident truth source.
+
+Qualification uses the real SQLite resource store with a fired/resolved lifecycle,
+an older excluded record, a related-resource negative control, absent occurrence
+time, truncation and empty history. Unavailable/failed storage, invalid input and
+archive resource isolation are separate negative controls. Captured actual tool
+responses must pass the Assistant expansion, scrolling and reload matrix at
+`/patrol`, 1440x1000, 900x1000 and 390x1000. This is contract and rendering proof,
+not a new real-model or continuous-coverage claim.
+
+Read-only API inspection of the actual removed storage fixture confirmed a
+remaining canonical write-boundary defect. The canonical app-container timeline
+returns its creation and removal, while the fired event at 13:14:28.59485Z and
+resolved event at 13:17:58.634095Z remain under its legacy Docker resource ID.
+The resource API includes related network changes by design. The new tool uses
+direct resource history only. `recordAlertTimelineChange` passes the alert's
+source ID directly to `BuildAlertTimelineChange`, and `MonitorAdapter.RecordChange`
+forwards it without canonical resolution. Consequently this read-path change is
+only partial incident-history remediation. The next required owning fix must
+resolve event identity before persistence and preserve access to retained prior
+identity records, including removed resources, through the shared identity/history
+contract. It must not add a Docker string rewrite inside the Assistant tool.
+The shared writer and retained-identity correction remain required in this goal.
+Private raw API receipts are in `tmp/patrol-canonical-history/live-timeline.json`
+and `live-legacy-alert-timeline.json`. No model call or infrastructure mutation
+was made during these reads.
+
+The history regression passes through the registered tool dispatcher. The full
+tools package passed in 59.856s, the final focused capture passed in 0.036s, and the
+focused race check passed in 1.189s on pulse-dev with Go1.26.8 and GOMAXPROCS4.
+The final Pro build passed and was installed into the local development stack.
+Its SHA256 is `4929aeb869db54122bc5525352d3126c0e9fa7c4847e3fdfa741500600b5e00d`.
+The managed backend restarted healthy. Final Playwright proof passed all five
+registered-tool cases at `/patrol`, 1440x1000, 900x1000 and 390x1000, including
+hover/focus, Enter/Space, deepest output scrolling, Escape and controlled session
+reload with exact input/output and success/failure comparison. Root inspected
+actual pixels at all three widths. Source and binary hashes remained fixed.
+The provider warning stayed visible and no retry, route switch or provider
+request was made. This is captured-response rendering, not real-model diagnosis
+or server persistence qualification. The exact scoped worker hook gates delivery
+through PR #1935.

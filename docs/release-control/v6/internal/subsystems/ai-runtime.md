@@ -3605,6 +3605,22 @@ has a single definition in the canonical resource contract.
 
 ## Completion Obligations
 
+The `pulse_knowledge` incidents action reads the organization-pinned canonical
+resource timeline used by resource history and Assistant handoffs. It preserves
+resource identity, observation and optional occurrence time, source and event
+metadata. Reads use explicit observation-time bounds and a bounded event count
+with truncation disclosure. Empty retained history is not continuous healthy
+coverage, and an unavailable or failed history store is a failed tool read.
+Legacy recording IDs are isolated archive lookups bound to the requested
+resource. Their recorder timestamps cannot establish source measurement time.
+The primary history path must not restore the legacy recorder as a parallel
+incident authority or derive fresh history by resampling cached metrics.
+`TestIncidentHistoryRetainsCanonicalEvidence` uses SQLite lifecycle records,
+time/resource negative controls, missing occurrence time and bounded reads.
+The corresponding unavailable/invalid and archive tests cover failure semantics
+and resource isolation. Live model interpretation remains governed by the
+customer journey qualification plan.
+
 Every per-organization Assistant or legacy AI service that can discover or
 dispatch through the host-agent command transport must receive an
 organization-pinned command-server view. A tenant service must never enumerate

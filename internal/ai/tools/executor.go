@@ -1221,7 +1221,7 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	case agentcapabilities.PulseDiscoveryToolName:
 		return e.discoveryProvider != nil
 	case agentcapabilities.PulseKnowledgeToolName:
-		return e.knowledgeStoreProvider != nil || e.incidentRecorderProvider != nil || e.eventCorrelatorProvider != nil
+		return e.actionAuditStore != nil || e.knowledgeStoreProvider != nil || e.incidentRecorderProvider != nil || e.eventCorrelatorProvider != nil
 	case agentcapabilities.PulsePMGToolName:
 		return e.hasReadState()
 	case agentcapabilities.PulseSummarizeToolName:

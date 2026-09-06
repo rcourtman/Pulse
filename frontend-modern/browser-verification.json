@@ -1,44 +1,24 @@
 {
   "version": 1,
-  "base_sha": "f5f440dbad18d83557104d2cf6197d8319949e44",
-  "verified_at": "2026-09-06T13:39:36.848659+00:00",
+  "base_sha": "6e18777d30f30b498def39d30016a697cabc4ea7",
+  "verified_at": "2026-09-06T14:26:55.462Z",
   "result": "passed",
   "changed_paths": [],
   "content_sha256": {},
   "backend_content_sha256": {
-    "internal/dockeragent/collect.go": "869eb906ac8d6fe57304a296bc81bc689f72a07b5a76267982b81228d147852d",
-    "internal/ai/tools/data_types.go": "91fff7a17735c9f9f4bf64c7fe42c7d4c5cf9e436af36ac07dec92feb952afc6",
-    "internal/ai/tools/tools_query.go": "5ba1f2c8ec7aadb21d594c967a5b2858db3471b02174889b7f78472e3a33235b"
+    "internal/ai/tools/tools_knowledge.go": "d98ea1bab481acce5eee4988d74d364dc73c4068ca33725d843b54117cc9cc85",
+    "internal/ai/tools/executor.go": "c476d6aec1f7925467f1547f0219e6c6265639a62b397649adc82a8ed87b7e4a"
   },
-  "binary_sha256": "0a21dca4106c2ddc6873a3aca3b23378dccef35383ca00d7e9292b966de7c200",
+  "binary_sha256": "4929aeb869db54122bc5525352d3126c0e9fa7c4847e3fdfa741500600b5e00d",
   "rendering_content_sha256": {
     "frontend-modern/src/components/AI/Chat/hooks/useChat.ts": "0b56b7a56e35d51ca96f0e126dd493b3164aa9e0ad4d8ae24bcf3af7a574b97c",
     "frontend-modern/src/components/AI/Chat/ChatMessages.tsx": "9672f7608d1e3a531c73cba20fd4a78752316783212afd0c292ddfd11d2bf371",
-    "frontend-modern/src/components/AI/Chat/ToolExecutionBlock.tsx": "cc7bd548a418c3863486f0fe987c5c3110c2f6cdfa70b630b2ec05fb794d60d6",
-    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "af58fb901b55b188be084105e78c71084af5a594d1a7dde2647959eb00cc6131",
-    "frontend-modern/src/features/docker/dockerContainerTableModel.ts": "48bf66fe7e3bacf6352c48d7ccd568dd337e9d27670da435f30c3caabccf79bc"
+    "frontend-modern/src/components/AI/Chat/ToolExecutionBlock.tsx": "cc7bd548a418c3863486f0fe987c5c3110c2f6cdfa70b630b2ec05fb794d60d6"
   },
   "routes": [
-    "/docker",
     "/patrol"
   ],
   "viewports": [
-    {
-      "width": 1920,
-      "height": 1080
-    },
-    {
-      "width": 1440,
-      "height": 1080
-    },
-    {
-      "width": 900,
-      "height": 1080
-    },
-    {
-      "width": 390,
-      "height": 1080
-    },
     {
       "width": 1440,
       "height": 1000
@@ -53,13 +33,13 @@
     }
   ],
   "states": [
-    "Captured canonical app-container and parent agent with tmpfs and bind mounts. Existing mount summary is a wide-table column, with no dedicated mount section in responsive detail views.",
-    "Two captured shared query results preserve native type, options, source, destination and RW. They establish mount configuration, not measured capacity.",
-    "Final Pro source/binary binding and original cached refusal preserved. No provider or production mutation in rendering proof."
+    "Five captured registered-tool results: retained canonical lifecycle, bounded/truncated history, empty retained history, unavailable store, and failed store read.",
+    "Observation and optional occurrence timestamps, source metadata, empty arrays, coverage limitations and failed tool status survive rendering.",
+    "Existing provider route warning remains visible. No retry, route switch, model request or infrastructure mutation was performed."
   ],
   "interactions": [
-    "Docker mount summary/title hover, keyboard expansion/collapse, mobile row tap, adjacent detail state, mount destination search, Escape and reloaded search.",
-    "Assistant exact input/output comparison, hover/focus, Enter/Space, deepest output scrolling, Escape, full reload and controlled session selection/reopening.",
-    "Pixel inspection at desktop/mobile. Private receipts: tmp/patrol-storage-fault-case/browser and docker-browser. Captured REST/SSE fixtures do not qualify installed collector, model diagnosis or server persistence."
+    "Hover/focus and Enter expansion, exact input/output comparison, deepest output scroll and pixel inspection at desktop/intermediate/mobile widths, Space collapse and Escape.",
+    "Full reload, controlled session selection, reopen each result and compare exact retained input/output and completed/failed state.",
+    "Final verified Pro build installed locally, healthy restart, fixed source/binary hashes before and after. Private receipt: tmp/patrol-canonical-history/browser/receipt.json. Captured response/session fixtures qualify rendering, not real-model diagnosis or backend persistence."
   ]
 }
