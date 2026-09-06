@@ -574,6 +574,10 @@ func TestPBSMetricAvailabilityAlertLifecycle(t *testing.T) {
 // Exercise HTTP decoding, poll evaluation and subsequent unified alert sync together.
 // This is synthetic integration evidence, not installed notification receipt.
 func TestPBSPolledCapacityRequiresObservedRecovery(t *testing.T) {
+	var listing atomic.Value
+	listing.Store(`{"data":[{"store":"backups"}]}`)
+	var listingStatus atomic.Int64
+	listingStatus.Store(http.StatusOK)
 	var response atomic.Value
 	response.Store(`{"data":{"total":1000,"used":850,"avail":150}}`)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -584,7 +588,8 @@ func TestPBSPolledCapacityRequiresObservedRecovery(t *testing.T) {
 		case "/api2/json/nodes/localhost/status":
 			_, _ = w.Write([]byte(`{"data":{"cpu":0.1,"memory":{"used":100,"total":1000}}}`))
 		case "/api2/json/admin/datastore":
-			_, _ = w.Write([]byte(`{"data":[{"store":"backups"}]}`))
+			w.WriteHeader(int(listingStatus.Load()))
+			_, _ = w.Write([]byte(listing.Load().(string)))
 		case "/api2/json/admin/datastore/backups/status":
 			_, _ = w.Write([]byte(response.Load().(string)))
 		default:
@@ -631,6 +636,28 @@ func TestPBSPolledCapacityRequiresObservedRecovery(t *testing.T) {
 			t.Fatalf("missing capacity %s changed incident: %+v", missing, active)
 		}
 	}
+	// Losing the listing itself must not turn a retained capacity incident
+	// into recovery when unified resources are repopulated from the snapshot.
+	for _, missing := range []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"permission denied", http.StatusForbidden, `{"message":"permission denied"}`},
+		{"gateway failure", http.StatusBadGateway, `{"message":"upstream unavailable"}`},
+		{"malformed listing", http.StatusOK, `{"data":`},
+		{"empty listing", http.StatusOK, `{"data":[]}`},
+	} {
+		listingStatus.Store(int64(missing.status))
+		listing.Store(missing.body)
+		poll()
+		active = manager.GetActiveAlerts()
+		if len(active) != 1 || active[0].ID != original.ID || active[0].Value != 85 || !active[0].StartTime.Equal(original.StartTime) || manager.GetResolvedAlert(original.ID) != nil {
+			t.Fatalf("%s changed capacity incident: %+v", missing.name, active)
+		}
+	}
+	listingStatus.Store(http.StatusOK)
+	listing.Store(`{"data":[{"store":"backups"}]}`)
 	response.Store(`{"data":{"total":1000,"used":0,"avail":1000}}`)
 	poll()
 	if len(manager.GetActiveAlerts()) != 0 {
