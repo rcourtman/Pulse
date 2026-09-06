@@ -332,20 +332,20 @@ describe('agentMachineTableModel coverage2', () => {
       ).toBe(800);
     });
 
-    it('returns read only when write is absent', () => {
+    it('leaves the total unavailable when write is absent', () => {
       expect(
         getAgentMachineDiskIOTotal(
           resource({ diskIO: { readRate: 500 } as unknown as ResourceDiskIO }),
         ),
-      ).toBe(500);
+      ).toBeUndefined();
     });
 
-    it('returns write only when read is absent', () => {
+    it('leaves the total unavailable when read is absent', () => {
       expect(
         getAgentMachineDiskIOTotal(
           resource({ diskIO: { writeRate: 300 } as unknown as ResourceDiskIO }),
         ),
-      ).toBe(300);
+      ).toBeUndefined();
     });
 
     it('returns undefined when both rates are absent', () => {
