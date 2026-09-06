@@ -653,3 +653,14 @@ email, webhook and Apprise, firing and recovery, and global versus destination
 disablement. This corrects false successful queue/audit records; it does not
 establish maintenance-window expiry, stop an already-started provider request,
 or repair historical false-success records.
+
+### SMTP transaction-stage retry regression coverage
+
+`TestEmailRetryRespectsSMTPTransactionReplies` extends the greeting-failure
+fixture through MAIL, RCPT, DATA command and completed-message replies. At each
+stage, structured 550 replies stop after one attempt despite temporary prose;
+451 replies retain the three-attempt configured budget, and a 451 followed by
+acceptance stops after the second attempt. This checks the sender's wrapped
+errors and retry termination, not only the failure classifier. The in-memory
+plain-SMTP fixture sends no external mail and does not qualify TLS, installed
+recipient receipt or queue persistence.

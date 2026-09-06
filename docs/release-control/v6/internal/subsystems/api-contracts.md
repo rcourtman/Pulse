@@ -10681,3 +10681,7 @@ Its returned failure retains the structured cause and actual attempt count;
 this does not change report API schemas or prove recipient acceptance.
 `internal/notifications/email_retry_class_test.go` verifies the shared transport
 failure boundary with in-memory SMTP replies, not end-to-end report delivery.
+The transaction-stage regression matrix additionally checks MAIL, RCPT, DATA
+command and completed-message rejections, including transient-then-accepted
+termination. It exercises the shared sender with plain SMTP and no attachments;
+it is not separate qualification of report rendering, TLS or report receipt.
