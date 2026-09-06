@@ -71,6 +71,22 @@ their updated thresholds and may apply explicit resource-disable policies, but
 it must not treat provider-owned incidents as missing thresholds. Unrelated
 configuration saves preserve those incidents and their acknowledgement state
 until their provider evaluator supplies recovery evidence.
+Storage configuration re-evaluation must use the same ordered resource ID and
+alias override lookup as polling. Static and forecast capacity alerts retain
+storage policy aliases in durable metadata, including through JSON and SQLite
+restore; a configuration reload must not fabricate recovery by substituting
+global defaults for a still-applicable datastore override. Older PBS snapshots
+without alias metadata may reconstruct the canonical datastore alias only when
+the recorded PBS instance, datastore name and complete legacy resource ID agree.
+Hyphenated names must not be split heuristically, and a same-named datastore on
+another instance must not inherit the override. Explicit policy changes retain
+normal resolution semantics.
+`TestPBSDatastoreOverrideLifecycleAcrossRestart` and
+`TestStoragePolicyAliasesLegacyIdentity` in
+`internal/alerts/canonical_stateful_test.go` pin restored incident identity,
+hysteresis, confirmed recovery, refiring, event counts and instance isolation
+for both persisted-alias and legacy snapshots.
+
 When a VM or container stops, guest evaluation resolves only metric-threshold
 alerts whose observations are no longer meaningful. Backup-age and snapshot
 posture remain owned by their posture evaluator and may stay active while the

@@ -215,12 +215,13 @@ var capacityForecastMetadataKeys = []string{
 
 func (m *Manager) evaluateStorageCapacity(storage models.Storage, thresholds ThresholdConfig, trend CapacityTrendObservation) {
 	input := &UnifiedResourceInput{
-		ID:       storage.ID,
-		Type:     "storage",
-		Name:     storage.Name,
-		Node:     storage.Node,
-		Instance: storage.Instance,
-		Disk:     &UnifiedResourceMetric{Percent: storage.Usage},
+		ID:             storage.ID,
+		StorageAliases: storage.AliasIDs,
+		Type:           "storage",
+		Name:           storage.Name,
+		Node:           storage.Node,
+		Instance:       storage.Instance,
+		Disk:           &UnifiedResourceMetric{Percent: storage.Usage},
 	}
 	m.evaluateUnifiedCapacity(input, thresholds, trend, func() bool {
 		if !m.config.Enabled {
@@ -376,6 +377,9 @@ func (m *Manager) evaluateCapacityForecast(input *UnifiedResourceInput, threshol
 		"forecastSampleCount":     trend.SampleCount,
 		"forecastBucketCount":     trend.BucketCount,
 		"forecastCoverageSeconds": int64(trend.CoverageSpan / time.Second),
+	}
+	if len(input.StorageAliases) > 0 {
+		metadata[storagePolicyAliasesKey] = append([]string(nil), input.StorageAliases...)
 	}
 	_, _ = m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
 		Spec: spec,

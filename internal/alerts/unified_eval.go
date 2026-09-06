@@ -55,6 +55,8 @@ type UnifiedResourceInput struct {
 	NetworkIn   *UnifiedResourceMetric
 	NetworkOut  *UnifiedResourceMetric
 	Temperature *UnifiedResourceMetric
+
+	StorageAliases []string // Durable policy lookup identities for storage alerts.
 }
 
 type unifiedMetricCandidate struct {
@@ -259,6 +261,19 @@ func (m *Manager) evaluateUnifiedMetrics(input *UnifiedResourceInput, thresholds
 	}
 
 	opts = metricOptionsWithTags(opts, input.Tags)
+	if len(input.StorageAliases) > 0 {
+		merged := metricOptions{}
+		if opts != nil {
+			merged = *opts
+		}
+		metadata := make(map[string]interface{}, len(merged.Metadata)+1)
+		for k, v := range merged.Metadata {
+			metadata[k] = v
+		}
+		metadata[storagePolicyAliasesKey] = append([]string(nil), input.StorageAliases...)
+		merged.Metadata = metadata
+		opts = &merged
+	}
 	for _, candidate := range buildUnifiedMetricCandidates(input, thresholds) {
 		m.checkMetricWithCanonicalSpec(candidate.Spec, input.Name, input.Node, input.Instance, unifiedAlertType(input.Type), candidate.Value, candidate.Threshold, opts)
 	}
