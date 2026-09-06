@@ -264,6 +264,39 @@ class ReleasePreflightTest(unittest.TestCase):
         self.assertIn('--env "PLAYWRIGHT_BASE_URL=${PULSE_E2E_BASE_URL}"', worker)
         self.assertNotIn("localhost:7655", worker)
 
+    def test_browser_uses_installed_runner_and_preserves_failure(self) -> None:
+        worker = (ROOT / "scripts/release-preflight-worker.sh").read_text()
+        function = re.search(
+            r"run_playwright\(\) \{.*?\n\}", worker, flags=re.DOTALL
+        ).group(0)
+        # Exercise the real shell function without starting Docker or a browser.
+        # A failed container must propagate, not become a successful admission.
+        for status in (0, 13):
+            with self.subTest(status=status):
+                result = subprocess.run(
+                    ["bash", "-c", """
+docker() { printf '%s\n' "$@"; return """ + str(status) + """; }
+REPOSITORY_DIR='/tmp/worker with spaces/repo'
+PLAYWRIGHT_IMAGE='mcr.microsoft.com/playwright:v1.61.1-noble'
+PULSE_E2E_BASE_URL='http://localhost:27655'
+""" + function + """
+run_playwright 'tests/a test.spec.ts' --project=chromium
+"""],
+                    text=True, capture_output=True, check=False,
+                )
+                self.assertEqual(result.returncode, status, result.stderr)
+                args = result.stdout.splitlines()
+                self.assertEqual(args[-5:], [
+                    "node", "/work/node_modules/@playwright/test/cli.js",
+                    "test", "tests/a test.spec.ts", "--project=chromium",
+                ])
+                self.assertNotIn("npx", args)
+                self.assertEqual(args[args.index("--volume") + 1],
+                                 "/tmp/worker with spaces/repo/tests/integration:/work")
+                self.assertEqual(args[args.index("--user") + 1],
+                                 f"{os.getuid()}:{os.getgid()}")
+                self.assertIn("mcr.microsoft.com/playwright:v1.61.1-noble", args)
+
     def test_worker_serializes_resource_intensive_test_suites(self) -> None:
         worker = (ROOT / "scripts/release-preflight-worker.sh").read_text()
         scheduling_block = re.search(

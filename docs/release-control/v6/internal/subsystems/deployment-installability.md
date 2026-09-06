@@ -2145,6 +2145,17 @@ artifact-selection behaviour.
     secrets, and seed hosted approvals through a single explicit tenant runtime
     restart when a release proof needs transactionally visible approval state.
 
+   Browser execution must invoke the npm-ci-installed
+   `/work/node_modules/@playwright/test/cli.js` directly with Node inside the
+   selected Playwright image. Missing or inaccessible mounted dependencies
+   must fail admission rather than trigger an npx registry download of a
+   substitute runner. Preserve the existing container UID/GID, mount, image
+   version selection and exit status. The executed-shell fixture in
+   `scripts/release_control/internal/release_preflight_test.py` verifies the
+   runner path, argument quoting, container identity and failure propagation
+   with mocked Docker; it is not browser qualification or proof that the
+   retained spawn-sh EACCES failure has been repaired.
+
 ## Forbidden Paths
 
 1. Leaving deployment bootstrap, installer, or update-runtime files unowned under broad monitoring or generic API ownership

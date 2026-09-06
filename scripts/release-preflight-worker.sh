@@ -257,6 +257,9 @@ else
     --tag pulse:test \
     .
 fi
+# Use only the npm-ci-installed runner. npx may fetch a different version when
+# the mounted dependency tree is missing or inaccessible, masking the actual
+# admission failure and breaking parity with the selected browser image.
 run_playwright() {
   docker run --rm \
     --network host \
@@ -269,7 +272,7 @@ run_playwright() {
     --volume "$REPOSITORY_DIR/tests/integration:/work" \
     --workdir /work \
     "$PLAYWRIGHT_IMAGE" \
-    npx playwright test "$@"
+    node /work/node_modules/@playwright/test/cli.js test "$@"
 }
 
 run_rehearsal_smoke() {
