@@ -2595,3 +2595,24 @@ The hook and destinations caller regressions in
 `useAlertDestinationsTabState.test.tsx` pin ordering and loading ownership.
 `scripts/check-delivery-health-ordering.mjs` exercises the real caller and card
 in Chromium with scripted API completions; it is not installed delivery proof.
+
+### Release/v6.4: missing storage connectivity is not recovery
+
+On candidate `f71542ec2182a5f0fe18a4bf5e4ecc298964f1ee`, the regression
+`TestStorageUnknownConnectivityDoesNotRecover` reproduces empty/unknown status
+resolving an existing offline incident. This violates the truthful recovery
+requirement already being repaired on this patch line; absent observation is
+not evidence that storage recovered.
+
+Backport only the storage implementation and tests from main-work commits
+`2e661e075a42e02dd833c7c29fa5741b38dc77b2` and
+`9a8ee6a5a7a8bd759f2ab46d864a7b92b0bbd71b` (PR #1931). Preserve the incident
+for empty/unknown connectivity while evaluating observed capacity independently.
+Normalize connectivity consistently so offline storage cannot emit misleading
+capacity alerts. Known inactive/disabled status keeps its existing semantics.
+No TrueNAS fixtures or unrelated product work are included.
+
+Unit reproduction and focused race tests are source-level evidence only, not
+installed-provider, restart transport or off-host recipient qualification of
+this changed candidate. Any promoted RC must bind the new revision and begin
+its own required soak; the former exact-candidate qualification cannot transfer.
