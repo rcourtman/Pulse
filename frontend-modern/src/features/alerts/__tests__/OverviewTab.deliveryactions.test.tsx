@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import type { Alert } from '@/types/api';
 import type { NotificationHealth } from '@/api/notifications';
@@ -48,6 +48,8 @@ vi.mock('@/utils/logger', () => ({
 vi.mock('@/components/Alerts/InvestigateAlertButton', () => ({
   InvestigateAlertButton: () => null,
 }));
+
+import { notificationStore } from '@/stores/notifications';
 
 import { OverviewTab } from '../OverviewTab';
 
@@ -107,10 +109,15 @@ describe('OverviewTab delivery health actions', () => {
     getDeliveryDiagnoses.mockReset();
     getDeliveryDiagnoses.mockResolvedValue([]);
     getHealth.mockReset();
+    retryTerminalFailures.mockReset();
+    dismissTerminalFailures.mockReset();
+    vi.mocked(notificationStore.success).mockClear();
+    vi.mocked(notificationStore.error).mockClear();
   });
 
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     setActiveLocale(DEFAULT_LOCALE);
   });
 
@@ -127,4 +134,68 @@ describe('OverviewTab delivery health actions', () => {
     expect(screen.queryByRole('button', { name: 'Refresh delivery status' })).toBeNull();
     expect(screen.getByRole('alert')).toHaveTextContent('Most recent failures: connectivity (1).');
   });
+  for (const action of [
+    { name: 'Retry retained deliveries', api: retryTerminalFailures },
+    { name: 'Dismiss retained failures', api: dismissTerminalFailures },
+  ]) {
+    it(`does not mutate or refresh when ${action.name} is cancelled`, async () => {
+      getHealth.mockResolvedValue(degradedHealth());
+      const confirmation = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      render(() => <OverviewTab {...defaultProps()} />);
+      fireEvent.click(await screen.findByRole('button', { name: action.name }));
+
+      expect(confirmation).toHaveBeenCalledOnce();
+      expect(action.api).not.toHaveBeenCalled();
+      expect(getHealth).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('alert')).toBeTruthy();
+    });
+
+    it(`retains attention and enables another attempt when ${action.name} fails`, async () => {
+      getHealth.mockResolvedValue(degradedHealth());
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      action.api.mockRejectedValue(new Error('queue action unavailable'));
+      render(() => <OverviewTab {...defaultProps()} />);
+      fireEvent.click(await screen.findByRole('button', { name: action.name }));
+
+      await waitFor(() => expect(notificationStore.error).toHaveBeenCalledOnce());
+      expect(notificationStore.success).not.toHaveBeenCalled();
+      expect(getHealth).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('alert')).toHaveTextContent('connectivity (1)');
+      expect(screen.getByRole('button', { name: action.name })).not.toBeDisabled();
+    });
+
+    it(`keeps both actions disabled until ${action.name} and its health refresh finish`, async () => {
+      const healthy = degradedHealth();
+      healthy.overallHealthy = true;
+      healthy.queue = { ...healthy.queue, status: 'healthy', healthy: true, attentionRequired: 0, deadLetter: 0 };
+      let completeAction!: (value: { affected: number }) => void;
+      let completeHealth!: (value: NotificationHealth) => void;
+      action.api.mockReturnValue(new Promise(resolve => { completeAction = resolve; }));
+      getHealth.mockResolvedValueOnce(degradedHealth()).mockReturnValueOnce(
+        new Promise(resolve => { completeHealth = resolve; }),
+      );
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      render(() => <OverviewTab {...defaultProps()} />);
+      fireEvent.click(await screen.findByRole('button', { name: action.name }));
+
+      const expectActionsDisabled = () => {
+        const buttons = screen.getByRole('alert').querySelectorAll('button');
+        expect(buttons.length).toBe(2);
+        for (const button of buttons) expect(button).toBeDisabled();
+      };
+      expectActionsDisabled();
+      expect(getHealth).toHaveBeenCalledTimes(1);
+      completeAction({ affected: 85 });
+      await waitFor(() => expect(getHealth).toHaveBeenCalledTimes(2));
+      expectActionsDisabled();
+      expect(screen.getByRole('alert')).toBeTruthy();
+
+      completeHealth(healthy);
+      await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+      expect(action.api).toHaveBeenCalledOnce();
+      expect(notificationStore.success).toHaveBeenCalledOnce();
+      expect(notificationStore.error).not.toHaveBeenCalled();
+    });
+  }
+
 });
