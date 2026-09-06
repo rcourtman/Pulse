@@ -142,6 +142,10 @@ export type LowPriorityNoticeOwner = 'github-star' | 'release-update';
 
 export const SESSION_STORAGE_KEYS = {
   LOW_PRIORITY_NOTICE_OWNER: 'pulse-low-priority-notice-owner',
+  // Demo mode signs the visitor in once per browser tab. The value is
+  // 'attempted' after the login page has tried, or 'suppressed' after an
+  // explicit sign-out, so a visitor who signed out lands on the form.
+  DEMO_AUTO_LOGIN: 'pulse-demo-auto-login',
 } as const;
 
 /**
