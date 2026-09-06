@@ -4774,6 +4774,17 @@ requests only the two held-notification event types over the same seven-day
 window as its delivery-attempt log, with an explicit bounded limit. That event
 request runs independently of `GET /api/notifications/delivery-log`; failure
 of either API must not recast the other response as empty or unavailable.
+Overlapping Destinations mount, configuration Retry and queue-action refreshes
+use latest-request ownership: only the most recently started refresh may
+replace delivery attempts, unavailable/loading flags or held-event rows.
+An older success cannot hide a newer unavailable result, and an older failure
+cannot erase newer evidence. Held-event completion remains independent of the
+attempt-log loading flag. Disposing the owning Solid scope ignores pending
+completions and prevents further reads through the abandoned loader.
+Regression coverage lives in the delivery-log and destinations-tab state tests;
+`scripts/check-delivery-log-ordering.mjs` additionally asserts positive
+rendered current-attempt content in Chromium at desktop and mobile widths
+using scripted APIs, not installed delivery or recipient evidence.
 
 `GET /api/alerts/incidents` with both `alertIdentifier` and `started_at` is an
 occurrence-qualified timeline read. The incident/resource-history projection
