@@ -90,7 +90,7 @@ export function OverviewTab(props: {
           onDismissFailures={() => void deliveryHealthState.dismissTerminalFailures()}
           detailsHref="/alerts/notifications#notification-delivery-activity"
           detailLevel="summary"
-          showRefresh={false}
+          showRefresh={deliveryHealthState.deliveryHealthUnavailable()}
         />
       </Show>
       <AlertOverviewStatsCards state={overviewState} />

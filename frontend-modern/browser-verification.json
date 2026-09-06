@@ -1,40 +1,34 @@
 {
   "version": 1,
-  "base_sha": "a5caca0d6311f1de18a9e55e26bb4e947895b319",
-  "verified_at": "2026-09-06T11:46:12.688Z",
+  "base_sha": "97f56d55dffb40cd7e2a46d70a43864ddd0656a1",
+  "verified_at": "2026-09-06T12:26:24.956560Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/AI/Chat/ChatMessages.tsx",
-    "frontend-modern/src/components/AI/Chat/hooks/useChat.ts"
+    "frontend-modern/src/features/alerts/OverviewTab.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/AI/Chat/ChatMessages.tsx": "9672f7608d1e3a531c73cba20fd4a78752316783212afd0c292ddfd11d2bf371",
-    "frontend-modern/src/components/AI/Chat/hooks/useChat.ts": "0b56b7a56e35d51ca96f0e126dd493b3164aa9e0ad4d8ae24bcf3af7a574b97c"
+    "frontend-modern/src/features/alerts/OverviewTab.tsx": "8f7fdc04bd0546f86152c8bb392ff3e3fb755f1f0a1c28d1ee85da3e9fe23582"
   },
   "routes": [
-    "/qualification/assistant-identity/ (loopback synthetic component fixture, not production routing)"
+    "/qualification (loopback synthetic Overview component, not production routing)"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 1000
-    },
-    {
-      "width": 900,
-      "height": 1000
+      "height": 900
     },
     {
       "width": 390,
-      "height": 1000
+      "height": 900
     }
   ],
   "states": [
-    "Real current-checkout useChat and ChatMessages; concurrent invocation identity, sibling approval retention, settled results and shared evidence after workflow row removal. No backend, provider or real actions.",
-    "Desktop approval and narrow expanded-evidence screenshots visually inspected. Transient running rows in streaming approval screenshot are not evidence of complete workflow-status correctness."
+    "Retry and Dismiss succeed, subsequent health read unavailable, explicit read-only refresh restores healthy status. Scripted APIs, no installed recipient proof.",
+    "390px unavailable screenshot visually inspected; refresh visible and reachable."
   ],
   "interactions": [
-    "pulse-heavy-run -- node scripts/check-assistant-identity.mjs: all three widths pass; service workers blocked; API/external HTTP aborted and fail the check.",
-    "Independent release-parent useChat substitution fails lost invocation assertion; independent ChatMessages substitution fails with three approval cards instead of two; fixed files restored and final run passes.",
-    "Expand both retained input/output evidence rows; verify their text and absence of document overflow. 167 affected unit tests pass. Source/screenshot hashes: lane 20260906T114016Z-release-line evidence/final/receipt.json."
+    "pulse-heavy-run -- node scripts/check-overview-health-refresh.mjs: four cases passed. External/API HTTP aborted; service workers blocked.",
+    "Each recovery requires exactly one queue mutation and three health reads. Narrowed final tree: 32 focused tests pass. Baseline: two Overview recovery cases fail.",
+    "Evidence: /var/lib/pulse-maintainer/queue/staging/20260906T122029Z-release-line/overview and browser-overview.log. Prior Assistant evidence remains in base history."
   ]
 }

@@ -103,6 +103,26 @@ describe('AlertDeliveryHealthCard', () => {
     expect(screen.getByRole('button', { name: 'Refresh delivery status' })).toBeDisabled();
   });
 
+  it('allows unavailable summary health to be rechecked without a queue mutation', () => {
+    const onRefresh = vi.fn();
+    render(() => (
+      <AlertDeliveryHealthCard
+        health={null}
+        unavailable
+        refreshing={false}
+        onRefresh={onRefresh}
+        detailLevel="summary"
+        showRefresh
+      />
+    ));
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Notification delivery status is unavailable',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh delivery status' }));
+    expect(onRefresh).toHaveBeenCalledOnce();
+    expect(screen.getByRole('alert')).toBeTruthy();
+  });
+
   it('keeps the overview treatment concise and points directly to delivery evidence', () => {
     render(() => (
       <Router>
