@@ -281,7 +281,7 @@ func (m *MockAIService) SetMetadataUpdater(updater chat.MetadataUpdater) { m.Cal
 func (m *MockAIService) SetKnowledgeStoreProvider(provider chat.KnowledgeStoreProvider) {
 	m.Called(provider)
 }
-func (m *MockAIService) SetIncidentRecorderProvider(provider chat.IncidentRecorderProvider) {
+func (m *MockAIService) SetIncidentArchiveProvider(provider chat.IncidentArchiveProvider) {
 	m.Called(provider)
 }
 func (m *MockAIService) SetEventCorrelatorProvider(provider chat.EventCorrelatorProvider) {

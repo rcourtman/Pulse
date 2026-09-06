@@ -8117,3 +8117,30 @@ unchanged pre-existing inventory. The ordinary package run skips live Docker
 work unless explicitly enabled. A direct fixture restart is teardown and must
 never be counted as a Pulse approval, execution, rejection or outcome. Model-led
 and canonical-action qualification remain separate required evidence.
+
+### Legacy incident recording retirement
+
+`internal/metrics/incident_archive.go` owns the historical recording format and
+explicit, organization-pinned archive reads. `IncidentArchiveProvider` exposes
+only a resource-bound window lookup with an error result. The primary
+`pulse_knowledge` incident action reads the canonical resource timeline. An
+explicit `window_id` reads saved legacy observations and labels their timestamp
+and historical-status limits. It must never start a recorder or infer source
+freshness from a recording timestamp. The disconnected incident coordinator,
+fleet sampling adapter, timer loop, retention writer and duplicate tool adapter
+are retired. There is no replacement incident scheduler or diagnosis policy.
+
+The archive reader preserves saved timestamps, resource labels, metadata and
+summary values, including records older than the former retention period. The response explicitly
+identifies the nanosecond encoding of the historical `summary.duration_ms` field. It
+distinguishes unavailable archives, failed reads and absent exact resource/window
+pairs. Proof lives in `internal/metrics/incident_archive_test.go` and the
+registered-tool cases in `internal/ai/tools/incident_history_test.go`.
+
+The legacy incidents listing still exposes incident memory and is not a complete
+canonical incident query. Its old sampler-derived `active_count` is now null with
+`active_count_status=not_measured`. Canonical-only events, alias-aware listing,
+query bounds and projection-read errors remain an explicit modernization gap in
+`patrol-assistant-customer-outcome-qualification`. The shared resource timeline
+remains the evidence owner. Do not invent another incident lifecycle to repair
+this listing.

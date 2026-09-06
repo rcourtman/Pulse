@@ -2647,3 +2647,20 @@ The hook and destinations caller regressions in
 `useAlertDestinationsTabState.test.tsx` pin ordering and loading ownership.
 `scripts/check-delivery-health-ordering.mjs` exercises the real caller and card
 in Chromium with scripted API completions; it is not installed delivery proof.
+
+### Alert status distinguishes dispatch from destination evidence
+
+The active alert card renders a valid diagnosis `lastNotified` timestamp as
+“Dispatch requested”, never “Notified”: the alert manager records this field
+before invoking delivery callbacks. A cooldown's `nextEligibleAt` is labelled
+“next eligible”, not a promised send time. Neither field proves destination
+acceptance or recipient receipt; that evidence must not be inferred from the
+muted presentation tone. Missing or invalid timestamps retain the existing
+pending/cooldown fallback; acknowledged alerts retain their badge without a
+second status line. No API field, notification policy or shared primitive changes.
+
+The existing wrapping status text must remain readable at desktop and phone
+widths despite the longer labels. The presentation and Overview delivery-status
+tests cover the evidence boundary; `scripts/check-alert-dispatch-copy.mjs`
+qualifies the real Overview with scripted API data in Chromium, not installed
+notification delivery.

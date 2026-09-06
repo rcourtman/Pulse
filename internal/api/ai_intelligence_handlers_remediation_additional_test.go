@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -72,11 +71,6 @@ func setupIncidentHandler(t *testing.T) (*AISettingsHandler, *memory.IncidentSto
 	store := memory.NewIncidentStore(memory.IncidentStoreConfig{DataDir: ""})
 	patrol.SetIncidentStore(store)
 
-	coordinator := ai.NewIncidentCoordinator(ai.IncidentCoordinatorConfig{EnableRecorder: false})
-	coordinator.SetIncidentStore(store)
-	coordinator.Start()
-	handler.SetIncidentCoordinator(coordinator)
-
 	alert := &alerts.Alert{
 		ID:           "alert-1",
 		Type:         "cpu",
@@ -86,7 +80,7 @@ func setupIncidentHandler(t *testing.T) (*AISettingsHandler, *memory.IncidentSto
 		StartTime:    time.Now(),
 		LastSeen:     time.Now(),
 	}
-	coordinator.OnAlertFired(alert)
+	store.RecordAlertFired(alert)
 
 	return handler, store
 }
@@ -110,8 +104,8 @@ func TestHandleGetRecentIncidents(t *testing.T) {
 	if len(incidents) != 1 {
 		t.Fatalf("expected 1 incident, got %d", len(incidents))
 	}
-	if resp["active_count"].(float64) < 1 {
-		t.Fatalf("expected active_count >= 1")
+	if resp["active_count"] != nil || resp["active_count_status"] != "not_measured" {
+		t.Fatalf("saved incident context must not imply a measured live count: %#v", resp)
 	}
 }
 
@@ -171,5 +165,32 @@ func TestHandleGetIncidentData(t *testing.T) {
 	}
 	if resp["formatted_context"] == "" {
 		t.Fatalf("expected formatted_context to be populated")
+	}
+}
+
+func TestHandleGetRecentIncidentsCountIsNotMeasured(t *testing.T) {
+	withMemory, _ := setupIncidentHandler(t)
+	for _, tc := range []struct {
+		name    string
+		handler *AISettingsHandler
+		query   string
+	}{
+		{"unavailable", &AISettingsHandler{}, ""},
+		{"fleet context", withMemory, ""},
+		{"resource context", withMemory, "?resource_id=res-1"},
+		{"empty resource context", withMemory, "?resource_id=absent"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			tc.handler.HandleGetRecentIncidents(rec, httptest.NewRequest(http.MethodGet, "/api/ai/incidents"+tc.query, nil))
+			var body map[string]interface{}
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			count, present := body["active_count"]
+			if !present || count != nil || body["active_count_status"] != "not_measured" {
+				t.Fatalf("archive/context presence cannot establish live count: %#v", body)
+			}
+		})
 	}
 }

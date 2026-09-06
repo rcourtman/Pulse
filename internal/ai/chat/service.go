@@ -60,7 +60,7 @@ type (
 	AgentProfileManager                 = tools.AgentProfileManager
 	FindingsManager                     = tools.FindingsManager
 	MetadataUpdater                     = tools.MetadataUpdater
-	IncidentRecorderProvider            = tools.IncidentRecorderProvider
+	IncidentArchiveProvider             = tools.IncidentArchiveProvider
 	EventCorrelatorProvider             = tools.EventCorrelatorProvider
 	KnowledgeStoreProvider              = tools.KnowledgeStoreProvider
 	AssistantDiscoveryProvider          = tools.DiscoveryProvider
@@ -3598,11 +3598,11 @@ func (s *Service) SetMetadataUpdater(updater MetadataUpdater) {
 	}
 }
 
-func (s *Service) SetIncidentRecorderProvider(provider IncidentRecorderProvider) {
+func (s *Service) SetIncidentArchiveProvider(provider IncidentArchiveProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.executor != nil {
-		s.executor.SetIncidentRecorderProvider(provider)
+		s.executor.SetIncidentArchiveProvider(provider)
 	}
 }
 

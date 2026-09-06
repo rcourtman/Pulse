@@ -111,6 +111,19 @@ describe('OverviewTab delivery status line', () => {
     expect(getDeliveryDiagnoses).toHaveBeenCalled();
   });
 
+  it.each([
+    { status: 'would_send', reason: 'ready' },
+    { status: 'suppressed', reason: 'cooldown', nextEligibleAt: '2026-08-26T10:20:00Z' },
+  ] as const)('does not turn dispatch evidence into receipt for $reason', async (state) => {
+    getDeliveryDiagnoses.mockResolvedValue([
+      makeDiagnosis('a1', { ...state, lastNotified: '2026-08-26T10:15:00Z' }),
+    ]);
+    render(() => <OverviewTab {...defaultProps({ activeAlerts: { a1: makeAlert('a1') } })} />);
+    await waitFor(() => expect(screen.getByText(/^Dispatch requested /)).toBeTruthy());
+    expect(screen.queryByText(/^Notified /)).toBeNull();
+    if (state.reason === 'cooldown') expect(screen.getByText(/next eligible/)).toBeTruthy();
+  });
+
   it('renders no delivery line when the diagnosis fetch fails', async () => {
     const activeAlerts: Record<string, Alert> = { a1: makeAlert('a1') };
     getDeliveryDiagnoses.mockRejectedValue(new Error('boom'));

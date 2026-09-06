@@ -10670,3 +10670,18 @@ reasoning and real remediation in
 `docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
 proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
 response does not establish a useful customer outcome or model qualification.
+
+### Explicit historical incident archives
+
+`internal/api/router.go` pins a read-only legacy archive to each organization's
+Assistant service. Its native `IncidentArchiveProvider` capability requires both
+resource and window identifiers and propagates read errors. No archive setup or
+shutdown writes files or starts sampling. The tool preserves stored metadata and
+anomalies and marks historical recording status as historical.
+
+`GET /api/ai/incidents` retains the `active_count` key as null and adds
+`active_count_status=not_measured` in every response. Incident memory, an empty
+result and unavailable services cannot establish a current count. The old
+coordinator never received production alert callbacks, so its zero was not a
+measurement. The legacy listing's broader canonical query and read-error
+modernization remains open under the customer-outcome qualification gap.

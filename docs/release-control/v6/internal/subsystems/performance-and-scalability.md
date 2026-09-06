@@ -3130,3 +3130,9 @@ candidate on the same worker with alternating samples, and retains full-route
 and middleware controls. Identical source or instruction sequences alone do not
 prove identical timing. The recorded final ten-pair check passes the unchanged
 time/bytes/allocation gate with no adjacent request-path regression.
+
+The disconnected incident recorder and its fleet metrics adapter are retired.
+Router initialization no longer launches their five-second cached-metrics loop
+or allocates per-resource pre-incident buffers. Explicit legacy archive reads
+are lazy and bounded to the existing 16 MiB file limit. Canonical resource
+history supplies current diagnostic evidence without a second sampling loop.

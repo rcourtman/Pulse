@@ -6001,3 +6001,11 @@ Unlike resource reports, a `patrol_digest` schedule run produces no generated
 file under the tenant `reports` directory and never calls the retention prune;
 the email body is the only artifact. Recovery and retention state are
 unaffected.
+
+Legacy `incident_windows.json` recovery is read-only through
+`internal/metrics/incident_archive.go`. Construction does not read the file, and
+explicit reads neither expire records nor rewrite contents or permissions.
+Malformed, oversized, symlink and non-regular archive paths fail visibly. Missing
+archives remain distinguishable from a valid archive with no matching window.
+The original recording times and historical status must never establish current
+source freshness or active recording.

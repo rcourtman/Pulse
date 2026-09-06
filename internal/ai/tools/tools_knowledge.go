@@ -7,44 +7,14 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-// IncidentRecorderProvider provides access to incident recording data
-type IncidentRecorderProvider interface {
-	GetWindowsForResource(resourceID string, limit int) []*IncidentWindow
-	GetWindow(windowID string) *IncidentWindow
-}
-
-// IncidentWindow represents a high-frequency recording window during an incident
-type IncidentWindow struct {
-	ID           string              `json:"id"`
-	ResourceID   string              `json:"resource_id"`
-	ResourceName string              `json:"resource_name,omitempty"`
-	ResourceType string              `json:"resource_type,omitempty"`
-	TriggerType  string              `json:"trigger_type"`
-	TriggerID    string              `json:"trigger_id,omitempty"`
-	StartTime    time.Time           `json:"start_time"`
-	EndTime      *time.Time          `json:"end_time,omitempty"`
-	Status       string              `json:"status"`
-	DataPoints   []IncidentDataPoint `json:"data_points"`
-	Summary      *IncidentSummary    `json:"summary,omitempty"`
-}
-
-// IncidentDataPoint represents a single data point in an incident window
-type IncidentDataPoint struct {
-	Timestamp time.Time          `json:"timestamp"`
-	Metrics   map[string]float64 `json:"metrics"`
-}
-
-// IncidentSummary provides computed statistics about an incident window
-type IncidentSummary struct {
-	Duration   time.Duration      `json:"duration_ms"`
-	DataPoints int                `json:"data_points"`
-	Peaks      map[string]float64 `json:"peaks"`
-	Lows       map[string]float64 `json:"lows"`
-	Averages   map[string]float64 `json:"averages"`
-	Changes    map[string]float64 `json:"changes"`
+// IncidentArchiveProvider provides explicit, resource-bound reads of saved
+// legacy recordings. Live incident evidence comes from the canonical timeline.
+type IncidentArchiveProvider interface {
+	GetWindow(resourceID, windowID string) (*metrics.IncidentWindow, error)
 }
 
 // EventCorrelatorProvider provides access to correlated events
@@ -184,17 +154,22 @@ func (e *PulseToolExecutor) executeGetIncidentWindow(_ context.Context, args map
 	// Isolate legacy recordings from the canonical timeline. Their sample times
 	// are recorder timestamps, not verified source observation timestamps.
 	if windowID != "" {
-		if e.incidentRecorderProvider == nil {
+		if e.incidentArchiveProvider == nil {
 			return NewErrorResult(fmt.Errorf("legacy incident recording archive is unavailable")), nil
 		}
-		window := e.incidentRecorderProvider.GetWindow(windowID)
-		if window == nil || window.ResourceID != resourceID {
+		window, err := e.incidentArchiveProvider.GetWindow(resourceID, windowID)
+		if err != nil {
+			return NewErrorResult(fmt.Errorf("read legacy incident recording archive: %w", err)), nil
+		}
+		if window == nil || window.ResourceID != resourceID || window.ID != windowID {
 			return NewErrorResult(fmt.Errorf("legacy incident recording not found for the requested resource")), nil
 		}
 		return NewJSONResult(map[string]interface{}{
-			"source":         "legacy_incident_recording",
-			"window":         window,
-			"evidence_limit": "Recording timestamps do not establish when the source measured each value. Repeated values may be cached observations. This archive is not the canonical incident timeline.",
+			"source":                "legacy_incident_recording",
+			"archive_read_only":     true,
+			"summary_duration_unit": "nanoseconds",
+			"window":                window,
+			"evidence_limit":        "Recording timestamps do not establish when the source measured each value. Repeated values may be cached observations. The legacy summary.duration_ms field contains nanoseconds. Stored recording status is historical and does not mean recording is active. This archive is not the canonical incident timeline.",
 		}), nil
 	}
 

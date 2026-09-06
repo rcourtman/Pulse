@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/require"
 )
@@ -51,11 +54,10 @@ func (failedIncidentHistoryStore) GetRecentChanges(string, time.Time, int) ([]un
 	return nil, errors.New("history store unavailable")
 }
 
-type incidentArchiveFixture struct{ window *IncidentWindow }
+type incidentArchiveFixture struct{ window *metrics.IncidentWindow }
 
-func (s incidentArchiveFixture) GetWindow(string) *IncidentWindow { return s.window }
-func (s incidentArchiveFixture) GetWindowsForResource(string, int) []*IncidentWindow {
-	panic("canonical incident reads must not enumerate legacy recordings")
+func (s incidentArchiveFixture) GetWindow(string, string) (*metrics.IncidentWindow, error) {
+	return s.window, nil
 }
 
 func TestIncidentHistoryRetainsCanonicalEvidence(t *testing.T) {
@@ -76,7 +78,7 @@ func TestIncidentHistoryRetainsCanonicalEvidence(t *testing.T) {
 	}
 	// No live inventory or incident recorder is necessary to read a retained
 	// event for a container that has since been removed.
-	exec := NewPulseToolExecutor(ExecutorConfig{ActionAuditStore: store, IncidentRecorderProvider: incidentArchiveFixture{}})
+	exec := NewPulseToolExecutor(ExecutorConfig{ActionAuditStore: store, IncidentArchiveProvider: incidentArchiveFixture{}})
 	require.True(t, exec.isToolAvailable(agentcapabilities.PulseKnowledgeToolName))
 	for _, tc := range []struct {
 		name      string
@@ -137,7 +139,7 @@ func TestIncidentHistoryUnavailableAndInvalid(t *testing.T) {
 		{"large limit", unifiedresources.NewMemoryStore(), map[string]interface{}{"resource_id": "app-container-1", "limit": float64(201)}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			exec := NewPulseToolExecutor(ExecutorConfig{ActionAuditStore: tc.store, IncidentRecorderProvider: incidentArchiveFixture{}})
+			exec := NewPulseToolExecutor(ExecutorConfig{ActionAuditStore: tc.store, IncidentArchiveProvider: incidentArchiveFixture{}})
 			tc.input["action"] = "incidents"
 			result, err := exec.registry.Execute(context.Background(), exec, agentcapabilities.PulseKnowledgeToolName, tc.input)
 			require.NoError(t, err)
@@ -150,8 +152,8 @@ func TestIncidentHistoryUnavailableAndInvalid(t *testing.T) {
 }
 
 func TestIncidentHistoryLegacyArchiveIsResourceBound(t *testing.T) {
-	window := &IncidentWindow{ID: "archive-1", ResourceID: "vm-1"}
-	exec := NewPulseToolExecutor(ExecutorConfig{IncidentRecorderProvider: incidentArchiveFixture{window}})
+	window := &metrics.IncidentWindow{ID: "archive-1", ResourceID: "vm-1"}
+	exec := NewPulseToolExecutor(ExecutorConfig{IncidentArchiveProvider: incidentArchiveFixture{window}})
 	for _, id := range []string{"vm-1", "vm-2"} {
 		result, err := exec.executeGetIncidentWindow(context.Background(), map[string]interface{}{"resource_id": id, "window_id": window.ID})
 		require.NoError(t, err)
@@ -163,5 +165,57 @@ func TestIncidentHistoryLegacyArchiveIsResourceBound(t *testing.T) {
 			require.True(t, result.IsError)
 			require.NotContains(t, result.Content[0].Text, "vm-1")
 		}
+	}
+	result, err := exec.executeGetIncidentWindow(context.Background(), map[string]interface{}{"resource_id": window.ResourceID, "window_id": "wrong-window"})
+	require.NoError(t, err)
+	require.True(t, result.IsError, "a provider cannot substitute another archived window")
+
+}
+
+func TestIncidentHistoryArchiveReadOutcomes(t *testing.T) {
+	dir := t.TempDir()
+	archivePath := filepath.Join(dir, "incident_windows.json")
+	archive := metrics.NewIncidentArchive(dir)
+	exec := NewPulseToolExecutor(ExecutorConfig{IncidentArchiveProvider: archive})
+	original := `{"completed_windows":[{"id":"saved-window","resource_id":"vm-archive","status":"recording","start_time":"2020-01-02T03:04:05Z","data_points":[{"timestamp":"2020-01-02T03:04:06Z","metrics":{"cpu":12.5},"metadata":{"source":"cached"}}],"summary":{"duration_ms":60000000000,"anomalies":["stored observation"]}}]}`
+	for _, tc := range []struct {
+		name, raw, resource, window string
+		wantError                   bool
+	}{
+		{"archive unavailable", "", "vm-archive", "saved-window", true},
+		{"archive malformed", "{", "vm-archive", "saved-window", true},
+		{"archive success", original, "vm-archive", "saved-window", false},
+		{"archive wrong resource", original, "vm-other", "saved-window", true},
+		{"archive missing window", original, "vm-archive", "missing", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.raw != "" {
+				require.NoError(t, os.WriteFile(archivePath, []byte(tc.raw), 0600))
+			}
+			input := map[string]interface{}{"action": "incidents", "resource_id": tc.resource, "window_id": tc.window}
+			result, err := exec.registry.Execute(context.Background(), exec, agentcapabilities.PulseKnowledgeToolName, input)
+			require.NoError(t, err)
+			require.Equal(t, tc.wantError, result.IsError, result.Content)
+			if !tc.wantError {
+				var got struct {
+					Window       *metrics.IncidentWindow `json:"window"`
+					ReadOnly     bool                    `json:"archive_read_only"`
+					DurationUnit string                  `json:"summary_duration_unit"`
+				}
+				require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &got))
+				require.True(t, got.ReadOnly)
+				require.Equal(t, "nanoseconds", got.DurationUnit)
+				require.Equal(t, time.Minute, got.Window.Summary.Duration)
+				require.Equal(t, metrics.IncidentWindowStatusRecording, got.Window.Status)
+				require.Equal(t, "cached", got.Window.DataPoints[0].Metadata["source"])
+				require.Equal(t, []string{"stored observation"}, got.Window.Summary.Anomalies)
+				require.Contains(t, result.Content[0].Text, "does not mean recording is active")
+			} else if tc.name == "archive wrong resource" {
+				require.NotContains(t, result.Content[0].Text, "stored observation")
+			}
+			capture, err := json.Marshal(map[string]any{"case": tc.name, "input": input, "result": result})
+			require.NoError(t, err)
+			t.Logf("INCIDENT_EVIDENCE %s", capture)
+		})
 	}
 }

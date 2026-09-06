@@ -1965,3 +1965,52 @@ The autonomous provider refusal remains enforced. Integration receipts are in
 `tmp/patrol-history-integration/`. The full integration hook gates its merge
 commit and push. All previously recorded model and wider-readiness gaps remain
 open.
+
+## Legacy recorder retirement, 2026-09-06
+
+The disconnected incident coordinator, five-second cached-metrics sampler,
+pre-incident buffers, archive writer and unused adapters are removed. They had
+no production alert trigger. Canonical resource history remains the primary
+incident evidence for Assistant. No replacement diagnosis or scheduling policy
+was added.
+
+Explicit archive lookup now requires exact organization, resource and window
+binding. The reader is lazy and read-only. Saved file contents, modification
+time, mode, old observations, metadata and summary values survive reads. Missing
+archives, malformed files and missing windows remain distinct outcomes. Legacy
+`recording` status is historical, and the response discloses that the old
+`summary.duration_ms` field contains nanoseconds. An old file is never rewritten
+to make its evidence appear current.
+
+The incidents API now reports `active_count: null` with
+`active_count_status: not_measured`. The retired coordinator's empty map never
+established a measured zero. Its legacy incident-memory listing still needs a
+canonical query design covering aliases, canonical-only events, honest bounds
+and propagated projection-read errors. This is recorded as an open modernization
+residual rather than treating that listing as complete.
+
+Final-source registered archive-tool receipts pass Playwright at `/patrol`,
+1440x1000, 900x1000 and 390x1000. The five cases cover a saved observation,
+unavailable/malformed archives, the wrong resource and a missing window.
+Verification includes hover/focus, Enter expansion, exact tool input/output,
+deep scrolling, Space collapse, Escape, reload and controlled session reopening.
+Actual pixels were inspected. Incoming main alert dispatch wording also passes
+its isolated real Overview browser script at all three widths. These controlled
+responses prove rendering, not model diagnosis, installed delivery or server
+persistence.
+
+The final worker Pro binary is
+`bd29e6f27be7b3ad4cfbc37842f4da90f08c6a48c9fc23b12c9c597b67346c9b`.
+After the managed local restart, canonical and legacy queries still return the
+same seven retained homelab records with the original fired/resolved events
+unchanged. The live incidents API reports an unmeasured count. Cached provider
+refusal remains enforced. No model request, paid spend, provider retry,
+production collector change or fault injection occurred in this slice.
+
+Archive, tools, chat, AI runtime and targeted API/race checks passed on the
+worker. One full API run as root invalidated its mode-bit persistence-failure
+fixture. That fixture passes unchanged under the normal worker account. The
+full API rerun passes under that account (286.960s), as do the incoming
+startup-replay and legacy-boundary source checks. Frontend type checks and all
+29 incoming alert tests pass. The exact staged hook gates landing.
+Private receipts are under `tmp/patrol-archive-retirement/` in the workspace.

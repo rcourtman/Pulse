@@ -2809,3 +2809,10 @@ optional link to the configured public URL. It never includes resource names,
 finding text, commands, evidence, or model names, and it uses the tenant's
 existing email configuration and recipients under the admin-only report
 schedule routes.
+
+Explicit legacy incident archive reads use the organization's pinned data path
+and exact resource/window identifiers. They retain bounded regular-file and
+symlink checks and expose no enumeration, sampling or writing capability.
+Removing the disconnected recorder does not alter alert, action approval or
+operator authority. An unrelated organization receives no default archive
+fallback.

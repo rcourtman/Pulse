@@ -7907,3 +7907,9 @@ positive matching evidence, provider replacement/return, write failure and
 automatic versus unknown-provenance cleanup. State and config tests cover atomic
 replacement and preservation of lifecycle evidence. These are synthetic local
 proofs, not reporter confirmation or installed-release resolution of #1930.
+
+Historical incident archives are explicit reads, not a collector lifecycle.
+`internal/api/router.go` no longer starts an incident coordinator or a cached
+metrics sampling loop. Organization teardown drops the archive reference without
+saving or deleting recordings. Alert observation and recovery continue through
+the alert manager and canonical resource timeline.

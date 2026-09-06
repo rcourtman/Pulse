@@ -2074,6 +2074,7 @@
         "internal/api/ai_intelligence_handlers.go",
         "internal/config/ai.go",
         "internal/config/patrol_autopilot_persistence.go",
+        "internal/metrics/incident_archive.go",
         "pkg/aicontracts/action_broker.go",
         "pkg/aicontracts/fix_execution.go",
         "pkg/aicontracts/investigation.go",
@@ -2088,6 +2089,20 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "legacy-incident-archive",
+            "label": "Explicit read-only legacy recording archive proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/metrics/incident_archive.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/ai/tools/incident_history_test.go",
+              "internal/metrics/incident_archive_test.go"
+            ]
+          },
           {
             "id": "retained-metric-evidence",
             "label": "retained metric evidence and observation coverage proof",
@@ -2190,6 +2205,7 @@
               "internal/api/ai_handlers_more_test.go",
               "internal/api/ai_handlers_patrol_actions_additional_test.go",
               "internal/api/ai_handlers_test.go",
+              "internal/api/ai_intelligence_handlers_remediation_additional_test.go",
               "internal/api/ai_intelligence_handlers_test.go",
               "internal/api/issue1640_readiness_gate_test.go",
               "internal/api/issue1640_readiness_transport_test.go",

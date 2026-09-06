@@ -18650,8 +18650,6 @@ func TestContract_AssistantProviderSeamsDoNotUseMCPTerminology(t *testing.T) {
 	}
 	intelligenceAdapters := string(intelligenceAdaptersSource)
 	for _, fragment := range []string{
-		`type IncidentRecorderToolAdapter struct`,
-		`func NewIncidentRecorderToolAdapter(recorder IncidentRecorderSource) *IncidentRecorderToolAdapter`,
 		`type EventCorrelatorToolAdapter struct`,
 		`func NewEventCorrelatorToolAdapter(correlator EventCorrelatorSource) *EventCorrelatorToolAdapter`,
 	} {
