@@ -1,30 +1,20 @@
 {
   "version": 1,
-  "base_sha": "2c4b27fc4b229bece4585c33eb3b11e74f1bdeef",
-  "verified_at": "2026-09-05T04:09:32Z",
+  "base_sha": "89c8e61463d134408caef430b580b53e154e17f4",
+  "verified_at": "2026-09-06T00:31:33.609713Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/stores/websocket-global.ts",
-    "frontend-modern/src/stores/websocket.ts",
-    "frontend-modern/src/useAppRuntimeState.ts"
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/stores/websocket-global.ts": "abacee8810729f0dbded90f0b8be99ad09936134160b631b74967e0751f2919f",
-    "frontend-modern/src/stores/websocket.ts": "253b45b6c9694ad39c881cf8b592398962ae5fa6849a1590812fbb634649fb9b",
-    "frontend-modern/src/useAppRuntimeState.ts": "e879a23baf48caf99359c63cf4c0c637156d27a28ab823f62c19e14052fd1643"
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts": "1eadf6df30b4f1130f868b8f139561ea60fdb87e1823deeeaaf2f8fbc699a00c"
   },
   "routes": [
-    "/proxmox",
-    "/docker",
-    "/alerts"
+    "/qualification (isolated caller/card fixture, not application routing)"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 900
-    },
-    {
-      "width": 1100,
       "height": 900
     },
     {
@@ -33,14 +23,12 @@
     }
   ],
   "states": [
-    "Synthetic populated Proxmox and Docker inventory in isolated real Go backend with production embedded frontend",
-    "Connected socket closed with 1013; reconnect attempts blocked while HTTP health remains available",
-    "Platform destinations retained during interruption and automatic recovery without reload; desktop navigation intentionally hidden below xl",
-    "Desktop active incidents retain enabled acknowledgement control; no acknowledgement persistence or notification receipt claim"
+    "Real Chromium with current useAlertDestinationsTabState, useNotificationDeliveryHealth and AlertDeliveryHealthCard; scripted API promises and queue actions. No installed backend or provider receipt.",
+    "Older healthy/newer degraded, older degraded/newer healthy, older error/newer healthy, older healthy/newer error. Warning presence and rendered state remain owned by newer request. Desktop and narrow screenshots inspected; this is not a full-shell or accessibility audit."
   ],
   "interactions": [
-    "pulse-heavy-run -- env PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 PULSE_MOCK_MODE=true PULSE_E2E_NAVIGATION_RECOVERY=1 PULSE_E2E_LOCAL_BACKEND_PORT=18765 npm --prefix tests/integration test -- tests/96-navigation-socket-recovery.spec.ts --project=chromium",
-    "Three Chromium checks passed; fresh contexts at 100% zoom; desktop and 390px reconnect screenshots inspected. Mobile menu interaction not exercised.",
-    "Open Alerts during interruption at 1440px; unblock socket and verify recovery without reload"
+    "pulse-heavy-run -- node scripts/check-delivery-health-ordering.mjs: 12 cases passed.",
+    "Configuration Retry overlaps pending mount health. Resolve newer then older and compare rendered main text and alert presence.",
+    "Retry retained deliveries and Dismiss retained failures each start post-action refresh while another read is pending. Older completion leaves loading true; latest healthy response clears warning. Confirmations and API responses are scripted."
   ]
 }

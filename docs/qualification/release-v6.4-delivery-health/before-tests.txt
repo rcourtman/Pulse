@@ -1,0 +1,216 @@
+
+> pulse-modern@1.0.0 test
+> vitest run src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx src/features/alerts/__tests__/useAlertDestinationsTabState.test.tsx
+
+
+ RUN  v3.2.7 /var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern
+
+stderr | src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx > useNotificationDeliveryHealth > treats an unreachable health endpoint as needing attention
+[ERROR] Failed to load notification delivery health Error: network down
+    at /var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx:48:63
+    at updateFn (file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/solid-js/dist/dev.js:197:17)
+    at runUpdates (file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/solid-js/dist/dev.js:868:17)
+    at Module.createRoot (file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/solid-js/dist/dev.js:202:12)
+    at /var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx:47:5
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+
+stderr | src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx > useNotificationDeliveryHealth > ignores older error completion after newer healthy result
+[ERROR] Failed to load notification delivery health Error: old failure
+    at /var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx:90:37
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+
+stderr | src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx > useNotificationDeliveryHealth > ignores older healthy completion after newer error result
+[ERROR] Failed to load notification delivery health Error: new failure
+    at /var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx:85:69
+    at updateFn (file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/solid-js/dist/dev.js:197:17)
+    at runUpdates (file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/solid-js/dist/dev.js:868:17)
+    at Module.createRoot (file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/solid-js/dist/dev.js:202:12)
+    at /var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx:73:5
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:861:59
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+
+stderr | src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx > useNotificationDeliveryHealth > keeps loading and first-load silence when older error finishes first
+[ERROR] Failed to load notification delivery health Error: old failure
+    at finishOld (/var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx:112:28)
+    at /var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx:124:9
+    at updateFn (file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/solid-js/dist/dev.js:197:17)
+    at runUpdates (file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/solid-js/dist/dev.js:868:17)
+    at Module.createRoot (file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/solid-js/dist/dev.js:202:12)
+    at /var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx:104:7
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:863:59
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+
+stdout | src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx > useNotificationDeliveryHealth > keeps post-dismissTerminalFailures health when a pre-action request finishes late
+[INFO] [toast:success] 2 retained failures dismissed.
+
+stdout | src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx > useNotificationDeliveryHealth > keeps post-retryTerminalFailures health when a pre-action request finishes late
+[INFO] [toast:success] 2 retained deliveries queued for retry.
+
+ ❯ src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx (12 tests | 8 failed) 108ms
+   ✓ useNotificationDeliveryHealth > stays silent before the first load resolves so it cannot flash a warning 3ms
+   ✓ useNotificationDeliveryHealth > does not raise attention for a healthy queue 0ms
+   ✓ useNotificationDeliveryHealth > treats an unreachable health endpoint as needing attention 5ms
+   ✓ useNotificationDeliveryHealth > treats a queue the server reports as unavailable as needing attention 0ms
+   × useNotificationDeliveryHealth > ignores older healthy completion after newer degraded result 5ms
+     → expected 'healthy' to be 'degraded' // Object.is equality
+   × useNotificationDeliveryHealth > ignores older degraded completion after newer healthy result 1ms
+     → expected 'degraded' to be 'healthy' // Object.is equality
+   × useNotificationDeliveryHealth > ignores older error completion after newer healthy result 1ms
+     → expected undefined to be 'healthy' // Object.is equality
+   × useNotificationDeliveryHealth > ignores older healthy completion after newer error result 1ms
+     → expected 'healthy' to be undefined // Object.is equality
+   × useNotificationDeliveryHealth > keeps loading and first-load silence when older healthy finishes first 2ms
+     → expected false to be true // Object.is equality
+   × useNotificationDeliveryHealth > keeps loading and first-load silence when older error finishes first 1ms
+     → expected false to be true // Object.is equality
+   × useNotificationDeliveryHealth > keeps post-dismissTerminalFailures health when a pre-action request finishes late 2ms
+     → expected 'degraded' to be 'healthy' // Object.is equality
+   × useNotificationDeliveryHealth > keeps post-retryTerminalFailures health when a pre-action request finishes late 1ms
+     → expected 'degraded' to be 'healthy' // Object.is equality
+ ❯ src/features/alerts/__tests__/useAlertDestinationsTabState.test.tsx (4 tests | 1 failed) 137ms
+   × useAlertDestinationsTabState > preserves degraded configuration Retry health when the older mount request finishes 62ms
+     → expected 'healthy' to be 'degraded' // Object.is equality
+   ✓ useAlertDestinationsTabState > owns webhook runtime and destination test actions separately from config load/save state 6ms
+   ✓ useAlertDestinationsTabState > warns instead of celebrating when a test send reports delivery is paused 1ms
+   ✓ useAlertDestinationsTabState > confirms and resolves retained terminal deliveries without deleting delivery history 52ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/features/alerts/__tests__/useAlertDestinationsTabState.test.tsx > useAlertDestinationsTabState > preserves degraded configuration Retry health when the older mount request finishes
+AssertionError: expected 'healthy' to be 'degraded' // Object.is equality
+
+Expected: "degraded"
+Received: "healthy"
+
+ ❯ src/features/alerts/__tests__/useAlertDestinationsTabState.test.tsx:114:51
+    112|     finishMount(healthy);
+    113|     await Promise.resolve();
+    114|     expect(result.deliveryHealth()?.queue.status).toBe('degraded');
+       |                                                   ^
+    115|     expect(result.deliveryNeedsAttention()).toBe(true);
+    116|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx > useNotificationDeliveryHealth > ignores older healthy completion after newer degraded result
+AssertionError: expected 'healthy' to be 'degraded' // Object.is equality
+
+Expected: "degraded"
+Received: "healthy"
+
+ ❯ src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx:93:52
+     91|       else resolve(healthWith(older));
+     92|       await pending;
+     93|       expect(state.deliveryHealth()?.queue.status).toBe(newer === 'err…
+       |                                                    ^
+     94|       expect(state.deliveryHealthUnavailable()).toBe(newer === 'error'…
+     95|       expect(state.deliveryNeedsAttention()).toBe(newer !== 'healthy');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx > useNotificationDeliveryHealth > ignores older degraded completion after newer healthy result
+AssertionError: expected 'degraded' to be 'healthy' // Object.is equality
+
+Expected: "healthy"
+Received: "degraded"
+
+ ❯ src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx:93:52
+     91|       else resolve(healthWith(older));
+     92|       await pending;
+     93|       expect(state.deliveryHealth()?.queue.status).toBe(newer === 'err…
+       |                                                    ^
+     94|       expect(state.deliveryHealthUnavailable()).toBe(newer === 'error'…
+     95|       expect(state.deliveryNeedsAttention()).toBe(newer !== 'healthy');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx > useNotificationDeliveryHealth > ignores older error completion after newer healthy result
+AssertionError: expected undefined to be 'healthy' // Object.is equality
+
+- Expected:
+"healthy"
+
++ Received:
+undefined
+
+ ❯ src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx:93:52
+     91|       else resolve(healthWith(older));
+     92|       await pending;
+     93|       expect(state.deliveryHealth()?.queue.status).toBe(newer === 'err…
+       |                                                    ^
+     94|       expect(state.deliveryHealthUnavailable()).toBe(newer === 'error'…
+     95|       expect(state.deliveryNeedsAttention()).toBe(newer !== 'healthy');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+ FAIL  src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx > useNotificationDeliveryHealth > ignores older healthy completion after newer error result
+AssertionError: expected 'healthy' to be undefined // Object.is equality
+
+- Expected:
+undefined
+
++ Received:
+"healthy"
+
+ ❯ src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx:93:52
+     91|       else resolve(healthWith(older));
+     92|       await pending;
+     93|       expect(state.deliveryHealth()?.queue.status).toBe(newer === 'err…
+       |                                                    ^
+     94|       expect(state.deliveryHealthUnavailable()).toBe(newer === 'error'…
+     95|       expect(state.deliveryNeedsAttention()).toBe(newer !== 'healthy');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯
+
+ FAIL  src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx > useNotificationDeliveryHealth > keeps loading and first-load silence when older healthy finishes first
+ FAIL  src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx > useNotificationDeliveryHealth > keeps loading and first-load silence when older error finishes first
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx:126:50
+    124|         finishOld();
+    125|         await oldRequest;
+    126|         expect(state.refreshingDeliveryHealth()).toBe(true);
+       |                                                  ^
+    127|         expect(state.deliveryHealth()).toBeNull();
+    128|         expect(state.deliveryNeedsAttention()).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/9]⎯
+
+ FAIL  src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx > useNotificationDeliveryHealth > keeps post-dismissTerminalFailures health when a pre-action request finishes late
+ FAIL  src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx > useNotificationDeliveryHealth > keeps post-retryTerminalFailures health when a pre-action request finishes late
+AssertionError: expected 'degraded' to be 'healthy' // Object.is equality
+
+Expected: "healthy"
+Received: "degraded"
+
+ ❯ src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx:162:56
+    160|           finishOld(healthWith('degraded'));
+    161|           await pending;
+    162|           expect(state.deliveryHealth()?.queue.status).toBe('healthy');
+       |                                                        ^
+    163|           expect(state.deliveryNeedsAttention()).toBe(false);
+    164|         } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/9]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  9 failed | 7 passed (16)
+   Start at  01:28:57
+   Duration  1.21s (transform 525ms, setup 153ms, collect 531ms, tests 244ms, environment 624ms, prepare 266ms)

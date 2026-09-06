@@ -2563,3 +2563,19 @@ REST active-alert recovery may complete before a resource snapshot. Neither
 active incidents nor alert hydration completion establishes an empty resource
 estate or replaces platform navigation admission. Incident access must remain
 available during socket reconnect; this does not assert notification delivery.
+
+### Delivery health requests have latest-started ownership
+
+Overlapping mount, configuration Retry and post-queue-action reads must not
+allow an older completion to replace newer delivery health. Success, failure,
+first-load completion and the refreshing flag belong only to the most recently
+started health request. A stale healthy response cannot hide degraded attention;
+a stale error cannot invent unavailability after recovery. Queue actions still
+refresh from the server, not from their affected count. This changes no provider
+acceptance, incident lifecycle or delivery guarantee.
+
+The hook and destinations caller regressions in
+`useNotificationDeliveryHealth.test.tsx` and
+`useAlertDestinationsTabState.test.tsx` pin ordering and loading ownership.
+`scripts/check-delivery-health-ordering.mjs` exercises the real caller and card
+in Chromium with scripted API completions; it is not installed delivery proof.
