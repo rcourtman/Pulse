@@ -1619,3 +1619,77 @@ so this assessment does not qualify model use of that corrected action.
 Storage-fault ground truth, reliable diagnosis, approved/rejected actions and
 independent recovery remain open. The supported autonomous provider dependency
 and wider independent-Pro-environment gate remain unchanged.
+
+
+### Command connection evidence correction plan
+
+Live command connectivity and retained monitoring observations are independent
+facts. The shared tool contract will name command-agent connections explicitly,
+including parent-node connections, without changing routing or execution policy.
+Topology built without a command-connection snapshot must omit connection flags,
+execution hints and connected counts rather than manufacture false/zero values.
+An observed empty snapshot still reports disconnected/zero. Assistant inventory
+context must preserve the same observation boundary. Existing permission,
+approval and invocation checks remain authoritative.
+
+Regression matrix: current Docker inventory and metrics with disconnected and
+connected command transport, read-only control with a connected agent, parent
+node versus guest connection, topology without a connection observation versus
+an observed empty set, and Assistant's seeded inventory. Run affected tools/chat
+packages and focused race proof on pulse-dev.
+
+Browser matrix after rebuilding the local Pro backend: `/patrol` at 1440x1000,
+900x1000 and 390x1000, actual captured query results showing disconnected and
+connected command transport beside unchanged monitored workload evidence.
+Exercise tool details open/closed, keyboard focus/activation, deepest output
+scrolling, Escape, reload and persisted result presentation. Inspect pixels and
+bind receipts to the final source and binary. Controlled rendering proof does
+not qualify model interpretation, autonomous Patrol or infrastructure actions.
+
+
+### Command connection evidence qualification
+
+The original projection failed the new regression because it labelled command
+transport as generic agent connectivity and emitted connected-agent counts from
+an inventory-only seed. Canonical guest search also promoted a parent-node
+connection into a direct guest connection. The shared projection now retains
+those distinctions. Existing host aliases remain available for non-guest
+resources. No routing, approval, execution or provider policy boundary changes.
+
+Four canonical query cases pass: no command connection, connected read-only
+transport, a direct guest connection without a parent connection, and connected
+transport with control enabled. Current workload state and CPU remain available
+in every case and no command is executed. Separate checks prove that topology
+without a command snapshot omits connection and execution hints and connected
+counts, while an observed empty snapshot retains false/zero. Assistant inventory
+context inherits that same unobserved state.
+
+Final source proof on pulse-dev used Go1.26.8 and GOMAXPROCS4. The full tools
+package passed in 59.456s and chat in 6.402s. Focused race checks passed in 1.048s
+and 1.030s. The Pro runtime cross-build passed and the installed local binary
+SHA256 is `bcaf748107211ee733a6dc0f4d17220d9b4d1ce1918c25bde27cf3d10c0d6379`.
+The managed development process restarted onto that artifact and `/api/health`
+reported healthy. No production agent was replaced.
+
+Playwright exercised nine captured results at `/patrol`, 1440x1000, 900x1000
+and 390x1000. Inputs, outputs and completed states match exactly before and after
+controlled session reload. Hover, keyboard focus/activation, expansion/collapse,
+deepest output scrolling, Escape and session selection passed. Pixel inspection
+covered each distinct connection state, unchanged workload metrics and restored
+mobile results. Backend and renderer hashes remained unchanged. The artificial
+route-check warning and controlled persistence fixtures retain their earlier
+qualification limits. No model request was part of this proof.
+A read-only settings check confirms the cached `provider_refusal` still carries
+its original `2026-09-05T19:46:39Z` timestamp and `patrol_capable=false`.
+
+Private source bindings, logs, captured outputs, runtime process/health receipts
+and browser proof are at workspace-relative `tmp/patrol-command-context/`.
+The change still requires its scoped pre-commit and landing checks. The preceding
+PR #1935 head `4d302109cee0758a132ff150935630b50114cc05` has no reported failures
+but its Build and Test and Core E2E runs are pending behind live earlier runs
+on the same branch. Those workflows are not restarted or cancelled.
+
+This correction establishes the connection evidence contract, not reliable
+interpretation. Native configuration-read model use, storage-fault diagnosis,
+approved/rejected action outcomes and independent recovery remain open, as do
+the supported autonomous provider dependency and independent-environment gate.

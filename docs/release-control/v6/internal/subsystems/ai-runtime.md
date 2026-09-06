@@ -25,6 +25,22 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+Shared query projections name command transport explicitly through
+`command_agent_connected`, `node_command_agent_connected` and the corresponding
+topology counts. These observations do not establish monitoring freshness or
+installation state. A topology built without a connection snapshot omits command
+flags, execution hints and connected counts. An observed empty snapshot preserves
+false/zero. Assistant's inventory seed carries that same absence semantics.
+The parent node's connection cannot become a direct guest connection merely
+because provider placement names that node. Existing command routing, control,
+approval and invocation enforcement remain authoritative. A `can_execute` hint
+reflects connected transport with control enabled, not approval for an operation.
+`TestCommandConnectivityDoesNotReplaceMonitoringEvidence`,
+`TestTopologyOmitsUnobservedCommandConnections` and
+`TestAssistantInventoryDoesNotInventCommandConnectionObservations` cover these
+projection and continuity boundaries. Existing persisted tool records are not
+rewritten, and this contract does not qualify model diagnosis or recovery.
+
 Native app-container configuration reads resolve identity, provider and placement
 from current canonical inventory. Optional session discovery cannot fabricate a
 not-found result or replace current placement with a stale execution target.

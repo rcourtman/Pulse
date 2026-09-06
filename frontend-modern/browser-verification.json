@@ -1,14 +1,16 @@
 {
   "version": 1,
-  "base_sha": "0fcb2ee147354de770dfc4b0b9672d8c2c9dceb2",
-  "verified_at": "2026-09-06T12:13:06.548Z",
+  "base_sha": "4d302109cee0758a132ff150935630b50114cc05",
+  "verified_at": "2026-09-06T12:57:13.096Z",
   "result": "passed",
   "changed_paths": [],
   "content_sha256": {},
   "backend_content_sha256": {
-    "internal/ai/tools/tools_query.go": "e9411606cdf96dec84882d0649ee69fb935b36086f0b5682d98fe3ee184f6841"
+    "internal/ai/tools/data_types.go": "00200b1366ee4bf1e541e3acf6618f56993b05b05fa08122b91cd2db320969ec",
+    "internal/ai/tools/tools_query.go": "69bd79091bc8892043b900ca8475d1ee9d25c9613cf0ca86e36e41a0e468e2f8",
+    "internal/ai/chat/service.go": "7b4a7696eb0a3ca2a99427d98f991740ff362bfc0c738c36f45f80549d7c2744"
   },
-  "binary_sha256": "552699cdf2e61a4ca1cea2ac5ef4e065735cbd1dbca01665456e184bd4fc3533",
+  "binary_sha256": "bcaf748107211ee733a6dc0f4d17220d9b4d1ce1918c25bde27cf3d10c0d6379",
   "rendering_content_sha256": {
     "frontend-modern/src/components/AI/Chat/hooks/useChat.ts": "0b56b7a56e35d51ca96f0e126dd493b3164aa9e0ad4d8ae24bcf3af7a574b97c",
     "frontend-modern/src/components/AI/Chat/ChatMessages.tsx": "9672f7608d1e3a531c73cba20fd4a78752316783212afd0c292ddfd11d2bf371",
@@ -32,13 +34,13 @@
     }
   ],
   "states": [
-    "Actual configuration tool results captured from the final Go regression run: available config without session context, unsupported adapter, actual missing inventory resource, explicit query denial, nil provider response, provider failure, incomplete placement and unavailable inventory. This backend-only change preserves the tool error bit and exact known resource identity.",
-    "Eight captured results replayed through the current Assistant stream renderer and restored through controlled session responses after a full page reload. This is rendering and reload proof, not server persistence, native provider integration, model diagnosis or action qualification.",
-    "The local Pro backend was rebuilt on pulse-dev with Go1.26.8. Binary and source hashes matched before and after Playwright. Non-GET provider and infrastructure requests were blocked. The route warning in this controlled browser does not qualify provider readiness."
+    "Nine actual regression outputs: disconnected transport beside current workload metrics, connected transport under read-only control, distinct parent and guest connections, control-enabled transport, unqueried topology and an observed empty connection snapshot.",
+    "Each captured input and output is preserved by the Assistant stream renderer and restored through controlled session responses after reload. Unobserved fields remain absent and observed false/zero remains explicit. This is rendering proof, not native integration or model diagnosis.",
+    "Local Pro backend cross-built on pulse-dev with Go1.26.8. Source and binary hashes matched before and after Playwright. Browser interception blocks provider and infrastructure writes. Its selected-route warning does not qualify provider readiness."
   ],
   "interactions": [
-    "Tool details open/closed, hover, keyboard focus, Enter and Space, complete input/output comparison, deepest output scrolling and pixel inspection at desktop, intermediate and narrow widths. Successful reads show completed and unavailable or denied reads show failed.",
-    "Escape, full reload, session picker selection, reopening each restored result and exact output comparison with preserved success/error state. No model call or infrastructure action was attempted.",
-    "Private final-source evidence: /Volumes/Development/pulse/tmp/patrol-config-read-contract/browser, tool-evidence.json and runtime-binding.json."
+    "Tool details open/closed, hover, keyboard focus, Enter and Space, exact complete input/output comparison, deepest output scrolling and pixel inspection at desktop, intermediate and narrow widths.",
+    "Escape, full reload, session picker selection, reopening all nine restored tool records with exact output and completed-state assertions. Controlled session fixtures do not qualify server persistence.",
+    "Private evidence: /Volumes/Development/pulse/tmp/patrol-command-context/browser, tool-evidence.json, runtime-binding.json and final.log."
   ]
 }

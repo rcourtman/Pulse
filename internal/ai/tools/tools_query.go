@@ -2151,7 +2151,7 @@ func (e *PulseToolExecutor) registerQueryTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseQueryToolName,
-			Description: `Query and search canonical infrastructure resources. Start here to discover systems, workloads, storage, and disks by name. Actions: search, get, config, topology, list, health. Health returns the connection overview by default, or the canonical resource projection when resource_id is provided.`,
+			Description: `Query and search canonical infrastructure resources. Start here to discover systems, workloads, storage, and disks by name. Actions: search, get, config, topology, list, health. Health returns the connection overview by default, or the canonical resource projection when resource_id is provided. command_agent_connected describes live command transport, independently of monitoring collection or freshness. Missing connection fields were not observed. can_execute describes connected transport with control enabled, not approval for a particular operation.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -2463,17 +2463,35 @@ func resourceHostCandidates(resource unifiedresources.Resource) []string {
 	return candidates
 }
 
-func resourceAgentConnected(resource unifiedresources.Resource, connected map[string]bool) bool {
-	for _, candidate := range resourceHostCandidates(resource) {
-		key := strings.TrimSpace(candidate)
-		if key == "" {
-			continue
-		}
-		if connected[key] {
-			return true
+// commandConnectionObservation keeps an unqueried snapshot distinct from an
+// observed disconnected transport. It says nothing about telemetry freshness.
+func commandConnectionObservation(snapshot map[string]bool, value bool) *bool {
+	if snapshot == nil {
+		return nil
+	}
+	return &value
+}
+
+func resourceCommandAgentConnected(resource unifiedresources.Resource, connected map[string]bool) *bool {
+	// A guest's provider node/host identifies placement, not a command
+	// connection inside the guest. Parent transport is projected separately.
+	candidates := []string{resourceDisplayName(resource)}
+	candidates = append(candidates, resource.Identity.Hostnames...)
+	if resource.Agent != nil {
+		candidates = append(candidates, resource.Agent.Hostname)
+	}
+	switch resource.Type {
+	case unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeSystemContainer, unifiedresources.ResourceTypeAppContainer:
+		// Only the guest's own identity can establish its direct connection.
+	default:
+		candidates = append(candidates, resourceHostCandidates(resource)...)
+	}
+	for _, candidate := range candidates {
+		if key := strings.TrimSpace(candidate); key != "" && connected[key] {
+			return commandConnectionObservation(connected, true)
 		}
 	}
-	return false
+	return commandConnectionObservation(connected, false)
 }
 
 func appContainerProviderID(resource unifiedresources.Resource) string {
@@ -2972,16 +2990,16 @@ func addCanonicalGuestSearchMatches(
 		node := canonicalGuestTarget(resource)
 		metadataCandidates := append([]string{resourceDisplayName(resource), resource.ID}, candidates...)
 		addMatch(ResourceMatch{
-			GovernedResourceMetadata: governance.Resolve(metadataCandidates...),
-			Type:                     kind,
-			ID:                       resource.ID,
-			Name:                     resourceDisplayName(resource),
-			Status:                   status,
-			Node:                     node,
-			NodeHasAgent:             connectedAgentHostnames[node],
-			Platform:                 canonicalResourcePlatform(resource),
-			VMID:                     vmid,
-			AgentConnected:           resourceAgentConnected(resource, connectedAgentHostnames),
+			GovernedResourceMetadata:  governance.Resolve(metadataCandidates...),
+			Type:                      kind,
+			ID:                        resource.ID,
+			Name:                      resourceDisplayName(resource),
+			Status:                    status,
+			Node:                      node,
+			NodeCommandAgentConnected: commandConnectionObservation(connectedAgentHostnames, connectedAgentHostnames[node]),
+			Platform:                  canonicalResourcePlatform(resource),
+			VMID:                      vmid,
+			CommandAgentConnected:     resourceCommandAgentConnected(resource, connectedAgentHostnames),
 		})
 	}
 }
@@ -3012,16 +3030,16 @@ func addGuestViewSearchMatches[V queryGuestView](
 			continue
 		}
 		addMatch(ResourceMatch{
-			GovernedResourceMetadata: governance.Resolve(g.Name(), g.ID(), vmidStr),
-			Type:                     kind,
-			ID:                       g.ID(),
-			Name:                     g.Name(),
-			Status:                   status,
-			Node:                     g.Node(),
-			NodeHasAgent:             connectedAgentHostnames[g.Node()],
-			Platform:                 "proxmox",
-			VMID:                     g.VMID(),
-			AgentConnected:           connectedAgentHostnames[g.Name()],
+			GovernedResourceMetadata:  governance.Resolve(g.Name(), g.ID(), vmidStr),
+			Type:                      kind,
+			ID:                        g.ID(),
+			Name:                      g.Name(),
+			Status:                    status,
+			Node:                      g.Node(),
+			NodeCommandAgentConnected: commandConnectionObservation(connectedAgentHostnames, connectedAgentHostnames[g.Node()]),
+			Platform:                  "proxmox",
+			VMID:                      g.VMID(),
+			CommandAgentConnected:     commandConnectionObservation(connectedAgentHostnames, connectedAgentHostnames[g.Name()]),
 		})
 	}
 }
@@ -3469,15 +3487,15 @@ func resolvedAppContainerRegistration(resource unifiedresources.Resource) (Resou
 
 func canonicalSystemSummaryFromResource(resource unifiedresources.Resource, connected map[string]bool) SystemSummary {
 	return SystemSummary{
-		ID:             strings.TrimSpace(resource.ID),
-		Name:           resourceDisplayName(resource),
-		Status:         string(resource.Status),
-		Platform:       canonicalResourcePlatform(resource),
-		ChildCount:     resource.ChildCount,
-		AgentConnected: resourceAgentConnected(resource, connected),
-		CPU:            metricPercent(resourceMetric(resource, "cpu")),
-		Memory:         metricPercent(resourceMetric(resource, "memory")),
-		Disk:           metricPercent(resourceMetric(resource, "disk")),
+		ID:                    strings.TrimSpace(resource.ID),
+		Name:                  resourceDisplayName(resource),
+		Status:                string(resource.Status),
+		Platform:              canonicalResourcePlatform(resource),
+		ChildCount:            resource.ChildCount,
+		CommandAgentConnected: resourceCommandAgentConnected(resource, connected),
+		CPU:                   metricPercent(resourceMetric(resource, "cpu")),
+		Memory:                metricPercent(resourceMetric(resource, "memory")),
+		Disk:                  metricPercent(resourceMetric(resource, "disk")),
 	}
 }
 
@@ -3809,7 +3827,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				GovernedResourceMetadata: governance.Resolve(node.Name(), node.ID()),
 				Name:                     node.Name(),
 				Status:                   string(node.Status()),
-				AgentConnected:           connectedAgentHostnames[node.Name()],
+				CommandAgentConnected:    commandConnectionObservation(connectedAgentHostnames, connectedAgentHostnames[node.Name()]),
 			})
 			count++
 		}
@@ -3993,7 +4011,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				Hostname:                 hostname,
 				DisplayName:              displayName,
 				ContainerCount:           len(hostContainers),
-				AgentConnected:           connectedAgentHostnames[hostname] || connectedAgentHostnames[displayName],
+				CommandAgentConnected:    commandConnectionObservation(connectedAgentHostnames, connectedAgentHostnames[hostname] || connectedAgentHostnames[displayName]),
 			}
 			for _, container := range hostContainers {
 				state := strings.TrimSpace(container.ContainerState())
@@ -4248,7 +4266,7 @@ type TopologyBuildOptions struct {
 	MaxK8sNodesPerCluster       int
 	MaxK8sDeploymentsPerCluster int
 	MaxK8sPodsPerCluster        int
-	ConnectedAgentHostnames     map[string]bool
+	ConnectedAgentHostnames     map[string]bool // nil means command connections were not observed
 	ControlEnabled              bool
 }
 
@@ -4266,9 +4284,6 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 	includeDocker := include == "all" || include == "app-containers"
 	includeKubernetes := include == "all" || include == "kubernetes"
 	connectedAgentHostnames := options.ConnectedAgentHostnames
-	if connectedAgentHostnames == nil {
-		connectedAgentHostnames = map[string]bool{}
-	}
 	governance := newGovernedQueryMetadataResolver(rs)
 
 	summary := TopologySummary{
@@ -4283,12 +4298,17 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 		TotalK8sPods:          len(rs.Pods()),
 	}
 
+	if connectedAgentHostnames != nil {
+		summary.NodesWithCommandAgents = new(int)
+		summary.DockerHostsWithCommandAgents = new(int)
+	}
+
 	for _, node := range rs.Nodes() {
 		if node == nil {
 			continue
 		}
 		if connectedAgentHostnames[node.Name()] {
-			summary.NodesWithAgents++
+			(*summary.NodesWithCommandAgents)++
 		}
 	}
 	for _, host := range rs.DockerHosts() {
@@ -4298,7 +4318,7 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 		hostname := strings.TrimSpace(host.Hostname())
 		displayName := strings.TrimSpace(host.Name())
 		if connectedAgentHostnames[hostname] || connectedAgentHostnames[displayName] {
-			summary.DockerHostsWithAgents++
+			(*summary.DockerHostsWithCommandAgents)++
 		}
 	}
 	for _, pod := range rs.Pods() {
@@ -4325,8 +4345,8 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 				GovernedResourceMetadata: governance.Resolve(node.Name(), node.ID()),
 				Name:                     name,
 				Status:                   string(node.Status()),
-				AgentConnected:           hasAgent,
-				CanExecute:               hasAgent && options.ControlEnabled,
+				CommandAgentConnected:    commandConnectionObservation(connectedAgentHostnames, hasAgent),
+				CanExecute:               commandConnectionObservation(connectedAgentHostnames, hasAgent && options.ControlEnabled),
 				VMs:                      []TopologyVM{},
 				Containers:               []TopologyContainer{},
 			}
@@ -4348,8 +4368,8 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 			GovernedResourceMetadata: governance.Resolve(name),
 			Name:                     name,
 			Status:                   status,
-			AgentConnected:           hasAgent,
-			CanExecute:               hasAgent && options.ControlEnabled,
+			CommandAgentConnected:    commandConnectionObservation(connectedAgentHostnames, hasAgent),
+			CanExecute:               commandConnectionObservation(connectedAgentHostnames, hasAgent && options.ControlEnabled),
 			VMs:                      []TopologyVM{},
 			Containers:               []TopologyContainer{},
 		}
@@ -4489,8 +4509,8 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 				GovernedResourceMetadata: governance.Resolve(host.Hostname(), host.Name(), host.HostSourceID(), host.ID()),
 				Hostname:                 hostname,
 				DisplayName:              displayName,
-				AgentConnected:           hasAgent,
-				CanExecute:               hasAgent && options.ControlEnabled,
+				CommandAgentConnected:    commandConnectionObservation(connectedAgentHostnames, hasAgent),
+				CanExecute:               commandConnectionObservation(connectedAgentHostnames, hasAgent && options.ControlEnabled),
 				Containers:               containers,
 				ContainerCount:           len(hostContainers),
 				ReturnedCount:            len(containers),
@@ -5721,7 +5741,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 				Status:                   status,
 				Host:                     canonicalAgentHost(resource),
 				Platform:                 canonicalResourcePlatform(resource),
-				AgentConnected:           resourceAgentConnected(resource, connectedAgentHostnames),
+				CommandAgentConnected:    resourceCommandAgentConnected(resource, connectedAgentHostnames),
 			})
 		}
 	}
@@ -5740,7 +5760,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 				Type:                     "node",
 				Name:                     node.Name(),
 				Status:                   status,
-				AgentConnected:           connectedAgentHostnames[node.Name()],
+				CommandAgentConnected:    commandConnectionObservation(connectedAgentHostnames, connectedAgentHostnames[node.Name()]),
 			})
 		}
 	}

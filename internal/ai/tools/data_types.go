@@ -238,40 +238,40 @@ func (r ResourceSearchResponse) NormalizeCollections() ResourceSearchResponse {
 // ResourceMatch is a compact match result for pulse_search_resources
 type ResourceMatch struct {
 	GovernedResourceMetadata
-	Type           string `json:"type"` // "agent", "node", "vm", "system-container", "app-container", "docker-host", "storage"
-	ID             string `json:"id,omitempty"`
-	Name           string `json:"name"`
-	Status         string `json:"status,omitempty"`
-	Node           string `json:"node,omitempty"`           // Hypervisor node this resource is on
-	NodeHasAgent   bool   `json:"node_has_agent,omitempty"` // True if the node has a connected agent
-	Host           string `json:"host,omitempty"`           // Docker host for docker containers
-	Platform       string `json:"platform,omitempty"`
-	VMID           int    `json:"vmid,omitempty"`
-	Image          string `json:"image,omitempty"`
-	AgentConnected bool   `json:"agent_connected,omitempty"` // True if this specific resource has a connected agent
+	Type                      string `json:"type"` // "agent", "node", "vm", "system-container", "app-container", "docker-host", "storage"
+	ID                        string `json:"id,omitempty"`
+	Name                      string `json:"name"`
+	Status                    string `json:"status,omitempty"`
+	Node                      string `json:"node,omitempty"`                         // Hypervisor node this resource is on
+	NodeCommandAgentConnected *bool  `json:"node_command_agent_connected,omitempty"` // Live command connection on the parent node, independent of telemetry collection
+	Host                      string `json:"host,omitempty"`                         // Docker host for docker containers
+	Platform                  string `json:"platform,omitempty"`
+	VMID                      int    `json:"vmid,omitempty"`
+	Image                     string `json:"image,omitempty"`
+	CommandAgentConnected     *bool  `json:"command_agent_connected,omitempty"` // Live command connection for this resource, independent of telemetry collection
 }
 
 // SystemSummary is a summarized infrastructure system for list responses.
 type SystemSummary struct {
 	GovernedResourceMetadata
-	ID             string  `json:"id"`
-	Name           string  `json:"name"`
-	Status         string  `json:"status"`
-	Platform       string  `json:"platform,omitempty"`
-	ChildCount     int     `json:"child_count,omitempty"`
-	AgentConnected bool    `json:"agent_connected,omitempty"`
-	CPU            float64 `json:"cpu_percent,omitempty"`
-	Memory         float64 `json:"memory_percent,omitempty"`
-	Disk           float64 `json:"disk_percent,omitempty"`
+	ID                    string  `json:"id"`
+	Name                  string  `json:"name"`
+	Status                string  `json:"status"`
+	Platform              string  `json:"platform,omitempty"`
+	ChildCount            int     `json:"child_count,omitempty"`
+	CommandAgentConnected *bool   `json:"command_agent_connected,omitempty"`
+	CPU                   float64 `json:"cpu_percent,omitempty"`
+	Memory                float64 `json:"memory_percent,omitempty"`
+	Disk                  float64 `json:"disk_percent,omitempty"`
 }
 
 // NodeSummary is a summarized node for list responses
 type NodeSummary struct {
 	GovernedResourceMetadata
-	Name           string `json:"name"`
-	Status         string `json:"status"`
-	ID             string `json:"id,omitempty"`
-	AgentConnected bool   `json:"agent_connected"` // True if an execution agent is connected for this node
+	Name                  string `json:"name"`
+	Status                string `json:"status"`
+	ID                    string `json:"id,omitempty"`
+	CommandAgentConnected *bool  `json:"command_agent_connected,omitempty"` // True if an execution agent is connected for this node
 }
 
 // VMSummary is a summarized VM for list responses
@@ -299,12 +299,12 @@ type ContainerSummary struct {
 // DockerHostSummary is a summarized Docker host for list responses
 type DockerHostSummary struct {
 	GovernedResourceMetadata
-	ID             string                   `json:"id"`
-	Hostname       string                   `json:"hostname"`
-	DisplayName    string                   `json:"display_name,omitempty"`
-	ContainerCount int                      `json:"container_count"`
-	AgentConnected bool                     `json:"agent_connected"` // True if an execution agent is connected for this host
-	Containers     []DockerContainerSummary `json:"containers"`
+	ID                    string                   `json:"id"`
+	Hostname              string                   `json:"hostname"`
+	DisplayName           string                   `json:"display_name,omitempty"`
+	ContainerCount        int                      `json:"container_count"`
+	CommandAgentConnected *bool                    `json:"command_agent_connected,omitempty"` // True if an execution agent is connected for this host
+	Containers            []DockerContainerSummary `json:"containers"`
 }
 
 func (s DockerHostSummary) NormalizeCollections() DockerHostSummary {
@@ -454,15 +454,15 @@ func (t ProxmoxTopology) NormalizeCollections() ProxmoxTopology {
 // ProxmoxNodeTopology represents a Proxmox node with its guests
 type ProxmoxNodeTopology struct {
 	GovernedResourceMetadata
-	Name           string              `json:"name"`
-	ID             string              `json:"id,omitempty"`
-	Status         string              `json:"status"`
-	AgentConnected bool                `json:"agent_connected"`
-	CanExecute     bool                `json:"can_execute"` // True if commands can be executed on this node
-	VMs            []TopologyVM        `json:"vms"`
-	Containers     []TopologyContainer `json:"containers"`
-	VMCount        int                 `json:"vm_count"`
-	ContainerCount int                 `json:"container_count"`
+	Name                  string              `json:"name"`
+	ID                    string              `json:"id,omitempty"`
+	Status                string              `json:"status"`
+	CommandAgentConnected *bool               `json:"command_agent_connected,omitempty"`
+	CanExecute            *bool               `json:"can_execute,omitempty"` // True if commands can be executed on this node
+	VMs                   []TopologyVM        `json:"vms"`
+	Containers            []TopologyContainer `json:"containers"`
+	VMCount               int                 `json:"vm_count"`
+	ContainerCount        int                 `json:"container_count"`
 }
 
 func (t ProxmoxNodeTopology) NormalizeCollections() ProxmoxNodeTopology {
@@ -538,15 +538,15 @@ func (t DockerTopology) NormalizeCollections() DockerTopology {
 // DockerHostTopology represents a Docker host with its containers
 type DockerHostTopology struct {
 	GovernedResourceMetadata
-	Hostname       string                   `json:"hostname"`
-	DisplayName    string                   `json:"display_name,omitempty"`
-	AgentConnected bool                     `json:"agent_connected"`
-	CanExecute     bool                     `json:"can_execute"` // True if commands can be executed on this host
-	Containers     []DockerContainerSummary `json:"containers"`
-	ContainerCount int                      `json:"container_count"`
-	ReturnedCount  int                      `json:"returned_container_count"`
-	Truncated      bool                     `json:"containers_truncated"`
-	RunningCount   int                      `json:"running_count"`
+	Hostname              string                   `json:"hostname"`
+	DisplayName           string                   `json:"display_name,omitempty"`
+	CommandAgentConnected *bool                    `json:"command_agent_connected,omitempty"`
+	CanExecute            *bool                    `json:"can_execute,omitempty"` // True if commands can be executed on this host
+	Containers            []DockerContainerSummary `json:"containers"`
+	ContainerCount        int                      `json:"container_count"`
+	ReturnedCount         int                      `json:"returned_container_count"`
+	Truncated             bool                     `json:"containers_truncated"`
+	RunningCount          int                      `json:"running_count"`
 }
 
 func (t DockerHostTopology) NormalizeCollections() DockerHostTopology {
@@ -642,21 +642,21 @@ type KubernetesPodDetail struct {
 
 // TopologySummary provides aggregate counts and status
 type TopologySummary struct {
-	TotalNodes            int `json:"total_nodes"`
-	TotalVMs              int `json:"total_vms"`
-	TotalSystemContainers int `json:"total_system_containers"`
-	TotalDockerHosts      int `json:"total_docker_hosts"`
-	TotalDockerContainers int `json:"total_docker_containers"`
-	TotalK8sClusters      int `json:"total_k8s_clusters"`
-	TotalK8sNodes         int `json:"total_k8s_nodes"`
-	TotalK8sDeployments   int `json:"total_k8s_deployments"`
-	TotalK8sPods          int `json:"total_k8s_pods"`
-	NodesWithAgents       int `json:"nodes_with_agents"`
-	DockerHostsWithAgents int `json:"docker_hosts_with_agents"`
-	RunningVMs            int `json:"running_vms"`
-	RunningContainers     int `json:"running_containers"`
-	RunningDocker         int `json:"running_docker"`
-	RunningK8sPods        int `json:"running_k8s_pods"`
+	TotalNodes                   int  `json:"total_nodes"`
+	TotalVMs                     int  `json:"total_vms"`
+	TotalSystemContainers        int  `json:"total_system_containers"`
+	TotalDockerHosts             int  `json:"total_docker_hosts"`
+	TotalDockerContainers        int  `json:"total_docker_containers"`
+	TotalK8sClusters             int  `json:"total_k8s_clusters"`
+	TotalK8sNodes                int  `json:"total_k8s_nodes"`
+	TotalK8sDeployments          int  `json:"total_k8s_deployments"`
+	TotalK8sPods                 int  `json:"total_k8s_pods"`
+	NodesWithCommandAgents       *int `json:"nodes_with_command_agents,omitempty"`
+	DockerHostsWithCommandAgents *int `json:"docker_hosts_with_command_agents,omitempty"`
+	RunningVMs                   int  `json:"running_vms"`
+	RunningContainers            int  `json:"running_containers"`
+	RunningDocker                int  `json:"running_docker"`
+	RunningK8sPods               int  `json:"running_k8s_pods"`
 }
 
 // ResourceResponse is returned by pulse_get_resource
