@@ -15,6 +15,20 @@
 
 ## Purpose
 
+### Benchmark qualification evidence
+
+The Build and Test benchmark job retains `bench-metadata.txt` together with
+baseline timings, candidate timings and their comparison even when the gate
+fails. Metadata identifies each checkout's committed HEAD/tree, selected Go
+version, platform, sample settings and paired execution order. A nested source
+archive must not inherit its enclosing checkout's identity. These identities
+are not clean-worktree or binary attestations; a PR checkout may be a synthetic
+merge. Diagnostic provenance does not replace the existing regression gate,
+frontend dependency audits or exact-candidate qualification. The workflow
+wiring is checked by `TestBenchmarkQualificationRetainsProvenance` in
+`scripts/installtests/build_release_assets_test.go`; executed collection cases
+remain in `scripts/tests/test-ci-benchmarks.sh`.
+
 ### Portable installer lifecycle ownership
 
 The shared shell installer lifecycle directory (outside the least-privilege

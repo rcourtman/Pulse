@@ -2630,3 +2630,13 @@ incident identity and resolved history, plus bounded no-extra-receipt windows.
 Manager recreation is not an installed process restart, and loopback receipts
 are not independent provider/device delivery evidence. Those qualification
 requirements and exact-candidate soak remain outstanding.
+
+### Release-line overview recovery regression (6 September 2026)
+
+Backport of main `d04f368f6f`: when delivery health is unavailable, Overview
+exposes its existing read-only refresh action. The summary treatment introduced
+by `4d2b312457` hid that action after Retry or Dismiss succeeded but the health
+read failed; it is present in RC1 and absent from stable v6.4.1. Healthy and
+known-degraded summaries remain concise. Tests cover cancellation, action
+failure, pending refresh, and recovery without repeating a queue mutation.
+Scripted component/browser evidence is not installed notification receipt.

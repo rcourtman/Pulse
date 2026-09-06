@@ -36,6 +36,14 @@ Feature-owned warning cards, including notification delivery health, compose
 the shared `Button` variants for retry, dismiss, refresh, loading, and disabled
 states. Feature code owns the action copy and confirmation consequences, but
 must not recreate local button chrome for those controls.
+The Overview notification summary must retain the existing read-only refresh
+control when delivery health is unavailable, including after Retry or Dismiss
+succeeds but its follow-up health read fails. Refresh must use the shared button
+loading/disabled state and re-read health without repeating the queue mutation.
+Known healthy or degraded summaries may omit this control; unavailable status
+must remain visible until a successful health read replaces it. Regression
+coverage belongs in OverviewTab.deliveryactions.test.tsx and the isolated
+check-overview-health-refresh.mjs browser fixture (desktop and narrow layouts).
 Feature panels embedded in a shared `Dialog` or drawer must not duplicate the
 overlay's accessible heading. A reusable panel may suppress its standalone
 title when the owning overlay supplies the canonical title, while preserving
