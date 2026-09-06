@@ -363,6 +363,7 @@ type Host struct {
 	DiskWriteRate float64 `json:"diskWriteRate,omitempty"`
 
 	// Linking: When this host agent is running on a known PVE node/VM/container
+	NodeLinkSource    string `json:"-"`                           // manual, unlinked, automatic; empty means legacy/unknown
 	LinkedNodeID      string `json:"linkedNodeId,omitempty"`      // ID of the PVE node this agent is running on
 	LinkedVMID        string `json:"linkedVmId,omitempty"`        // ID of the VM this agent is running inside
 	LinkedContainerID string `json:"linkedContainerId,omitempty"` // ID of the container this agent is running inside
@@ -3859,6 +3860,21 @@ func preferNodeForMerge(existing Node, candidate Node) Node {
 }
 
 func reconcileHostNodeLinksLocked(hosts []Host, nodes []Node) {
+	// Explicit operator intent is pinned to the selected provider ID, never
+	// transferred by hostname to a replacement provider identity.
+	for _, host := range hosts {
+		if host.NodeLinkSource != "manual" && host.NodeLinkSource != "unlinked" {
+			continue
+		}
+		for i := range nodes {
+			if nodes[i].LinkedAgentID == host.ID {
+				nodes[i].LinkedAgentID = ""
+			}
+			if host.NodeLinkSource == "manual" && nodes[i].ID == host.LinkedNodeID {
+				nodes[i].LinkedAgentID = host.ID
+			}
+		}
+	}
 	linkedNodeByHostID := make(map[string]string)
 	multipleNodeLinksByHostID := make(map[string]struct{})
 	for _, node := range nodes {
@@ -3880,6 +3896,9 @@ func reconcileHostNodeLinksLocked(hosts []Host, nodes []Node) {
 			continue
 		}
 
+		if hosts[i].NodeLinkSource == "manual" || hosts[i].NodeLinkSource == "unlinked" {
+			continue
+		}
 		nodeID, hasLinkedNode := linkedNodeByHostID[hostID]
 		_, ambiguous := multipleNodeLinksByHostID[hostID]
 		switch {
@@ -5315,6 +5334,13 @@ func (s *State) UpsertHost(host Host) {
 	defer s.mu.Unlock()
 
 	host = cloneHost(host)
+	for i, node := range s.Nodes {
+		// Legacy one-way links have unknown intent; an unmarked host update
+		// cannot authorise their removal (SMART fallback also uses these links).
+		if host.NodeLinkSource != "" && host.ID != "" && node.LinkedAgentID == host.ID && node.ID != host.LinkedNodeID {
+			s.Nodes[i].LinkedAgentID = ""
+		}
+	}
 
 	updated := false
 	for i, existing := range s.Hosts {
@@ -6076,4 +6102,40 @@ func (s *State) UpdatePollStats(pollDuration float64, uptime int64, wsClients in
 	s.Stats.PollingCycles++
 	s.Stats.Uptime = uptime
 	s.Stats.WebSocketClients = wsClients
+}
+
+// SetHostNodeLinkIntent commits operator intent only after durable storage
+// accepts the complete set of changed hosts. persist must not call State.
+func (s *State) SetHostNodeLinkIntent(hostID, nodeID string, persist func([]Host) error) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next := &State{Hosts: cloneHosts(s.Hosts), Nodes: append([]Node(nil), s.Nodes...)}
+	if nodeID != "" {
+		if err := next.LinkHostAgentToNode(hostID, nodeID); err != nil {
+			return err
+		}
+	} else if !next.UnlinkHostAgent(hostID) {
+		return fmt.Errorf("host not found or not linked to a node")
+	}
+	var changed []Host
+	for i := range next.Hosts {
+		h := &next.Hosts[i]
+		if h.ID == hostID {
+			h.NodeLinkSource = "manual"
+			if nodeID == "" {
+				h.NodeLinkSource = "unlinked"
+			}
+			changed = append(changed, *h)
+		} else if h.LinkedNodeID != s.Hosts[i].LinkedNodeID {
+			h.NodeLinkSource = "unlinked"
+			changed = append(changed, *h)
+		}
+	}
+	if persist != nil {
+		if err := persist(changed); err != nil {
+			return err
+		}
+	}
+	s.Hosts, s.Nodes, s.LastUpdate = next.Hosts, next.Nodes, next.LastUpdate
+	return nil
 }
