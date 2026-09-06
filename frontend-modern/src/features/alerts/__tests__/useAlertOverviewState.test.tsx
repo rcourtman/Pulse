@@ -85,6 +85,61 @@ describe('useAlertOverviewState', () => {
     expect(result.deliveryDiagnoses()).toEqual({});
   });
 
+  it('does not accept an older success when a newer periodic refresh fails', async () => {
+    let finishOlder!: (value: AlertDeliveryDiagnosis[]) => void;
+    const retained = {
+      alertIdentifier: 'a1',
+      reason: 'notifications_disabled',
+    } as AlertDeliveryDiagnosis;
+    vi.mocked(AlertsAPI.getDeliveryDiagnoses)
+      .mockResolvedValueOnce([retained])
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishOlder = resolve;
+        }),
+      )
+      .mockRejectedValueOnce(new Error('refresh unavailable'));
+    const { result } = renderHook(() =>
+      useAlertOverviewState({
+        activeAlerts: () => ({ a1: makeAlert('a1', new Date().toISOString()) }),
+        overrides: () => [],
+        showAcknowledged: () => true,
+        updateAlert: vi.fn(),
+      }),
+    );
+    await Promise.resolve();
+    expect(result.deliveryDiagnoses()).toEqual({ a1: retained });
+    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(AlertsAPI.getDeliveryDiagnoses).toHaveBeenCalledTimes(3);
+    finishOlder([{ alertIdentifier: 'a1', reason: 'ready' } as AlertDeliveryDiagnosis]);
+    await Promise.resolve();
+    expect(result.deliveryDiagnoses()).toEqual({ a1: retained });
+  });
+
+  it('ignores pending responses and stops periodic reads after disposal', async () => {
+    let finish!: (value: AlertDeliveryDiagnosis[]) => void;
+    vi.mocked(AlertsAPI.getDeliveryDiagnoses).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const { result, cleanup } = renderHook(() =>
+      useAlertOverviewState({
+        activeAlerts: () => ({ a1: makeAlert('a1', new Date().toISOString()) }),
+        overrides: () => [],
+        showAcknowledged: () => true,
+        updateAlert: vi.fn(),
+      }),
+    );
+    cleanup();
+    finish([{ alertIdentifier: 'a1', reason: 'ready' } as AlertDeliveryDiagnosis]);
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(result.deliveryDiagnoses()).toEqual({});
+    expect(AlertsAPI.getDeliveryDiagnoses).toHaveBeenCalledOnce();
+  });
+
   it('owns overview stats, filtering, and acknowledge flows outside the tab shell', async () => {
     const now = Date.now();
     const [activeAlerts] = createSignal<Record<string, Alert>>({
