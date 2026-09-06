@@ -328,3 +328,47 @@ func TestProjectNotificationDeliveryHealthRespectsActivation(t *testing.T) {
 		})
 	}
 }
+
+// Changing activation must suppress new dispatches without losing the standing
+// warning, and must not suppress a fresh incident after delivery is re-enabled.
+func TestProjectNotificationDeliveryHealthActivationTransitions(t *testing.T) {
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	manager.SetAlertCallback(func(*alerts.Alert) {})
+	m := &Monitor{}
+	project := func(counts map[string]int) []alerts.Alert {
+		health := notifications.ClassifyQueueHealth(counts)
+		m.projectNotificationDeliveryHealth(manager, func() notifications.DeliveryHealth { return health })
+		return manager.GetActiveAlerts()
+	}
+	activate := func(state alerts.ActivationState) {
+		config := manager.GetConfig()
+		config.ActivationState = state
+		manager.UpdateConfig(config)
+	}
+
+	activate(alerts.ActivationActive)
+	first := project(map[string]int{string(notifications.QueueStatusFailed): 1})
+	if len(first) != 1 || first[0].LastNotified == nil {
+		t.Fatal("initial active failure was not dispatched")
+	}
+	activate(alerts.ActivationSnoozed)
+	changed := project(map[string]int{string(notifications.QueueStatusDLQ): 2})
+	if len(changed) != 1 || changed[0].LastNotified == nil || !changed[0].LastNotified.Equal(*first[0].LastNotified) {
+		t.Fatal("snoozed diagnosis change hid the warning or dispatched it again")
+	}
+	if !changed[0].StartTime.Equal(first[0].StartTime) || changed[0].Metadata["deadLetterCount"] != 2 {
+		t.Fatal("snoozed diagnosis did not refresh the standing incident")
+	}
+	if active := project(nil); len(active) != 0 {
+		t.Fatal("recovery while snoozed left the warning active")
+	}
+	activate(alerts.ActivationActive)
+	recurred := project(map[string]int{string(notifications.QueueStatusDLQ): 2})
+	if len(recurred) != 1 || recurred[0].LastNotified == nil || !recurred[0].LastNotified.After(*first[0].LastNotified) {
+		t.Fatal("re-enabled delivery did not dispatch the recurring failure")
+	}
+	if !recurred[0].StartTime.After(first[0].StartTime) {
+		t.Fatal("recurrence reused the previous incident")
+	}
+}
