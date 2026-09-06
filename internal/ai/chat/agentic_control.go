@@ -84,8 +84,8 @@ func (a *AgenticLoop) SetAutonomousMode(enabled bool) {
 }
 
 // SetExecutionProfile applies the core-owned execution profile for this
-// loop. The profile owns non-interactive behavior (question handling,
-// tool-only-turn wrap-up) and the prompt's execution-mode description;
+// loop. The profile owns non-interactive question handling, provider
+// stream allowance, and the prompt's execution-mode description;
 // it is deliberately separate from autonomous mode, which only affects
 // approval waiting and grants no mutation authority.
 func (a *AgenticLoop) SetExecutionProfile(profile tools.ExecutionProfile) {

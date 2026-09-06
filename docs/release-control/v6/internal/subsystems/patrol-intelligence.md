@@ -2539,7 +2539,14 @@ transitions`. `FindingsPanel.tsx` shows the same label on findings and demotes
 active findings that mirror an active alert (`isAlertMirroredFinding` in
 `frontend-modern/src/utils/findingAlertIdentity.ts`) into a collapsed `N
 findings mirror an active alert` group below the list, where their finding
-options remain available; dismissed and resolved views keep them in place.
+options and investigation review remain available; dismissed and resolved views
+keep them in place. Review selection resolves the canonical filtered findings,
+including mirrors, independently of visual grouping. A completed investigation
+with an uncertain diagnosis remains unresolved and keeps failed access evidence
+visible in its transcript and the linked Assistant context. The rendered
+selection regression lives in `FindingsPanel.links.test.tsx`; the desktop,
+intermediate and narrow linked journey is exercised by
+`scripts/check-patrol-assistant-journey.mjs`.
 `PatrolAttentionWorkbench.test.tsx` pins the four decisions and their copy, the
 rule reason requirement, the remembered-decision path, the alert-only
 guidance, and the flapping collapse.

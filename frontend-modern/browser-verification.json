@@ -1,16 +1,17 @@
 {
   "version": 1,
-  "base_sha": "3a189f31d44789a642b68a915d3d4a683ab81104",
-  "verified_at": "2026-09-06T00:41:42.025224Z",
+  "base_sha": "c5d2f56dda42946ebafe09266c8e2e52319ba24b",
+  "verified_at": "2026-09-06T01:21:13.188Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/AI/aiChatUtils.ts"
+    "frontend-modern/src/components/AI/FindingsPanel.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/AI/aiChatUtils.ts": "c65a0f95d3e32da3e8f590de1d40067b5568e5d7d5573652024541e8f8709fb8"
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "aead071f9431e5c2284014cd8e4af8fc5cde69951f3f850821808dcf885c5226"
   },
   "routes": [
-    "/patrol"
+    "/patrol",
+    "/alerts"
   ],
   "viewports": [
     {
@@ -27,13 +28,12 @@
     }
   ],
   "states": [
-    "Assistant persisted real retained-performance answer with a six-column table. Browser-only short-table and streaming-table fixtures use the current shared renderer and DOM morph implementation.",
-    "Wide table overflow belongs to its focusable region. Conversation and surrounding prose do not scroll horizontally. All columns remain reachable.",
-    "Saved subscription provider refusal remains visible. No provider probe, model request or infrastructure mutation was made for this rendering verification."
+    "Ordinary and alert-mirrored findings retain the same review selection. Completed investigation remains Needs attention with unknown cause and failed access evidence.",
+    "Original failed read and uncertain conclusion remain visible in the nested investigation transcript and linked Assistant request. Scripted responses establish presentation and context preservation, not diagnostic competence."
   ],
   "interactions": [
-    "Open Assistant, select retained session, keyboard-focus table, ArrowRight scrolling, scroll to last column, vertical message scrolling, inspect start/end pixels at desktop and narrow widths.",
-    "Append a table row through the current renderer and DOM morph. Verify region identity, keyboard focus and horizontal scroll position are preserved. Inspect short and streaming table pixels at 1440, 900 and 390 widths.",
-    "Escape, reload, reopen Assistant and retained session. Private proof: tmp/patrol-outcome-telemetry/homelab/markdown-table-final. This is renderer qualification, not a passing diagnostic outcome."
+    "Activity, Finding options and history, mirrored disclosure, keyboard Review, investigation thread expansion/collapse, review close at 1440/900/390 widths. Inspect final pixels for readable content and reachable controls.",
+    "Inbox selected issue, evidence expansion, keyboard Explain, same canonical finding with failed-read evidence and uncertainty in Assistant handoff, Escape, draft preservation, reload without resubmission.",
+    "Existing adjacent alert menu Escape/outside dismissal and provider failure/retry checked. No infrastructure mutations or autonomous provider calls. Private source-bound proof: tmp/patrol-assistant-journey/result.json."
   ]
 }

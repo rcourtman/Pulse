@@ -63,7 +63,7 @@ reproduction evidence, not a representative customer success rate.
 |---|---|---|---|
 | 1. Product contract and baseline | Map the current loop and sources of judgment. Record telemetry populations and gaps. | Every identified decision has an owner. Activity is not labelled usefulness. | Complete for this redesign scope. Contract, ownership decisions and baseline limits are recorded. |
 | 2. Shared evidence | Preserve canonical risk reasons and SMART counters, source/time semantics and history across tools/turns. | Regression tests preserve unknown versus zero and all canonical evidence. Real responses can inspect the same facts as the product. | Implemented and qualified for the named shared-evidence defects. Canonical disk detail, risk and cadence pass real data-path proof. Full affected package, concurrency and retained-query performance checks pass. Real-model interpretation failures remain tracked in step 5. |
-| 3. Diagnostic orchestration | Correct proposal-as-proof. Audit triage budgets, unmatched-signal evaluation, assessment completion and investigation cutoffs. | No code-written causal conclusion. No quality inferred from tool, flag or finding counts. Each retained pass has an objective reason. Safety boundaries and incomplete outcomes remain explicit. | Proposal promotion and capture inference removed in the working change. Targeted tool, loop and full-service regressions pass. Remaining orchestration audit and live qualification are open. |
+| 3. Diagnostic orchestration | Correct proposal-as-proof. Audit triage budgets, unmatched-signal evaluation, assessment completion and investigation cutoffs. | No code-written causal conclusion. No quality inferred from tool, flag or finding counts. Each retained pass has an objective reason. Safety boundaries and incomplete outcomes remain explicit. | Proposal promotion and capture inference were removed in c5d2f56dda. The current slice removes investigation success-call floors, checkpoint instructions and generic call-count wrap-up rules. Full chat regressions pass. Detection passes and live qualification remain open. |
 | 4. Issue through verified outcome | Follow existing issue/investigation/action records into Assistant, approval, execution and independent readback. | Accepted proposal is visibly distinct from execution and verification. Rejected or unsupported actions do not become success. Uncertainty can survive an action proposal. | Existing foundation, full journey qualification pending. |
 | 5. Ground-truth qualification and landing | Extend existing qualification tooling only where necessary. Exercise healthy/unhealthy, dependency, missing-access, storage/backup and approved/rejected action cases. Inspect the final browser journey at desktop and narrow widths. | Record exact source/model/permissions, evidence, decisions, faults/misses, latency and verification. Fix in-scope failures, pass appropriate proofs and land scoped commits. | Pending. |
 
@@ -82,7 +82,8 @@ scoring to make the model pass.
 | Flag-count turn ladder | `computeTriageMaxTurns` grants 5 + 3 turns per flag, bounded to 8–40, with a separate quick limit. | Replace quality/urgency proxies with explicit execution resource limits. More flags must not imply a better investigation budget. |
 | Unmatched-signal evaluation | `runAIAnalysisState` detects signals from tool output and triage, then starts a second model pass when they lack matching findings. | Audit for removal in favour of complete initial evidence and model-owned decisions. Preserve negative-control and missed-fault qualification rather than force reports. |
 | Missing-finding assessment sweep | A bounded continuation requests missing explicit present/resolved/uncertain verdicts for known findings. | Retain only the mechanical completeness obligation, with sufficient original evidence and no fabricated resolution or requirement to discover new issues. |
-| Investigation evidence-call floor | Completion is rejected unless at least one successful structured evidence call occurred. | Audit seed evidence and action freshness separately. A tool count does not prove grounding or quality. Preserve explicit failed/unavailable evidence. |
+| Investigation evidence-call floor | Removed in the current slice. Seed-only and failed-read conclusions survive without forced extra calls. | Completion is not diagnostic correctness. Preserve explicit limits, failed/unavailable evidence and independent action freshness checks. |
+| Generic wrap-up counters | Removed the 12/18-call tool-result instructions and four silent-turn cutoff. | Explicit run limits bound work. Counts and silence do not establish evidential sufficiency. A twenty-read regression preserves available tools, observations and the model conclusion. |
 | Authority and execution boundaries | Tenant identity, capability schemas, approvals, invocation IDs, parameter redaction and independent readback. | Keep and prove unchanged when diagnostic policy is simplified. These enforce objective invariants. |
 
 This is an audited change list, not a claim that the changes are already made.
@@ -138,6 +139,7 @@ executes infrastructure actions. Authentication stays in browser memory.
 |---|---|
 | `/patrol`, 1440, 900 and 390 pixels wide | Start review, expand evidence, focus and activate Explain with Enter, inspect issue title and response, verify selected evidence/resource and one request |
 | Assistant drawer | Draft preserved across close/reopen, no inference on ordinary open, no competing workflow starters, normal failed-request display and retry, reload without resubmission |
+| `/patrol` Activity, 1440, 900 and 390 pixels wide | Ordinary and mirrored-alert findings, keyboard review, completed-but-unresolved investigation, failed read and nested transcript, collapse, same linked finding and uncertainty in Assistant |
 | `/alerts`, desktop and narrow | Open secondary action menu, dismiss with Escape and outside click, reopen, choose explanation, verify selected alert context and no Patrol trigger |
 | Initialization regression tests | Newer context cannot be cleared by an earlier send, rejected send retains context, preparation failure reports error, organisation switch cancels old evidence |
 
@@ -713,3 +715,34 @@ Subsequent full and focused race runs passed, including the final implementation
 The original fault has no established root cause and is not labelled harmless
 or explained by the successful reruns. Its private worker log is
 `paired-metrics-local-20260905T235637/full-metrics-final.log`.
+
+### Diagnostic orchestration slice, 2026-09-06
+
+The investigation loop no longer rejects a conclusion for having no successful
+read or forces extra tool calls when seed context or unavailable access supports
+an honest unknown conclusion. Evidence attempts still consume the configured
+limit, which remains visible as a system fact. Removed completion checkpoints
+and the Assistant/Watch 12/18-call wrap-up instructions from tool results, along
+with the four silent-tool-turn cutoff. Overall turns, advertised capability
+boundaries, configured budgets and repeated-call/error recovery remain bounded.
+
+Full worker chat and AI packages pass against the exact changed runtime source.
+The longer-read regression executes twenty distinct reads over five silent tool
+turns, retains unchanged observations, and preserves the model's conclusion.
+Seed-only and failed/policy-blocked read cases retain uncertainty. These are
+contract tests, not proof of real diagnosis.
+
+Browser qualification reproduced a linked-issue defect: a finding folded under
+an existing alert could not stay selected because selection searched only the
+non-mirrored display groups. Selection now resolves the canonical filtered
+findings, preserving the existing interactive inline surface. The final
+Playwright matrix opens ordinary and mirrored findings at 1440/900/390 widths,
+opens the nested failed-read transcript, collapses the review and
+passes the same finding, unknown conclusion and access limit to Assistant.
+Scripted inference and blocked writes make this a presentation/context proof.
+
+PR #1920's initial worker proof passed against local source 5288b64d, but its CI
+comparison against the actual base 4f9de86e failed nine benchmark comparisons,
+including small single-resource retained reads. Landing is blocked while the
+exact base/candidate comparison is reproduced and corrected. Do not treat the
+previous narrower performance pass as complete CI qualification.

@@ -801,12 +801,11 @@ type AgenticLoop struct {
 	modelName    string
 
 	// Token accumulation across all turns
-	totalInputTokens        int
-	totalOutputTokens       int
-	totalToolCalls          int
-	totalModelTurns         int
-	totalEvidenceCalls      int
-	successfulEvidenceCalls int
+	totalInputTokens   int
+	totalOutputTokens  int
+	totalToolCalls     int
+	totalModelTurns    int
+	totalEvidenceCalls int
 
 	// State for ongoing executions
 	mu             sync.Mutex
@@ -950,8 +949,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	patrolOutputLimitRecoveryAttempted := false
 	investigationOutputLimitRecoveryPending := false // A truncated investigation conclusion needs one evidence-only retry
 	investigationOutputLimitRecoveryAttempted := false
-	investigationEvidenceStartRepairPending := false // A tool-free investigation start gets one structured evidence retry
-	investigationEvidenceStartRepairAttempted := false
 	toolBlockedLastTurn := false // When true, request final text after budget/loop block
 	investigationProposalCompleted := false
 	acceptedFindingReports := 0
@@ -982,17 +979,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	// limit check below owns compaction when the request actually needs it.
 	currentTurnStartIndex := len(providerMessages)
 
-	// Generic Assistant/Watch wrap-up nudge. Patrol investigation has a
-	// separate evidence budget and completion checkpoint below.
-	const wrapUpNudgeAfterCalls = 12
-	const wrapUpEscalateAfterCalls = 18
-	const maxConsecutiveToolOnlyTurns = 4
-	totalToolCalls := 0
-	wrapUpNudgeFired := false
-	wrapUpEscalateFired := false
-	investigationCheckpointFired := false
-	investigationBudgetWarningFired := false
-	consecutiveToolOnlyTurns := 0
 	consecutiveAllErrorTurns := 0
 	patrolContinuationProviderFailed := false
 
@@ -1000,8 +986,7 @@ agenticLoop:
 	for turn < maxTurns ||
 		(patrolFindingRepairPending && !patrolFindingRepairAttempted) ||
 		(patrolOutputLimitRecoveryPending && !patrolOutputLimitRecoveryAttempted) ||
-		(investigationOutputLimitRecoveryPending && !investigationOutputLimitRecoveryAttempted) ||
-		(investigationEvidenceStartRepairPending && !investigationEvidenceStartRepairAttempted) {
+		(investigationOutputLimitRecoveryPending && !investigationOutputLimitRecoveryAttempted) {
 		// Check if aborted
 		a.mu.Lock()
 		if a.aborted[sessionID] {
@@ -1082,7 +1067,6 @@ agenticLoop:
 		patrolFindingContinuationTurn := false
 		patrolOutputLimitRecoveryTurn := false
 		investigationOutputLimitRecoveryTurn := false
-		investigationEvidenceStartRepairTurn := false
 		if patrolFindingRepairPending && !patrolFindingRepairAttempted {
 			if applyPatrolFindingLifecycleRepairRequest(&req, a.currentExecutionProfile(), tools) {
 				patrolFindingRepairTurn = true
@@ -1131,18 +1115,6 @@ agenticLoop:
 				Str("session_id", sessionID).
 				Msg("[AgenticLoop] Investigation output limit reached — retrying one evidence-only conclusion turn")
 		}
-		if !patrolFindingRepairTurn && !patrolOutputLimitRecoveryTurn && !investigationOutputLimitRecoveryTurn && investigationEvidenceStartRepairPending && !investigationEvidenceStartRepairAttempted {
-			if !applyInvestigationEvidenceStartRepairRequest(&req, a.currentExecutionProfile(), tools) {
-				return resultMessages, fmt.Errorf("Patrol investigation requires grounded evidence, but no evidence tools are available")
-			}
-			investigationEvidenceStartRepairTurn = true
-			investigationEvidenceStartRepairPending = false
-			investigationEvidenceStartRepairAttempted = true
-			log.Warn().
-				Int("turn", turn).
-				Str("session_id", sessionID).
-				Msg("[AgenticLoop] Investigation returned prose before evidence — requiring one structured evidence call")
-		}
 		if !patrolFindingRepairTurn && !patrolOutputLimitRecoveryTurn && shouldOfferPatrolFindingLifecycleContinuation(patrolFindingContinuationPending, writeCompletedLastTurn, toolBlockedLastTurn) {
 			if applyPatrolFindingLifecycleContinuationRequest(&req, a.currentExecutionProfile(), tools) {
 				patrolFindingContinuationTurn = true
@@ -1155,7 +1127,7 @@ agenticLoop:
 				patrolFindingContinuationPending = false
 			}
 		}
-		if !patrolFindingRepairTurn && !patrolOutputLimitRecoveryTurn && !patrolFindingContinuationTurn && !investigationEvidenceStartRepairTurn && shouldOfferFinalPatrolFindingDecision(turn, maxTurns, patrolFindingSummaryPending, writeCompletedLastTurn, toolBlockedLastTurn) {
+		if !patrolFindingRepairTurn && !patrolOutputLimitRecoveryTurn && !patrolFindingContinuationTurn && shouldOfferFinalPatrolFindingDecision(turn, maxTurns, patrolFindingSummaryPending, writeCompletedLastTurn, toolBlockedLastTurn) {
 			// Watch detection gives the model one final, tightly scoped chance to
 			// persist the conclusion it reached from earlier evidence. Other
 			// profiles keep the historical tool-free final response.
@@ -1204,25 +1176,18 @@ agenticLoop:
 				Str("session_id", sessionID).
 				Msg("[AgenticLoop] Tool calls blocked last turn — omitting tools for final response")
 		}
-		if isPatrolInvestigationExecution(a.currentExecutionProfile()) && !investigationOutputLimitRecoveryTurn && !investigationEvidenceStartRepairTurn {
+		if isPatrolInvestigationExecution(a.currentExecutionProfile()) && !investigationOutputLimitRecoveryTurn {
+			if a.maxEvidenceCalls > 0 && !investigationProposalCompleted {
+				req.System += fmt.Sprintf("\nEvidence-tool calls remaining within this run's configured limit: %d.", max(0, a.maxEvidenceCalls-a.totalEvidenceCalls))
+			}
 			switch {
 			case investigationProposalCompleted:
 				req.Tools = nil
 				textOnlySafetyBrake = true
 				req.System += investigationProposalCompletionSystemPrompt
 			case a.maxEvidenceCalls > 0 && a.totalEvidenceCalls >= a.maxEvidenceCalls:
-				if a.successfulEvidenceCalls > 0 {
-					req.Tools = investigationTerminalTools(tools)
-				} else {
-					req.Tools = nil
-				}
+				req.Tools = investigationTerminalTools(tools)
 				textOnlySafetyBrake = len(req.Tools) == 0
-				req.System += investigationEvidenceBudgetExhaustedSystemPrompt
-			case a.successfulEvidenceCalls == 0:
-				// A proposal cannot be grounded before any evidence capability has
-				// returned a successful result. Failed and policy-blocked attempts still
-				// consume budget, but cannot unlock proposal authority.
-				req.Tools = investigationEvidenceTools(tools)
 			}
 		}
 		applyExecutionInferenceAllowance(&req, a.currentExecutionProfile(), patrolSummaryOnlyTurn, a.totalOutputTokens)
@@ -1688,14 +1653,6 @@ agenticLoop:
 		}
 		providerMessages = append(providerMessages, providerAssistant)
 
-		// Track turns where the model emitted tool calls but no user-facing text.
-		// In chat mode this can otherwise spiral into long tool-only chains.
-		if len(toolCalls) > 0 && strings.TrimSpace(assistantMsg.Content) == "" {
-			consecutiveToolOnlyTurns++
-		} else {
-			consecutiveToolOnlyTurns = 0
-		}
-
 		// If no tool calls, we're done - but first check FSM and phantom execution
 		if len(toolCalls) == 0 {
 			// No tool calls breaks the "consecutive all-error tool turns" streak.
@@ -1738,24 +1695,6 @@ agenticLoop:
 					return resultMessages, fmt.Errorf("Patrol investigation exhausted its output budget twice before completing its conclusion (last stop reason %q)", stopReason)
 				}
 				investigationOutputLimitRecoveryPending = true
-				turn++
-				continue
-			}
-
-			if isPatrolInvestigationExecution(a.currentExecutionProfile()) && a.successfulEvidenceCalls == 0 {
-				// Prose about intended tool use is not evidence. Preserve it only in
-				// provider context for one bounded correction turn, never as the
-				// durable investigation conclusion.
-				if len(resultMessages) > 0 {
-					resultMessages[len(resultMessages)-1].Content = ""
-				}
-				if a.maxEvidenceCalls > 0 && a.totalEvidenceCalls >= a.maxEvidenceCalls {
-					return resultMessages, fmt.Errorf("Patrol investigation exhausted its evidence-call budget without a successful structured evidence result")
-				}
-				if investigationEvidenceStartRepairAttempted {
-					return resultMessages, fmt.Errorf("Patrol investigation completed twice without a successful structured evidence result")
-				}
-				investigationEvidenceStartRepairPending = true
 				turn++
 				continue
 			}
@@ -2447,8 +2386,6 @@ agenticLoop:
 			if firstToolResultText == "" {
 				firstToolResultText = resultText
 			}
-			successfulInvestigationEvidence := isPatrolInvestigationExecution(a.currentExecutionProfile()) &&
-				isSuccessfulInvestigationEvidenceResult(tc.Name, resultText, isError)
 
 			// Track pending recovery for strict resolution blocks
 			// (FSM blocks are tracked above; strict resolution blocks come from the executor)
@@ -2563,9 +2500,6 @@ agenticLoop:
 
 			if !isError {
 				anyToolSucceededThisTurn = true
-				if successfulInvestigationEvidence {
-					a.successfulEvidenceCalls++
-				}
 				if isPatrolDetectionExecution(a.currentExecutionProfile()) && tc.Name == agentcapabilities.PatrolGetFindingsToolName {
 					patrolFindingsReadCompleted = true
 				}
@@ -2681,24 +2615,6 @@ agenticLoop:
 			})
 		}
 
-		if isPatrolInvestigationExecution(a.currentExecutionProfile()) && a.maxEvidenceCalls > 0 {
-			remaining := a.maxEvidenceCalls - a.totalEvidenceCalls
-			checkpoint := investigationEvidenceCheckpoint(a.maxEvidenceCalls)
-			if !investigationCheckpointFired && a.totalEvidenceCalls >= checkpoint {
-				if maybeInjectInvestigationEvidenceCheckpoint(providerMessages, a.totalEvidenceCalls, remaining) {
-					investigationCheckpointFired = true
-				}
-			}
-			if !investigationBudgetWarningFired && remaining <= 2 {
-				if maybeInjectInvestigationEvidenceBudgetWarning(providerMessages, a.totalEvidenceCalls, remaining) {
-					investigationBudgetWarningFired = true
-				}
-			}
-			if a.totalEvidenceCalls >= a.maxEvidenceCalls && a.successfulEvidenceCalls == 0 {
-				return resultMessages, fmt.Errorf("Patrol investigation exhausted its evidence-call budget without a successful structured evidence result")
-			}
-		}
-
 		if patrolFindingLifecycleCompletedThisTurn < patrolFindingLifecycleCallsThisTurn {
 			patrolFindingLifecycleFailedThisTurn = true
 		}
@@ -2747,36 +2663,6 @@ agenticLoop:
 				Msg("[AgenticLoop] Tool calls blocked this turn — next turn omits tools")
 		}
 
-		// Guardrail: in interactive chat mode, force wrap-up after repeated
-		// tool-only turns to avoid long no-answer chains. Profile-owned:
-		// non-interactive Patrol runs are tool-only by design, so the
-		// guardrail applies only to the interactive Assistant profile
-		// (and, within it, keeps the historical autonomous exemption).
-		a.mu.Lock()
-		autonomousMode := a.autonomousMode
-		interactiveProfile := !a.executionProfile.NonInteractive()
-		a.mu.Unlock()
-		if interactiveProfile && !autonomousMode && consecutiveToolOnlyTurns >= maxConsecutiveToolOnlyTurns {
-			toolBlockedLastTurn = true
-			log.Warn().
-				Int("consecutive_tool_only_turns", consecutiveToolOnlyTurns).
-				Int("turn", turn).
-				Str("session_id", sessionID).
-				Msg("[AgenticLoop] Consecutive tool-only turns exceeded threshold — next turn omits tools")
-		}
-
-		// Track cumulative tool calls and inject the generic wrap-up
-		// nudge/escalation outside Patrol investigation, whose evidence budget
-		// has its own earlier completion contract.
-		totalToolCalls += len(toolCalls)
-		if !isPatrolInvestigationExecution(a.currentExecutionProfile()) && !wrapUpNudgeFired && totalToolCalls >= wrapUpNudgeAfterCalls {
-			maybeInjectWrapUpNudge(providerMessages, totalToolCalls, maxTurns, turn, wrapUpNudgeAfterCalls)
-			wrapUpNudgeFired = true
-		} else if !isPatrolInvestigationExecution(a.currentExecutionProfile()) && wrapUpNudgeFired && !wrapUpEscalateFired && totalToolCalls >= wrapUpEscalateAfterCalls {
-			maybeInjectWrapUpEscalation(providerMessages, totalToolCalls)
-			wrapUpEscalateFired = true
-		}
-
 		// Mark the start of the next turn's messages for compaction tracking
 		currentTurnStartIndex = len(providerMessages)
 		turn++
@@ -2784,9 +2670,6 @@ agenticLoop:
 
 	if !patrolContinuationProviderFailed {
 		log.Warn().Int("max_turns", maxTurns).Str("session_id", sessionID).Msg("agentic loop hit max turns limit")
-	}
-	if isPatrolInvestigationExecution(a.currentExecutionProfile()) && a.successfulEvidenceCalls == 0 {
-		return resultMessages, fmt.Errorf("Patrol investigation reached its model-turn limit without a successful structured evidence result")
 	}
 	if patrolFindingSummaryPending {
 		resultMessages = a.ensureFinalTextResponseWithSystemPrompt(ctx, sessionID, resultMessages, providerMessages, callback, patrolFindingLifecycleSummarySystemPrompt)

@@ -178,32 +178,23 @@ The proposal remains an attributed model decision. Core preserves final model
 prose unchanged in the response, stream and transcript, including uncertainty
 or a correction of the earlier rationale. Neither structural validation nor
 proposal acceptance establishes a root cause or authorizes execution.
-An investigation cannot complete or submit a typed action proposal before the
-model has received at least one successful structured result from an advertised
-evidence tool. Until then, core withholds proposal authority while leaving
-evidence-tool selection model-owned. Failed, policy-blocked, loop-blocked, and
-otherwise rejected calls still consume the bounded evidence-attempt budget but
-cannot satisfy grounding. Transport success alone is insufficient: the result
-must contain non-empty evidence content and must not carry the shared legacy or
-structured policy-block/approval markers. If that budget is exhausted without
-a successful result, the run fails closed before proposal or
-completed-investigation persistence. An unset attempt ceiling does not weaken
-that rule: reaching the
-independent model-turn limit with no successful result fails closed before the
-generic final-summary fallback. The side-effect-free action-capability lookup is planning
-metadata, not infrastructure evidence: it neither consumes the evidence budget
-nor satisfies this grounding gate. The shared
-`agentcapabilities.IsPatrolInfrastructureEvidenceToolName` vocabulary admits
-only canonical query, discovery, metrics, storage, Docker, Kubernetes, deep-read,
-and PMG observations. Alert/finding state, retained knowledge, and generated
-summaries may help interpret evidence but cannot consume the evidence budget,
-satisfy grounding, or unlock proposal authority by themselves. If the provider
-returns prose without a tool call, core
-must discard that prose as a durable conclusion and allow one bounded repair
-turn that requires a successful structured result from the same advertised evidence
-manifest. The repair is generic and carries no platform-, incident-, or
-model-specific diagnosis. A second tool-free response fails the investigation
-closed instead of recording narrated or simulated tool use as completed work.
+Investigation completion and proposal availability do not depend on successful
+evidence-call counts. The model may conclude from supplied observations or
+report that missing access prevents diagnosis. Failed reads remain failed in
+the model context and retained transcript. Completion means the run ended,
+not that its diagnosis is correct, an issue is resolved or an action executed.
+Capability schemas, permissions, correlation and invocation integrity still
+govern proposals and execution independently.
+
+The configured evidence-attempt ceiling remains a resource limit. Attempted
+calls consume it whether they succeed or fail. The request reports the remaining
+allowance as a system fact and removes those tools when it reaches zero.
+It does not prescribe an investigation priority, demand a causal peer, or inject
+checkpoint instructions into tool results. The existing classification of
+infrastructure evidence calls remains only the scope of this resource limit.
+Planning and retained-context tools remain subject to the overall model-turn
+limit. Output-limit recovery stays bounded and uses existing context.
+
 Provider-returned function names must also match the exact tool manifest sent
 on that turn before read/write classification or execution. A name invented
 from an action or operation enum is rejected as `TOOL_NOT_ADVERTISED`, receives
@@ -4475,12 +4466,12 @@ model responses, model-selected tool calls, and evidence-tool calls. The
 operator-facing investigation budget limits evidence calls; core derives a
 separate model-response ceiling with reserved completion capacity, and the
 terminal `patrol_propose_action` call does not consume evidence budget. The
-default budget is ten evidence calls: enough for model-led diagnosis while
-making the shipped qualification ceiling the ordinary product posture instead
-of a lab-only override. Operators may still choose the bounded 5–30 range. The
-investigation execution profile injects an evidence-completion checkpoint,
-then structurally removes evidence tools at exhaustion while retaining only the
-typed proposal route and final prose. This remains model-led: Pulse defines the
+default budget is ten evidence calls. This is a resource limit, not a claim of
+diagnostic sufficiency. Operators may choose the bounded 5–30 range. The
+investigation execution profile reports the remaining limit in system context
+and structurally removes evidence tools at exhaustion while retaining only the
+typed proposal route and final prose. Tool results contain observations, without
+appended completion instructions. This remains model-led: Pulse defines the
 four completion questions (symptom, root cause or uncertainty, affected scope,
 safe next action), not a prescribed diagnostic tool sequence. Structured run
 completion also preserves the action handoff implied by the model's own
@@ -5850,9 +5841,11 @@ pulse_question from the manifest AND runtime-block it in the agentic
 loop before the interactive-call-set special case - a fabricated
 question call returns a non-interactive error without emitting a
 waiting event and sibling tool calls from the same provider turn keep
-processing; approval waits never block (they queue), and the
-tool-only-turn wrap-up guardrail is interactive-profile-owned rather
-than keyed on autonomy. Interactive runs additionally enforce a
+processing; approval waits never block (they queue). Assistant and Watch
+do not infer diagnostic sufficiency from tool-call totals or silent tool turns.
+Configured run limits and repeated identical-call/error recovery still bound
+execution. Tool results never receive count-based wrap-up instructions.
+Interactive runs additionally enforce a
 look-before-asking gate: a `pulse_question` issued before the run has
 attempted any real tool call is refused with an error tool result that
 steers the model to read-only enumeration (the resolve-before-asking
@@ -7834,15 +7827,13 @@ Qualification may therefore require positive input/output usage for a
 tool-free real-model all-clear without falsely rejecting Codex subscription
 runs whose analysis and healthy outcome were durably persisted.
 
-Investigation evidence checkpoints keep the finding resource as an anchor,
-not a fence. When a cross-resource cause remains plausible, empty logs or a
-policy-blocked deep-read attempt cannot justify an unknown-root-cause
-conclusion or remediation proposal on the symptom alone; the remaining
-read-only budget must prioritize canonical query, discovery, or topology
-evidence for at least one plausible causal peer or dependency. Later
-topology/query/discovery resource entries take precedence over an earlier
-empty Docker Swarm-service result when determining whether a container peer is
-implicated.
+The finding resource anchors investigation context without restricting which
+canonical resources the model can inspect. The model decides whether further
+peer or dependency evidence is needed and whether missing access prevents a
+causal conclusion. Neither a successful read count nor a submitted proposal
+establishes that cause. Failed reads and explicit uncertainty remain in the
+transcript and final conclusion. Canonical topology/query/discovery tools retain
+the current evidence required for cross-resource diagnosis.
 
 Resource-scoped investigation health evidence uses the canonical resource
 projection. `pulse_query` with `action=health` and a non-empty `resource_id`

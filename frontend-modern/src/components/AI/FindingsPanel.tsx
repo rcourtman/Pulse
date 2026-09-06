@@ -507,9 +507,12 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     );
   });
   const selectedPatrolFinding = createMemo(() => {
+    if (!isPatrolFindingsSource()) return undefined;
     const selectedId = expandedId();
     if (!selectedId) return undefined;
-    return selectedPatrolGroup()?.findings.find((finding) => finding.id === selectedId);
+    // Alert mirrors have their own disclosure instead of a display group, but
+    // share the same review surface and selection as every visible finding.
+    return filteredFindings().find((finding) => finding.id === selectedId);
   });
   createEffect(() => {
     if (isPatrolFindingsSource() && expandedId() && !selectedPatrolFinding()) {

@@ -3334,6 +3334,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
+                "frontend-modern/src/components/AI/__tests__/FindingsPanel.links.test.tsx",
                 "frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts",
                 "frontend-modern/src/components/patrol/__tests__/ApprovalSection.test.tsx",
                 "frontend-modern/src/components/patrol/__tests__/InvestigationSection.test.tsx",
@@ -3365,6 +3366,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
+                "frontend-modern/src/components/AI/__tests__/FindingsPanel.links.test.tsx",
                 "frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts",
                 "frontend-modern/src/components/patrol/__tests__/ApprovalSection.test.tsx",
                 "frontend-modern/src/components/patrol/__tests__/InvestigationSection.test.tsx",
