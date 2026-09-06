@@ -5691,7 +5691,7 @@ func TestApplyHostReportPreservesPoolOnlyUnraidCount(t *testing.T) {
 func TestFindLinkedProxmoxEntityWithHints_RejectsHostLocalNetworkIdentity(t *testing.T) {
 	for _, tc := range []struct{ name, nic, address string }{
 		{"docker", "docker0", "172.17.0.1/16"},
-		{"custom docker bridge", "br-123abc", "192.0.2.1/24"},
+		{"generated docker bridge", "br-0123456789ab", "192.0.2.1/24"},
 		{"loopback", "lo", "127.0.0.1/8"},
 		{"IPv6 loopback", "lo", "::1/128"},
 		{"link local", "eth0", "169.254.1.2/16"},
@@ -5726,8 +5726,10 @@ func TestAgentLinkNetworkIdentityFiltering(t *testing.T) {
 		{"IPv6 management", "vmbr0", "2001:db8::10/64", true},
 		{"ULA management", "eth0", "fd00::10/64", true},
 		{"unnamed legacy interface", "", "192.0.2.10", true},
+		{"custom management bridge", "br-mgmt", "192.0.2.10", true},
 		{"docker", "docker0", "172.17.0.1/16", false},
-		{"custom docker", "br-abc", "192.0.2.1/24", false},
+		{"generated docker", "br-0123456789ab", "192.0.2.1/24", false},
+		{"non-hex bridge", "br-0123456789ag", "192.0.2.1/24", true},
 		{"loopback", "eth0", "127.1.2.3/8", false},
 		{"IPv6 unspecified", "eth0", "::", false},
 		{"multicast", "eth0", "224.0.0.1", false},

@@ -4400,11 +4400,27 @@ func normalizeAgentLinkIP(address string) string {
 	return ""
 }
 
-// Do not discard all bridges: Proxmox management addresses commonly use vmbr0.
-// Explicit report-IP and endpoint hints remain usable for routable addresses.
+// Do not discard all bridges: Proxmox management addresses commonly use vmbr0,
+// and operators may use names such as br-mgmt. Docker's automatically named
+// user-defined bridges use br- followed by the first 12 hex characters of the
+// network ID. Explicit report-IP and endpoint hints remain usable for routable
+// addresses.
 func isHostLocalAgentLinkInterface(name string) bool {
 	name = strings.ToLower(strings.TrimSpace(name))
-	return name == "lo" || strings.HasPrefix(name, "docker") || strings.HasPrefix(name, "br-")
+	if name == "lo" || strings.HasPrefix(name, "docker") {
+		return true
+	}
+
+	bridgeID, found := strings.CutPrefix(name, "br-")
+	if !found || len(bridgeID) != 12 {
+		return false
+	}
+	for _, character := range bridgeID {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func collectReportedHostIPs(

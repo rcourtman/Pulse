@@ -19,14 +19,15 @@
 
 ### Host-local addresses are not PVE identity
 
-Automatic host/PVE network matching excludes non-global-unicast addresses
-and lo/docker*/br-* interfaces from both reported-host and provider-node
-address inventories. A Docker bridge address seen on only one PVE node can
-still exist on an unrelated NAS; provider-only owner counts cannot make it
-machine identity. Management bridges such as vmbr0, unnamed legacy interfaces,
-private IPv4 and IPv6/ULA remain eligible. Explicit unicast report-IP hints
-remain eligible independently of inferred interface evidence. No blanket
-private-subnet exclusion is permitted.
+Automatic host/PVE network matching excludes non-global-unicast addresses,
+lo/docker* interfaces and Docker-generated `br-` plus 12-hex-character bridge
+names from both reported-host and provider-node address inventories. A Docker
+bridge address seen on only one PVE node can still exist on an unrelated NAS;
+provider-only owner counts cannot make it machine identity. Management bridges
+such as vmbr0 and br-mgmt, unnamed legacy interfaces, private IPv4 and IPv6/ULA
+remain eligible. Explicit unicast report-IP hints remain eligible independently
+of inferred interface evidence. No blanket private-subnet exclusion is
+permitted.
 
 Verification in `internal/monitoring/monitor_host_agents_test.go`:
 `TestFindLinkedProxmoxEntityWithHints_RejectsHostLocalNetworkIdentity` covers

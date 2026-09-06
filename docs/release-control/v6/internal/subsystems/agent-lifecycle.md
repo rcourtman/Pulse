@@ -21,10 +21,12 @@ Host ingestion must not create a host-to-PVE or reciprocal PVE-to-agent link
 solely from a shared host-local network address. Uniqueness among monitored
 PVE nodes does not establish uniqueness across unrelated agent hosts.
 Automatic network evidence excludes loopback, unspecified, multicast and
-link-local IPs, and interfaces named lo or prefixed docker/br-. This changes
-association evidence only: enrollment, token binding, removal, re-enrollment
-and command authority remain unchanged. It does not migrate or repair
-persisted incorrect links.
+link-local IPs, interfaces named lo or prefixed docker, and Docker-generated
+bridge names matching `br-` plus a 12-character hexadecimal network ID. Other
+bridge names remain eligible because they may carry management traffic. This
+changes association evidence only: enrollment, token binding, removal,
+re-enrollment and command authority remain unchanged. It does not migrate or
+repair persisted incorrect links.
 
 Verification: `TestApplyHostReportDoesNotLinkUnrelatedDockerBridge` in
 `internal/monitoring/monitor_host_agents_test.go` ingests repeated synthetic
