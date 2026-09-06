@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { NotificationQueueHealth } from '@/api/notifications';
@@ -121,6 +122,51 @@ describe('AlertDeliveryHealthCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Refresh delivery status' }));
     expect(onRefresh).toHaveBeenCalledOnce();
     expect(screen.getByRole('alert')).toBeTruthy();
+  });
+
+  it('replaces stale failure advice when status becomes unavailable, then restores fresh evidence', () => {
+    const [unavailable, setUnavailable] = createSignal(false);
+    render(() => (
+      <AlertDeliveryHealthCard
+        health={degradedHealth}
+        unavailable={unavailable()}
+        refreshing={false}
+        onRefresh={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('classified as authentication (2)');
+    setUnavailable(true);
+    expect(screen.getByRole('alert')).toHaveTextContent('Notification delivery status is unavailable');
+    expect(screen.getByRole('alert')).toHaveTextContent('send a test before relying on delivery');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('classified as authentication (2)');
+    setUnavailable(false);
+    expect(screen.getByRole('alert')).toHaveTextContent('Notification delivery needs attention');
+    expect(screen.getByRole('alert')).toHaveTextContent('classified as authentication (2)');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('Notification delivery status is unavailable');
+  });
+
+  it.each(['retry', 'dismiss'] as const)('disables conflicting controls throughout %s and restores them afterwards', (action) => {
+    const [busy, setBusy] = createSignal(true);
+    render(() => (
+      <AlertDeliveryHealthCard
+        health={degradedHealth}
+        unavailable={false}
+        refreshing={false}
+        retryingFailures={action === 'retry' && busy()}
+        dismissingFailures={action === 'dismiss' && busy()}
+        onRefresh={vi.fn()}
+        onRetryFailures={vi.fn()}
+        onDismissFailures={vi.fn()}
+      />
+    ));
+
+    const labels = ['Refresh delivery status', 'Retry retained deliveries', 'Dismiss retained failures'];
+    for (const name of labels) expect(screen.getByRole('button', { name })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Notification delivery needs attention');
+    setBusy(false);
+    for (const name of labels) expect(screen.getByRole('button', { name })).toBeEnabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Notification delivery needs attention');
   });
 
   it('keeps the overview treatment concise and points directly to delivery evidence', () => {
