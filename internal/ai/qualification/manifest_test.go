@@ -23,6 +23,46 @@ func TestLoadCatalogValidatesCheckedInScenarios(t *testing.T) {
 	}
 }
 
+func TestCatalogFaultInjectorsMatchPublishedSchema(t *testing.T) {
+	root := filepath.Join("..", "..", "..", "tests", "qualification", "patrol")
+	payload, err := os.ReadFile(filepath.Join(root, "patrol.qual.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Follow the published schema to the fault injector enum. This checks the
+	// external authoring contract against the executable catalogue, without
+	// maintaining a second list of supported injectors in the test.
+	for _, key := range []string{"$defs", "fault", "properties", "injector", "properties", "kind", "enum"} {
+		var object map[string]json.RawMessage
+		if err := json.Unmarshal(payload, &object); err != nil {
+			t.Fatalf("schema path %s: %v", key, err)
+		}
+		payload = object[key]
+		if len(payload) == 0 {
+			t.Fatalf("schema path missing %s", key)
+		}
+	}
+	var allowed []string
+	if err := json.Unmarshal(payload, &allowed); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := LoadCatalog(filepath.Join(root, "scenarios"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, manifest := range catalog.Manifests {
+		for _, fault := range manifest.Faults {
+			found := false
+			for _, kind := range allowed {
+				found = found || fault.Injector.Kind == kind
+			}
+			if !found {
+				t.Errorf("%s fault %s uses injector %q rejected by the published schema", manifest.ID, fault.ID, fault.Injector.Kind)
+			}
+		}
+	}
+}
+
 func TestManifestSchemaQualificationMinimumMatchesStatisticalFloor(t *testing.T) {
 	payload, err := os.ReadFile(filepath.Join("..", "..", "..", "tests", "qualification", "patrol", "patrol.qual.schema.json"))
 	if err != nil {

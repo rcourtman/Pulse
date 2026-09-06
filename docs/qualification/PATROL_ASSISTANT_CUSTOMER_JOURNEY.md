@@ -888,3 +888,25 @@ including nested failed-read evidence and the linked Assistant. This qualifies
 the integrated presentation and context contract only. Exact staged hook and
 remote landing are subsequent delivery checks. Real diagnosis and autonomous
 action outcomes remain unqualified, and the provider refusal remains enforced.
+
+## Qualification catalogue contract, 2026-09-06
+
+The published JSON schema omitted `health_process_stop`, although the runtime
+implements it and all three approved, rejected and autonomous restart scenarios
+use it. A regression against the checked-in catalogue reproduced all three
+rejections. The schema now accepts that implemented injector. The regression
+reads the published enum and checks actual catalogue faults rather than keeping
+a second injector list. This is a fault-type compatibility check, not a full
+JSON Schema validator or a live-model result.
+
+At source base `f779bf064ab4`, the corrected catalogue validates all eleven
+scenarios and both qualification packages pass on pulse-dev (4.232s and 0.005s).
+The private worker log is `/opt/pulse-release-worker/patrol-schema-f779.log`.
+No provider request, fault injection or infrastructure mutation was performed.
+
+The existing live runner covers Docker health, process exit/restart and network
+dependency faults. It has no missing-access or storage/backup scenario or
+corresponding independent lab probe. The ordinary homelab file-read failure
+proof remains useful but does not close that autonomous qualification gap.
+Those cases require suitable independent ground truth through the existing
+qualification framework before the overall goal can complete.

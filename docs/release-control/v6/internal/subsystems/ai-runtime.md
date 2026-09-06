@@ -25,6 +25,12 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+The published Patrol qualification schema must accept the fault injectors used
+by the executable catalogue. `TestCatalogFaultInjectorsMatchPublishedSchema`
+checks the actual scenario faults against the schema enum, including the
+health-process fault shared by approved, rejected and autonomous restart cases.
+This compatibility proof does not establish live diagnosis or action outcomes.
+
 Physical-disk reads in `pulse_metrics` and `pulse_query` list/get/health
 share `physicalDiskSummaryFromResource`. The projection preserves canonical
 resource status, per-source freshness, physical-disk risk reasons and optional SMART counters alongside
