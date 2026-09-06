@@ -1290,3 +1290,41 @@ remains enforced. Further prompt or orchestration rules are not justified merely
 because this response ignored already explicit evidence limitations. Real-model
 diagnosis, approved/rejected action outcomes and wider customer readiness remain
 open qualification requirements.
+
+
+### Landing benchmark follow-through
+
+Run `34017211910` on `173d74a8e422` completed with the frontend, full API
+race shard, both remaining backend shards and build/smoke checks passing. Its
+only failed job was the unchanged benchmark gate, with four NormalizeSegment
+time regressions against exact base `3347f561ec7bc7ae30903e64998b0f90b5fb5217`.
+A ten-pair, 500ms-sample worker reproduction confirmed three segment regressions,
+while full middleware time and allocations remained unchanged. Both source
+files and normalized compiled instruction streams matched between base and
+candidate. The binary addresses differed. Layout sensitivity is an inference
+from these observations, not a proven functional defect.
+
+The canonical route-label classifiers now inspect ASCII bytes directly instead
+of decoding Unicode runes that cannot satisfy the numeric/hexadecimal checks.
+Existing label precedence and non-ASCII behavior are preserved, with regression
+cases for long numeric IDs, Unicode digits/names and malformed UTF-8. The full
+HTTP-metrics test file passes under the race detector in 1.057s on Go 1.26.8.
+Ten new alternating baseline/candidate pairs pass the existing greater-than-10%,
+p-less-than-0.05 gate with 500ms samples. Segment numeric, UUID, long-token,
+short-name and medium-name time changes are -32.19%, -33.59%, -38.83%, -37.06%
+and -37.11%. Bytes and allocations are unchanged. Adjacent route and full
+middleware benchmarks have no significant regressions. These are local
+microbenchmark results, not a claim about customer-perceived application speed.
+
+Final source hashes:
+
+- `internal/api/http_metrics.go`: `916c27ad5ff07e00170dd94df0b75eb509dd329e34288647f5358a0759353d37`
+- `internal/api/http_metrics_test.go`: `4d425559d84052a50de56286101a6b37422027629d076c845920d8d02f9aff41`
+
+Worker comparison: `/opt/pulse-release-worker/patrol-normalize-final-bench/`.
+Private copies, the failed initial comparison and exact CI failure output remain
+at workspace-relative `tmp/patrol-current-assistant-check/`. The preceding
+diagnostic-record commit `ba69933da352` passed its two-file staged hook, all
+163 tests in 127.527s with unchanged hashes. The current runtime change still
+requires its final staged hook and exact-head remote CI. Overall diagnostic and
+action-outcome qualification remains open.

@@ -83,6 +83,8 @@ func TestIsNumeric(t *testing.T) {
 		{"hexadecimal prefix", "0x10", false},
 		{"special characters", "12@34", false},
 		{"unicode digits", "１２３", false}, // fullwidth digits
+		{"arabic digits", "١٢٣", false},
+		{"invalid utf8 after digits", "123\xff", false},
 	}
 
 	for _, tt := range tests {
@@ -127,6 +129,8 @@ func TestLooksLikeUUID(t *testing.T) {
 		{"space in uuid", "550e8400 e29b-41d4-a716-446655440000", false},
 		{"underscore", "550e8400_e29b-41d4-a716-446655440000", false},
 		{"special char", "550e8400-e29b-41d4-a716-44665544000!", false},
+		{"unicode within 36 bytes", "é0e8400-e29b-41d4-a716-446655440000", false},
+		{"invalid utf8 within 36 bytes", "\xff50e8400-e29b-41d4-a716-446655440000", false},
 
 		// Edge cases
 		{"all zeros no dashes wrong length", "00000000000000000000000000000000xxxx", false},
@@ -153,6 +157,7 @@ func TestNormalizeSegment(t *testing.T) {
 		{"numeric id", "123", ":id"},
 		{"single digit", "5", ":id"},
 		{"large number", "9999999999", ":id"},
+		{"numeric precedence over token", "123456789012345678901234567890123456", ":id"},
 
 		// UUID segments -> :uuid
 		{"uuid", "550e8400-e29b-41d4-a716-446655440000", ":uuid"},
@@ -173,6 +178,8 @@ func TestNormalizeSegment(t *testing.T) {
 		{"empty string", "", ""},
 		{"single letter", "a", "a"},
 		{"mixed alphanumeric short", "user123", "user123"},
+		{"unicode name", "café", "café"},
+		{"invalid utf8 name", "node\xff", "node\xff"},
 	}
 
 	for _, tt := range tests {

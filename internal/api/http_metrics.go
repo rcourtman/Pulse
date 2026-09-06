@@ -140,8 +140,9 @@ func isNumeric(s string) bool {
 	if s == "" {
 		return false
 	}
-	for _, r := range s {
-		if r < '0' || r > '9' {
+	// These labels accept ASCII digits only, so decoding UTF-8 is unnecessary.
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
 			return false
 		}
 	}
@@ -152,7 +153,8 @@ func looksLikeUUID(s string) bool {
 	if len(s) != 36 {
 		return false
 	}
-	for i, r := range s {
+	for i := 0; i < len(s); i++ {
+		r := s[i]
 		switch {
 		case r == '-':
 			if i != 8 && i != 13 && i != 18 && i != 23 {
