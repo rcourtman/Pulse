@@ -1,20 +1,16 @@
 {
   "version": 1,
-  "base_sha": "f4dc1e69a0e214dd0085c7696f42444b8fd91fa3",
-  "verified_at": "2026-09-06T16:58:13Z",
+  "base_sha": "df7eca7913c72f913fe196f37acec4d3b104c726",
+  "verified_at": "2026-09-06T19:40:26Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Login.tsx",
-    "frontend-modern/src/useAppRuntimeState.ts",
-    "frontend-modern/src/utils/localStorage.ts"
+    "frontend-modern/src/components/DemoBanner.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Login.tsx": "621f0b97d775aacaa521a3c72ed02db3fde5ad3eda06d55950a32107723eb44c",
-    "frontend-modern/src/useAppRuntimeState.ts": "5a1d343d92c441e1302dab129be7256dd9a287c6a60fb0e17c6f9fa13fe20900",
-    "frontend-modern/src/utils/localStorage.ts": "182ed45685228781fd32725db50611b1115f9ee4fb1af23aeedcf41ca707bdbc"
+    "frontend-modern/src/components/DemoBanner.tsx": "13fd8dea552d97f1df866438f7ba38eec01f25907dc68a0bec672e1793c3fc97"
   },
   "routes": [
-    "/"
+    "/proxmox/overview"
   ],
   "viewports": [
     {
@@ -27,18 +23,11 @@
     }
   ],
   "states": [
-    "demo-mode login page with the \"Signing you in to the demo\u2026\" status while the automatic sign-in is in flight",
-    "application shell after the automatic demo sign-in (Demo instance banner, Proxmox overview)",
-    "login form with printed demo credentials after an explicit Logout, session marker \"suppressed\"",
-    "login form still shown after a reload following the Logout",
-    "login form with the \"Invalid username or password\" error after a rejected automatic sign-in (401 stub), Sign in button enabled"
+    "demo-mode banner at 1280x800 with the read-only notice followed by the \"Run Pulse on your own hardware\" link",
+    "demo-mode banner at 390x844 wrapping onto two lines with the link visible and the dismiss control intact"
   ],
   "interactions": [
-    "load / in a fresh browser context at 1280x800 and at 390x844; automatic POST /api/login with demo/demo, no typing",
-    "click the Logout control in the app header at both widths",
-    "reload the page after Logout",
-    "type demo/demo into the form and submit after Logout",
-    "open / in a second fresh context: automatic sign-in again",
-    "stub /api/login with 401 and load /: form fallback"
+    "load /proxmox/overview on a DEMO_MODE=true mock backend behind Vite in fresh contexts at both widths",
+    "read the link attributes from the live DOM: href https://pulserelay.pro/#setup, target _blank, rel noopener noreferrer"
   ]
 }
