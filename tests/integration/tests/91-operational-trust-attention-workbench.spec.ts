@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { primaryNavigationLink } from "./helpers";
 
 type AttentionMode = "active" | "calm" | "failed";
 
@@ -112,7 +113,7 @@ test.beforeEach(async ({ page }) => {
   ).not.toBe("");
   await expect(
     page
-      .getByRole("tab", { name: "Patrol", exact: true })
+      .getByRole("link", { name: "Patrol", exact: true })
       .or(page.getByRole("button", { name: "Patrol", exact: true }))
       .first(),
   ).toBeVisible();
@@ -694,10 +695,8 @@ test("starts from the normal monitor shell and reaches the canonical attention q
     (page.viewportSize()?.width ?? 1280) < 1024
       ? page
           .getByRole("navigation", { name: "Mobile navigation" })
-          .getByRole("button", { name: /Patrol/ })
-      : page
-          .getByRole("tab", { name: /Patrol/ })
-          .or(page.getByRole("link", { name: /Patrol/ }));
+          .getByRole("link", { name: /Patrol/ })
+      : primaryNavigationLink(page, /Patrol/);
   await patrolNavigation.click();
 
   await expect(page).toHaveURL(/\/patrol/);
@@ -749,7 +748,7 @@ test("makes active operational work primary and preserves the evidence boundary"
   await page.goto("/patrol", { waitUntil: "domcontentloaded" });
 
   await expect(
-    page.getByRole("tab", { name: "Patrol: 2 active attention items" }).or(
+    page.getByRole("link", { name: "Patrol: 2 active attention items" }).or(
       page.getByRole("button", {
         name: "Patrol: 2 active attention items",
       }),

@@ -105,6 +105,10 @@ test("Actions remains named, directly reachable, keyboard accessible, and free o
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  // Scan the settled surface: the update banner slides in over 300ms and
+  // axe would otherwise sample its controls mid-fade and report blended
+  // colours as contrast failures.
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.route("**/api/actions?*", (route) =>
     route.fulfill({
       status: 200,
@@ -137,8 +141,19 @@ test("Actions remains named, directly reachable, keyboard accessible, and free o
       document.documentElement.clientWidth,
   );
   expect(overflow).toBeFalsy();
+
+  const skipLink = page.getByRole("link", { name: "Skip to main content" });
+  await page.evaluate(() => {
+    document.body.tabIndex = -1;
+    document.body.focus();
+    document.body.removeAttribute("tabindex");
+  });
   await page.keyboard.press("Tab");
-  await expect(page.locator(":focus")).toBeVisible();
+  await expect(skipLink).toBeFocused();
+  await expect(skipLink).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#main")).toBeFocused();
+
   await testInfo.attach("actions-phone-width", {
     body: await page.screenshot(),
     contentType: "image/png",

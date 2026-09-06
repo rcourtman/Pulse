@@ -1,13 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
-import { ensureAuthenticated } from "./helpers";
+import { ensureAuthenticated, primaryNavigationLink } from "./helpers";
 
 const DESKTOP_VIEWPORT = { width: 1440, height: 900 };
 
 async function openDesktopProxmoxBackups(page: Page) {
-  const proxmoxTab = page.getByRole("tab", {
-    name: "Proxmox",
-    exact: true,
-  });
+  const proxmoxTab = primaryNavigationLink(page, "Proxmox");
   await expect(proxmoxTab).toBeVisible({ timeout: 30_000 });
   await proxmoxTab.click();
 
@@ -16,7 +13,7 @@ async function openDesktopProxmoxBackups(page: Page) {
   });
   await expect(sections).toBeVisible({ timeout: 60_000 });
   await sections.getByRole("link", { name: "Backups", exact: true }).click();
-  await expect(page).toHaveURL(/\/proxmox\/backups$/);
+  await expect(page).toHaveURL(/\/proxmox\/backups\/date$/);
 }
 
 test.describe("Operational trust protection posture", () => {

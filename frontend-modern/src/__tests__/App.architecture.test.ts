@@ -869,7 +869,8 @@ describe('App architecture', () => {
   it('keeps alert hydration separate from tenant resource admission', () => {
     const start = appRuntimeStateSource.indexOf('const runtimeStateResolved');
     const predicate = appRuntimeStateSource.slice(
-      start, appRuntimeStateSource.indexOf('const state =', start),
+      start,
+      appRuntimeStateSource.indexOf('const state =', start),
     );
     expect(start).toBeGreaterThan(-1);
     expect(predicate).toContain('resourceSnapshotReceived()');

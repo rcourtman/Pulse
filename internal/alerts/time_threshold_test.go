@@ -8,7 +8,8 @@ import (
 )
 
 func TestGetTimeThresholdMappings(t *testing.T) {
-	manager := NewManager()
+	manager := NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
 
 	manager.mu.Lock()
 	manager.config.TimeThresholds = map[string]int{
@@ -42,7 +43,8 @@ func TestGetTimeThresholdMappings(t *testing.T) {
 }
 
 func TestGetTimeThresholdMetricOverrides(t *testing.T) {
-	manager := NewManager()
+	manager := NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
 
 	manager.mu.Lock()
 	manager.config.TimeThresholds = map[string]int{
@@ -139,7 +141,8 @@ func TestCheckMetricNoisyWarningWaitsButCriticalFiresImmediately(t *testing.T) {
 }
 
 func TestCheckMetricUsesPendingStartTime(t *testing.T) {
-	manager := NewManager()
+	manager := NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
 
 	manager.mu.Lock()
 	manager.config.TimeThresholds["guest"] = 2

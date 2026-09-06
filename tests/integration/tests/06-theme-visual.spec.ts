@@ -75,7 +75,7 @@ async function stabilizeVisualState(page: Page): Promise<void> {
       [data-testid="update-banner"] {
         display: none !important;
       }
-      [role="tab"] span[class*="rounded-full"] {
+      nav[aria-label="Primary navigation"] a span[class*="rounded-full"] {
         display: none !important;
       }
       .tabs [role="group"][aria-label="Infrastructure"] {

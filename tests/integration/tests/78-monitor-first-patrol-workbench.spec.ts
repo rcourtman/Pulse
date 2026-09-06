@@ -3,7 +3,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test as base, type Page } from "@playwright/test";
 
-import { createAuthenticatedStorageState } from "./helpers";
+import {
+  createAuthenticatedStorageState,
+  primaryNavigation,
+  primaryNavigationLink,
+} from "./helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -653,14 +657,12 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
       timeout: 30_000,
     });
 
-    const desktopNav = page.getByRole("tablist", {
-      name: "Primary navigation",
-    });
+    const desktopNav = primaryNavigation(page);
     await expect(
-      desktopNav.getByRole("tab", { name: "Proxmox" }),
+      desktopNav.getByRole("link", { name: "Proxmox" }),
     ).toBeVisible();
     await expect(
-      desktopNav.getByRole("tab", {
+      desktopNav.getByRole("link", {
         name: /Patrol: 1 (?:action awaits approval|active attention item)/,
       }),
     ).toBeVisible();
@@ -710,7 +712,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     await expect(page.getByText("No Patrol work waiting")).toHaveCount(0);
     await expect(page.getByText("Next check scheduled")).toHaveCount(0);
 
-    await page.getByRole("tab", { name: "Patrol" }).click();
+    await primaryNavigationLink(page, /Patrol/).click();
     await expect(page).toHaveURL(/\/patrol$/);
     await expect(
       page.getByRole("heading", { level: 1, name: "Patrol" }),
@@ -759,7 +761,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     ).toHaveCount(0);
     await expect(page.getByText("What Pulse checked")).toHaveCount(0);
 
-    await page.getByRole("tab", { name: /Patrol/ }).click();
+    await primaryNavigationLink(page, /Patrol/).click();
     await expect(page).toHaveURL(/\/patrol$/);
     await expect(
       page.getByRole("heading", { level: 2, name: "1 decision needs you" }),
@@ -886,7 +888,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     ).toBeVisible();
     await page.getByRole("tab", { name: "Activity", exact: true }).click();
     await page
-      .getByRole("button", { name: /Findings and run records/ })
+      .getByRole("button", { name: /Finding options and history/ })
       .click();
     await expect(
       page.getByText("Operating system updates need review").first(),
@@ -933,7 +935,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.getByRole("tab", { name: "Activity", exact: true }).click();
     await page
-      .getByRole("button", { name: /Findings and run records/ })
+      .getByRole("button", { name: /Finding options and history/ })
       .click();
     const cleanupTitle = page
       .getByText("Downloaded package data is using needed space")
@@ -991,7 +993,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.getByRole("tab", { name: "Activity", exact: true }).click();
     await page
-      .getByRole("button", { name: /Findings and run records/ })
+      .getByRole("button", { name: /Finding options and history/ })
       .click();
     await page.getByRole("button", { name: "Resolved", exact: true }).click();
     const resolvedTitle = page

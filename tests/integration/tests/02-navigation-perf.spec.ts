@@ -1,5 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
-import { ensureAuthenticated, getMockMode, setMockMode, waitForPulseReady } from './helpers';
+import {
+  ensureAuthenticated,
+  getMockMode,
+  primaryNavigationLink,
+  setMockMode,
+  waitForPulseReady,
+} from './helpers';
 
 const truthy = (value: string | undefined) => {
   if (!value) return false;
@@ -91,7 +97,7 @@ const measureTabTransition = async (
   waitForReady: (page: Page) => Promise<void>,
 ): Promise<number> => {
   const start = Date.now();
-  await page.getByRole('tab', { name: new RegExp(`^${tabName}$`) }).first().click();
+  await primaryNavigationLink(page, new RegExp(`^${tabName}$`)).first().click();
   await waitForReady(page);
   return Date.now() - start;
 };

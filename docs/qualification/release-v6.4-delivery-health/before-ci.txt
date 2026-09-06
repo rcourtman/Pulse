@@ -1,0 +1,37 @@
+FFFF
+======================================================================
+FAIL: test_build_and_e2e_cover_release_train_pushes_and_proposals (__main__.ReleaseTrainCIContractTest.test_build_and_e2e_cover_release_train_pushes_and_proposals) (workflow='build-and-test.yml', event='push')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/scripts/tests/test_release_train_ci_contract.py", line 29, in test_build_and_e2e_cover_release_train_pushes_and_proposals
+    self.assertTrue(
+AssertionError: False is not true : build-and-test.yml push excludes release/v6.4: ['main', 'pulse/v6-release']
+
+======================================================================
+FAIL: test_build_and_e2e_cover_release_train_pushes_and_proposals (__main__.ReleaseTrainCIContractTest.test_build_and_e2e_cover_release_train_pushes_and_proposals) (workflow='build-and-test.yml', event='pull_request')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/scripts/tests/test_release_train_ci_contract.py", line 29, in test_build_and_e2e_cover_release_train_pushes_and_proposals
+    self.assertTrue(
+AssertionError: False is not true : build-and-test.yml pull_request excludes release/v6.4: ['main', 'pulse/v6-release']
+
+======================================================================
+FAIL: test_build_and_e2e_cover_release_train_pushes_and_proposals (__main__.ReleaseTrainCIContractTest.test_build_and_e2e_cover_release_train_pushes_and_proposals) (workflow='test-e2e.yml', event='push')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/scripts/tests/test_release_train_ci_contract.py", line 29, in test_build_and_e2e_cover_release_train_pushes_and_proposals
+    self.assertTrue(
+AssertionError: False is not true : test-e2e.yml push excludes release/v6.4: ['main', 'master', 'pulse/v6-release']
+
+======================================================================
+FAIL: test_build_and_e2e_cover_release_train_pushes_and_proposals (__main__.ReleaseTrainCIContractTest.test_build_and_e2e_cover_release_train_pushes_and_proposals) (workflow='test-e2e.yml', event='pull_request')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/scripts/tests/test_release_train_ci_contract.py", line 29, in test_build_and_e2e_cover_release_train_pushes_and_proposals
+    self.assertTrue(
+AssertionError: False is not true : test-e2e.yml pull_request excludes release/v6.4: ['main', 'pulse/v6-release']
+
+----------------------------------------------------------------------
+Ran 1 test in 0.001s
+
+FAILED (failures=4)

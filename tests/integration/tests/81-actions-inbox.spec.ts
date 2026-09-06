@@ -630,7 +630,7 @@ test("APT history keeps update execution verification recovery and delayed recei
   await expect(dialog.getByText("Confirmed by executing agent")).toBeVisible();
   await expect(dialog.getByText("Source: Executing agent")).toBeVisible();
   await expect(
-    dialog.getByText("Yes — fact only; no reboot was authorized"),
+    dialog.getByText("Yes — fact only. No reboot was authorized"),
   ).toBeVisible();
   await expect(dialog.getByTestId("action-execution-truth")).toBeVisible();
   await expect(dialog.getByTestId("action-verification-truth")).toBeVisible();

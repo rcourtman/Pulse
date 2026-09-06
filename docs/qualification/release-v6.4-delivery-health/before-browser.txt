@@ -1,0 +1,36 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
++ actual - expected
+
++ 'Delivery health ordering fixture\nConfiguration Retryfalse'
+- 'Delivery health ordering fixture\n' +
+-   'Configuration Retryfalse\n' +
+-   'Notification delivery needs attention\n' +
+-   '\n' +
+-   '1 failed delivery retained for 7 days. These notifications were not delivered. Check each enabled destination and send a test. Review delivery activity in Notifications for timestamps, destinations, alerts, and safely redacted errors. After correcting the destination, retry them. Dismiss retained failures to clear this warning without deleting delivery history. Otherwise Pulse removes expired records hourly after their retention limit. Recoverable retry attempts do not trigger this warning.\n' +
+-   '\n' +
+-   'Retry retained deliveries\n' +
+-   'Dismiss retained failures\n' +
+-   'Refresh delivery status'
+
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/scripts/check-delivery-health-ordering.mjs:98:14 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: 'Delivery health ordering fixture\nConfiguration Retryfalse',
+  expected: 'Delivery health ordering fixture\n' +
+    'Configuration Retryfalse\n' +
+    'Notification delivery needs attention\n' +
+    '\n' +
+    '1 failed delivery retained for 7 days. These notifications were not delivered. Check each enabled destination and send a test. Review delivery activity in Notifications for timestamps, destinations, alerts, and safely redacted errors. After correcting the destination, retry them. Dismiss retained failures to clear this warning without deleting delivery history. Otherwise Pulse removes expired records hourly after their retention limit. Recoverable retry attempts do not trigger this warning.\n' +
+    '\n' +
+    'Retry retained deliveries\n' +
+    'Dismiss retained failures\n' +
+    'Refresh delivery status',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.20.0

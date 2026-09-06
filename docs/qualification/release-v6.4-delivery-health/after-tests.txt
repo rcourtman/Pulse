@@ -1,0 +1,46 @@
+
+> pulse-modern@1.0.0 test
+> vitest run src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx src/features/alerts/__tests__/useAlertDestinationsTabState.test.tsx
+
+
+ RUN  v3.2.7 /var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern
+
+stderr | src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx > useNotificationDeliveryHealth > treats an unreachable health endpoint as needing attention
+[ERROR] Failed to load notification delivery health Error: network down
+    at /var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx:48:63
+    at updateFn (file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/solid-js/dist/dev.js:197:17)
+    at runUpdates (file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/solid-js/dist/dev.js:868:17)
+    at Module.createRoot (file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/solid-js/dist/dev.js:202:12)
+    at /var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx:47:5
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+
+stderr | src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx > useNotificationDeliveryHealth > ignores older healthy completion after newer error result
+[ERROR] Failed to load notification delivery health Error: new failure
+    at /var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx:85:69
+    at updateFn (file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/solid-js/dist/dev.js:197:17)
+    at runUpdates (file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/solid-js/dist/dev.js:868:17)
+    at Module.createRoot (file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/solid-js/dist/dev.js:202:12)
+    at /var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx:73:5
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:861:59
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///var/lib/pulse-maintainer/team-worktrees/20260906T002521Z-release-line/pulse@release_v6.4/frontend-modern/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+
+stdout | src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx > useNotificationDeliveryHealth > keeps post-dismissTerminalFailures health when a pre-action request finishes late
+[INFO] [toast:success] 2 retained failures dismissed.
+
+stdout | src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx > useNotificationDeliveryHealth > keeps post-retryTerminalFailures health when a pre-action request finishes late
+[INFO] [toast:success] 2 retained deliveries queued for retry.
+
+ ✓ src/features/alerts/__tests__/useNotificationDeliveryHealth.test.tsx (12 tests) 90ms
+ ✓ src/features/alerts/__tests__/useAlertDestinationsTabState.test.tsx (4 tests) 129ms
+
+ Test Files  2 passed (2)
+      Tests  16 passed (16)
+   Start at  01:30:25
+   Duration  1.61s (transform 488ms, setup 200ms, collect 530ms, tests 220ms, environment 1.06s, prepare 189ms)
