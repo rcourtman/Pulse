@@ -79,6 +79,48 @@ func TestStorageRecoveryAcrossRestart(t *testing.T) {
 			if testHasActiveAlert(t, m, id) {
 				t.Fatal("empty observation recreated resolved incident")
 			}
+
+			// Metric recovery followed by renewed pressure starts a fresh
+			// occurrence; discrete-alert refire retention does not apply.
+			s.Usage, s.Used, s.Free = 90, 900, 100
+			for range 5 {
+				m.CheckStorage(s)
+			}
+			recurrent := testRequireActiveAlert(t, m, id)
+			if !recurrent.StartTime.After(original.StartTime) || recurrent.Value != 90 {
+				t.Fatalf("recurrence reused the resolved start or lost fresh measurement: %+v", recurrent)
+			}
+			if got := len(m.GetActiveAlerts()); got != 1 {
+				t.Fatalf("recurrence created %d active incidents, want 1", got)
+			}
+			recurrenceStart := recurrent.StartTime
+			if err := m.SaveActiveAlerts(); err != nil {
+				t.Fatal(err)
+			}
+			m.Stop()
+
+			m = start()
+			recurrent = testRequireActiveAlert(t, m, id)
+			if !recurrent.StartTime.Equal(recurrenceStart) || recurrent.Value != 90 {
+				t.Fatalf("recurrent incident did not survive another restart: %+v", recurrent)
+			}
+			s.Usage, s.Total, s.Used, s.Free = 0, 0, 0, 0
+			for range 5 {
+				m.CheckStorage(s)
+			}
+			if retained := testRequireActiveAlert(t, m, id); !retained.StartTime.Equal(recurrenceStart) || retained.Value != 90 {
+				t.Fatalf("missing capacity changed recurrent incident: %+v", retained)
+			}
+			s.Total, s.Free = 1000, 1000
+			for range 5 {
+				m.CheckStorage(s)
+			}
+			if testHasActiveAlert(t, m, id) {
+				t.Fatal("confirmed empty capacity did not resolve recurrence")
+			}
+			if resolved := m.GetResolvedAlert(id); resolved == nil || !resolved.StartTime.Equal(recurrenceStart) || resolved.Value != 0 {
+				t.Fatalf("recovery resolved the wrong occurrence: %+v", resolved)
+			}
 		})
 	}
 }
