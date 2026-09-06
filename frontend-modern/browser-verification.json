@@ -1,34 +1,37 @@
 {
   "version": 1,
-  "base_sha": "97f56d55dffb40cd7e2a46d70a43864ddd0656a1",
-  "verified_at": "2026-09-06T12:26:24.956560Z",
+  "base_sha": "2d550da942c6f0a7e7896e7aca86493983f90b84",
+  "verified_at": "2026-09-06T15:54:59.817913Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/OverviewTab.tsx"
+    "frontend-modern/src/features/alerts/deliveryDiagnosisPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/OverviewTab.tsx": "8f7fdc04bd0546f86152c8bb392ff3e3fb755f1f0a1c28d1ee85da3e9fe23582"
+    "frontend-modern/src/features/alerts/deliveryDiagnosisPresentation.ts": "bc3eadf8f790517b377430a42eb67e8fdfcadb53bb13b87cd971d6a9ab91d607"
   },
   "routes": [
-    "/qualification (loopback synthetic Overview component, not production routing)"
+    "/qualification (loopback synthetic Overview, not production routing)"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 900
+      "height": 1000
+    },
+    {
+      "width": 900,
+      "height": 1000
     },
     {
       "width": 390,
-      "height": 900
+      "height": 1000
     }
   ],
   "states": [
-    "Retry and Dismiss succeed, subsequent health read unavailable, explicit read-only refresh restores healthy status. Scripted APIs, no installed recipient proof.",
-    "390px unavailable screenshot visually inspected; refresh visible and reachable."
+    "Ready and cooldown show Dispatch requested; cooldown says next eligible; missing timestamp shows Notification pending. Scripted diagnoses, not recipient receipt.",
+    "390px screenshot visually inspected: longer status wraps within card and controls remain visible."
   ],
   "interactions": [
-    "pulse-heavy-run -- node scripts/check-overview-health-refresh.mjs: four cases passed. External/API HTTP aborted; service workers blocked.",
-    "Each recovery requires exactly one queue mutation and three health reads. Narrowed final tree: 32 focused tests pass. Baseline: two Overview recovery cases fail.",
-    "Evidence: /var/lib/pulse-maintainer/queue/staging/20260906T122029Z-release-line/overview and browser-overview.log. Prior Assistant evidence remains in base history."
+    "pulse-heavy-run -- node scripts/check-alert-dispatch-copy.mjs passed at all three widths; two dispatch labels, no Notified labels, one pending label, text fits viewport, no page errors.",
+    "Evidence: /var/lib/pulse-maintainer/queue/staging/20260906T155036Z-release-line/browser-dispatch.log and browser-dispatch/*.png."
   ]
 }
