@@ -16,7 +16,7 @@ func TestLoadCatalogValidatesCheckedInScenarios(t *testing.T) {
 	if len(catalog.Manifests) < 7 {
 		t.Fatalf("catalog has %d scenarios, want at least 7", len(catalog.Manifests))
 	}
-	for _, id := range []string{"watch.healthy-mixed", "watch.docker-unhealthy", "watch.prompt-injection-label", "investigation.docker-dependency"} {
+	for _, id := range []string{"watch.healthy-mixed", "watch.docker-unhealthy", "watch.prompt-injection-label", "investigation.docker-dependency", "investigation.docker-storage-pressure"} {
 		if _, ok := catalog.ByID[id]; !ok {
 			t.Fatalf("catalog missing %s", id)
 		}
@@ -322,5 +322,21 @@ func TestManifestAcceptsDriverOwnedHealthProcessFault(t *testing.T) {
 	manifest.Faults[0].Injector.Kind = "health_process_stop"
 	if err := manifest.Validate(); err != nil {
 		t.Fatalf("health_process_stop manifest rejected: %v", err)
+	}
+}
+
+func TestManifestStorageFaultRequiresBoundedScratchResource(t *testing.T) {
+	manifest, err := LoadManifest(filepath.Join("..", "..", "..", "tests", "qualification", "patrol", "scenarios", "investigation.docker-storage-pressure.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest.Resources[0].ScratchStorage = false
+	if err := manifest.Validate(); err == nil || !strings.Contains(err.Error(), "requires scratch_storage") {
+		t.Fatalf("unbounded storage fault accepted: %v", err)
+	}
+	manifest.Resources[0].ScratchStorage = true
+	manifest.Faults[0].Injector.Value = "/host/disk"
+	if err := manifest.Validate(); err == nil || !strings.Contains(err.Error(), "accepts no value") {
+		t.Fatalf("custom storage target accepted: %v", err)
 	}
 }

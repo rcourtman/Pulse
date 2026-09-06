@@ -959,3 +959,67 @@ inversion. Its worker log is `patrol-retained-concurrent-bindings.log`.
 Private full/race logs are under
 `tmp/patrol-f779-final-proof/`. Exact staged hook and remote landing remain
 pending. This correction does not close the outstanding real-model/action outcome gap.
+
+## Independent service-storage oracle, 2026-09-06
+
+The qualification framework now includes
+`investigation.docker-storage-pressure`, with a driver-owned fixed 8 MiB tmpfs,
+a real ENOSPC write fault and an independent filesystem-statistics probe. The
+service's normal writes fail and its health degrades, while an unrelated control
+stays healthy. Reversion removes only the fixed fill file. The driver verifies
+the prepared container ID, exact ownership labels, filesystem type and capacity
+before writing. Existing fill files and symlinks are refused.
+
+The final qualification and CLI packages pass on pulse-dev (4.223s and 0.005s).
+The initial provider-free oracle run passed in 8.478s. The final live test adds
+an explicit symlink outside the scratch mount, proves the target is unchanged
+after refusal and reversion, and passes in 8.65s. The catalogue contains twelve
+valid manifests. These tests make no Pulse API or model request.
+
+The independent measurements establish 8,380,416 free bytes at baseline,
+zero during the fault and restored free space after reversion. The service
+remains running during the fault, its health changes to unhealthy, and the
+control remains healthy. Final cleanup removes both disposable containers and
+their network, the second cleanup is a no-op, and pre-existing inventory is
+unchanged. The worker's preloaded Alpine 3.20 image digest is
+`sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc`.
+
+Production driver `internal/ai/qualification/lab_storage.go` SHA-256 is
+`9e204767ddd20496c52e2566fae5690df22f840f8aac32b3af00ddc3cffc8bc8`.
+Final live-test SHA-256 is
+`0350997f3dbc6cbaa1877a9942e75ce500d28ecdfeff7e16fc8d8bb2cce588d1`.
+Private worker logs are `patrol-storage-qualification.log` and
+`patrol-storage-symlink-final.log` under `/opt/pulse-release-worker/`.
+
+This closes the missing service-storage fault/oracle implementation, not the
+required real-model diagnosis. A normal Pulse collector and supported provider
+route are still required to qualify Patrol on this scenario. Host/storage-pool
+and backup faults are outside this specific fixture. Missing access must be
+qualified at Pulse's source or tool boundary, not substituted with an app's
+unrelated file-permission fault. The overall goal and provider-refusal boundary
+remain unchanged. Final staged hook and landing for this slice remain pending.
+
+Actual published-schema validation initially rejected the new storage manifest
+and three existing action manifests because `required_summary_terms` remained
+mandatory despite runtime support for equivalent-term groups. The schema now
+accepts either form and retains required evidence fields. A full JSON Schema
+catalogue test, with negative controls for missing/empty expectations and missing
+evidence, is wired into the existing Patrol regression workflow. This is distinct
+from `-mode validate`, which exercises only the Go manifest validator.
+
+All twelve manifests now pass the published schema with the CI-pinned
+`jsonschema` 4.26.0. All five schema regression tests pass, including missing
+and empty summary expectations and missing evidence controls. The worker log
+is `/opt/pulse-release-worker/patrol-storage-schema-final.log`. Schema SHA-256
+is `01ea739e2a68dc0a7b6a0041de15f5e2edcf59f31826b02a01b51a1e2b5488d`.
+
+The final shipped guide is byte-identical to the source and passes Playwright
+at `/docs/AI_PATROL_QUALIFICATION`, 1440x1000, 900x1000 and 390x1000.
+The new catalogue row, storage section, command and deepest qualification
+limits were inspected as pixels. The page stays within its viewport and the
+long command scrolls within its own block. Reload, keyboard navigation to the
+documentation index and browser-history return pass. Private matrix, screenshots
+and receipt are under `tmp/patrol-storage-docs-proof/` at the workspace root.
+The served guide SHA-256 is
+`1970ed5cd70e976d2acbeaf7d36a7b78b5dedf65355c50a19abdba8ca96c9770`.
+No model or infrastructure action is used by this browser proof.

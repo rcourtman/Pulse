@@ -54,6 +54,12 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Validate published qualification schema
+        run: |
+          python3 -m venv "$RUNNER_TEMP/patrol-schema-venv"
+          "$RUNNER_TEMP/patrol-schema-venv/bin/python" -m pip install jsonschema==4.26.0
+          "$RUNNER_TEMP/patrol-schema-venv/bin/python" tests/qualification/patrol/schema_test.py
+
       - name: Validate qualification catalogue
         run: go run ./cmd/patrol-qualify -mode validate -catalog tests/qualification/patrol/scenarios
 

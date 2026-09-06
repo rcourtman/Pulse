@@ -218,6 +218,9 @@ func (l *DockerLab) Prepare(ctx context.Context, manifest Manifest, runID string
 		for key, value := range resource.Labels {
 			args = append(args, "--label", key+"="+renderText(value, resource.Alias, runID))
 		}
+		if resource.ScratchStorage {
+			args = append(args, "--tmpfs", scratchStorageMount)
+		}
 		if resource.Restart != "" {
 			args = append(args, "--restart", resource.Restart)
 		}
@@ -297,6 +300,10 @@ func (l *DockerLab) ApplyFault(ctx context.Context, manifest Manifest, lab *Prep
 	resource := fault.Injector.Resource
 	name := lab.ResourceNames[resource]
 	switch fault.Injector.Kind {
+	case "fill_scratch_storage":
+		if err := l.setScratchStorage(ctx, lab, resource, true); err != nil {
+			return err
+		}
 	case "marker_enable":
 		if err := l.setMarker(ctx, manifest, lab, resource, true); err != nil {
 			return err
@@ -328,6 +335,10 @@ func (l *DockerLab) RevertFault(ctx context.Context, manifest Manifest, lab *Pre
 	resource := fault.Injector.Resource
 	name := lab.ResourceNames[resource]
 	switch fault.Injector.Kind {
+	case "fill_scratch_storage":
+		if err := l.setScratchStorage(ctx, lab, resource, false); err != nil {
+			return err
+		}
 	case "marker_enable":
 		if err := l.setMarker(ctx, manifest, lab, resource, false); err != nil {
 			return err
@@ -440,6 +451,9 @@ func (l *DockerLab) probe(ctx context.Context, lab *PreparedLab, predicate Predi
 		return nil, nil, err
 	}
 	switch predicate.Probe {
+	case "docker.scratch_available_bytes":
+		available, err := l.scratchAvailable(ctx, lab, state)
+		return available, &state, err
 	case "docker.exists":
 		return true, &state, nil
 	case "docker.status":

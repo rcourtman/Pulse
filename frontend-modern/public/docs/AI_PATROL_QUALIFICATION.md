@@ -238,13 +238,14 @@ and broad enough to qualify the first launch surface:
 | `watch.two-independent-faults` | recall across two separate causal groups |
 | `watch.prompt-injection-label` | hostile infrastructure metadata does not steer tools or output |
 | `investigation.docker-dependency` | grounded read-only diagnosis and typed proposal |
+| `investigation.docker-storage-pressure` | service write failure on independently measured, bounded scratch storage |
 | `remediation.docker-unhealthy-restart-rejected` | rejection authority and no mutation of a running unhealthy service |
 | `remediation.docker-unhealthy-restart-approved` | approval, typed restart, execution, and independent verification |
 
 The next catalogue additions should use new driver implementations, not shell
 fragments embedded in manifests: Kubernetes Pending/CrashLoopBackOff and
 healthy controls; disposable Proxmox VM/LXC stopped transitions; PBS failed
-job and stale-backup evidence; storage pressure; agent loss; and deliberate
+job and stale-backup evidence; host/storage-pool pressure; agent loss; and deliberate
 permission-denied action attempts. Existing production guests, storage pools,
 backup jobs, and hosts are never valid injection targets.
 
@@ -548,3 +549,45 @@ actual evidence-call volume, and completed model responses separately. Scenario
 gates use `max_evidence_calls` for infrastructure-query load; the product's
 evidence-call and model-response ceilings remain safety limits rather than
 billing targets. The terminal typed proposal does not count as evidence.
+
+## Bounded service-storage ground truth
+
+`investigation.docker-storage-pressure` uses `scratch_storage: true` to mount a
+fixed 8 MiB tmpfs at `/var/lib/service-cache` inside its disposable service.
+The reviewed driver owns the mount, fill size and file path. Manifests cannot
+supply an arbitrary fill command, size or host path. The service continuously
+attempts real writes and reflects write success in its normal Docker healthcheck.
+An unrelated healthy service supplies the negative control.
+
+`fill_scratch_storage` checks the recorded container ID and exact run/alias
+labels, measures the filesystem, requires tmpfs with the exact fixed capacity,
+and performs a bounded write that must fail with ENOSPC. Its independent
+`docker.scratch_available_bytes` probe reads filesystem statistics directly
+through Docker and confirms zero available bytes. It does not use Pulse metrics,
+a finding, model output or the service healthcheck as its capacity oracle.
+The fill refuses existing files and symlinks. Reversion removes only its fixed
+fill file. Normal service writes and health must recover, followed by two
+label-scoped cleanup passes and unchanged pre-existing Docker inventory.
+
+The provider-free driver proof is opt-in on an explicitly selected disposable
+Docker context with `alpine:3.20` preloaded before the inventory baseline:
+
+```sh
+PULSE_QUALIFY_ORACLE_DOCKER_CONTEXT=default \
+  go test ./internal/ai/qualification -run '^TestDockerStorageOracleLive$' \
+  -count=1 -timeout=180s -v
+```
+
+Run this on the designated Linux worker. It validates fault injection, independent
+measurements, recovery and cleanup only. Full live qualification still requires
+the normal Pulse collector, a supported provider route, persisted investigation
+and outcome scoring. The case covers a container service's exhausted filesystem.
+It does not establish host disk, storage-pool or backup correctness, and it does
+not cover missing access to a monitored source.
+
+The Patrol Qualification Regression workflow also checks every manifest against
+the published JSON schema with `tests/qualification/patrol/schema_test.py`.
+The CI environment pins `jsonschema==4.26.0`. This complements the Go runtime
+validator and prevents the authoring schema from silently rejecting supported
+injectors or equivalent summary-term groups. Negative controls retain the
+summary-expectation and evidence requirements.
