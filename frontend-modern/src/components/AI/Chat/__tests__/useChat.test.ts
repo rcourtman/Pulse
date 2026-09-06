@@ -2219,6 +2219,96 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('preserves distinct invocation IDs across concurrent same-name tool updates', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+      const inputA = '{"action":"search","query":"client"}';
+      const inputB = '{"action":"search","query":"Tower"}';
+      const assistant = () => chat.messages().find((m) => m.role === 'assistant')!;
+      fire({ type: 'tool_start', data: { id: 'a', name: 'pulse_query', input: inputA } });
+      fire({ type: 'tool_start', data: { id: 'b', name: 'pulse_query', input: inputB } });
+      expect(assistant().pendingTools?.map((tool) => [tool.id, tool.input])).toEqual([
+        ['a', inputA],
+        ['b', inputB],
+      ]);
+      fire({
+        type: 'tool_progress',
+        data: { id: 'a', name: 'pulse_query', message: 'Reading client' },
+      });
+      fire({ type: 'tool_start', data: { id: 'a', name: 'pulse_query', input: inputA } });
+      expect(assistant().pendingTools?.map((tool) => tool.id)).toEqual(['a', 'b']);
+      expect(assistant().pendingTools?.[1].progress).toBeUndefined();
+      fire({
+        type: 'tool_end',
+        data: { id: 'a', name: 'pulse_query', output: 'client evidence', success: true },
+      });
+      expect(
+        assistant()
+          .streamEvents?.filter((event) => event.type === 'tool' || event.type === 'pending_tool')
+          .map((event) => [
+            event.type,
+            event.toolId,
+            event.tool?.input || event.pendingTool?.input,
+          ]),
+      ).toEqual([
+        ['tool', 'a', inputA],
+        ['pending_tool', 'b', inputB],
+      ]);
+      fire({
+        type: 'tool_end',
+        data: { id: 'b', name: 'pulse_query', output: 'host unavailable', success: false },
+      });
+      expect(assistant().pendingTools).toEqual([]);
+      expect(assistant().toolCalls?.map((tool) => [tool.input, tool.output, tool.success])).toEqual(
+        [
+          [inputA, 'client evidence', true],
+          [inputB, 'host unavailable', false],
+        ],
+      );
+      dispose();
+    });
+
+    it('does not cancel or approve a sibling invocation with the same name', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+      const assistant = () => chat.messages().find((m) => m.role === 'assistant')!;
+      for (const id of ['a', 'b']) {
+        fire({
+          type: 'tool_start',
+          data: { id, name: 'pulse_control', input: JSON.stringify({ resource_id: id }) },
+        });
+        fire({
+          type: 'approval_needed',
+          data: {
+            tool_id: id,
+            tool_name: 'pulse_control',
+            approval_id: `approval-${id}`,
+            command: id,
+          },
+        });
+      }
+      fire({ type: 'tool_end', data: { id: 'a', name: 'pulse_control', output: 'completed a' } });
+      expect(assistant().pendingApprovals?.map((approval) => approval.toolId)).toEqual(['b']);
+      expect(
+        assistant()
+          .streamEvents?.filter((event) => event.type === 'approval')
+          .map((event) => event.approval?.toolId),
+      ).toEqual(['b']);
+      fire({ type: 'tool_start', data: { id: 'c', name: 'pulse_control', input: '{}' } });
+      fire({ type: 'tool_cancel', data: { id: 'c', name: 'pulse_control', reason: 'Skipped' } });
+      expect(assistant().pendingTools?.map((tool) => tool.id)).toEqual(['b']);
+      expect(
+        assistant()
+          .streamEvents?.filter((event) => event.type === 'tool_cancel')
+          .map((event) => event.toolId),
+      ).toEqual(['c']);
+      dispose();
+    });
+
     it('processes tool_start events', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));

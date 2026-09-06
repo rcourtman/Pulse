@@ -2349,6 +2349,12 @@ deriving an older display status from `workflowStatusHistory`.
    normalized tool name when an older server omits IDs, upsert one pending tool
    row and collapse stale duplicate pending rows instead of replaying several
    near-identical steps in the transcript.
+   A supplied invocation ID is authoritative. Distinct IDs must not merge by
+   tool name during start, progress, cancellation, completion or approval
+   cleanup. Completing one invocation must leave its sibling approvals intact.
+   Message rendering keys rows by message ID and reads immutable transcript
+   values. It must not deeply reconcile shared tool objects: removing a status
+   row must never mutate evidence retained in another event or in toolCalls.
    `frontend-modern/src/api/aiChat.ts` owns the Assistant predicate: token
    content and hidden reasoning may continue to opt out of those checkpoints so
    answer streaming remains fast, while session, workflow, model-switch, tool,
