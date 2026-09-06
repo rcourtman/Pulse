@@ -65,7 +65,7 @@ reproduction evidence, not a representative customer success rate.
 | 2. Shared evidence | Preserve canonical risk reasons and SMART counters, source/time semantics and history across tools/turns. | Regression tests preserve unknown versus zero and all canonical evidence. Real responses can inspect the same facts as the product. | Implemented and qualified for the named shared-evidence defects. Canonical disk detail, risk and cadence pass real data-path proof. Affected package and concurrency checks pass. Integrated CI later exposed remaining query and allocation regressions. The final bounded query-reuse correction passes complete selected exact-base worker comparisons and full metrics/database and focused race checks. Final landing CI passed and PRs #1928 and #1929 merged. Real-model interpretation failures remain tracked in step 5. |
 | 3. Diagnostic orchestration | Correct proposal-as-proof. Audit triage budgets, unmatched-signal evaluation, assessment completion and investigation cutoffs. | No code-written causal conclusion. No quality inferred from tool, flag or finding counts. Each retained pass has an objective reason. Safety boundaries and incomplete outcomes remain explicit. | Proposal promotion and capture inference were removed in c5d2f56dda. Commit 668af3fe6b removes investigation success-call floors, checkpoint instructions and generic call-count wrap-up rules. The detection slice removes contextless follow-up passes, flag/report-count policy and first-finding completion modes. Full chat and AI suites, focused API and conversation race tests pass. Real-model/action outcome qualification remains open. |
 | 4. Issue through verified outcome | Follow existing issue/investigation/action records into Assistant, approval, execution and independent readback. | Accepted proposal is visibly distinct from execution and verification. Rejected or unsupported actions do not become success. Uncertainty can survive an action proposal. | Existing foundation, full journey qualification pending. |
-| 5. Ground-truth qualification and landing | Extend existing qualification tooling only where necessary. Exercise healthy/unhealthy, dependency, missing-access, storage/backup and approved/rejected action cases. Inspect the final browser journey at desktop and narrow widths. | Record exact source/model/permissions, evidence, decisions, faults/misses, latency and verification. Fix in-scope failures, pass appropriate proofs and land scoped commits. | Pending. |
+| 5. Ground-truth qualification and landing | Extend existing qualification tooling only where necessary. Exercise healthy/unhealthy, dependency, missing-access, storage/backup and approved/rejected action cases. Inspect the final browser journey at desktop and narrow widths. | Record exact source/model/permissions, evidence, decisions, faults/misses, latency and verification. Fix in-scope failures, pass appropriate proofs and land scoped commits. | Partial. Regression, controlled browser and live collector evidence are recorded below. Real-model diagnosis, linked approval/action outcomes and installed collector qualification remain open. |
 
 Use one shared runtime and the existing qualification runner, not a second
 product intelligence engine or a new parallel lifecycle. Preserve independent
@@ -2014,3 +2014,36 @@ full API rerun passes under that account (286.960s), as do the incoming
 startup-replay and legacy-boundary source checks. Frontend type checks and all
 29 incoming alert tests pass. The exact staged hook gates landing.
 Private receipts are under `tmp/patrol-archive-retirement/` in the workspace.
+
+### Live collector storage evidence, 2026-09-06
+
+`TestCollectContainerStorageFaultLive` calls the production Docker client and
+`collectContainer` implementation against the existing storage-pressure lab.
+The opt-in command, run on the worker beside its Docker Unix socket, is:
+
+```sh
+PULSE_QUALIFY_ORACLE_DOCKER_CONTEXT=default go test ./internal/dockeragent -run '^TestCollectContainerStorageFaultLive$' -count=1 -timeout=240s -v
+```
+
+The final test passed in 8.694s on Docker 29.8.0 against the runtime source tree
+of `186ce504c8f0fa6e0174f3b10f3d99f6278f10fc`. Its SHA256 is
+`cdf303f4de23c020690c81b0b57190c728319788cb0aaff906b0d4d9d864541e`.
+Independent filesystem observations measured 8,380,416 available bytes before
+the fault, zero during it and 8,380,416 after recovery. The service stayed
+running. Collected and JSON-decoded health followed healthy, unhealthy, healthy,
+while the unrelated control remained healthy. Docker returned zero native
+`Mounts` throughout. The report retained the single tmpfs destination, type,
+8 MiB configuration options and writable setting from `HostConfig.Tmpfs`.
+Configured size is not a measured capacity counter in the report.
+
+The test targets exact run-owned container IDs and labels. Existing fixture
+cleanup passed, its second cleanup was a no-op and inventory matched the
+pre-run snapshot. The test skips without explicit opt-in. All four existing
+mount regression cases also pass. Private logs are in
+`tmp/patrol-storage-collector-live/` in the workspace.
+
+This proves live collection and report serialization only. It does not send a
+report to Pulse, enroll or replace a production agent, call a provider, or
+qualify approval, execution, diagnosis or model recovery. No runtime or frontend
+source changed in this slice, so no new browser claim is made. Prior storage
+diagnosis failures and the cached autonomous-provider refusal remain open.
