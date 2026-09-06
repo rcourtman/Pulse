@@ -1559,3 +1559,63 @@ Real-model retest, temporal/storage interpretation, approved and rejected
 action outcomes and independent recovery proof remain open. Autonomous
 subscription refusal and separately billed provider approval boundaries remain
 unchanged.
+
+
+### Corrected storage evidence, ordinary Assistant retest
+
+The Docker observation and canonical configuration corrections are pushed to
+PR #1935 at `355ac1f0a481d6dbc9a7ff3977bced0956711979`. Their exact staged
+worker pre-commit checks passed without source changes. Remote checks remain
+pending. The current configuration runtime also passed all fourteen contract
+cases, the complete tools package and focused race checks.
+
+One ordinary read-only storage assessment ran on 2026-09-06 from
+12:27:05.857Z to 12:30:03.726Z, an HTTP window of 177.869s. It used the existing
+`claude-subscription:claude-opus-5` route, explicit `autonomous_mode=false`,
+read-only control and thirteen successful tool reads. No infrastructure change,
+paid-model request or autonomous readiness retry occurred. This is a single
+assessment, not a success-rate or latency estimate.
+
+The answer identified the backup datastore at 90.6% utilisation and its active
+capacity warning affecting seven workloads. It used the corrected container I/O
+history, separated cumulative device counters from rates, acknowledged missing
+container filesystem usage, and retained the reason for missing older history
+as unknown. It did not attribute older host I/O peaks to the container whose
+returned I/O window starts later. These are useful observations.
+
+The complete diagnosis still does not qualify. Its opening assurance that the
+container is not short of space contradicts the later acknowledgement that
+container filesystem usage is unavailable. It treats high retained host rates
+as bucket/counter artifacts without establishing that mechanism. It includes a
+host CPU maximum timestamped 21:00 the previous evening in a 03:00-04:00 window.
+The suggested retention explanation is not established by capacity alone, and
+available PBS job reads were not performed. Its rough growth extrapolation uses
+retained extrema, not a measured first-to-last slope, and must retain that limit.
+Corrected observations have not established reliable interpretation.
+
+The run also highlights a tool-context distinction to review: Docker-host
+`agent_connected` describes the command connection, while telemetry may still
+arrive through other collection paths. The model treated current telemetry and
+that false connection flag as an unresolved inconsistency. Its storage-pools
+request supplied `host`, although the tool schema only advertises that filter
+for RAID and Ceph detail. That call returned all pools. Neither observation
+justifies fabricating resource absence or collection downtime.
+
+Playwright exercised `/patrol` at 1440x1000 and 390x1000, the actual answer,
+all thirteen expanded tool records, keyboard activation, deepest output
+scrolling, Escape, reload and the persisted session. Every displayed input and
+output matches the persisted tool records. Pixel review includes the answer,
+evidence and the mobile table scrolled to its rightmost state. The table's
+400-pixel content is reachable inside its 309-pixel horizontal viewport.
+The artificial selected-route warning comes from blocked non-GET route checks,
+so this does not qualify the unmodified provider-readiness UI.
+
+The runtime binary SHA256 stayed
+`552699cdf2e61a4ca1cea2ac5ef4e065735cbd1dbca01665456e184bd4fc3533`
+through the request and browser pass. Private request, source, binary, tool,
+persistence, evaluation and pixel receipts are under workspace-relative
+`tmp/patrol-storage-assistant-check/`. No native config action was requested,
+so this assessment does not qualify model use of that corrected action.
+Storage-fault ground truth, reliable diagnosis, approved/rejected actions and
+independent recovery remain open. The supported autonomous provider dependency
+and wider independent-Pro-environment gate remain unchanged.
