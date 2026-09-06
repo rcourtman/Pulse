@@ -17,6 +17,18 @@ import (
 // delivering to a person's device. Use real monitor callbacks and notification
 // rendering rather than invoking the transport directly.
 func TestPBSMetricObservationGapNotificationReceipts(t *testing.T) {
+	for _, restart := range []bool{false, true} {
+		name := "uninterrupted"
+		if restart {
+			name = "restart"
+		}
+		t.Run(name, func(t *testing.T) {
+			testPBSMetricObservationGapNotificationReceipts(t, restart)
+		})
+	}
+}
+
+func testPBSMetricObservationGapNotificationReceipts(t *testing.T, restart bool) {
 	receipts := make(chan []byte, 16)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
@@ -28,27 +40,35 @@ func TestPBSMetricObservationGapNotificationReceipts(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	t.Cleanup(server.Close)
-	notifier := notifications.NewNotificationManagerWithDataDir("http://pulse.example", t.TempDir())
-	t.Cleanup(notifier.Stop)
-	if err := notifier.UpdateAllowedPrivateCIDRs("127.0.0.1/32,::1/128"); err != nil {
-		t.Fatal(err)
-	}
-	notifier.AddWebhook(notifications.WebhookConfig{ID: "pbs-receipt", Name: "pbs-receipt", URL: server.URL, Enabled: true, Service: "generic"})
-	notifier.SetNotifyOnResolve(true)
-	notifier.SetGroupingWindow(0)
+	// Recreate both managers on the same disk state; this remains an in-process
+	// lifecycle test, not installed binary or external provider qualification.
+	alertDir, notificationDir := t.TempDir(), t.TempDir()
+	var manager *alerts.Manager
+	var notifier *notifications.NotificationManager
+	start := func() {
+		notifier = notifications.NewNotificationManagerWithDataDir("http://pulse.example", notificationDir)
+		t.Cleanup(notifier.Stop)
+		if err := notifier.UpdateAllowedPrivateCIDRs("127.0.0.1/32,::1/128"); err != nil {
+			t.Fatal(err)
+		}
+		notifier.AddWebhook(notifications.WebhookConfig{ID: "pbs-receipt", Name: "pbs-receipt", URL: server.URL, Enabled: true, Service: "generic"})
+		notifier.SetNotifyOnResolve(true)
+		notifier.SetGroupingWindow(0)
 
-	manager := alerts.NewManagerWithDataDir(t.TempDir())
-	t.Cleanup(manager.Stop)
-	cfg := manager.GetConfig()
-	cfg.Enabled = true
-	cfg.ActivationState = alerts.ActivationActive
-	cfg.Schedule.QuietHours.Enabled = false
-	cfg.TimeThresholds["pbs"] = 0
-	cfg.PBSDefaults.CPU = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
-	manager.UpdateConfig(cfg)
-	monitor := &Monitor{alertManager: manager, notificationMgr: notifier}
-	manager.SetAlertCallback(monitor.handleAlertFired)
-	manager.SetResolvedCallback(monitor.handleAlertResolved)
+		manager = alerts.NewManagerWithDataDir(alertDir)
+		t.Cleanup(manager.Stop)
+		cfg := manager.GetConfig()
+		cfg.Enabled = true
+		cfg.ActivationState = alerts.ActivationActive
+		cfg.Schedule.QuietHours.Enabled = false
+		cfg.TimeThresholds["pbs"] = 0
+		cfg.PBSDefaults.CPU = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
+		manager.UpdateConfig(cfg)
+		monitor := &Monitor{alertManager: manager, notificationMgr: notifier}
+		manager.SetAlertCallback(monitor.handleAlertFired)
+		manager.SetResolvedCallback(monitor.handleAlertResolved)
+	}
+	start()
 
 	receive := func() []byte {
 		t.Helper()
@@ -105,6 +125,21 @@ func TestPBSMetricObservationGapNotificationReceipts(t *testing.T) {
 		t.Fatalf("observation gap lost the active incident: %+v", active)
 	}
 
+	if restart {
+		original := manager.GetActiveAlerts()[0]
+		manager.Stop()
+		notifier.Stop()
+		start()
+		for range 3 {
+			manager.CheckPBS(pbs)
+		}
+		quiet()
+		active := manager.GetActiveAlerts()
+		if len(active) != 1 || active[0].ID != id || !active[0].StartTime.Equal(original.StartTime) {
+			t.Fatalf("restart changed incident identity: %+v", active)
+		}
+	}
+
 	pbs.NodeMetricsUnavailable = false
 	manager.CheckPBS(pbs)
 	var recovery struct {
@@ -119,6 +154,19 @@ func TestPBSMetricObservationGapNotificationReceipts(t *testing.T) {
 	}
 	if active := manager.GetActiveAlerts(); len(active) != 0 {
 		t.Fatalf("healthy sample left active alerts: %+v", active)
+	}
+
+	if restart {
+		manager.Stop()
+		notifier.Stop()
+		start()
+		if active := manager.GetActiveAlerts(); len(active) != 0 {
+			t.Fatalf("restart resurrected resolved incident: %+v", active)
+		}
+		if history := manager.GetAlertHistory(10); len(history) != 1 {
+			t.Fatalf("restart lost resolved history: %+v", history)
+		}
+		quiet()
 	}
 
 	// A distinct breach clears the default two-point minimum-delta spam guard.
