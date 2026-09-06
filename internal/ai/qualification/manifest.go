@@ -69,16 +69,17 @@ type LabSpec struct {
 }
 
 type ResourceSpec struct {
-	Alias       string            `json:"alias"`
-	Kind        string            `json:"kind"`
-	Name        string            `json:"name"`
-	Image       string            `json:"image,omitempty"`
-	Command     []string          `json:"command,omitempty"`
-	Restart     string            `json:"restart,omitempty"`
-	Healthcheck []string          `json:"healthcheck,omitempty"`
-	HealthEvery string            `json:"health_every,omitempty"`
-	FaultVolume bool              `json:"fault_volume,omitempty"`
-	Labels      map[string]string `json:"labels,omitempty"`
+	Alias          string            `json:"alias"`
+	Kind           string            `json:"kind"`
+	Name           string            `json:"name"`
+	Image          string            `json:"image,omitempty"`
+	Command        []string          `json:"command,omitempty"`
+	Restart        string            `json:"restart,omitempty"`
+	Healthcheck    []string          `json:"healthcheck,omitempty"`
+	HealthEvery    string            `json:"health_every,omitempty"`
+	FaultVolume    bool              `json:"fault_volume,omitempty"`
+	ScratchStorage bool              `json:"scratch_storage,omitempty"`
+	Labels         map[string]string `json:"labels,omitempty"`
 }
 
 type FaultSpec struct {
@@ -318,6 +319,7 @@ func (m Manifest) Validate() error {
 		errs = append(errs, fmt.Errorf("unsupported lab driver %q", m.Lab.Driver))
 	}
 	aliases := make(map[string]struct{}, len(m.Resources))
+	scratchResources := make(map[string]bool, len(m.Resources))
 	if len(m.Resources) == 0 {
 		errs = append(errs, errors.New("at least one disposable resource is required"))
 	}
@@ -329,12 +331,22 @@ func (m Manifest) Validate() error {
 			errs = append(errs, fmt.Errorf("duplicate resource alias %q", resource.Alias))
 		}
 		aliases[resource.Alias] = struct{}{}
+		scratchResources[resource.Alias] = resource.ScratchStorage
 		if resource.Kind != "container" {
 			errs = append(errs, fmt.Errorf("resource %q has unsupported kind %q", resource.Alias, resource.Kind))
 		}
 		if resource.Image == "" && m.Lab.Image == "" {
 			errs = append(errs, fmt.Errorf("resource %q has no image", resource.Alias))
 		}
+	}
+	checkPredicates := func(label string, predicates []Predicate) []error {
+		problems := validatePredicates(label, predicates, aliases)
+		for _, predicate := range predicates {
+			if predicate.Probe == "docker.scratch_available_bytes" && !scratchResources[predicate.Target] {
+				problems = append(problems, fmt.Errorf("%s scratch probe requires scratch_storage on %q", label, predicate.Target))
+			}
+		}
+		return problems
 	}
 	faultIDs := make(map[string]struct{}, len(m.Faults))
 	for i, fault := range m.Faults {
@@ -352,6 +364,13 @@ func (m Manifest) Validate() error {
 			errs = append(errs, fmt.Errorf("fault %q injector targets unknown resource %q", fault.ID, fault.Injector.Resource))
 		}
 		switch fault.Injector.Kind {
+		case "fill_scratch_storage":
+			if !scratchResources[fault.Injector.Resource] {
+				errs = append(errs, fmt.Errorf("fault %q requires scratch_storage", fault.ID))
+			}
+			if fault.Injector.Value != "" {
+				errs = append(errs, fmt.Errorf("fault %q uses a fixed storage bound and accepts no value", fault.ID))
+			}
 		case "marker_enable", "health_process_stop", "stop", "disconnect_network", "kill":
 		default:
 			errs = append(errs, fmt.Errorf("fault %q has unsupported injector %q", fault.ID, fault.Injector.Kind))
@@ -386,8 +405,8 @@ func (m Manifest) Validate() error {
 				errs = append(errs, fmt.Errorf("fault %q detect_within: %w", fault.ID, err))
 			}
 		}
-		errs = append(errs, validatePredicates("fault "+fault.ID+" oracle", fault.Oracle, aliases)...)
-		errs = append(errs, validatePredicates("fault "+fault.ID+" revert_oracle", fault.RevertOracle, aliases)...)
+		errs = append(errs, checkPredicates("fault "+fault.ID+" oracle", fault.Oracle)...)
+		errs = append(errs, checkPredicates("fault "+fault.ID+" revert_oracle", fault.RevertOracle)...)
 		if fault.Expected.MaxPrimaryFindings < 1 {
 			errs = append(errs, fmt.Errorf("fault %q max_primary_findings must be positive", fault.ID))
 		}
@@ -395,8 +414,8 @@ func (m Manifest) Validate() error {
 	if len(m.Baseline) == 0 {
 		errs = append(errs, errors.New("baseline predicates are required"))
 	}
-	errs = append(errs, validatePredicates("baseline", m.Baseline, aliases)...)
-	errs = append(errs, validatePredicates("teardown", m.Teardown.Predicates, aliases)...)
+	errs = append(errs, checkPredicates("baseline", m.Baseline)...)
+	errs = append(errs, checkPredicates("teardown", m.Teardown.Predicates)...)
 	for _, control := range m.NegativeControls {
 		if _, ok := aliases[control.Resource]; !ok {
 			errs = append(errs, fmt.Errorf("negative control references unknown resource %q", control.Resource))
@@ -472,7 +491,7 @@ func (m Manifest) Validate() error {
 			if m.Remediation.RequireLifecycleVerification && len(m.Remediation.AllowedVerificationStatuses) == 0 {
 				errs = append(errs, errors.New("required lifecycle verification needs allowed statuses"))
 			}
-			errs = append(errs, validatePredicates("remediation postconditions", m.Remediation.Postconditions, aliases)...)
+			errs = append(errs, checkPredicates("remediation postconditions", m.Remediation.Postconditions)...)
 		}
 	} else if m.Remediation != nil {
 		errs = append(errs, errors.New("only remediation-track scenarios may declare remediation expectations"))
@@ -556,7 +575,7 @@ func validatePredicates(label string, predicates []Predicate, aliases map[string
 			errs = append(errs, fmt.Errorf("%s[%d] targets unknown resource %q", label, index, predicate.Target))
 		}
 		switch predicate.Probe {
-		case "inventory.same_as_pre", "docker.exists", "docker.status", "docker.running", "docker.health", "docker.restart_count", "docker.exit_code", "docker.network_attached":
+		case "inventory.same_as_pre", "docker.exists", "docker.status", "docker.running", "docker.health", "docker.restart_count", "docker.exit_code", "docker.network_attached", "docker.scratch_available_bytes":
 		default:
 			errs = append(errs, fmt.Errorf("%s[%d] has unsupported probe %q", label, index, predicate.Probe))
 		}

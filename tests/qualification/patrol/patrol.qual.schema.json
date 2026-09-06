@@ -40,7 +40,7 @@
     "resource": {
       "type": "object", "additionalProperties": false,
       "required": ["alias", "kind", "name"],
-      "properties": {"alias": {"type": "string"}, "kind": {"const": "container"}, "name": {"type": "string"}, "image": {"type": "string"}, "command": {"type": "array", "items": {"type": "string"}}, "restart": {"type": "string"}, "healthcheck": {"type": "array", "items": {"type": "string"}}, "health_every": {"type": "string"}, "fault_volume": {"type": "boolean"}, "labels": {"type": "object", "additionalProperties": {"type": "string"}}}
+      "properties": {"alias": {"type": "string"}, "kind": {"const": "container"}, "name": {"type": "string"}, "image": {"type": "string"}, "command": {"type": "array", "items": {"type": "string"}}, "restart": {"type": "string"}, "healthcheck": {"type": "array", "items": {"type": "string"}}, "health_every": {"type": "string"}, "fault_volume": {"type": "boolean"}, "scratch_storage": {"type": "boolean"}, "labels": {"type": "object", "additionalProperties": {"type": "string"}}}
     },
     "predicate": {
       "type": "object", "additionalProperties": false,
@@ -52,7 +52,7 @@
       "required": ["id", "causal_group", "target", "injector", "oracle", "expected_finding", "required"],
       "properties": {
         "id": {"type": "string"}, "causal_group": {"type": "string"}, "target": {"type": "string"}, "required": {"type": "boolean"}, "detect_within": {"type": "string"},
-        "injector": {"type": "object", "additionalProperties": false, "required": ["kind", "resource"], "properties": {"kind": {"enum": ["marker_enable", "health_process_stop", "stop", "disconnect_network", "kill"]}, "resource": {"type": "string"}, "value": {"type": "string"}}},
+        "injector": {"type": "object", "additionalProperties": false, "required": ["kind", "resource"], "properties": {"kind": {"enum": ["marker_enable", "health_process_stop", "fill_scratch_storage", "stop", "disconnect_network", "kill"]}, "resource": {"type": "string"}, "value": {"type": "string"}}},
         "oracle": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/predicate"}},
         "revert_oracle": {"type": "array", "items": {"$ref": "#/$defs/predicate"}},
         "related_resources": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
@@ -86,7 +86,8 @@
     },
     "investigation": {
       "type": "object", "additionalProperties": false,
-      "required": ["required_summary_terms", "require_completed_status"],
+      "required": ["require_completed_status"],
+      "allOf": [{"anyOf": [{"required": ["required_summary_terms"]}, {"required": ["required_summary_term_groups"]}]}],
       "anyOf": [{"required": ["min_evidence_calls"]}, {"required": ["min_evidence_ids"]}],
       "properties": {
         "min_evidence_calls": {"type": "integer", "minimum": 1},

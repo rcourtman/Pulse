@@ -62,7 +62,7 @@ reproduction evidence, not a representative customer success rate.
 | Step | Work | Acceptance | Current state |
 |---|---|---|---|
 | 1. Product contract and baseline | Map the current loop and sources of judgment. Record telemetry populations and gaps. | Every identified decision has an owner. Activity is not labelled usefulness. | Complete for this redesign scope. Contract, ownership decisions and baseline limits are recorded. |
-| 2. Shared evidence | Preserve canonical risk reasons and SMART counters, source/time semantics and history across tools/turns. | Regression tests preserve unknown versus zero and all canonical evidence. Real responses can inspect the same facts as the product. | Implemented and qualified for the named shared-evidence defects. Canonical disk detail, risk and cadence pass real data-path proof. Affected package and concurrency checks pass. Commit f01db995ed corrects the PR benchmark regressions. Exact-base worker comparisons and full metrics/database and focused race checks pass. Final landing CI remains open. Real-model interpretation failures remain tracked in step 5. |
+| 2. Shared evidence | Preserve canonical risk reasons and SMART counters, source/time semantics and history across tools/turns. | Regression tests preserve unknown versus zero and all canonical evidence. Real responses can inspect the same facts as the product. | Implemented and qualified for the named shared-evidence defects. Canonical disk detail, risk and cadence pass real data-path proof. Affected package and concurrency checks pass. Integrated CI later exposed remaining query and allocation regressions. The final bounded query-reuse correction passes complete selected exact-base worker comparisons and full metrics/database and focused race checks. Final landing CI remains open. Real-model interpretation failures remain tracked in step 5. |
 | 3. Diagnostic orchestration | Correct proposal-as-proof. Audit triage budgets, unmatched-signal evaluation, assessment completion and investigation cutoffs. | No code-written causal conclusion. No quality inferred from tool, flag or finding counts. Each retained pass has an objective reason. Safety boundaries and incomplete outcomes remain explicit. | Proposal promotion and capture inference were removed in c5d2f56dda. Commit 668af3fe6b removes investigation success-call floors, checkpoint instructions and generic call-count wrap-up rules. The detection slice removes contextless follow-up passes, flag/report-count policy and first-finding completion modes. Full chat and AI suites, focused API and conversation race tests pass. Real-model/action outcome qualification remains open. |
 | 4. Issue through verified outcome | Follow existing issue/investigation/action records into Assistant, approval, execution and independent readback. | Accepted proposal is visibly distinct from execution and verification. Rejected or unsupported actions do not become success. Uncertainty can survive an action proposal. | Existing foundation, full journey qualification pending. |
 | 5. Ground-truth qualification and landing | Extend existing qualification tooling only where necessary. Exercise healthy/unhealthy, dependency, missing-access, storage/backup and approved/rejected action cases. Inspect the final browser journey at desktop and narrow widths. | Record exact source/model/permissions, evidence, decisions, faults/misses, latency and verification. Fix in-scope failures, pass appropriate proofs and land scoped commits. | Pending. |
@@ -910,3 +910,342 @@ corresponding independent lab probe. The ordinary homelab file-read failure
 proof remains useful but does not close that autonomous qualification gap.
 Those cases require suitable independent ground truth through the existing
 qualification framework before the overall goal can complete.
+
+## Retained-read performance correction, 2026-09-06
+
+Build and Test run `34008823529` for integration `f779bf064ab4` failed its
+benchmark comparison against exact main `3f74c0c27304`. All other jobs passed,
+and Core E2E run `34008823534` passed all eight browser shards. The benchmark
+failure comprised fifteen time/allocation comparisons, including batch reads
+up to 59% slower and small-read bytes about 198% higher. Earlier narrow worker
+comparisons omitted the actual QueryAllBatch cases and did not establish this
+integrated performance result. The initial status report calling that CI job
+passed was incorrect and was explicitly corrected.
+
+The canonical reader now reuses bounded SQL templates and numbered bindings,
+checks absent preferred tiers once within the current statement, and appends
+consecutive results directly to their series. It retains tier reconciliation,
+current snapshots, scope isolation and output semantics. No benchmark threshold
+was relaxed. An initial correction still regressed the plain raw-read case by
+11% and was revised before landing.
+
+Final production `pkg/metrics/store.go` SHA-256:
+`9a66d1acea82c17ca540abe9a9ee66e089a36420620e2ebb8ca7e6d102191a8d`.
+Ten alternating 100ms samples on pulse-dev, Go 1.26.8 and GOMAXPROCS=4,
+compare the final implementation with exact base `3f74c0c27304`. The complete
+selected Query, QueryAllBatch, RollupCandidate, fleet dashboard, history API,
+chart batch and NormalizeRoute benchmark families have no statistically
+significant greater-than-10% regression in time, bytes or allocations. Plain
+raw reads show no significant time change. Batch reads improve 16–42%, with
+bytes reduced 28–34%. Single-metric downsampling is 5.66% slower and the
+1,000-point rollup candidate is 6.04% slower, both inside the unchanged gate.
+The bounded history API shows no significant time change. These are selected
+worker comparisons, not a claim that final remote CI has passed.
+
+Private raw samples and benchstat outputs are under
+`tmp/patrol-f779-v2-selected/` and `tmp/patrol-f779-v2-normalize/` at the
+workspace root. Focused tests cover newly appearing preferred buckets after a
+cached absent-tier read, current resource family, metric, window and display
+step bindings, per-series overlap and batch parity. Integration with main
+`6c000837e27b` brings three test-only changes and no additional runtime changes.
+Full metrics and database packages pass on pulse-dev in 77.265s and 0.272s.
+Focused retained coverage, fresh bindings and batch identity race proof passes
+in 5.349s. The two latency-based concurrent SLO tests run in the ordinary suite
+but explicitly skip under the race detector. A separate canonical hot-path
+regression exercises eight concurrent query scopes and mixed display steps
+through a one-connection pool without latency assertions. It passes normally
+(0.043s) and under race (2.106s), with no cross-query binding leakage or lock
+inversion. Its worker log is `patrol-retained-concurrent-bindings.log`.
+Private full/race logs are under
+`tmp/patrol-f779-final-proof/`. Exact staged hook and remote landing remain
+pending. This correction does not close the outstanding real-model/action outcome gap.
+
+## Independent service-storage oracle, 2026-09-06
+
+The qualification framework now includes
+`investigation.docker-storage-pressure`, with a driver-owned fixed 8 MiB tmpfs,
+a real ENOSPC write fault and an independent filesystem-statistics probe. The
+service's normal writes fail and its health degrades, while an unrelated control
+stays healthy. Reversion removes only the fixed fill file. The driver verifies
+the prepared container ID, exact ownership labels, filesystem type and capacity
+before writing. Existing fill files and symlinks are refused.
+
+The final qualification and CLI packages pass on pulse-dev (4.223s and 0.005s).
+The initial provider-free oracle run passed in 8.478s. The final live test adds
+an explicit symlink outside the scratch mount, proves the target is unchanged
+after refusal and reversion, and passes in 8.65s. The catalogue contains twelve
+valid manifests. These tests make no Pulse API or model request.
+
+The independent measurements establish 8,380,416 free bytes at baseline,
+zero during the fault and restored free space after reversion. The service
+remains running during the fault, its health changes to unhealthy, and the
+control remains healthy. Final cleanup removes both disposable containers and
+their network, the second cleanup is a no-op, and pre-existing inventory is
+unchanged. The worker's preloaded Alpine 3.20 image digest is
+`sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc`.
+
+Production driver `internal/ai/qualification/lab_storage.go` SHA-256 is
+`9e204767ddd20496c52e2566fae5690df22f840f8aac32b3af00ddc3cffc8bc8`.
+Final live-test SHA-256 is
+`0350997f3dbc6cbaa1877a9942e75ce500d28ecdfeff7e16fc8d8bb2cce588d1`.
+Private worker logs are `patrol-storage-qualification.log` and
+`patrol-storage-symlink-final.log` under `/opt/pulse-release-worker/`.
+
+This closes the missing service-storage fault/oracle implementation, not the
+required real-model diagnosis. A normal Pulse collector and supported provider
+route are still required to qualify Patrol on this scenario. Host/storage-pool
+and backup faults are outside this specific fixture. Missing access must be
+qualified at Pulse's source or tool boundary, not substituted with an app's
+unrelated file-permission fault. The overall goal and provider-refusal boundary
+remain unchanged. Final staged hook and landing for this slice remain pending.
+
+Actual published-schema validation initially rejected the new storage manifest
+and three existing action manifests because `required_summary_terms` remained
+mandatory despite runtime support for equivalent-term groups. The schema now
+accepts either form and retains required evidence fields. A full JSON Schema
+catalogue test, with negative controls for missing/empty expectations and missing
+evidence, is wired into the existing Patrol regression workflow. This is distinct
+from `-mode validate`, which exercises only the Go manifest validator.
+
+All twelve manifests now pass the published schema with the CI-pinned
+`jsonschema` 4.26.0. All five schema regression tests pass, including missing
+and empty summary expectations and missing evidence controls. The worker log
+is `/opt/pulse-release-worker/patrol-storage-schema-final.log`. Schema SHA-256
+is `01ea739e2a68dc0a7b6a0041de15f5e2edcf59f31826b02a01b51a1e2b5488d`.
+
+The final shipped guide is byte-identical to the source and passes Playwright
+at `/docs/AI_PATROL_QUALIFICATION`, 1440x1000, 900x1000 and 390x1000.
+The new catalogue row, storage section, command and deepest qualification
+limits were inspected as pixels. The page stays within its viewport and the
+long command scrolls within its own block. Reload, keyboard navigation to the
+documentation index and browser-history return pass. Private matrix, screenshots
+and receipt are under `tmp/patrol-storage-docs-proof/` at the workspace root.
+The served guide SHA-256 is
+`1970ed5cd70e976d2acbeaf7d36a7b78b5dedf65355c50a19abdba8ca96c9770`.
+No model or infrastructure action is used by this browser proof.
+
+## Disk probe completion ordering, 2026-09-06
+
+Build and Test run `34011979848` on `f26668aa6ddc` reports a failure in
+`TestCollectDisksExcludesFreeBSDFdescfsBeforeUsage`: the expected root filesystem
+read did not invoke its usage probe. The shared in-flight registry published a
+result before removing the completed entry. A subsequent collection could reuse
+that completed result instead of taking a fresh measurement.
+
+A controlled regression holds the registry lock while the syscall completes.
+It fails on the preceding implementation because the caller returns while its
+completed probe remains discoverable. Retirement and completion publication now
+share one critical section. The syscall and caller waits remain outside the lock,
+and overlapping collectors still share genuinely running probes. This corrects
+the shared ordering contract instead of clearing state or retrying the test.
+
+On pulse-dev with Go 1.26.8, twenty full hostmetrics package runs pass in
+16.687s and three complete race-detector runs pass in 1.864s. These include
+excluded mounts, stalled mounts, recovery, shared results and cancellation.
+Production source SHA-256 is
+`cbf5efa6bfcc163faa061ccf7c70bb6738c4ef2f78473d7d66fa00c589f87555`.
+Regression file SHA-256 is
+`e7a3adfe7f2cbc36cd8c315ef71ec019fa34db45b75458fa0b2212e3533b09b7`.
+Both hashes match before and after proof. The raw worker log is
+`/opt/pulse-release-worker/patrol-disk-probe-completion.log`.
+
+The preceding storage slice was committed and pushed as `618700db5e` to
+PR #1928, which remains open. Its exact staged hook passed 163 tests in 127.989s with all fourteen
+file hashes unchanged. This supersedes the pending-hook statements above for that
+slice only. Current remote CI is not a completed pass. The f266 benchmark job
+also failed and its comparison remains under investigation. The overall goal,
+real-model/action qualification and provider refusal remain open and unchanged.
+
+## Large-scope query binding correction, 2026-09-06
+
+The disk-probe slice is committed as `b964eea767` and pushed to open PR #1928.
+Its final exact staged hook passes all 163 tests in 128.317s, with six unchanged
+source hashes. This supersedes the pending disk-hook status above.
+
+Build and Test run `34011979848` compares `f26668aa6ddc` against PR base
+`3347f561ec7b`, rather than the earlier `3f74c0c27304` worker baseline. Its
+remaining benchmark failure is the 500-node dashboard batch read: allocation
+events increase 24.73%, allocated bytes increase 0.62% and runtime has no
+statistically significant change. Ten alternating 100ms samples on pulse-dev
+with Go 1.26.8 and GOMAXPROCS=4 reproduce all three results. The unchanged
+repository benchmark checker rejects that candidate.
+
+The pinned SQLite driver matches each numbered parameter against argument
+ordinals, converting each compared ordinal to a string. Large scopes repeatedly
+pay those conversions. The allocation profile identifies that conversion path.
+The correction retains shared parameter values across query branches but uses
+alphabetic names and `database/sql.Named`. Every read still supplies current
+values. Resource identity, retention coverage, snapshots and cached shape bounds
+are unchanged. Parameter names are internal positions, never user values.
+
+An initial source-bound experiment against the same exact baseline reduces the
+500-node allocation difference to +0.26% and allocated bytes to -1.68%. Runtime
+has no statistically significant difference. Ten samples per variant pass the
+actual repository benchmark checker. Experiment source SHA-256 is
+`b73ea7984bded06b2a3319ed3a62fbe63ee87f63fd317a40b51d451f5c21b89c`.
+Query-plan, fresh snapshot/window/step, concurrent binding and large-scope
+binding tests pass in 0.201s. The new large-scope test reuses one cached shape
+with 500 current IDs and changed family, metric filters and time window. IDs
+that resemble SQL or parameter names remain data.
+
+Private raw experiment comparisons and profiles are under
+`tmp/patrol-disk-bench-go1268/` at the workspace root. The final product source
+also includes an explanatory comment. Full affected package/race proof, broader
+final-source comparisons and the final staged hook remain pending. The goal
+remains open for real-model diagnosis, missing-access and action-outcome
+qualification. The provider refusal is unchanged.
+
+Final product source SHA-256 is
+`72a7674a67ed1114be74038fb9a3d1e9c9d0507fb0d9597995f38aec0c8cbc56`.
+Final test source SHA-256 is
+`76be5a315e8b6dafd4a93b09711e01854087ce9f6f5a94ddb8c2ff20b3e8f708`.
+Full metrics and database packages pass on Go 1.26.8 in 77.390s and 0.203s.
+Focused retained/tier/binding/batch race proof, including the new 500-resource
+binding case, passes in 7.707s. Both source hashes match before and after proof.
+The worker log is `/opt/pulse-release-worker/patrol-named-binding-final-tests.log`.
+Broader final-source performance comparison and staged-hook qualification
+remain pending.
+
+The two latency-based concurrent SLO tests are included in the ordinary full
+suite and deliberately skip under the race detector. The separate concurrent
+and large-scope binding regressions execute under race without latency gates.
+
+The final broader comparison uses ten paired 100ms rounds on pulse-dev, with
+baseline before candidate in each round, against exact CI base `3347f561ec7b`.
+It covers all Query, QueryAllBatch, QueryManyResources and 500-node dashboard
+query/concurrent-load cases, plus history API, memory-fallback control and
+workload/summary chart APIs. All forty invocations succeed. Both metrics and
+API comparisons pass the unchanged repository checker for time, bytes and
+allocations. The 500-node read remains +0.26% in allocation events and -1.68%
+in bytes versus base, with no statistically significant runtime difference.
+
+Base source hashes match the actual git object and final source hashes match
+the product manifest above. The local and worker benchmark checker hashes are
+identical. An earlier setup used the invalid package path `./pkg/api` and is
+discarded. The complete final run uses `./internal/api` and an actual frontend
+build artifact. Its raw worker directory is
+`/opt/pulse-release-worker/patrol-wide-results-corrected/`, with the final
+comparisons, gates and logs copied to `tmp/patrol-named-binding-final-proof/` at
+the workspace root. This establishes the selected local performance proof,
+not a completed remote CI pass. Final staged-hook qualification and landing
+remain pending.
+
+
+### Missing diagnostic access preserves monitored identity
+
+The named-binding correction is committed as `1f41fa174d7d` and pushed to PR
+#1928 after the exact five-file staged hook passed 163 tests in 127.438s.
+This supersedes the pending-hook statement above. Remote landing remains open.
+
+The missing-access case reproduced a shared routing defect before any new
+infrastructure fault was introduced. With no connected command agents, the
+resolver returned before consulting monitoring topology. Known hosts, VMs and
+system containers consequently lost their kind, parent and required transport.
+The regression failed for all three known targets in the original source.
+
+The shared resolver now retains topology when no server or connection exists.
+A known target cannot fall through to an unrelated agent with a colliding ID.
+No-target routing still requires exactly one connected agent. The file-read,
+file-write, file-append, read-only execution and retained legacy command handlers
+return the existing NO_AGENT failure envelope, including known resource kind and
+parent node when available. The requested operation did not run. Missing access
+no longer produces a successful file-write result or unsupported installation
+advice. Absence of a connection does not establish a policy denial, missing
+installation, guest capability, fresh observation or healthy workload.
+
+This concerns diagnostic command access. Advertised Proxmox lifecycle actions
+retain their canonical hypervisor action authority and do not acquire an
+in-guest diagnostic prerequisite. Issue #1782's full body and two comments were
+read as adjacent evidence of the customer harm caused by invented prerequisites.
+Its requested reporter confirmation remains outstanding. No comment was sent.
+
+The final full tools package passes on pulse-dev with Go 1.26.8 in 59.437s.
+Targeted local regression passes on Go 1.27.1 in 0.538s. Worker source hashes are
+unchanged across the full-package proof. Private reproduction, source manifest
+and browser-result export are under `tmp/patrol-access-routing-proof/` at the
+workspace root. The export invokes actual current tool handlers with controlled
+connection fixtures. Its initial connected mock lacked a GetConnectedAgents
+expectation and failed before export. The corrected export passes in 0.513s.
+Browser fixtures prove rendering only. They do not qualify model judgment or
+real command-scope enforcement. Final browser, race and staged proofs follow.
+
+
+Final focused race proof explicitly runs all five new/missing-read tests and
+passes in 1.051s on Go 1.26.8. An earlier broader name pattern passed but omitted
+three newly named routing tests, so it is not used to claim their race coverage.
+Existing API regressions for implicit monitoring-token scope and real WebSocket
+rejection without agent-exec scope also pass in 0.122s. These preserve the access
+boundary. They are not a model-led missing-access investigation.
+
+Playwright and pixel inspection pass for known disconnected target, unknown
+target and ordinary failed-read controls at `/patrol`, 1440x1000, 900x1000 and
+390x1000. The 18 cases cover ordinary and mirrored findings, keyboard review,
+completed-but-unresolved records, readable error evidence, expanded investigation
+transcripts, collapse, linked Assistant explanation and deepest failed-tool
+input/output, Escape and context-only reopen, plus reload without resubmission.
+Nine chat requests are intercepted, with no infrastructure writes. The backend
+results are serialized from actual final-source handlers with controlled
+connection/command fixtures. Model conclusions and transport are scripted.
+The generic Patrol toolbar opens context-only Assistant, so the proof checks
+no automatic submission there rather than expecting a persisted issue session.
+One permission-control pass exhausted a five-second wait while capabilities
+were still loading. Its complete matrix passes with a twenty-second request
+wait. This does not establish a latency SLO. Final receipts/screenshots are in
+`tmp/patrol-access-browser-proof/{known-vm,unknown-target,permission-denied}/`
+at the workspace root. No frontend runtime source changed.
+
+The final routing source hashes are:
+
+- `internal/ai/tools/tools_control.go`: `f6ac2e05542657a1d859196b06c3a68288e08b436db6dabf4f691ded744dc751`
+
+- `internal/ai/tools/tools_file.go`: `c42002e1bf012024e1b38aa64738e0a8d9e0609699a49362675e01e7891d763e`
+
+- `internal/ai/tools/tools_read.go`: `643a02f70432adff75355ef3083d84ab24f43c3b811bba7730cfca2ca4fd8de7`
+
+- `internal/ai/tools/strict_resolution_test.go`: `7f88e16933c0b91b1ef7754cb7df977501fdc7278540a6ec70c1c4283e08c62d`
+
+- `internal/ai/tools/file_docker_test.go`: `6bb8f5df1291175b9f7c52dd863293bfe89a4b189ef3ed79daeaf2f8d7adb45b`
+
+
+The missing-access slice is ready for its exact staged hook. The broader goal
+remains open for real-model diagnosis and approved/rejected action outcomes.
+On head `1f41fa174d7d`, governance, all eight Core E2E shards and CodeQL pass.
+Build and Test run `34015148620` is still pending with no jobs, so omitted PR
+checks are not treated as success. PR #1928 remains open with auto-merge enabled.
+
+
+### Live dependency and restart fault contracts
+
+The missing-access slice is committed and pushed as `58caeda69ba3` to PR #1928.
+Its exact eight-file staged hook passes all 163 tests in 127.706s with unchanged
+hashes. The first hook environment lacked PyYAML. The complete rerun used
+PyYAML 6.0.3 and jsonschema 4.26.0, with the initial failure retained separately.
+This supersedes the pending-hook statement above. Remote CI remains open.
+
+The existing dependency and action scenarios had schema/mocked-command coverage
+but no explicit live Docker oracle regression alongside the storage oracle.
+`TestDockerDependencyAndRestartOraclesLive` now exercises the checked-in
+investigation dependency manifest and all three approved/rejected/autonomous
+service-restart manifests. It shares the existing DockerLab, explicit daemon
+selection and exact run-scoped cleanup. It never contacts Pulse or a model.
+
+On pulse-dev with Go 1.26.8 and pre-existing Alpine 3.20 image digest
+`sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc`,
+the live package run passes in 65.080s. The dependency case takes 12.53s, and
+the three service cases take 17.51s, 17.51s and 17.52s. Each records baseline,
+fault, unchanged fault after refused duplicate injection, explicit fixture
+recovery and restored baseline. Stopping the dependency makes its running
+client unhealthy, and starting it restores both. Stopping the service health
+process leaves its container running and unhealthy until explicit restart.
+Every cleanup passes, second cleanup is a no-op, and pre-existing containers,
+volumes, networks and images are unchanged. No image was pulled.
+
+This proves the fault/oracle contracts, including that observation does not
+repair the fixture. Direct fixture recovery is teardown. It is not a Pulse
+approval, rejected-action execution, autonomous action or verified customer
+outcome. The required real-model and canonical action journeys remain open.
+Raw log: `/opt/pulse-release-worker/patrol-dependency-action-oracles-live.log`,
+copied to `tmp/patrol-dependency-action-oracles/` at the workspace root.
+The live test source SHA-256 is
+`78b72dc44231cd3ecbd0b2ee925d53a5836af3141e695152046aa032580f1e48`.
+The ordinary qualification and CLI packages pass in 4.224s and 0.008s on Go 1.26.8 with the explicit live environment unset. The test hash is unchanged. The exact staged hook remains pending for this slice.

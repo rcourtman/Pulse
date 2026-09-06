@@ -153,9 +153,6 @@ func (e *PulseToolExecutor) executeFileEdit(ctx context.Context, args map[string
 
 // executeFileRead reads a file's contents
 func (e *PulseToolExecutor) executeFileRead(ctx context.Context, path, targetHost, dockerContainer string) (CallToolResult, error) {
-	if e.agentServer == nil {
-		return NewErrorResult(fmt.Errorf("no agent server available")), nil
-	}
 
 	if blocked, reason := safety.IsSensitivePath(path); blocked {
 		return NewToolResponseResult(NewToolBlockedError(
@@ -179,10 +176,7 @@ func (e *PulseToolExecutor) executeFileRead(ctx context.Context, path, targetHos
 	// Use full routing resolution - includes provenance for debugging
 	routing := e.resolveTargetForCommandFull(targetHost)
 	if routing.AgentID == "" {
-		if routing.TargetType == "container" || routing.TargetType == "vm" {
-			return NewErrorResult(fmt.Errorf("'%s' is a %s but no agent is available on its host node. Install Pulse Unified Agent on the node.", targetHost, routing.TargetType)), nil
-		}
-		return NewErrorResult(fmt.Errorf("No agent found for host '%s'. Check that the hostname is correct and an agent is connected.", targetHost)), nil
+		return unavailableCommandConnection(targetHost, routing), nil
 	}
 
 	var command string
@@ -274,9 +268,6 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 // blocking, routing + resolved-resource validation, approval gating, base64
 // transfer, audited execution, and post-write verification.
 func (e *PulseToolExecutor) executeFileMutation(ctx context.Context, path, content, targetHost, dockerContainer string, args map[string]interface{}, spec fileMutationSpec) (CallToolResult, error) {
-	if e.agentServer == nil {
-		return NewErrorResult(fmt.Errorf("no agent server available")), nil
-	}
 	approvalID := agentcapabilities.ApprovalArgument(args)
 
 	if blocked, reason := safety.IsSensitivePath(path); blocked {
@@ -310,10 +301,7 @@ func (e *PulseToolExecutor) executeFileMutation(ctx context.Context, path, conte
 	// Use full routing resolution - includes provenance for debugging
 	routing := e.resolveTargetForCommandFull(targetHost)
 	if routing.AgentID == "" {
-		if routing.TargetType == "container" || routing.TargetType == "vm" {
-			return NewTextResult(fmt.Sprintf("'%s' is a %s but no agent is available on its host node. Install Pulse Unified Agent on the node.", targetHost, routing.TargetType)), nil
-		}
-		return NewTextResult(fmt.Sprintf("No agent found for host '%s'. Check that the hostname is correct and an agent is connected.", targetHost)), nil
+		return unavailableCommandConnection(targetHost, routing), nil
 	}
 
 	// INVARIANT: If the target resolves to a child resource (container/VM), writes MUST execute

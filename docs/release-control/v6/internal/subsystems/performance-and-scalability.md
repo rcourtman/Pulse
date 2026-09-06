@@ -45,8 +45,24 @@ Display-aggregated reads use one transaction. Indexed existence checks identify
 which retention tiers have observations in that snapshot. Every present tier
 participates in the shared indexed overlap query. Presence never stands in for
 per-series coverage. The store retains at most 32 compiled read-statement shapes
-and evaluates them again inside each current read snapshot.
-It never caches tier presence, query results or timestamp windows. Less common
+and 32 SQL templates keyed only by parameter counts, tier order and aggregation
+shape. Alphabetic named SQLite bindings supply each current identity, window and
+display step once across all branches. Bindings use `database/sql.Named` so the
+driver need not repeatedly convert ordinals to strings while matching a large
+parameter set. Names describe parameter positions only. Resource IDs and all
+other values remain bound data, never interpolated SQL. The large-scope binding
+regression reuses a 500-resource query shape with new resource family, identities,
+metrics and time window, including IDs that resemble parameter names or SQL.
+An uncorrelated existence guard in the same
+statement avoids per-observation overlap probes when a preferred tier is absent.
+If any preferred observation exists, the correlated same-series check still
+owns coverage. Both checks are reevaluated in the current snapshot.
+The template lock performs no database I/O and is separate from statement
+preparation. The store never caches tier presence, query results or timestamp
+windows. Consecutive output points append directly to the current series slice,
+flushing it to the result map on series change and completion. Interleaved
+metrics resume their existing slices. A single chunk returns its result directly
+without copying the outer map. Less common
 shapes run uncached after the bound is reached. Preparation occurs before
 acquiring the transaction, including with a single-connection pool. The shared
 database instrumentation preserves timing for transaction-bound prepared

@@ -1020,6 +1020,21 @@ component-local required-scope list.
 
 ## Extension Points
 
+The published qualification schema accepts either literal summary terms or
+non-empty groups of equivalent terms, matching the runtime expectation shape.
+A full JSON Schema catalogue regression runs in CI alongside Go validation.
+It must reject missing summary and evidence requirements and empty term groups.
+
+The service-storage qualification driver owns a fixed 8 MiB container tmpfs.
+Its fill operation checks the prepared container identity and exact ownership
+labels, validates filesystem type and capacity, refuses existing fill files,
+and requires both a real ENOSPC write failure and independently measured zero
+free bytes. Model output, Pulse metrics and the service healthcheck cannot
+establish capacity ground truth. Recovery and exact-label cleanup preserve
+pre-existing inventory. The opt-in Docker oracle test makes no provider or
+Pulse API call and cannot qualify diagnosis. Host/storage-pool, backup and
+missing-source-access coverage remain separate required scenarios.
+
 Patrol model qualification extends only through
 `internal/ai/qualification/`, `cmd/patrol-qualify/`, and reviewed manifests
 under `tests/qualification/patrol/`. A manifest's qualification repeat profile must be
@@ -8015,3 +8030,28 @@ disallowed. Streaming DOM reconciliation preserves table region identity, focus
 and scroll position. The conversation itself must not acquire horizontal scroll
 from wide answer tables. Browser proof covers a persisted real answer and
 explicit renderer fixtures at 1440, 900 and 390 pixel widths.
+
+
+### Monitoring identity without command access
+
+Command routing resolves monitored topology independently of agent connection
+availability. A missing connection must preserve the known target kind and
+parent node, cannot fall back to a different agent with a colliding name or ID,
+and cannot dispatch a command. No-target routing requires exactly one connection.
+Diagnostic reads and file mutations return the same NO_AGENT failure envelope
+when no command connection is available. Failure is distinct from an established
+permission denial. Do not infer an installation requirement or guest capability
+from this absence. Advertised hypervisor lifecycle capabilities remain governed
+by their canonical action path, independently of diagnostic command access.
+
+
+### Independent dependency and restart fault proof
+
+The opt-in live dependency/restart oracle uses the checked-in investigation
+and action manifests through the existing DockerLab. It requires an explicit
+Docker context, preserves fault state while observing and refusing duplicate
+injection, verifies fixture recovery, and requires exact run cleanup plus
+unchanged pre-existing inventory. The ordinary package run skips live Docker
+work unless explicitly enabled. A direct fixture restart is teardown and must
+never be counted as a Pulse approval, execution, rejection or outcome. Model-led
+and canonical-action qualification remain separate required evidence.

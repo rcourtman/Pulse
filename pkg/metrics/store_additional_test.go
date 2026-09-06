@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -1248,5 +1249,100 @@ func TestCommercialHistoryRetentionNeverExpandsOperatorPolicy(t *testing.T) {
 	store.SetCommercialHistoryRetention(14, now)
 	if got := store.effectiveRetention(7*24*time.Hour, now); got != 7*24*time.Hour {
 		t.Fatalf("commercial ceiling expanded shorter operator retention: %v", got)
+	}
+}
+
+// Exercise shared query reuse under race detection without latency assertions.
+// A one-connection pool also exposes preparation/read-transaction lock inversion.
+func TestStoreRetainedConcurrentQueryBindings(t *testing.T) {
+	db := newPlanTestDB(t)
+	db.SetMaxOpenConns(1)
+	store := &Store{db: pdb.Wrap(db, "concurrent-retained-bindings")}
+	base := time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC)
+	type scope struct {
+		family, id, metric string
+		value              float64
+	}
+	var scopes []scope
+	for i := 0; i < 8; i++ {
+		item := scope{family: "node", id: strconv.Itoa(i / 2), metric: "cpu", value: float64(i + 1)}
+		if i%2 != 0 {
+			item.family = "vm"
+		}
+		if i%4 >= 2 {
+			item.metric = "memory"
+		}
+		if _, err := db.Exec(`INSERT INTO metrics(resource_type,resource_id,metric_type,tier,timestamp,value) VALUES (?,?,?,'raw',?,?)`, item.family, item.id, item.metric, base.Add(70*time.Second).Unix(), item.value); err != nil {
+			t.Fatal(err)
+		}
+		scopes = append(scopes, item)
+	}
+	start := make(chan struct{})
+	var workers sync.WaitGroup
+	for _, item := range scopes {
+		workers.Add(1)
+		go func(item scope) {
+			defer workers.Done()
+			<-start
+			for i := 0; i < 12; i++ {
+				step := []int64{0, 60, 120}[i%3]
+				points, err := store.Query(item.family, item.id, item.metric, base.Add(time.Duration(i)*time.Second), base.Add(3*time.Minute), step)
+				if err != nil {
+					t.Errorf("scope %+v step %d: %v", item, step, err)
+					return
+				}
+				if len(points) != 1 || points[0].Value != item.value {
+					t.Errorf("scope %+v step %d received another query's values: %+v", item, step, points)
+					return
+				}
+			}
+		}(item)
+	}
+	close(start)
+	workers.Wait()
+}
+
+// A cached large-scope query must bind every identity and filter anew. Values
+// resembling SQL parameters or SQL syntax remain resource data.
+func TestStoreRetainedLargeQueryBindings(t *testing.T) {
+	db := newPlanTestDB(t)
+	store := &Store{db: pdb.Wrap(db, "large-retained-bindings")}
+	base := time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC)
+	for round := 0; round < 2; round++ {
+		family := []string{"node", "vm"}[round]
+		metrics := [][]string{{"cpu", "memory"}, {"disk_read", "disk_write"}}[round]
+		start := base.Add(time.Duration(round) * time.Hour)
+		observed := start.Add(30 * time.Second)
+		ids := make([]string, queryAllBatchChunkSize)
+		for i := range ids {
+			ids[i] = strconv.Itoa(round) + "/resource-" + strconv.Itoa(i)
+		}
+		ids[0] += ":p1"
+		ids[len(ids)-1] += "' OR 1=1 --"
+		for _, index := range []int{0, len(ids) - 1} {
+			for _, metric := range metrics {
+				if _, err := db.Exec(`INSERT INTO metrics(resource_type,resource_id,metric_type,tier,timestamp,value) VALUES (?,?,?,'raw',?,?)`, family, ids[index], metric, observed.Unix(), float64(index+round+1)); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		result, err := store.QueryMetricTypesBatch(family, ids, metrics, start, start.Add(time.Minute), 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(result) != 2 {
+			t.Fatalf("round %d returned %d resources, want two", round, len(result))
+		}
+		for _, index := range []int{0, len(ids) - 1} {
+			if len(result[ids[index]]) != len(metrics) {
+				t.Fatalf("round %d resource %q returned unexpected metrics: %+v", round, ids[index], result[ids[index]])
+			}
+			for _, metric := range metrics {
+				points := result[ids[index]][metric]
+				if len(points) != 1 || points[0].Value != float64(index+round+1) || !points[0].Timestamp.Equal(observed) {
+					t.Fatalf("round %d resource %q metric %q returned wrong scope: %+v", round, ids[index], metric, points)
+				}
+			}
+		}
 	}
 }
