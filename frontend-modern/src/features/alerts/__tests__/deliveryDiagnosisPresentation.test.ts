@@ -35,12 +35,44 @@ describe('describeAlertDeliveryStatus', () => {
     expect(describeAlertDeliveryStatus(diagnosis, true)).toBeNull();
   });
 
-  it('shows the notified time when eligible and already notified', () => {
+  it('shows dispatch evidence without claiming destination success', () => {
     const diagnosis = baseDiagnosis({ lastNotified: '2026-08-26T10:15:00Z' });
     const line = describeAlertDeliveryStatus(diagnosis, false);
     expect(line?.tone).toBe('muted');
-    expect(line?.label).toMatch(/^Notified /);
+    expect(line?.label).toMatch(/^Dispatch requested /);
   });
+
+  it('shows dispatch without promising another send when cooldown has no next time', () => {
+    const line = describeAlertDeliveryStatus(
+      baseDiagnosis({
+        status: 'suppressed',
+        reason: 'cooldown',
+        lastNotified: '2026-08-26T10:15:00Z',
+      }),
+      false,
+    );
+    expect(line?.label).toMatch(/^Dispatch requested /);
+    expect(line?.label).not.toContain('next');
+  });
+
+  it.each([undefined, '', 'invalid'])(
+    'does not invent dispatch for timestamp %s',
+    (lastNotified) => {
+      expect(describeAlertDeliveryStatus(baseDiagnosis({ lastNotified }), false)?.label).toBe(
+        'Notification pending',
+      );
+      expect(
+        describeAlertDeliveryStatus(
+          baseDiagnosis({
+            status: 'suppressed',
+            reason: 'cooldown',
+            lastNotified,
+          }),
+          false,
+        )?.label,
+      ).toBe('Waiting for cooldown');
+    },
+  );
 
   it('shows pending when eligible but never notified', () => {
     const line = describeAlertDeliveryStatus(baseDiagnosis({}), false);
@@ -67,7 +99,7 @@ describe('describeAlertDeliveryStatus', () => {
     });
     const line = describeAlertDeliveryStatus(diagnosis, false);
     expect(line?.tone).toBe('muted');
-    expect(line?.label).toMatch(/^Notified .* — next /);
+    expect(line?.label).toMatch(/^Dispatch requested .* — next eligible /);
   });
 
   it.each([
