@@ -10690,6 +10690,21 @@ reasoning and real remediation in
 proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
 response does not establish a useful customer outcome or model qualification.
 
+### Report email shares the canonical SMTP retry verdict
+
+Attachment delivery through `internal/notifications/email_enhanced.go` uses
+notifications-owned `sendEmailWithOptions`; reporting must not introduce a
+separate retry classification. That transport stops on authentication,
+configuration, or rejection failures and preserves temporary-failure retries.
+Its returned failure retains the structured cause and actual attempt count;
+this does not change report API schemas or prove recipient acceptance.
+`internal/notifications/email_retry_class_test.go` verifies the shared transport
+failure boundary with in-memory SMTP replies, not end-to-end report delivery.
+The transaction-stage regression matrix additionally checks MAIL, RCPT, DATA
+command and completed-message rejections, including transient-then-accepted
+termination. It exercises the shared sender with plain SMTP and no attachments;
+it is not separate qualification of report rendering, TLS or report receipt.
+
 ### Explicit historical incident archives
 
 `internal/api/router.go` pins a read-only legacy archive to each organization's

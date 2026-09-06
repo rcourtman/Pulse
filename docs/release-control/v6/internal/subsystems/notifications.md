@@ -247,7 +247,18 @@ That same ownership includes webhook retry classification. The canonical
 retry gate in `webhook_enhanced.go` must parse provider failures from both
 `status 429`-style and `HTTP 429`-style error strings before it decides
 whether to retry, so a non-retryable `HTTP 400` result cannot be retried just
-because the transport changed its error wording.
+because the transport changed its error wording. Explicit HTTP status also
+wins over network-like diagnostic text in the response body: a terminal 403
+mentioning "authentication timeout" must stop transport retries, retain the
+403 in delivery history, and record zero retries when rejected on the first
+attempt. The existing transient HTTP exceptions and retryable fallback for
+network or unclassified failures remain unchanged.
+`TestIsRetryableWebhookError_StatusOverridesBody` and
+`TestWebhookRetryRejectsForbiddenTimeoutBody` in
+`internal/notifications/webhook_retry_test.go` pin this precedence with a
+status/body matrix and a queue-free loopback receiver that checks request
+count and delivery history. These are synthetic transport proofs, not installed
+recipient receipts or a change to persistent-queue retry policy.
 That same notification transport boundary also owns outbound Apprise HTTP URL
 normalization. Server URLs must be validated as absolute HTTP(S) endpoints
 without userinfo before request construction, and the `/notify` plus optional
@@ -570,6 +581,21 @@ the queue nor any destination type may keep its own list. This generalises to
 every destination the decision webhook delivery already made for HTTP 4xx in
 `isRetryableWebhookError`.
 
+The SMTP transport's inner retry loop must apply that same classifier after
+an unsuccessful send, before sleeping or attempting another connection.
+Permanent authentication, configuration, and rejection failures return on that
+attempt; transient failures retain up to `MaxRetries + 1` transport attempts.
+The returned error preserves the structured cause and reports the actual
+attempt count, not the configured maximum. This applies equally to ordinary,
+threaded, and attachment email through `sendEmailWithOptions`.
+
+`internal/notifications/email_retry_class_test.go` exercises the real sender
+with in-memory SMTP handshake failures: permanent 550/535/554/501 replies stop
+at one attempt, while transient 421 retains three configured attempts even
+when its prose mentions authentication. It checks classification and the
+reported attempt count. This is transport-only proof, not queue persistence,
+post-DATA acceptance, or an installed recipient receipt.
+
 Dead-lettering early must not lose the notification: `RetryTerminalFailures`
 remains the operator's recovery path, returning eligible retained terminal
 failures to the queue with a fresh budget once the credentials or configuration
@@ -627,3 +653,14 @@ email, webhook and Apprise, firing and recovery, and global versus destination
 disablement. This corrects false successful queue/audit records; it does not
 establish maintenance-window expiry, stop an already-started provider request,
 or repair historical false-success records.
+
+### SMTP transaction-stage retry regression coverage
+
+`TestEmailRetryRespectsSMTPTransactionReplies` extends the greeting-failure
+fixture through MAIL, RCPT, DATA command and completed-message replies. At each
+stage, structured 550 replies stop after one attempt despite temporary prose;
+451 replies retain the three-attempt configured budget, and a 451 followed by
+acceptance stops after the second attempt. This checks the sender's wrapped
+errors and retry termination, not only the failure classifier. The in-memory
+plain-SMTP fixture sends no external mail and does not qualify TLS, installed
+recipient receipt or queue persistence.

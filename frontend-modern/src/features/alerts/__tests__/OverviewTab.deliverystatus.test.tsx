@@ -146,6 +146,46 @@ describe('OverviewTab delivery status line', () => {
     expect(screen.getByText('Notifications are turned off')).toBeTruthy();
   });
 
+  it.each(['success', 'failure'] as const)(
+    'does not apply a resolved incident %s to its recurrence on the same resource',
+    async (outcome) => {
+      let finishOlder!: (value: AlertDeliveryDiagnosis[]) => void;
+      let rejectOlder!: (reason: Error) => void;
+      getDeliveryDiagnoses.mockReturnValueOnce(
+        new Promise((resolve, reject) => {
+          finishOlder = resolve;
+          rejectOlder = reject;
+        }),
+      );
+      getDeliveryDiagnoses.mockResolvedValueOnce([
+        makeDiagnosis('a2', { status: 'suppressed', reason: 'notifications_disabled' }),
+      ]);
+      const original = makeAlert('a1');
+      const recurrence = {
+        ...makeAlert('a2'),
+        resourceId: original.resourceId,
+        resourceName: original.resourceName,
+        startTime: '2026-09-06T19:00:00Z',
+      };
+      const [alerts, setAlerts] = createSignal<Record<string, Alert>>({ a1: original });
+      render(() => <OverviewTab {...defaultProps()} activeAlerts={alerts()} />);
+      await waitFor(() => expect(getDeliveryDiagnoses).toHaveBeenCalledTimes(1));
+      setAlerts({ a2: recurrence });
+      await waitFor(() => expect(screen.getByText('Notifications are turned off')).toBeTruthy());
+      expect(getDeliveryDiagnoses).toHaveBeenCalledTimes(2);
+      if (outcome === 'success') {
+        finishOlder([makeDiagnosis('a1', { lastNotified: '2026-08-26T10:15:00Z' })]);
+      } else {
+        rejectOlder(new Error('Previous incident diagnosis request failed'));
+      }
+      await Promise.resolve();
+      expect(screen.getByText('High CPU on VM a2')).toBeTruthy();
+      expect(screen.queryByText('High CPU on VM a1')).toBeNull();
+      expect(screen.queryByText(/^Dispatch requested /)).toBeNull();
+      expect(screen.getByText('Notifications are turned off')).toBeTruthy();
+    },
+  );
+
   it('renders no delivery line when the diagnosis fetch fails', async () => {
     const activeAlerts: Record<string, Alert> = { a1: makeAlert('a1') };
     getDeliveryDiagnoses.mockRejectedValue(new Error('boom'));

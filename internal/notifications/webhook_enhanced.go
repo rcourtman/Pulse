@@ -495,17 +495,9 @@ func parseRetryAfterBackoff(retryAfter string, now time.Time) (time.Duration, bo
 
 // isRetryableWebhookError determines if a webhook error should trigger a retry
 func isRetryableWebhookError(err error) bool {
-	errStr := strings.ToLower(err.Error())
-
-	// Network-related errors that should be retried
-	if strings.Contains(errStr, "timeout") ||
-		strings.Contains(errStr, "connection refused") ||
-		strings.Contains(errStr, "connection reset") ||
-		strings.Contains(errStr, "no such host") ||
-		strings.Contains(errStr, "network unreachable") {
-		return true
-	}
-
+	// An explicit HTTP rejection takes precedence over diagnostic body text:
+	// a 403 mentioning "timeout" is not a transport timeout. Errors without
+	// a recognised status (including network failures) remain retryable below.
 	if statusCode, ok := webhookErrorStatusCode(err); ok {
 		switch statusCode {
 		case http.StatusRequestTimeout, http.StatusMisdirectedRequest, http.StatusLocked, http.StatusTooEarly, http.StatusTooManyRequests:
