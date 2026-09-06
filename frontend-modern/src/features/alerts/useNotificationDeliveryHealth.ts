@@ -22,19 +22,27 @@ export function useNotificationDeliveryHealth(options?: {
   const [refreshingDeliveryHealth, setRefreshingDeliveryHealth] = createSignal(false);
   const [loadedOnce, setLoadedOnce] = createSignal(false);
 
+  // Mount, configuration retry and queue actions can overlap. Only the latest
+  // requested snapshot owns health and loading state, regardless of completion order.
+  let latestHealthRequest = 0;
   const loadDeliveryHealth = async () => {
+    const request = ++latestHealthRequest;
     setRefreshingDeliveryHealth(true);
     try {
       const health = await NotificationsAPI.getHealth();
+      if (request !== latestHealthRequest) return;
       setDeliveryHealth(health);
       setDeliveryHealthUnavailable(health.queue.status === 'unavailable');
     } catch (error) {
+      if (request !== latestHealthRequest) return;
       logger.error('Failed to load notification delivery health', error);
       setDeliveryHealth(null);
       setDeliveryHealthUnavailable(true);
     } finally {
-      setLoadedOnce(true);
-      setRefreshingDeliveryHealth(false);
+      if (request === latestHealthRequest) {
+        setLoadedOnce(true);
+        setRefreshingDeliveryHealth(false);
+      }
     }
   };
 

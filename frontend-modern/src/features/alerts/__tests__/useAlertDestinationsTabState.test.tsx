@@ -81,6 +81,40 @@ const buildAppriseConfig = (): UIAppriseConfig => ({
 });
 
 describe('useAlertDestinationsTabState', () => {
+  it('preserves degraded configuration Retry health when the older mount request finishes', async () => {
+    let finishMount!: (health: Awaited<ReturnType<typeof NotificationsAPI.getHealth>>) => void;
+    const healthy = { queue: { status: 'healthy', attentionRequired: 0 } } as Awaited<
+      ReturnType<typeof NotificationsAPI.getHealth>
+    >;
+    vi.mocked(NotificationsAPI.getWebhooks).mockResolvedValue([]);
+    vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValue({ entries: [] } as never);
+    vi.mocked(NotificationsAPI.getHealth)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishMount = resolve;
+        }),
+      )
+      .mockResolvedValueOnce({ ...healthy, queue: { ...healthy.queue, status: 'degraded' } });
+    const [appriseConfig, setAppriseConfig] = createSignal(buildAppriseConfig());
+    const { result } = renderHook(() =>
+      useAlertDestinationsTabState({
+        appriseConfig,
+        setAppriseConfig,
+        configLoadError: () => null,
+        emailConfig: () => buildEmailConfig(),
+        isLoadingDestinations: () => false,
+        isRetrying: () => false,
+        onRetryLoad: vi.fn(),
+      }),
+    );
+    result.handleRetry();
+    await waitFor(() => expect(result.deliveryNeedsAttention()).toBe(true));
+    finishMount(healthy);
+    await Promise.resolve();
+    expect(result.deliveryHealth()?.queue.status).toBe('degraded');
+    expect(result.deliveryNeedsAttention()).toBe(true);
+  });
+
   beforeEach(() => {
     vi.mocked(AlertsAPI.getEvents).mockReset();
     vi.mocked(AlertsAPI.getEvents).mockResolvedValue([]);
