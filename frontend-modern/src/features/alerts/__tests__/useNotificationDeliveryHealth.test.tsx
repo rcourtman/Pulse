@@ -18,6 +18,8 @@ const healthWith = (status: string) => ({ queue: { status, failed: 3, deadLetter
 describe('useNotificationDeliveryHealth', () => {
   beforeEach(() => {
     vi.mocked(NotificationsAPI.getHealth).mockReset();
+    vi.mocked(NotificationsAPI.dismissTerminalFailures).mockReset();
+    vi.mocked(NotificationsAPI.retryTerminalFailures).mockReset();
   });
 
   it('stays silent before the first load resolves so it cannot flash a warning', () =>
@@ -167,4 +169,43 @@ describe('useNotificationDeliveryHealth', () => {
         }
       }),
   );
+
+  describe.each(['dismissTerminalFailures', 'retryTerminalFailures'] as const)('%s', (action) => {
+    it.each(['cancelled', 'rejected'] as const)(
+      'preserves retained failure evidence when the action is %s',
+      (outcome) => createRoot(async (dispose) => {
+        const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(outcome !== 'cancelled');
+        const onAfterQueueAction = vi.fn();
+        try {
+          const health = { queue: { status: 'degraded', attentionRequired: 2 } } as never;
+          vi.mocked(NotificationsAPI.getHealth).mockResolvedValueOnce(health);
+          const state = useNotificationDeliveryHealth({ onAfterQueueAction });
+          await state.loadDeliveryHealth();
+          let rejectAction!: (reason: Error) => void;
+          vi.mocked(NotificationsAPI[action]).mockReturnValueOnce(new Promise((_, reject) => {
+            rejectAction = reject;
+          }));
+          const pending = state[action]();
+          const busy = action === 'dismissTerminalFailures'
+            ? state.dismissingTerminalFailures : state.retryingTerminalFailures;
+          expect(busy()).toBe(outcome === 'rejected');
+          if (outcome === 'rejected') rejectAction(new Error('request rejected'));
+          await pending;
+
+          expect(confirmSpy).toHaveBeenCalledOnce();
+          expect(NotificationsAPI[action]).toHaveBeenCalledTimes(outcome === 'rejected' ? 1 : 0);
+          expect(NotificationsAPI.getHealth).toHaveBeenCalledTimes(1);
+          expect(onAfterQueueAction).not.toHaveBeenCalled();
+          expect(state.deliveryHealth()).toBe(health);
+          expect(state.deliveryNeedsAttention()).toBe(true);
+          expect(state.deliveryHealthUnavailable()).toBe(false);
+          expect(busy()).toBe(false);
+        } finally {
+          confirmSpy.mockRestore();
+          dispose();
+        }
+      }),
+    );
+  });
+
 });
