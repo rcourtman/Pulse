@@ -17,6 +17,28 @@
 
 ## Purpose
 
+### Host-local network evidence exclusion
+
+Automatic PVE association must not treat loopback, unspecified, multicast or
+link-local addresses as machine identity. Both agent and provider interface
+evidence excludes `lo`, docker-prefixed interfaces and generated Docker
+`br-<12 hex>` names. Uniqueness among monitored PVE nodes is insufficient:
+an unrelated standalone host can expose the same local bridge address.
+
+Keep private/ULA management addresses, `vmbr0`, custom bridges such as
+`br-mgmt`, unnamed legacy interfaces and explicit unicast report-IP hints
+eligible. Existing hostname and ambiguity rules remain unchanged. This
+prevents new false associations; it neither clears legacy links nor changes
+manual link persistence.
+
+Release-line backport of main fixes 386fc0415e and 2ed9965968 for the
+provider-interface matching regression introduced by afaf1289507.
+Verification: `TestFindLinkedProxmoxEntityWithHints_RejectsHostLocalNetworkIdentity`,
+`TestAgentLinkNetworkIdentityFiltering` and
+`TestApplyHostReportDoesNotLinkUnrelatedDockerBridge` in
+`internal/monitoring/monitor_host_agents_test.go`. Synthetic reproduction
+does not establish the cause or resolution of reporter issue #1930.
+
 PBS node-status collection must reject HTTP-success responses whose `data`
 is omitted or null (including a null response envelope). Absent status is
 unavailable telemetry, not measured zero usage: the poller retains independently
