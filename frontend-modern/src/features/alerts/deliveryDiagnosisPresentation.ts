@@ -54,9 +54,11 @@ export const describeAlertDeliveryStatus = (
 
   const reason = (diagnosis.reason || '').split(':')[0];
 
+  // lastNotified is recorded before delivery callbacks; it is dispatch evidence,
+  // not confirmation that a destination accepted or a person received anything.
   if (diagnosis.status === 'would_send') {
     const notifiedAt = formatShortTime(diagnosis.lastNotified);
-    if (notifiedAt) return { label: `Notified ${notifiedAt}`, tone: 'muted' };
+    if (notifiedAt) return { label: `Dispatch requested ${notifiedAt}`, tone: 'muted' };
     return { label: 'Notification pending', tone: 'muted' };
   }
 
@@ -75,9 +77,12 @@ export const describeAlertDeliveryStatus = (
       const notifiedAt = formatShortTime(diagnosis.lastNotified);
       const nextAt = formatShortTime(diagnosis.nextEligibleAt);
       if (notifiedAt && nextAt) {
-        return { label: `Notified ${notifiedAt} — next ${nextAt}`, tone: 'muted' };
+        return {
+          label: `Dispatch requested ${notifiedAt} — next eligible ${nextAt}`,
+          tone: 'muted',
+        };
       }
-      if (notifiedAt) return { label: `Notified ${notifiedAt}`, tone: 'muted' };
+      if (notifiedAt) return { label: `Dispatch requested ${notifiedAt}`, tone: 'muted' };
       return { label: 'Waiting for cooldown', tone: 'muted' };
     }
     case 'rate_limited':

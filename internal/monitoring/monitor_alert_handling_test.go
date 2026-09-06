@@ -343,8 +343,28 @@ func TestLifecycleReplayMaterializesImportedHistoryTimeline(t *testing.T) {
 	monitor := &Monitor{alertManager: manager, incidentStore: incidentStore}
 	resourceStore := unifiedresources.NewMemoryStore()
 	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(resourceStore))
-	monitor.SetResourceStore(adapter)
-	monitor.SetResourceStore(adapter)
+	// Hold replay at its serialization boundary. Router construction attaches
+	// this store, so attachment must return even while history repair cannot
+	// make progress. Eventual timeline assertions alone miss a synchronous
+	// replay regression that stalls startup on an upgrade backlog.
+	monitor.alertProjectionReplayMu.Lock()
+	attached := make(chan struct{})
+	go func() {
+		monitor.SetResourceStore(adapter)
+		monitor.SetResourceStore(adapter)
+		close(attached)
+	}()
+	select {
+	case <-attached:
+		monitor.alertProjectionReplayMu.Unlock()
+	case <-time.After(2 * time.Second):
+		// Release the probe before failing, including for a synchronous-replay
+		// negative control, so no goroutine retains the test's stores.
+		monitor.alertProjectionReplayMu.Unlock()
+		<-attached
+		monitor.alertProjectionWG.Wait()
+		t.Fatal("resource-store attachment waited for lifecycle replay")
+	}
 	monitor.alertProjectionWG.Wait()
 
 	timeline := incidentStore.GetTimelineByAlertAt(snapshot.ID, snapshot.StartTime)

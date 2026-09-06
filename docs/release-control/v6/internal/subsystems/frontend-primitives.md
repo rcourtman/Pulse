@@ -7154,3 +7154,20 @@ confirmation and wrapping controls remain unchanged; no new primitive is added.
 The focused hook/caller tests and `scripts/check-delivery-health-ordering.mjs`
 cover this dependency at desktop and narrow widths using scripted health and
 queue-action responses, without claiming backend notification delivery.
+
+### Alert status distinguishes dispatch from destination evidence
+
+The active alert card renders a valid diagnosis `lastNotified` timestamp as
+“Dispatch requested”, never “Notified”: the alert manager records this field
+before invoking delivery callbacks. A cooldown's `nextEligibleAt` is labelled
+“next eligible”, not a promised send time. Neither field proves destination
+acceptance or recipient receipt; that evidence must not be inferred from the
+muted presentation tone. Missing or invalid timestamps retain the existing
+pending/cooldown fallback; acknowledged alerts retain their badge without a
+second status line. No API field, notification policy or shared primitive changes.
+
+The existing wrapping status text must remain readable at desktop and phone
+widths despite the longer labels. The presentation and Overview delivery-status
+tests cover the evidence boundary; `scripts/check-alert-dispatch-copy.mjs`
+qualifies the real Overview with scripted API data in Chromium, not installed
+notification delivery.

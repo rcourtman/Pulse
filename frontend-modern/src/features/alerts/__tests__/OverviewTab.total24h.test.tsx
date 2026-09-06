@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import type { Alert, AlertDeliveryDiagnosis } from '@/types/api';
 
@@ -73,6 +73,37 @@ describe('OverviewTab Last 24 Hours stat', () => {
     cleanup();
     vi.useRealTimers();
     setActiveLocale(DEFAULT_LOCALE);
+  });
+
+  it('keeps dispatch evidence separate from the triggered count', async () => {
+    vi.useRealTimers();
+    const now = Date.now();
+    getDeliveryDiagnoses.mockResolvedValue([
+      {
+        alertIdentifier: 'old',
+        alertId: 'old',
+        status: 'would_send',
+        reason: 'ready',
+        lastNotified: new Date(now).toISOString(),
+      } as AlertDeliveryDiagnosis,
+    ]);
+    render(() => (
+      <OverviewTab
+        {...defaultProps({
+          activeAlerts: {
+            old: makeAlert('old', new Date(now - 3 * 86_400_000).toISOString()),
+          },
+        })}
+      />
+    ));
+    await waitFor(() => expect(screen.getByText(/^Dispatch requested /)).toBeTruthy());
+    expect(screen.queryByText(/^Notified /)).toBeNull();
+    expect(
+      screen
+        .getByText('Triggered (24h)')
+        .closest('tr')
+        ?.querySelector('[data-testid="alert-overview-stat-value"]')?.textContent,
+    ).toBe('0');
   });
 
   it('counts only alerts with startTime within the last 24 hours', () => {

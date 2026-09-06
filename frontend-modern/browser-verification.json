@@ -1,18 +1,16 @@
 {
   "version": 1,
-  "base_sha": "9b4fa52d84e6196108e961ccba2b317df497268b",
-  "verified_at": "2026-09-06T10:15:18.709765Z",
+  "base_sha": "4fd68c72b26f033f5b1b0fcb7d7b2b0d67e85ec8",
+  "verified_at": "2026-09-06T14:12:06.315693Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/AI/Chat/ChatMessages.tsx",
-    "frontend-modern/src/components/AI/Chat/hooks/useChat.ts"
+    "frontend-modern/src/features/alerts/deliveryDiagnosisPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/AI/Chat/ChatMessages.tsx": "9672f7608d1e3a531c73cba20fd4a78752316783212afd0c292ddfd11d2bf371",
-    "frontend-modern/src/components/AI/Chat/hooks/useChat.ts": "0b56b7a56e35d51ca96f0e126dd493b3164aa9e0ad4d8ae24bcf3af7a574b97c"
+    "frontend-modern/src/features/alerts/deliveryDiagnosisPresentation.ts": "bc3eadf8f790517b377430a42eb67e8fdfcadb53bb13b87cd971d6a9ab91d607"
   },
   "routes": [
-    "/patrol"
+    "/qualification (isolated real OverviewTab, not installed /alerts)"
   ],
   "viewports": [
     {
@@ -29,12 +27,9 @@
     }
   ],
   "states": [
-    "Captured healthy and dependency Assistant responses replayed without provider calls. All 7 and 16 terminal tool records retain exact inputs, outputs and distinct rows. Success, failed NO_AGENT and unsupported config results inspected.",
-    "Controlled stream: concurrent same-name calls, repeated starts, progress, two separate approval cards, sibling completion, canceled call and failed completion. No real action was attempted.",
-    "Restored persisted healthy and dependency sessions retain original prompts and evidence. Artificial route warning reflects blocked non-GET readiness checks, not route qualification."
+    "Scripted ready and cooldown diagnoses with lastNotified render Dispatch requested; cooldown says next eligible. Missing timestamp remains Notification pending. No Notified label."
   ],
   "interactions": [
-    "Hover, focus, Enter/Space expand and collapse, scroll expanded output to its end, Escape, reload and select the original persisted session. Tool details and wrapping inspected at desktop, intermediate and narrow widths.",
-    "Private evidence: /Volumes/Development/pulse/tmp/patrol-assistant-lab-readiness/identity-verified-healthy, identity-verified-fault and identity-states. Baseline reproductions retained in identity-before-fault and failed focused regressions."
+    "Loaded real Overview in Chromium via scripts/check-alert-dispatch-copy.mjs; asserted status text ranges fit each viewport and no page errors. Inspected desktop and phone screenshots. No delivery actions invoked; no backend receipt claimed. Screenshots retained in lane outcome evidence."
   ]
 }
