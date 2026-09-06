@@ -269,11 +269,25 @@ test.describe("TrueNAS connections in the consolidated workspace", () => {
       .getByRole("textbox", { name: "API key", exact: true })
       .fill("secret-api-key");
 
+    // Missing key ownership must fail locally, not send an unusable credential.
+    await dialog.getByRole("button", { name: "Test connection" }).click();
+    await expect(
+      page.getByText(
+        "TrueNAS API key owner username is required for supported authentication",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    expect(draftTestPayload).toBeNull();
+
+    await dialog
+      .getByRole("textbox", { name: /^API key owner username/ })
+      .fill("pulse-monitor");
     await dialog.getByRole("button", { name: "Test connection" }).click();
     await expect.poll(() => draftTestPayload).not.toBeNull();
     expect(draftTestPayload).toMatchObject({
       host: "tower.local",
       apiKey: "secret-api-key",
+      username: "pulse-monitor",
     });
 
     await dialog.getByRole("button", { name: "Preview impact" }).click();
@@ -290,6 +304,7 @@ test.describe("TrueNAS connections in the consolidated workspace", () => {
       name: "Tower NAS",
       host: "tower.local",
       apiKey: "secret-api-key",
+      username: "pulse-monitor",
       useHttps: true,
       enabled: true,
     });
@@ -352,6 +367,9 @@ test.describe("TrueNAS connections in the consolidated workspace", () => {
       .getByRole("textbox", { name: "API key", exact: true })
       .fill("secret-api-key");
 
+    await dialog
+      .getByRole("textbox", { name: /^API key owner username/ })
+      .fill("pulse-monitor");
     await dialog.getByRole("button", { name: "Add connection" }).click();
 
     // The rejection surfaces the server's monitored-system explanation as an
