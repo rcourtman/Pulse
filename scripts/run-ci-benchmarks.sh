@@ -64,6 +64,21 @@ revision() {
 work_dir="$(mktemp -d)"
 trap 'rm -rf "${work_dir}"' EXIT
 
+# Hash the actual executable Go is about to run, not a later reconstruction.
+# Keep hashing outside benchmark timing and never log binary paths or arguments.
+binary_wrapper="${work_dir}/record-binary"
+cat > "${binary_wrapper}" <<'WRAPPER'
+#!/usr/bin/env bash
+set -euo pipefail
+digest="$(sha256sum -- "$1")"
+digest="${digest%% *}"
+printf 'binary=%s,%s,%s,%s\n' "${PULSE_BENCH_LABEL}" \
+  "${PULSE_BENCH_ROUND}" "${1##*/}" "${digest}" >> "${PULSE_BENCH_METADATA}"
+exec "$@"
+WRAPPER
+chmod +x "${binary_wrapper}"
+export PULSE_BENCH_METADATA="${metadata}"
+
 run_sample() {
   local tree="$1"
   local output="$2"
@@ -76,7 +91,8 @@ run_sample() {
   echo "=== ${label} benchmark sample ${round}/${SAMPLE_COUNT} ==="
   (
     cd "${tree}"
-    PULSE_DATA_DIR="${data_dir}" go test \
+    PULSE_BENCH_LABEL="${label}" PULSE_BENCH_ROUND="${round}" \
+    PULSE_DATA_DIR="${data_dir}" go test -exec "${binary_wrapper}" \
       -bench=. -benchmem -count=1 -run='^$' \
       -benchtime="${BENCHTIME}" -timeout=5m \
       "${PACKAGES[@]}"
@@ -90,7 +106,8 @@ run_unpaired() {
   mkdir -p "${data_dir}"
   (
     cd "${CURRENT_DIR}"
-    PULSE_DATA_DIR="${data_dir}" go test \
+    PULSE_BENCH_LABEL=candidate PULSE_BENCH_ROUND=unpaired \
+    PULSE_DATA_DIR="${data_dir}" go test -exec "${binary_wrapper}" \
       -bench=. -benchmem -count="${SAMPLE_COUNT}" -run='^$' \
       -benchtime="${BENCHTIME}" -timeout=5m \
       "${PACKAGES[@]}"
