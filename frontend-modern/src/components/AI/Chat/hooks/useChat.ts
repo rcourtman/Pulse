@@ -821,8 +821,8 @@ export function useChat(options: UseChatOptions = {}) {
 
     const matchesTool = (tool?: PendingTool, toolId?: string) => {
       if (!tool) return false;
-      if (data.id && toolId === data.id) return true;
-      if (data.id && tool.id === data.id) return true;
+      // A supplied invocation ID must never fall back to a sibling tool name.
+      if (data.id) return toolId === data.id || tool.id === data.id;
       return normalizedName !== '' && normalizeChatToolName(tool.name) === normalizedName;
     };
 
@@ -903,8 +903,8 @@ export function useChat(options: UseChatOptions = {}) {
 
     const matchesTool = (tool?: PendingTool, toolId?: string) => {
       if (!tool) return false;
-      if (data.id && toolId === data.id) return true;
-      if (data.id && tool.id === data.id) return true;
+      // A supplied invocation ID must never fall back to a sibling tool name.
+      if (data.id) return toolId === data.id || tool.id === data.id;
       return normalizedName !== '' && normalizeChatToolName(tool.name) === normalizedName;
     };
 
@@ -1519,8 +1519,8 @@ export function useChat(options: UseChatOptions = {}) {
               const normalizedName = normalizeChatToolName(data.name || '');
               const matchesTool = (tool?: PendingTool, toolId?: string) => {
                 if (!tool) return false;
-                if (data.id && toolId === data.id) return true;
-                if (data.id && tool.id === data.id) return true;
+                // A supplied invocation ID must never fall back to a sibling tool name.
+                if (data.id) return toolId === data.id || tool.id === data.id;
                 return normalizedName !== '' && normalizeChatToolName(tool.name) === normalizedName;
               };
               const pendingTools = msg.pendingTools || [];
@@ -1588,8 +1588,7 @@ export function useChat(options: UseChatOptions = {}) {
                 data.input && data.input.trim() ? data.input : resolvedPendingTool?.input || '{}';
               const completedRawInput = data.raw_input ?? resolvedPendingTool?.rawInput;
               const matchesCompletedTool = (toolId?: string, toolName?: string) => {
-                if (data.id && toolId === data.id) return true;
-                if (completedToolId && toolId === completedToolId) return true;
+                if (completedToolId) return toolId === completedToolId;
                 return (
                   normalizedEndName !== '' &&
                   normalizeChatToolName(toolName || '') === normalizedEndName

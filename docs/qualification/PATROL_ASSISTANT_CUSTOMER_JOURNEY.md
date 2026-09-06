@@ -62,7 +62,7 @@ reproduction evidence, not a representative customer success rate.
 | Step | Work | Acceptance | Current state |
 |---|---|---|---|
 | 1. Product contract and baseline | Map the current loop and sources of judgment. Record telemetry populations and gaps. | Every identified decision has an owner. Activity is not labelled usefulness. | Complete for this redesign scope. Contract, ownership decisions and baseline limits are recorded. |
-| 2. Shared evidence | Preserve canonical risk reasons and SMART counters, source/time semantics and history across tools/turns. | Regression tests preserve unknown versus zero and all canonical evidence. Real responses can inspect the same facts as the product. | Implemented and qualified for the named shared-evidence defects. Canonical disk detail, risk and cadence pass real data-path proof. Affected package and concurrency checks pass. Integrated CI later exposed remaining query and allocation regressions. The final bounded query-reuse correction passes complete selected exact-base worker comparisons and full metrics/database and focused race checks. Final landing CI remains open. Real-model interpretation failures remain tracked in step 5. |
+| 2. Shared evidence | Preserve canonical risk reasons and SMART counters, source/time semantics and history across tools/turns. | Regression tests preserve unknown versus zero and all canonical evidence. Real responses can inspect the same facts as the product. | Implemented and qualified for the named shared-evidence defects. Canonical disk detail, risk and cadence pass real data-path proof. Affected package and concurrency checks pass. Integrated CI later exposed remaining query and allocation regressions. The final bounded query-reuse correction passes complete selected exact-base worker comparisons and full metrics/database and focused race checks. Final landing CI passed and PRs #1928 and #1929 merged. Real-model interpretation failures remain tracked in step 5. |
 | 3. Diagnostic orchestration | Correct proposal-as-proof. Audit triage budgets, unmatched-signal evaluation, assessment completion and investigation cutoffs. | No code-written causal conclusion. No quality inferred from tool, flag or finding counts. Each retained pass has an objective reason. Safety boundaries and incomplete outcomes remain explicit. | Proposal promotion and capture inference were removed in c5d2f56dda. Commit 668af3fe6b removes investigation success-call floors, checkpoint instructions and generic call-count wrap-up rules. The detection slice removes contextless follow-up passes, flag/report-count policy and first-finding completion modes. Full chat and AI suites, focused API and conversation race tests pass. Real-model/action outcome qualification remains open. |
 | 4. Issue through verified outcome | Follow existing issue/investigation/action records into Assistant, approval, execution and independent readback. | Accepted proposal is visibly distinct from execution and verification. Rejected or unsupported actions do not become success. Uncertainty can survive an action proposal. | Existing foundation, full journey qualification pending. |
 | 5. Ground-truth qualification and landing | Extend existing qualification tooling only where necessary. Exercise healthy/unhealthy, dependency, missing-access, storage/backup and approved/rejected action cases. Inspect the final browser journey at desktop and narrow widths. | Record exact source/model/permissions, evidence, decisions, faults/misses, latency and verification. Fix in-scope failures, pass appropriate proofs and land scoped commits. | Pending. |
@@ -1328,3 +1328,83 @@ diagnostic-record commit `ba69933da352` passed its two-file staged hook, all
 163 tests in 127.527s with unchanged hashes. The current runtime change still
 requires its final staged hook and exact-head remote CI. Overall diagnostic and
 action-outcome qualification remains open.
+
+
+## Healthy and dependency Assistant qualification, 2026-09-06
+
+Two ordinary read-only Assistant requests used the configured
+`claude-subscription:claude-opus-5` route with explicit `autonomous_mode=false`.
+These are single-case observations, not an autonomous Patrol pass or an estimate
+of customer success, false-alarm or missed-problem rates. The earlier policy
+refusal remains in force. No paid-provider request was made.
+
+The unchanged Docker dependency manifest ran through the existing `DockerLab`
+on the monitored Tower host. Only run-owned Alpine containers and their private
+network were created. The existing production container was untouched. Independent
+Docker observations and Pulse resource convergence established healthy client and
+dependency, then a stopped dependency and running-but-unhealthy client. Fault
+injection used a deliberate stop with a five-second grace period. Its exit 137
+therefore does not establish OOM.
+
+| Case | Observed result | Limit |
+|---|---|---|
+| Healthy client | 82.835s, seven tool calls, no failed tools. Assistant correctly recommended no action. Independent observations before and after the request retained both healthy containers and unchanged identities. | The answer incorrectly inferred no contribution to or effect from host storage pressure from empty mounts and zero sampled writes. The primary decision passes this case, but the full explanation does not. |
+| Stopped dependency | 204.384s, sixteen tool calls, three failed reads. Assistant identified the stopped sibling and treated the dependency explanation as a hypothesis. It preserved the command-access limit and did not claim exit 137 proved OOM. | It excluded storage causality from zero sampled I/O, overstated what `OOMKilled=false` establishes, recommended restarting the client without first establishing that need, and claimed continued failure after dependency recovery must be a client-healthcheck fault. Those claims exceed the observations. This is partial diagnostic evidence, not a qualification pass. |
+
+The fault case also received two `app-container not found` responses from config
+reads despite successful canonical get responses. That tool capability/error
+contract remains an in-scope follow-up. No post-answer Docker fault observation or
+explicit recovery phase was recorded before the fixture's 25-minute deadline.
+Deadline cleanup completed at 08:16:40.820Z, removed both run-owned containers and
+their network, then passed a second no-op cleanup with unchanged original
+inventory. The helper exited on its deadline. This proves cleanup, not a completed
+recovery or action-outcome journey. Neither Assistant request mutated the lab.
+
+Private evidence root:
+`/Volumes/Development/pulse/tmp/patrol-assistant-lab-readiness/runs/asst-20260906075136356-380d4d/`.
+It contains independent `oracle/` receipts, healthy/fault Pulse convergence,
+complete SSE streams, persisted sessions, requests, screenshots and before/after
+source/binary bindings. Both requests used unchanged runtime binary SHA256
+`ebd0c2c74e4dbee330284a12a99137cfcecaecfe1ec2545c25432f06183a10c1`.
+HTTP windows were 07:53:58.742Z to 07:55:21.577Z and 07:58:04.234Z to
+08:01:28.618Z. Displayed token counts are not complete context or billable-cost
+measurements. Browser interception blocked unrelated non-GET requests, including
+route checks, producing an artificial selected-route warning. It did not test
+route recovery or retry the autonomous refusal.
+
+### Tool evidence identity correction
+
+The captured browser responses exposed a separate reproducible evidence defect.
+Concurrent starts/progress used name fallback even when invocation IDs differed.
+Completing one same-name action could remove another invocation's approval card.
+The shared reducer now treats supplied IDs as authoritative through start,
+progress, cancellation, completion and approval cleanup. Older ID-less name
+matching remains the existing compatibility path.
+
+A second reproduction showed deep Solid store reconciliation mutating objects
+shared by `toolCalls` and `streamEvents`. Removing a workflow row could change the
+first query's input and output into a later alerts call. Message rendering now
+keys rows by message ID and reads the immutable message through an accessor.
+It keeps DOM stability without copying or mutating the evidence graph. Regression
+proof includes the actual status-row-removal trigger, concurrent same-name calls,
+sibling approval retention and cancellation. The affected test files pass all
+167 tests, including existing message mount-stability checks.
+
+Browser matrix: `/patrol` at 1440x1000, 900x1000 and 390x1000. Captured-response
+replay checks all seven healthy and sixteen dependency tool inputs and outputs
+against their exact terminal SSE records. It also exercises hover/focus, keyboard
+expansion/collapse, output scrolling and restored persisted sessions. A controlled
+stream fixture exercises concurrent pending tools, repeated starts, progress,
+out-of-order completion, independent approval cards, cancellation and failed
+completion. These are renderer/identity checks, not model or action qualification.
+Private replay and state receipts live under
+`/Volumes/Development/pulse/tmp/patrol-assistant-lab-readiness/identity-*`.
+
+PR #1928 merged its earlier scope at `6d2d188867430f653e1bf9ada634fd2b90440786`.
+The later diagnosis record and route-label performance correction merged through
+PR #1929 at `cf98358c0eb46987a82def5776fa41db5f54210a`. Its backend, frontend,
+benchmarks, governance, CodeQL and eight Core E2E shards passed. The identity
+correction above is a separate scoped change and requires its own landing checks.
+The redesign remains open for reliable interpretation, the config-read contract,
+storage/backup, approved/rejected action outcomes and supported autonomous Patrol
+qualification. Wider customer readiness still requires independent Pro environments.
