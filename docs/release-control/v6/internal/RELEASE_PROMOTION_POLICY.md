@@ -282,6 +282,19 @@ without the other lanes changing the candidate underneath it.
    moving `main` can no longer invalidate the compiler's exact-SHA binding
    between dispatch and compilation, which is what failed run 33579042375.
    Earlier `6.4.x` versions keep their historical `main` mapping.
+8. The forward regression checkpoint `v6.4.4-beta.1` uses the same
+   `release/v6.4` line, with an explicit `6.4.4` mapping for beta, RC and
+   eventual stable. This is a maturity reset, not new feature scope: a
+   `6.4.3-beta.N` would sort below the published `v6.4.3-rc.1`.
+   `v6.4.4-beta.1` advances both that preview and stable `v6.4.1`;
+   `v6.4.1` remains the rollback target. Later qualification proceeds through
+   `v6.4.4-rc.N` and exact same-version stable promotion, including a fresh
+   72-hour clean RC soak. Beta time does not count. Mapping is preparation,
+   not readiness or publication authority: failed candidate checks still
+   require repair or an evidence-based disposition under the existing gates.
+   Land the mapping and resolver contract on canonical main and backport it
+   to the release line before taking a fresh bound packet. Unlisted patches
+   and new product work retain their existing mapping and scope.
 
 ## Paid Pro Artifact Lineage
 
