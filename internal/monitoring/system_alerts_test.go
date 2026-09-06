@@ -282,3 +282,49 @@ func TestProjectNotificationDeliveryHealthLifecycle(t *testing.T) {
 		}
 	}
 }
+
+// Inactive delivery must not hide the system warning: it is the fallback
+// visibility path when notifications cannot reach their destination.
+func TestProjectNotificationDeliveryHealthRespectsActivation(t *testing.T) {
+	for _, state := range []alerts.ActivationState{alerts.ActivationPending, alerts.ActivationSnoozed} {
+		t.Run(string(state), func(t *testing.T) {
+			manager := alerts.NewManagerWithDataDir(t.TempDir())
+			t.Cleanup(manager.Stop)
+			config := manager.GetConfig()
+			config.ActivationState = state
+			manager.UpdateConfig(config)
+			// A callback is required to exercise policy rather than the
+			// no-destination early return. No external destination is used.
+			manager.SetAlertCallback(func(*alerts.Alert) {})
+			m := &Monitor{}
+			for _, counts := range []map[string]int{
+				{string(notifications.QueueStatusFailed): 1},
+				{string(notifications.QueueStatusFailed): 4},
+				{string(notifications.QueueStatusDLQ): 2},
+				nil,
+				{string(notifications.QueueStatusFailed): 1},
+			} {
+				health := notifications.ClassifyQueueHealth(counts)
+				m.projectNotificationDeliveryHealth(manager, func() notifications.DeliveryHealth { return health })
+				active := manager.GetActiveAlerts()
+				if health.Healthy {
+					if len(active) != 0 {
+						t.Fatal("recovery left a suppressed warning active")
+					}
+					continue
+				}
+				if len(active) != 1 || active[0].ID != alerts.SystemAlertID(alerts.NotificationDeliveryAlertType) {
+					t.Fatal("inactive delivery hid or duplicated the system warning")
+				}
+				if active[0].Message != notificationDeliveryAlertMessage(health) {
+					t.Fatal("suppressed warning did not refresh its presentation")
+				}
+				// LastNotified is stamped synchronously before an async
+				// callback, so this does not depend on goroutine scheduling.
+				if active[0].LastNotified != nil {
+					t.Fatal("inactive delivery dispatched a system warning")
+				}
+			}
+		})
+	}
+}
