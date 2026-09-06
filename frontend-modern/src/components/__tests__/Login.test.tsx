@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { Login } from '@/components/Login';
 import loginSource from '@/components/Login.tsx?raw';
-import { STORAGE_KEYS } from '@/utils/localStorage';
+import { SESSION_STORAGE_KEYS, STORAGE_KEYS } from '@/utils/localStorage';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -182,7 +182,10 @@ describe('Login', () => {
     expect(mockFetch).not.toHaveBeenCalledWith('/api/security/status');
   });
 
-  it('shows demo credentials when session capabilities mark the runtime as demo mode', async () => {
+  it('shows demo credentials when the visitor has signed out of the demo', async () => {
+    // A sign-out marks the tab so the page does not sign the visitor straight
+    // back in; the printed credentials are the way back.
+    window.sessionStorage.setItem(SESSION_STORAGE_KEYS.DEMO_AUTO_LOGIN, 'suppressed');
     const mockOnLogin = vi.fn();
     const securityStatus = {
       hasAuthentication: true,
@@ -196,6 +199,78 @@ describe('Login', () => {
 
     expect(await screen.findByText('Demo Mode')).toBeInTheDocument();
     expect(screen.getAllByText('demo')).toHaveLength(2);
+    expect(mockFetch).not.toHaveBeenCalledWith('/api/login', expect.anything());
+    expect(mockOnLogin).not.toHaveBeenCalled();
+  });
+
+  it('signs the visitor in with the demo credentials when the runtime is in demo mode', async () => {
+    const mockOnLogin = vi.fn();
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const securityStatus = {
+      hasAuthentication: true,
+      hideLocalLogin: false,
+      presentationPolicy: { demoMode: true },
+    };
+
+    render(() => (
+      <Login onLogin={mockOnLogin} hasAuth={true} securityStatus={securityStatus as any} />
+    ));
+
+    await waitFor(() => expect(mockOnLogin).toHaveBeenCalledOnce());
+    const loginCall = mockFetch.mock.calls.find(([url]) => url === '/api/login');
+    expect(loginCall).toBeDefined();
+    expect(JSON.parse((loginCall?.[1] as RequestInit).body as string)).toEqual({
+      username: 'demo',
+      password: 'demo',
+      rememberMe: false,
+    });
+    expect(window.sessionStorage.getItem(SESSION_STORAGE_KEYS.DEMO_AUTO_LOGIN)).toBe('attempted');
+  });
+
+  it('falls back to the form when the demo sign-in is rejected', async () => {
+    const mockOnLogin = vi.fn();
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: false, message: 'Invalid username or password' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const securityStatus = {
+      hasAuthentication: true,
+      hideLocalLogin: false,
+      presentationPolicy: { demoMode: true },
+    };
+
+    render(() => (
+      <Login onLogin={mockOnLogin} hasAuth={true} securityStatus={securityStatus as any} />
+    ));
+
+    expect(await screen.findByText('Invalid username or password')).toBeInTheDocument();
+    expect(screen.getAllByText('demo')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: /sign in to pulse/i })).toBeEnabled();
+    expect(mockOnLogin).not.toHaveBeenCalled();
+  });
+
+  it('does not sign in to the demo twice in one browser tab', async () => {
+    window.sessionStorage.setItem(SESSION_STORAGE_KEYS.DEMO_AUTO_LOGIN, 'attempted');
+    const mockOnLogin = vi.fn();
+    const securityStatus = {
+      hasAuthentication: true,
+      hideLocalLogin: false,
+      presentationPolicy: { demoMode: true },
+    };
+
+    render(() => (
+      <Login onLogin={mockOnLogin} hasAuth={true} securityStatus={securityStatus as any} />
+    ));
+
+    expect(await screen.findByText('Demo Mode')).toBeInTheDocument();
+    expect(mockFetch).not.toHaveBeenCalledWith('/api/login', expect.anything());
   });
 
   it('restores the remembered username without storing a password', async () => {
