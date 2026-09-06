@@ -171,6 +171,37 @@ describe('useNotificationDeliveryHealth', () => {
   );
 
   describe.each(['dismissTerminalFailures', 'retryTerminalFailures'] as const)('%s', (action) => {
+    it('reports unavailable rather than healthy when the post-action refresh fails', () =>
+      createRoot(async (dispose) => {
+        const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+        const onAfterQueueAction = vi.fn().mockResolvedValue(undefined);
+        try {
+          vi.mocked(NotificationsAPI.getHealth)
+            .mockResolvedValueOnce({
+              queue: { status: 'degraded', attentionRequired: 2 },
+            } as never)
+            .mockRejectedValueOnce(new Error('post-action connection lost'));
+          vi.mocked(NotificationsAPI[action]).mockResolvedValueOnce({ affected: 2 } as never);
+          const state = useNotificationDeliveryHealth({ onAfterQueueAction });
+          await state.loadDeliveryHealth();
+
+          await state[action]();
+
+          expect(NotificationsAPI[action]).toHaveBeenCalledOnce();
+          expect(NotificationsAPI.getHealth).toHaveBeenCalledTimes(2);
+          expect(onAfterQueueAction).toHaveBeenCalledOnce();
+          expect(state.deliveryHealth()).toBeNull();
+          expect(state.deliveryHealthUnavailable()).toBe(true);
+          expect(state.deliveryNeedsAttention()).toBe(true);
+          expect(state.refreshingDeliveryHealth()).toBe(false);
+          expect(state.retryingTerminalFailures()).toBe(false);
+          expect(state.dismissingTerminalFailures()).toBe(false);
+        } finally {
+          confirmSpy.mockRestore();
+          dispose();
+        }
+      }));
+
     it.each(['cancelled', 'rejected'] as const)(
       'preserves retained failure evidence when the action is %s',
       (outcome) =>
