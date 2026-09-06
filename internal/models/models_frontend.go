@@ -1152,8 +1152,8 @@ type ResourceNetworkFrontend struct {
 
 // ResourceDiskIOFrontend represents aggregate disk I/O rates for the frontend.
 type ResourceDiskIOFrontend struct {
-	ReadRate  int64 `json:"readRate"`
-	WriteRate int64 `json:"writeRate"`
+	ReadRate  *int64 `json:"readRate,omitempty"`
+	WriteRate *int64 `json:"writeRate,omitempty"`
 }
 
 // ResourceAlertFrontend represents an alert on a resource.

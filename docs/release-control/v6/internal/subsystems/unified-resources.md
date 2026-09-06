@@ -15,6 +15,16 @@
 
 ## Purpose
 
+Docker container writable/root layer bytes describe image composition, not
+used/total filesystem capacity, and cannot populate `ResourceMetrics.Disk`.
+Optional valid block-I/O rate pointers preserve measured zero. Missing, negative
+and non-finite rates remain unavailable. Raw layer metadata remains available.
+`TestMetricsFromDockerContainerDistinguishesAbsentAndIdleIO` and the container
+I/O projection proof in `internal/unifiedresources/metrics_test.go` pin this
+boundary.
+The frontend resource contract likewise makes read and write rates independently
+optional, preserving this distinction through current-history labels.
+
 Physical disk source freshness preserves the collector-authored
 `expectedUpdateIntervalSeconds` alongside the actual last observation. Registry
 ingest, merge, cloning and typed disk views preserve it. Staleness uses the

@@ -1,11 +1,33 @@
 package unifiedresources
 
 import (
+	"math"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
+
+func TestMetricsFromDockerContainerDistinguishesAbsentAndIdleIO(t *testing.T) {
+	for _, value := range []float64{0, 123, -1, math.NaN(), math.Inf(1)} {
+		ct := models.DockerContainer{BlockIO: &models.DockerContainerBlockIO{ReadRateBytesPerSecond: &value, WriteRateBytesPerSecond: &value}}
+		got := metricsFromDockerContainer(ct)
+		valid := value >= 0 && !math.IsInf(value, 0)
+		if valid {
+			if got.DiskRead == nil || got.DiskWrite == nil || got.DiskRead.Value != value || got.DiskWrite.Value != value {
+				t.Fatalf("lost measured rate %v: %+v", value, got)
+			}
+		} else if got.DiskRead != nil || got.DiskWrite != nil {
+			t.Fatalf("invalid rate %v became observation: %+v", value, got)
+		}
+	}
+	for _, io := range []*models.DockerContainerBlockIO{nil, {ReadBytes: 5000, WriteBytes: 7000}} {
+		got := metricsFromDockerContainer(models.DockerContainer{BlockIO: io})
+		if got.DiskRead != nil || got.DiskWrite != nil {
+			t.Fatalf("absent rates became observations: %+v", got)
+		}
+	}
+}
 
 func TestMetricsFromDockerHostIncludesIORates(t *testing.T) {
 	host := models.DockerHost{
@@ -447,8 +469,8 @@ func TestMetricsFromDockerContainerIncludesContainerIORates(t *testing.T) {
 	if metrics.DiskWrite == nil || metrics.DiskWrite.Value != writeRate {
 		t.Fatalf("expected diskWrite=%v, got %+v", writeRate, metrics.DiskWrite)
 	}
-	if metrics.Disk == nil || metrics.Disk.Percent <= 0 {
-		t.Fatalf("expected non-zero disk usage metric, got %+v", metrics.Disk)
+	if metrics.Disk != nil {
+		t.Fatalf("container layer sizes are not filesystem capacity, got %+v", metrics.Disk)
 	}
 }
 

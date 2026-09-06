@@ -133,8 +133,8 @@ export interface ResourceNetwork {
 
 // Disk I/O metrics (rates in bytes/sec from backend)
 export interface ResourceDiskIO {
-  readRate: number; // Read rate (bytes/sec)
-  writeRate: number; // Write rate (bytes/sec)
+  readRate?: number; // Observed read rate (bytes/sec), including measured zero.
+  writeRate?: number; // Absent directions remain unavailable.
 }
 
 // Alert associated with a resource

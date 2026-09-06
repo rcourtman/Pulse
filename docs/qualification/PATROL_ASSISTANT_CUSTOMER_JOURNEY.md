@@ -1408,3 +1408,89 @@ correction above is a separate scoped change and requires its own landing checks
 The redesign remains open for reliable interpretation, the config-read contract,
 storage/backup, approved/rejected action outcomes and supported autonomous Patrol
 qualification. Wider customer readiness still requires independent Pro environments.
+
+### Docker measurement correction plan, 2026-09-06
+
+The next shared-source correction distinguishes absent block-I/O observations
+from measured idle zero and removes the Docker layer-size ratio from filesystem
+capacity. Counter presence uses the existing rate tracker contract. Missing
+reports must not reset the baseline or fabricate samples. Container layer sizes
+remain descriptive metadata.
+
+Persisted Docker-family disk series previously mixed invalid capacity ratios and
+unobserved I/O zeros with real measurements. New disk observations use separate
+physical series keys while public metric names remain unchanged. Retained reads
+exclude ambiguous legacy disk series without deleting or relabelling them. The
+shared app-container storage family also serves non-Docker providers, so new
+valid capacity observations must remain supported. Non-Docker series retain
+existing behavior. Explicit zero must survive every retained-read API and rollup.
+
+Browser verification is required after the final backend build. Interaction
+matrix: `/docker` at 1440x1000, 900x1000 and 390x1000, container selection,
+resource drawer open/close, current metrics, history expansion, measured idle,
+unavailable readings, and reload. Inspect actual pixels, scrolling, focus and
+Escape dismissal. `/patrol` evidence rendering must preserve absent versus zero
+in current-resource and retained-history tool results. Controlled responses may
+qualify rendering but cannot qualify diagnosis. Live read-only API observations
+must bind to the rebuilt backend. No autonomous subscription retry or paid-model
+request is authorized by this correction.
+
+Collection also carries optional presence for each I/O direction. Explicit zero
+entries survive the report JSON. For older reports without presence, only
+positive counters establish an observation, so ambiguous zeros remain unavailable
+until the agent is updated or a positive baseline exists. This does not require
+re-enrollment. Docker-host first-disk history and network-counter presence are
+adjacent limits outside this container block-I/O correction.
+
+The final browser matrix also covers the shared host I/O table, Docker host
+Overview and Machines table/tooltip at the same three widths. Partial read/write
+observations must show a missing marker for the absent direction, retain measured
+zero, and remain excluded from sums used for sorting and comparison. Exercise
+column selection, hover/focus, tooltip dismissal and scrolling where present.
+
+### Docker correction qualification and scope
+
+The implementation carries per-direction presence from collection and report
+JSON into the existing rate tracker, canonical resource metrics, persisted
+history and resource-to-browser conversion. REST resource adaptation also
+preserves optional rates. Shared rate formatting keeps missing values distinct
+from zero in Machines and Docker host details. Incomplete rates do not become
+complete throughput totals for sorting or comparison. A browser-discovered
+first-user column migration bug is corrected in the shared preference hook, so
+showing Disk I/O survives the first reload.
+
+Legacy workload conversion in `frontend-modern/src/hooks/useWorkloads.ts` still
+uses numeric direction fields with grouped availability. Its direction-level
+modernization remains a separate consumer follow-up. Docker-host first-disk
+history and network presence are also outside this container measurement slice.
+The correction must not be represented as complete coverage of all metrics or
+all monitoring surfaces. No new model competence or autonomous action result is
+claimed.
+
+Affected Go package checks and targeted race checks ran on pulse-dev with
+Go1.26.8. The changed websocket assertion now expects observed read zero with
+absent write omitted. Targeted frontend suites and type checking cover optional
+rates, REST conversion, sorting, formatting and column persistence. Ten paired
+read-benchmark rounds used the unchanged parent store via Go overlay. The
+canonical >10%, p<0.05 regression gate passed, with +0.82% timing geomean in this
+scoped comparison. This is not a fleet-load or full-product performance claim.
+
+The Pro backend was cross-built on pulse-dev from the changed source and
+installed into the existing local dev runtime. Binary SHA256:
+`59f05f954ff8080bd3e8f3054b2b059281c49172ee771b2e454c255241158a4a`.
+No production agent was replaced. Older agents remain compatible and treat
+ambiguous zero counters conservatively.
+
+Private receipts: `/Volumes/Development/pulse/tmp/patrol-docker-observed-metrics/`.
+Worker logs: `/opt/pulse-release-worker/patrol-docker-observed-proof/`.
+PR1934's preceding identity correction merged at
+`6b0abc3bee9ffa81f6ab298b5b67ee11369688a0` with all checks passing. The current
+measurement slice passed final-source Playwright inspection on `/docker`,
+`/standalone/machines` and `/patrol` at 1440x1000, 900x1000 and 390x1000.
+Live history, controlled absence/idle/loading/error, partial host rates, column
+persistence, nested picker dismissal, tooltip focus, and expanded Assistant
+evidence were exercised. The source-bound receipt is
+`frontend-modern/browser-verification.json`. The unused shared host table card
+has type and selector coverage, not an active-route browser claim. Controlled
+responses qualify rendering only. Landing checks remain separate from the
+unperformed diagnosis, approved/rejected action and recovery qualifications.

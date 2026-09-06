@@ -21,6 +21,14 @@
 
 ## Purpose
 
+Container image-layer sizes do not establish filesystem capacity. Docker
+resource metrics omit that invalid ratio, and retained queries exclude legacy
+ambiguous disk observations while preserving new valid provider measurements.
+The shared REST resource projection retains missing read/write directions
+independently of measured zero. An idle I/O rate cannot establish available
+capacity, backup coverage or recoverability. This correction adds no recovery
+authority or verified recovery outcome.
+
 Patrol consumes storage evidence in the original diagnostic conversation. A
 saved finding does not close storage-read authority before the explicit run
 limit. Missing backup or recovery evidence remains unknown, and neither finding

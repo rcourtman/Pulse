@@ -15,6 +15,11 @@
 
 ## Purpose
 
+Docker block-I/O report presence fields are optional measurement metadata.
+They preserve zero and omitted directions independently without changing report
+admission, enrollment, identity, command permission or agent lifecycle state.
+Older agents remain accepted, with ambiguous omitted zero counters unavailable.
+
 The internal Patrol request bridge carries explicit execution limits and
 capability allowlists without a diagnostic report-count budget. Finding writes
 retain their server-owned scope and cannot enter or satisfy the infrastructure

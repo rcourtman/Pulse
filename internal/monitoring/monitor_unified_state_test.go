@@ -165,7 +165,7 @@ func TestConvertResourcesForBroadcastCoalescesSplitHostResources(t *testing.T) {
 	if resource.DiskIO == nil {
 		t.Fatal("expected aggregate disk I/O rates in broadcast resource")
 	}
-	if resource.DiskIO.ReadRate != 4096 || resource.DiskIO.WriteRate != 8192 {
+	if resource.DiskIO.ReadRate == nil || resource.DiskIO.WriteRate == nil || *resource.DiskIO.ReadRate != 4096 || *resource.DiskIO.WriteRate != 8192 {
 		t.Fatalf("unexpected aggregate disk I/O rates: %+v", resource.DiskIO)
 	}
 }

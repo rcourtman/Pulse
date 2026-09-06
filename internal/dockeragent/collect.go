@@ -1318,35 +1318,34 @@ func randomDuration(max time.Duration) time.Duration {
 }
 
 func summarizeBlockIO(stats containertypes.StatsResponse) *agentsdocker.ContainerBlockIO {
-	// BlkioStats structure varies by cgroup version
-	// Cgroup v1: IoServiceBytesRecursive []BlkioStatEntry
-	// Cgroup v2: IoServiceBytesRecursive is empty? No, Docker maps it?
-	// Docker API guarantees IoServiceBytesRecursive is populated?
-	// It seems to try to handle both.
-
 	if len(stats.BlkioStats.IoServiceBytesRecursive) == 0 {
 		return nil
 	}
 
 	var readBytes, writeBytes uint64
+	var readPresent, writePresent bool
 
 	for _, entry := range stats.BlkioStats.IoServiceBytesRecursive {
 		op := strings.ToLower(entry.Op)
 		switch op {
 		case "read":
+			readPresent = true
 			readBytes += entry.Value
 		case "write":
+			writePresent = true
 			writeBytes += entry.Value
 		}
 	}
 
-	if readBytes == 0 && writeBytes == 0 {
+	if !readPresent && !writePresent {
 		return nil
 	}
 
 	return &agentsdocker.ContainerBlockIO{
-		ReadBytes:  readBytes,
-		WriteBytes: writeBytes,
+		ReadBytes:         readBytes,
+		WriteBytes:        writeBytes,
+		ReadBytesPresent:  &readPresent,
+		WriteBytesPresent: &writePresent,
 	}
 }
 

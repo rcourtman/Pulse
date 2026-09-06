@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
   getAgentMachineDiskPercent,
+  getAgentMachineDiskIOTotal,
   getAgentMachineDiskIODetails,
   getAgentMachineGPUTitle,
   getAgentMachineGPUUtilizationPercent,
@@ -475,4 +476,13 @@ describe('agentMachineTableModel', () => {
       false,
     );
   });
+});
+
+it('requires both disk directions for a throughput total', () => {
+  expect(getAgentMachineDiskIOTotal(resource({ diskIO: { readRate: 0, writeRate: 0 } }))).toBe(0);
+  expect(getAgentMachineDiskIOTotal(resource({ diskIO: { readRate: 100, writeRate: 200 } }))).toBe(
+    300,
+  );
+  expect(getAgentMachineDiskIOTotal(resource({ diskIO: { readRate: 0 } }))).toBeUndefined();
+  expect(getAgentMachineDiskIOTotal(resource({ diskIO: { writeRate: 100 } }))).toBeUndefined();
 });

@@ -15,6 +15,20 @@
 
 ## Purpose
 
+The Docker/app-container history families `dockercontainer` and `docker` use
+separate physical `.observed` series for new disk capacity and block-I/O
+measurements. Older disk series lack the required presence/capacity semantics
+and remain stored unchanged, but retained reads exclude them from current
+evidence. All four shared read APIs expose corrected series under the existing
+public metric names. Valid capacity from other providers sharing this storage
+family remains writable. `NormalizedSeriesKey` describes physical storage for
+coverage/backfill matching. Rollups aggregate each physical generation separately.
+Projection happens once per returned series, not per observation, and adds no
+query, schema migration, or per-row work for other resource families.
+`pkg/metrics/store_docker_observation_contract_test.go` pins legacy coexistence,
+zero retention, selected/fleet read parity, rollup separation and unaffected
+resource families.
+
 Retained reads use one shared query contract in `pkg/metrics/store.go` for
 `Query`, `QueryAll`, `QueryAllBatch` and `QueryMetricTypesBatch`. A non-empty
 preferred resolution no longer hides a newer raw tail, an older uncovered

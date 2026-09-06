@@ -915,8 +915,8 @@ const toResource = (v2: APIResource): Resource => {
     diskIO:
       v2.metrics?.diskRead || v2.metrics?.diskWrite
         ? {
-            readRate: v2.metrics?.diskRead?.value ?? 0,
-            writeRate: v2.metrics?.diskWrite?.value ?? 0,
+            readRate: v2.metrics?.diskRead?.value,
+            writeRate: v2.metrics?.diskWrite?.value,
           }
         : undefined,
     uptime:

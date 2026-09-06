@@ -17,6 +17,20 @@
 
 ## Purpose
 
+Docker collection records read and write counter presence independently,
+including explicit zero, in optional report fields. Older reports without those
+fields establish only positive counters. Container reports propagate this
+presence to the shared rate tracker. An omitted block-I/O payload and the first counter sample
+produce no rate history. Unchanged observed counters produce measured zero,
+including after an omitted report. Container writable/root layer sizes never
+produce capacity usage history. The ingestion regression is
+`internal/monitoring/docker_metric_presence_test.go`. This changes measurement
+projection only and grants no agent lifecycle authority.
+The shared resource-to-browser conversion preserves each optional I/O rate
+independently. Missing directions are omitted from JSON, while measured zero
+remains numeric zero. No aggregate presence flag may fabricate its sibling
+direction. `TestResourceDiskIOWirePreservesAbsentDirection` pins that wire path.
+
 Physical disk inventory has an independent collector schedule. The PVE poller
 carries its default five-minute or configured interval with each disk record,
 while keeping the last successful observation timestamp on retained records.

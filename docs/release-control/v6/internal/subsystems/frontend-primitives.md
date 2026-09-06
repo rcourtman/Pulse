@@ -20,6 +20,14 @@
 
 ## Purpose
 
+Disk I/O presentation preserves each observed direction independently. Shared
+formatting renders a missing rate as a dash and measured idle as numeric zero.
+Partial observations cannot form a complete throughput total for sorting or
+comparison. Machines column preferences must preserve an explicit user choice
+across the first reload, including default-hidden migrations. Final-source
+browser proof covers Docker host details, Machines column selection and tooltip
+focus/dismissal at desktop, intermediate and narrow widths.
+
 The shared delivery-health card wraps action groups according to available
 space, retaining readable explanation width when Review, Retry, Dismiss and
 Refresh appear together. Its heading uses the opaque semantic foreground,

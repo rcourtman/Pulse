@@ -61,7 +61,7 @@ import type { Disk } from '@/types/api';
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { getActionableAgentIdFromResource } from '@/utils/agentResources';
-import { formatBytes, formatSpeed, normalizeDiskArray } from '@/utils/format';
+import { formatBytes, formatSpeed, formatObservedSpeed, normalizeDiskArray } from '@/utils/format';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { notificationStore } from '@/stores/notifications';
@@ -84,7 +84,6 @@ import {
   getAgentMachineGPUTitle,
   getAgentMachineGPUUtilizationPercent,
   getAgentMachineDiskIODetails,
-  getAgentMachineDiskIOTotal,
   getAgentMachineIpValues,
   matchesAgentMachineSearch,
   getAgentMachineNetworkInterfaceDetails,
@@ -502,9 +501,9 @@ const AgentMachineDiskIOCell: Component<{
       trigger={
         <>
           <span class="inline-flex shrink-0 font-mono text-blue-500">R</span>
-          <span class="min-w-0 truncate">{formatSpeed(props.diskIO?.readRate ?? 0)}</span>
+          <span class="min-w-0 truncate">{formatObservedSpeed(props.diskIO?.readRate)}</span>
           <span class="inline-flex shrink-0 font-mono text-amber-500">W</span>
-          <span class="min-w-0 truncate">{formatSpeed(props.diskIO?.writeRate ?? 0)}</span>
+          <span class="min-w-0 truncate">{formatObservedSpeed(props.diskIO?.writeRate)}</span>
         </>
       }
     >
@@ -513,11 +512,11 @@ const AgentMachineDiskIOCell: Component<{
         <div class="mb-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-[9px]">
           <span class="font-mono text-blue-500">Read</span>
           <span class="min-w-0 truncate text-base-content">
-            {formatSpeed(props.diskIO?.readRate ?? 0)}
+            {formatObservedSpeed(props.diskIO?.readRate)}
           </span>
           <span class="font-mono text-amber-500">Write</span>
           <span class="min-w-0 truncate text-base-content">
-            {formatSpeed(props.diskIO?.writeRate ?? 0)}
+            {formatObservedSpeed(props.diskIO?.writeRate)}
           </span>
         </div>
         <div class="max-h-[280px] space-y-1.5 overflow-y-auto pr-1">
@@ -1038,7 +1037,7 @@ const networkTitleFor = (machine: Resource): string => {
 
 const diskIOTitleFor = (machine: Resource): string => {
   if (!machine.diskIO) return '';
-  return `Read ${formatSpeed(machine.diskIO.readRate)}\nWrite ${formatSpeed(machine.diskIO.writeRate)}`;
+  return `Read ${formatObservedSpeed(machine.diskIO.readRate)}\nWrite ${formatObservedSpeed(machine.diskIO.writeRate)}`;
 };
 
 const agentIdentityIdFor = (machine: Resource): string =>
@@ -1527,7 +1526,6 @@ export const AgentsMachinesTable: Component<{
                       aggregateDisk() !== undefined || (disks()?.length ?? 0) > 0;
                     const networkTotal = () => getAgentMachineNetworkTotal(machine);
                     const networkInterfaces = () => getAgentMachineNetworkInterfaceDetails(machine);
-                    const diskIOTotal = () => getAgentMachineDiskIOTotal(machine);
                     const diskIODetails = () => getAgentMachineDiskIODetails(machine);
                     const primaryIp = () =>
                       getPreferredResourceIP(machine) ?? getAgentMachinePrimaryIp(machine);
@@ -1738,7 +1736,11 @@ export const AgentsMachinesTable: Component<{
                               class={`${getPlatformTableCellClassForKind('numeric-value')} ${machineColumnWidthClass('diskio')} text-base-content`}
                             >
                               <Show
-                                when={canRenderMetrics() && diskIOTotal() !== undefined}
+                                when={
+                                  canRenderMetrics() &&
+                                  (machine.diskIO?.readRate !== undefined ||
+                                    machine.diskIO?.writeRate !== undefined)
+                                }
                                 fallback={telemetryFallbackMarker()}
                               >
                                 <AgentMachineDiskIOCell
