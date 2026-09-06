@@ -1301,3 +1301,48 @@ func TestStoreRetainedConcurrentQueryBindings(t *testing.T) {
 	close(start)
 	workers.Wait()
 }
+
+// A cached large-scope query must bind every identity and filter anew. Values
+// resembling SQL parameters or SQL syntax remain resource data.
+func TestStoreRetainedLargeQueryBindings(t *testing.T) {
+	db := newPlanTestDB(t)
+	store := &Store{db: pdb.Wrap(db, "large-retained-bindings")}
+	base := time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC)
+	for round := 0; round < 2; round++ {
+		family := []string{"node", "vm"}[round]
+		metrics := [][]string{{"cpu", "memory"}, {"disk_read", "disk_write"}}[round]
+		start := base.Add(time.Duration(round) * time.Hour)
+		observed := start.Add(30 * time.Second)
+		ids := make([]string, queryAllBatchChunkSize)
+		for i := range ids {
+			ids[i] = strconv.Itoa(round) + "/resource-" + strconv.Itoa(i)
+		}
+		ids[0] += ":p1"
+		ids[len(ids)-1] += "' OR 1=1 --"
+		for _, index := range []int{0, len(ids) - 1} {
+			for _, metric := range metrics {
+				if _, err := db.Exec(`INSERT INTO metrics(resource_type,resource_id,metric_type,tier,timestamp,value) VALUES (?,?,?,'raw',?,?)`, family, ids[index], metric, observed.Unix(), float64(index+round+1)); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		result, err := store.QueryMetricTypesBatch(family, ids, metrics, start, start.Add(time.Minute), 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(result) != 2 {
+			t.Fatalf("round %d returned %d resources, want two", round, len(result))
+		}
+		for _, index := range []int{0, len(ids) - 1} {
+			if len(result[ids[index]]) != len(metrics) {
+				t.Fatalf("round %d resource %q returned unexpected metrics: %+v", round, ids[index], result[ids[index]])
+			}
+			for _, metric := range metrics {
+				points := result[ids[index]][metric]
+				if len(points) != 1 || points[0].Value != float64(index+round+1) || !points[0].Timestamp.Equal(observed) {
+					t.Fatalf("round %d resource %q metric %q returned wrong scope: %+v", round, ids[index], metric, points)
+				}
+			}
+		}
+	}
+}

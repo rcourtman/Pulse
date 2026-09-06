@@ -1369,6 +1369,11 @@ func retainedQueryParameters(resourceType string, resourceIDs, metricTypes []str
 	if stepSecs > 1 {
 		params = append(params, stepSecs)
 	}
+	// Alphabetic names avoid the SQLite driver's repeated ordinal-to-string
+	// conversions while matching numbered parameters in large scopes.
+	for i, value := range params {
+		params[i] = sql.Named("p"+strconv.Itoa(i+1), value)
+	}
 	return params
 }
 
@@ -1412,12 +1417,12 @@ func retainedQuerySQL(resourceType string, resourceIDs, metricTypes []string, st
 	if len(metricTypes) != 1 {
 		identityColumns += "metric_type, "
 	}
-	// Reuse SQLite's numbered bindings across every branch and overlap probe.
+	// Reuse SQLite's named bindings across every branch and overlap probe.
 	// Each identity, timestamp and display step is bound only once per read.
 	slots := func(first, count int) string {
 		values := make([]string, count)
 		for i := range values {
-			values[i] = fmt.Sprintf("?%d", first+i)
+			values[i] = fmt.Sprintf(":p%d", first+i)
 		}
 		return strings.Join(values, ",")
 	}
@@ -1432,16 +1437,16 @@ func retainedQuerySQL(resourceType string, resourceIDs, metricTypes []string, st
 		index = "idx_metrics_lookup"
 	}
 	scope := func(alias string, tierIndex int) string {
-		clause := alias + ".resource_type = ?1 AND " + alias + ".resource_id IN (" + idSlots + ")"
+		clause := alias + ".resource_type = :p1 AND " + alias + ".resource_id IN (" + idSlots + ")"
 		if len(metricTypes) > 0 {
 			clause += " AND " + alias + ".metric_type IN (" + metricSlots + ")"
 		}
-		return clause + fmt.Sprintf(" AND %s.tier = ?%d AND %s.timestamp >= ?%d AND %s.timestamp <= ?%d", alias, tierParam+tierIndex, alias, startParam, alias, endParam)
+		return clause + fmt.Sprintf(" AND %s.tier = :p%d AND %s.timestamp >= :p%d AND %s.timestamp <= :p%d", alias, tierParam+tierIndex, alias, startParam, alias, endParam)
 	}
 	projection := identityColumns + `m.timestamp, m.value,
    COALESCE(m.min_value, m.value) AS min_value, COALESCE(m.max_value, m.value) AS max_value`
 	directAggregate := stepSecs > 1 && len(tiers) == 1
-	bucketExpression := fmt.Sprintf("(timestamp / ?%d) * ?%d + (?%d / 2)", stepParam, stepParam, stepParam)
+	bucketExpression := fmt.Sprintf("(timestamp / :p%d) * :p%d + (:p%d / 2)", stepParam, stepParam, stepParam)
 	if directAggregate {
 		projection = identityColumns + bucketExpression + ` AS bucket_ts,
    AVG(m.value), MIN(COALESCE(m.min_value, m.value)), MAX(COALESCE(m.max_value, m.value))`
@@ -1458,9 +1463,9 @@ func retainedQuerySQL(resourceType string, resourceIDs, metricTypes []string, st
 			branch += fmt.Sprintf(`
     SELECT 1 FROM metrics AS h
     WHERE h.resource_type = m.resource_type AND h.resource_id = m.resource_id
-    AND h.metric_type = m.metric_type AND h.tier = ?%d
-    AND h.timestamp >= MAX(?%d, (m.timestamp / %d) * %d)
-    AND h.timestamp <= ?%d AND h.timestamp < (m.timestamp / %d) * %d + %d
+    AND h.metric_type = m.metric_type AND h.tier = :p%d
+    AND h.timestamp >= MAX(:p%d, (m.timestamp / %d) * %d)
+    AND h.timestamp <= :p%d AND h.timestamp < (m.timestamp / %d) * %d + %d
    ))`, tierParam+j, startParam, bucket, bucket, endParam, bucket, bucket, bucket)
 		}
 		branches = append(branches, branch)

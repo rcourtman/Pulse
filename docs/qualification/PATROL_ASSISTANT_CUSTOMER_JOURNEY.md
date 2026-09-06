@@ -1055,3 +1055,77 @@ file hashes unchanged. This supersedes the pending-hook statements above for tha
 slice only. Current remote CI is not a completed pass. The f266 benchmark job
 also failed and its comparison remains under investigation. The overall goal,
 real-model/action qualification and provider refusal remain open and unchanged.
+
+## Large-scope query binding correction, 2026-09-06
+
+The disk-probe slice is committed as `b964eea767` and pushed to open PR #1928.
+Its final exact staged hook passes all 163 tests in 128.317s, with six unchanged
+source hashes. This supersedes the pending disk-hook status above.
+
+Build and Test run `34011979848` compares `f26668aa6ddc` against PR base
+`3347f561ec7b`, rather than the earlier `3f74c0c27304` worker baseline. Its
+remaining benchmark failure is the 500-node dashboard batch read: allocation
+events increase 24.73%, allocated bytes increase 0.62% and runtime has no
+statistically significant change. Ten alternating 100ms samples on pulse-dev
+with Go 1.26.8 and GOMAXPROCS=4 reproduce all three results. The unchanged
+repository benchmark checker rejects that candidate.
+
+The pinned SQLite driver matches each numbered parameter against argument
+ordinals, converting each compared ordinal to a string. Large scopes repeatedly
+pay those conversions. The allocation profile identifies that conversion path.
+The correction retains shared parameter values across query branches but uses
+alphabetic names and `database/sql.Named`. Every read still supplies current
+values. Resource identity, retention coverage, snapshots and cached shape bounds
+are unchanged. Parameter names are internal positions, never user values.
+
+An initial source-bound experiment against the same exact baseline reduces the
+500-node allocation difference to +0.26% and allocated bytes to -1.68%. Runtime
+has no statistically significant difference. Ten samples per variant pass the
+actual repository benchmark checker. Experiment source SHA-256 is
+`b73ea7984bded06b2a3319ed3a62fbe63ee87f63fd317a40b51d451f5c21b89c`.
+Query-plan, fresh snapshot/window/step, concurrent binding and large-scope
+binding tests pass in 0.201s. The new large-scope test reuses one cached shape
+with 500 current IDs and changed family, metric filters and time window. IDs
+that resemble SQL or parameter names remain data.
+
+Private raw experiment comparisons and profiles are under
+`tmp/patrol-disk-bench-go1268/` at the workspace root. The final product source
+also includes an explanatory comment. Full affected package/race proof, broader
+final-source comparisons and the final staged hook remain pending. The goal
+remains open for real-model diagnosis, missing-access and action-outcome
+qualification. The provider refusal is unchanged.
+
+Final product source SHA-256 is
+`72a7674a67ed1114be74038fb9a3d1e9c9d0507fb0d9597995f38aec0c8cbc56`.
+Final test source SHA-256 is
+`76be5a315e8b6dafd4a93b09711e01854087ce9f6f5a94ddb8c2ff20b3e8f708`.
+Full metrics and database packages pass on Go 1.26.8 in 77.390s and 0.203s.
+Focused retained/tier/binding/batch race proof, including the new 500-resource
+binding case, passes in 7.707s. Both source hashes match before and after proof.
+The worker log is `/opt/pulse-release-worker/patrol-named-binding-final-tests.log`.
+Broader final-source performance comparison and staged-hook qualification
+remain pending.
+
+The two latency-based concurrent SLO tests are included in the ordinary full
+suite and deliberately skip under the race detector. The separate concurrent
+and large-scope binding regressions execute under race without latency gates.
+
+The final broader comparison uses ten paired 100ms rounds on pulse-dev, with
+baseline before candidate in each round, against exact CI base `3347f561ec7b`.
+It covers all Query, QueryAllBatch, QueryManyResources and 500-node dashboard
+query/concurrent-load cases, plus history API, memory-fallback control and
+workload/summary chart APIs. All forty invocations succeed. Both metrics and
+API comparisons pass the unchanged repository checker for time, bytes and
+allocations. The 500-node read remains +0.26% in allocation events and -1.68%
+in bytes versus base, with no statistically significant runtime difference.
+
+Base source hashes match the actual git object and final source hashes match
+the product manifest above. The local and worker benchmark checker hashes are
+identical. An earlier setup used the invalid package path `./pkg/api` and is
+discarded. The complete final run uses `./internal/api` and an actual frontend
+build artifact. Its raw worker directory is
+`/opt/pulse-release-worker/patrol-wide-results-corrected/`, with the final
+comparisons, gates and logs copied to `tmp/patrol-named-binding-final-proof/` at
+the workspace root. This establishes the selected local performance proof,
+not a completed remote CI pass. Final staged-hook qualification and landing
+remain pending.
