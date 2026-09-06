@@ -3771,3 +3771,14 @@ ordinary host metrics, but missing stats, storage, images, networks, volumes,
 Swarm, and update evidence remain absent rather than being reconstructed from
 older or adjacent observations. Model, monitor, and unified-resource tests pin
 the additive field through the ingestion path.
+
+### Asymmetric bridge evidence regression coverage
+
+`TestApplyHostReportBridgeIdentity` verifies two consecutive reports through
+host ingestion and checks both host-to-node and reciprocal node-to-agent links.
+Custom management bridges, private IPv4 and ULA addresses retain association
+when names differ and the provider endpoint is DNS-based. A Docker or generated
+bridge on either side alone must not supply inferred identity: testing only
+symmetric bridges would miss removal of filtering from one inventory.
+This proof does not establish safety for arbitrarily renamed Docker bridges
+or repair persisted links, and is not reporter or installed-release validation.

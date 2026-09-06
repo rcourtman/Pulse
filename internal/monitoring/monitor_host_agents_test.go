@@ -5784,3 +5784,55 @@ func TestApplyHostReportDoesNotLinkUnrelatedDockerBridge(t *testing.T) {
 		}
 	}
 }
+
+// Exercise each side independently: symmetric fixtures alone would still pass
+// if filtering accidentally disappeared from either address inventory.
+func TestApplyHostReportBridgeIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		name, providerNIC, agentNIC, address string
+		wantLink                             bool
+	}{
+		{"custom management", "br-mgmt", "br-mgmt", "192.0.2.10/24", true},
+		{"private management", "vmbr0", "eth0", "172.17.0.1/16", true},
+		{"ULA management", "br-mgmt", "eth0", "fd00::10/64", true},
+		{"provider docker only", "docker0", "eth0", "172.17.0.1/16", false},
+		{"agent docker only", "vmbr0", "docker0", "172.17.0.1/16", false},
+		{"provider generated bridge only", "br-0123456789ab", "eth0", "192.0.2.10/24", false},
+		{"agent generated bridge only", "vmbr0", "br-0123456789ab", "192.0.2.10/24", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			monitor := issue1654Monitor()
+			monitor.state.UpdateNodes([]models.Node{{
+				ID: "pve-node", Name: "pve", Instance: "cluster",
+				Host: "https://pve.example:8006",
+				NetworkInterfaces: []models.HostNetworkInterface{
+					{Name: tc.providerNIC, Addresses: []string{tc.address}},
+				},
+			}})
+			report := issue1654Report(time.Now().UTC())
+			// Different names and a DNS endpoint force network evidence.
+			report.Host.Hostname = "agent.example"
+			report.Network = []agentshost.NetworkInterface{
+				{Name: tc.agentNIC, Addresses: []string{tc.address}},
+			}
+			for i := 0; i < 2; i++ {
+				report.Timestamp = report.Timestamp.Add(time.Second)
+				host, err := monitor.ApplyHostReport(report, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				wantNode, wantAgent := "", ""
+				if tc.wantLink {
+					wantNode, wantAgent = "pve-node", host.ID
+				}
+				if host.LinkedNodeID != wantNode {
+					t.Fatalf("report %d: linked node = %q, want %q", i, host.LinkedNodeID, wantNode)
+				}
+				nodes := monitor.state.GetSnapshot().Nodes
+				if len(nodes) != 1 || nodes[0].LinkedAgentID != wantAgent {
+					t.Fatalf("report %d: reciprocal link mismatch, want agent %q", i, wantAgent)
+				}
+			}
+		})
+	}
+}

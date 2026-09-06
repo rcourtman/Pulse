@@ -7849,3 +7849,14 @@ against interleaved Linux procfs counters.
 `internal/hostmetrics/issue1894_interleaved_collectors_test.go` independently
 pins isolated collector deltas and startup fallback. This changes telemetry
 sampling only, not report schemas, identity, enrollment or command authority.
+
+### Asymmetric bridge evidence regression coverage
+
+`TestApplyHostReportBridgeIdentity` verifies two consecutive reports through
+host ingestion and checks both host-to-node and reciprocal node-to-agent links.
+Custom management bridges, private IPv4 and ULA addresses retain association
+when names differ and the provider endpoint is DNS-based. A Docker or generated
+bridge on either side alone must not supply inferred identity: testing only
+symmetric bridges would miss removal of filtering from one inventory.
+This proof does not establish safety for arbitrarily renamed Docker bridges
+or repair persisted links, and is not reporter or installed-release validation.
