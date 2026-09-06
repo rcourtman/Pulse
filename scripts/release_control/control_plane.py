@@ -442,7 +442,18 @@ def legacy_release_line_for_version(
         reverse=True,
     )
     for line in legacy_release_lines:
-        if normalized_version.startswith(line["version_prefix"]):
+        prefix = line["version_prefix"]
+        # A complete patch version binds only that version, not e.g. 6.4.40.
+        # Trailing-dot prefixes continue to bind the whole minor/major line.
+        if prefix.endswith("."):
+            matches = normalized_version.startswith(prefix)
+        else:
+            matches = (
+                normalized_version == prefix
+                or normalized_version.startswith(prefix + "-")
+                or normalized_version.startswith(prefix + "+")
+            )
+        if matches:
             return line
     return None
 
