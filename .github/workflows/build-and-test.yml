@@ -338,5 +338,6 @@ jobs:
             bench-results.txt
             bench-baseline.txt
             bench-comparison.txt
+            bench-metadata.txt
           if-no-files-found: warn
           retention-days: 7
