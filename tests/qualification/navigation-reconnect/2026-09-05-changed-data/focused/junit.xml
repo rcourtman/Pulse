@@ -1,0 +1,8 @@
+<testsuites id="" name="" tests="2" failures="0" skipped="0" errors="0" time="29.969079">
+<testsuite name="96-navigation-socket-recovery.spec.ts" timestamp="2026-09-05T21:40:17.066Z" hostname="chromium" tests="2" failures="0" skipped="0" time="29.07" errors="0">
+<testcase name="changed backend incidents recover without reload at 1440px" classname="96-navigation-socket-recovery.spec.ts" time="13.01">
+</testcase>
+<testcase name="changed backend incidents recover without reload at 320px" classname="96-navigation-socket-recovery.spec.ts" time="16.06">
+</testcase>
+</testsuite>
+</testsuites>

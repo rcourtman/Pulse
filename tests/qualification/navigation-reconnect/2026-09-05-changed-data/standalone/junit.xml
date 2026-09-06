@@ -1,0 +1,108 @@
+<testsuites id="" name="" tests="10" failures="2" skipped="0" errors="0" time="131.86015300000003">
+<testsuite name="96-navigation-socket-recovery.spec.ts" timestamp="2026-09-05T21:32:42.779Z" hostname="chromium" tests="10" failures="2" skipped="0" time="130.05" errors="0">
+<testcase name="populated navigation survives socket loss at 1440px (admission failure: false)" classname="96-navigation-socket-recovery.spec.ts" time="9.693">
+</testcase>
+<testcase name="populated navigation survives socket loss at 1100px (admission failure: false)" classname="96-navigation-socket-recovery.spec.ts" time="7.787">
+</testcase>
+<testcase name="populated navigation survives socket loss at 390px (admission failure: false)" classname="96-navigation-socket-recovery.spec.ts" time="19.151">
+</testcase>
+<testcase name="populated navigation survives socket loss at 320px (admission failure: false)" classname="96-navigation-socket-recovery.spec.ts" time="17.869">
+</testcase>
+<testcase name="populated navigation survives socket loss at 1440px (admission failure: true)" classname="96-navigation-socket-recovery.spec.ts" time="6.753">
+</testcase>
+<testcase name="populated navigation survives socket loss at 1100px (admission failure: true)" classname="96-navigation-socket-recovery.spec.ts" time="9.026">
+</testcase>
+<testcase name="populated navigation survives socket loss at 390px (admission failure: true)" classname="96-navigation-socket-recovery.spec.ts" time="16.656">
+</testcase>
+<testcase name="populated navigation survives socket loss at 320px (admission failure: true)" classname="96-navigation-socket-recovery.spec.ts" time="14.237">
+</testcase>
+<testcase name="changed backend incidents recover without reload at 1440px" classname="96-navigation-socket-recovery.spec.ts" time="16.536">
+<failure message="96-navigation-socket-recovery.spec.ts:301:3 changed backend incidents recover without reload at 1440px" type="FAILURE">
+<![CDATA[  [chromium] › 96-navigation-socket-recovery.spec.ts:301:3 › changed backend incidents recover without reload at 1440px
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[id="alert-docker:proxmox-lxc-docker:Production West:pve1:112::docker:proxmox-lxc-docker:Production West:pve1:112-connectivity"]').getByRole('button', { name: 'Unacknowledge', exact: true })
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for locator('[id="alert-docker:proxmox-lxc-docker:Production West:pve1:112::docker:proxmox-lxc-docker:Production West:pve1:112-connectivity"]').getByRole('button', { name: 'Unacknowledge', exact: true })
+
+
+      269 |     const acknowledgedSnapshot = await reconnect();
+      270 |     expect(acknowledgedSnapshot.find((a: { id: string }) => a.id === target!.id)?.acknowledged).toBe(true);
+    > 271 |     await expect(card.getByRole('button', { name: 'Unacknowledge', exact: true })).toBeVisible();
+          |                                                                                    ^
+      272 |     await testInfo.attach('changed-incident', { body: await page.screenshot(), contentType: 'image/png' });
+      273 |
+      274 |     const configResponse = await apiRequest(page, '/api/alerts/config');
+        at /var/lib/pulse-maintainer/team-worktrees/20260905T211528Z-web-product/pulse/tests/integration/tests/96-navigation-socket-recovery.spec.ts:271:84
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/96-navigation-socket-recov-2bfb7-er-without-reload-at-1440px-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/96-navigation-socket-recov-2bfb7-er-without-reload-at-1440px-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/96-navigation-socket-recov-2bfb7-er-without-reload-at-1440px-chromium/error-context.md
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|96-navigation-socket-recov-2bfb7-er-without-reload-at-1440px-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|96-navigation-socket-recov-2bfb7-er-without-reload-at-1440px-chromium/video.webm]]
+
+[[ATTACHMENT|96-navigation-socket-recov-2bfb7-er-without-reload-at-1440px-chromium/error-context.md]]
+]]>
+</system-out>
+</testcase>
+<testcase name="changed backend incidents recover without reload at 320px" classname="96-navigation-socket-recovery.spec.ts" time="12.342">
+<failure message="96-navigation-socket-recovery.spec.ts:301:3 changed backend incidents recover without reload at 320px" type="FAILURE">
+<![CDATA[  [chromium] › 96-navigation-socket-recovery.spec.ts:301:3 › changed backend incidents recover without reload at 320px
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+    Call Log:
+    - Timeout 10000ms exceeded while waiting on the predicate
+
+      238 |     // This standalone fixture avoids acknowledgement moving a grouped storage
+      239 |     // incident into a collapsed related-incidents panel.
+    > 240 |     await expect.poll(async () => (await readActive()).some(alert =>
+          |     ^
+      241 |       alert.resourceName === 'edge-proxy-01' && !alert.acknowledged)).toBe(true);
+      242 |     const initial = await readActive();
+      243 |     const target = initial.find(alert => alert.resourceName === 'edge-proxy-01' && !alert.acknowledged);
+        at /var/lib/pulse-maintainer/team-worktrees/20260905T211528Z-web-product/pulse/tests/integration/tests/96-navigation-socket-recovery.spec.ts:240:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/96-navigation-socket-recov-cb0ef-ver-without-reload-at-320px-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/96-navigation-socket-recov-cb0ef-ver-without-reload-at-320px-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/96-navigation-socket-recov-cb0ef-ver-without-reload-at-320px-chromium/error-context.md
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|96-navigation-socket-recov-cb0ef-ver-without-reload-at-320px-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|96-navigation-socket-recov-cb0ef-ver-without-reload-at-320px-chromium/video.webm]]
+
+[[ATTACHMENT|96-navigation-socket-recov-cb0ef-ver-without-reload-at-320px-chromium/error-context.md]]
+]]>
+</system-out>
+</testcase>
+</testsuite>
+</testsuites>

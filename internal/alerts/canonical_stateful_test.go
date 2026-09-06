@@ -4,7 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -164,4 +166,116 @@ func TestStatefulAlertReFireCooldown(t *testing.T) {
 			t.Errorf("expected 2 history entries after re-fire past cooldown, got %d", historyAfterReFire)
 		}
 	})
+}
+
+// A UI-keyed datastore override must govern actual incidents, not just the
+// threshold resolver. Exercise hysteresis and recurrence across SQLite reopen,
+// including a same-named datastore on another PBS instance.
+func TestPBSDatastoreOverrideLifecycleAcrossRestart(t *testing.T) {
+	for _, legacySnapshot := range []bool{false, true} {
+		name := "persisted aliases"
+		if legacySnapshot {
+			name = "legacy snapshot"
+		}
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			start := func() *Manager {
+				m := NewManagerWithDataDir(dir)
+				t.Cleanup(m.Stop)
+				m.EnableEventLog()
+				if !m.activeStateAuthoritative.Load() {
+					t.Fatal("SQLite active state is not authoritative")
+				}
+				m.UpdateConfig(AlertConfig{Enabled: true, ActivationState: ActivationActive,
+					StorageDefault: HysteresisThreshold{Trigger: 95, Clear: 90},
+					Overrides:      map[string]ThresholdConfig{"pbs-primary/backups": {Usage: &HysteresisThreshold{Trigger: 80, Clear: 70}}},
+				})
+				disableTestTimeThresholds(m)
+				return m
+			}
+			storage := func(instance string, usage float64) models.Storage {
+				return models.Storage{ID: instance + "-backups", AliasIDs: []string{instance + "/backups"}, Name: "backups", Instance: instance, Type: "pbs", Status: "online", Total: 1000, Used: int64(usage * 10), Free: int64(1000 - usage*10), Usage: usage}
+			}
+			observe := func(m *Manager, usage float64) {
+				t.Helper()
+				for range 5 {
+					m.CheckStorage(storage("pbs-primary", usage))
+					m.CheckStorage(storage("pbs-secondary", usage))
+				}
+				if testHasActiveAlert(t, m, canonicalMetricStateID("pbs-secondary-backups", "usage")) {
+					t.Fatal("override leaked to another PBS instance")
+				}
+			}
+			events := func(m *Manager, fired, resolved int) {
+				t.Helper()
+				for kind, want := range map[string]int{eventlog.TypeFired: fired, eventlog.TypeResolved: resolved} {
+					if got := len(queryAlertEvents(t, m, eventlog.Filter{Types: []string{kind}})); got != want {
+						t.Fatalf("%s events = %d, want %d", kind, got, want)
+					}
+				}
+			}
+			id := canonicalMetricStateID("pbs-primary-backups", "usage")
+			m := start()
+			observe(m, 85)
+			original := *testRequireActiveAlert(t, m, id)
+			events(m, 1, 0)
+			if legacySnapshot {
+				m.mu.Lock()
+				delete(m.activeAlerts[id].Metadata, storagePolicyAliasesKey)
+				m.mu.Unlock()
+				if err := m.SaveActiveAlerts(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			m.Stop()
+
+			m = start()
+			observe(m, 75) // Below trigger, but not below the override's clear threshold.
+			if got := testRequireActiveAlert(t, m, id); !got.StartTime.Equal(original.StartTime) {
+				t.Fatal("restart replaced the firing incident")
+			}
+			events(m, 1, 0)
+			observe(m, 65)
+			if testHasActiveAlert(t, m, id) {
+				t.Fatal("override recovery did not clear incident")
+			}
+			events(m, 1, 1)
+			m.Stop()
+
+			m = start()
+			observe(m, 75)
+			if testHasActiveAlert(t, m, id) {
+				t.Fatal("resolved incident resurrected inside hysteresis band")
+			}
+			events(m, 1, 1)
+			observe(m, 85)
+			if got := testRequireActiveAlert(t, m, id); !got.StartTime.After(original.StartTime) {
+				t.Fatal("refire reused original incident start")
+			}
+			events(m, 2, 1)
+		})
+	}
+}
+
+func TestStoragePolicyAliasesLegacyIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		name, instance, resource, datastore string
+		want                                bool
+	}{
+		{"hyphenated names", "pbs-backup-east", "pbs-backup-east-daily-store", "daily-store", true},
+		{"different instance", "pbs-backup-west", "pbs-backup-east-daily-store", "daily-store", false},
+		{"not PBS", "backup-east", "backup-east-daily-store", "daily-store", false},
+		{"missing datastore", "pbs-backup-east", "pbs-backup-east-", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := storagePolicyAliases(&Alert{Instance: tc.instance, ResourceID: tc.resource, ResourceName: tc.datastore})
+			if tc.want {
+				if len(got) != 1 || got[0] != tc.instance+"/"+tc.datastore {
+					t.Fatalf("aliases = %v", got)
+				}
+			} else if len(got) != 0 {
+				t.Fatalf("invented alias: %v", got)
+			}
+		})
+	}
 }

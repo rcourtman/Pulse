@@ -1,0 +1,146 @@
+{
+  "initial": {
+    "width": 292,
+    "scrollWidth": 292,
+    "left": 0,
+    "overflowX": "clip",
+    "tabIndex": -1,
+    "cells": [
+      {
+        "text": "loki",
+        "x": 9,
+        "width": 116.796875,
+        "titles": [
+          "Expand details for loki",
+          "Healthy",
+          "loki"
+        ]
+      },
+      {
+        "text": "running",
+        "x": 125.796875,
+        "width": 43.796875,
+        "titles": [
+          "running"
+        ]
+      },
+      {
+        "text": "12%",
+        "x": 169.59375,
+        "width": 43.796875,
+        "titles": []
+      },
+      {
+        "text": "74%",
+        "x": 213.390625,
+        "width": 49.625,
+        "titles": []
+      },
+      {
+        "text": "—",
+        "x": 263.015625,
+        "width": 37.953125,
+        "titles": [
+          "No image update check reported"
+        ]
+      }
+    ]
+  },
+  "pointer": {
+    "width": 292,
+    "scrollWidth": 292,
+    "left": 0,
+    "overflowX": "clip",
+    "tabIndex": -1,
+    "cells": [
+      {
+        "text": "loki",
+        "x": 9,
+        "width": 116.796875,
+        "titles": [
+          "Expand details for loki",
+          "Healthy",
+          "loki"
+        ]
+      },
+      {
+        "text": "running",
+        "x": 125.796875,
+        "width": 43.796875,
+        "titles": [
+          "running"
+        ]
+      },
+      {
+        "text": "12%",
+        "x": 169.59375,
+        "width": 43.796875,
+        "titles": []
+      },
+      {
+        "text": "74%",
+        "x": 213.390625,
+        "width": 49.625,
+        "titles": []
+      },
+      {
+        "text": "—",
+        "x": 263.015625,
+        "width": 37.953125,
+        "titles": [
+          "No image update check reported"
+        ]
+      }
+    ]
+  },
+  "keyboard": {
+    "width": 292,
+    "scrollWidth": 292,
+    "left": 0,
+    "overflowX": "clip",
+    "tabIndex": -1,
+    "cells": [
+      {
+        "text": "loki",
+        "x": 9,
+        "width": 116.796875,
+        "titles": [
+          "Expand details for loki",
+          "Healthy",
+          "loki"
+        ]
+      },
+      {
+        "text": "running",
+        "x": 125.796875,
+        "width": 43.796875,
+        "titles": [
+          "running"
+        ]
+      },
+      {
+        "text": "12%",
+        "x": 169.59375,
+        "width": 43.796875,
+        "titles": []
+      },
+      {
+        "text": "74%",
+        "x": 213.390625,
+        "width": 49.625,
+        "titles": []
+      },
+      {
+        "text": "—",
+        "x": 263.015625,
+        "width": 37.953125,
+        "titles": [
+          "No image update check reported"
+        ]
+      }
+    ]
+  },
+  "accessibleRow": "- row \"Expand details for notifications-worker notifications-worker running 12% 48% —\":\n  - cell \"Expand details for notifications-worker notifications-worker\":\n    - button \"Expand details for notifications-worker\"\n    - text: notifications-worker\n  - cell \"running\"\n  - cell \"12%\"\n  - cell \"48%\"\n  - cell \"—\"",
+  "expanded": "true",
+  "detailText": "notifications-worker\nContainer\nDocker / Podman\nOverview\nHistory\nManage\nRUNTIME CONTEXT\nObserved state\t\nRunning\n\nUptime\t\n6d 6h\n\nLast seen\t\n15s ago\n\nCONTAINER\nImage\t\nghcr.io/pulse-demo/notifications-worker:2026.04\n\nRestarts\t\n1\n\nCreated\t\n18 days ago\n\nStarted\t\n6 days ago\n\nCompose project\t\norion-2\n\nCompose service\t\npostgres\n\nLabels\t\ncom.docker.compose.project: orion-2\ncom.docker.compose.service: postgres\ncom.pulse.demo: true\ncom.pulse.role.production: true\ncom.pulse.role.queue: true\ncom.pulse.role.worker: true\n\nIDENTITY\nHostname\t\nnotifications-worker\n\nPrimary ID\t\napp-container:orion-2-26f93461b215\n\nParent\t\nagent-9dbedd74104d1527\n\nDiscovery\t\napp-container:notifications-worker\n\nMetrics Target\t\napp-container:orion-2-26f93461b215\n\nAliases\t\napp-container:orion-2-26f93461b215\norion-2-26f93461b215\norion-2-mock\napp-platform-01\n+4\nRelationship map\n\n1 canonical relationship\n\nCANONICAL RELATIONSHIPS\nnotifications-worker\n→\ndocker-network-0ab79ab291cd98fa\nAttached To\n100% confidence · Docker Adapter · last seen just now"
+}

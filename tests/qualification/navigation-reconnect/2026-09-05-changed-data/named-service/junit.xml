@@ -1,0 +1,88 @@
+<testsuites id="" name="" tests="2" failures="2" skipped="0" errors="0" time="24.149623">
+<testsuite name="96-navigation-socket-recovery.spec.ts" timestamp="2026-09-05T21:38:22.149Z" hostname="chromium" tests="2" failures="2" skipped="0" time="22.578" errors="0">
+<testcase name="changed backend incidents recover without reload at 1440px" classname="96-navigation-socket-recovery.spec.ts" time="11.928">
+<failure message="96-navigation-socket-recovery.spec.ts:301:3 changed backend incidents recover without reload at 1440px" type="FAILURE">
+<![CDATA[  [chromium] › 96-navigation-socket-recovery.spec.ts:301:3 › changed backend incidents recover without reload at 1440px
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+    Call Log:
+    - Timeout 10000ms exceeded while waiting on the predicate
+
+      238 |     // This standalone service fixture needs no host-offline confirmation delay
+      239 |     // and avoids moving grouped storage incidents into a collapsed panel.
+    > 240 |     await expect.poll(async () => (await readActive()).some(alert =>
+          |     ^
+      241 |       alert.resourceName === 'infra-docker')).toBe(true);
+      242 |     const initial = await readActive();
+      243 |     const target = initial.find(alert => alert.resourceName === 'infra-docker');
+        at /var/lib/pulse-maintainer/team-worktrees/20260905T211528Z-web-product/pulse/tests/integration/tests/96-navigation-socket-recovery.spec.ts:240:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/96-navigation-socket-recov-2bfb7-er-without-reload-at-1440px-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/96-navigation-socket-recov-2bfb7-er-without-reload-at-1440px-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/96-navigation-socket-recov-2bfb7-er-without-reload-at-1440px-chromium/error-context.md
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|96-navigation-socket-recov-2bfb7-er-without-reload-at-1440px-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|96-navigation-socket-recov-2bfb7-er-without-reload-at-1440px-chromium/video.webm]]
+
+[[ATTACHMENT|96-navigation-socket-recov-2bfb7-er-without-reload-at-1440px-chromium/error-context.md]]
+]]>
+</system-out>
+</testcase>
+<testcase name="changed backend incidents recover without reload at 320px" classname="96-navigation-socket-recovery.spec.ts" time="10.65">
+<failure message="96-navigation-socket-recovery.spec.ts:301:3 changed backend incidents recover without reload at 320px" type="FAILURE">
+<![CDATA[  [chromium] › 96-navigation-socket-recovery.spec.ts:301:3 › changed backend incidents recover without reload at 320px
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+    Call Log:
+    - Timeout 10000ms exceeded while waiting on the predicate
+
+      238 |     // This standalone service fixture needs no host-offline confirmation delay
+      239 |     // and avoids moving grouped storage incidents into a collapsed panel.
+    > 240 |     await expect.poll(async () => (await readActive()).some(alert =>
+          |     ^
+      241 |       alert.resourceName === 'infra-docker')).toBe(true);
+      242 |     const initial = await readActive();
+      243 |     const target = initial.find(alert => alert.resourceName === 'infra-docker');
+        at /var/lib/pulse-maintainer/team-worktrees/20260905T211528Z-web-product/pulse/tests/integration/tests/96-navigation-socket-recovery.spec.ts:240:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/96-navigation-socket-recov-cb0ef-ver-without-reload-at-320px-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/96-navigation-socket-recov-cb0ef-ver-without-reload-at-320px-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/96-navigation-socket-recov-cb0ef-ver-without-reload-at-320px-chromium/error-context.md
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|96-navigation-socket-recov-cb0ef-ver-without-reload-at-320px-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|96-navigation-socket-recov-cb0ef-ver-without-reload-at-320px-chromium/video.webm]]
+
+[[ATTACHMENT|96-navigation-socket-recov-cb0ef-ver-without-reload-at-320px-chromium/error-context.md]]
+]]>
+</system-out>
+</testcase>
+</testsuite>
+</testsuites>

@@ -242,6 +242,7 @@ scripts/release_control/*
 !scripts/release_control/governance_stage_guard.py
 !scripts/release_control/governance_stage_guard_test.py
 !scripts/release_control/helm_pages_retry_test.py
+!scripts/release_control/helm_publish_version_test.py
 !scripts/release_control/live_runtime_proof.py
 !scripts/release_control/live_runtime_proof_test.py
 !scripts/release_control/mobile_relay_auth_approvals_proof.py

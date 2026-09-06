@@ -15,6 +15,22 @@
 
 ## Purpose
 
+### Public Helm exact-package receipt
+
+The post-activation public Pages verification in `.github/workflows/helm-pages.yml`
+must pull the requested chart version through the consumer repository and compare
+its archive bytes with the package already recovered through OCI qualification.
+Readable chart metadata alone is not a successful convergence receipt. The OCI
+manifest digest hashes a different object and must not be compared directly with
+the archive. A byte mismatch fails immediately; unavailable downloads retain the
+bounded retry, with previous downloaded files removed before each attempt.
+Activation bindings, publication authority and containment remain prerequisites.
+The executed-shell fixtures in `scripts/release_control/helm_pages_retry_test.py`
+cover matching, mismatched, missing and unavailable public packages without
+network or publication writes. They are not installed Helm qualification or proof
+that any historical published chart was wrong or has been repaired.
+
+
 The shell-owned multi-tenant integration suite uses a dedicated desktop-only
 Playwright configuration selecting the seven multi-tenant scenarios. It must
 reject any non-empty E2E tier identity rather than impersonating stable or
@@ -4073,6 +4089,13 @@ are part of the same governed bootstrap input even when the package manifest
 range already permits the newer version; the lockfile must identify the
 resolved package version and integrity that the release build will actually
 consume.
+Build and Test and Core E2E must admit both pushes and pull requests for
+`release/v*` trains as well as main. A release proposal must not appear
+qualified merely because documentation and boundary checks passed while the
+branch filters excluded build, dependency-security and applicable E2E checks.
+Existing path filters and per-job requirements remain in force; branch admission
+is not evidence that those jobs executed or passed.
+
 Frontend dependency-security changes use their own proof route rather than
 borrowing the local dev-runtime orchestration tests. The canonical
 `.github/workflows/build-and-test.yml` frontend job must run the complete
@@ -5168,3 +5191,20 @@ passed. A read-only probe of job 101235205647 retained the expected failure text
 without ESC bytes. Private containment classification and successful scheduled
 reconciliation still require post-integration evidence; this is not customer
 convergence or release qualification.
+
+### 2026-09-05 — Bind hosted chart application version to release version
+
+The hosted Helm publisher rejects a supplied application version that differs
+from the chart version before emitting version outputs or packaging. Both server
+and agent image defaults use Chart.AppVersion, so an exact source SHA and chart
+digest alone do not prevent an override from selecting another release's images.
+The normal release caller already supplies equal versions; default and release
+event paths remain unchanged. This does not remove users' image value overrides.
+
+Verification: helm_publish_version_test.py executes the actual version-resolution
+shell. Four mismatches failed assertions before the fix and are rejected after it;
+stable/alpha/beta/RC equal and default versions and release-event defaults pass.
+All 4 tests, 7 Helm Pages retry tests and 47 promotion-policy tests pass locally.
+No hosted publication or installed-image qualification is claimed.
+External reference retrieved 2026-09-05: https://helm.sh/docs/topics/charts/#the-appversion-field
+explains that application version is separate from chart version.

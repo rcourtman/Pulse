@@ -635,6 +635,20 @@ installer download and the agent's subsequent Pulse TLS connection.
 
 ## Shared Boundaries
 
+### Container update receipt and independent observation
+
+The server's independent Docker-update verification must compare the daemon
+state/running observation with the replacement state recorded by the agent,
+not only its container ID. A matching running replacement needs healthy or
+no-healthcheck evidence; intentionally stopped replacements remain stopped.
+Missing agent readback cannot become independent confirmation. This server-side
+classification does not amend the agent's mutation receipt, trigger another
+update, change runner permissions, or reinterpret compensation as execution.
+`TestDockerContainerUpdateIndependentObservationMustMatchState` in
+`internal/api/docker_container_action_result_test.go` verifies these boundaries;
+existing callback-loss reconciliation must continue without redispatch.
+
+
 The shared `PBSInstance.NodeMetricsUnavailable` field belongs exclusively to
 provider polling and alert evaluation. It is retained by in-process state copies
 but excluded from JSON; it neither grants nor revokes host-agent identity,
@@ -2879,6 +2893,22 @@ traverse an agent.
 4. Lifecycle setup, install, or fleet surfaces that invoke retired self-hosted trial acquisition; `POST /api/license/trial/start` and the retired `/auth/trial-activate` callback must stay closed on the ordinary self-hosted router rather than reappearing as lifecycle-local CTAs or retry paths.
 
 ## Completion Obligations
+
+### Docker update readback is not mutation history
+
+The agent's post-update inspect can observe a running replacement whose health
+has not settled or has deteriorated after module success. The API must retain
+the completed mutation as execution history without treating replacement
+identity alone as confirmed running health. Agent-attested verification requires
+running state and healthy or explicit no-healthcheck evidence for running
+replacements; unknown health remains inconclusive. This does not trigger an
+automatic resend or rollback and preserves deliberately stopped updates.
+
+Verification: `TestDockerContainerUpdateAgentReadbackMustSupportRunningClaim`
+asserts both verification outcomes and unchanged successful execution.
+`TestDockerContainerActionExecutorDispatchesTypedUpdate` retains typed-only
+dispatch with explicit no-healthcheck readback evidence.
+
 
 Command-capable agent completion must prove more than fresh telemetry. The
 dedicated agent listener must admit the full bootstrap/report/WebSocket

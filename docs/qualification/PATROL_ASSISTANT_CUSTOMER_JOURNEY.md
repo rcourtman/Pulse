@@ -867,3 +867,24 @@ The final full tools package passes in 59.413s and focused file-read race proof
 in 1.033s, covering successful reads alongside the failed-read controls.
 Private worker logs are `file-read-full.log` and `file-read-race.log` under
 `/opt/pulse-release-worker/`.
+
+## Integration qualification, 2026-09-06
+
+The detection and failed-read slice is committed as `61607333cc9e`. Integration
+with main `3f74c0c27304` required a fresh browser receipt. Intermediate-width
+inspection exposed the shared delivery-health card squeezing its explanation
+under the action buttons. The shared card now wraps by available width and uses
+an opaque semantic heading colour. Permanent fixtures include 900 pixels and
+check control bounds and heading overflow.
+
+Final worker proof passes 18 delivery-ordering cases and 12 Overview refresh
+cases at 1440, 900 and 390 pixels, with Overview checked in light and dark themes.
+Unavailable health, retained retry/dismiss actions, pending refresh and healthy
+recovery were exercised. Final card pixels were inspected at all three widths.
+Frontend lint, type checking and three affected test files pass. Focused merged
+Patrol/API/adapter/Docker-result proof passes. The final local scripted
+`/patrol` and `/alerts` journey passes at 1440x1000, 900x1000 and 390x1000,
+including nested failed-read evidence and the linked Assistant. This qualifies
+the integrated presentation and context contract only. Exact staged hook and
+remote landing are subsequent delivery checks. Real diagnosis and autonomous
+action outcomes remain unqualified, and the provider refusal remains enforced.

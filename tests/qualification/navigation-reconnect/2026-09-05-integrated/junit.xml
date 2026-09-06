@@ -1,0 +1,20 @@
+<testsuites id="" name="" tests="8" failures="0" skipped="0" errors="0" time="132.169269">
+<testsuite name="96-navigation-socket-recovery.spec.ts" timestamp="2026-09-05T20:43:55.759Z" hostname="chromium" tests="8" failures="0" skipped="0" time="131.012" errors="0">
+<testcase name="populated navigation survives socket loss at 1440px (admission failure: false)" classname="96-navigation-socket-recovery.spec.ts" time="9.231">
+</testcase>
+<testcase name="populated navigation survives socket loss at 1100px (admission failure: false)" classname="96-navigation-socket-recovery.spec.ts" time="7.962">
+</testcase>
+<testcase name="populated navigation survives socket loss at 390px (admission failure: false)" classname="96-navigation-socket-recovery.spec.ts" time="18.039">
+</testcase>
+<testcase name="populated navigation survives socket loss at 320px (admission failure: false)" classname="96-navigation-socket-recovery.spec.ts" time="16.376">
+</testcase>
+<testcase name="populated navigation survives socket loss at 1440px (admission failure: true)" classname="96-navigation-socket-recovery.spec.ts" time="11.781">
+</testcase>
+<testcase name="populated navigation survives socket loss at 1100px (admission failure: true)" classname="96-navigation-socket-recovery.spec.ts" time="24.992">
+</testcase>
+<testcase name="populated navigation survives socket loss at 390px (admission failure: true)" classname="96-navigation-socket-recovery.spec.ts" time="23.496">
+</testcase>
+<testcase name="populated navigation survives socket loss at 320px (admission failure: true)" classname="96-navigation-socket-recovery.spec.ts" time="19.135">
+</testcase>
+</testsuite>
+</testsuites>

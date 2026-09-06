@@ -22,7 +22,7 @@ on:
         required: true
         type: string
       app_version:
-        description: "Application version to embed (defaults to chart version)."
+        description: "Application version (must equal chart version; defaults to it)."
         required: false
         type: string
         default: ""
@@ -36,7 +36,7 @@ on:
         description: "Chart version (required when running manually, use format 4.24.0)"
         required: true
       app_version:
-        description: "Application version to embed (defaults to chart version)"
+        description: "Application version (must equal chart version; defaults to it)"
         required: false
 
 permissions:
@@ -88,6 +88,13 @@ jobs:
             fi
             CHART_VERSION="${RELEASE_TAG#v}"
             APP_VERSION="$CHART_VERSION"
+          fi
+
+          # Pulse's server and agent image defaults use Chart.AppVersion.
+          # Source provenance alone cannot detect a mismatched image override.
+          if [ "$APP_VERSION" != "$CHART_VERSION" ]; then
+            echo "::error::Release chart app_version must equal chart_version."
+            exit 1
           fi
 
           IS_PRERELEASE="false"

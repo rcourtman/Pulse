@@ -20,6 +20,19 @@
 
 ## Purpose
 
+The shared delivery-health card wraps action groups according to available
+space, retaining readable explanation width when Review, Retry, Dismiss and
+Refresh appear together. Its heading uses the opaque semantic foreground,
+not the translucent palette shades reserved for status backgrounds. Verify
+light/dark layouts at desktop, intermediate and narrow widths, including
+unavailable health, pending refresh and recovery.
+
+The alerts overview offers the existing delivery-status refresh control when
+health is unavailable, including after a successful retained-queue action whose
+follow-up health read fails. The warning remains until a verified healthy read;
+a successful queue action alone is not evidence of delivery health. Normal
+degraded summary presentation continues to omit refresh.
+
 Proxmox backup presentation treats every manifestless PBS artifact as
 non-recoverable. It renders the artifact as `Running` when current writer
 visibility is absent or a matching writer is active, and as danger-tone
@@ -7117,3 +7130,15 @@ reasoning and real remediation in
 `docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
 proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
 response does not establish a useful customer outcome or model qualification.
+
+### Alert health attention preserves asynchronous ownership
+
+The existing delivery-health card and shared buttons consume only the latest
+started health read's state. Configuration Retry can overlap a disabled card
+refresh; disabling that button is not a concurrency guard. Older completions
+must neither clear the latest request's busy flag nor replace its attention or
+unavailable presentation. Existing danger tone, accessible alert role, labels,
+confirmation and wrapping controls remain unchanged; no new primitive is added.
+The focused hook/caller tests and `scripts/check-delivery-health-ordering.mjs`
+cover this dependency at desktop and narrow widths using scripted health and
+queue-action responses, without claiming backend notification delivery.
