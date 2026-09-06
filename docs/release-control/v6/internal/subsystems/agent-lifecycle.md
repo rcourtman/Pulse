@@ -7860,3 +7860,30 @@ bridge on either side alone must not supply inferred identity: testing only
 symmetric bridges would miss removal of filtering from one inventory.
 This proof does not establish safety for arbitrarily renamed Docker bridges
 or repair persisted links, and is not reporter or installed-release validation.
+
+### Manual host/node association safety boundary (6 September 2026)
+
+`TestManualHostLinkSurvivesUnmatchedReportsAndProviderRefresh` protects an
+operator-created association between `nas.example` and an otherwise unmatched
+`pve` node through repeated reports, `UpdateNodesForInstance`, and explicit
+unlink. Reapplying the rejected stale-link cleanup plus provider-name matcher
+change makes the first report fail this regression. Neither change is included
+with this test.
+
+Restart remains an independently reproduced gap, not a supported invariant:
+using `newHostRemovalLifecycleMonitor` with a temporary data directory, submit
+`hostRemovalLifecycleReport("machine", "machine", "agent", "nas.example",
+"linux", now)`, populate the unmatched `pve-node`, and call `LinkHostAgent`.
+Reconstructing the monitor from the same directory immediately yields a host
+without the link. Sending another report before reconstruction persists the
+link, but refreshing the provider on the reconstructed monitor and submitting
+the next report still returns an empty `LinkedNodeID`.
+
+`LinkHostAgent` currently changes state only. `HostContinuityEntry` stores the
+target ID but no manual/automatic provenance. Legacy manual and automatic links
+can therefore have identical persisted representations. A repair must not
+classify every unmarked legacy link as automatic. Durable operator intent,
+failed-write handling, provider identity changes, and explicit unlink across
+restart need coverage before enabling destructive stale-link cleanup. This is
+maintenance evidence, not demand for a new user-visible linking surface or a
+claim of resolution of issue #1930.
