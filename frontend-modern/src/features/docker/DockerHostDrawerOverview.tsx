@@ -20,7 +20,13 @@ import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel'
 import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Resource } from '@/types/resource';
-import { formatBytes, formatRelativeTime, formatSpeed, normalizeDiskArray } from '@/utils/format';
+import {
+  formatBytes,
+  formatRelativeTime,
+  formatSpeed,
+  formatObservedSpeed,
+  normalizeDiskArray,
+} from '@/utils/format';
 import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
 
 interface DockerHostDrawerOverviewProps {
@@ -279,7 +285,7 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
     ) {
       rows.push({
         label: 'Disk I/O',
-        value: `${formatSpeed(props.host.diskIO?.readRate ?? 0)} / ${formatSpeed(props.host.diskIO?.writeRate ?? 0)}`,
+        value: `${formatObservedSpeed(props.host.diskIO?.readRate)} / ${formatObservedSpeed(props.host.diskIO?.writeRate)}`,
       });
     }
     return rows;

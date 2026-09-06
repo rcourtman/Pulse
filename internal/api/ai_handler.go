@@ -78,7 +78,7 @@ type AIService interface {
 	SetFindingsManager(manager chat.FindingsManager)
 	SetMetadataUpdater(updater chat.MetadataUpdater)
 	SetKnowledgeStoreProvider(provider chat.KnowledgeStoreProvider)
-	SetIncidentRecorderProvider(provider chat.IncidentRecorderProvider)
+	SetIncidentArchiveProvider(provider chat.IncidentArchiveProvider)
 	SetEventCorrelatorProvider(provider chat.EventCorrelatorProvider)
 	SetDiscoveryProvider(provider chat.AssistantDiscoveryProvider)
 	SetUnifiedResourceProvider(provider chat.AssistantUnifiedResourceProvider)

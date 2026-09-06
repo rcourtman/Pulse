@@ -67,13 +67,17 @@ describe('ApprovalSection typed action handoff', () => {
     window.history.replaceState({}, '', '/');
   });
 
-  const renderSection = (investigationOutcome: string) =>
+  const renderSection = (investigationOutcome: string, findingStatus = 'active') =>
     render(() => (
       <Router>
         <Route
           path="/"
           component={() => (
-            <ApprovalSection findingId="finding-1" investigationOutcome={investigationOutcome} />
+            <ApprovalSection
+              findingId="finding-1"
+              findingStatus={findingStatus}
+              investigationOutcome={investigationOutcome}
+            />
           )}
         />
       </Router>
@@ -104,13 +108,20 @@ describe('ApprovalSection typed action handoff', () => {
   it('routes terminal action history to the exact recorded outcome', async () => {
     getInvestigationMock.mockResolvedValue(investigation(actionReference('completed')));
 
-    renderSection('fix_verified');
+    renderSection('fix_verified', 'resolved');
 
     expect(await screen.findByRole('link', { name: /view outcome in actions/i })).toHaveAttribute(
       'href',
       '/actions?action=act-1',
     );
     expect(screen.getByText('Outcome verified')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /discuss with assistant/i }));
+    expect(openMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        handoffContext: expect.stringContaining('Resolved'),
+        autonomousMode: false,
+      }),
+    );
   });
 
   it('keeps missing plan identity visible while leaving replan guidance to Actions', async () => {

@@ -86,7 +86,7 @@ func adaptChatMessage(m chat.Message) ai.ChatMessage {
 		Timestamp:        m.Timestamp,
 	}
 	for _, tc := range m.ToolCalls {
-		msg.ToolCalls = append(msg.ToolCalls, tc.ProviderToolCall())
+		msg.ToolCalls = append(msg.ToolCalls, tc.NormalizeCollections())
 	}
 	if m.ToolResult != nil {
 		toolResult := *m.ToolResult

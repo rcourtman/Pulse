@@ -6,22 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 )
-
-type stubIncidentRecorder struct {
-	windows []*IncidentWindowData
-	window  *IncidentWindowData
-}
-
-func (s *stubIncidentRecorder) GetWindowsForResource(resourceID string, limit int) []*IncidentWindowData {
-	return s.windows
-}
-
-func (s *stubIncidentRecorder) GetWindow(windowID string) *IncidentWindowData {
-	return s.window
-}
 
 type stubEventCorrelator struct {
 	correlations []EventCorrelationData
@@ -66,65 +52,6 @@ func TestForecastDataAdapter_GetMetricHistory(t *testing.T) {
 	points, err = storageAdapter.GetMetricHistory("store-1", "usage", now.Add(-5*time.Minute), now)
 	if err != nil || len(points) != 1 || points[0].Value != 55 {
 		t.Fatalf("expected storage points")
-	}
-}
-
-func TestMetricsAdapter_GetMonitoredResourceIDs(t *testing.T) {
-	state := models.StateSnapshot{
-		Nodes:      []models.Node{{ID: "node/pve1", Name: "pve1", Instance: "inst1"}},
-		VMs:        []models.VM{{ID: "qemu/100", VMID: 100, Name: "vm-1", Node: "pve1", Instance: "inst1"}},
-		Containers: []models.Container{{ID: "lxc/200", VMID: 200, Name: "ct-1", Node: "pve1", Instance: "inst1"}},
-	}
-	adapter := NewMetricsAdapter(readStateFromSnapshot(state))
-	ids := adapter.GetMonitoredResourceIDs()
-
-	// Should include both unified IDs and source IDs (3 resources × 2 IDs each = 6)
-	if len(ids) < 3 {
-		t.Fatalf("expected at least 3 IDs, got %d: %v", len(ids), ids)
-	}
-
-	// Verify no empty IDs
-	for _, id := range ids {
-		if id == "" {
-			t.Fatalf("unexpected empty ID in %v", ids)
-		}
-	}
-
-	// Verify source IDs are present (for pre-incident buffer compatibility)
-	idSet := make(map[string]bool, len(ids))
-	for _, id := range ids {
-		idSet[id] = true
-	}
-	if !idSet["qemu/100"] {
-		t.Errorf("expected source ID 'qemu/100' in monitored IDs, got %v", ids)
-	}
-	if !idSet["lxc/200"] {
-		t.Errorf("expected source ID 'lxc/200' in monitored IDs, got %v", ids)
-	}
-	if !idSet["node/pve1"] {
-		t.Errorf("expected source ID 'node/pve1' in monitored IDs, got %v", ids)
-	}
-}
-
-func TestIncidentRecorderToolAdapter(t *testing.T) {
-	adapter := NewIncidentRecorderToolAdapter(nil)
-	if adapter.GetWindowsForResource("res", 1) != nil {
-		t.Fatalf("expected nil windows for nil recorder")
-	}
-	if adapter.GetWindow("id") != nil {
-		t.Fatalf("expected nil window for nil recorder")
-	}
-
-	recorder := &stubIncidentRecorder{
-		windows: []*IncidentWindowData{{ID: "w1"}},
-		window:  &IncidentWindowData{ID: "w1"},
-	}
-	adapter = NewIncidentRecorderToolAdapter(recorder)
-	if len(adapter.GetWindowsForResource("res", 1)) != 1 {
-		t.Fatalf("expected windows from recorder")
-	}
-	if adapter.GetWindow("w1") == nil {
-		t.Fatalf("expected window from recorder")
 	}
 }
 

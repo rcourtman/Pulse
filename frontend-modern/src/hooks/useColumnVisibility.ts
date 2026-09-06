@@ -124,21 +124,21 @@ export function useColumnVisibility(
   const appliedDefaultHiddenMigrations = hasUserPreference
     ? readAppliedDefaultHiddenMigrations(storageKey, persistedIdAliases)
     : [];
-  const pendingDefaultHiddenMigrations = hasUserPreference
-    ? Array.from(
-        new Set(
-          defaultHiddenMigrationIds
-            .map((id) => id.trim())
-            .filter(
-              (id) =>
-                id &&
-                effectiveDefaultHidden.includes(id) &&
-                toggleableIds.includes(id) &&
-                !appliedDefaultHiddenMigrations.includes(id),
-            ),
+  // Fresh preferences already contain these defaults. Mark their migration as
+  // applied too, so the first reload cannot undo a user's subsequent choice.
+  const pendingDefaultHiddenMigrations = Array.from(
+    new Set(
+      defaultHiddenMigrationIds
+        .map((id) => id.trim())
+        .filter(
+          (id) =>
+            id &&
+            effectiveDefaultHidden.includes(id) &&
+            toggleableIds.includes(id) &&
+            !appliedDefaultHiddenMigrations.includes(id),
         ),
-      )
-    : [];
+    ),
+  );
   let defaultHiddenMigrationsPersisted = false;
 
   // Persist hidden columns to localStorage
@@ -169,7 +169,7 @@ export function useColumnVisibility(
   createEffect(() => {
     const hasUnpersistedDefaultHiddenMigrations =
       pendingDefaultHiddenMigrations.length > 0 && !defaultHiddenMigrationsPersisted;
-    if (!hasUserPreference || (!persistedIdsMigrated && !hasUnpersistedDefaultHiddenMigrations)) {
+    if (!persistedIdsMigrated && !hasUnpersistedDefaultHiddenMigrations) {
       return;
     }
     persistedIdsMigrated = false;

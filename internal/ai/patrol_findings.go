@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -1791,23 +1792,9 @@ func (p *PatrolService) maybeInvestigateFinding(f *Finding) bool {
 			if orchestrator != nil {
 				latestInvestigation = orchestrator.GetInvestigationByFinding(latest.ID)
 			}
-			if record := BuildFindingInvestigationRecord(latest, latestInvestigation); record != nil {
-				// When a remediation plan exists for this finding, lift its
-				// per-step rollback strings into record.Rollback so the
-				// operator-facing investigation surface answers
-				// "what's the undo for the proposed fix?" at the record root
-				// rather than only in nested per-step payload.
-				if engine := p.remediationEngine; engine != nil {
-					if plan := engine.GetPlanForFinding(latest.ID); plan != nil {
-						record.Rollback = AggregatePlanRollbackSteps(plan)
-					}
-				}
-				if p.findings.UpdateInvestigationRecord(latest.ID, record) {
-					if refreshed := p.findings.Get(latest.ID); refreshed != nil {
-						latest = refreshed
-					} else {
-						latest.InvestigationRecord = record
-					}
+			if p.storeFindingInvestigationRecord(latest.ID, latestInvestigation, false) {
+				if refreshed := p.findings.Get(latest.ID); refreshed != nil {
+					latest = refreshed
 				}
 			}
 			if pushUnified != nil {
@@ -1850,11 +1837,50 @@ func (p *PatrolService) maybeInvestigateFinding(f *Finding) bool {
 	return true
 }
 
-// PublishFindingLifecycleUpdate projects a reconciled action outcome to the
-// unified finding owner and, for terminal execution outcomes, to mobile push.
-// It is called only after the finding store changed, so duplicate action
-// callbacks and read-time hydration do not emit duplicate notifications.
-func (p *PatrolService) PublishFindingLifecycleUpdate(findingID string) {
+// RefreshFindingInvestigationRecord preserves the latest investigation and
+// reconciled action in the durable record shared by product surfaces.
+func (p *PatrolService) RefreshFindingInvestigationRecord(findingID string, session *InvestigationSession) bool {
+	return p.storeFindingInvestigationRecord(findingID, session, true)
+}
+
+func (p *PatrolService) storeFindingInvestigationRecord(findingID string, session *InvestigationSession, preserveEvidence bool) bool {
+	if p == nil || p.findings == nil {
+		return false
+	}
+	finding := p.findings.Get(findingID)
+	if finding == nil {
+		return false
+	}
+	record := BuildFindingInvestigationRecord(finding, session)
+	// Later action transitions update lifecycle facts, not the evidence and
+	// diagnosis captured when this investigation completed. The current finding
+	// may no longer retain all of that original context after restart.
+	if previous := finding.InvestigationRecord; preserveEvidence && previous != nil && previous.ID == record.ID {
+		retained := previous.NormalizeCollections()
+		retained.Status = record.Status
+		retained.Outcome = record.Outcome
+		retained.Action = record.Action
+		retained.Verification = record.Verification
+		record = &retained
+	} else {
+		p.mu.RLock()
+		engine := p.remediationEngine
+		p.mu.RUnlock()
+		if engine != nil {
+			if plan := engine.GetPlanForFinding(findingID); plan != nil {
+				record.Rollback = AggregatePlanRollbackSteps(plan)
+			}
+		}
+	}
+	if reflect.DeepEqual(finding.InvestigationRecord, record) {
+		return false
+	}
+	return p.findings.UpdateInvestigationRecord(findingID, record)
+}
+
+// PublishFindingLifecycleUpdate projects reconciled records to the unified
+// finding owner. Repairing a stale record alone must not repeat outcome pushes.
+func (p *PatrolService) PublishFindingLifecycleUpdate(findingID string, outcomeChanged bool) {
 	if p == nil || p.findings == nil {
 		return
 	}
@@ -1873,7 +1899,7 @@ func (p *PatrolService) PublishFindingLifecycleUpdate(findingID string) {
 	if finding.ResolvedAt != nil && resolveUnified != nil {
 		resolveUnified(finding.ID)
 	}
-	if pushNotify == nil {
+	if pushNotify == nil || !outcomeChanged {
 		return
 	}
 	switch InvestigationOutcome(finding.InvestigationOutcome) {

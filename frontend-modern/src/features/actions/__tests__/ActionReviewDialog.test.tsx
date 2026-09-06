@@ -115,6 +115,16 @@ const detail = (audit: ActionAuditRecord): ActionDetailResponse => ({
 });
 
 describe('ActionReviewDialog trust gates', () => {
+  it('keeps a rejected action outcome visible without offering execution', () => {
+    const audit = makeAudit('resolved', '2026-07-12T00:10:00Z');
+    audit.state = 'rejected';
+    render(() => <ActionReviewDialog detail={detail(audit)} onClose={vi.fn()} />);
+    expect(screen.getByText('Rejected', { exact: true })).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: /approve|run|refresh plan/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it('links a trusted Patrol action back to its exact operational record', () => {
     const audit = makeAudit('resolved', '2099-01-01T00:00:00Z');
     audit.origin = {

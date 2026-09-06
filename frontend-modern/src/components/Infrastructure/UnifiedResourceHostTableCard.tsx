@@ -3,6 +3,7 @@ import type { Component } from 'solid-js';
 import {
   formatBytes,
   formatSpeed,
+  formatObservedSpeed,
   formatUptime,
   getResourceDiskSummary,
   normalizeDiskArray,
@@ -334,8 +335,11 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                 const networkEmphasis = createMemo(() =>
                   getOutlierEmphasis(networkTotal(), table.ioScale().network),
                 );
-                const diskIOTotal = createMemo(
-                  () => (resource.diskIO?.readRate ?? 0) + (resource.diskIO?.writeRate ?? 0),
+                const diskIOTotal = createMemo(() =>
+                  resource.diskIO?.readRate !== undefined &&
+                  resource.diskIO?.writeRate !== undefined
+                    ? resource.diskIO.readRate + resource.diskIO.writeRate
+                    : NaN,
                 );
                 const diskIOEmphasis = createMemo(() =>
                   getOutlierEmphasis(diskIOTotal(), table.ioScale().diskIO),
@@ -662,11 +666,11 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                               class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
                               title={
                                 diskIOEmphasis().showOutlierHint
-                                  ? `${formatSpeed(resource.diskIO!.readRate)} (Top outlier)`
-                                  : formatSpeed(resource.diskIO!.readRate)
+                                  ? `${formatObservedSpeed(resource.diskIO!.readRate)} (Top outlier)`
+                                  : formatObservedSpeed(resource.diskIO!.readRate)
                               }
                             >
-                              {formatSpeed(resource.diskIO!.readRate)}
+                              {formatObservedSpeed(resource.diskIO!.readRate)}
                             </span>
                             <span class="inline-flex w-3 justify-center font-mono text-amber-500">
                               W
@@ -675,11 +679,11 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                               class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
                               title={
                                 diskIOEmphasis().showOutlierHint
-                                  ? `${formatSpeed(resource.diskIO!.writeRate)} (Top outlier)`
-                                  : formatSpeed(resource.diskIO!.writeRate)
+                                  ? `${formatObservedSpeed(resource.diskIO!.writeRate)} (Top outlier)`
+                                  : formatObservedSpeed(resource.diskIO!.writeRate)
                               }
                             >
-                              {formatSpeed(resource.diskIO!.writeRate)}
+                              {formatObservedSpeed(resource.diskIO!.writeRate)}
                             </span>
                           </div>
                         </Show>

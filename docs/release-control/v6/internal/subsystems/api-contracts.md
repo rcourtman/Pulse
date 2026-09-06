@@ -20,6 +20,24 @@
 
 ## Purpose
 
+Action reconciliation refreshes the durable product investigation record from
+the authoritative session/action even when the finding outcome already matches.
+The same builder owns initial completion and later refresh. Original prose,
+evidence and retained rollback survive. Unchanged hydration is a no-op, and a
+record-only repair does not repeat outcome notifications. Resolved findings
+retain the canonical action-history link and resolved status in Assistant context.
+Live approved and rejected recovery cases pass, but storage's lexical scorecard
+pass fails semantic review because an exhausted container tmpfs was incorrectly
+attributed to host capacity. Storage and broader product qualification stay open.
+
+Product history retains the stored result-bearing `TranscriptToolCall` contract,
+including observed output and an optional success bit. A false bit is retained,
+and an absent historical result bit stays absent. Provider requests use the
+explicit narrower projection. The history adapter cannot project away evidence
+by treating a display transcript as request arguments. The frontend Patrol API
+extends the shared Assistant tool-call shape, and transport regressions pin
+failed output and unknown historical status across the message envelope.
+
 The internal Patrol bridge preserves explicit execution limits, scoped tool
 allowlists and execution identity. The retired unmatched-signal evaluator no
 longer contributes a signal-count-derived successful-report budget. Diagnosis
@@ -1683,6 +1701,7 @@ payload shape change when the portal presents compact client rows.
 57. `internal/agentcapabilities/tool_names.go` shared with `ai-runtime`: the Pulse Intelligence registry tool-name vocabulary is both the native Assistant execution/display contract and the canonical API/agent tool identity contract for MCP-facing external-agent adapters.
 58. `internal/agentcapabilities/tool_response.go` shared with `ai-runtime`: the shared tool response envelope, tool error-code vocabulary, and tool-result error-code and verification evidence parsers are both the Assistant structured tool-result contract and the canonical API/agent branching contract for Pulse Intelligence tool failures, recovery tracking, and write self-verification.
 59. `internal/agentcapabilities/tool_result.go` shared with `ai-runtime`: the Pulse Intelligence shared tool-result content/result envelope, structuredContent projection, result constructors, HTTP response-to-result mapping, text projection, and result interpretation helpers are both the Assistant registry result contract and the canonical API/agent result projection contract for governed tool outcomes.
+60. `internal/agentcapabilities/transcript.go` shared with `ai-runtime`: Stored Assistant tool results and product history share one result-bearing transcript contract, with an explicit narrower provider-request projection. Observed failures and absent historical result status must survive the API boundary.
 60. `internal/agentcapabilities/types.go` shared with `ai-runtime`: the agent capabilities manifest wire type, manifest-owned external-adapter surface tool contract field, capability display title and structured output schema fields, approval-policy vocabulary, capability governance normalization, and tool-governance descriptor shape are both the canonical API payload contract and the AI runtime projection contract for Pulse Assistant and MCP-facing agent tools.
 61. `internal/agentcapabilities/workflow_prompt.go` shared with `ai-runtime`: the Pulse Intelligence workflow prompt catalogue, manifest-owned `workflowPrompts` projection, MCP prompt title projection, presentation kind hints, shared resource-context and finding argument vocabulary, Patrol issue-handling capability gating, argument validation, and manifest-gated shared prompt rendering rules are both the AI runtime starter contract for Assistant-compatible surfaces and the canonical API/agent prompt projection contract for MCP-facing clients.
 62. `internal/api/access_control_handlers.go` shared with `organization-settings`: RBAC role and user-assignment handlers are both an organization settings control surface and a canonical API payload contract boundary.
@@ -10685,3 +10704,18 @@ The transaction-stage regression matrix additionally checks MAIL, RCPT, DATA
 command and completed-message rejections, including transient-then-accepted
 termination. It exercises the shared sender with plain SMTP and no attachments;
 it is not separate qualification of report rendering, TLS or report receipt.
+
+### Explicit historical incident archives
+
+`internal/api/router.go` pins a read-only legacy archive to each organization's
+Assistant service. Its native `IncidentArchiveProvider` capability requires both
+resource and window identifiers and propagates read errors. No archive setup or
+shutdown writes files or starts sampling. The tool preserves stored metadata and
+anomalies and marks historical recording status as historical.
+
+`GET /api/ai/incidents` retains the `active_count` key as null and adds
+`active_count_status=not_measured` in every response. Incident memory, an empty
+result and unavailable services cannot establish a current count. The old
+coordinator never received production alert callbacks, so its zero was not a
+measurement. The legacy listing's broader canonical query and read-error
+modernization remains open under the customer-outcome qualification gap.

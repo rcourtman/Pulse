@@ -225,9 +225,7 @@ export function PatrolIntelligenceSurface() {
             onToggle={(event) => setFindingsOpen(event.currentTarget.open)}
           >
             <summary class="sr-only">Finding options and history</summary>
-            <div
-              class={`space-y-4 border-t border-border p-4 sm:p-5 ${!state.patrolEnabledLocal() ? 'opacity-50 pointer-events-none' : ''}`}
-            >
+            <div class="space-y-4 border-t border-border p-4 sm:p-5">
               <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p class="text-xs leading-5 text-muted">
                   <Show

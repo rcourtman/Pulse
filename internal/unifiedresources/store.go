@@ -609,6 +609,9 @@ func (s *SQLiteResourceStore) initSchema() error {
 	if err := s.ensureResourceChangesIndexes(); err != nil {
 		return err
 	}
+	if err := s.migrateResourceHistoryAliases(); err != nil {
+		return err
+	}
 	if err := s.migrateResourceIdentitiesSchema(); err != nil {
 		return err
 	}
@@ -1428,6 +1431,13 @@ func (s *SQLiteResourceStore) pruneOldRecords() {
 	} else if affected > 0 {
 		totalDeleted += affected
 	}
+	// History-only aliases need not outlive all records for either identifier.
+	// This never removes canonical identity pins or authority-bearing state.
+	if _, err := s.db.Exec(`DELETE FROM resource_history_aliases
+		WHERE NOT EXISTS (SELECT 1 FROM resource_changes WHERE canonical_id = resource_history_aliases.source_id)
+		AND NOT EXISTS (SELECT 1 FROM resource_changes WHERE canonical_id = resource_history_aliases.canonical_id)`); err != nil {
+		log.Printf("unifiedresources: failed to prune resource history identities: %v", err)
+	}
 
 	res, err = s.db.Exec(
 		`DELETE FROM action_audits WHERE created_at < ?`,
@@ -1614,10 +1624,10 @@ func (s *SQLiteResourceStore) queryResourceIdentityPins() ([]ResourceIdentityPin
 // history. Resources without pins (Proxmox guests, record-declared eras)
 // merge through the durable canonical_id_successions record instead. Unknown
 // IDs expand to themselves.
-func (s *SQLiteResourceStore) resourceChangeIDSet(canonicalID string) []string {
+func (s *SQLiteResourceStore) resourceChangeIDSet(canonicalID string) ([]string, error) {
 	canonicalID = CanonicalResourceID(canonicalID)
 	if canonicalID == "" {
-		return nil
+		return nil, nil
 	}
 
 	s.identityPinMu.Lock()
@@ -1631,7 +1641,7 @@ func (s *SQLiteResourceStore) resourceChangeIDSet(canonicalID string) []string {
 	pins := s.identityPinCache
 	s.identityPinMu.Unlock()
 
-	return expandResourceChangeIDs(canonicalID, pins, s.successionMap())
+	return s.expandHistoryAliases(expandResourceChangeIDs(canonicalID, pins, s.successionMap()))
 }
 
 func expandResourceChangeIDs(canonicalID string, pins []ResourceIdentityPin, successors map[string]string) []string {
@@ -1757,7 +1767,11 @@ func (s *SQLiteResourceStore) GetRecentChangesFiltered(canonicalID string, since
 	conditions := []string{}
 	canonicalID = CanonicalResourceID(canonicalID)
 	if canonicalID != "" {
-		conditions, args = appendRecentChangeResourceCondition(conditions, args, s.resourceChangeIDSet(canonicalID), filters.IncludeRelated)
+		ids, err := s.resourceChangeIDSet(canonicalID)
+		if err != nil {
+			return nil, err
+		}
+		conditions, args = appendRecentChangeResourceCondition(conditions, args, ids, filters.IncludeRelated)
 	} else {
 		conditions = append(conditions, observedAtExpr+" >= ?")
 		args = append(args, since)
@@ -1882,8 +1896,12 @@ func (s *SQLiteResourceStore) CountRecentChanges(canonicalID string, since time.
 }
 
 func (s *SQLiteResourceStore) CountRecentChangesFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (int, error) {
+	ids, err := s.resourceChangeIDSet(canonicalID)
+	if err != nil {
+		return 0, err
+	}
 	query, args := buildRecentChangeCountQuery(
-		s.resourceChangeIDSet(canonicalID),
+		ids,
 		since,
 		filters,
 		"SELECT COUNT(*) FROM resource_changes",
@@ -1907,8 +1925,12 @@ func (s *SQLiteResourceStore) CountRecentChangesByKind(canonicalID string, since
 }
 
 func (s *SQLiteResourceStore) CountRecentChangesByKindFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (map[ChangeKind]int, error) {
+	ids, err := s.resourceChangeIDSet(canonicalID)
+	if err != nil {
+		return nil, err
+	}
 	query, args := buildRecentChangeCountQuery(
-		s.resourceChangeIDSet(canonicalID),
+		ids,
 		since,
 		filters,
 		"SELECT COALESCE(kind, ''), COUNT(*) FROM resource_changes",
@@ -1950,9 +1972,13 @@ func (s *SQLiteResourceStore) CountRecentChangesBySourceType(canonicalID string,
 }
 
 func (s *SQLiteResourceStore) CountRecentChangesBySourceTypeFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (map[ChangeSourceType]int, error) {
+	ids, err := s.resourceChangeIDSet(canonicalID)
+	if err != nil {
+		return nil, err
+	}
 	sourceTypeExpr := s.resourceChangesSourceTypeExpr()
 	query, args := buildRecentChangeCountQuery(
-		s.resourceChangeIDSet(canonicalID),
+		ids,
 		since,
 		filters,
 		"SELECT "+sourceTypeExpr+", COUNT(*) FROM resource_changes",
@@ -1994,9 +2020,13 @@ func (s *SQLiteResourceStore) CountRecentChangesBySourceAdapter(canonicalID stri
 }
 
 func (s *SQLiteResourceStore) CountRecentChangesBySourceAdapterFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (map[ChangeSourceAdapter]int, error) {
+	ids, err := s.resourceChangeIDSet(canonicalID)
+	if err != nil {
+		return nil, err
+	}
 	sourceAdapterExpr := s.resourceChangesSourceAdapterExpr()
 	query, args := buildRecentChangeCountQuery(
-		s.resourceChangeIDSet(canonicalID),
+		ids,
 		since,
 		filters,
 		"SELECT "+sourceAdapterExpr+", COUNT(*) FROM resource_changes",
@@ -3352,6 +3382,7 @@ type MemoryStore struct {
 	loopReports            map[string]LoopReport
 	identityPins           map[string]ResourceIdentityPin
 	canonicalSuccessions   map[string]string
+	historyAliases         map[string]string
 }
 
 func NewMemoryStore() *MemoryStore {
@@ -3422,7 +3453,11 @@ func (m *MemoryStore) resourceChangeIDSetLocked(canonicalID string) []string {
 	for _, pin := range m.identityPins {
 		pins = append(pins, pin)
 	}
-	return expandResourceChangeIDs(canonicalID, pins, m.canonicalSuccessions)
+	if resolved := m.historyAliases[canonicalID]; resolved != "" {
+		canonicalID = resolved
+	}
+	ids := expandResourceChangeIDs(canonicalID, pins, m.canonicalSuccessions)
+	return appendSupersededChangeIDs(ids, m.historyAliases)
 }
 
 func (m *MemoryStore) AddLink(link ResourceLink) error {

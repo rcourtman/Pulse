@@ -1,6 +1,7 @@
 package agentcapabilities
 
 import (
+	"encoding/json"
 	"net/http"
 	"slices"
 	"strings"
@@ -201,5 +202,48 @@ func TestNewToolGovernanceDescriptorAppliesSharedDefaults(t *testing.T) {
 	}
 	if descriptor.ApprovalSummary != "hidden in read-only mode; approval required in controlled mode" {
 		t.Fatalf("descriptor approval summary = %q", descriptor.ApprovalSummary)
+	}
+}
+
+// Stored result evidence and provider request arguments are different wire
+// contracts. In particular, explicit failure cannot disappear through omitempty.
+func TestTranscriptToolCallPreservesResultOutsideProviderRequests(t *testing.T) {
+	failed := false
+	call := TranscriptToolCall{ID: "read-1", Name: PulseReadToolName, Output: "NO_AGENT", Success: &failed}.NormalizeCollections()
+	failed = true
+	body, err := json.Marshal(call)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stored map[string]interface{}
+	if err := json.Unmarshal(body, &stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored["output"] != "NO_AGENT" || stored["success"] != false || stored["input"] == nil {
+		t.Fatalf("stored result lost explicit failure or normalized input: %s", body)
+	}
+	requestBody, err := json.Marshal(call.ProviderToolCall())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var request map[string]interface{}
+	if err := json.Unmarshal(requestBody, &request); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"output", "success"} {
+		if _, exists := request[key]; exists {
+			t.Fatalf("provider request retained display-only %s: %s", key, requestBody)
+		}
+	}
+	unknownBody, err := json.Marshal(TranscriptToolCall{Name: PulseQueryToolName}.NormalizeCollections())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var unknown map[string]interface{}
+	if err := json.Unmarshal(unknownBody, &unknown); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := unknown["success"]; exists {
+		t.Fatalf("unknown historical status became a result: %s", unknownBody)
 	}
 }

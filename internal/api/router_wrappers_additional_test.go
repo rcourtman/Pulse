@@ -8,7 +8,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/patterns"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -49,84 +48,6 @@ func TestForecastResourceIterator_NilReadState(t *testing.T) {
 
 	if len(iter.ForecastVMs()) != 0 || len(iter.ForecastContainers()) != 0 || len(iter.ForecastNodes()) != 0 || len(iter.ForecastStoragePools()) != 0 {
 		t.Fatalf("expected empty slices for nil readState")
-	}
-}
-
-func TestIncidentRecorderProviderWrapper(t *testing.T) {
-	now := time.Now().UTC()
-	end := now.Add(5 * time.Minute)
-
-	activeWindow := &metrics.IncidentWindow{
-		ID:           "win-active",
-		ResourceID:   "res-1",
-		ResourceName: "Resource",
-		ResourceType: "vm",
-		TriggerType:  "alert",
-		TriggerID:    "alert-1",
-		StartTime:    now,
-		EndTime:      &end,
-		Status:       metrics.IncidentWindowStatusRecording,
-		DataPoints: []metrics.IncidentDataPoint{
-			{Timestamp: now, Metrics: map[string]float64{"cpu": 10}},
-		},
-		Summary: &metrics.IncidentSummary{
-			Duration:   5 * time.Minute,
-			DataPoints: 1,
-			Peaks:      map[string]float64{"cpu": 10},
-			Lows:       map[string]float64{"cpu": 5},
-			Averages:   map[string]float64{"cpu": 7},
-			Changes:    map[string]float64{"cpu": 2},
-		},
-	}
-
-	completedWindow := &metrics.IncidentWindow{
-		ID:           "win-complete",
-		ResourceID:   "res-1",
-		ResourceName: "Resource",
-		ResourceType: "vm",
-		TriggerType:  "alert",
-		TriggerID:    "alert-2",
-		StartTime:    now.Add(-time.Hour),
-		Status:       metrics.IncidentWindowStatusComplete,
-		DataPoints: []metrics.IncidentDataPoint{
-			{Timestamp: now.Add(-time.Hour), Metrics: map[string]float64{"cpu": 20}},
-		},
-	}
-
-	recorder := metrics.NewIncidentRecorder(metrics.DefaultIncidentRecorderConfig())
-	setUnexportedField(t, recorder, "activeWindows", map[string]*metrics.IncidentWindow{"win-active": activeWindow})
-	setUnexportedField(t, recorder, "completedWindows", []*metrics.IncidentWindow{completedWindow})
-
-	wrapper := &incidentRecorderProviderWrapper{recorder: recorder}
-	windows := wrapper.GetWindowsForResource("res-1", 10)
-	if len(windows) != 2 {
-		t.Fatalf("expected 2 windows, got %d", len(windows))
-	}
-
-	ids := []string{windows[0].ID, windows[1].ID}
-	if !containsStringSlice(ids, "win-active") || !containsStringSlice(ids, "win-complete") {
-		t.Fatalf("unexpected window ids %v", ids)
-	}
-
-	window := wrapper.GetWindow("win-active")
-	if window == nil || window.ResourceID != "res-1" || window.Status == "" {
-		t.Fatalf("unexpected window: %#v", window)
-	}
-}
-
-func TestIncidentRecorderProviderWrapper_NilRecorder(t *testing.T) {
-	wrapper := &incidentRecorderProviderWrapper{}
-	if got := wrapper.GetWindowsForResource("res-1", 5); got != nil {
-		t.Fatalf("expected nil windows, got %#v", got)
-	}
-	if got := wrapper.GetWindow("win-1"); got != nil {
-		t.Fatalf("expected nil window, got %#v", got)
-	}
-}
-
-func TestConvertIncidentWindowNil(t *testing.T) {
-	if got := convertIncidentWindow(nil); got != nil {
-		t.Fatalf("expected nil window, got %#v", got)
 	}
 }
 

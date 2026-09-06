@@ -1451,6 +1451,25 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('preserves an observed zero without inventing its absent I/O direction', async () => {
+    setWsConnected(false);
+    setWsInitialDataReceived(false);
+    setWsState('resources', []);
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: [{ ...v2Resource, metrics: { diskRead: { value: 0 } } }] }),
+    });
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+    await result!.refetch();
+    expect(result!.resources()[0]?.diskIO).toEqual({ readRate: 0, writeRate: undefined });
+    dispose();
+  });
+
   it('preserves richer REST resource details across thinner websocket updates', async () => {
     setWsConnected(false);
     setWsInitialDataReceived(false);

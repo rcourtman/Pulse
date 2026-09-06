@@ -105,7 +105,7 @@ func (h *AISettingsHandler) applyPatrolActionAudit(orgID string, audit unifiedre
 			store.Update(investigation)
 		}
 		ctx := context.WithValue(context.Background(), OrgIDContextKey, orgID)
-		h.updateFindingOutcome(ctx, orgID, origin.FindingID, string(outcome))
+		h.updateFindingInvestigationOutcome(ctx, orgID, origin.FindingID, string(outcome), investigation)
 		return
 	}
 	if changed {

@@ -29,6 +29,7 @@ import { buildPatrolInvestigationRecordPresentation } from '@/features/patrol/pa
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { InvestigationMessages } from './InvestigationMessages';
+import { renderMarkdown } from '@/components/AI/aiChatUtils';
 import { notificationStore } from '@/stores/notifications';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import type { InvestigationRecord } from '@/api/ai';
@@ -39,6 +40,9 @@ const INVESTIGATION_BADGE_PROPS = {
   size: 'xs',
   shape: 'rounded',
 } as const;
+
+const summaryClass =
+  'text-sm prose prose-slate prose-sm dark:prose-invert max-w-none break-words prose-headings:my-2 prose-p:my-2 prose-pre:overflow-x-auto prose-code:break-all prose-code:before:content-none prose-code:after:content-none';
 
 interface InvestigationSectionProps {
   findingId: string;
@@ -210,7 +214,11 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
           </div>
 
           <Show when={investigationRecord().conclusion}>
-            <p class="mt-2 text-sm text-base-content">{investigationRecord().conclusion}</p>
+            <div
+              class={`mt-2 ${summaryClass}`}
+              // eslint-disable-next-line solid/no-innerhtml
+              innerHTML={renderMarkdown(investigationRecord().conclusion!)}
+            />
           </Show>
           <Show when={investigationRecord().recommendedAction}>
             <p class="mt-1 text-xs text-muted">
@@ -325,6 +333,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
             <Show
               when={
                 inv().error &&
+                inv().error?.trim() !== investigationRecord().error &&
                 (inv().status === 'failed' ||
                   inv().outcome === 'timed_out' ||
                   inv().outcome === 'fix_failed' ||
@@ -341,8 +350,16 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
             </Show>
 
             {/* Summary */}
-            <Show when={inv().summary}>
-              <div class="text-sm text-muted bg-surface-alt rounded p-2">{inv().summary}</div>
+            <Show
+              when={
+                inv().summary?.trim() && inv().summary?.trim() !== investigationRecord().conclusion
+              }
+            >
+              <div
+                class={`bg-surface-alt rounded p-2 ${summaryClass}`}
+                // eslint-disable-next-line solid/no-innerhtml
+                innerHTML={renderMarkdown(inv().summary!)}
+              />
             </Show>
 
             {/* Tools used + turn count */}

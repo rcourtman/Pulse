@@ -21,6 +21,14 @@
 
 ## Purpose
 
+Container image-layer sizes do not establish filesystem capacity. Docker
+resource metrics omit that invalid ratio, and retained queries exclude legacy
+ambiguous disk observations while preserving new valid provider measurements.
+The shared REST resource projection retains missing read/write directions
+independently of measured zero. An idle I/O rate cannot establish available
+capacity, backup coverage or recoverability. This correction adds no recovery
+authority or verified recovery outcome.
+
 Patrol consumes storage evidence in the original diagnostic conversation. A
 saved finding does not close storage-read authority before the explicit run
 limit. Missing backup or recovery evidence remains unknown, and neither finding
@@ -5993,3 +6001,11 @@ Unlike resource reports, a `patrol_digest` schedule run produces no generated
 file under the tenant `reports` directory and never calls the retention prune;
 the email body is the only artifact. Recovery and retention state are
 unaffected.
+
+Legacy `incident_windows.json` recovery is read-only through
+`internal/metrics/incident_archive.go`. Construction does not read the file, and
+explicit reads neither expire records nor rewrite contents or permissions.
+Malformed, oversized, symlink and non-regular archive paths fail visibly. Missing
+archives remain distinguishable from a valid archive with no matching window.
+The original recording times and historical status must never establish current
+source freshness or active recording.

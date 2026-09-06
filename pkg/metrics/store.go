@@ -174,10 +174,11 @@ type SeriesKey struct {
 // NormalizedSeriesKey builds the SeriesKey the write path would store for the
 // given identifiers, so callers can match MaxTimestampsForTier results.
 func NormalizedSeriesKey(resourceType, resourceID, metricType string) SeriesKey {
+	resourceType = normalizeMetricResourceType(resourceType)
 	return SeriesKey{
-		ResourceType: normalizeMetricResourceType(resourceType),
+		ResourceType: resourceType,
 		ResourceID:   normalizeMetricIdentifier(resourceID),
-		MetricType:   normalizeMetricType(metricType),
+		MetricType:   storedObservationMetric(resourceType, normalizeMetricType(metricType)),
 	}
 }
 
@@ -723,7 +724,7 @@ func validateMetricWrite(resourceType, resourceID, metricType string, tier Tier)
 		return "", "", "", false, fmt.Sprintf("unsupported metric tier %q", tier)
 	}
 
-	return normalizedType, normalizedID, normalizedMetric, true, ""
+	return normalizedType, normalizedID, storedObservationMetric(normalizedType, normalizedMetric), true, ""
 }
 
 // Write adds a metric to the write buffer with the 'raw' tier by default
@@ -1297,6 +1298,11 @@ func (s *Store) queryBatch(
 		return map[string]map[string][]MetricPoint{}, nil
 	}
 	normalizedMetricTypes := normalizeMetricTypes(metricTypes)
+	if hasDockerObservationContract(resourceType) {
+		for i, metric := range normalizedMetricTypes {
+			normalizedMetricTypes[i] = storedObservationMetric(resourceType, metric)
+		}
+	}
 
 	tiers := s.tierFallbacks(end.Sub(start))
 	if len(tiers) == 0 {
@@ -1730,6 +1736,9 @@ func (s *Store) queryRetainedChunk(resourceType string, resourceIDs []string, me
 
 	flushBucket()
 	flushSeries()
+	if hasDockerObservationContract(resourceType) {
+		projectDockerObservations(result)
+	}
 	return result, nil
 }
 

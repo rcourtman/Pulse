@@ -2873,41 +2873,8 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, orgID, da
 		log.Info().Msg("AI Intelligence: Event-driven trigger manager initialized and started")
 	}
 
-	// 12. Initialize incident coordinator for high-frequency recording
-	if patrol != nil {
-		incidentCoordinator := ai.NewIncidentCoordinator(ai.DefaultIncidentCoordinatorConfig())
-
-		// Wire the incident store if available
-		if incidentStore := patrol.GetIncidentStore(); incidentStore != nil {
-			incidentCoordinator.SetIncidentStore(incidentStore)
-		}
-
-		// Create metrics adapter for incident recorder (ReadState is sole source since SRC-03m)
-		var metricsAdapter *adapters.MetricsAdapter
-		if monitor != nil {
-			metricsAdapter = adapters.NewMetricsAdapter(monitor.GetUnifiedReadState())
-		}
-
-		// Initialize and wire the incident recorder (high-frequency metrics)
-		if metricsAdapter != nil {
-			recorderCfg := metrics.DefaultIncidentRecorderConfig()
-			recorderCfg.DataDir = dataDir
-			recorder := metrics.NewIncidentRecorder(recorderCfg)
-			recorder.SetMetricsProvider(metricsAdapter)
-			recorder.Start()
-			incidentCoordinator.SetRecorder(recorder)
-			r.aiSettingsHandler.SetIncidentRecorderForOrg(orgID, recorder)
-			log.Info().Msg("AI Intelligence: Incident recorder initialized and started")
-		}
-
-		// Start the coordinator
-		incidentCoordinator.Start()
-
-		// Store reference
-		r.aiSettingsHandler.SetIncidentCoordinatorForOrg(orgID, incidentCoordinator)
-
-		log.Info().Msg("AI Intelligence: Incident coordinator initialized and started")
-	}
+	// Legacy recordings are available only through explicit archive lookup.
+	r.aiSettingsHandler.SetIncidentArchiveForOrg(orgID, metrics.NewIncidentArchive(dataDir))
 
 	log.Info().Msg("AI Intelligence: All Phase 6 & 7 services initialized successfully")
 }
@@ -2963,24 +2930,6 @@ func (r *Router) ShutdownAIIntelligence() {
 		}
 		triggerManager.Stop()
 		log.Debug().Str("org_id", orgID).Msg("AI Intelligence: Trigger manager stopped")
-	}
-
-	// 4. Stop incident coordinators (stop high-frequency recording)
-	for orgID, incidentCoordinator := range r.aiSettingsHandler.ListIncidentCoordinators() {
-		if incidentCoordinator == nil {
-			continue
-		}
-		incidentCoordinator.Stop()
-		log.Debug().Str("org_id", orgID).Msg("AI Intelligence: Incident coordinator stopped")
-	}
-
-	// 4b. Stop incident recorders (stop background sampling)
-	for orgID, incidentRecorder := range r.aiSettingsHandler.ListIncidentRecorders() {
-		if incidentRecorder == nil {
-			continue
-		}
-		incidentRecorder.Stop()
-		log.Debug().Str("org_id", orgID).Msg("AI Intelligence: Incident recorder stopped")
 	}
 
 	// 5. Cleanup learning stores (removes old records, persists if data dir configured)
@@ -3353,15 +3302,15 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 	}
 
 	// Wire intelligence providers for Assistant tools.
-	// - IncidentRecorderProvider: high-frequency incident data (pulse_get_incident_window)
+	// - IncidentArchiveProvider: explicit reads of saved legacy recordings
 	// - EventCorrelatorProvider: Proxmox events (pulse_correlate_events)
 	// - KnowledgeStoreProvider: notes (pulse_remember, pulse_recall)
 
-	// Wire incident recorder provider (high-frequency incident data)
+	// Wire the org-pinned archive reader without creating or sampling data.
 	if r.aiSettingsHandler != nil {
-		if recorder := r.aiSettingsHandler.GetIncidentRecorderForOrg(orgID); recorder != nil {
-			service.SetIncidentRecorderProvider(&incidentRecorderProviderWrapper{recorder: recorder})
-			log.Debug().Msg("AI chat: Incident recorder provider wired")
+		if archive := r.aiSettingsHandler.GetIncidentArchiveForOrg(orgID); archive != nil {
+			service.SetIncidentArchiveProvider(archive)
+			log.Debug().Msg("AI chat: Incident archive provider wired")
 		}
 	}
 
@@ -3474,82 +3423,6 @@ func (w *forecastResourceIterator) ForecastStoragePools() []forecast.ResourceInf
 		result = append(result, forecast.ResourceInfo{ID: sp.SourceID(), Name: sp.Name()})
 	}
 	return result
-}
-
-// incidentRecorderProviderWrapper adapts metrics.IncidentRecorder to tools.IncidentRecorderProvider.
-type incidentRecorderProviderWrapper struct {
-	recorder *metrics.IncidentRecorder
-}
-
-func (w *incidentRecorderProviderWrapper) GetWindowsForResource(resourceID string, limit int) []*tools.IncidentWindow {
-	if w.recorder == nil {
-		return nil
-	}
-
-	windows := w.recorder.GetWindowsForResource(resourceID, limit)
-	if len(windows) == 0 {
-		return nil
-	}
-
-	result := make([]*tools.IncidentWindow, 0, len(windows))
-	for _, window := range windows {
-		if window == nil {
-			continue
-		}
-		result = append(result, convertIncidentWindow(window))
-	}
-	return result
-}
-
-func (w *incidentRecorderProviderWrapper) GetWindow(windowID string) *tools.IncidentWindow {
-	if w.recorder == nil {
-		return nil
-	}
-	window := w.recorder.GetWindow(windowID)
-	if window == nil {
-		return nil
-	}
-	return convertIncidentWindow(window)
-}
-
-func convertIncidentWindow(window *metrics.IncidentWindow) *tools.IncidentWindow {
-	if window == nil {
-		return nil
-	}
-
-	points := make([]tools.IncidentDataPoint, 0, len(window.DataPoints))
-	for _, point := range window.DataPoints {
-		points = append(points, tools.IncidentDataPoint{
-			Timestamp: point.Timestamp,
-			Metrics:   point.Metrics,
-		})
-	}
-
-	var summary *tools.IncidentSummary
-	if window.Summary != nil {
-		summary = &tools.IncidentSummary{
-			Duration:   window.Summary.Duration,
-			DataPoints: window.Summary.DataPoints,
-			Peaks:      window.Summary.Peaks,
-			Lows:       window.Summary.Lows,
-			Averages:   window.Summary.Averages,
-			Changes:    window.Summary.Changes,
-		}
-	}
-
-	return &tools.IncidentWindow{
-		ID:           window.ID,
-		ResourceID:   window.ResourceID,
-		ResourceName: window.ResourceName,
-		ResourceType: window.ResourceType,
-		TriggerType:  window.TriggerType,
-		TriggerID:    window.TriggerID,
-		StartTime:    window.StartTime,
-		EndTime:      window.EndTime,
-		Status:       string(window.Status),
-		DataPoints:   points,
-		Summary:      summary,
-	}
 }
 
 func (r *Router) publishActionCompletedAgentEvent(broadcaster *AgentEventBroadcaster, record unifiedresources.ActionAuditRecord) {

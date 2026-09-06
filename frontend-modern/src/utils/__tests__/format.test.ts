@@ -5,6 +5,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import {
   formatBytes,
   formatSpeed,
+  formatObservedSpeed,
   formatPercent,
   formatNumber,
   formatUptime,
@@ -360,5 +361,15 @@ describe('getBackupInfo', () => {
       const result = getBackupInfo(thirtyHoursAgo, { freshHours: 12 });
       expect(result.status).toBe('stale'); // 30h > 12h fresh, but < 72h default stale
     });
+  });
+});
+
+describe('formatObservedSpeed', () => {
+  it('preserves zero and leaves missing or invalid observations unavailable', () => {
+    expect(formatObservedSpeed(0)).toBe('0 B/s');
+    expect(formatObservedSpeed(1024)).toBe('1.00 KB/s');
+    for (const value of [undefined, null, -1, NaN, Infinity]) {
+      expect(formatObservedSpeed(value)).toBe('-');
+    }
   });
 });

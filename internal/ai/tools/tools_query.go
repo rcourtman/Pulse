@@ -2151,7 +2151,7 @@ func (e *PulseToolExecutor) registerQueryTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseQueryToolName,
-			Description: `Query and search canonical infrastructure resources. Start here to discover systems, workloads, storage, and disks by name. Actions: search, get, config, topology, list, health. Health returns the connection overview by default, or the canonical resource projection when resource_id is provided.`,
+			Description: `Query and search canonical infrastructure resources. Start here to discover systems, workloads, storage, and disks by name. Actions: search, get, config, topology, list, health. Health returns the connection overview by default, or the canonical resource projection when resource_id is provided. command_agent_connected describes live command transport, independently of monitoring collection or freshness. Missing connection fields were not observed. can_execute describes connected transport with control enabled, not approval for a particular operation.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -2166,7 +2166,7 @@ func (e *PulseToolExecutor) registerQueryTools() {
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "Resource type. For get/search, prefer canonical values: 'agent', 'vm', 'system-container', 'app-container', 'storage', 'physical-disk', and 'docker-host'. For get, 'node' resolves to 'agent'. For search, 'node' filters Proxmox nodes. Compatibility aliases 'system' and 'storage-pool' are still accepted. For config: 'vm', 'system-container', or supported API-backed 'app-container'.",
+						Description: "Resource type. For get/search, prefer canonical values: 'agent', 'vm', 'system-container', 'app-container', 'storage', 'physical-disk', and 'docker-host'. For get, 'node' resolves to 'agent'. For search, 'node' filters Proxmox nodes. Compatibility aliases 'system' and 'storage-pool' are still accepted. For config: 'vm', 'system-container', or TrueNAS 'app-container'. Docker and Podman app-container configuration reads are not supported. Their collected health, mounts, ports, and networks are available through get.",
 						Enum:        []string{"agent", "system", "vm", "system-container", "app-container", "node", "docker-host", "storage", "storage-pool", "physical-disk"},
 					},
 					"resource_id": {
@@ -2463,17 +2463,35 @@ func resourceHostCandidates(resource unifiedresources.Resource) []string {
 	return candidates
 }
 
-func resourceAgentConnected(resource unifiedresources.Resource, connected map[string]bool) bool {
-	for _, candidate := range resourceHostCandidates(resource) {
-		key := strings.TrimSpace(candidate)
-		if key == "" {
-			continue
-		}
-		if connected[key] {
-			return true
+// commandConnectionObservation keeps an unqueried snapshot distinct from an
+// observed disconnected transport. It says nothing about telemetry freshness.
+func commandConnectionObservation(snapshot map[string]bool, value bool) *bool {
+	if snapshot == nil {
+		return nil
+	}
+	return &value
+}
+
+func resourceCommandAgentConnected(resource unifiedresources.Resource, connected map[string]bool) *bool {
+	// A guest's provider node/host identifies placement, not a command
+	// connection inside the guest. Parent transport is projected separately.
+	candidates := []string{resourceDisplayName(resource)}
+	candidates = append(candidates, resource.Identity.Hostnames...)
+	if resource.Agent != nil {
+		candidates = append(candidates, resource.Agent.Hostname)
+	}
+	switch resource.Type {
+	case unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeSystemContainer, unifiedresources.ResourceTypeAppContainer:
+		// Only the guest's own identity can establish its direct connection.
+	default:
+		candidates = append(candidates, resourceHostCandidates(resource)...)
+	}
+	for _, candidate := range candidates {
+		if key := strings.TrimSpace(candidate); key != "" && connected[key] {
+			return commandConnectionObservation(connected, true)
 		}
 	}
-	return false
+	return commandConnectionObservation(connected, false)
 }
 
 func appContainerProviderID(resource unifiedresources.Resource) string {
@@ -2972,16 +2990,16 @@ func addCanonicalGuestSearchMatches(
 		node := canonicalGuestTarget(resource)
 		metadataCandidates := append([]string{resourceDisplayName(resource), resource.ID}, candidates...)
 		addMatch(ResourceMatch{
-			GovernedResourceMetadata: governance.Resolve(metadataCandidates...),
-			Type:                     kind,
-			ID:                       resource.ID,
-			Name:                     resourceDisplayName(resource),
-			Status:                   status,
-			Node:                     node,
-			NodeHasAgent:             connectedAgentHostnames[node],
-			Platform:                 canonicalResourcePlatform(resource),
-			VMID:                     vmid,
-			AgentConnected:           resourceAgentConnected(resource, connectedAgentHostnames),
+			GovernedResourceMetadata:  governance.Resolve(metadataCandidates...),
+			Type:                      kind,
+			ID:                        resource.ID,
+			Name:                      resourceDisplayName(resource),
+			Status:                    status,
+			Node:                      node,
+			NodeCommandAgentConnected: commandConnectionObservation(connectedAgentHostnames, connectedAgentHostnames[node]),
+			Platform:                  canonicalResourcePlatform(resource),
+			VMID:                      vmid,
+			CommandAgentConnected:     resourceCommandAgentConnected(resource, connectedAgentHostnames),
 		})
 	}
 }
@@ -3012,16 +3030,16 @@ func addGuestViewSearchMatches[V queryGuestView](
 			continue
 		}
 		addMatch(ResourceMatch{
-			GovernedResourceMetadata: governance.Resolve(g.Name(), g.ID(), vmidStr),
-			Type:                     kind,
-			ID:                       g.ID(),
-			Name:                     g.Name(),
-			Status:                   status,
-			Node:                     g.Node(),
-			NodeHasAgent:             connectedAgentHostnames[g.Node()],
-			Platform:                 "proxmox",
-			VMID:                     g.VMID(),
-			AgentConnected:           connectedAgentHostnames[g.Name()],
+			GovernedResourceMetadata:  governance.Resolve(g.Name(), g.ID(), vmidStr),
+			Type:                      kind,
+			ID:                        g.ID(),
+			Name:                      g.Name(),
+			Status:                    status,
+			Node:                      g.Node(),
+			NodeCommandAgentConnected: commandConnectionObservation(connectedAgentHostnames, connectedAgentHostnames[g.Node()]),
+			Platform:                  "proxmox",
+			VMID:                      g.VMID(),
+			CommandAgentConnected:     commandConnectionObservation(connectedAgentHostnames, connectedAgentHostnames[g.Name()]),
 		})
 	}
 }
@@ -3469,15 +3487,15 @@ func resolvedAppContainerRegistration(resource unifiedresources.Resource) (Resou
 
 func canonicalSystemSummaryFromResource(resource unifiedresources.Resource, connected map[string]bool) SystemSummary {
 	return SystemSummary{
-		ID:             strings.TrimSpace(resource.ID),
-		Name:           resourceDisplayName(resource),
-		Status:         string(resource.Status),
-		Platform:       canonicalResourcePlatform(resource),
-		ChildCount:     resource.ChildCount,
-		AgentConnected: resourceAgentConnected(resource, connected),
-		CPU:            metricPercent(resourceMetric(resource, "cpu")),
-		Memory:         metricPercent(resourceMetric(resource, "memory")),
-		Disk:           metricPercent(resourceMetric(resource, "disk")),
+		ID:                    strings.TrimSpace(resource.ID),
+		Name:                  resourceDisplayName(resource),
+		Status:                string(resource.Status),
+		Platform:              canonicalResourcePlatform(resource),
+		ChildCount:            resource.ChildCount,
+		CommandAgentConnected: resourceCommandAgentConnected(resource, connected),
+		CPU:                   metricPercent(resourceMetric(resource, "cpu")),
+		Memory:                metricPercent(resourceMetric(resource, "memory")),
+		Disk:                  metricPercent(resourceMetric(resource, "disk")),
 	}
 }
 
@@ -3809,7 +3827,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				GovernedResourceMetadata: governance.Resolve(node.Name(), node.ID()),
 				Name:                     node.Name(),
 				Status:                   string(node.Status()),
-				AgentConnected:           connectedAgentHostnames[node.Name()],
+				CommandAgentConnected:    commandConnectionObservation(connectedAgentHostnames, connectedAgentHostnames[node.Name()]),
 			})
 			count++
 		}
@@ -3993,7 +4011,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				Hostname:                 hostname,
 				DisplayName:              displayName,
 				ContainerCount:           len(hostContainers),
-				AgentConnected:           connectedAgentHostnames[hostname] || connectedAgentHostnames[displayName],
+				CommandAgentConnected:    commandConnectionObservation(connectedAgentHostnames, connectedAgentHostnames[hostname] || connectedAgentHostnames[displayName]),
 			}
 			for _, container := range hostContainers {
 				state := strings.TrimSpace(container.ContainerState())
@@ -4248,7 +4266,7 @@ type TopologyBuildOptions struct {
 	MaxK8sNodesPerCluster       int
 	MaxK8sDeploymentsPerCluster int
 	MaxK8sPodsPerCluster        int
-	ConnectedAgentHostnames     map[string]bool
+	ConnectedAgentHostnames     map[string]bool // nil means command connections were not observed
 	ControlEnabled              bool
 }
 
@@ -4266,9 +4284,6 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 	includeDocker := include == "all" || include == "app-containers"
 	includeKubernetes := include == "all" || include == "kubernetes"
 	connectedAgentHostnames := options.ConnectedAgentHostnames
-	if connectedAgentHostnames == nil {
-		connectedAgentHostnames = map[string]bool{}
-	}
 	governance := newGovernedQueryMetadataResolver(rs)
 
 	summary := TopologySummary{
@@ -4283,12 +4298,17 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 		TotalK8sPods:          len(rs.Pods()),
 	}
 
+	if connectedAgentHostnames != nil {
+		summary.NodesWithCommandAgents = new(int)
+		summary.DockerHostsWithCommandAgents = new(int)
+	}
+
 	for _, node := range rs.Nodes() {
 		if node == nil {
 			continue
 		}
 		if connectedAgentHostnames[node.Name()] {
-			summary.NodesWithAgents++
+			(*summary.NodesWithCommandAgents)++
 		}
 	}
 	for _, host := range rs.DockerHosts() {
@@ -4298,7 +4318,7 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 		hostname := strings.TrimSpace(host.Hostname())
 		displayName := strings.TrimSpace(host.Name())
 		if connectedAgentHostnames[hostname] || connectedAgentHostnames[displayName] {
-			summary.DockerHostsWithAgents++
+			(*summary.DockerHostsWithCommandAgents)++
 		}
 	}
 	for _, pod := range rs.Pods() {
@@ -4325,8 +4345,8 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 				GovernedResourceMetadata: governance.Resolve(node.Name(), node.ID()),
 				Name:                     name,
 				Status:                   string(node.Status()),
-				AgentConnected:           hasAgent,
-				CanExecute:               hasAgent && options.ControlEnabled,
+				CommandAgentConnected:    commandConnectionObservation(connectedAgentHostnames, hasAgent),
+				CanExecute:               commandConnectionObservation(connectedAgentHostnames, hasAgent && options.ControlEnabled),
 				VMs:                      []TopologyVM{},
 				Containers:               []TopologyContainer{},
 			}
@@ -4348,8 +4368,8 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 			GovernedResourceMetadata: governance.Resolve(name),
 			Name:                     name,
 			Status:                   status,
-			AgentConnected:           hasAgent,
-			CanExecute:               hasAgent && options.ControlEnabled,
+			CommandAgentConnected:    commandConnectionObservation(connectedAgentHostnames, hasAgent),
+			CanExecute:               commandConnectionObservation(connectedAgentHostnames, hasAgent && options.ControlEnabled),
 			VMs:                      []TopologyVM{},
 			Containers:               []TopologyContainer{},
 		}
@@ -4489,8 +4509,8 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 				GovernedResourceMetadata: governance.Resolve(host.Hostname(), host.Name(), host.HostSourceID(), host.ID()),
 				Hostname:                 hostname,
 				DisplayName:              displayName,
-				AgentConnected:           hasAgent,
-				CanExecute:               hasAgent && options.ControlEnabled,
+				CommandAgentConnected:    commandConnectionObservation(connectedAgentHostnames, hasAgent),
+				CanExecute:               commandConnectionObservation(connectedAgentHostnames, hasAgent && options.ControlEnabled),
 				Containers:               containers,
 				ContainerCount:           len(hostContainers),
 				ReturnedCount:            len(containers),
@@ -5037,9 +5057,11 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 				}
 				for _, m := range resource.Docker.Mounts {
 					response.Mounts = append(response.Mounts, MountInfo{
+						Type:        m.Type,
 						Source:      m.Source,
 						Destination: m.Destination,
-						ReadWrite:   !strings.EqualFold(strings.TrimSpace(m.Mode), "ro"),
+						Mode:        m.Mode,
+						ReadWrite:   m.RW,
 					})
 				}
 			}
@@ -5144,8 +5166,10 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 
 			for _, m := range container.Mounts() {
 				response.Mounts = append(response.Mounts, MountInfo{
+					Type:        m.Type,
 					Source:      m.Source,
 					Destination: m.Destination,
+					Mode:        m.Mode,
 					ReadWrite:   m.RW,
 				})
 			}
@@ -5276,110 +5300,117 @@ func (e *PulseToolExecutor) executeGetResourceConfig(ctx context.Context, args m
 }
 
 func (e *PulseToolExecutor) executeNativeAppContainerConfig(ctx context.Context, resourceRef string) (CallToolResult, error) {
-	if e.appContainerConfigProvider == nil {
-		return NewTextResult("App-container configuration not available."), nil
+	validation := e.validateResolvedResource(resourceRef, "query", true)
+	if validation.ErrorMsg != "" {
+		return NewErrorResult(fmt.Errorf("%s", validation.ErrorMsg)), nil
+	}
+	if validation.Resource != nil && validation.Resource.GetKind() != "app-container" {
+		return NewErrorResult(fmt.Errorf("resource '%s' is %q, not app-container", resourceRef, validation.Resource.GetKind())), nil
+	}
+	if e.unifiedResourceProvider == nil {
+		return NewErrorResult(fmt.Errorf("current app-container inventory is unavailable")), nil
 	}
 
 	rs, err := e.readStateForControl()
 	if err != nil {
-		return NewTextResult("State information not available."), nil
+		return NewErrorResult(fmt.Errorf("current app-container state is unavailable: %w", err)), nil
 	}
 	governance := newGovernedQueryMetadataResolver(rs)
 
-	var resource unifiedresources.Resource
-	var found bool
-	if validation := e.validateResolvedResource(resourceRef, "query", true); validation.Resource != nil {
-		if matched, _, ok := findCanonicalAppContainerResource(e.unifiedResourceProvider, resourceRef); ok {
-			resource = matched
-			found = true
-		}
-	}
+	resource, providerID, found := findCanonicalAppContainerResource(e.unifiedResourceProvider, resourceRef)
 	if !found {
-		var containerID string
-		resource, containerID, found = findCanonicalAppContainerResource(e.unifiedResourceProvider, resourceRef)
-		if !found {
-			return NewJSONResult(map[string]interface{}{
-				"error":       "not_found",
-				"resource_id": resourceRef,
-				"type":        "app-container",
-			}), nil
-		}
-		if reg, ok := resolvedAppContainerRegistration(resource); ok {
-			e.registerResolvedResourceWithExplicitAccess(reg)
-		}
-		_ = containerID
+		return NewJSONResult(map[string]interface{}{
+			"error":       "not_found",
+			"resource_id": resourceRef,
+			"type":        "app-container",
+		}), nil
 	}
 
-	validation := e.validateResolvedResource(resourceRef, "query", true)
-	if validation.Resource == nil {
-		if validation.ErrorMsg != "" {
-			return NewErrorResult(fmt.Errorf("%s", validation.ErrorMsg)), nil
-		}
-		return NewErrorResult(fmt.Errorf("app-container not found: %s", resourceRef)), nil
+	// Inventory owns read identity and capability. Optional session discovery
+	// supplies restrictions and continuity, not proof that the resource exists.
+	resourceID := canonicalAppContainerID(resource)
+	canonicalValidation := e.validateResolvedResource(resourceID, "query", true)
+	if canonicalValidation.ErrorMsg != "" {
+		return NewErrorResult(fmt.Errorf("%s", canonicalValidation.ErrorMsg)), nil
 	}
-	if validation.ErrorMsg != "" {
-		return NewErrorResult(fmt.Errorf("%s", validation.ErrorMsg)), nil
+	if canonicalValidation.Resource != nil && canonicalValidation.Resource.GetKind() != "app-container" {
+		return NewErrorResult(fmt.Errorf("resource '%s' is %q, not app-container", resourceID, canonicalValidation.Resource.GetKind())), nil
 	}
-	resolved := validation.Resource
-	if resolved.GetKind() != "app-container" {
-		return NewErrorResult(fmt.Errorf("resource '%s' is %q, not app-container", resourceRef, resolved.GetKind())), nil
+	platform := canonicalAppContainerAdapter(resource)
+	unavailable := func(reason, message string) CallToolResult {
+		return NewJSONResultWithIsError(map[string]interface{}{
+			"available": false, "reason": reason, "message": message,
+			"resource_id": resourceID, "type": "app-container", "platform": platform,
+		}, true)
 	}
-	if !strings.EqualFold(strings.TrimSpace(resolved.GetAdapter()), "truenas") {
-		return NewTextResult("App-container configuration not available."), nil
+	if platform != "truenas" {
+		return unavailable("unsupported_adapter", "The resource exists, but its adapter does not support configuration reads."), nil
+	}
+	if e.appContainerConfigProvider == nil {
+		return unavailable("provider_unavailable", "The resource exists, but its configuration provider is unavailable."), nil
+	}
+	reg, ok := resolvedAppContainerRegistration(resource)
+	if !ok {
+		return unavailable("resource_context_unavailable", "The resource exists, but its current provider identity or placement is incomplete."), nil
+	}
+	// Do not overwrite an existing session's allowed actions during a read.
+	if validation.Resource == nil && canonicalValidation.Resource == nil {
+		e.registerResolvedResourceWithExplicitAccess(reg)
 	}
 
 	result, err := e.appContainerConfigProvider.GetConfig(ctx, AppContainerConfigRequest{
 		OrgID:       e.orgID,
-		ResourceID:  strings.TrimSpace(resolved.GetResourceID()),
-		ProviderUID: strings.TrimSpace(resolved.GetProviderUID()),
+		ResourceID:  resourceID,
+		ProviderUID: providerID,
 		Name:        resourceDisplayName(resource),
-		Host:        strings.TrimSpace(resolved.GetTargetHost()),
-		Platform:    "truenas",
+		Host:        canonicalAppContainerHost(resource),
+		Platform:    platform,
 	})
 	if err != nil {
 		return NewErrorResult(err), nil
 	}
+	if result == nil {
+		return unavailable("empty_provider_response", "The resource exists, but the provider returned no configuration observation."), nil
+	}
 
 	response := EmptyAppContainerConfigResponse()
-	if result != nil {
-		response.GovernedResourceMetadata = governance.Resolve(result.Name, result.ResourceID, result.ProviderUID)
-		response.Type = "app-container"
-		response.ID = result.ProviderUID
-		if response.ID == "" {
-			response.ID = strings.TrimSpace(result.ResourceID)
-		}
-		response.Name = result.Name
-		response.Host = result.Host
-		response.Platform = result.Platform
-		response.Status = result.Status
-		response.Version = result.Version
-		response.HumanVersion = result.HumanVersion
-		response.Notes = result.Notes
-		response.CustomApp = result.CustomApp
-		response.UpgradeAvailable = result.UpgradeAvailable
-		response.ImageUpdatesAvailable = result.ImageUpdatesAvailable
-		response.ContainerCount = result.ContainerCount
-		response.UsedHostIPs = append([]string{}, result.UsedHostIPs...)
-		response.Images = append([]string{}, result.Images...)
-		response.Ports = append([]PortInfo{}, result.Ports...)
-		response.Networks = append([]NetworkInfo{}, result.Networks...)
-		response.Mounts = append([]MountInfo{}, result.Mounts...)
-		response.Containers = append([]AppContainerConfigContainer{}, result.Containers...)
-	}
+	response.GovernedResourceMetadata = governance.Resolve(result.Name, result.ResourceID, result.ProviderUID)
+	response.Type = "app-container"
+	response.ID = result.ProviderUID
 	if response.ID == "" {
-		response.ID = strings.TrimSpace(resolved.GetProviderUID())
+		response.ID = strings.TrimSpace(result.ResourceID)
+	}
+	response.Name = result.Name
+	response.Host = result.Host
+	response.Platform = result.Platform
+	response.Status = result.Status
+	response.Version = result.Version
+	response.HumanVersion = result.HumanVersion
+	response.Notes = result.Notes
+	response.CustomApp = result.CustomApp
+	response.UpgradeAvailable = result.UpgradeAvailable
+	response.ImageUpdatesAvailable = result.ImageUpdatesAvailable
+	response.ContainerCount = result.ContainerCount
+	response.UsedHostIPs = append([]string{}, result.UsedHostIPs...)
+	response.Images = append([]string{}, result.Images...)
+	response.Ports = append([]PortInfo{}, result.Ports...)
+	response.Networks = append([]NetworkInfo{}, result.Networks...)
+	response.Mounts = append([]MountInfo{}, result.Mounts...)
+	response.Containers = append([]AppContainerConfigContainer{}, result.Containers...)
+	if response.ID == "" {
+		response.ID = providerID
 	}
 	if response.Name == "" {
-		response.Name = resolvedResourceDisplayName(resolved)
+		response.Name = resourceDisplayName(resource)
 	}
 	if response.Host == "" {
-		response.Host = strings.TrimSpace(resolved.GetTargetHost())
+		response.Host = canonicalAppContainerHost(resource)
 	}
 	if response.Platform == "" {
-		response.Platform = strings.TrimSpace(resolved.GetAdapter())
+		response.Platform = platform
 	}
 	if response.GovernedResourceMetadata.Policy == nil && response.AISafeSummary == "" {
-		response.GovernedResourceMetadata = governance.Resolve(response.Name, strings.TrimSpace(resolved.GetResourceID()), response.ID)
+		response.GovernedResourceMetadata = governance.Resolve(response.Name, resourceID, response.ID)
 	}
 
 	return NewJSONResult(response.NormalizeCollections()), nil
@@ -5714,7 +5745,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 				Status:                   status,
 				Host:                     canonicalAgentHost(resource),
 				Platform:                 canonicalResourcePlatform(resource),
-				AgentConnected:           resourceAgentConnected(resource, connectedAgentHostnames),
+				CommandAgentConnected:    resourceCommandAgentConnected(resource, connectedAgentHostnames),
 			})
 		}
 	}
@@ -5733,7 +5764,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 				Type:                     "node",
 				Name:                     node.Name(),
 				Status:                   status,
-				AgentConnected:           connectedAgentHostnames[node.Name()],
+				CommandAgentConnected:    commandConnectionObservation(connectedAgentHostnames, connectedAgentHostnames[node.Name()]),
 			})
 		}
 	}

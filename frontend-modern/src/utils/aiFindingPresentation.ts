@@ -1287,9 +1287,10 @@ export const getFindingResolutionReason = (
       case 'timed_out':
         return `Resolved after investigation timeout ${resolvedTime}`;
       case 'cannot_fix':
-        return `Resolved manually ${resolvedTime}`;
       case 'needs_attention':
-        return `Resolved after manual review ${resolvedTime}`;
+        // An investigation outcome does not identify who later resolved the
+        // finding. Explicit operator resolution is handled above.
+        return `Resolved ${resolvedTime}`;
       default:
         return `Issue no longer detected ${resolvedTime}`;
     }

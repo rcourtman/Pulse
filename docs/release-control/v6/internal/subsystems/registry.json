@@ -780,6 +780,14 @@
       ]
     },
     {
+      "path": "internal/agentcapabilities/transcript.go",
+      "rationale": "Stored Assistant tool results and product history share one result-bearing transcript contract, with an explicit narrower provider-request projection. Observed failures and absent historical result status must survive the API boundary",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
       "path": "internal/agentcapabilities/types.go",
       "rationale": "the agent capabilities manifest wire type, manifest-owned external-adapter surface tool contract field, capability display title and structured output schema fields, approval-policy vocabulary, capability governance normalization, and tool-governance descriptor shape are both the canonical API payload contract and the AI runtime projection contract for Pulse Assistant and MCP-facing agent tools",
       "subsystems": [
@@ -1611,6 +1619,7 @@
               "internal/config/host_continuity_test.go",
               "internal/models/metrics_types_test.go",
               "internal/monitoring/availability_probe_agent_test.go",
+              "internal/monitoring/docker_metric_presence_test.go",
               "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
               "internal/monitoring/monitor_host_agents_test.go",
               "scripts/installtests/agent_state_dir_lifecycle_test.go",
@@ -2073,6 +2082,7 @@
         "internal/api/ai_intelligence_handlers.go",
         "internal/config/ai.go",
         "internal/config/patrol_autopilot_persistence.go",
+        "internal/metrics/incident_archive.go",
         "pkg/aicontracts/action_broker.go",
         "pkg/aicontracts/fix_execution.go",
         "pkg/aicontracts/investigation.go",
@@ -2087,6 +2097,20 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "legacy-incident-archive",
+            "label": "Explicit read-only legacy recording archive proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/metrics/incident_archive.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/ai/tools/incident_history_test.go",
+              "internal/metrics/incident_archive_test.go"
+            ]
+          },
           {
             "id": "retained-metric-evidence",
             "label": "retained metric evidence and observation coverage proof",
@@ -2186,9 +2210,11 @@
             ],
             "exact_files": [
               "internal/api/ai_handler_test.go",
+              "internal/api/ai_handlers_investigation_additional_test.go",
               "internal/api/ai_handlers_more_test.go",
               "internal/api/ai_handlers_patrol_actions_additional_test.go",
               "internal/api/ai_handlers_test.go",
+              "internal/api/ai_intelligence_handlers_remediation_additional_test.go",
               "internal/api/ai_intelligence_handlers_test.go",
               "internal/api/issue1640_readiness_gate_test.go",
               "internal/api/issue1640_readiness_transport_test.go",
@@ -3222,6 +3248,7 @@
           "exact_files": [
             "frontend-modern/src/types/api.ts",
             "internal/api/action_runner_credentials_test.go",
+            "internal/api/ai_handlers_investigation_additional_test.go",
             "internal/api/ai_handlers_more_test.go",
               "internal/api/ai_handlers_patrol_actions_additional_test.go",
               "internal/api/alerting/external_probe_notifications_test.go",
@@ -5945,6 +5972,7 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/config/host_continuity_test.go",
+              "internal/monitoring/docker_metric_presence_test.go",
               "internal/monitoring/issue1485_unraid_lifecycle_test.go",
               "internal/monitoring/issue1595_collection_trust_test.go",
               "internal/monitoring/monitor_docker_test.go",
@@ -6066,6 +6094,8 @@
               "internal/dockeragent/agent_collect_test.go",
               "internal/dockeragent/agent_cpu_test.go",
               "internal/dockeragent/agent_internal_test.go",
+              "internal/dockeragent/blockio_presence_test.go",
+              "internal/dockeragent/collect_tmpfs_test.go",
               "internal/dockeragent/swarm_coverage_test.go"
             ]
           },
@@ -6125,13 +6155,15 @@
               "internal/models/issue1639_pbs_collision_test.go",
               "internal/models/metrics_types_test.go",
               "internal/models/state_host_test.go",
+              "internal/monitoring/docker_metric_presence_test.go",
               "internal/monitoring/issue1595_collection_trust_test.go",
               "internal/monitoring/monitor_full_coverage_test.go",
               "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
               "internal/monitoring/monitor_host_agents_test.go",
               "internal/monitoring/monitor_package_updates_test.go",
               "internal/unifiedresources/adapter_coverage_test.go",
-              "internal/unifiedresources/registry_test.go"
+              "internal/unifiedresources/registry_test.go",
+              "pkg/agents/docker/blockio_presence_test.go"
             ]
           },
           {
@@ -7005,6 +7037,7 @@
             "exact_files": [
               "pkg/metrics/store_additional_test.go",
               "pkg/metrics/store_bench_test.go",
+              "pkg/metrics/store_docker_observation_contract_test.go",
               "pkg/metrics/store_query_plan_test.go",
               "pkg/metrics/store_slo_test.go"
             ]
@@ -7132,6 +7165,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSelectors.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/useTableWindowing.test.ts",
@@ -8078,6 +8112,7 @@
               "internal/unifiedresources/adapter_coverage_test.go",
               "internal/unifiedresources/adapters_test.go",
               "internal/unifiedresources/ceph_pool_health_contract_test.go",
+              "internal/unifiedresources/history_identity_test.go",
               "internal/unifiedresources/host_storage_cleanup_test.go",
               "internal/unifiedresources/monitor_adapter_read_state_test.go",
               "internal/unifiedresources/views_test.go"
@@ -8475,6 +8510,7 @@
             "exact_files": [
               "internal/monitoring/issue1595_collection_trust_test.go",
               "internal/unifiedresources/availability_link_test.go",
+              "internal/unifiedresources/history_identity_test.go",
               "internal/unifiedresources/kubernetes_registry_test.go",
               "internal/unifiedresources/pbs_pmg_registry_test.go",
               "internal/unifiedresources/registry_merge_policy_test.go",
@@ -8510,6 +8546,19 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/unifiedresources/action_policy_provenance_test.go"
+            ]
+          },
+          {
+            "id": "resource-history-identity",
+            "label": "resource history identity and authority isolation proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/unifiedresources/history_identity.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/unifiedresources/history_identity_test.go"
             ]
           },
           {

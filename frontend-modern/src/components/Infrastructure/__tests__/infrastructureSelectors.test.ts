@@ -458,3 +458,16 @@ describe('infrastructureSelectors', () => {
     });
   });
 });
+
+it('does not compare partial disk observations as complete throughput totals', () => {
+  const known = [
+    makeResource(1, { diskIO: { readRate: 0, writeRate: 0 } }),
+    makeResource(2, { diskIO: { readRate: 100, writeRate: 200 } }),
+  ];
+  const partial = [
+    makeResource(3, { diskIO: { readRate: 10000 } }),
+    makeResource(4, { diskIO: { writeRate: 0 } }),
+    makeResource(5, { diskIO: {} }),
+  ];
+  expect(computeIOScale([...known, ...partial]).diskIO).toEqual(computeIOScale(known).diskIO);
+});

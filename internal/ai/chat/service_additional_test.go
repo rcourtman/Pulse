@@ -16,7 +16,7 @@ func TestServiceSettersAndAutonomousMode(t *testing.T) {
 		agenticLoop: loop,
 	}
 
-	service.SetIncidentRecorderProvider(nil)
+	service.SetIncidentArchiveProvider(nil)
 	service.SetEventCorrelatorProvider(nil)
 	service.SetKnowledgeStoreProvider(nil)
 

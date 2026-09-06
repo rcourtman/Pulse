@@ -17,6 +17,28 @@
 
 ## Purpose
 
+Docker mount collection preserves both native `Mounts` records and entries
+reported only in `HostConfig.Tmpfs`. Existing reported destinations remain
+authoritative. Additional tmpfs destinations are ordered deterministically,
+retain their options and read/write setting, and use the existing mount report
+shape. Configured tmpfs size is configuration, not measured used/free space.
+`TestCollectContainerPreservesTmpfsMounts` reproduces a live tmpfs-only inspect
+shape and covers mixed mounts, read-only options, overlap and absent host config.
+
+Docker collection records read and write counter presence independently,
+including explicit zero, in optional report fields. Older reports without those
+fields establish only positive counters. Container reports propagate this
+presence to the shared rate tracker. An omitted block-I/O payload and the first counter sample
+produce no rate history. Unchanged observed counters produce measured zero,
+including after an omitted report. Container writable/root layer sizes never
+produce capacity usage history. The ingestion regression is
+`internal/monitoring/docker_metric_presence_test.go`. This changes measurement
+projection only and grants no agent lifecycle authority.
+The shared resource-to-browser conversion preserves each optional I/O rate
+independently. Missing directions are omitted from JSON, while measured zero
+remains numeric zero. No aggregate presence flag may fabricate its sibling
+direction. `TestResourceDiskIOWirePreservesAbsentDirection` pins that wire path.
+
 ### PBS datastore alert evaluation belongs to the live poll
 
 After publishing freshly polled PBS datastore storage rows, the poller invokes
@@ -163,6 +185,15 @@ Verification: `TestPollPBSBackups_PreservesCacheOnTransientDatastoreError` and
 fixtures for 500, 502 quoting 403, 503 quoting 404, and genuine 401/403/404.
 These tests prove cache retention/removal, not installed PBS wake, service
 restart, or notification receipt.
+
+Docker alert lifecycle events pass through the shared resource history identity
+writer. A full Docker source reference must reach the same canonical container
+history as inventory changes, including recovery after inventory removal and
+restart. Existing alert lifecycle event IDs remain unchanged so replay cannot
+duplicate retained events. Same-name containers and abbreviated IDs must not
+join another container's history. The real alert-manager callback path is
+covered by `TestDockerAlertTimelineUsesCanonicalHistoryIdentity` in
+`internal/monitoring/monitor_alert_handling_test.go`.
 
 TrueNAS native alert projection preserves the trimmed, uppercase provider level in ResourceIncident.NativeSeverity. INFO and NOTICE retain the same canonical monitor risk; consumers must not lose their distinct actionability when projecting provider evidence. Native CRITICAL, ALERT, and EMERGENCY all project to canonical critical severity; EMERGENCY must not be discarded as unknown or make a still-active condition appear recovered. WARNING remains warning, and INFO and NOTICE remain informational at this projection boundary.
 

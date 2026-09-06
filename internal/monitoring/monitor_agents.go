@@ -2354,10 +2354,15 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			containerIdentifier = payload.Name
 		}
 		if strings.TrimSpace(containerIdentifier) != "" {
+			readPresent, writePresent := payload.BlockIO.CounterPresence()
 			metrics := models.IOMetrics{
 				NetworkIn:  clampToInt64(payload.NetworkRXBytes),
 				NetworkOut: clampToInt64(payload.NetworkTXBytes),
 				Timestamp:  receivedAt,
+				Presence: models.IOCounterPresence{
+					Explicit: true, DiskRead: readPresent, DiskWrite: writePresent,
+					NetworkIn: true, NetworkOut: true,
+				},
 			}
 			if payload.BlockIO != nil {
 				metrics.DiskRead = clampToInt64(payload.BlockIO.ReadBytes)
@@ -2640,16 +2645,9 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			}
 			metricKey := fmt.Sprintf("docker:%s", container.ID)
 
-			var diskPercent float64
-			if container.RootFilesystemBytes > 0 && container.WritableLayerBytes > 0 {
-				diskPercent = float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
-				if diskPercent > 100 {
-					diskPercent = 100
-				}
-			}
-
-			var diskReadRate float64
-			var diskWriteRate float64
+			// Layer sizes describe container images, not filesystem capacity.
+			// Missing rate observations must not become measured idle samples.
+			diskReadRate, diskWriteRate := -1.0, -1.0
 			if container.BlockIO != nil {
 				if container.BlockIO.ReadRateBytesPerSecond != nil {
 					diskReadRate = *container.BlockIO.ReadRateBytesPerSecond
@@ -2662,7 +2660,6 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(metricKey, "cpu", models.DockerContainerCPUCapacityPercent(container, host.CPUs), now)
 				m.metricsHistory.AddGuestMetric(metricKey, "memory", container.MemoryPercent, now)
-				m.metricsHistory.AddGuestMetric(metricKey, "disk", diskPercent, now)
 				if container.NetInRate >= 0 {
 					m.metricsHistory.AddGuestMetric(metricKey, "netin", container.NetInRate, now)
 				}
@@ -2680,7 +2677,6 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			if m.metricsStore != nil {
 				m.metricsStore.Write("dockerContainer", container.ID, "cpu", models.DockerContainerCPUCapacityPercent(container, host.CPUs), now)
 				m.metricsStore.Write("dockerContainer", container.ID, "memory", container.MemoryPercent, now)
-				m.metricsStore.Write("dockerContainer", container.ID, "disk", diskPercent, now)
 				if container.NetInRate >= 0 {
 					m.metricsStore.Write("dockerContainer", container.ID, "netin", container.NetInRate, now)
 				}

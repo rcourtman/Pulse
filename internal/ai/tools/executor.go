@@ -559,9 +559,9 @@ type ExecutorConfig struct {
 	AgentProfileManager AgentProfileManager
 
 	// Optional providers - intelligence
-	IncidentRecorderProvider IncidentRecorderProvider
-	EventCorrelatorProvider  EventCorrelatorProvider
-	KnowledgeStoreProvider   KnowledgeStoreProvider
+	IncidentArchiveProvider IncidentArchiveProvider
+	EventCorrelatorProvider EventCorrelatorProvider
+	KnowledgeStoreProvider  KnowledgeStoreProvider
 
 	// Optional providers - discovery
 	DiscoveryProvider DiscoveryProvider
@@ -627,9 +627,9 @@ type PulseToolExecutor struct {
 	agentProfileManager AgentProfileManager
 
 	// Intelligence providers
-	incidentRecorderProvider IncidentRecorderProvider
-	eventCorrelatorProvider  EventCorrelatorProvider
-	knowledgeStoreProvider   KnowledgeStoreProvider
+	incidentArchiveProvider IncidentArchiveProvider
+	eventCorrelatorProvider EventCorrelatorProvider
+	knowledgeStoreProvider  KnowledgeStoreProvider
 
 	// Discovery provider
 	discoveryProvider DiscoveryProvider
@@ -750,7 +750,7 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		metadataUpdater:            cfg.MetadataUpdater,
 		findingsManager:            cfg.FindingsManager,
 		agentProfileManager:        cfg.AgentProfileManager,
-		incidentRecorderProvider:   cfg.IncidentRecorderProvider,
+		incidentArchiveProvider:    cfg.IncidentArchiveProvider,
 		eventCorrelatorProvider:    cfg.EventCorrelatorProvider,
 		knowledgeStoreProvider:     cfg.KnowledgeStoreProvider,
 		discoveryProvider:          cfg.DiscoveryProvider,
@@ -827,7 +827,7 @@ func (e *PulseToolExecutor) Clone() *PulseToolExecutor {
 		metadataUpdater:             e.metadataUpdater,
 		findingsManager:             e.findingsManager,
 		agentProfileManager:         e.agentProfileManager,
-		incidentRecorderProvider:    e.incidentRecorderProvider,
+		incidentArchiveProvider:     e.incidentArchiveProvider,
 		eventCorrelatorProvider:     e.eventCorrelatorProvider,
 		knowledgeStoreProvider:      e.knowledgeStoreProvider,
 		discoveryProvider:           e.discoveryProvider,
@@ -1019,9 +1019,9 @@ func (e *PulseToolExecutor) SetUpdatesProvider(provider UpdatesProvider) {
 	e.updatesProvider = provider
 }
 
-// SetIncidentRecorderProvider sets the incident recorder provider
-func (e *PulseToolExecutor) SetIncidentRecorderProvider(provider IncidentRecorderProvider) {
-	e.incidentRecorderProvider = provider
+// SetIncidentArchiveProvider sets the read-only legacy incident archive provider
+func (e *PulseToolExecutor) SetIncidentArchiveProvider(provider IncidentArchiveProvider) {
+	e.incidentArchiveProvider = provider
 }
 
 // SetEventCorrelatorProvider sets the event correlator provider
@@ -1221,7 +1221,7 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	case agentcapabilities.PulseDiscoveryToolName:
 		return e.discoveryProvider != nil
 	case agentcapabilities.PulseKnowledgeToolName:
-		return e.knowledgeStoreProvider != nil || e.incidentRecorderProvider != nil || e.eventCorrelatorProvider != nil
+		return e.actionAuditStore != nil || e.knowledgeStoreProvider != nil || e.incidentArchiveProvider != nil || e.eventCorrelatorProvider != nil
 	case agentcapabilities.PulsePMGToolName:
 		return e.hasReadState()
 	case agentcapabilities.PulseSummarizeToolName:

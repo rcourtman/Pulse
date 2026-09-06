@@ -4327,6 +4327,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/config/host_continuity_test.go",
                 "internal/models/metrics_types_test.go",
                 "internal/monitoring/availability_probe_agent_test.go",
+                "internal/monitoring/docker_metric_presence_test.go",
                 "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
                 "internal/monitoring/monitor_host_agents_test.go",
                 "scripts/installtests/agent_state_dir_lifecycle_test.go",
@@ -4349,6 +4350,7 @@ class SubsystemLookupTest(unittest.TestCase):
             monitoring_match["verification_requirement"]["exact_files"],
             [
                 "internal/config/host_continuity_test.go",
+                "internal/monitoring/docker_metric_presence_test.go",
                 "internal/monitoring/issue1485_unraid_lifecycle_test.go",
                 "internal/monitoring/issue1595_collection_trust_test.go",
                 "internal/monitoring/monitor_docker_test.go",
@@ -4462,6 +4464,7 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "internal/monitoring/issue1595_collection_trust_test.go",
                 "internal/unifiedresources/availability_link_test.go",
+                "internal/unifiedresources/history_identity_test.go",
                 "internal/unifiedresources/kubernetes_registry_test.go",
                 "internal/unifiedresources/pbs_pmg_registry_test.go",
                 "internal/unifiedresources/registry_merge_policy_test.go",
@@ -4492,6 +4495,7 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "internal/monitoring/issue1595_collection_trust_test.go",
                 "internal/unifiedresources/availability_link_test.go",
+                "internal/unifiedresources/history_identity_test.go",
                 "internal/unifiedresources/kubernetes_registry_test.go",
                 "internal/unifiedresources/pbs_pmg_registry_test.go",
                 "internal/unifiedresources/registry_merge_policy_test.go",

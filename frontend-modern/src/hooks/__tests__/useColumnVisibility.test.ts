@@ -120,6 +120,29 @@ describe('useColumnVisibility', () => {
     });
   });
 
+  it('does not reapply a default-hidden migration after a fresh user shows the column', async () => {
+    const columns: ColumnDef[] = [
+      { id: 'name', label: 'Name' },
+      { id: 'diskio', label: 'Disk I/O', toggleable: true, defaultHidden: true },
+    ];
+    let dispose = () => {};
+    let visibility: ReturnType<typeof useColumnVisibility>;
+    createRoot((d) => {
+      dispose = d;
+      visibility = useColumnVisibility(storageKey, columns, [], undefined, {}, ['diskio']);
+    });
+    await Promise.resolve();
+    visibility!.show('diskio');
+    await Promise.resolve();
+    expect(window.localStorage.getItem(storageKey)).toBe('[]');
+    dispose();
+    createRoot((d) => {
+      const reloaded = useColumnVisibility(storageKey, columns, [], undefined, {}, ['diskio']);
+      expect(reloaded.isHiddenByUser('diskio')).toBe(false);
+      d();
+    });
+  });
+
   it('resets back to the canonical default-hidden set', () => {
     createRoot((dispose) => {
       const columns: ColumnDef[] = [
