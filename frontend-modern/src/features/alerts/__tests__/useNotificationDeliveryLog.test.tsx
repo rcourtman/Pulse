@@ -113,6 +113,33 @@ describe('useNotificationDeliveryLog', () => {
       }
     }));
 
+  it('clears stale held events on failure without losing readable delivery attempts', () =>
+    createRoot(async (dispose) => {
+      vi.mocked(AlertsAPI.getEvents)
+        .mockResolvedValueOnce([
+          {
+            id: 1,
+            type: 'notification_suppressed',
+            alertId: 'previous',
+            occurredAt: '2026-09-06T08:00:00Z',
+          },
+        ])
+        .mockRejectedValueOnce(new Error('held events unavailable'));
+      vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValue(emptyLog);
+      const state = useNotificationDeliveryLog();
+      try {
+        await state.loadDeliveryLog();
+        expect(state.heldEvents()).toHaveLength(1);
+        await state.loadDeliveryLog();
+        expect(state.heldEvents()).toEqual([]);
+        expect(state.deliveryLog()).toEqual(emptyLog);
+        expect(state.deliveryLogUnavailable()).toBe(false);
+        expect(state.refreshingDeliveryLog()).toBe(false);
+      } finally {
+        dispose();
+      }
+    }));
+
   it('keeps the newest successful read when an older read fails', () =>
     createRoot(async (dispose) => {
       const older = deferred<NotificationDeliveryLog>();
