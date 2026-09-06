@@ -163,6 +163,38 @@ repair an older generated unit rather than adding a JSON-parsing wrapper.
 
 ### Notifications
 
+#### No alert when Pulse, power or internet goes down
+
+Pulse cannot send a notification while its host is stopped or its outbound
+network is unavailable. A local delivery-health warning is not an external
+outage detector, and a successful **Send test** does not prove outage coverage.
+
+- In **Alerts → Notifications → External watchdog**, configure a
+  Healthchecks-compatible **success ping URL** and save the configuration.
+  Keep the URL secret; do not include it in screenshots or support reports.
+- Run the watchdog outside the failure you want to detect. Another machine on
+  the same power supply or internet connection does not cover a whole-site
+  outage. Its notification destination must also remain reachable independently
+  of that site.
+- At the watchdog, configure a one-minute period and a three-minute grace
+  period, and enable its notification integration. Pulse sends a heartbeat
+  every minute and a `/fail` signal if its monitoring loop stalls. For
+  Healthchecks simple schedules, a missing heartbeat becomes down after
+  **period plus grace**: approximately four minutes after the last success,
+  not three. Recipient delivery can take longer. See
+  [Healthchecks timing and notification concepts](https://healthchecks.io/docs/).
+- Verify in an authorised test environment: confirm incoming heartbeats at
+  the watchdog, stop the test Pulse instance, and check that the intended
+  recipient actually receives the external alert. Restore Pulse and verify
+  heartbeat recovery. Test loss of internet separately if you need that
+  coverage; a stopped-process test does not prove it.
+- To retire the check, pause or remove it at the watchdog too. Clearing the
+  URL in Pulse stops its signals but does not pause the remote check.
+
+A healthy heartbeat indicates Pulse monitoring-loop progress, not successful
+delivery of every resource alert or external reachability of your services.
+Continue checking delivery activity for destination failures.
+
 #### Emails not sending
 - Open **Alerts → Notifications** first. Pulse shows a delivery warning when
   failed or dead-lettered notifications remain in the persistent queue; a
