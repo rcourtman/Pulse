@@ -3,6 +3,8 @@ package notifications
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"sync/atomic"
 	"testing"
 )
 
@@ -318,5 +320,54 @@ func TestIsRetryableWebhookError_NetworkPatterns(t *testing.T) {
 				t.Errorf("network error %q should be retryable", errStr)
 			}
 		})
+	}
+}
+
+// Provider diagnostics must not turn a terminal HTTP rejection into a network retry.
+func TestIsRetryableWebhookError_StatusOverridesBody(t *testing.T) {
+	for _, code := range []int{400, 401, 403, 404, 422} {
+		for _, body := range []string{"authentication timeout", "connection refused", "connection reset", "no such host", "network unreachable"} {
+			t.Run(fmt.Sprintf("%d/%s", code, body), func(t *testing.T) {
+				err := fmt.Errorf("webhook returned HTTP %d: %s", code, body)
+				if isRetryableWebhookError(err) {
+					t.Fatalf("terminal HTTP %d was retried because of diagnostic %q", code, body)
+				}
+			})
+		}
+	}
+}
+
+// Exercise the HTTP transport without starting a persistent queue or workers.
+func TestWebhookRetryRejectsForbiddenTimeoutBody(t *testing.T) {
+	var attempts atomic.Int32
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.Header().Set("Retry-After", "0")
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprint(w, "authentication timeout: replace credentials")
+	}))
+	defer server.Close()
+	nm := &NotificationManager{}
+	if err := nm.UpdateAllowedPrivateCIDRs("127.0.0.1"); err != nil {
+		t.Fatal(err)
+	}
+	nm.webhookClient = nm.createSecureWebhookClient(WebhookTimeout)
+	defer nm.webhookClient.CloseIdleConnections()
+	err := nm.sendWebhookWithRetry(EnhancedWebhookConfig{
+		WebhookConfig: WebhookConfig{Name: "synthetic rejection", URL: server.URL},
+		RetryEnabled:  true, RetryCount: 1,
+	}, []byte(`{"test":true}`), "synthetic:alert")
+	if err == nil {
+		t.Fatal("expected forbidden delivery failure")
+	}
+	if got := attempts.Load(); got != 1 {
+		t.Errorf("HTTP attempts = %d, want 1", got)
+	}
+	history := nm.GetWebhookHistory()
+	if len(history) != 1 {
+		t.Fatalf("history length = %d, want 1", len(history))
+	}
+	if history[0].StatusCode != http.StatusForbidden || history[0].Success || history[0].RetryAttempts != 0 {
+		t.Errorf("history lost terminal rejection: status=%d success=%v retries=%d", history[0].StatusCode, history[0].Success, history[0].RetryAttempts)
 	}
 }
