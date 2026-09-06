@@ -20,6 +20,11 @@
 
 ## Purpose
 
+The internal Patrol bridge preserves explicit execution limits, scoped tool
+allowlists and execution identity. The retired unmatched-signal evaluator no
+longer contributes a signal-count-derived successful-report budget. Diagnosis
+and missing-finding assessments stay in the original evidence conversation.
+
 The frontend `Node` projection preserves the unified resource's optional
 `metricsTarget` without deriving storage coordinates from its display identity.
 Proxmox-only nodes advertise the `node` storage family and provider-native ID.

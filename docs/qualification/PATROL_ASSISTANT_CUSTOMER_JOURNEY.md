@@ -62,8 +62,8 @@ reproduction evidence, not a representative customer success rate.
 | Step | Work | Acceptance | Current state |
 |---|---|---|---|
 | 1. Product contract and baseline | Map the current loop and sources of judgment. Record telemetry populations and gaps. | Every identified decision has an owner. Activity is not labelled usefulness. | Complete for this redesign scope. Contract, ownership decisions and baseline limits are recorded. |
-| 2. Shared evidence | Preserve canonical risk reasons and SMART counters, source/time semantics and history across tools/turns. | Regression tests preserve unknown versus zero and all canonical evidence. Real responses can inspect the same facts as the product. | Implemented and qualified for the named shared-evidence defects. Canonical disk detail, risk and cadence pass real data-path proof. Affected package and concurrency checks pass. Final exact-base performance qualification remains open after PR CI exposed regressions. Real-model interpretation failures remain tracked in step 5. |
-| 3. Diagnostic orchestration | Correct proposal-as-proof. Audit triage budgets, unmatched-signal evaluation, assessment completion and investigation cutoffs. | No code-written causal conclusion. No quality inferred from tool, flag or finding counts. Each retained pass has an objective reason. Safety boundaries and incomplete outcomes remain explicit. | Proposal promotion and capture inference were removed in c5d2f56dda. Commit 668af3fe6b removes investigation success-call floors, checkpoint instructions and generic call-count wrap-up rules. Full chat regressions pass. Detection passes and live qualification remain open. |
+| 2. Shared evidence | Preserve canonical risk reasons and SMART counters, source/time semantics and history across tools/turns. | Regression tests preserve unknown versus zero and all canonical evidence. Real responses can inspect the same facts as the product. | Implemented and qualified for the named shared-evidence defects. Canonical disk detail, risk and cadence pass real data-path proof. Affected package and concurrency checks pass. Commit f01db995ed corrects the PR benchmark regressions. Exact-base worker comparisons and full metrics/database and focused race checks pass. Final landing CI remains open. Real-model interpretation failures remain tracked in step 5. |
+| 3. Diagnostic orchestration | Correct proposal-as-proof. Audit triage budgets, unmatched-signal evaluation, assessment completion and investigation cutoffs. | No code-written causal conclusion. No quality inferred from tool, flag or finding counts. Each retained pass has an objective reason. Safety boundaries and incomplete outcomes remain explicit. | Proposal promotion and capture inference were removed in c5d2f56dda. Commit 668af3fe6b removes investigation success-call floors, checkpoint instructions and generic call-count wrap-up rules. The detection slice removes contextless follow-up passes, flag/report-count policy and first-finding completion modes. Full chat and AI suites, focused API and conversation race tests pass. Real-model/action outcome qualification remains open. |
 | 4. Issue through verified outcome | Follow existing issue/investigation/action records into Assistant, approval, execution and independent readback. | Accepted proposal is visibly distinct from execution and verification. Rejected or unsupported actions do not become success. Uncertainty can survive an action proposal. | Existing foundation, full journey qualification pending. |
 | 5. Ground-truth qualification and landing | Extend existing qualification tooling only where necessary. Exercise healthy/unhealthy, dependency, missing-access, storage/backup and approved/rejected action cases. Inspect the final browser journey at desktop and narrow widths. | Record exact source/model/permissions, evidence, decisions, faults/misses, latency and verification. Fix in-scope failures, pass appropriate proofs and land scoped commits. | Pending. |
 
@@ -79,10 +79,10 @@ scoring to make the model pass.
 |---|---|---|
 | Proposal rationale inserted as Root Cause | The reviewed baseline amended the conclusion after acceptance in the agent loop and service. Both mutations are removed in the working change. | Prove uncertain prose survives accepted proposals through stream, persistence and linked Assistant display. Keep the proposal record as an attributed model decision and allow uncertainty in the diagnosis. |
 | Causal-resource validator | Removed the duplicate resource graph and name/status inference from the working capture boundary. Causal attribution is optional when unknown. | Prove capability/schema validation, parameter isolation and invocation integrity remain enforced. Dependency evidence remains available to the model through canonical queries. |
-| Flag-count turn ladder | `computeTriageMaxTurns` grants 5 + 3 turns per flag, bounded to 8–40, with a separate quick limit. | Replace quality/urgency proxies with explicit execution resource limits. More flags must not imply a better investigation budget. |
-| Unmatched-signal evaluation | `runAIAnalysisState` detects signals from tool output and triage, then starts a second model pass when they lack matching findings. | Audit for removal in favour of complete initial evidence and model-owned decisions. Preserve negative-control and missed-fault qualification rather than force reports. |
-| Missing-finding assessment sweep | A separate session receives old finding excerpts after the main run. It lacks the original run evidence. | Remove the separate session. Keep explicit present/resolved/uncertain decisions in the original conversation and preserve incomplete status for omissions. |
-| First accepted finding ends investigation | The main loop replaces its prompt and removes evidence tools after a finding write succeeds. | Remove this interpretation of persistence as evidential sufficiency. Recording one issue must not prevent reads needed for another issue or a known finding. |
+| Flag-count turn ladder | Removed in the detection slice. Ordinary runs have a fixed forty-turn limit, explicit quick runs retain four. | Verify flags and inventory size cannot change the execution limit or mandate findings. |
+| Unmatched-signal evaluation | Removed the separate evaluator and its signal-count report budget. | Verify the original model conclusion and usage are retained without a second diagnostic session. Ground-truth missed-fault qualification remains required. |
+| Missing-finding assessment sweep | Removed the separate session. | Preserve explicit assessments in the original conversation and incomplete status for omissions. No old finding excerpt may become a fresh verdict. |
+| First accepted finding ends investigation | Removed the post-write summary, continuation and repair modes. | Preserve evidence tools and original context within the run limit. Accepted decisions survive a later provider failure without hiding that failure. |
 | Investigation evidence-call floor | Removed in the current slice. Seed-only and failed-read conclusions survive without forced extra calls. | Completion is not diagnostic correctness. Preserve explicit limits, failed/unavailable evidence and independent action freshness checks. |
 | Generic wrap-up counters | Removed the 12/18-call tool-result instructions and four silent-turn cutoff. | Explicit run limits bound work. Counts and silence do not establish evidential sufficiency. A twenty-read regression preserves available tools, observations and the model conclusion. |
 | Authority and execution boundaries | Tenant identity, capability schemas, approvals, invocation IDs, parameter redaction and independent readback. | Keep and prove unchanged when diagnostic policy is simplified. These enforce objective invariants. |
@@ -790,3 +790,80 @@ Private worker evidence is retained under
 `/opt/pulse-release-worker/pr1920-bench-4f9-c5d2/`, with source-bound
 `full-metrics-second.log`, `full-db-second.log`, `race-metrics-second.log`,
 `second-candidate-*` and `adj-*` artifacts.
+
+
+### Detection conversation redesign
+
+The original model conversation now owns reads, finding decisions and correction
+of rejected calls within the explicit run limit. Removed the separate evaluator,
+old-evidence assessment sweep, signal-count report budget and post-finding prompt
+replacement. The standing prompt describes Pulse's evidence, existing alerts,
+active-finding obligation and action boundaries without fixed tool sequences or
+forcing symptom reports before investigation. A run with no new finding may be called all clear only when the model's
+evidence supports that conclusion. Final-turn and output-limit recovery instructions
+also retain missing/stale evidence and avoid repeating accepted assessments.
+
+The 01:55 UTC ordinary Assistant recheck did not yield a final answer. Server
+logs record `context canceled` at 01:57:06 UTC, before the qualification runner
+was interrupted at about 01:57:44 UTC. The request's eleven tool calls and partial
+session remain reproduction evidence. It is a runtime failure with an unresolved
+cancellation source, not a completed diagnosis. Its source/binary correspondence
+has not been established as an exact final-build proof. No autonomous request or
+paid alternate-provider call was made.
+
+The rebuilt local runtime retains the same unknown cause and failed-read evidence
+through ordinary and alert-mirrored finding review and the linked Assistant.
+The scripted browser matrix passes at 1440x1000, 900x1000 and 390x1000, including
+nested transcript expansion/collapse, keyboard review and explanation, selected
+issue identity, draft preservation, menu dismissal and error/retry. Actual pixels
+were inspected. This proves presentation and context continuity, not diagnosis.
+The private source-bound receipt is `tmp/patrol-assistant-journey/result.json`.
+Runtime binary SHA-256 before/after the pass was
+`724941045a17714460f703724528a040645c752aabe01c114fc1aae6cecca52c`.
+
+Final affected worker proof passes: full chat 13.670s, full AI 10.216s,
+Patrol/API bridge tests 24.421s and focused conversation race tests 1.043s.
+The race cases cover mixed accepted/rejected finding calls, a fresh evidence read
+between independent findings, provider failure after an accepted finding and
+exact accepted-call idempotency. The integration case retains an omitted
+assessment as active and incomplete after exactly one original model run.
+Zero, one and fifteen heuristic flags do not change the run limit, trigger an
+auxiliary session, manufacture findings or inflate model usage. Existing
+control-mode, capability and objective-observer tests remain part of the passing
+full packages. Private proof logs are `/opt/pulse-release-worker/final-affected2-chat.log`
+and `final-affected3-{ai,api,race}.log`.
+
+The subsequent ordinary Assistant check on the unchanged binary completed from
+02:45:25.486 to 02:48:18.734 UTC, about 173 seconds, with thirteen visible tool
+records. It distinguished high utilisation from proven pressure and preserved
+failed access. It still inferred observation startup from timestamp coincidence
+and asserted that a change across retained resolutions was not an aggregation
+artefact without supporting evidence. The temporal conclusion therefore remains
+unqualified. Completion of this request does not explain the earlier cancellation
+and does not qualify autonomous Patrol.
+
+This real run also reproduced a canonical result defect: `pulse_read` with
+`action=file` returned missing-agent text but a successful result. The shared
+file-read boundary now returns a tool error for absent agents and nonzero
+host/container command exits, preserving the original explanation. Success
+continues to require actual file content. Focused negative controls cover absent
+agents and both stderr/stdout error paths. The final real Assistant check executed the exact file read once and returned
+`tool_end.success=false`. The failed badge and original explanation were visible
+in desktop and narrow views, survived expansion/collapse and reload, and the
+model described a collection limit without claiming file evidence. The single
+request ran from 02:52:16.552 to 02:52:48.461 UTC. The scripted linked-issue matrix
+also passed again at 1440/900/390 widths on the final rebuilt runtime.
+
+Final binary SHA-256 was
+`a575a40a640af1aaed479b56636dc5a3205c76df6999bbb20546ccf09fe70659`,
+unchanged throughout both passes. `tools_file.go` SHA-256 was
+`a5585c787e8a24aa5bc694b40a6c945709ecab06d9f581105131531dd16d3ac3`.
+Private receipts remain under the task's
+`diagnostic-evidence-file-read-failure-final/` and the repository's
+`tmp/patrol-assistant-journey/`. This qualifies the named ordinary read failure
+and presentation contract, not autonomous investigation or action outcomes.
+
+The final full tools package passes in 59.413s and focused file-read race proof
+in 1.033s, covering successful reads alongside the failed-read controls.
+Private worker logs are `file-read-full.log` and `file-read-race.log` under
+`/opt/pulse-release-worker/`.

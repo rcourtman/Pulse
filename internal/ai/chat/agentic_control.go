@@ -140,15 +140,6 @@ func (a *AgenticLoop) SetMaxEvidenceCalls(n int) {
 	a.mu.Unlock()
 }
 
-// SetMaxFindingReports bounds successful patrol_report_finding writes for a
-// focused Patrol invocation. A non-positive value leaves ordinary Watch runs
-// uncapped; evaluator passes set the exact number of unmatched signals.
-func (a *AgenticLoop) SetMaxFindingReports(n int) {
-	a.mu.Lock()
-	a.maxFindingReports = n
-	a.mu.Unlock()
-}
-
 // SetProviderInfo sets the provider/model info for telemetry.
 func (a *AgenticLoop) SetProviderInfo(provider, model string) {
 	a.mu.Lock()
@@ -193,8 +184,8 @@ func (a *AgenticLoop) GetTotalModelTurns() int {
 }
 
 // GetTotalEvidenceCalls returns attempted model-selected Patrol investigation
-// evidence calls. Failed and policy-blocked calls consume this budget but do
-// not satisfy the separate successful-evidence grounding gate.
+// evidence calls. Failed and policy-blocked calls consume this explicit limit.
+// The count does not establish whether a conclusion is grounded.
 func (a *AgenticLoop) GetTotalEvidenceCalls() int {
 	return a.totalEvidenceCalls
 }

@@ -15,6 +15,12 @@
 
 ## Purpose
 
+Detection retains one model conversation for evidence gathering and finding
+decisions. Recording one finding does not establish diagnostic sufficiency or
+remove its evidence tools. Missing assessments and provider failures remain
+visible limitations alongside accepted records. Assistant continues those
+same records without promoting persistence into diagnosis or verified recovery.
+
 Own the Patrol intelligence route shell, outcome-first feature surface, local
 state orchestration, genuine-decision presentation, verified-work receipts,
 findings and approval presentation, run-history rendering, and Patrol-specific

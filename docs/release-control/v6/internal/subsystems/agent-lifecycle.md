@@ -15,6 +15,11 @@
 
 ## Purpose
 
+The internal Patrol request bridge carries explicit execution limits and
+capability allowlists without a diagnostic report-count budget. Finding writes
+retain their server-owned scope and cannot enter or satisfy the infrastructure
+verification lifecycle. A saved finding does not curtail further evidence reads.
+
 The shared physical-disk model preserves an internal collector cadence through
 state snapshot cloning and canonical typed read-state reconstruction. This is
 monitoring metadata and does not change Agent registration, execution authority,

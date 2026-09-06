@@ -271,8 +271,7 @@ func TestIntegration_FindingRejectedByThreshold(t *testing.T) {
 	}
 }
 
-// TestIntegration_StaleFindingReconciliation verifies that findings that are
-// NOT re-reported by the LLM on a subsequent patrol run get auto-resolved.
+// Omitted assessments remain active and incomplete after the original run.
 func TestIntegration_StaleFindingReconciliation(t *testing.T) {
 	persistence := config.NewConfigPersistence(t.TempDir())
 	svc := NewService(persistence, nil)
@@ -282,10 +281,15 @@ func TestIntegration_StaleFindingReconciliation(t *testing.T) {
 	}
 	svc.provider = &mockProvider{}
 
+	var modelRuns atomic.Int32
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	mockCS := &patrolMockChatService{
 		executor: executor,
 		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
+			modelRuns.Add(1)
+			if req.SessionID != "patrol-main" {
+				t.Errorf("unexpected separate model session: %s", req.SessionID)
+			}
 			// Deliberately report NO findings — the LLM "doesn't see" the issue anymore
 			// Also check existing findings to trigger the seeded-finding tracking
 			creator := executor.GetPatrolFindingCreator()
@@ -358,6 +362,9 @@ func TestIntegration_StaleFindingReconciliation(t *testing.T) {
 	}
 	if stored.IsResolved() {
 		t.Fatal("expected pre-seeded finding to remain active when Patrol omitted its required assessment")
+	}
+	if modelRuns.Load() != 1 {
+		t.Fatalf("missing assessment triggered %d model runs, want the original run only", modelRuns.Load())
 	}
 	runs := ps.runHistoryStore.GetRecent(1)
 	if len(runs) != 1 || runs[0].ErrorCount == 0 {

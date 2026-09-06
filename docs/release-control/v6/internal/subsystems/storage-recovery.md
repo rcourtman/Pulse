@@ -21,6 +21,11 @@
 
 ## Purpose
 
+Patrol consumes storage evidence in the original diagnostic conversation. A
+saved finding does not close storage-read authority before the explicit run
+limit. Missing backup or recovery evidence remains unknown, and neither finding
+persistence nor an omitted assessment establishes successful recovery.
+
 Canonical disk source status may carry the collector's expected update interval.
 This freshness metadata remains separate from physical-disk risk, SMART values
 and recovery/action authority. Source status cloning preserves the optional field,
