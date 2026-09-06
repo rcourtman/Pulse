@@ -1,25 +1,35 @@
 {
   "version": 1,
-  "base_sha": "580a246981c76b401e9007f5ac65c89355b64c6d",
-  "verified_at": "2026-09-06T15:06:56.468Z",
+  "base_sha": "919331d5b3f6076f8616b07eb8e9ca611f26ee52",
+  "verified_at": "2026-09-06T15:39:31.729Z",
   "result": "passed",
-  "changed_paths": [],
-  "content_sha256": {},
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/useNotificationDeliveryLog.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/useNotificationDeliveryLog.ts": "be919497714d749fcbe9a48a325aa82282b7afa8d6866d84eb1cc09ab52c14a6"
+  },
   "backend_content_sha256": {
+    "internal/ai/tools/executor.go": "c476d6aec1f7925467f1547f0219e6c6265639a62b397649adc82a8ed87b7e4a",
+    "internal/ai/tools/tools_knowledge.go": "d98ea1bab481acce5eee4988d74d364dc73c4068ca33725d843b54117cc9cc85",
+    "internal/config/host_continuity.go": "641e7593d1581d6e230c76fd7845b06e648ce24f94b3def6291ec4a38f505259",
+    "internal/models/models.go": "39684f7535cece1a635648c521cc5057a5ddac764dc6e6ae332eb4287ade9e71",
+    "internal/monitoring/monitor_agents.go": "52291b9f8521d5794f464147ea61990be654bfc19b9b5da35b6adaf02fdf70e5",
+    "internal/monitoring/monitor_pbs_pmg.go": "a1986a20cf8c535a13b87ff2d5cbff730df89b74253262b96793d3c44edbf2f7",
     "internal/unifiedresources/history_identity.go": "3934ac49acce29b16dd671769719112208be053a8658c678f798645a6a38395d",
     "internal/unifiedresources/monitor_adapter.go": "5b51089bac8e85e7c776956c17471599ec15add4e5e8502cd8687c4f788fcdb1",
-    "internal/unifiedresources/store.go": "018176a4762b06adf52c78128f8351ca93819cbfa10bf2242535fef3d7c59191",
-    "internal/ai/tools/tools_knowledge.go": "d98ea1bab481acce5eee4988d74d364dc73c4068ca33725d843b54117cc9cc85",
-    "internal/ai/tools/executor.go": "c476d6aec1f7925467f1547f0219e6c6265639a62b397649adc82a8ed87b7e4a"
+    "internal/unifiedresources/store.go": "018176a4762b06adf52c78128f8351ca93819cbfa10bf2242535fef3d7c59191"
   },
-  "binary_sha256": "bb6d1508a5b4d23943c37dfc42198f132c0139805dcd1891ee18aca0a9f9dd54",
+  "binary_sha256": "234f625cb74be3d300facfed1bb17b17e20c44c06037a1f8f4fffc1c4f49d621",
   "rendering_content_sha256": {
     "frontend-modern/src/components/AI/Chat/hooks/useChat.ts": "0b56b7a56e35d51ca96f0e126dd493b3164aa9e0ad4d8ae24bcf3af7a574b97c",
     "frontend-modern/src/components/AI/Chat/ChatMessages.tsx": "9672f7608d1e3a531c73cba20fd4a78752316783212afd0c292ddfd11d2bf371",
-    "frontend-modern/src/components/AI/Chat/ToolExecutionBlock.tsx": "cc7bd548a418c3863486f0fe987c5c3110c2f6cdfa70b630b2ec05fb794d60d6"
+    "frontend-modern/src/components/AI/Chat/ToolExecutionBlock.tsx": "cc7bd548a418c3863486f0fe987c5c3110c2f6cdfa70b630b2ec05fb794d60d6",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryLog.ts": "be919497714d749fcbe9a48a325aa82282b7afa8d6866d84eb1cc09ab52c14a6"
   },
   "routes": [
-    "/patrol"
+    "/patrol",
+    "http://127.0.0.1:5197/qualification (isolated delivery-log component)"
   ],
   "viewports": [
     {
@@ -33,16 +43,26 @@
     {
       "width": 390,
       "height": 1000
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
     }
   ],
   "states": [
     "Six captured registered-tool results: migrated legacy Docker fired event plus canonical recovery, retained lifecycle, bounded history, empty history, unavailable store and failed read.",
     "Exact event IDs, original resource references, observation/occurrence times and source metadata survive expansion. Empty coverage and failed tool states remain distinct.",
-    "Actual removed homelab container canonical and legacy timeline APIs return the same seven records, preserving both previously captured fired/resolved records exactly. Provider refusal remains enforced."
+    "Actual removed homelab container canonical and legacy timeline APIs return the same seven records, preserving both previously captured fired/resolved records exactly. Provider refusal remains enforced.",
+    "Incoming delivery-log integration: latest evidence survives older success/failure, held-event requests do not hold the attempt spinner, newest pending work remains pending, and latest failure stays unavailable."
   ],
   "interactions": [
     "Hover/focus, Enter expansion, exact input/output comparison, deepest scrolling, Space collapse and Escape at /patrol, 1440x1000, 900x1000 and 390x1000. Actual pixels inspected at all three widths.",
     "Full reload, controlled session selection, reopening all six results and exact retained input/output and completed/failed comparison.",
-    "Final verified worker Pro build installed locally and restarted healthy. Source/binary hashes fixed before and after. Private proof: tmp/patrol-history-identity/browser/receipt.json and live-history-proof.json. Captured tool/session rendering does not qualify real-model diagnosis or server persistence. No provider call or fault injection."
+    "Final merged-source worker Pro build installed locally and restarted healthy. Source/binary hashes fixed before and after. Private proof: tmp/patrol-history-integration/browser/receipt.json and live-history-proof.json. Captured tool/session rendering does not qualify real-model diagnosis or server persistence. No provider call or fault injection.",
+    "Incoming delivery component at 1440x900 and 390x900: Configuration Retry, delayed old/new attempt and held responses, enabled/disabled refresh state, failure state and pixel inspection. scripts/check-delivery-log-ordering.mjs passed with scripted APIs. This is not full-tab, installed service or external notification qualification."
   ]
 }

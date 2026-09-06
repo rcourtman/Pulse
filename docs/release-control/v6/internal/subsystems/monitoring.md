@@ -39,6 +39,98 @@ independently. Missing directions are omitted from JSON, while measured zero
 remains numeric zero. No aggregate presence flag may fabricate its sibling
 direction. `TestResourceDiskIOWirePreservesAbsentDirection` pins that wire path.
 
+### PBS datastore alert evaluation belongs to the live poll
+
+After publishing freshly polled PBS datastore storage rows, the poller invokes
+the existing storage alert evaluator with capacity-trend evidence. It must not
+depend on mock ticks or unified metric evaluation: that path does not evaluate
+PBS storage thresholds. Existing storage policy, aliases, suppression and
+connectivity semantics remain alerts-owned; this wiring adds no new policy.
+
+Absent or partial capacity counters must not resolve an existing usage
+incident. Explicit empty-store counters (positive total, zero used, free equal
+to total) may recover it. Repeated polls and subsequent unified alert sync must
+preserve the usage incident identity, including recurrence with alternate PBS
+counter names. Independent backup-posture incidents remain separate.
+
+Verification: `TestPBSPolledCapacityRequiresObservedRecovery` in
+`internal/monitoring/monitor_pbs_coverage_test.go` crosses synthetic HTTP
+decoding, live polling and unified sync. It checks an 80% threshold at 85%,
+missing counter retention, confirmed-empty recovery and 86% recurrence with an
+explicit one-point minimum delta. This is local capacity-path evidence, not
+installed recipient receipt, restart qualification or exhaustive connectivity
+validation.
+
+### Host-local addresses are not PVE identity
+
+Automatic host/PVE network matching excludes non-global-unicast addresses,
+lo/docker* interfaces and Docker-generated `br-` plus 12-hex-character bridge
+names from both reported-host and provider-node address inventories. A Docker
+bridge address seen on only one PVE node can still exist on an unrelated NAS;
+provider-only owner counts cannot make it machine identity. Management bridges
+such as vmbr0 and br-mgmt, unnamed legacy interfaces, private IPv4 and IPv6/ULA
+remain eligible. Explicit unicast report-IP hints remain eligible independently
+of inferred interface evidence. No blanket private-subnet exclusion is
+permitted.
+
+Verification in `internal/monitoring/monitor_host_agents_test.go`:
+`TestFindLinkedProxmoxEntityWithHints_RejectsHostLocalNetworkIdentity` covers
+seven previously false associations; `TestAgentLinkNetworkIdentityFiltering`
+pins both-side exclusions and positive management controls;
+`TestApplyHostReportDoesNotLinkUnrelatedDockerBridge` requires repeated
+ingestion to leave both link directions absent. Existing endpoint and
+ambiguous-name tests remain required. These checks prevent a reproduced
+synthetic misassociation, not all private-address collisions or unknown
+custom bridge names, and do not prove the cause of #1930.
+
+### Host/node associations retain durable operator intent
+
+Monitoring owns the provenance used to distinguish an operator selection from
+an automatic association. The host continuity journal records `manual`,
+`unlinked` or `automatic`; an absent value is legacy/unknown, not evidence that
+the link was automatic. This internal provenance does not add a public API or
+frontend field.
+
+The existing link/unlink APIs hold the host lifecycle write lock and persist
+the complete affected intent transaction under the state lock before publishing
+either direction of the association. Missing storage or a failed journal write
+must return an error without changing visible links or the journal's in-memory
+entries. Replacing a node's owner persists the displaced owner's explicit unlink
+too, including an owner which has not yet reconnected after restart. Link writes
+preserve identity, report watermarks, credential and removal evidence.
+
+A manual selection remains pinned to the selected provider ID through unmatched
+reports, provider refresh and restart before another report. A replacement
+provider ID must not inherit that selection by name: intent remains dormant
+until the original ID returns or the operator explicitly selects another ID.
+The persisted reservation prevents another host's automatic match taking that
+node before its owner reconnects. Explicit unlink survives restart and suppresses
+automatic node reassociation even when the next report supplies matching evidence.
+
+Automatic name matching uses the provider's node name, never the display name
+merged from an already-linked agent. Known automatic associations may be
+re-evaluated and cleared; provenance-bearing host updates remove obsolete
+reverse links without clearing another agent's link. Unmarked legacy forward
+links are retained during report ingestion, and unmarked one-way reverse links
+must survive host updates because SMART fallback also consumes them. Legacy
+provider reconciliation otherwise keeps its existing behaviour. This deliberately
+does not claim to repair every persisted v6.4.1 association or resolve #1930.
+
+Verification:
+- `internal/monitoring/host_manual_link_regression_test.go` covers immediate
+  restart, explicit unlink with positive matching evidence, provider-ID
+  replacement/return, failed writes, automatic versus unknown provenance,
+  dormant reservations and concurrent reports/provider refresh.
+- `internal/config/host_continuity_test.go` pins journal preservation and
+  replacement of a dormant owner.
+- `internal/models/state_additional_test.go` pins transaction rollback,
+  obsolete reverse-link cleanup and retention of unknown legacy reverse links.
+- `TestMaybePollPhysicalDisksAsync_AgentFallbackWhenDiskQueryFails` in
+  `internal/monitoring/monitor_pve_disk_fallback_test.go` remains required:
+  association cleanup must not remove the one-way link used by SMART fallback.
+
+### Physical-disk observation cadence
+
 Physical disk inventory has an independent collector schedule. The PVE poller
 carries its default five-minute or configured interval with each disk record,
 while keeping the last successful observation timestamp on retained records.
@@ -87,6 +179,13 @@ existing cache policy. The legacy untyped-error fallback is unchanged.
 Retaining cached inventory does not establish a successful poll or fresh
 backup evidence.
 
+Verification: `TestPollPBSBackups_PreservesCacheOnTransientDatastoreError` and
+`TestPollPBSBackups_DropsStaleCacheOnTerminalDatastoreError` in
+`internal/monitoring/monitor_backups_readstate_test.go` exercise actual HTTP
+fixtures for 500, 502 quoting 403, 503 quoting 404, and genuine 401/403/404.
+These tests prove cache retention/removal, not installed PBS wake, service
+restart, or notification receipt.
+
 Docker alert lifecycle events pass through the shared resource history identity
 writer. A full Docker source reference must reach the same canonical container
 history as inventory changes, including recovery after inventory removal and
@@ -95,13 +194,6 @@ duplicate retained events. Same-name containers and abbreviated IDs must not
 join another container's history. The real alert-manager callback path is
 covered by `TestDockerAlertTimelineUsesCanonicalHistoryIdentity` in
 `internal/monitoring/monitor_alert_handling_test.go`.
-
-Verification: `TestPollPBSBackups_PreservesCacheOnTransientDatastoreError` and
-`TestPollPBSBackups_DropsStaleCacheOnTerminalDatastoreError` in
-`internal/monitoring/monitor_backups_readstate_test.go` exercise actual HTTP
-fixtures for 500, 502 quoting 403, 503 quoting 404, and genuine 401/403/404.
-These tests prove cache retention/removal, not installed PBS wake, service
-restart, or notification receipt.
 
 TrueNAS native alert projection preserves the trimmed, uppercase provider level in ResourceIncident.NativeSeverity. INFO and NOTICE retain the same canonical monitor risk; consumers must not lose their distinct actionability when projecting provider evidence. Native CRITICAL, ALERT, and EMERGENCY all project to canonical critical severity; EMERGENCY must not be discarded as unknown or make a still-active condition appear recovered. WARNING remains warning, and INFO and NOTICE remain informational at this projection boundary.
 
@@ -3780,3 +3872,14 @@ ordinary host metrics, but missing stats, storage, images, networks, volumes,
 Swarm, and update evidence remain absent rather than being reconstructed from
 older or adjacent observations. Model, monitor, and unified-resource tests pin
 the additive field through the ingestion path.
+
+### Asymmetric bridge evidence regression coverage
+
+`TestApplyHostReportBridgeIdentity` verifies two consecutive reports through
+host ingestion and checks both host-to-node and reciprocal node-to-agent links.
+Custom management bridges, private IPv4 and ULA addresses retain association
+when names differ and the provider endpoint is DNS-based. A Docker or generated
+bridge on either side alone must not supply inferred identity: testing only
+symmetric bridges would miss removal of filtering from one inventory.
+This proof does not establish safety for arbitrarily renamed Docker bridges
+or repair persisted links, and is not reporter or installed-release validation.

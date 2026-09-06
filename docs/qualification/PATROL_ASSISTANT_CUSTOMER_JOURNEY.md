@@ -1935,3 +1935,33 @@ This history correction does not qualify the failed ordinary storage diagnosis,
 partial recovery claim, installed tmpfs collector, autonomous provider, approved
 and rejected action outcomes, or independent Pro environments. The unused legacy
 recorder/coordinator still needs retirement with its archives preserved.
+
+
+The history identity change passed the exact thirteen-file worker hook and was
+pushed as `919331d5b3f6076f8616b07eb8e9ca611f26ee52` in PR #1935. Integration
+with main `11a8cc2180aae886ec7f92e2333002b57cf1b9a3` preserves both sides of
+three additive subsystem-contract conflicts. The host-ingestion auto-merge
+retains Docker observation corrections alongside incoming host-link provenance.
+Unrelated registry indentation was restored without changing its decoded data.
+
+The combined monitoring, unifiedresources, tools, config and models packages
+passed in 85.894s, 41.931s, 59.609s, 18.381s and 0.098s. Focused history,
+Assistant, host-link and lifecycle race checks passed. Frontend type checking
+and four alert suites passed all 42 tests. The incoming delivery-log component
+browser proof passed at 1440x900 and 390x900, including reordered success/failure,
+held events, pending state and newest failure. Pixels were inspected. This is
+scripted component proof, not installed notification delivery.
+
+The final merged-source Pro binary has SHA256
+`234f625cb74be3d300facfed1bb17b17e20c44c06037a1f8f4fffc1c4f49d621`.
+Its local restart was healthy. The complete six-case Assistant matrix was
+repeated at `/patrol`, 1440x1000, 900x1000 and 390x1000, with exact tool records,
+keyboard expansion/collapse, deep scrolling and controlled-session reload.
+Pixels and source/binary bindings were checked after this final build. Both
+actual removed-container timeline queries still return the same seven retained
+records with the original fired/resolved content. No model request, route
+switch, infrastructure fault or production collector replacement was made.
+The autonomous provider refusal remains enforced. Integration receipts are in
+`tmp/patrol-history-integration/`. The full integration hook gates its merge
+commit and push. All previously recorded model and wider-readiness gaps remain
+open.

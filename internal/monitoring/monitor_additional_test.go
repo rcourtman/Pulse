@@ -64,7 +64,7 @@ func TestMonitorGetDockerHostsNilReceiver(t *testing.T) {
 }
 
 func TestMonitorLinkHostAgent(t *testing.T) {
-	monitor := &Monitor{state: models.NewState()}
+	monitor := &Monitor{state: models.NewState(), hostContinuityStore: config.NewHostContinuityStore(t.TempDir(), nil)}
 
 	if err := monitor.LinkHostAgent("", "node-1"); err == nil {
 		t.Fatalf("expected error on empty host ID")

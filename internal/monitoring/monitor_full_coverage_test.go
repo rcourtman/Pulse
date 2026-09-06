@@ -536,6 +536,7 @@ func TestMonitor_HostAgentManagement(t *testing.T) {
 	m.nodePendingUpdatesCache = make(map[string]pendingUpdatesCache)
 
 	// Test UnlinkHostAgent
+	m.hostContinuityStore = config.NewHostContinuityStore(t.TempDir(), nil)
 	err := m.UnlinkHostAgent("host1")
 	if err != nil {
 		t.Errorf("UnlinkHostAgent failed: %v", err)

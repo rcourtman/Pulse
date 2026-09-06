@@ -21,6 +21,35 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
 });
 
 describe('proxmoxPageModel', () => {
+  it('does not infer PVE membership from a generic NAS sharing cluster labels', () => {
+    // #1930 boundary check, not a reproduction of the reporter's API payload.
+    // A missing PVE version must not hide a real node either.
+    const node = makeResource({
+      id: 'pve-node',
+      type: 'agent',
+      proxmox: { nodeName: 'pve-node', clusterName: 'test-cluster' },
+    });
+    const nas = makeResource({
+      id: 'synthetic-nas',
+      type: 'agent',
+      platformType: 'generic',
+      sourceType: 'agent',
+      platformId: node.platformId,
+      clusterId: 'test-cluster',
+      identity: { hostname: 'synthetic-nas', clusterName: 'test-cluster' },
+      sources: ['host-agent'],
+    });
+
+    expect(resolveProxmoxPlatformScope(nas)).toBeNull();
+    expect(getResourceVersion(node)).toBe('');
+    const model = buildProxmoxPageModel([nas, node]);
+    expect(model.pveNodes).toEqual([node]);
+    expect(model.resources).toEqual([node]);
+    expect(model.clusterGroups).toHaveLength(1);
+    expect(model.clusterGroups[0].nodes).toEqual([node]);
+    expect(model.summary.nodeCount).toBe(1);
+  });
+
   it('keeps the platform-native section set aligned with the legacy Proxmox workspace', () => {
     expect(PROXMOX_TAB_SPECS.map((tab) => tab.id)).toEqual([
       'overview',

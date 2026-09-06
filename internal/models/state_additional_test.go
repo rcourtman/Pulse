@@ -685,3 +685,56 @@ func TestStateContainers(t *testing.T) {
 		t.Fatalf("expected false for missing container")
 	}
 }
+
+func TestSetHostNodeLinkIntentTransaction(t *testing.T) {
+	s := &State{
+		Hosts: []Host{{ID: "a", LinkedNodeID: "n", NodeLinkSource: "manual"}, {ID: "b"}},
+		Nodes: []Node{{ID: "n", LinkedAgentID: "a"}},
+	}
+	failure := errors.New("disk unavailable")
+	err := s.SetHostNodeLinkIntent("b", "n", func(changed []Host) error {
+		if len(changed) != 2 {
+			t.Fatalf("changed hosts = %d", len(changed))
+		}
+		if changed[0].NodeLinkSource != "unlinked" || changed[1].NodeLinkSource != "manual" {
+			t.Fatalf("replacement intent not explicit: %+v", changed)
+		}
+		return failure
+	})
+	if !errors.Is(err, failure) {
+		t.Fatalf("error = %v", err)
+	}
+	if s.Hosts[0].LinkedNodeID != "n" || s.Hosts[1].LinkedNodeID != "" || s.Nodes[0].LinkedAgentID != "a" {
+		t.Fatal("failed persistence changed visible state")
+	}
+	if err := s.SetHostNodeLinkIntent("b", "n", func([]Host) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if s.Hosts[0].NodeLinkSource != "unlinked" || s.Hosts[1].NodeLinkSource != "manual" || s.Nodes[0].LinkedAgentID != "b" {
+		t.Fatal("replacement did not commit both intents")
+	}
+	called := false
+	if err := s.SetHostNodeLinkIntent("b", "missing", func([]Host) error { called = true; return nil }); err == nil || called {
+		t.Fatal("invalid target reached persistence")
+	}
+}
+
+func TestUpsertHostClearsOnlyObsoleteReverseLinks(t *testing.T) {
+	s := &State{Nodes: []Node{
+		{ID: "old", LinkedAgentID: "agent"},
+		{ID: "current", LinkedAgentID: "agent"},
+		{ID: "other", LinkedAgentID: "other-agent"},
+	}}
+	s.UpsertHost(Host{ID: "agent", LinkedNodeID: "current", NodeLinkSource: "automatic"})
+	if s.Nodes[0].LinkedAgentID != "" || s.Nodes[1].LinkedAgentID != "agent" || s.Nodes[2].LinkedAgentID != "other-agent" {
+		t.Fatalf("incorrect reverse-link cleanup: %+v", s.Nodes)
+	}
+}
+
+func TestUpsertHostPreservesUnknownLegacyReverseLink(t *testing.T) {
+	s := &State{Nodes: []Node{{ID: "legacy-node", LinkedAgentID: "legacy-agent"}}}
+	s.UpsertHost(Host{ID: "legacy-agent", Hostname: "legacy"})
+	if s.Nodes[0].LinkedAgentID != "legacy-agent" {
+		t.Fatal("unmarked host update erased unknown legacy reverse link")
+	}
+}

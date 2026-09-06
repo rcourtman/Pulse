@@ -8,12 +8,14 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 )
 
@@ -566,5 +568,141 @@ func TestPBSMetricAvailabilityAlertLifecycle(t *testing.T) {
 	}
 	if len(manager.GetRecentlyResolved()) != 1 {
 		t.Fatal("missing resolved history")
+	}
+}
+
+// Exercise HTTP decoding, poll evaluation and subsequent unified alert sync together.
+// This is synthetic integration evidence, not installed notification receipt.
+func TestPBSPolledCapacityRequiresObservedRecovery(t *testing.T) {
+	var listing atomic.Value
+	listing.Store(`{"data":[{"store":"backups"}]}`)
+	var listingStatus atomic.Int64
+	listingStatus.Store(http.StatusOK)
+	var response atomic.Value
+	response.Store(`{"data":{"total":1000,"used":850,"avail":150}}`)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api2/json/version":
+			_, _ = w.Write([]byte(`{"data":{"version":"3.4.2"}}`))
+		case "/api2/json/nodes/localhost/status":
+			_, _ = w.Write([]byte(`{"data":{"cpu":0.1,"memory":{"used":100,"total":1000}}}`))
+		case "/api2/json/admin/datastore":
+			w.WriteHeader(int(listingStatus.Load()))
+			_, _ = w.Write([]byte(listing.Load().(string)))
+		case "/api2/json/admin/datastore/backups/status":
+			_, _ = w.Write([]byte(response.Load().(string)))
+		default:
+			_, _ = w.Write([]byte(`{"data":[]}`))
+		}
+	}))
+	defer server.Close()
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	defer manager.Stop()
+	basePolicy := alerts.AlertConfig{Enabled: true, ActivationState: alerts.ActivationActive, MinimumDelta: 1,
+		TimeThresholds: map[string]int{"storage": 0}, StorageDefault: alerts.HysteresisThreshold{Trigger: 80, Clear: 70}}
+	manager.UpdateConfig(basePolicy)
+	instance := config.PBSInstance{Name: "pbs-capacity", Host: server.URL, MonitorDatastores: true}
+	monitor := newPBSHealthAuthorityMonitor([]config.PBSInstance{instance})
+	monitor.alertManager = manager
+	client := newPBSHealthTestClient(t, server.URL)
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	poll := func() {
+		t.Helper()
+		for range 5 {
+			monitor.pollPBSInstance(context.Background(), instance.Name, client)
+			adapter.PopulateFromSnapshot(monitor.state.GetSnapshot())
+			monitor.syncUnifiedResourceAlertsToState(adapter.GetAll())
+		}
+	}
+	// Exercise the production poll-to-storage conversion, not just the
+	// manager's alias resolver: UI-written datastore policy must gate the
+	// new direct evaluation before it can create a capacity incident.
+	for _, policy := range []struct {
+		name      string
+		configure func(*alerts.AlertConfig)
+	}{
+		{"alerts disabled", func(c *alerts.AlertConfig) { c.Enabled = false }},
+		{"storage disabled", func(c *alerts.AlertConfig) { c.DisableAllStorage = true }},
+		{"canonical datastore disabled", func(c *alerts.AlertConfig) {
+			c.Overrides = map[string]alerts.ThresholdConfig{"pbs-pbs-capacity/backups": {Disabled: true}}
+		}},
+		{"canonical datastore threshold", func(c *alerts.AlertConfig) {
+			c.Overrides = map[string]alerts.ThresholdConfig{"pbs-pbs-capacity/backups": {
+				Usage: &alerts.HysteresisThreshold{Trigger: 90, Clear: 80},
+			}}
+		}},
+	} {
+		t.Run(policy.name, func(t *testing.T) {
+			cfg := basePolicy
+			policy.configure(&cfg)
+			manager.UpdateConfig(cfg)
+			poll()
+			if active := manager.GetActiveAlerts(); len(active) != 0 {
+				t.Fatalf("poll bypassed capacity policy: %+v", active)
+			}
+		})
+	}
+	manager.UpdateConfig(basePolicy)
+	poll()
+	active := manager.GetActiveAlerts()
+	if len(active) != 1 || active[0].Type != "usage" || active[0].Value != 85 {
+		t.Fatalf("expected one polled capacity incident: %+v", active)
+	}
+	original := active[0]
+	if original.ResourceID != "pbs-pbs-capacity-backups" {
+		t.Fatalf("unexpected datastore identity: %q", original.ResourceID)
+	}
+	for _, missing := range []string{
+		`{"data":null}`,
+		`{"data":{}}`,
+		`{"data":{"total":1000}}`,
+		`{"data":{"total":1000,"used":0}}`,
+	} {
+		response.Store(missing)
+		poll()
+		active = manager.GetActiveAlerts()
+		if len(active) != 1 || active[0].ID != original.ID || active[0].Value != 85 || !active[0].StartTime.Equal(original.StartTime) || manager.GetResolvedAlert(original.ID) != nil {
+			t.Fatalf("missing capacity %s changed incident: %+v", missing, active)
+		}
+	}
+	// Losing the listing itself must not turn a retained capacity incident
+	// into recovery when unified resources are repopulated from the snapshot.
+	for _, missing := range []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"permission denied", http.StatusForbidden, `{"message":"permission denied"}`},
+		{"gateway failure", http.StatusBadGateway, `{"message":"upstream unavailable"}`},
+		{"malformed listing", http.StatusOK, `{"data":`},
+		{"empty listing", http.StatusOK, `{"data":[]}`},
+	} {
+		listingStatus.Store(int64(missing.status))
+		listing.Store(missing.body)
+		poll()
+		active = manager.GetActiveAlerts()
+		if len(active) != 1 || active[0].ID != original.ID || active[0].Value != 85 || !active[0].StartTime.Equal(original.StartTime) || manager.GetResolvedAlert(original.ID) != nil {
+			t.Fatalf("%s changed capacity incident: %+v", missing.name, active)
+		}
+	}
+	listingStatus.Store(http.StatusOK)
+	listing.Store(`{"data":[{"store":"backups"}]}`)
+	response.Store(`{"data":{"total":1000,"used":0,"avail":1000}}`)
+	poll()
+	if len(manager.GetActiveAlerts()) != 0 {
+		t.Fatal("observed empty datastore did not recover")
+	}
+	if resolved := manager.GetResolvedAlert(original.ID); resolved == nil || resolved.Value != 0 || !resolved.StartTime.Equal(original.StartTime) {
+		t.Fatalf("incorrect recovery: %+v", resolved)
+	}
+	// Alternate PBS counter names must feed the same policy and identity.
+	// Stay below the separate 90% backup-posture incident threshold; the
+	// configured minimum delta of one permits this immediate recurrence.
+	response.Store(`{"data":{"total-space":1000,"used-space":860,"avail-space":140}}`)
+	poll()
+	active = manager.GetActiveAlerts()
+	if len(active) != 1 || active[0].ID != original.ID || active[0].Value != 86 || !active[0].StartTime.After(original.StartTime) {
+		t.Fatalf("incorrect recurrent incident: %+v", active)
 	}
 }

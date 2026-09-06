@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"slices"
 	"strings"
 	"sync"
@@ -973,6 +974,8 @@ func hostAgentIdentifiersMatch(left, right string) bool {
 // This is used when auto-linking can't disambiguate (e.g., multiple nodes with hostname "pve").
 // After linking, the host agent's temperature/sensor data will appear on the correct node.
 func (m *Monitor) LinkHostAgent(hostID, nodeID string) error {
+	m.hostAgentLifecycleMu.Lock()
+	defer m.hostAgentLifecycleMu.Unlock()
 	hostID = strings.TrimSpace(hostID)
 	nodeID = strings.TrimSpace(nodeID)
 	if hostID == "" {
@@ -982,7 +985,7 @@ func (m *Monitor) LinkHostAgent(hostID, nodeID string) error {
 		return fmt.Errorf("node id is required")
 	}
 
-	if err := m.state.LinkHostAgentToNode(hostID, nodeID); err != nil {
+	if err := m.state.SetHostNodeLinkIntent(hostID, nodeID, m.persistNodeLinkIntents); err != nil {
 		return fmt.Errorf("link host agent %q to node %q: %w", hostID, nodeID, err)
 	}
 
@@ -998,13 +1001,15 @@ func (m *Monitor) LinkHostAgent(hostID, nodeID string) error {
 // The agent will continue to report but will appear in the Managed Agents table
 // instead of being merged with the PVE node in the Dashboard.
 func (m *Monitor) UnlinkHostAgent(hostID string) error {
+	m.hostAgentLifecycleMu.Lock()
+	defer m.hostAgentLifecycleMu.Unlock()
 	hostID = strings.TrimSpace(hostID)
 	if hostID == "" {
 		return fmt.Errorf("host id is required")
 	}
 
-	if !m.state.UnlinkHostAgent(hostID) {
-		return fmt.Errorf("host not found or not linked to a node")
+	if err := m.state.SetHostNodeLinkIntent(hostID, "", m.persistNodeLinkIntents); err != nil {
+		return err
 	}
 
 	log.Info().
@@ -1663,6 +1668,7 @@ func (m *Monitor) persistHostContinuity(host models.Host, report agentshost.Repo
 		TokenID:              strings.TrimSpace(host.TokenID),
 		AgentVersion:         strings.TrimSpace(host.AgentVersion),
 		Platform:             strings.TrimSpace(host.Platform),
+		NodeLinkSource:       host.NodeLinkSource,
 		LinkedNodeID:         strings.TrimSpace(host.LinkedNodeID),
 		LinkedVMID:           strings.TrimSpace(host.LinkedVMID),
 		LinkedContainerID:    strings.TrimSpace(host.LinkedContainerID),
@@ -1781,6 +1787,7 @@ func hostFromContinuityEntry(entry config.HostContinuityEntry) models.Host {
 		Platform:          platformsupport.NormalizeAgentReportedPlatform(entry.Platform),
 		IsLegacy:          entry.IsLegacy,
 		IntervalSeconds:   entry.IntervalSeconds,
+		NodeLinkSource:    entry.NodeLinkSource,
 		LinkedNodeID:      strings.TrimSpace(entry.LinkedNodeID),
 		LinkedVMID:        strings.TrimSpace(entry.LinkedVMID),
 		LinkedContainerID: strings.TrimSpace(entry.LinkedContainerID),
@@ -3556,6 +3563,25 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		report.Host.ReportIP,
 		report.Network,
 	)
+	// Unknown legacy provenance is not permission to erase an operator link.
+	// Only associations created with explicit automatic provenance are cleaned.
+	prior, exists := m.hostByID(host.ID)
+	if !exists && m.hostContinuityStore != nil {
+		if entry, ok := m.hostContinuityStore.Get(host.ID); ok {
+			prior = hostFromContinuityEntry(entry)
+		}
+	}
+	host.NodeLinkSource = "automatic"
+	if prior.NodeLinkSource == "manual" || prior.NodeLinkSource == "unlinked" ||
+		(prior.NodeLinkSource == "" && prior.LinkedNodeID != "") {
+		host.NodeLinkSource = prior.NodeLinkSource
+		linkedNodeID = prior.LinkedNodeID
+		linkedVMID, linkedContainerID = "", ""
+	}
+	if linkedNodeID != "" && host.NodeLinkSource != "manual" && m.hostContinuityStore != nil &&
+		m.hostContinuityStore.NodeLinkReservedByOther(host.ID, linkedNodeID) {
+		linkedNodeID = ""
+	}
 	if linkedNodeID != "" {
 		host.LinkedNodeID = linkedNodeID
 		log.Debug().
@@ -4385,18 +4411,54 @@ func (m *Monitor) findLinkedProxmoxEntity(hostname string) (nodeID, vmID, contai
 	return m.findLinkedProxmoxEntityWithHints(hostname, "", nil)
 }
 
+// Host-local addresses may be unique among the monitored PVE nodes while also
+// existing on an unrelated agent host. They are not machine identity evidence.
+func normalizeAgentLinkIP(address string) string {
+	normalized := unifiedresources.NormalizeIP(address)
+	if ip := net.ParseIP(normalized); ip != nil && ip.IsGlobalUnicast() {
+		return normalized
+	}
+	return ""
+}
+
+// Do not discard all bridges: Proxmox management addresses commonly use vmbr0,
+// and operators may use names such as br-mgmt. Docker's automatically named
+// user-defined bridges use br- followed by the first 12 hex characters of the
+// network ID. Explicit report-IP and endpoint hints remain usable for routable
+// addresses.
+func isHostLocalAgentLinkInterface(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if name == "lo" || strings.HasPrefix(name, "docker") {
+		return true
+	}
+
+	bridgeID, found := strings.CutPrefix(name, "br-")
+	if !found || len(bridgeID) != 12 {
+		return false
+	}
+	for _, character := range bridgeID {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
 func collectReportedHostIPs(
 	reportIP string,
 	network []agentshost.NetworkInterface,
 ) map[string]struct{} {
 	ips := make(map[string]struct{})
-	if normalized := unifiedresources.NormalizeIP(reportIP); normalized != "" {
+	if normalized := normalizeAgentLinkIP(reportIP); normalized != "" {
 		ips[normalized] = struct{}{}
 	}
 
 	for _, nic := range network {
+		if isHostLocalAgentLinkInterface(nic.Name) {
+			continue
+		}
 		for _, address := range nic.Addresses {
-			if normalized := unifiedresources.NormalizeIP(address); normalized != "" {
+			if normalized := normalizeAgentLinkIP(address); normalized != "" {
 				ips[normalized] = struct{}{}
 			}
 		}
@@ -4408,8 +4470,11 @@ func collectReportedHostIPs(
 func collectNodeNetworkIPs(network []unifiedresources.NetworkInterface) map[string]struct{} {
 	ips := make(map[string]struct{})
 	for _, nic := range network {
+		if isHostLocalAgentLinkInterface(nic.Name) {
+			continue
+		}
 		for _, address := range nic.Addresses {
-			if normalized := unifiedresources.NormalizeIP(address); normalized != "" {
+			if normalized := normalizeAgentLinkIP(address); normalized != "" {
 				ips[normalized] = struct{}{}
 			}
 		}
@@ -4534,7 +4599,8 @@ func (m *Monitor) findLinkedProxmoxEntityWithHints(
 	// Check PVE nodes first - but detect ambiguity when multiple nodes match
 	var matchingNodes []linkedEntityMatch
 	for _, node := range nodes {
-		if matchHostname(node.Name()) {
+		// Merged display names can come from the linked agent, not the provider.
+		if matchHostname(node.NodeName()) {
 			matchingNodes = append(matchingNodes, linkedEntityMatch{
 				id:       node.SourceID(),
 				instance: node.Instance(),
@@ -5100,4 +5166,19 @@ func sharedSystemAlertCorrelationForHost(host models.Host, nodes []models.Node) 
 	)
 }
 
-// sortContent sorts comma-separated content values for consistent display
+// Called with the lifecycle write lock and state lock held. No report or
+// provider refresh can interleave the journal commit and visible link change.
+func (m *Monitor) persistNodeLinkIntents(hosts []models.Host) error {
+	if m.hostContinuityStore == nil {
+		return fmt.Errorf("host continuity storage unavailable")
+	}
+	entries := make([]config.HostContinuityEntry, 0, len(hosts))
+	for _, h := range hosts {
+		entries = append(entries, config.HostContinuityEntry{
+			HostID: h.ID, Hostname: h.Hostname, MachineID: h.MachineID,
+			TokenID: h.TokenID, LastSeen: h.LastSeen, LinkedNodeID: h.LinkedNodeID,
+			NodeLinkSource: h.NodeLinkSource,
+		})
+	}
+	return m.hostContinuityStore.SetNodeLinkIntents(entries)
+}
