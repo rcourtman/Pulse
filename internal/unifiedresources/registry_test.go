@@ -6414,3 +6414,71 @@ func TestIssue1720ArrayVolumeMergesBareSerialWithPrefixedWWN(t *testing.T) {
 		t.Fatalf("sibling volumes collapsed into one identity: %+v", byPath)
 	}
 }
+
+func TestPhysicalDiskFreshnessUsesCollectorCadenceAndRecovers(t *testing.T) {
+	now := time.Now().UTC()
+	for _, cadence := range []time.Duration{5 * time.Minute, 15 * time.Minute} {
+		t.Run(cadence.String(), func(t *testing.T) {
+			rr := NewRegistry(nil)
+			disk := models.PhysicalDisk{ID: "disk-source", Instance: "pve", Node: "node", DevPath: "/dev/nvme0n1", Serial: "serial-1", Health: "PASSED", Wearout: 63, LastChecked: now, ExpectedUpdateInterval: cadence}
+			rr.ingestPhysicalDisk(disk)
+			check := func(wantStatus ResourceStatus, wantFreshness string) Resource {
+				t.Helper()
+				resources := rr.ListByType(ResourceTypePhysicalDisk)
+				if len(resources) != 1 {
+					t.Fatalf("disks: %+v", resources)
+				}
+				got := resources[0]
+				if got.Status != wantStatus || got.SourceStatus[SourceProxmox].Status != wantFreshness {
+					t.Fatalf("status=%s freshness=%+v, want %s/%s", got.Status, got.SourceStatus, wantStatus, wantFreshness)
+				}
+				if got.SourceStatus[SourceProxmox].ExpectedUpdateIntervalSeconds != int64(cadence/time.Second) {
+					t.Fatalf("cadence lost: %+v", got.SourceStatus)
+				}
+				return got
+			}
+			rr.MarkStale(now.Add(cadence), map[DataSource]time.Duration{SourceProxmox: time.Minute})
+			original := check(StatusOnline, "online")
+			rr.MarkStale(now.Add(2*cadence+time.Second), map[DataSource]time.Duration{SourceProxmox: time.Minute})
+			check(StatusWarning, "stale")
+			disk.LastChecked = now.Add(2*cadence + 2*time.Second)
+			rr.ingestPhysicalDisk(disk)
+			recovered := check(StatusOnline, "online")
+			if recovered.ID != original.ID {
+				t.Fatal("freshness recovery changed identity")
+			}
+			disk.Wearout = 8
+			disk.LastChecked = disk.LastChecked.Add(cadence)
+			rr.ingestPhysicalDisk(disk)
+			warning := check(StatusWarning, "online")
+			if warning.PhysicalDisk.Risk == nil {
+				t.Fatal("fresh source hid measured disk risk")
+			}
+		})
+	}
+}
+
+func TestPlatformOnlyResourceStatusRecoversWithoutOverridingAgent(t *testing.T) {
+	now := time.Now().UTC()
+	rr := NewRegistry(nil)
+	identity := ResourceIdentity{MachineID: "0123456789abcdef0123456789abcdef", Hostnames: []string{"node-one"}}
+	source := Resource{Type: ResourceTypeAgent, Name: "node-one", Status: StatusOnline, LastSeen: now}
+	id := rr.ingest(SourceProxmox, "pve-node", source, identity)
+	rr.MarkStale(now.Add(3*time.Minute), nil)
+	source.LastSeen = now.Add(4 * time.Minute)
+	rr.ingest(SourceProxmox, "pve-node", source, identity)
+	got, _ := rr.Get(id)
+	if got.Status != StatusOnline {
+		t.Fatalf("fresh platform status remains %s", got.Status)
+	}
+	source.Status = StatusWarning
+	if mergedID := rr.ingest(SourceAgent, "agent-node", source, identity); mergedID != id {
+		t.Fatalf("fixture did not merge: %s != %s", mergedID, id)
+	}
+	source.Status = StatusOnline
+	rr.ingest(SourceProxmox, "pve-node", source, identity)
+	got, _ = rr.Get(id)
+	if got.Status != StatusWarning {
+		t.Fatalf("platform overwrote higher-priority agent status: %s", got.Status)
+	}
+}

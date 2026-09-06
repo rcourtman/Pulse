@@ -328,3 +328,43 @@ func slowQueryCount(t *testing.T, database, operation string) float64 {
 	}
 	return m.Counter.GetValue()
 }
+
+func TestTransactionBoundPreparedStatementInstrumentation(t *testing.T) {
+	raw := openTestDB(t)
+	raw.SetMaxOpenConns(1)
+	idb := Wrap(raw, "bound_stmt_db")
+	if _, err := idb.Exec("CREATE TABLE t (val INTEGER)"); err != nil {
+		t.Fatal(err)
+	}
+	stmt, err := idb.Prepare("SELECT COUNT(*) FROM t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stmt.Close()
+	tx, err := idb.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("INSERT INTO t VALUES (1)"); err != nil {
+		t.Fatal(err)
+	}
+	before := histogramSampleCount(t, "bound_stmt_db", "stmt_query_row")
+	bound := tx.Stmt(stmt)
+	var count int
+	if err := bound.QueryRow().Scan(&count); err != nil || count != 1 {
+		t.Fatalf("transaction snapshot: %d, %v", count, err)
+	}
+	if err := bound.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if histogramSampleCount(t, "bound_stmt_db", "stmt_query_row")-before != 1 {
+		t.Fatal("bound statement lost query instrumentation")
+	}
+	if err := tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	if err := stmt.QueryRow().Scan(&count); err != nil || count != 0 {
+		t.Fatalf("database statement must survive bound close and rollback: %d, %v", count, err)
+	}
+}

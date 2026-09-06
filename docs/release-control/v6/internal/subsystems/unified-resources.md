@@ -15,6 +15,26 @@
 
 ## Purpose
 
+Physical disk source freshness preserves the collector-authored
+`expectedUpdateIntervalSeconds` alongside the actual last observation. Registry
+ingest, merge, cloning and typed disk views preserve it. Staleness uses the
+longer of the configured source threshold and two collector intervals. A new
+observation from the highest-priority represented source may refresh canonical
+status, including Proxmox-only resources. Lower-priority platform data cannot
+overwrite a linked Agent status. Freshness changes never change resource identity.
+Proof: disk cadence/recovery tests in `internal/unifiedresources/registry_test.go`
+and source-status clone coverage in `internal/unifiedresources/clone_test.go`.
+
+Canonical resource identity and metrics storage coordinates are distinct.
+API-only Proxmox hosts remain `agent` resources but their metrics target is
+`node` with the Proxmox source ID, matching the collector's writes. A real
+linked Agent source retains priority and its `agent` store ID. Consumers must
+use that target rather than reconstructing storage coordinates from display
+identity or discovery routing. The node view carries the canonical target into
+its History tab. Discovery can route by a host name without an installed Agent,
+so it does not establish a `linkedAgentId` or Agent-only disk-throughput coverage.
+The explicit Agent facet/link owns that evidence.
+
 ResourceIncident carries optional nativeSeverity JSON evidence independently of canonical Severity and identity. Missing nativeSeverity remains compatible with older payloads. TrueNAS INFO and NOTICE may share canonical monitor risk without becoming indistinguishable to alert consumers; native severity does not change resource or incident identity.
 
 Unraid adapters preserve optional `numDisks` in both host and storage metadata, including explicit zero in JSON and absence for unknown counts. Disk count is topology evidence only: changing it must not change canonical host/storage identity. The storage projection uses the monitoring-owned assessment so an explicit pool-only array does not acquire a no-parity warning.

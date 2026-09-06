@@ -180,9 +180,9 @@ func (e *PulseToolExecutor) executeFileRead(ctx context.Context, path, targetHos
 	routing := e.resolveTargetForCommandFull(targetHost)
 	if routing.AgentID == "" {
 		if routing.TargetType == "container" || routing.TargetType == "vm" {
-			return NewTextResult(fmt.Sprintf("'%s' is a %s but no agent is available on its host node. Install Pulse Unified Agent on the node.", targetHost, routing.TargetType)), nil
+			return NewErrorResult(fmt.Errorf("'%s' is a %s but no agent is available on its host node. Install Pulse Unified Agent on the node.", targetHost, routing.TargetType)), nil
 		}
-		return NewTextResult(fmt.Sprintf("No agent found for host '%s'. Check that the hostname is correct and an agent is connected.", targetHost)), nil
+		return NewErrorResult(fmt.Errorf("No agent found for host '%s'. Check that the hostname is correct and an agent is connected.", targetHost)), nil
 	}
 
 	var command string
@@ -209,9 +209,9 @@ func (e *PulseToolExecutor) executeFileRead(ctx context.Context, path, targetHos
 			errMsg = result.Stdout
 		}
 		if dockerContainer != "" {
-			return NewTextResult(fmt.Sprintf("Failed to read file from container '%s' (exit code %d): %s", dockerContainer, result.ExitCode, errMsg)), nil
+			return NewErrorResult(fmt.Errorf("Failed to read file from container '%s' (exit code %d): %s", dockerContainer, result.ExitCode, errMsg)), nil
 		}
-		return NewTextResult(fmt.Sprintf("Failed to read file (exit code %d): %s", result.ExitCode, errMsg)), nil
+		return NewErrorResult(fmt.Errorf("Failed to read file (exit code %d): %s", result.ExitCode, errMsg)), nil
 	}
 
 	redacted, redactionCount := safety.RedactSensitiveText(result.Stdout)

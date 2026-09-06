@@ -1613,6 +1613,11 @@ func (rr *ResourceRegistry) markStaleLocked(now time.Time, thresholds map[DataSo
 			if !ok {
 				threshold = 120 * time.Second
 			}
+			if status.ExpectedUpdateIntervalSeconds > 0 {
+				// Slow inventory polls have their own cadence. A source must miss
+				// two expected intervals before its retained observation is stale.
+				threshold = max(threshold, 2*time.Duration(status.ExpectedUpdateIntervalSeconds)*time.Second)
+			}
 			if status.LastSeen.IsZero() {
 				continue
 			}
@@ -2667,9 +2672,10 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 	}
 	resource.Identity = identity
 	resource.Sources = []DataSource{source}
-	resource.SourceStatus = map[DataSource]SourceStatus{
-		source: {Status: sourceSightingStatus(resource.LastSeen), LastSeen: resource.LastSeen},
-	}
+	sighting := resource.SourceStatus[source]
+	sighting.Status = sourceSightingStatus(resource.LastSeen)
+	sighting.LastSeen = resource.LastSeen
+	resource.SourceStatus = map[DataSource]SourceStatus{source: sighting}
 	resource.parentBySource = make(map[DataSource]string)
 	rr.setSourceParent(&resource, source, resource.ParentID)
 
@@ -3557,7 +3563,10 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	if existing.SourceStatus == nil {
 		existing.SourceStatus = make(map[DataSource]SourceStatus)
 	}
-	existing.SourceStatus[source] = SourceStatus{Status: sourceSightingStatus(incoming.LastSeen), LastSeen: incoming.LastSeen}
+	sighting := incoming.SourceStatus[source]
+	sighting.Status = sourceSightingStatus(incoming.LastSeen)
+	sighting.LastSeen = incoming.LastSeen
+	existing.SourceStatus[source] = sighting
 
 	if incoming.LastSeen.After(existing.LastSeen) {
 		existing.LastSeen = incoming.LastSeen
@@ -3566,7 +3575,7 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	existing.UpdatedAt = now
 	existing.ParentID = rr.resolveCanonicalParentID(existing)
 
-	existing.Status = chooseStatus(existing.Status, incoming.Status, source)
+	existing.Status = chooseStatus(existing.Status, incoming.Status, source, existing.Sources)
 	existing.Metrics = mergeMetrics(existing, existing.Metrics, incoming.Metrics, source, now, existing.SourceStatus, nil)
 	existing.Metrics = clearUnavailableSourceMemoryMetric(existing.Metrics, &incoming, source)
 
@@ -5483,14 +5492,18 @@ func sourcePriority(source DataSource) int {
 	}
 }
 
-func chooseStatus(existing ResourceStatus, incoming ResourceStatus, source DataSource) ResourceStatus {
+func chooseStatus(existing ResourceStatus, incoming ResourceStatus, source DataSource, sources []DataSource) ResourceStatus {
 	if existing == "" || existing == StatusUnknown {
 		return incoming
 	}
-	if sourcePriority(source) >= sourcePriority(SourceAgent) {
-		return incoming
+	for _, observed := range sources {
+		if sourcePriority(observed) > sourcePriority(source) {
+			return existing
+		}
 	}
-	return existing
+	// Refresh the highest-priority observed source, including a platform-only
+	// resource. Its first status must not remain sticky after recovery.
+	return incoming
 }
 
 func aggregateStatus(resource *Resource) ResourceStatus {

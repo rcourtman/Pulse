@@ -1,16 +1,22 @@
 {
   "version": 1,
-  "base_sha": "4cc53d10950f2effae720d251f92bf7d143d2093",
-  "verified_at": "2026-09-06T00:55:06.543758Z",
+  "base_sha": "61607333cc9e2fe1c1712b94ce458ac45abdabd1",
+  "verified_at": "2026-09-06T03:17:28.710286Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/OverviewTab.tsx"
+    "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.tsx",
+    "frontend-modern/src/features/alerts/OverviewTab.tsx",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/OverviewTab.tsx": "8f7fdc04bd0546f86152c8bb392ff3e3fb755f1f0a1c28d1ee85da3e9fe23582"
+    "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.tsx": "dad60838804e575c0314398b304bda6d2fbd842cb2f693b3f33d168a4bce5dc1",
+    "frontend-modern/src/features/alerts/OverviewTab.tsx": "8f7fdc04bd0546f86152c8bb392ff3e3fb755f1f0a1c28d1ee85da3e9fe23582",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts": "1eadf6df30b4f1130f868b8f139561ea60fdb87e1823deeeaaf2f8fbc699a00c"
   },
   "routes": [
-    "/qualification (actual OverviewTab in isolated Solid Router fixture; not application shell)"
+    "/qualification (actual delivery-health and Overview components in isolated Solid Router fixtures, scripted API promises)",
+    "/patrol",
+    "/alerts"
   ],
   "viewports": [
     {
@@ -18,16 +24,34 @@
       "height": 900
     },
     {
+      "width": 900,
+      "height": 900
+    },
+    {
       "width": 390,
       "height": 900
+    },
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 900,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
     }
   ],
   "states": [
-    "Actual OverviewTab and delivery-health hook/card in Chromium, scripted API promises, empty active alerts. Not installed backend or recipient qualification.",
-    "Degraded health, successful Retry or Dismiss followed by unavailable health, pending manual refresh, verified healthy response. Desktop and narrow unavailable screenshots visually inspected; Refresh fits without clipping. Not a full accessibility or shell audit."
+    "Delivery ordering: 18 scripted cases at three widths. Overview refresh: 12 scripted cases across light/dark themes and three widths. Unavailable health, retained Retry/Dismiss actions, pending disabled Refresh and healthy recovery. These fixtures do not qualify installed backend delivery or recipient outcomes.",
+    "Final card pixels inspected at desktop, intermediate and narrow widths in both themes. Heading is readable and actions wrap within the card. This is a focused card check, not a full dark-theme shell audit.",
+    "Ordinary and alert-mirrored Patrol findings preserve unknown cause and failed-read evidence in the investigation transcript and linked Assistant. Scripted responses qualify presentation and context preservation, not diagnostic competence."
   ],
   "interactions": [
-    "pulse-heavy-run -- node scripts/check-overview-health-refresh.mjs: four cases passed (two actions at two widths).",
-    "Retry and Dismiss each accepted once; failed health read preserves unavailable warning and offers Refresh; Refresh disabled while pending; healthy read removes warning without another queue action."
+    "Retry and Dismiss followed by failed health read, manual Refresh while pending, healthy recovery and overlapping old/new response ordering. Geometry assertions check heading overflow and control bounds.",
+    "Selected issue, evidence expansion, keyboard Review and Explain, nested transcript expansion/collapse, Assistant streaming, preserved draft, reload, error/retry, menu Escape and outside dismissal at 1440/900/390 widths.",
+    "Private receipts: /Volumes/Development/pulse/tmp/patrol-merge-browser/final-health-ordering and final-overview-refresh, and tmp/patrol-assistant-journey/result.json. No infrastructure mutations or autonomous provider calls."
   ]
 }

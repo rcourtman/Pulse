@@ -290,9 +290,10 @@ const (
 
 // SourceStatus describes the freshness of data from a source.
 type SourceStatus struct {
-	Status   string    `json:"status"` // online, stale, offline
-	LastSeen time.Time `json:"lastSeen"`
-	Error    string    `json:"error,omitempty"`
+	Status                        string    `json:"status"` // online, stale, offline
+	LastSeen                      time.Time `json:"lastSeen"`
+	Error                         string    `json:"error,omitempty"`
+	ExpectedUpdateIntervalSeconds int64     `json:"expectedUpdateIntervalSeconds,omitempty"` // Collector-authored cadence, zero uses source default
 }
 
 // ResourceIdentity holds identifiers used for matching.

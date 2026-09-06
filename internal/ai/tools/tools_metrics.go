@@ -24,7 +24,7 @@ Types:
 - temperatures: CPU, disk, and sensor temperatures from hosts
 - network: Network interface statistics (rx/tx bytes, speed)
 - diskio: Disk I/O statistics (read/write bytes, ops)
-- disks: Physical disk health (SMART, wearout, temperatures)
+- disks: Physical disk health, canonical status/risk reasons, source freshness, SMART counters and temperatures. health is the device-reported SMART result. risk carries hardware-risk reasons, while source_status describes collection freshness and may explain a status warning even when SMART is PASSED and no hardware risk is recorded. life_remaining_percent is percent life remaining (100 is unworn), while smart.percentageUsed is percent endurance consumed. Missing counters are unobserved, not zero.
 - baselines: Learned normal behavior baselines for resources
 - patterns: Detected operational patterns and predictions
 
@@ -762,34 +762,7 @@ func (e *PulseToolExecutor) executeListPhysicalDisks(_ context.Context, args map
 				continue
 			}
 
-			summary := PhysicalDiskSummary{
-				ID:          r.ID,
-				Node:        node,
-				DevPath:     pd.DevPath,
-				Model:       pd.Model,
-				Serial:      pd.Serial,
-				WWN:         pd.WWN,
-				Type:        pd.DiskType,
-				SizeBytes:   pd.SizeBytes,
-				Health:      pd.Health,
-				Used:        pd.Used,
-				LastChecked: r.LastSeen,
-			}
-
-			if pd.Wearout >= 0 {
-				wearout := pd.Wearout
-				summary.Wearout = &wearout
-			}
-			if pd.Temperature > 0 {
-				temp := pd.Temperature
-				summary.Temperature = &temp
-			}
-			if pd.RPM > 0 {
-				rpm := pd.RPM
-				summary.RPM = &rpm
-			}
-
-			disks = append(disks, summary)
+			disks = append(disks, physicalDiskSummaryFromResource(r))
 		}
 
 		if disks == nil {

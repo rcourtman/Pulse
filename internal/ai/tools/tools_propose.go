@@ -48,7 +48,7 @@ func (e *PulseToolExecutor) registerProposeTools() {
 
 Reference an advertised resource capability (see the resource's capability catalog) and fill only its declared parameters. Never place secrets in params - sensitive parameters are supplied by an operator at approval time.
 
-Identify the exact canonical causal resource established by the collected evidence. This may equal the action target, but when a dependency or peer caused the finding it must name that different resource. The reason must preserve the causal resource's observed state and explain the causal chain.
+If the evidence establishes a causal resource, identify it separately from the action target. Otherwise omit causal_resource_id. Explain the observed problem, why the proposed action should help, and any uncertainty. An action can address a symptom without establishing its underlying cause.
 
 Submit at most one proposal per investigation. If no safe remediation exists, conclude without proposing.`,
 			InputSchema: InputSchema{
@@ -64,7 +64,7 @@ Submit at most one proposal per investigation. If no safe remediation exists, co
 					},
 					"causal_resource_id": {
 						Type:        "string",
-						Description: "Exact canonical resource ID whose observed state establishes the remediation rationale; may equal resource_id",
+						Description: "Optional canonical resource ID attributed as causal by the investigation. Omit when the cause is unknown.",
 					},
 					"params": {
 						Type:        "object",
@@ -72,10 +72,10 @@ Submit at most one proposal per investigation. If no safe remediation exists, co
 					},
 					"reason": {
 						Type:        "string",
-						Description: "Why this action remediates the finding",
+						Description: "Observed evidence, why this action should help, and remaining uncertainty",
 					},
 				},
-				Required: []string{"resource_id", "causal_resource_id", "capability_name", "reason"},
+				Required: []string{"resource_id", "capability_name", "reason"},
 			},
 		},
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
@@ -164,13 +164,9 @@ func (e *PulseToolExecutor) executeProposeAction(ctx context.Context, args map[s
 	if params == nil {
 		params = map[string]interface{}{}
 	}
-	if resourceID == "" || causalResourceID == "" || capabilityName == "" || reason == "" {
+	if resourceID == "" || capabilityName == "" || reason == "" {
 		capture.RecordFailedAttempt()
-		return NewErrorResult(fmt.Errorf("resource_id, causal_resource_id, capability_name, and reason are required")), nil
-	}
-	if err := capture.validateCausalResource(causalResourceID); err != nil {
-		capture.RecordFailedAttempt()
-		return NewErrorResult(err), nil
+		return NewErrorResult(fmt.Errorf("resource_id, capability_name, and reason are required")), nil
 	}
 
 	if err := validateProposalAgainstCatalog(ctx, capture.catalog, resourceID, capabilityName, params); err != nil {
@@ -252,13 +248,4 @@ func stringArg(args map[string]interface{}, key string) string {
 // clones share the sink deliberately so one run has exactly one capture.
 func (e *PulseToolExecutor) SetProposalCapture(capture *ProposalCapture) {
 	e.proposalCapture = capture
-}
-
-// RecordProposalEvidence updates the request-local proposal validator with a
-// successful structured evidence result. It is a no-op outside investigations.
-func (e *PulseToolExecutor) RecordProposalEvidence(toolName, content string) {
-	if e == nil || e.proposalCapture == nil {
-		return
-	}
-	e.proposalCapture.RecordEvidence(toolName, content)
 }

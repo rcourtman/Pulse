@@ -47,6 +47,34 @@ const makeTemp = (overrides: Partial<Temperature> = {}): Temperature => ({
 
 describe('nodeDrawerModel (branch coverage 0713)', () => {
   describe('getNodeDrawerHistoryTarget', () => {
+    it.each(['node', 'agent'] as const)(
+      'uses canonical %s storage coordinates before display and linked identities',
+      (resourceType) => {
+        const node = makeNode({
+          linkedAgentId: 'agent:legacy-link',
+          metricsTarget: { resourceType, resourceId: 'retained-native-id' },
+        });
+        expect(getNodeDrawerHistoryTarget(node)).toStrictEqual({
+          resourceType,
+          resourceId: 'retained-native-id',
+        });
+      },
+    );
+
+    it.each([
+      { resourceType: 'node', resourceId: '   ' },
+      { resourceType: 'vm', resourceId: 'guest-id' },
+    ] as const)(
+      'retains legacy history when canonical coordinates are unusable: %o',
+      (metricsTarget) => {
+        expect(
+          getNodeDrawerHistoryTarget(
+            makeNode({ linkedAgentId: 'agent:legacy-link', metricsTarget }),
+          ),
+        ).toStrictEqual({ resourceType: 'agent', resourceId: 'legacy-link' });
+      },
+    );
+
     it('strips only the first agent: prefix when the value is double-prefixed', () => {
       // stripAgentPrefix runs a single startsWith + slice, so 'agent:agent:node-9'
       // collapses to 'agent:node-9' (one prefix removed), NOT 'node-9'.

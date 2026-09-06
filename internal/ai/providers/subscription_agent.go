@@ -855,8 +855,8 @@ func decodeSubscriptionAgentTurn(agent SubscriptionAgent, raw []byte) (subscript
 // all of its local tools are intentionally disabled. The CLI then fabricates a
 // "No such tool available" result and lets the model continue, which destroys
 // Pulse's one-tool-turn-at-a-time provider protocol. The stream preserves the
-// original intended call before that local error. Route the first declared
-// Pulse call back through Pulse's executor; never execute it inside Claude.
+// original intended calls before that local error. Route the first declared
+// Pulse tool batch back through Pulse's executor; never execute it inside Claude.
 func decodeClaudeSubscriptionAgentResponse(req ChatRequest, raw []byte) (subscriptionAgentTurn, error) {
 	if !bytes.Contains(raw, []byte{'\n'}) {
 		return decodeSubscriptionAgentTurn(SubscriptionAgentClaude, raw)
@@ -869,8 +869,7 @@ func decodeClaudeSubscriptionAgentResponse(req ChatRequest, raw []byte) (subscri
 
 	var terminal claudePrintResponse
 	var terminalFound bool
-	var content strings.Builder
-	var routed *subscriptionAgentToolCall
+	var routed []subscriptionAgentToolCall
 	for _, line := range bytes.Split(raw, []byte{'\n'}) {
 		line = bytes.TrimSpace(line)
 		if len(line) == 0 {
@@ -882,12 +881,9 @@ func decodeClaudeSubscriptionAgentResponse(req ChatRequest, raw []byte) (subscri
 		}
 		switch event.Type {
 		case "assistant":
+			var batch []subscriptionAgentToolCall
 			for _, block := range event.Message.Content {
 				switch block.Type {
-				case "text":
-					if routed == nil && strings.TrimSpace(block.Text) != "" {
-						content.WriteString(block.Text)
-					}
 				case "tool_use":
 					if block.Name == "StructuredOutput" {
 						continue
@@ -895,11 +891,11 @@ func decodeClaudeSubscriptionAgentResponse(req ChatRequest, raw []byte) (subscri
 					if _, ok := allowed[block.Name]; !ok {
 						return subscriptionAgentTurn{}, fmt.Errorf("Claude subscription agent attempted undeclared native tool %q", block.Name)
 					}
-					if routed == nil {
-						call := subscriptionAgentToolCall{ID: block.ID, Name: block.Name, Input: block.Input}
-						routed = &call
-					}
+					batch = append(batch, subscriptionAgentToolCall{ID: block.ID, Name: block.Name, Input: block.Input})
 				}
+			}
+			if len(routed) == 0 && len(batch) > 0 {
+				routed = batch
 			}
 		case "result":
 			if err := json.Unmarshal(line, &terminal); err != nil {
@@ -919,8 +915,7 @@ func decodeClaudeSubscriptionAgentResponse(req ChatRequest, raw []byte) (subscri
 	}
 	if routed != nil {
 		return subscriptionAgentTurn{
-			Content:      content.String(),
-			RawToolCalls: []subscriptionAgentToolCall{*routed},
+			RawToolCalls: routed,
 			InputTokens:  terminal.Usage.InputTokens,
 			OutputTokens: terminal.Usage.OutputTokens,
 		}, nil
@@ -1102,6 +1097,10 @@ func validateSubscriptionAgentTurn(req ChatRequest, turn *subscriptionAgentTurn)
 		}
 	}
 	if len(turn.RawToolCalls) > 0 {
+		// Routing turns contain only validated calls in this transport contract.
+		// CLI narration can include serialized protocol or synthetic local tool
+		// errors. Neither is a user-facing answer or infrastructure evidence.
+		turn.Content = ""
 		turn.StopReason = "tool_use"
 	} else {
 		turn.StopReason = "end_turn"

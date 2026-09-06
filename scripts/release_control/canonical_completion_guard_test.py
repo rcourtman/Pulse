@@ -2698,6 +2698,7 @@ None yet.
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "frontend-modern/src/components/AI/__tests__/FindingsPanel.links.test.tsx",
                         "frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts",
                         "frontend-modern/src/components/patrol/__tests__/ApprovalSection.test.tsx",
                         "frontend-modern/src/components/patrol/__tests__/InvestigationSection.test.tsx",

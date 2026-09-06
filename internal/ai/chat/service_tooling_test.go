@@ -353,7 +353,7 @@ func TestBuildSystemPrompt_DoesNotClaimGenericVMControl(t *testing.T) {
 	if !strings.Contains(prompt, "pulse_kubernetes") {
 		t.Fatalf("expected system prompt to include the governed Kubernetes tool contract, got %q", prompt)
 	}
-	if !strings.Contains(prompt, "Do not use emoji, warning icons, or decorative symbols") {
+	if !strings.Contains(prompt, "without decorative symbols") {
 		t.Fatalf("expected system prompt to keep Assistant formatting operational, got %q", prompt)
 	}
 }
@@ -365,9 +365,9 @@ func TestBuildSystemPrompt_IncludesProvenanceGuidance(t *testing.T) {
 
 	for _, expected := range []string{
 		"## GROUNDING & PROVENANCE",
-		"attribute it briefly so the user can trust and verify it",
-		"Do not present stale or cached context as current",
-		"Keep attribution concise and inline",
+		"source observations, model hypotheses, proposed actions, executed operations and verified outcomes separately",
+		"historical evidence until a current observation supports it",
+		"Attribute measured facts to their source and observation time",
 	} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("expected provenance guidance %q in system prompt, got %q", expected, prompt)
@@ -1182,6 +1182,7 @@ func TestNonInteractiveProfileBlocksQuestionPersistsPairAndContinues(t *testing.
 }
 
 func TestInvestigationLoopRedactsProposalParamsEverywhereDurable(t *testing.T) {
+	const conclusion = "### Investigation Summary\nRestart proposed.\n\n### Root Cause\nThe cause is unknown. The earlier dependency rationale is unconfirmed.\n\n### Affected Resources\n`vm:42`.\n\n### Recommendation\nRestart pending.\n\n### Conclusion\nNEEDS_ATTENTION: pending."
 	turn := 0
 	provider := &stubStreamingProvider{}
 	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
@@ -1214,7 +1215,7 @@ func TestInvestigationLoopRedactsProposalParamsEverywhereDurable(t *testing.T) {
 				}
 			}
 		}
-		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "### Investigation Summary\nRestart proposed.\n\n### Root Cause\nDependency failure.\n\n### Affected Resources\n`vm:42`.\n\n### Recommendation\nRestart pending.\n\n### Conclusion\nNEEDS_ATTENTION: pending."}})
+		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: conclusion}})
 		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
 		return nil
 	}
@@ -1235,16 +1236,22 @@ func TestInvestigationLoopRedactsProposalParamsEverywhereDurable(t *testing.T) {
 
 	loop := NewAgenticLoop(provider, exec, "base prompt")
 	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
-	loop.totalEvidenceCalls = 1
-	loop.successfulEvidenceCalls = 1
 
 	var streamedRawParam bool
+	var streamedConclusion strings.Builder
 	messages, err := loop.ExecuteWithTools(
 		context.Background(),
 		"session-investigation",
 		[]Message{{Role: "user", Content: "investigate finding f-9"}},
 		nil,
 		func(event StreamEvent) {
+			if event.Type == "content" {
+				var data ContentData
+				if err := json.Unmarshal(event.Data, &data); err != nil {
+					t.Errorf("decode content: %v", err)
+				}
+				streamedConclusion.WriteString(data.Text)
+			}
 			if strings.Contains(string(event.Data), "graceful") {
 				streamedRawParam = true
 			}
@@ -1255,6 +1262,19 @@ func TestInvestigationLoopRedactsProposalParamsEverywhereDurable(t *testing.T) {
 	}
 	if streamedRawParam {
 		t.Fatal("stream events must never expose proposal parameter values")
+	}
+
+	if streamedConclusion.String() != conclusion {
+		t.Fatalf("stream changed the model's uncertain diagnosis: %q", streamedConclusion.String())
+	}
+	var durableConclusion strings.Builder
+	for _, msg := range messages {
+		if msg.Role == "assistant" {
+			durableConclusion.WriteString(msg.Content)
+		}
+	}
+	if durableConclusion.String() != conclusion {
+		t.Fatalf("transcript changed the model's uncertain diagnosis: %q", durableConclusion.String())
 	}
 
 	// The durable transcript keeps the call but with redacted params.
@@ -1284,6 +1304,80 @@ func TestInvestigationLoopRedactsProposalParamsEverywhereDurable(t *testing.T) {
 	}
 	if proposal.CausalResourceID != "vm:dependency" {
 		t.Fatalf("captured causal resource = %q, want vm:dependency", proposal.CausalResourceID)
+	}
+}
+
+func TestInvestigationServicePreservesUncertainDiagnosisAfterProposal(t *testing.T) {
+	const conclusion = "### Root Cause\nUnknown. A restart may restore service, but the earlier dependency explanation is unconfirmed.\n\n### Recommendation\nProposal pending approval. No action has executed."
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	turn := 0
+	provider := &stubStreamingProvider{}
+	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		turn++
+		switch turn {
+		case 1:
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{
+				ID: "evidence-1", Name: agentcapabilities.PulseQueryToolName,
+				Input: map[string]interface{}{"action": "health"},
+			}}}})
+		case 2:
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{
+				ID: "proposal-1", Name: agentcapabilities.PatrolProposeActionToolName,
+				Input: map[string]interface{}{"resource_id": "vm:42", "causal_resource_id": "vm:dependency", "capability_name": "restart", "reason": "The dependency may have stopped."},
+			}}}})
+		default:
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: conclusion}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		}
+		return nil
+	}
+	service := &Service{
+		started: true, sessions: store,
+		executor:              tools.NewPulseToolExecutor(tools.ExecutorConfig{StateProvider: &mockStateProvider{}}),
+		cfg:                   &config.AIConfig{PatrolModel: "mock:model", ControlLevel: config.ControlLevelReadOnly},
+		patrolProviderFactory: func(string) (providers.StreamingProvider, error) { return provider, nil },
+	}
+	var streamed strings.Builder
+	result, err := service.ExecuteInvestigationStream(context.Background(), InvestigationRunRequest{
+		SessionID: "uncertain-investigation", Prompt: "Investigate the issue", SystemPrompt: "Investigate using current evidence.",
+		MaxTurns: 5, MaxEvidenceCalls: 3, ResourceType: "vm",
+		Identity: tools.ProposalIdentity{FindingID: "finding-1", InvestigationID: "investigation-1"},
+		Catalog: func(context.Context, string) ([]ur.ResourceCapability, error) {
+			return []ur.ResourceCapability{{Name: "restart"}}, nil
+		},
+	}, func(event StreamEvent) {
+		if event.Type == "content" {
+			var data ContentData
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				t.Errorf("content decode: %v", err)
+			}
+			streamed.WriteString(data.Text)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Proposal == nil || result.Proposal.CausalResourceID != "vm:dependency" {
+		t.Fatalf("proposal attribution lost: %+v", result.Proposal)
+	}
+	if result.Content != conclusion || streamed.String() != conclusion {
+		t.Fatalf("service promoted proposal rationale into diagnosis: result=%q stream=%q", result.Content, streamed.String())
+	}
+	messages, err := store.GetMessages("uncertain-investigation")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var persisted strings.Builder
+	for _, msg := range messages {
+		if msg.Role == "assistant" {
+			persisted.WriteString(msg.Content)
+		}
+	}
+	if persisted.String() != conclusion {
+		t.Fatalf("stored diagnosis mutated: %q", persisted.String())
 	}
 }
 

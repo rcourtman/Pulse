@@ -52,20 +52,20 @@ export function AlertDeliveryHealthCard(props: AlertDeliveryHealthCardProps) {
 
   return (
     <Card tone="danger" padding="sm" class="border-red-200 dark:border-red-800 sm:p-4" role="alert">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div class="flex min-w-0 items-start gap-3">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="flex min-w-0 flex-1 basis-72 items-start gap-3">
           <AlertTriangleIcon
             class="mt-0.5 h-4 w-4 flex-shrink-0 text-red-700 dark:text-red-300"
             aria-hidden="true"
           />
           <div class="min-w-0">
-            <h3 class="text-sm font-semibold text-red-900 dark:text-red-100">
+            <h3 class="text-sm font-semibold text-base-content">
               {getAlertDestinationsDeliveryHealthTitle(status())}
             </h3>
             <p class="mt-1 text-sm leading-6 text-red-800 dark:text-red-200">{description()}</p>
           </div>
         </div>
-        <div class="flex flex-shrink-0 flex-wrap items-center gap-2">
+        <div class="flex max-w-full flex-wrap items-center gap-2">
           {props.detailsHref ? (
             <ButtonLink variant="secondary" size="sm" href={props.detailsHref}>
               {getAlertDestinationsDeliveryReviewLabel()}

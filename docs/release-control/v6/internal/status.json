@@ -5648,15 +5648,11 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Performance is at the current release floor with bounded residuals. Retained queries still require temporal tier reconciliation so an existing aggregate does not hide newer raw evidence. Scalability headroom and performance follow-up remain tracked separately.",
+        "summary": "Performance is at the current release floor with bounded residuals. Retained query tier reconciliation and extrema preservation are verified. Additional scalability headroom and performance follow-up remain tracked separately.",
         "tracking": [
           {
             "kind": "lane-followup",
             "id": "performance-post-rc-headroom"
-          },
-          {
-            "kind": "lane-followup",
-            "id": "retained-metric-query-coverage"
           }
         ]
       },
@@ -9730,19 +9726,6 @@
         "pulse-pro"
       ],
       "subsystem_ids": []
-    },
-    {
-      "id": "retained-metric-query-coverage",
-      "summary": "Repair temporal coverage across retained metric tiers. A 24-hour Query or QueryAll currently returns an older non-empty aggregate tier even when a newer raw point exists. Reconcile bucket precedence, extrema and downsampling consistently across single-series, all-series and batch reads. The model-facing evidence tool reports the returned timestamps but does not make this shared-store query complete. Required for trustworthy Patrol and Assistant history, tracked with patrol-assistant-customer-outcome-qualification.",
-      "owner": "project-owner",
-      "status": "planned",
-      "recorded_at": "2026-09-05",
-      "lane_ids": [
-        "L10"
-      ],
-      "subsystem_ids": [
-        "performance-and-scalability"
-      ]
     }
   ],
   "coverage_gaps": [
@@ -10218,19 +10201,23 @@
     },
     {
       "id": "patrol-assistant-customer-outcome-qualification",
-      "summary": "The 2026-09-05 product review found that Explain with Assistant opened a blank generic conversation and the attention workbench discarded richer canonical finding context. The explicit explanation dispatcher and canonical handoff repair address that frontend break, with scripted browser proof and regression tests. They do not qualify model reasoning, real infrastructure actions, or repeated customer value. Latest-report, monitoring-active, multi-ping telemetry excluding dev and deployment proof contained 127 paid installs, 71 with Patrol enabled and 23 with Assistant calls. Fourteen reported verified resolutions were concentrated in one install. Paid includes all non-free tiers, and activity cooccurrence is not a linked successful journey. Schema 17 outcome/provider/cost fields had no adoption in that review. Three real jobs remain to qualify across named provider/model/version configurations: unhealthy service diagnosis, backup or capacity risk, and supported VM/LXC plan, approval and verified result. Repeatability must be established across independent paid customer environments without pooling free-tier or ineligible installs. The same-day real maintainer homelab evaluation with Claude Opus 5 exposed missing Proxmox temperature-tool evidence, contradictory summary health, incomplete visible prose, alert-count confusion and an inaccurately classified provider refusal during Patrol readiness. The shared temperature projection and premature within-window evidence compaction are repaired, while the documented reasoning, completion, readiness and end-to-end outcome failures remain unqualified. The continuation repaired canonical resource lookup, operation-versus-disk filtering, Proxmox CPU topology and retained resource-scoped history across backend restarts. Unscoped summary/baseline modernization, wear semantics, disk risk explanation and complete retained-window coverage remain open. A named-resource repeat exposed overly restrictive current_resource recovery guidance, now corrected without weakening the attachment boundary. Live testing also exposed warning-based API execution after an incomplete provider check. Runtime and API now enforce the selected-mode verdict, including saved incomplete results, and the repaired live endpoint returns HTTP 409. One read-only test run started before the gate correction and was stopped, so it is not qualification evidence. The evidence interpretation continuation replaces model-facing heuristic summaries with retained statistics, explicit source scope, real observation coverage and preserved bucket extrema/timestamps. A typed provider_refusal diagnosis now survives CLI exit and legacy cache decoding without granting readiness or repeating the refused request. The final real summary distinguished utilisation from demonstrated pressure and explained extrema versus bucket averages, but still speculated about sensor artefacts and monitoring restarts, inferred continuous coverage from minute spacing, and conflated returned history with retained history. Reasoning remains unqualified. A local fixture confirmed that 24-hour Query and QueryAll can hide newer raw points when a preferred aggregate tier is non-empty. Shared temporal tier reconciliation, including batch queries, is required in L10 before claiming current requested-window history.",
+      "summary": "The maintainer requested a whole-design assessment and an explicit completion goal for Patrol and Assistant. The ordered plan and source-bound evidence are in docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md. The contract separates observations, model conclusions, proposals, execution and independently verified outcomes. Assistant continues the same issue and governed action records. The explicit explanation handoff is an implemented frontend foundation, not outcome qualification. The recorded 2026-09-05 latest-report, monitoring-active, multi-ping review excluded development and deployment proof and contained 127 paid installs, 71 with Patrol enabled and 23 with Assistant calls. Fourteen reported verified resolutions came from one install. Paid includes all non-free tiers. Activity cooccurrence does not establish a successful linked task, and schema 17 outcome/provider/cost fields had no adoption in that review. Real read-only homelab testing with Claude Opus 5 exposed missing canonical evidence, history target/tier gaps, premature context loss, unsupported causal claims and multi-minute responses. Prior history and handoff changes are recorded in the plan. The current working slice removes proposal rationale promotion into Root Cause and duplicate causal inference, preserves disk SMART/risk/source freshness and explicit remaining life, supports canonical disk get/health, and corrects collector cadence and status recovery. Targeted regressions and the live disk data path pass. Affected full worker package suites pass. The single-metric downsample regression and an adjacent bounded chart regression are corrected. Compiled presence statements are reused within a bounded set, but every query reads current data in one snapshot. The chart comparison shows no significant slowdown. Final metrics/database suites, focused concurrency race checks and the existing benchmark guard pass. Single-metric downsampling remains close to the performance threshold. PR #1920 CI subsequently failed nine benchmark comparisons against the actual base 4f9de86e, including small retained reads. The prior worker comparison used local source 5288b64d and does not establish final CI performance. The exact-base correction removes unnecessary plain-read presence probes, transaction wrappers and metric sorting while retaining canonical reconciliation and current snapshots. Full metrics/database and focused race suites pass. Ten alternating worker samples cover the previously failed CI comparisons without a significant greater-than-10% regression. Final CI landing qualification remains pending. One earlier SQLite native binding fault has no established root cause, although subsequent final full and focused race proofs pass. The latest live answers still infer collector startup from timestamp coincidence, claim continuous coverage from retained spacing and infer backup recovery from an online datastore. They fail diagnostic qualification. A serialized routing-envelope leak prompted a subscription transport correction with targeted regression proof, verified without routing prose in a completed real Assistant answer. A narrow answer-table overflow defect is corrected in the shared sanitized renderer with desktop, intermediate and mobile browser proof. The selected subscription provider explicitly refused autonomous Patrol readiness. The runtime and API preserve that refusal and prevent execution. Ordinary Assistant success is not autonomous proof. Required healthy/unhealthy, dependency, missing-access, backup/capacity and approved/rejected action qualification remains incomplete. Independent volunteered Pro environments are required before claiming repeatable customer value or wider readiness. The next diagnostic slice removes successful-read completion floors, evidence checkpoint instructions and generic call-count/silent-turn wrap-up policy. Full worker chat and AI suites pass. Browser qualification exposed and corrected mirrored-alert finding selection in the shared review lookup. Ordinary/mirrored records and linked uncertainty/failed-read context pass Playwright at 1440/900/390 widths. The detection slice removes contextless evaluation and assessment sessions, the flag-count turn ladder, signal-count report quotas and post-finding prompt replacement. The original conversation retains evidence tools and accepted records alongside errors. Full chat and AI packages, focused Patrol API tests and conversation race regressions pass. Source-bound scripted browser proof against the rebuilt runtime preserves linked uncertainty and failed reads at 1440/900/390 widths. Integration with current main and final landing verification remain pending. The latest ordinary Assistant recheck ended with context cancellation before a final answer, with eleven tool results retained. Its cancellation source and exact running binary correspondence are unresolved. The subsequent unchanged-runtime ordinary Assistant check completed in about 173 seconds, correctly distinguished utilisation from pressure, but still made unsupported temporal claims. It also exposed a failed file read marked successful. The shared file-read correction now preserves error status for absent agents and nonzero exits, with a final real ordinary file-read check returning success=false and showing the failed badge, preserved explanation and honest collection limit through reload. The linked-issue browser matrix passes again on the final rebuilt runtime. The full tools package and focused file-read race proof pass. Final integrated landing proof remains pending. Real-model/action outcome qualification remains open. Integrated main 3f74c0c27304 passes focused API proof and final frontend lint, type checking and three affected test files. Permanent browser fixtures pass 18 delivery-ordering and 12 light/dark Overview cases at 1440/900/390 widths after repairing shared card wrapping and heading readability. The final linked Patrol/Assistant browser matrix also passes. Exact staged hook and remote landing remain pending. These checks do not close the real-model/action outcome gap. The qualification schema now accepts the implemented health_process_stop injector used by all three action scenarios. A new catalogue/schema compatibility regression reproduced the old rejection. All eleven manifests validate and both qualification packages pass on pulse-dev. The existing live lab has no missing-access or storage/backup scenario or independent probe, so those required autonomous cases remain open. No live provider or infrastructure action was used for this schema proof.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-09-05",
       "lane_ids": [
         "L6",
-        "L10"
+        "L8",
+        "L10",
+        "L13"
       ],
       "subsystem_ids": [
         "ai-runtime",
         "api-contracts",
+        "frontend-primitives",
         "patrol-intelligence",
-        "performance-and-scalability"
+        "performance-and-scalability",
+        "unified-resources"
       ],
       "proposed_resolution": "lane-expansion",
       "coverage_impact": 4,
@@ -10243,6 +10230,11 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/performance-and-scalability.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/unified-resources.md",
           "kind": "file"
         },
         {
@@ -10377,13 +10369,15 @@
     {
       "id": "patrol-assistant-customer-outcomes",
       "name": "Patrol and Assistant Customer Outcomes",
-      "summary": "Qualify unhealthy service diagnosis, backup or capacity risk, and supported VM/LXC planning through approval and independent verification on disposable infrastructure. Compare named model configurations for useful outcomes, missed faults, false positives, latency and cost, then establish repeated value across independent volunteered Pro environments. The explicit explanation handoff is the completed frontend foundation, not completion of this outcome qualification.",
+      "summary": "Simplify Patrol around model-owned investigation and one issue-to-verified-outcome journey shared with Assistant. Preserve canonical evidence and remove proposal-as-proof and proxy-driven diagnostic policy while retaining deterministic authority and independent verification. Execute the ordered redesign plan in docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md, qualify unhealthy service diagnosis, backup or capacity risk and supported VM/LXC actions with negative controls, and record real model quality, latency and cost limits. Independent volunteered Pro qualification remains required for wider readiness.",
       "status": "proposed",
       "recorded_at": "2026-09-05",
       "target_id": "v6-product-lane-expansion",
       "current_lane_ids": [
         "L6",
-        "L10"
+        "L8",
+        "L10",
+        "L13"
       ],
       "coverage_gap_ids": [
         "patrol-assistant-customer-outcome-qualification"
@@ -10391,12 +10385,15 @@
       "subsystem_ids": [
         "ai-runtime",
         "api-contracts",
+        "frontend-primitives",
         "patrol-intelligence",
-        "performance-and-scalability"
+        "performance-and-scalability",
+        "unified-resources"
       ],
       "demand_evidence": [
         "user-direction: 2026-09-05 prioritise dependable Patrol and Assistant outcomes as core Pulse Pro value",
-        "qualification-contract: docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md"
+        "qualification-contract: docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md",
+        "user-direction: 2026-09-05 assess the whole design, establish an executable plan and pursue its completion as an explicit goal"
       ]
     }
   ],

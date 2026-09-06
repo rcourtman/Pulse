@@ -115,6 +115,24 @@ describe('aiChatUtils', () => {
       expect(output).not.toContain('alert("xss")');
     });
 
+    it('contains table overflow without trusting model layout attributes', () => {
+      const output = utils.renderMarkdown(
+        '<table class="fixed inset-0" style="position:fixed" onclick="alert(1)"><tr><th>Metric</th><th>Value</th></tr><tr><td>Memory</td><td>88%</td></tr></table>',
+      );
+      const root = document.createElement('div');
+      root.innerHTML = output;
+      const table = root.querySelector('table');
+      const region = table?.parentElement;
+      expect(region?.getAttribute('role')).toBe('region');
+      expect(region?.getAttribute('aria-label')).toBe('Scrollable table');
+      expect(region?.tabIndex).toBe(0);
+      expect(region?.classList.contains('overflow-x-auto')).toBe(true);
+      expect(table?.textContent).toBe('MetricValueMemory88%');
+      expect(table?.hasAttribute('class')).toBe(false);
+      expect(table?.hasAttribute('style')).toBe(false);
+      expect(table?.hasAttribute('onclick')).toBe(false);
+    });
+
     it('escapes HTML entities if markdown parsing fails', () => {
       const spy = vi.spyOn(marked, 'parse').mockImplementation(() => {
         throw new Error('boom');

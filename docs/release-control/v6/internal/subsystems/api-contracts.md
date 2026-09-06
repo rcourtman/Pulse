@@ -20,6 +20,18 @@
 
 ## Purpose
 
+The internal Patrol bridge preserves explicit execution limits, scoped tool
+allowlists and execution identity. The retired unmatched-signal evaluator no
+longer contributes a signal-count-derived successful-report budget. Diagnosis
+and missing-finding assessments stay in the original evidence conversation.
+
+The frontend `Node` projection preserves the unified resource's optional
+`metricsTarget` without deriving storage coordinates from its display identity.
+Proxmox-only nodes advertise the `node` storage family and provider-native ID.
+An explicit Agent source takes precedence with its own `agent` coordinates.
+Discovery routing alone does not establish an installed Agent or its history
+capabilities. Resource adapters and history consumers preserve that distinction.
+
 The manual Patrol API consumes the service's selected-mode runtime verdict as
 an execution check. Dimension-level presentation warnings cannot authorize a
 run after a provider failure leaves Watch-only readiness unassessed. Operator

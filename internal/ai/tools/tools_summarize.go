@@ -18,7 +18,7 @@ func (e *PulseToolExecutor) registerSummarizeTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name: agentcapabilities.PulseSummarizeToolName,
-			Description: `Read retained metric evidence for one resource or a fleet over 24h, 7d, or 30d. Returns measured statistics, units, actual first/latest observation times, retained point counts and largest gaps. The requested window does not imply complete or fresh coverage. Means are unweighted means of returned retained points, which may already be retention aggregates.
+			Description: `Read retained metric evidence for one resource or a fleet over 24h, 7d, or 30d. Returns measured statistics, units, first/latest retained timestamps, retained point counts and largest timestamp gaps. The requested window does not imply complete or fresh coverage. Means are unweighted means of returned retained points, which may already be retention aggregates.
 
 This tool reads metrics only. Alerts, findings, disk health, backup coverage and topology are not queried. Use the relevant tools for those sources before drawing conclusions about health or causes.
 
@@ -118,16 +118,18 @@ func (e *PulseToolExecutor) executeSummarize(ctx context.Context, args map[strin
 // EvidenceScope states what was collected, independently from an empty result.
 // In particular, an empty metrics map says nothing about alert or disk health.
 type summarizeEvidenceScope struct {
-	Source      string   `json:"source"`
-	NotQueried  []string `json:"not_queried"`
-	Aggregation string   `json:"aggregation"`
+	Source        string   `json:"source"`
+	NotQueried    []string `json:"not_queried"`
+	Aggregation   string   `json:"aggregation"`
+	TimeSemantics string   `json:"time_semantics"`
 }
 
 func retainedSummaryScope() summarizeEvidenceScope {
 	return summarizeEvidenceScope{
-		Source:      "retained_metrics",
-		NotQueried:  []string{"alerts", "findings", "disk_health", "backups", "topology"},
-		Aggregation: "Mean and latest describe retained point values, which may be bucket averages. Min and max preserve recorded bucket extrema, with their bucket timestamps, so peaks can exceed the plotted averages. The mean is unweighted. First and last timestamps do not prove continuous coverage.",
+		Source:        "retained_metrics",
+		NotQueried:    []string{"alerts", "findings", "disk_health", "backups", "topology"},
+		Aggregation:   "Mean and latest describe retained point values, which may be bucket averages. Min and max preserve recorded bucket extrema, with their bucket timestamps, so peaks can exceed the plotted averages. The mean is unweighted. First and last timestamps do not prove continuous coverage.",
+		TimeSemantics: "first_at, last_at and max_gap_seconds describe only returned point or retention-bucket timestamps inside the requested window. Buckets do not record sample completeness. These fields establish neither collection uptime nor why older observations are absent. Collector start/restart events and retention configuration are not queried.",
 	}
 }
 
@@ -315,9 +317,7 @@ func summarizeReportTypeForResource(res unifiedresources.Resource) string {
 // on it) while the metrics target rides MetricsResourceID. When the resolved
 // target's type is one reporting understands, it wins over the static
 // classification — merged host resources advertise the store family their
-// metrics are actually written under. Pure Proxmox nodes are the documented
-// exception: their metrics live under the "node" store type while the target
-// labels the agent family, so the node classification is kept there.
+// metrics are actually written under.
 func (e *PulseToolExecutor) summarizeFleetCandidateFor(res unifiedresources.Resource) (summarizeFleetCandidate, bool) {
 	id := strings.TrimSpace(res.ID)
 	reportType := summarizeReportTypeForResource(res)
@@ -332,10 +332,8 @@ func (e *PulseToolExecutor) summarizeFleetCandidateFor(res unifiedresources.Reso
 	}
 	if target := e.resourceMetricsTarget(res); target != nil {
 		cand.metricsID = strings.TrimSpace(target.ResourceID)
-		if reportType != "node" {
-			if canonical := reporting.CanonicalResourceType(target.ResourceType); canonical != "" {
-				cand.reportType = canonical
-			}
+		if canonical := reporting.CanonicalResourceType(target.ResourceType); canonical != "" {
+			cand.reportType = canonical
 		}
 	}
 	return cand, true

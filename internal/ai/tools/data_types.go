@@ -2026,21 +2026,25 @@ func (r PhysicalDisksResponse) NormalizeCollections() PhysicalDisksResponse {
 
 // PhysicalDiskSummary summarizes a physical disk with SMART health info
 type PhysicalDiskSummary struct {
-	ID          string    `json:"id"`
-	Node        string    `json:"node"`
-	Instance    string    `json:"instance"`
-	DevPath     string    `json:"dev_path"`
-	Model       string    `json:"model,omitempty"`
-	Serial      string    `json:"serial,omitempty"`
-	WWN         string    `json:"wwn,omitempty"`
-	Type        string    `json:"type"` // nvme, sata, sas
-	SizeBytes   int64     `json:"size_bytes"`
-	Health      string    `json:"health"`                // PASSED, FAILED, UNKNOWN
-	Wearout     *int      `json:"wearout,omitempty"`     // SSD wear percentage (0-100), nil when unavailable
-	Temperature *int      `json:"temperature,omitempty"` // Celsius, nil when unavailable
-	RPM         *int      `json:"rpm,omitempty"`         // 0 for SSDs, nil when unavailable
-	Used        string    `json:"used,omitempty"`
-	LastChecked time.Time `json:"last_checked,omitempty"`
+	ID                   string                                                        `json:"id"`
+	Node                 string                                                        `json:"node"`
+	Instance             string                                                        `json:"instance"`
+	DevPath              string                                                        `json:"dev_path"`
+	Model                string                                                        `json:"model,omitempty"`
+	Serial               string                                                        `json:"serial,omitempty"`
+	WWN                  string                                                        `json:"wwn,omitempty"`
+	Type                 string                                                        `json:"type"` // nvme, sata, sas
+	SizeBytes            int64                                                         `json:"size_bytes"`
+	Health               string                                                        `json:"health"` // Device-reported SMART result: PASSED, FAILED, UNKNOWN
+	Status               unifiedresources.ResourceStatus                               `json:"status,omitempty"`
+	SourceStatus         map[unifiedresources.DataSource]unifiedresources.SourceStatus `json:"source_status,omitempty"`
+	Risk                 *unifiedresources.PhysicalDiskRisk                            `json:"risk,omitempty"`
+	SMART                *unifiedresources.SMARTMeta                                   `json:"smart,omitempty"`
+	LifeRemainingPercent *int                                                          `json:"life_remaining_percent,omitempty"` // SSD life remaining percent (0-100), nil when unavailable
+	Temperature          *int                                                          `json:"temperature,omitempty"`            // Celsius, nil when unavailable
+	RPM                  *int                                                          `json:"rpm,omitempty"`                    // 0 for SSDs, nil when unavailable
+	Used                 string                                                        `json:"used,omitempty"`
+	LastChecked          time.Time                                                     `json:"last_checked,omitempty"`
 }
 
 // ========== Host RAID Types ==========

@@ -132,10 +132,54 @@ func TestExecuteFileReadDocker(t *testing.T) {
 		})
 		result, err := exec.executeFileRead(ctx, "/config/test.json", "tower", "nonexistent")
 		require.NoError(t, err)
+		assert.True(t, result.IsError)
 		assert.Contains(t, result.Content[0].Text, "Failed to read file from container 'nonexistent'")
 		assert.Contains(t, result.Content[0].Text, "No such container")
 		mockAgent.AssertExpectations(t)
 	})
+}
+
+// Failure status must agree with the evidence returned to the model and UI.
+func TestExecuteFileReadFailureStatus(t *testing.T) {
+	t.Run("missing agent", func(t *testing.T) {
+		agent := &mockAgentServer{}
+		agent.On("GetConnectedAgents").Return([]agentexec.ConnectedAgent{})
+		executor := NewPulseToolExecutor(ExecutorConfig{
+			StateProvider: &mockStateProvider{state: models.StateSnapshot{}},
+			AgentServer:   agent,
+		})
+		result, err := executor.executeFileRead(context.Background(), "/proc/meminfo", "delly2", "")
+		require.NoError(t, err)
+		require.True(t, result.IsError, "missing agent must not count as a successful read")
+		assert.Contains(t, result.Content[0].Text, "No agent found")
+		agent.AssertNotCalled(t, "ExecuteCommand", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	for _, container := range []string{"", "service"} {
+		for _, stderr := range []bool{false, true} {
+			t.Run(fmt.Sprintf("container=%s/stderr=%t", container, stderr), func(t *testing.T) {
+				agent := &mockAgentServer{}
+				agent.On("GetConnectedAgents").Return([]agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "tower"}})
+				command := &agentexec.CommandResultPayload{ExitCode: 1}
+				if stderr {
+					command.Stderr = "permission denied"
+				} else {
+					command.Stdout = "permission denied"
+				}
+				agent.On("ExecuteCommand", mock.Anything, "agent-1", mock.Anything).Return(command, nil)
+				executor := NewPulseToolExecutor(ExecutorConfig{
+					StateProvider: &mockStateProvider{state: models.StateSnapshot{}},
+					AgentServer:   agent,
+				})
+				result, err := executor.executeFileRead(context.Background(), "/proc/meminfo", "tower", container)
+				require.NoError(t, err)
+				require.True(t, result.IsError, "nonzero command exit must not count as file evidence")
+				assert.Contains(t, result.Content[0].Text, "permission denied")
+				assert.Contains(t, result.Content[0].Text, "exit code 1")
+				agent.AssertExpectations(t)
+			})
+		}
+	}
 }
 
 func TestExecuteFileWriteDocker(t *testing.T) {

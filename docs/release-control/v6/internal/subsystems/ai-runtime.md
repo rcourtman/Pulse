@@ -1,5 +1,11 @@
 # AI Runtime Contract
 
+File-read failures must carry the canonical tool error bit. A missing host/guest
+agent, failed command transport or nonzero host/container read exit cannot be
+reported as successful evidence merely because a textual explanation exists.
+The model, persisted tool history, telemetry and Assistant presentation consume
+that same result. Successful reads retain their content and execution provenance.
+
 ## Contract Metadata
 
 ```json
@@ -18,6 +24,29 @@
 ```
 
 ## Purpose
+
+The published Patrol qualification schema must accept the fault injectors used
+by the executable catalogue. `TestCatalogFaultInjectorsMatchPublishedSchema`
+checks the actual scenario faults against the schema enum, including the
+health-process fault shared by approved, rejected and autonomous restart cases.
+This compatibility proof does not establish live diagnosis or action outcomes.
+
+Physical-disk reads in `pulse_metrics` and `pulse_query` list/get/health
+share `physicalDiskSummaryFromResource`. The projection preserves canonical
+resource status, per-source freshness, physical-disk risk reasons and optional SMART counters alongside
+the device-reported SMART health result. It never recomputes risk or collapses a
+SMART pass into an all-clear. A stale source may explain a warning without a
+hardware risk. Missing counters remain absent and observed zero
+remains present. The tool projection labels `life_remaining_percent` explicitly, rather than
+exposing the source-specific ambiguous `wearout` name, and distinguishes it from
+`smart.percentageUsed` as consumed endurance. The regression proof is
+`internal/ai/tools/physical_disk_evidence_test.go`.
+
+Retained summaries disclose that point and bucket timestamps describe returned
+history inside the requested window. Their spacing does not measure collection
+uptime or explain missing history. Collector lifecycle and retention settings
+are not part of the summary query. These are source semantics supplied to the
+model, not a harness-generated diagnosis or a claim of model qualification.
 
 The manual Patrol API consumes the service's selected-mode runtime verdict as
 an execution check. Dimension-level presentation warnings cannot authorize a
@@ -148,51 +177,36 @@ results before asserting that no peer is implicated. The Docker `services`
 operation is explicitly Swarm-only: an empty service list never proves the
 absence of ordinary Docker containers or container dependencies, and its tool
 result must direct the model to topology or search for that evidence.
-Every accepted investigation proposal carries two separately typed resource
-identities: the action target and the exact canonical causal resource
-established by collected evidence. They may be equal, but a cross-resource
-diagnosis must preserve the peer or dependency as the causal identity and the
-proposal reason must preserve its observed state and causal chain. The
-request-local proposal boundary retains a minimal canonical resource graph from
-successful structured query results (resource ID, name, state, and health-check
-targets only). When that graph uniquely resolves a claimed causal resource's
-health-check target to a different unavailable resource, a proposal that still
-names the affected resource as causal is rejected before capture and returned
-to the investigation for correction. Ambiguous names and non-structured or
-failed evidence never create a causal assertion; core must not guess among
-possible resources or retain arbitrary log text at this boundary. The
-tool-free completion turn receives that accepted record as an evidence
-checkpoint. Before persistence, core reconciles the Root Cause section against
-the checkpoint and restores the exact causal identity and recorded basis if the
-provider's final prose omits or downgrades them. This reconciliation adds no new
-model claim and grants no action authority; it prevents the narrative from
-contradicting the already accepted, evidence-bound proposal record.
-An investigation cannot complete or submit a typed action proposal before the
-model has received at least one successful structured result from an advertised
-evidence tool. Until then, core withholds proposal authority while leaving
-evidence-tool selection model-owned. Failed, policy-blocked, loop-blocked, and
-otherwise rejected calls still consume the bounded evidence-attempt budget but
-cannot satisfy grounding. Transport success alone is insufficient: the result
-must contain non-empty evidence content and must not carry the shared legacy or
-structured policy-block/approval markers. If that budget is exhausted without
-a successful result, the run fails closed before proposal or
-completed-investigation persistence. An unset attempt ceiling does not weaken
-that rule: reaching the
-independent model-turn limit with no successful result fails closed before the
-generic final-summary fallback. The side-effect-free action-capability lookup is planning
-metadata, not infrastructure evidence: it neither consumes the evidence budget
-nor satisfies this grounding gate. The shared
-`agentcapabilities.IsPatrolInfrastructureEvidenceToolName` vocabulary admits
-only canonical query, discovery, metrics, storage, Docker, Kubernetes, deep-read,
-and PMG observations. Alert/finding state, retained knowledge, and generated
-summaries may help interpret evidence but cannot consume the evidence budget,
-satisfy grounding, or unlock proposal authority by themselves. If the provider
-returns prose without a tool call, core
-must discard that prose as a durable conclusion and allow one bounded repair
-turn that requires a successful structured result from the same advertised evidence
-manifest. The repair is generic and carries no platform-, incident-, or
-model-specific diagnosis. A second tool-free response fails the investigation
-closed instead of recording narrated or simulated tool use as completed work.
+Every accepted investigation proposal preserves the canonical action target.
+An optional `causal_resource_id` records the model's attribution when supported
+by evidence. It is omitted when the cause is unknown. A recovery proposal may
+address an observed symptom without establishing its underlying cause. The
+reason carries observed evidence, expected benefit and remaining uncertainty.
+The capture boundary validates capability schemas, permissions, correlation,
+parameter isolation and invocation integrity. It does not maintain a duplicate
+resource graph or infer causality from dependency names and status vocabulary.
+The tool-free completion turn distinguishes proposal acceptance from diagnosis.
+The proposal remains an attributed model decision. Core preserves final model
+prose unchanged in the response, stream and transcript, including uncertainty
+or a correction of the earlier rationale. Neither structural validation nor
+proposal acceptance establishes a root cause or authorizes execution.
+Investigation completion and proposal availability do not depend on successful
+evidence-call counts. The model may conclude from supplied observations or
+report that missing access prevents diagnosis. Failed reads remain failed in
+the model context and retained transcript. Completion means the run ended,
+not that its diagnosis is correct, an issue is resolved or an action executed.
+Capability schemas, permissions, correlation and invocation integrity still
+govern proposals and execution independently.
+
+The configured evidence-attempt ceiling remains a resource limit. Attempted
+calls consume it whether they succeed or fail. The request reports the remaining
+allowance as a system fact and removes those tools when it reaches zero.
+It does not prescribe an investigation priority, demand a causal peer, or inject
+checkpoint instructions into tool results. The existing classification of
+infrastructure evidence calls remains only the scope of this resource limit.
+Planning and retained-context tools remain subject to the overall model-turn
+limit. Output-limit recovery stays bounded and uses existing context.
+
 Provider-returned function names must also match the exact tool manifest sent
 on that turn before read/write classification or execution. A name invented
 from an action or operation enum is rejected as `TOOL_NOT_ADVERTISED`, receives
@@ -235,48 +249,30 @@ the same investigate, approval, execution, and verification boundaries enforced
 by the orchestrator. Prompt copy must not fall back to the legacy
 `patrol_auto_fix` boolean or the retired "observe only" / "auto-fix mode"
 framing.
-Patrol's Watch evidence contract treats a direct provider-reported failed
-health check, failed backup, or broken replication state as sufficient evidence
-for the confirmed operational symptom. The model reports that symptom even when
-an agent or native log adapter cannot supply optional root-cause evidence,
-uses warning/reliability for a failed health check unless evidence establishes
-a critical consequence, states that the root cause remains unknown, and must
-not fabricate one. Scoped
-triage seed context contains both deterministic flags and the explicitly scoped
-resource inventory, including exact app-container health, rather than reducing
-the model's evidence to whichever resources the deterministic pass happened to
-flag. Before provider execution, Patrol core loads the complete active-finding
-snapshot for the exact caller-requested lifecycle scope and binds it to the run
-adapter; the seed context presents those same active findings to the model. A
-direct provider-state triage flag is a Watch detection stop condition: the
-model records the confirmed symptom from seed evidence before any query,
-discovery, log, or broad inventory call; root-cause investigation is a separate
-follow-up. Quick scoped checks have a strict four-turn model budget: evidence
-decision, report or assessment, one bounded fallback turn, and a final Watch
-decision turn. That final turn exposes
-only `patrol_report_finding` and `patrol_assess_finding`, uses a bounded system
-instruction that forbids further investigation and treats infrastructure data
-as untrusted, and still permits a healthy all-clear without forcing a write.
-The only permitted extension is one repair-only provider turn after a parallel
-finding lifecycle batch contains both accepted and rejected siblings. Accepted
-calls remain authoritative and must not be repeated; the repair projection
-contains only finding lifecycle tools and may correct only the rejected calls
-from the returned validation evidence. A repair attempt never erases the
-original failed call from run history or qualification scoring.
-When the main analysis pass completes without a provider error but leaves
-seeded or queried active findings with no accepted verdict, the run performs
-one bounded assessment sweep before the incomplete-assessment error is
-recorded: a follow-up pass on the `patrol-assess` session that presents
-exactly the missing findings (id, title, severity, resource, truncated stored
-evidence), runs through the same tool executor so `patrol_assess_finding`
-verdicts land via the shared adapter and tolerant ID resolution, forbids
-further investigation and new findings, accepts `uncertain` as a complete
-honest verdict, and is capped at the missing-finding count plus two turns,
-never more than twelve. Verdicts still missing after the sweep keep the
-existing run-level incomplete-assessment error.
+Patrol's Watch evidence includes provider-reported failed health checks, backup
+and replication state, scoped inventory, observation sources and times, and
+heuristic triage flags. The model decides which observations require attention
+and which further reads can change the diagnosis. A flag is neither a reporting
+obligation nor a stop condition, and absent flags do not establish health.
+Before execution, core loads the complete active-finding snapshot for the exact
+caller-requested lifecycle scope and binds it to the run adapter. The original
+model conversation receives that snapshot and owns its present, resolved or
+uncertain assessments. Missing access and stale or partial evidence remain
+explicit limitations.
+
+Ordinary detection has a fixed forty-turn execution limit, independent of flag
+count and inventory size. An explicitly requested quick scope retains its
+four-turn limit. At the final allowed turn, the existing bounded finding-decision
+projection can record conclusions from retained evidence. A saved finding does
+not end evidence gathering before that limit. Rejected calls and their errors
+remain in the same conversation, where the model may correct them within the
+remaining limit. There is no separate unmatched-signal evaluator, assessment
+sweep or accepted-report-count budget. Omitted assessments remain incomplete
+and cannot resolve the finding. Provider failure remains a run failure even
+when earlier finding writes succeeded.
 Findings first created by an accepted `patrol_report_finding` in the current
 run are already complete structured new-issue outcomes and never join that
-run's assessment sweep, even if a concurrent or later `patrol_get_findings`
+run's pre-existing-finding assessment obligation, even if a concurrent or later `patrol_get_findings`
 call observes them. Re-reported pre-existing findings remain subject to the
 existing-finding verdict contract.
 If the main provider pass nevertheless calls `patrol_assess_finding` for a
@@ -325,26 +321,16 @@ free-form prose, so evidence that a deeper issue also stopped the container
 does not hide that issue. This lets causal incidents retain one user-facing
 Patrol finding even when a provider tries to file the alert-owned dependency
 state separately.
-Investigation and interactive profiles retain a tool-free final summary; a
-Watch finding write at the deadline is followed only by the existing bounded
-summary path. A capability-unavailable
-read result is terminal for that capability within the run and must not trigger
-retries or broad inventory scans.
-Patrol report, assessment, and resolution tools remain governed Pulse-state
-writes for invocation authorization, but accepting one does not represent an
-infrastructure mutation and must not enter or satisfy the infrastructure
-read-after-write FSM. A successful finding-lifecycle write closes investigation
-authority but does not force an immediate text-only conclusion. Watch retains
-bounded report and assessment tools so a provider that emits independent
-findings sequentially can finish the remaining structured decisions without
-restarting collection; accepted lifecycle results are authoritative and may
-not be repeated. That optional continuation gets one provider attempt. If it
-fails after an accepted lifecycle write, Watch preserves the durable result and
-returns control to the deterministic unmatched-signal evaluation pass instead
-of failing the whole run or replaying the stalled continuation. A tool-free
-response ends that completion phase, while the
-existing max-turn fallback still produces bounded text-only summary prose when
-the final allowed turn contains a write. When a real infrastructure write does
+Investigation and interactive profiles retain their bounded final summary.
+Patrol report, assessment and resolution tools are governed Pulse-state writes
+for invocation authorization. Accepting one records a decision, does not prove
+its diagnosis and cannot enter or satisfy the infrastructure read-after-write
+FSM. The normal detection conversation retains its evidence capabilities and
+standing prompt after those writes. Exact repeated accepted lifecycle calls are
+suppressed before invocation, while distinct decisions and reads remain
+available. A provider failure is retained alongside any accepted finding and
+cannot be replaced with a success summary or a separate diagnostic session.
+When a real infrastructure write does
 require another verification turn, the internal verification constraint is
 appended to the provider conversation as a user-role instruction; the request
 must never end in an assistant prefill that compatible providers reject before
@@ -4464,12 +4450,12 @@ model responses, model-selected tool calls, and evidence-tool calls. The
 operator-facing investigation budget limits evidence calls; core derives a
 separate model-response ceiling with reserved completion capacity, and the
 terminal `patrol_propose_action` call does not consume evidence budget. The
-default budget is ten evidence calls: enough for model-led diagnosis while
-making the shipped qualification ceiling the ordinary product posture instead
-of a lab-only override. Operators may still choose the bounded 5–30 range. The
-investigation execution profile injects an evidence-completion checkpoint,
-then structurally removes evidence tools at exhaustion while retaining only the
-typed proposal route and final prose. This remains model-led: Pulse defines the
+default budget is ten evidence calls. This is a resource limit, not a claim of
+diagnostic sufficiency. Operators may choose the bounded 5–30 range. The
+investigation execution profile reports the remaining limit in system context
+and structurally removes evidence tools at exhaustion while retaining only the
+typed proposal route and final prose. Tool results contain observations, without
+appended completion instructions. This remains model-led: Pulse defines the
 four completion questions (symptom, root cause or uncertainty, affected scope,
 safe next action), not a prescribed diagnostic tool sequence. Structured run
 completion also preserves the action handoff implied by the model's own
@@ -5839,9 +5825,11 @@ pulse_question from the manifest AND runtime-block it in the agentic
 loop before the interactive-call-set special case - a fabricated
 question call returns a non-interactive error without emitting a
 waiting event and sibling tool calls from the same provider turn keep
-processing; approval waits never block (they queue), and the
-tool-only-turn wrap-up guardrail is interactive-profile-owned rather
-than keyed on autonomy. Interactive runs additionally enforce a
+processing; approval waits never block (they queue). Assistant and Watch
+do not infer diagnostic sufficiency from tool-call totals or silent tool turns.
+Configured run limits and repeated identical-call/error recovery still bound
+execution. Tool results never receive count-based wrap-up instructions.
+Interactive runs additionally enforce a
 look-before-asking gate: a `pulse_question` issued before the run has
 attempted any real tool call is refused with an error tool result that
 steers the model to read-only enumeration (the resolve-before-asking
@@ -7121,11 +7109,11 @@ the reporting request shape the way the API report path's
 the resolved metrics target rides `MetricsResourceID`, so the
 engine's store queries actually find data instead of silently
 returning zero points. Reporting types are classified from the
-unified resource (agent-backed hosts as `agent`, pure Proxmox
-nodes as `node` — the documented exception where the metrics
-target labels the agent family but node metrics live under the
-`node` store type — pure Docker hosts as `docker-host`), and the
-resolved target's type wins elsewhere. `resource_type` is now an
+unified resource, with the canonical metrics target taking precedence.
+Agent-backed hosts use `agent`, pure Proxmox nodes use `node`, and
+pure Docker hosts use `docker-host`. The Proxmox storage-family
+correction belongs to the unified target, so summary tools no longer
+carry their own exception. `resource_type` is now an
 optional filter/default for fleet mode and only required for
 `action=resource` when the identifier is not a known resource.
 Every remaining error path in the tool tells the model to
@@ -7675,27 +7663,12 @@ scope, never prompt text. An empty or unknown type keeps the full governed profi
 guessing and silently blinding Patrol; the allowlist is applied after profile
 projection and therefore can remove tools but cannot add authority.
 
-Bounded continuations do not repeat either main-pass manifest: the
-unmatched-signal evaluation pass receives only
-`patrol_report_finding` after core has established the complete exact-scope
-active-finding snapshot; narrow compatibility paths without a complete snapshot
-receive only `patrol_get_findings` plus `patrol_report_finding`. The
-assessment-completion sweep receives only
-`patrol_assess_finding`. These are structured call-site allowlists applied
-after profile projection and may only reduce authority. An unavailable or
-unknown requested tool fails closed. Prompt text never selects the manifest.
-The evaluation pass also carries a typed successful-report budget equal to the
-number of unmatched signals it was given. Accepted `patrol_report_finding`
-writes consume that budget; once it is exhausted, report authority is removed
-and the next provider turn is a tool-free bounded summary. Capped same-turn
-report batches execute in provider order, and any excess call fails before
-persistence. Ordinary Watch runs carry no report cap, so model-owned discovery
-of an open-ended number of independent problems remains intact.
-Each Patrol invocation, including the main pass and both continuations, receives
-a fresh infrastructure workflow FSM and resolved-resource context. Its stable
-session ID remains a forensic-log key only and cannot carry a prior run's read
-authority, resource alias, validated target, or unfinished verification state
-into the next call.
+The internal Patrol request bridge carries the explicit run limit, caller-owned
+tool allowlist and execution identity. It no longer carries an evaluator's
+signal-count-derived report budget. Each invocation receives a fresh
+infrastructure workflow FSM and resolved-resource context. Its stable session
+ID is a forensic-log key and cannot import prior-run read authority, resource
+aliases, validated targets or unfinished verification state.
 While that fresh FSM is resolving, Patrol state-only writes bypass the generic
 infrastructure read-before-write gate because their server-owned run adapters
 already validate exact finding scope, active finding identity, complete
@@ -7716,8 +7689,8 @@ handling.
 Finding creation also validates the provider-authored resource ID and display
 name as one identity pair against the current runtime snapshot. When both
 values resolve uniquely but identify different same-type resources, core
-rejects the report and lets the bounded finding repair turn resubmit a coherent
-canonical pair; it never guesses which value was intended. This prevents one
+rejects the report and lets the model correct the rejected call in the original conversation
+within its execution limit; it never guesses which value was intended. This prevents one
 incident from being persisted twice when a report copies the ID of an in-scope
 sibling while describing the correct affected resource by name. The existing
 exact-name repair remains limited to unknown ID transcription errors and does
@@ -7735,12 +7708,11 @@ published as an all-clear. An objective-design mission uses the parallel
 proposal-only recovery contract above rather than being rejected merely because
 finding lifecycle tools were intentionally absent.
 
-Every provider tool call admitted by the orchestration boundary from the main
-pass, evaluation pass, and assessment sweep is merged into the one durable
-Patrol run trace, including raw provider arguments, failed calls, and bounded
+Every provider tool call admitted by the original model conversation is
+retained in the durable Patrol run trace, including raw provider arguments, failed calls, and bounded
 outputs. Qualification and operator forensics therefore see the complete
-canonical model-owned decision path; a follow-up cannot hide a duplicate
-findings read or a failed lifecycle write in an ephemeral callback. Exact
+canonical model-owned decision path, including a failed lifecycle write.
+No auxiliary model session can hide those attempts in an ephemeral callback. Exact
 finding-lifecycle retries suppressed before canonical invocation are runtime
 loop-control decisions rather than tool executions and do not create a second
 tool-start/tool-end pair.
@@ -7823,15 +7795,13 @@ Qualification may therefore require positive input/output usage for a
 tool-free real-model all-clear without falsely rejecting Codex subscription
 runs whose analysis and healthy outcome were durably persisted.
 
-Investigation evidence checkpoints keep the finding resource as an anchor,
-not a fence. When a cross-resource cause remains plausible, empty logs or a
-policy-blocked deep-read attempt cannot justify an unknown-root-cause
-conclusion or remediation proposal on the symptom alone; the remaining
-read-only budget must prioritize canonical query, discovery, or topology
-evidence for at least one plausible causal peer or dependency. Later
-topology/query/discovery resource entries take precedence over an earlier
-empty Docker Swarm-service result when determining whether a container peer is
-implicated.
+The finding resource anchors investigation context without restricting which
+canonical resources the model can inspect. The model decides whether further
+peer or dependency evidence is needed and whether missing access prevents a
+causal conclusion. Neither a successful read count nor a submitted proposal
+establishes that cause. Failed reads and explicit uncertainty remain in the
+transcript and final conclusion. Canonical topology/query/discovery tools retain
+the current evidence required for cross-resource diagnosis.
 
 Resource-scoped investigation health evidence uses the canonical resource
 projection. `pulse_query` with `action=health` and a non-empty `resource_id`
@@ -8011,3 +7981,37 @@ reasoning and real remediation in
 `docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
 proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
 response does not establish a useful customer outcome or model qualification.
+
+### Subscription routing content boundary
+
+Subscription routing turns emit validated tool calls only. Native CLI narration
+and synthetic local errors are transport material, not Assistant answer text or
+infrastructure observations. For Claude's native-tool fallback, retain the entire
+first declared tool batch in order and discard later CLI continuations produced
+without Pulse tool results. Exact tool names, invocation identity, refusal,
+permission-denial and disabled local-tool boundaries remain enforced. Structured
+final answers retain their content unchanged.
+
+The regression uses a serialized routing envelope before a two-call native batch
+and a later synthetic continuation. It verifies empty routing prose, both
+original calls, original order and preserved final uncertainty. A completed
+real Assistant request after the transport change showed no routing envelope
+in the persisted conversation or visible answer. Its unsupported historical
+inferences remain failed diagnostic qualification.
+
+The shared Assistant response prompt is scoped to the user's resource, period
+and decision. It no longer demands general thoroughness or unsolicited next
+steps on every answer. Provenance follows the product's distinct source
+observation, model hypothesis, proposal, execution and verification records.
+This is model context, not a deterministic quality classifier. Real responses
+remain subject to factual review and latency qualification.
+
+### Readable answer tables
+
+The shared sanitized markdown renderer owns horizontal overflow for each table
+through a labelled, keyboard-focusable region. Application styling is added only
+after sanitization. Model-provided classes, styles and event handlers remain
+disallowed. Streaming DOM reconciliation preserves table region identity, focus
+and scroll position. The conversation itself must not acquire horizontal scroll
+from wide answer tables. Browser proof covers a persisted real answer and
+explicit renderer fixtures at 1440, 900 and 390 pixel widths.

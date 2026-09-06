@@ -152,6 +152,9 @@ func TestSummarizeTool_ResourceReturnsHeuristicNarrative(t *testing.T) {
 	if parsed.Scope.Source != "retained_metrics" || parsed.Evidence == nil || len(parsed.Evidence.Metrics) != 0 {
 		t.Fatalf("expected empty retained evidence, got %+v", parsed)
 	}
+	if parsed.Scope.TimeSemantics == "" {
+		t.Fatal("even empty results must disclose the retained timestamp semantics")
+	}
 	for _, field := range []string{"health_status", "health_message", "observations", "recommendations"} {
 		if strings.Contains(res.Content[0].Text, `"`+field+`"`) {
 			t.Fatalf("empty evidence invented %s: %s", field, res.Content[0].Text)
@@ -411,7 +414,7 @@ func newSummarizeStubProvider() *stubSummarizeResourceProvider {
 			},
 		},
 		targets: map[string]*unifiedresources.MetricsTarget{
-			"host-abc123": {ResourceType: "agent", ResourceID: "delly-node-id"},
+			"host-abc123": {ResourceType: "node", ResourceID: "delly-node-id"},
 			"vm-def456":   {ResourceType: "vm", ResourceID: "pve1:node:101"},
 		},
 	}
@@ -448,8 +451,7 @@ func TestSummarizeTool_FleetEnumeratesWhenIDsOmitted(t *testing.T) {
 	if len(parsed.Resources) != 2 || parsed.Resources[0].Name != "delly" || parsed.Resources[1].Type != "vm" {
 		t.Errorf("Resources = %+v", parsed.Resources)
 	}
-	// Pure Proxmox node classification keeps the "node" reporting type even
-	// though the metrics target labels the agent family.
+	// Pure Proxmox history follows its canonical node store coordinates.
 	if parsed.Resources[0].Type != "node" {
 		t.Errorf("host entry type = %q, want node", parsed.Resources[0].Type)
 	}

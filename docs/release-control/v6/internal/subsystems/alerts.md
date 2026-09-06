@@ -15,6 +15,13 @@
 
 ## Purpose
 
+The shared delivery-health card wraps action groups according to available
+space, retaining readable explanation width when Review, Retry, Dismiss and
+Refresh appear together. Its heading uses the opaque semantic foreground,
+not the translucent palette shades reserved for status backgrounds. Verify
+light/dark layouts at desktop, intermediate and narrow widths, including
+unavailable health, pending refresh and recovery.
+
 The alerts overview offers the existing delivery-status refresh control when
 health is unavailable, including after a successful retained-queue action whose
 follow-up health read fails. The warning remains until a verified healthy read;

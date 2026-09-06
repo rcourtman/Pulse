@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -15,7 +16,7 @@ import (
 // This catches index regressions — if a schema migration drops an index or a
 // query change breaks index eligibility, these tests fail immediately.
 //
-// Each sub-test runs EXPLAIN QUERY PLAN on the exact SQL the store uses at
+// Each sub-test runs EXPLAIN QUERY PLAN on SQL the store uses at
 // runtime. Queries are classified by how they should access the table:
 //   - searchRequired: the plan must use SEARCH (B-tree point/range lookup)
 //   - allowCoveringIndexScan: the plan may use a covering-index scan, which
@@ -24,7 +25,8 @@ import (
 //
 // In all cases, a bare "SCAN TABLE metrics" (full table scan) is rejected.
 //
-// NOTE: The schema and SQL here are intentionally duplicated from store.go.
+// NOTE: Maintenance SQL is duplicated from store.go. Retained reads exercise
+// the shared runtime builder directly in TestRetainedQueryPlansUseIndexes.
 // If store.go's schema or queries change, these tests must be updated in
 // lockstep — a mismatch means they validate stale SQL.
 func TestQueryPlansUseIndexes(t *testing.T) {
@@ -50,96 +52,6 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 		allowIndexScan bool
 	}{
 		{
-			name: "single metric lookup",
-			query: `SELECT timestamp, value, COALESCE(min_value, value), COALESCE(max_value, value)
-				FROM metrics
-				WHERE resource_type = ? AND resource_id = ? AND metric_type = ? AND tier = ?
-				AND timestamp >= ? AND timestamp <= ?
-				ORDER BY timestamp ASC`,
-			args:      []any{"vm", "vm-1", "cpu", "raw", int64(0), farFuture},
-			wantIndex: "idx_metrics_lookup",
-		},
-		{
-			name: "single metric with downsampling",
-			query: `SELECT
-				(timestamp / ?) * ? + (? / 2) as bucket_ts,
-				AVG(value),
-				MIN(COALESCE(min_value, value)),
-				MAX(COALESCE(max_value, value))
-				FROM metrics
-				WHERE resource_type = ? AND resource_id = ? AND metric_type = ? AND tier = ?
-				AND timestamp >= ? AND timestamp <= ?
-				GROUP BY bucket_ts
-				ORDER BY bucket_ts ASC`,
-			args:      []any{int64(60), int64(60), int64(60), "vm", "vm-1", "cpu", "raw", int64(0), farFuture},
-			wantIndex: "idx_metrics_lookup",
-		},
-		{
-			name: "multi-metric lookup (QueryAll)",
-			query: `SELECT metric_type, timestamp, value, COALESCE(min_value, value), COALESCE(max_value, value)
-				FROM metrics
-				WHERE resource_type = ? AND resource_id = ? AND tier = ?
-				AND timestamp >= ? AND timestamp <= ?
-				ORDER BY metric_type, timestamp ASC`,
-			args: []any{"vm", "vm-1", "raw", int64(0), farFuture},
-			// The planner uses an indexed SEARCH — it may pick idx_metrics_query_all
-			// or idx_metrics_lookup depending on statistics.
-			// All are valid; the key invariant is that it does a SEARCH, not a SCAN.
-		},
-		{
-			name: "multi-metric with downsampling (QueryAll)",
-			query: `SELECT
-				metric_type,
-				(timestamp / ?) * ? + (? / 2) as bucket_ts,
-				AVG(value),
-				MIN(COALESCE(min_value, value)),
-				MAX(COALESCE(max_value, value))
-				FROM metrics
-				WHERE resource_type = ? AND resource_id = ? AND tier = ?
-				AND timestamp >= ? AND timestamp <= ?
-				GROUP BY metric_type, bucket_ts
-				ORDER BY metric_type, bucket_ts ASC`,
-			args: []any{int64(60), int64(60), int64(60), "vm", "vm-1", "raw", int64(0), farFuture},
-		},
-		{
-			name: "multi-resource multi-metric lookup (QueryAllBatch)",
-			query: `SELECT resource_id, metric_type, timestamp, value, COALESCE(min_value, value), COALESCE(max_value, value)
-				FROM metrics
-				WHERE resource_type = ? AND resource_id IN (?, ?, ?) AND tier = ?
-				AND timestamp >= ? AND timestamp <= ?
-				ORDER BY resource_id, metric_type, timestamp ASC`,
-			args: []any{"vm", "vm-1", "vm-2", "vm-3", "raw", int64(0), farFuture},
-			// QueryAllBatch is the anti-N+1 dashboard path. The planner may choose
-			// idx_metrics_query_all or idx_metrics_lookup
-			// depending on statistics; the invariant is an indexed SEARCH rather
-			// than a full table scan.
-		},
-		{
-			name: "multi-resource multi-metric with downsampling (QueryAllBatch)",
-			query: `SELECT
-				resource_id,
-				metric_type,
-				(timestamp / ?) * ? + (? / 2) as bucket_ts,
-				AVG(value),
-				MIN(COALESCE(min_value, value)),
-				MAX(COALESCE(max_value, value))
-				FROM metrics
-				WHERE resource_type = ? AND resource_id IN (?, ?, ?) AND tier = ?
-				AND timestamp >= ? AND timestamp <= ?
-				GROUP BY resource_id, metric_type, bucket_ts
-				ORDER BY resource_id, metric_type, bucket_ts ASC`,
-			args: []any{int64(60), int64(60), int64(60), "vm", "vm-1", "vm-2", "vm-3", "raw", int64(0), farFuture},
-		},
-		{
-			name: "multi-resource filtered-metric lookup (QueryMetricTypesBatch)",
-			query: `SELECT resource_id, metric_type, timestamp, value, COALESCE(min_value, value), COALESCE(max_value, value)
-				FROM metrics
-				WHERE resource_type = ? AND resource_id IN (?, ?, ?) AND metric_type IN (?, ?) AND tier = ?
-				AND timestamp >= ? AND timestamp <= ?
-				ORDER BY resource_id, metric_type, timestamp ASC`,
-			args: []any{"vm", "vm-1", "vm-2", "vm-3", "cpu", "memory", "raw", int64(0), farFuture},
-		},
-		{
 			name:      "retention delete by tier+time",
 			query:     `DELETE FROM metrics WHERE tier = ? AND timestamp < ?`,
 			args:      []any{"raw", farFuture},
@@ -162,8 +74,8 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 				SELECT
 					resource_type, resource_id, metric_type,
 					AVG(value) as value,
-					MIN(value) as min_value,
-					MAX(value) as max_value,
+					MIN(COALESCE(min_value, value)) as min_value,
+					MAX(COALESCE(max_value, value)) as max_value,
 					(timestamp / ?) * ? as bucket_ts,
 					?
 				FROM metrics
@@ -181,8 +93,8 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 					resource_id,
 					metric_type,
 					AVG(value) as value,
-					MIN(value) as min_value,
-					MAX(value) as max_value,
+					MIN(COALESCE(min_value, value)) as min_value,
+					MAX(COALESCE(max_value, value)) as max_value,
 					(timestamp / ?) * ? as bucket_ts,
 					?
 				FROM metrics
@@ -249,6 +161,73 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 				t.Errorf("expected SEARCH on metrics using index %q not found in plan\nPlan:\n%s", tt.wantIndex, plan)
 			}
 		})
+	}
+}
+
+// Query, QueryAll and both batch variants share this exact runtime SQL. The
+// display step is applied in SQLite after tier reconciliation.
+func TestRetainedQueryPlansUseIndexes(t *testing.T) {
+	db := newPlanTestDB(t)
+	store := &Store{}
+	for _, window := range []time.Duration{time.Hour, 24 * time.Hour, 7 * 24 * time.Hour, 30 * 24 * time.Hour} {
+		for _, filtered := range []bool{false, true} {
+			for _, step := range []int64{0, 60} {
+				t.Run(fmt.Sprintf("%s/filtered_%v/step_%d", window, filtered, step), func(t *testing.T) {
+					var metrics []string
+					if filtered {
+						metrics = []string{"cpu", "memory"}
+					}
+					end := time.Unix(2000000000, 0)
+					sql, args := retainedQuerySQL("vm", []string{"vm-1", "vm-2", "vm-3"}, metrics, end.Add(-window), end, step, store.tierFallbacks(window), false)
+					plan := explainQueryPlan(t, db, sql, args)
+					searches := 0
+					for _, line := range strings.Split(plan, "\n") {
+						if strings.Contains(line, "SCAN m ") || strings.Contains(line, "SCAN h ") {
+							t.Fatalf("unbounded metrics read: %s", plan)
+						}
+						if strings.Contains(line, "SEARCH m ") || strings.Contains(line, "SEARCH h ") {
+							searches++
+							for _, constraint := range []string{"resource_type=?", "resource_id=?", "tier=?", "timestamp>?", "timestamp<?"} {
+								if !strings.Contains(line, constraint) {
+									t.Fatalf("retained search missing indexed %s: %s", constraint, line)
+								}
+							}
+						}
+					}
+					n := len(store.tierFallbacks(window))
+					if searches != n*(n+1)/2 {
+						t.Fatalf("expected every tier and overlap probe indexed, got %d: %s", searches, plan)
+					}
+				})
+			}
+		}
+	}
+}
+
+// A single present tier uses direct aggregation. It must retain the same
+// bounded identity/tier/time lookup as the reconciled multi-tier query.
+func TestRetainedSingleTierQueryPlansUseIndexes(t *testing.T) {
+	db := newPlanTestDB(t)
+	end := time.Unix(2000000000, 0)
+	for _, tier := range []Tier{TierRaw, TierMinute, TierHourly, TierDaily} {
+		for _, filtered := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/filtered_%v", tier, filtered), func(t *testing.T) {
+				var metrics []string
+				if filtered {
+					metrics = []string{"cpu"}
+				}
+				query, args := retainedQuerySQL("vm", []string{"vm-1"}, metrics, end.Add(-time.Hour), end, 60, []Tier{tier}, false)
+				plan := explainQueryPlan(t, db, query, args)
+				if strings.Contains(plan, "SCAN m ") || !strings.Contains(plan, "SEARCH m ") {
+					t.Fatalf("single tier must use a bounded lookup: %s", plan)
+				}
+				for _, constraint := range []string{"resource_type=?", "resource_id=?", "tier=?", "timestamp>?", "timestamp<?"} {
+					if !strings.Contains(plan, constraint) {
+						t.Fatalf("missing indexed %s: %s", constraint, plan)
+					}
+				}
+			})
+		}
 	}
 }
 
@@ -557,4 +536,15 @@ func explainQueryPlan(t *testing.T, db *sql.DB, query string, args []any) string
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+func TestRetainedUnaggregatedQueryAvoidsMetricSort(t *testing.T) {
+	db := newPlanTestDB(t)
+	end := time.Unix(2000000040, 0)
+	query, args := retainedQuerySQL("node", []string{"a", "b"}, nil, end.Add(-time.Hour), end, 0, []Tier{TierRaw, TierMinute, TierHourly}, false)
+	for _, line := range strings.Split(explainQueryPlan(t, db, query, args), "\n") {
+		if strings.Contains(strings.ToUpper(line), "TEMP B-TREE") {
+			t.Fatalf("unaggregated all-metric read sorts despite time-ordered index: %s", line)
+		}
+	}
 }

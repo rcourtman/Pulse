@@ -15,17 +15,55 @@
 
 ## Purpose
 
-The open `patrol-assistant-customer-outcome-qualification` gap includes retained
-query coverage in `pkg/metrics/store.go`. A 24-hour `Query` returns the first
-non-empty resolution tier, and `QueryAll` fills missing metric names rather than
-missing times. A fixture with a minute-tier CPU point at 21:37 and a raw point
-at 22:16 returns only 21:37 for both 24-hour APIs, while a two-hour query returns
-22:16. The new model-facing evidence contract discloses the returned timestamps
-but does not repair this shared-store defect. Canonical follow-up must reconcile
-temporal coverage across tiers for single-series, all-series and batch queries,
-with explicit bucket precedence, extrema and downsampling semantics. Do not
-claim complete or current requested-window coverage from the present fallback
-behavior. This belongs to metrics-store qualification, not model prompting.
+Retained reads use one shared query contract in `pkg/metrics/store.go` for
+`Query`, `QueryAll`, `QueryAllBatch` and `QueryMetricTypesBatch`. A non-empty
+preferred resolution no longer hides a newer raw tail, an older uncovered
+bucket, a gap, or another metric on the same resource. Resource identity,
+metric filters and timestamp bounds apply to every tier and overlap probe.
+
+Tier priority still follows the requested range. An aggregate owns its UTC
+minute/hour/day bucket when that tier has priority. Lower-priority observations
+inside it are excluded. A coarser fallback that overlaps a preferred observation
+is omitted as an indivisible aggregate, never split or interpolated. Only
+buckets whose stored timestamp lies in the requested window participate. This
+avoids double-counting and prevents observations outside the requested range
+from suppressing evidence inside it. Reconciliation precedes display
+aggregation, which retains the existing unweighted mean and centred display
+bucket timestamp. Single-resource charts aggregate in SQLite after reconciliation so only display
+buckets cross into Go. Fleet queries stream ordered observations into bounded
+display buckets without retaining every input point. Both preserve identical
+bucket, mean and extrema semantics, and reuse scan destinations across rows.
+
+Each bounded resource chunk reads one consistent snapshot. Plain reads execute
+the canonical reconciliation query as one SQLite statement. They require no
+separate presence probe or explicit transaction. All-metric plain reads use
+resource/time index order, which preserves each output series' chronology
+without an unnecessary metric sort. Streaming display aggregation still
+requires contiguous series and requests that ordering explicitly.
+
+Display-aggregated reads use one transaction. Indexed existence checks identify
+which retention tiers have observations in that snapshot. Every present tier
+participates in the shared indexed overlap query. Presence never stands in for
+per-series coverage. The store retains at most 32 compiled read-statement shapes
+and evaluates them again inside each current read snapshot.
+It never caches tier presence, query results or timestamp windows. Less common
+shapes run uncached after the bound is reached. Preparation occurs before
+acquiring the transaction, including with a single-connection pool. The shared
+database instrumentation preserves timing for transaction-bound prepared
+statements, and database closure owns their lifetime. In display-aggregated
+reads, empty tiers need no per-observation probe and an all-raw series uses a
+direct range query. Fixed query dimensions need
+not be decoded again for every returned point. Query-plan tests exercise the runtime SQL builder,
+including all tier priorities and metric filters. Multi-stage rollups preserve
+recorded minima and maxima instead of taking extrema from bucket averages.
+Already discarded historical extrema cannot be reconstructed by this change.
+
+The `retained-metric-query-coverage` follow-up addresses the specific first-tier
+query defect reproduced during Patrol outcome qualification. Returned points
+still do not prove continuous collection or a complete requested window.
+Uncollected observations and unavailable pressure evidence remain unavailable.
+`pkg/metrics/store_tier_coverage_test.go` owns the overlap, tail, gap, per-series
+scope, downsampling parity and retained-extrema regression cases.
 
 
 Resource-scoped Assistant performance reads query retained CPU, memory and

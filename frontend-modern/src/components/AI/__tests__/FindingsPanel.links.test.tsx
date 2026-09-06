@@ -189,6 +189,40 @@ vi.mock('@/stores/aiIntelligence', () => ({
 }));
 
 describe('FindingsPanel resource links', () => {
+  it('keeps an alert-mirrored finding selected in the shared Patrol review panel', async () => {
+    const title = 'Disk pressure with unknown cause';
+    mockState.patrolFindings = [
+      {
+        ...mockState.initialPatrolFindings[0],
+        id: 'mirrored-finding',
+        title,
+        mirrorsAlertId: 'alert-1',
+        mirrorsAlertType: 'disk',
+        description: 'The disk is full. Its cause remains unknown.',
+        investigationStatus: 'completed',
+        investigationOutcome: 'needs_attention',
+      },
+    ];
+    render(() => <FindingsPanel findingsSource="patrol" />);
+    fireEvent.click(screen.getByText('1 finding mirrors an active alert'));
+    const review = screen.getByRole('button', { name: `Review issue for ${title}` });
+    fireEvent.click(review);
+    const panel = await screen.findByRole('complementary', { name: `Review ${title}` });
+    expect(panel).toHaveTextContent('The disk is full. Its cause remains unknown.');
+    expect(screen.getByRole('button', { name: `Close review for ${title}` })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    fireEvent.click(screen.getByRole('button', { name: `Close review panel for ${title}` }));
+    await waitFor(() =>
+      expect(screen.queryByRole('complementary', { name: `Review ${title}` })).toBeNull(),
+    );
+    expect(screen.getByRole('button', { name: `Review issue for ${title}` })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
   const expectCollapsedFinding = (title: string) => {
     expect(screen.getByRole('button', { name: `Review issue for ${title}` })).toBeInTheDocument();
   };

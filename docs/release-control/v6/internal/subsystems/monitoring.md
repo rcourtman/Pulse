@@ -17,6 +17,16 @@
 
 ## Purpose
 
+Physical disk inventory has an independent collector schedule. The PVE poller
+carries its default five-minute or configured interval with each disk record,
+while keeping the last successful observation timestamp on retained records.
+Quick temperature refreshes and typed read-state conversions must preserve that
+cadence rather than falling back to the general node polling interval. It feeds
+the canonical source-freshness contract, not a model-generated diagnosis.
+Proof: the async fallback poll in `monitor_pve_disk_fallback_test.go`, the canonical
+roundtrip in `issue1595_collection_trust_test.go`, and registry cadence/recovery
+coverage. Live `/api/resources` and final Assistant browser proof are also required.
+
 PBS node-status collection must reject HTTP-success responses whose `data`
 is omitted or null (including a null response envelope). Absent status is
 unavailable telemetry, not measured zero usage: the poller retains independently

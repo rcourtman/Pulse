@@ -65,30 +65,75 @@ let browser;
 try {
   await server.listen();
   browser = await chromium.launch({ headless: true });
-  mkdirSync('/tmp/pulse-overview-refresh', { recursive: true });
+  mkdirSync("/tmp/pulse-overview-refresh", { recursive: true });
   let cases = 0;
-  for (const width of [1440, 390]) {
-    for (const action of ['Retry retained deliveries', 'Dismiss retained failures']) {
-      const page = await browser.newPage({ viewport: { width, height: 900 } });
-      await page.goto('http://127.0.0.1:5197/qualification');
-      await page.waitForFunction(() => window.count?.() === 1);
-      await page.evaluate(() => window.finish(0, 'degraded'));
-      await page.getByRole('button', {name: action, exact: true}).click();
-      await page.waitForFunction(() => window.count() === 2);
-      await page.evaluate(() => window.finish(1, 'error'));
-      const refresh = page.getByRole('button', {name:'Refresh delivery status', exact:true});
-      await refresh.waitFor();
-      assert.match(await page.getByRole('alert').innerText(), /status is unavailable/);
-      await page.screenshot({path: `/tmp/pulse-overview-refresh/${width}-${cases}-unavailable.png`});
-      await refresh.click();
-      await page.waitForFunction(() => window.count() === 3);
-      assert.equal(await refresh.isDisabled(), true);
-      await page.evaluate(() => window.finish(2, 'healthy'));
-      await page.getByRole('alert').waitFor({state:'detached'});
-      assert.equal(await page.evaluate(() => window.actions), 1);
-      await page.screenshot({path: `/tmp/pulse-overview-refresh/${width}-${cases}-healthy.png`});
-      cases++;
-      await page.close();
+  for (const theme of ["light", "dark"]) {
+    for (const width of [1440, 900, 390]) {
+      for (const action of [
+        "Retry retained deliveries",
+        "Dismiss retained failures",
+      ]) {
+        const page = await browser.newPage({
+          viewport: { width, height: 900 },
+        });
+        await page.goto("http://127.0.0.1:5197/qualification");
+        await page.evaluate(
+          (theme) =>
+            document.documentElement.classList.toggle("dark", theme === "dark"),
+          theme,
+        );
+        await page.waitForFunction(() => window.count?.() === 1);
+        await page.evaluate(() => window.finish(0, "degraded"));
+        await page.getByRole("button", { name: action, exact: true }).click();
+        await page.waitForFunction(() => window.count() === 2);
+        await page.evaluate(() => window.finish(1, "error"));
+        const refresh = page.getByRole("button", {
+          name: "Refresh delivery status",
+          exact: true,
+        });
+        await refresh.waitFor();
+        assert.match(
+          await page.getByRole("alert").innerText(),
+          /status is unavailable/,
+        );
+        const geometry = await page.getByRole("alert").evaluate((el) => {
+          const heading = el.querySelector("h3");
+          const bounds = el.getBoundingClientRect();
+          return {
+            titleFits: heading.scrollWidth <= heading.clientWidth + 1,
+            actionsFit: [...el.querySelectorAll("button, a")].every(
+              (control) => {
+                const rect = control.getBoundingClientRect();
+                return rect.left >= bounds.left && rect.right <= bounds.right;
+              },
+            ),
+          };
+        });
+        assert.equal(
+          geometry.titleFits,
+          true,
+          "warning heading must not overflow beneath actions",
+        );
+        assert.equal(
+          geometry.actionsFit,
+          true,
+          "warning actions must stay inside the card",
+        );
+        await page.screenshot({
+          path: `/tmp/pulse-overview-refresh/${theme}-${width}-${cases}-unavailable.png`,
+        });
+        await refresh.click();
+        await page.waitForFunction(() => window.count() === 3);
+        assert.equal(await refresh.isDisabled(), true);
+        await page.evaluate(() => window.finish(2, "healthy"));
+        await page.getByRole("alert").waitFor({ state: "detached" });
+        assert.equal(await page.evaluate(() => window.actions), 1);
+        await page.screenshot({
+          path: `/tmp/pulse-overview-refresh/${theme}-${width}-${cases}-healthy.png`,
+        });
+        cases++;
+        await page.close();
+      }
     }
   }
   console.log(`${cases} overview action/outage/refresh browser cases passed`);

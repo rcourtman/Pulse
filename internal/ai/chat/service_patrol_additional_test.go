@@ -275,8 +275,8 @@ func TestService_ExecutePatrolStream_UsesFreshFSMAndAcceptsCoreValidatedFindingW
 
 	// A previous invocation may have ended while verifying an infrastructure
 	// write. The shared session ID is only a forensic key for Patrol and must not
-	// carry that workflow state into this bounded continuation.
-	staleFSM := store.GetSessionFSM("patrol-eval")
+	// carry that workflow state into the next detection run.
+	staleFSM := store.GetSessionFSM("patrol-main")
 	staleFSM.State = StateVerifying
 	staleFSM.WroteThisEpisode = true
 	staleFSM.ReadAfterWrite = false
@@ -313,8 +313,8 @@ func TestService_ExecutePatrolStream_UsesFreshFSMAndAcceptsCoreValidatedFindingW
 				}})
 				return nil
 			}
-			if req.System != patrolFindingLifecycleSummarySystemPrompt || len(req.Tools) != 0 || req.ToolChoice != nil {
-				t.Fatalf("post-budget service request = %+v, want tool-free Patrol summary", req)
+			if !providerToolIsAdvertised(req.Tools, agentcapabilities.PatrolReportFindingToolName) || req.ToolChoice != nil {
+				t.Fatalf("post-report service request = %+v, want unchanged finding capability", req)
 			}
 			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "Finding recorded."}})
 			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{InputTokens: 4, OutputTokens: 2}})
@@ -323,11 +323,10 @@ func TestService_ExecutePatrolStream_UsesFreshFSMAndAcceptsCoreValidatedFindingW
 	}
 
 	resp, err := service.ExecutePatrolStream(context.Background(), PatrolRequest{
-		Prompt:            "Record the validated signal.",
-		SessionID:         "patrol-eval",
-		MaxTurns:          3,
-		MaxFindingReports: 1,
-		AllowedToolNames:  []string{agentcapabilities.PatrolReportFindingToolName},
+		Prompt:           "Record the validated signal.",
+		SessionID:        "patrol-main",
+		MaxTurns:         3,
+		AllowedToolNames: []string{agentcapabilities.PatrolReportFindingToolName},
 	}, func(StreamEvent) {})
 	if err != nil {
 		t.Fatalf("ExecutePatrolStream failed: %v", err)

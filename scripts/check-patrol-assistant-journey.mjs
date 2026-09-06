@@ -4,7 +4,8 @@ import {
   chromium,
   expect,
 } from "../tests/integration/node_modules/@playwright/test/index.mjs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 const base = process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:5173";
 const output = new URL("../tmp/patrol-assistant-journey/", import.meta.url);
 await mkdir(output, { recursive: true });
@@ -70,6 +71,67 @@ const detail = (item) => ({
     },
   ],
 });
+// Completed execution is deliberately paired with an unresolved diagnosis.
+const uncertainConclusion =
+  "The cause remains unknown. Host access is unavailable. No action was performed.";
+const failedRead =
+  "Host agent unavailable. The requested logs could not be collected.";
+let investigationFixture = false;
+const investigation = {
+  id: "investigation-proof",
+  finding_id: "finding-proof",
+  session_id: "investigation-session",
+  status: "completed",
+  outcome: "needs_attention",
+  started_at: now,
+  completed_at: now,
+  turn_count: 2,
+  summary: uncertainConclusion,
+  tools_used: ["pulse_read"],
+};
+const finding = {
+  id: "finding-proof",
+  resource_id: resourceId,
+  resource_name: "Database VM",
+  resource_type: "vm",
+  severity: "warning",
+  category: "capacity",
+  title: "Disk pressure with unknown cause",
+  description: "The disk is 95 percent full. The source of growth is unknown.",
+  evidence: "Disk usage is 95 percent.",
+  recommendation: "Restore read access before deciding on a change.",
+  detected_at: now,
+  last_seen_at: now,
+  auto_resolved: false,
+  times_raised: 1,
+  suppressed: false,
+  mirrors_alert_id: "alert-proof",
+  mirrors_alert_type: "disk",
+  investigation_status: "completed",
+  investigation_outcome: "needs_attention",
+  investigation_session_id: investigation.session_id,
+  investigation_attempts: 1,
+  investigation_record: {
+    id: investigation.id,
+    finding_id: "finding-proof",
+    status: "completed",
+    outcome: "needs_attention",
+    subject: {
+      resource_id: resourceId,
+      resource_name: "Database VM",
+      resource_type: "vm",
+    },
+    trigger: { title: "Disk pressure with unknown cause", detected_at: now },
+    confidence: "low",
+    conclusion: uncertainConclusion,
+    evidence: [{ kind: "tool_error", summary: failedRead }],
+    tools_used: ["pulse_read"],
+    started_at: now,
+    completed_at: now,
+    verification: [],
+    rollback: [],
+  },
+};
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext();
 const page = await context.newPage();
@@ -93,7 +155,9 @@ const reply = async (route, failure = false) =>
           { type: "session", data: { id: "explanation-proof" } },
           {
             type: "content",
-            data: "The database disk is 95 percent full. Check the recent growth before choosing a change. No changes were made.",
+            data: investigationFixture
+              ? uncertainConclusion
+              : "The database disk is 95 percent full. Check the recent growth before choosing a change. No changes were made.",
           },
           { type: "done", data: { session_id: "explanation-proof" } },
         ]
@@ -129,6 +193,55 @@ try {
         status: 403,
         json: { error: "Writes disabled in journey proof" },
       });
+    }
+    if (investigationFixture) {
+      if (path === "/api/ai/patrol/findings")
+        return route.fulfill({ json: [finding] });
+      if (path === "/api/ai/unified/findings")
+        return route.fulfill({ json: { findings: [] } });
+      if (path === `/api/ai/findings/${finding.id}/investigation`)
+        return route.fulfill({ json: investigation });
+      if (path === `/api/ai/findings/${finding.id}/investigation/messages`)
+        return route.fulfill({
+          json: {
+            investigation_id: investigation.id,
+            session_id: investigation.session_id,
+            messages: [
+              {
+                id: "read",
+                role: "assistant",
+                content: "",
+                timestamp: now,
+                tool_calls: [
+                  {
+                    id: "read-1",
+                    name: "pulse_read",
+                    input: {
+                      command: "journalctl --no-pager",
+                      target_host: "Database VM",
+                    },
+                  },
+                ],
+              },
+              {
+                id: "read-result",
+                role: "user",
+                timestamp: now,
+                tool_result: {
+                  tool_use_id: "read-1",
+                  content: failedRead,
+                  is_error: true,
+                },
+              },
+              {
+                id: "conclusion",
+                role: "assistant",
+                content: uncertainConclusion,
+                timestamp: now,
+              },
+            ],
+          },
+        });
     }
     if (path === "/api/ai/status")
       return route.fulfill({ json: { running: true } });
@@ -251,11 +364,15 @@ try {
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto(`${base}/alerts`, { waitUntil: "domcontentloaded" });
-    const menu = page.getByRole("button", { name: "More alert actions", exact: true }).first();
+    const menu = page
+      .getByRole("button", { name: "More alert actions", exact: true })
+      .first();
     await expect(menu).toBeVisible({ timeout: 20000 });
     await menu.click();
     await expect(page.getByRole("menuitem")).toBeVisible();
-    await page.screenshot({ path: new URL(`alert-menu-${width}.png`, output).pathname });
+    await page.screenshot({
+      path: new URL(`alert-menu-${width}.png`, output).pathname,
+    });
     await page.keyboard.press("Escape");
     await expect(page.getByRole("menuitem")).toHaveCount(0);
     await menu.click();
@@ -265,13 +382,119 @@ try {
     const before = requests.length;
     await page.getByRole("menuitem").click();
     await expect.poll(() => requests.length).toBe(before + 1);
-    expect(requests.at(-1).handoff_context).toContain("Source: Pulse Alerts active alert");
+    expect(requests.at(-1).handoff_context).toContain(
+      "Source: Pulse Alerts active alert",
+    );
     expect(requests.at(-1).handoff_resources.length).toBeGreaterThan(0);
     expect(requests.at(-1).autonomous_mode).toBe(false);
-    await expect(page.getByText("No changes were made.", { exact: false })).toBeVisible();
+    await expect(
+      page.getByText("No changes were made.", { exact: false }),
+    ).toBeVisible();
     await expect(page.getByRole("menuitem")).toHaveCount(0);
-    await page.screenshot({ path: new URL(`alert-explanation-${width}.png`, output).pathname });
-    results.push({ width, state: "alert menu, Escape, outside click, selected alert explanation" });
+    await page.screenshot({
+      path: new URL(`alert-explanation-${width}.png`, output).pathname,
+    });
+    results.push({
+      width,
+      state: "alert menu, Escape, outside click, selected alert explanation",
+    });
+  }
+  investigationFixture = true;
+  for (const mirrored of [false, true]) {
+    finding.mirrors_alert_id = mirrored ? "alert-proof" : undefined;
+    finding.mirrors_alert_type = mirrored ? "disk" : undefined;
+    for (const width of [1440, 900, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto(`${base}/patrol`, { waitUntil: "domcontentloaded" });
+      await page.getByRole("tab", { name: "Activity", exact: true }).click();
+      await page
+        .getByRole("button", { name: /Finding options and history/ })
+        .click();
+      if (mirrored)
+        await page
+          .getByText("1 finding mirrors an active alert", { exact: true })
+          .click();
+      const review = page.getByRole("button", {
+        name: `Review issue for ${finding.title}`,
+        exact: true,
+      });
+      await review.scrollIntoViewIfNeeded();
+      await review.focus();
+      await review.press("Enter");
+      const panel = page.locator(`#finding-${finding.id}-details`);
+      await expect(
+        panel.getByText(uncertainConclusion, { exact: true }).first(),
+      ).toBeVisible();
+      await expect(panel.getByText(failedRead, { exact: true })).toBeVisible();
+      await expect(panel.getByText("Resolved", { exact: true })).toHaveCount(0);
+      const thread = page.getByRole("button", {
+        name: "Show investigation thread",
+        exact: true,
+      });
+      await thread.scrollIntoViewIfNeeded();
+      await thread.focus();
+      await thread.press("Enter");
+      await expect(panel.getByText("Error", { exact: true })).toBeVisible();
+      await expect(
+        panel.getByText(failedRead, { exact: true }).last(),
+      ).toBeVisible();
+      await panel
+        .getByText(uncertainConclusion, { exact: true })
+        .last()
+        .scrollIntoViewIfNeeded();
+      await page.screenshot({
+        path: new URL(
+          `investigation-unknown-${mirrored ? "mirrored" : "ordinary"}-${width}.png`,
+          output,
+        ).pathname,
+      });
+      await page
+        .getByRole("button", { name: "Hide investigation thread", exact: true })
+        .click();
+      await expect(panel.getByText("Error", { exact: true })).toHaveCount(0);
+      await page
+        .getByRole("button", {
+          name: `Close review for ${finding.title}`,
+          exact: true,
+        })
+        .click();
+      await expect(panel).toHaveCount(0);
+      if (mirrored) {
+        await page.getByRole("tab", { name: "Inbox", exact: true }).click();
+        await page
+          .getByRole("button", { name: "Start review", exact: true })
+          .click();
+        const explain = page.getByRole("button", {
+          name: "Explain with Assistant",
+          exact: true,
+        });
+        const before = requests.length;
+        await explain.scrollIntoViewIfNeeded();
+        await explain.focus();
+        await explain.press("Enter");
+        await expect.poll(() => requests.length).toBe(before + 1);
+        expect(requests.at(-1).handoff_context).toContain(finding.id);
+        expect(requests.at(-1).handoff_context).toContain(uncertainConclusion);
+        expect(requests.at(-1).handoff_context).toContain(failedRead);
+        expect(requests.at(-1).autonomous_mode).toBe(false);
+        await expect(
+          page
+            .getByTestId("assistant-message-list")
+            .getByText(uncertainConclusion, { exact: true }),
+        ).toBeVisible();
+        await page.screenshot({
+          path: new URL(`investigation-handoff-${width}.png`, output).pathname,
+        });
+        await page.keyboard.press("Escape");
+      }
+      results.push({
+        width,
+        mirrored,
+        state:
+          "Activity finding, keyboard review, completed but unresolved record, failed read, investigation transcript, collapse",
+        linkedAssistantHandoff: mirrored,
+      });
+    }
   }
   // No background inference after a reload or context-only drawer open.
   const beforeReload = requests.length;
@@ -280,11 +503,26 @@ try {
   expect(requests.length).toBe(beforeReload);
   expect(mutations).toEqual([]);
   expect(errors).toEqual([]);
+  const sourceHashes = {};
+  for (const path of [
+    "internal/ai/chat/agentic.go",
+    "internal/ai/chat/agentic_investigation_budget.go",
+    "scripts/check-patrol-assistant-journey.mjs",
+    "frontend-modern/src/components/AI/FindingsPanel.tsx",
+    "frontend-modern/src/components/patrol/InvestigationSection.tsx",
+    "frontend-modern/src/components/patrol/InvestigationMessages.tsx",
+  ]) {
+    sourceHashes[path] = createHash("sha256")
+      .update(await readFile(new URL(`../${path}`, import.meta.url)))
+      .digest("hex");
+  }
   await writeFile(
     new URL("result.json", output),
     JSON.stringify(
       {
         passed: true,
+        at: new Date().toISOString(),
+        sourceHashes,
         base,
         results,
         requestCount: requests.length,

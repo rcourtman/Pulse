@@ -2224,10 +2224,13 @@ func resourceFromPhysicalDisk(disk models.PhysicalDisk) (Resource, ResourceIdent
 	}
 
 	resource := Resource{
-		Type:         ResourceTypePhysicalDisk,
-		Name:         name,
-		Status:       physicalDiskStatus(disk.Model, disk.Health, assessment),
-		LastSeen:     disk.LastChecked,
+		Type:     ResourceTypePhysicalDisk,
+		Name:     name,
+		Status:   physicalDiskStatus(disk.Model, disk.Health, assessment),
+		LastSeen: disk.LastChecked,
+		SourceStatus: map[DataSource]SourceStatus{
+			SourceProxmox: {ExpectedUpdateIntervalSeconds: int64(disk.ExpectedUpdateInterval / time.Second)},
+		},
 		UpdatedAt:    time.Now().UTC(),
 		Metrics:      metricsFromPhysicalDisk(disk),
 		PhysicalDisk: pdMeta,

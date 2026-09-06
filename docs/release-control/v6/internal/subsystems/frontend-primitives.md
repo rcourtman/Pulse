@@ -20,6 +20,13 @@
 
 ## Purpose
 
+The shared delivery-health card wraps action groups according to available
+space, retaining readable explanation width when Review, Retry, Dismiss and
+Refresh appear together. Its heading uses the opaque semantic foreground,
+not the translucent palette shades reserved for status backgrounds. Verify
+light/dark layouts at desktop, intermediate and narrow widths, including
+unavailable health, pending refresh and recovery.
+
 The alerts overview offers the existing delivery-status refresh control when
 health is unavailable, including after a successful retained-queue action whose
 follow-up health read fails. The warning remains until a verified healthy read;
@@ -212,6 +219,15 @@ guests, nodes, and unified resources must not render historical charts inline
 on Overview or reintroduce object-local tab or range-selector chrome. The
 metrics and chart groups may remain object-specific without changing this
 navigation contract.
+
+Node history consumes the canonical `metricsTarget` carried by the resource
+projection before legacy node identifiers. Proxmox-only history uses the
+collector's `node` coordinates even when the unified resource has an `agent`
+display identity. The presence of discovery routing does not enable Agent-only
+disk-throughput charts. Explicit Agent linkage owns that capability distinction.
+`nodeDrawerModel.branchcov0713.test.ts` pins target precedence and unsupported
+target fallback, while `NodeDrawer.test.tsx` verifies the chart request and
+API-only chart groups through the rendered History tab.
 
 Platform inventory presentation has one structural owner across provider pages,
 drawers, and inline detail rows. `PlatformTableShell` owns framed page tables;

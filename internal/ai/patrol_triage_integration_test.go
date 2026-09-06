@@ -137,66 +137,6 @@ func TestBuildTriageSeedContext_SmallOutput(t *testing.T) {
 	}
 }
 
-func TestComputeTriageMaxTurns(t *testing.T) {
-	if got := computeTriageMaxTurns(0, nil); got != 8 {
-		t.Fatalf("0 flags: expected 8 turns, got %d", got)
-	}
-	if got := computeTriageMaxTurns(1, nil); got != 8 {
-		t.Fatalf("1 flag: expected 8 turns, got %d", got)
-	}
-	if got := computeTriageMaxTurns(3, nil); got != 14 {
-		t.Fatalf("3 flags: expected 14 turns, got %d", got)
-	}
-	if got := computeTriageMaxTurns(10, nil); got != 35 {
-		t.Fatalf("10 flags: expected 35 turns, got %d", got)
-	}
-	if got := computeTriageMaxTurns(15, nil); got != 40 {
-		t.Fatalf("15 flags: expected 40 turns (cap), got %d", got)
-	}
-
-	quickScope := &PatrolScope{Depth: PatrolDepthQuick}
-	for _, flagCount := range []int{0, 1, 15, 100} {
-		if got := computeTriageMaxTurns(flagCount, quickScope); got != 4 {
-			t.Fatalf("quick scope with %d flags: expected strict 4-turn budget, got %d", flagCount, got)
-		}
-	}
-}
-
-func TestGetPatrolSystemPromptForTriage(t *testing.T) {
-	ps := NewPatrolService(&Service{
-		cfg: &config.AIConfig{PatrolAutoFix: false},
-	}, nil)
-
-	prompt := ps.getPatrolSystemPromptForTriage()
-	if !strings.Contains(prompt, "Pulse has assembled deterministic evidence before this turn") {
-		t.Fatalf("expected triage preamble in prompt, got:\n%s", prompt)
-	}
-	if !strings.Contains(prompt, "prioritized context, not as a final diagnosis") {
-		t.Fatalf("expected triage prompt to preserve model-owned assessment boundary, got:\n%s", prompt)
-	}
-	if strings.Contains(prompt, "Triage already verified") || strings.Contains(prompt, "Focus your turns exclusively") {
-		t.Fatalf("triage prompt must not present deterministic pre-pass as a Pulse-authored judgment boundary, got:\n%s", prompt)
-	}
-	if !strings.Contains(prompt, "## Investigation Tools") || !strings.Contains(prompt, "pulse_query") {
-		t.Fatalf("expected tool descriptions from base prompt, got:\n%s", prompt)
-	}
-	if strings.Contains(prompt, "Your job is to find issues that simple threshold-based alerts CANNOT catch") {
-		t.Fatalf("expected standard opening to be replaced in triage prompt, got:\n%s", prompt)
-	}
-	for _, required := range []string{
-		"failed health check",
-		"Report that symptom even when logs or command execution are unavailable",
-		"root cause is unknown",
-		"do not retry that capability",
-		"treat detection as complete",
-		"Do not call pulse_query, pulse_discovery, pulse_read",
-	} {
-		if !strings.Contains(prompt, required) {
-			t.Fatalf("expected confirmed-symptom evidence contract %q in prompt, got:\n%s", required, prompt)
-		}
-	}
-}
-
 func triageIntegrationState(vmCount int) models.StateSnapshot {
 	state := models.StateSnapshot{
 		Nodes: []models.Node{

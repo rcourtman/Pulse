@@ -31,7 +31,9 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 			return &MetricsTarget{ResourceType: "agent", ResourceID: st.SourceID}
 		}
 		if st, ok := bySource[SourceProxmox]; ok {
-			return &MetricsTarget{ResourceType: "agent", ResourceID: st.SourceID}
+			// Resource identity is agent-shaped, but PVE history is written
+			// under the node store family. Keep storage coordinates explicit.
+			return &MetricsTarget{ResourceType: "node", ResourceID: st.SourceID}
 		}
 		if st, ok := bySource[SourceVMware]; ok {
 			return &MetricsTarget{ResourceType: "agent", ResourceID: st.SourceID}

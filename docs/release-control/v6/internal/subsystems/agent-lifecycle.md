@@ -15,6 +15,18 @@
 
 ## Purpose
 
+The internal Patrol request bridge carries explicit execution limits and
+capability allowlists without a diagnostic report-count budget. Finding writes
+retain their server-owned scope and cannot enter or satisfy the infrastructure
+verification lifecycle. A saved finding does not curtail further evidence reads.
+
+The shared physical-disk model preserves an internal collector cadence through
+state snapshot cloning and canonical typed read-state reconstruction. This is
+monitoring metadata and does not change Agent registration, execution authority,
+or the Agent report wire contract. `internal/models/metrics_types_test.go` covers
+snapshot retention and isolation, and the monitoring collection-trust roundtrip
+covers merged Agent/Proxmox disks without losing the Proxmox source schedule.
+
 Assistant historical metric wiring uses the current monitor's retained store
 and registry metrics coordinates. Historical reads do not alter enrollment,
 agent ownership, or command capabilities. Proxmox-only canonical agent details

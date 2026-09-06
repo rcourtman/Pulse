@@ -69,7 +69,7 @@ try {
   browser = await chromium.launch({ headless: true });
   mkdirSync("/tmp/pulse-health-ordering", { recursive: true });
   let cases = 0;
-  for (const width of [1440, 390]) {
+  for (const width of [1440, 900, 390]) {
     for (const [old, newer] of [
       ["healthy", "degraded"],
       ["degraded", "healthy"],
@@ -135,7 +135,7 @@ try {
     JSON.stringify({
       result: "passed",
       cases,
-      viewports: [1440, 390],
+      viewports: [1440, 900, 390],
       scope:
         "real Chromium, real caller/hook/card, scripted API; not installed application or notification receipt",
     }),

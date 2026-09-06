@@ -146,58 +146,29 @@ func TestFailedAttemptsWithoutSuccessAreATypedError(t *testing.T) {
 	assert.Equal(t, 0, failed)
 }
 
-func TestProposalRejectsCausalResourceContradictedByObservedHealthDependency(t *testing.T) {
-	catalog := func(_ context.Context, resourceID string) ([]unified.ResourceCapability, error) {
-		switch resourceID {
-		case "app-container-client", "app-container-dependency":
-			return []unified.ResourceCapability{{Name: "restart", MinimumApprovalLevel: unified.ApprovalAdmin}}, nil
-		default:
-			return nil, nil
-		}
-	}
-	capture := NewProposalCapture(ProposalIdentity{InvestigationID: "inv-1"}, catalog)
+func TestProposalAllowsUncertainCauseWithoutInventingAttribution(t *testing.T) {
+	capture := NewProposalCapture(ProposalIdentity{InvestigationID: "inv-1"}, testProposalCatalog())
 	exec := newInvestigationExecutor(t, capture)
-
-	exec.RecordProposalEvidence(agentcapabilities.PulseQueryToolName, `{
-		"id":"app-container-client",
-		"name":"client",
-		"status":"running",
-		"health":"unhealthy",
-		"healthcheck_targets":["dependency"]
-	}`)
-	exec.RecordProposalEvidence(agentcapabilities.PulseQueryToolName, `{
-		"docker":{"hosts":[{"containers":[
-			{"id":"app-container-client","name":"client","state":"running","health":"unhealthy","healthcheck_targets":["dependency"]},
-			{"id":"app-container-dependency","name":"dependency","state":"exited","health":"unhealthy"}
-		]}]}
-	}`)
-
-	wrong := map[string]interface{}{
-		"resource_id":        "app-container-client",
-		"causal_resource_id": "app-container-client",
-		"capability_name":    "restart",
-		"reason":             "restart the unhealthy client",
-	}
-	rejected := executePropose(t, exec, "call-wrong", wrong)
-	assert.True(t, rejected.IsError)
-	assert.Contains(t, rejected.Content[0].Text, "app-container-dependency")
-	assert.Contains(t, rejected.Content[0].Text, `status "exited"`)
-
-	corrected := map[string]interface{}{
-		"resource_id":        "app-container-dependency",
-		"causal_resource_id": "app-container-dependency",
-		"capability_name":    "restart",
-		"reason":             "restart the exited dependency required by the unhealthy client",
-	}
-	accepted := executePropose(t, exec, "call-corrected", corrected)
-	assert.False(t, accepted.IsError)
-
+	args := proposeArgs()
+	delete(args, "causal_resource_id")
+	args["reason"] = "The service is stopped. A restart may restore service, but the cause is unknown."
+	result := executePropose(t, exec, "recovery-1", args)
+	require.False(t, result.IsError, "%+v", result)
 	proposal, failed, err := capture.Outcome()
 	require.NoError(t, err)
 	require.NotNil(t, proposal)
-	assert.Equal(t, "app-container-dependency", proposal.ResourceID)
-	assert.Equal(t, "app-container-dependency", proposal.CausalResourceID)
-	assert.Equal(t, 1, failed)
+	assert.Empty(t, proposal.CausalResourceID)
+	assert.Equal(t, args["reason"], proposal.Reason)
+	assert.Equal(t, "vm:42", proposal.ResourceID)
+	assert.Zero(t, failed)
+	// Unknown cause does not weaken invocation integrity or grant execution.
+	changed := proposeArgs()
+	changed["reason"] = args["reason"]
+	result = executePropose(t, exec, "recovery-1", changed)
+	assert.True(t, result.IsError)
+	proposal, _, err = capture.Outcome()
+	assert.Nil(t, proposal)
+	assert.ErrorIs(t, err, ErrProposalIntegrity)
 }
 
 func TestSensitiveProposalParamsRejectedWithoutEcho(t *testing.T) {
@@ -515,7 +486,7 @@ func TestProposeActionSchemaExposesOnlyModelAuthoredFields(t *testing.T) {
 			[]string{"resource_id", "causal_resource_id", "capability_name", "params", "reason"},
 			mapKeys(tool.InputSchema.Properties),
 		)
-		assert.Contains(t, tool.InputSchema.Required, "causal_resource_id")
+		assert.NotContains(t, tool.InputSchema.Required, "causal_resource_id")
 		return
 	}
 	t.Fatal("patrol_propose_action missing from investigation projection")

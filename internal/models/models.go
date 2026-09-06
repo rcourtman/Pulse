@@ -2673,28 +2673,29 @@ type CephServiceStatus struct {
 
 // PhysicalDisk represents a physical disk on a node
 type PhysicalDisk struct {
-	ID              string                          `json:"id"` // "{instance}-{node}-{devpath}"
-	Node            string                          `json:"node"`
-	Instance        string                          `json:"instance"`
-	DevPath         string                          `json:"devPath"` // /dev/nvme0n1, /dev/sda
-	Model           string                          `json:"model"`
-	Vendor          string                          `json:"vendor,omitempty"`
-	Serial          string                          `json:"serial"`
-	WWN             string                          `json:"wwn"`                  // World Wide Name
-	Type            string                          `json:"type"`                 // nvme, sata, sas
-	Controller      string                          `json:"controller,omitempty"` // Controller association when reported
-	Target          string                          `json:"target,omitempty"`     // Controller target/HCTL when reported
-	Size            int64                           `json:"size"`                 // bytes
-	Health          string                          `json:"health"`               // PASSED, FAILED, UNKNOWN
-	Wearout         int                             `json:"wearout"`              // SSD wear metric from Proxmox (0-100, -1 when unavailable)
-	Temperature     int                             `json:"temperature"`          // Celsius (if available)
-	RPM             int                             `json:"rpm"`                  // 0 for SSDs
-	Used            string                          `json:"used"`                 // Filesystem or partition usage
-	StorageGroup    string                          `json:"storageGroup"`         // Pool/VG/array this disk belongs to (e.g. ZFS pool name); empty if not matched
-	SmartAttributes *SMARTAttributes                `json:"smartAttributes,omitempty"`
-	IO              *DiskIO                         `json:"io,omitempty"`
-	Collection      *diskinventory.CollectionStatus `json:"collection,omitempty"`
-	LastChecked     time.Time                       `json:"lastChecked"`
+	ID                     string                          `json:"id"` // "{instance}-{node}-{devpath}"
+	Node                   string                          `json:"node"`
+	Instance               string                          `json:"instance"`
+	DevPath                string                          `json:"devPath"` // /dev/nvme0n1, /dev/sda
+	Model                  string                          `json:"model"`
+	Vendor                 string                          `json:"vendor,omitempty"`
+	Serial                 string                          `json:"serial"`
+	WWN                    string                          `json:"wwn"`                  // World Wide Name
+	Type                   string                          `json:"type"`                 // nvme, sata, sas
+	Controller             string                          `json:"controller,omitempty"` // Controller association when reported
+	Target                 string                          `json:"target,omitempty"`     // Controller target/HCTL when reported
+	Size                   int64                           `json:"size"`                 // bytes
+	Health                 string                          `json:"health"`               // PASSED, FAILED, UNKNOWN
+	Wearout                int                             `json:"wearout"`              // SSD wear metric from Proxmox (0-100, -1 when unavailable)
+	Temperature            int                             `json:"temperature"`          // Celsius (if available)
+	RPM                    int                             `json:"rpm"`                  // 0 for SSDs
+	Used                   string                          `json:"used"`                 // Filesystem or partition usage
+	StorageGroup           string                          `json:"storageGroup"`         // Pool/VG/array this disk belongs to (e.g. ZFS pool name); empty if not matched
+	SmartAttributes        *SMARTAttributes                `json:"smartAttributes,omitempty"`
+	IO                     *DiskIO                         `json:"io,omitempty"`
+	Collection             *diskinventory.CollectionStatus `json:"collection,omitempty"`
+	ExpectedUpdateInterval time.Duration                   `json:"-"` // Collector schedule, independent of general node polling
+	LastChecked            time.Time                       `json:"lastChecked"`
 }
 
 // PBSInstance represents a Proxmox Backup Server instance

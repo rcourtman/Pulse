@@ -636,7 +636,7 @@ func TestDecodeClaudeSubscriptionAgentRoutesNativePulseToolAttempt(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if turn.Content != "Checking logs next." || len(turn.RawToolCalls) != 1 {
+	if turn.Content != "" || len(turn.RawToolCalls) != 1 {
 		t.Fatalf("routed turn = %#v", turn)
 	}
 	call := turn.RawToolCalls[0]
@@ -661,6 +661,51 @@ func TestDecodeClaudeSubscriptionAgentRoutesOnlyFirstNativePulseToolAttempt(t *t
 	}
 	if len(turn.RawToolCalls) != 1 || turn.RawToolCalls[0].Name != "pulse_read" {
 		t.Fatalf("routed tool calls = %#v", turn.RawToolCalls)
+	}
+}
+
+func TestDecodeClaudeSubscriptionAgentPreservesFirstBatchWithoutProtocolText(t *testing.T) {
+	raw := []byte(strings.Join([]string{
+		`{"type":"assistant","message":{"content":[{"type":"text","text":"{\"content\":\"\",\"stop_reason\":\"tool_use\",\"tool_calls\":[]}"}]}}`,
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"read-1","name":"pulse_read","input":{"action":"logs"}},{"type":"tool_use","id":"query-1","name":"pulse_query","input":{"action":"health"}}]}}`,
+		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"read-1","is_error":true,"content":"No such tool available"}]}}`,
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"read-2","name":"pulse_read","input":{"action":"exec"}}]}}`,
+		`{"type":"result","subtype":"success","structured_output":{"content":"Synthetic local failure","stop_reason":"end_turn","tool_calls":[]},"permission_denials":[],"usage":{"input_tokens":11,"output_tokens":17}}`,
+	}, "\n"))
+	req := ChatRequest{Tools: []Tool{{Name: "pulse_read"}, {Name: "pulse_query"}}}
+	turn, err := decodeClaudeSubscriptionAgentResponse(req, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateSubscriptionAgentTurn(req, &turn); err != nil {
+		t.Fatal(err)
+	}
+	if turn.Content != "" || turn.StopReason != "tool_use" || len(turn.ProviderToolCalls) != 2 {
+		t.Fatalf("routing turn leaked text or lost batch: %#v", turn)
+	}
+	if turn.ProviderToolCalls[0].ID != "read-1" || turn.ProviderToolCalls[1].ID != "query-1" {
+		t.Fatalf("original ordered batch replaced by local continuation: %#v", turn.ProviderToolCalls)
+	}
+}
+
+func TestSubscriptionAgentStructuredRoutingTurnHasNoAnswerContent(t *testing.T) {
+	req := ChatRequest{Tools: []Tool{{Name: "pulse_query"}}}
+	turn := subscriptionAgentTurn{
+		Content:      `{"content":"","stop_reason":"tool_use","tool_calls":[{"id":"q1","name":"pulse_query"}]}`,
+		RawToolCalls: []subscriptionAgentToolCall{{ID: "q1", Name: "pulse_query", Input: map[string]interface{}{"action": "health"}}},
+	}
+	if err := validateSubscriptionAgentTurn(req, &turn); err != nil {
+		t.Fatal(err)
+	}
+	if turn.Content != "" || len(turn.ProviderToolCalls) != 1 {
+		t.Fatalf("structured routing turn leaked transport content: %#v", turn)
+	}
+	final := subscriptionAgentTurn{Content: "The cause is unknown. Read access is unavailable."}
+	if err := validateSubscriptionAgentTurn(req, &final); err != nil {
+		t.Fatal(err)
+	}
+	if final.Content != "The cause is unknown. Read access is unavailable." || final.StopReason != "end_turn" {
+		t.Fatalf("final answer changed: %#v", final)
 	}
 }
 
