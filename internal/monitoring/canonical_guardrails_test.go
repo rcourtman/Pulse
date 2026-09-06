@@ -2683,8 +2683,9 @@ func TestDefaultOrgMonitorSharesCanonicalRuntimeTokenInventory(t *testing.T) {
 		Scopes:    []string{config.ScopeAgentExec},
 	}}
 	config.Mu.Unlock()
-	monitor.mu.Lock()
-	monitor.state.Hosts = []models.Host{{
+	// GetMonitor starts polling concurrently; host fixtures must use the
+	// state-owned lock, not monitor.mu, to synchronise with snapshots.
+	monitor.state.UpsertHost(models.Host{
 		ID:              "agent-fresh-token",
 		Hostname:        "fresh-token-host",
 		Status:          "online",
@@ -2692,8 +2693,7 @@ func TestDefaultOrgMonitorSharesCanonicalRuntimeTokenInventory(t *testing.T) {
 		AgentVersion:    "6.2.2",
 		TokenID:         "fresh-agent-token",
 		CommandsEnabled: true,
-	}}
-	monitor.mu.Unlock()
+	})
 
 	diagnostics := monitor.GetAgentFleetDiagnostics("6.2.2", now)
 	agent := requireAgentDiagnostic(t, diagnostics, "agent-agent-fresh-token")
