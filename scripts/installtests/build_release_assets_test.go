@@ -3661,6 +3661,26 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	}
 }
 
+func TestReleaseTrainCITriggersIncludeBuildAndE2E(t *testing.T) {
+	for _, workflow := range []string{"build-and-test.yml", "test-e2e.yml"} {
+		content, err := os.ReadFile(repoFile(".github", "workflows", workflow))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, event := range []string{"push", "pull_request"} {
+			t.Run(workflow+"/"+event, func(t *testing.T) {
+				// Limit the assertion to this event's branch list, not another
+				// trigger or a job comment mentioning the same pattern.
+				expression := regexp.MustCompile(`(?m)^  ` + event + `:\n    branches:\n((?:      - [^\n]+\n)+)`)
+				match := expression.FindStringSubmatch(string(content))
+				if len(match) != 2 || !strings.Contains(match[1], "      - 'release/v*'\n") || !strings.Contains(match[1], "      - main\n") {
+					t.Fatal("CI must admit main and release/v* branches for this event")
+				}
+			})
+		}
+	}
+}
+
 func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	workflowPath := repoFile(".github", "workflows", "build-and-test.yml")
 	assertFileContainsAll(t, workflowPath,
