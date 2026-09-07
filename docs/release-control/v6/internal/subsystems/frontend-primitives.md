@@ -38,7 +38,11 @@ feature views, keyboard activation/clear and text/control containment at 1440,
 900 and 390px, with scripted responses and genuine toast expiry. It does not
 establish screen-reader announcement quality or installed notification delivery.
 
-
+The shared action evidence disclosure preserves the named observer independently
+of the executor. Its observation timestamp uses the neutral label `Observed`,
+followed by the separate Pulse receipt time. Independent Proxmox API evidence
+must not be labelled as an agent observation. Browser qualification expands
+this disclosure in completed action reviews at desktop and narrow widths.
 
 Disk I/O presentation preserves each observed direction independently. Shared
 formatting renders a missing rate as a dash and measured idle as numeric zero.

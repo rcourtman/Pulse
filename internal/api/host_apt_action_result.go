@@ -39,19 +39,10 @@ func hostAPTExecutionResult(resourceID, agentID, operation, output, refusalReaso
 			verificationTruth.ReasonCode = "stale_agent_readback"
 			verificationTruth.Summary = "The agent readback was stale, skewed, or had invalid mutation chronology."
 		} else {
-			evidenceObservedAt := afterObservedAt.UTC()
-			evidenceReceivedAt := receivedAt.UTC()
-			// Validation permits the agent clock to be slightly ahead of the
-			// server. Canonical evidence cannot claim an observation after its
-			// receipt, so conservatively bind bounded positive skew to the
-			// server receipt boundary.
-			if evidenceObservedAt.After(evidenceReceivedAt) {
-				evidenceObservedAt = evidenceReceivedAt
-			}
 			evidence, err := unified.NormalizeActionEvidence(unified.ActionEvidence{
 				Version: unified.ActionEvidenceVersion, ID: operation + "-agent-readback", ObserverID: agentID,
 				ObserverKind: "unified_agent", ObserverTrustDomain: "agent:" + agentID, ExecutorTrustDomain: "agent:" + agentID,
-				Method: "typed_read_after_write", SubjectID: resourceID, ObservedAt: evidenceObservedAt, ReceivedAt: evidenceReceivedAt,
+				Method: "typed_read_after_write", SubjectID: resourceID, ObservedAt: afterObservedAt.UTC(), ReceivedAt: receivedAt.UTC(),
 				Summary: output,
 			})
 			if err == nil {

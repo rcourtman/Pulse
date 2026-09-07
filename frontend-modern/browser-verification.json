@@ -1,25 +1,20 @@
 {
   "version": 1,
-  "base_sha": "e949c15c3d0e751e6cd7b1d8d46a1147840ae3c8",
-  "verified_at": "2026-09-07T10:44:07Z",
+  "base_sha": "09ab5c2d0ae6e02fcc5280853782a8142646e40f",
+  "verified_at": "2026-09-07T10:45:50.469666Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/AlertQueueActionFeedback.tsx",
-    "frontend-modern/src/features/alerts/OverviewTab.tsx",
-    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
-    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts",
-    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts"
+    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/AlertQueueActionFeedback.tsx": "4fd4e2757b11bc4adb52bad293eb5a7a8d55301e12e5f4c3816fdbe0682bc578",
-    "frontend-modern/src/features/alerts/OverviewTab.tsx": "6700ce02ad19b4133860a7b680ed145e21ce27fa7fd4053937ce9cd3fc0c02e1",
-    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "968d6d3f82d59235a13bfcd89b8405558d0286c89a22efc12bbc7e2ff5ad1600",
-    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts": "25d47c0ce64f433ce0fd8ca851434d3c09441970d1e929de8c7787f209ab1ddb",
-    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts": "863e1b167bc27df5d46976b704a883ba6df9066bb6e42133935dbaa2c02f0b03"
+    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx": "ea0301d5ee7bee7b064f8e7fd8db43a54a74bc4488c0a87285d7c52151a5e07b"
   },
   "routes": [
-    "/qualification/overview",
-    "/qualification/destinations"
+    "/actions?action=act_9ec8d575b777a5f8fc70561376a52381",
+    "/actions?action=act_3384576233bf55aa3182537ad02d81d4",
+    "/actions?action=act_7687850d214e9c5f7038a436c6cc2ff7",
+    "/actions?action=act_e5e1f06da3dc42215a97360731d7e36b",
+    "/actions?action=act_185eebf5dfc24652e6332881dbe94f6c"
   ],
   "viewports": [
     {
@@ -36,20 +31,20 @@
     }
   ],
   "states": [
-    "Rejected Retry and Dismiss with untimed feedback after real toast timers expire using the Playwright clock",
-    "Cancelled action retains prior feedback without another API mutation",
-    "Accepted mutation with failed health read preserves unavailable warning and does not report mutation failure",
-    "Newer confirmed action supersedes prior feedback",
-    "Destination healthy refresh removes health warning but retains failed-action information",
-    "Deliberate clear removes feedback and retains focus in its labelled region",
-    "Light and dark themes at desktop, intermediate and narrow widths"
+    "VM110 start and stop awaiting exact-plan approval",
+    "Completed VM110 start and stop with independent Proxmox verification",
+    "Expanded independent observer evidence with original observation and Pulse receipt labels",
+    "Expanded durable delivery record with agent-specific observation label",
+    "Retained completed Docker restart with independent evidence",
+    "Retained rejected Docker restart without execution controls",
+    "Retained expired Docker restart with refresh offered and no execution controls"
   ],
   "interactions": [
-    "Focus Retry and Dismiss and activate with Enter; accept or cancel native confirmation",
-    "Advance browser clock beyond ten-second error duration and complete toast exit timer",
-    "Refresh unavailable health; reconcile destination health to healthy",
-    "Focus and activate Clear recovery message using Enter",
-    "Assert feedback text and controls fit viewport; inspect representative screenshots"
+    "Inspect exact target identity, approval controls and planned state before API-authorized execution",
+    "Open and close policy evidence, evidence details and delivery identifiers using keyboard focus and Enter",
+    "Scroll nested action review and inspect readable evidence, wrapping, stacking and reachable footer at all widths",
+    "Close with Escape and explicit close control, reopen exact action link and reload persisted state",
+    "Inspect final pixels and verify no document horizontal overflow"
   ],
-  "notes": "Real source OverviewTab and DestinationsTab with shared Card, Button and ToastContainer in isolated Vite/Chromium fixture; scripted APIs, not full app-shell routing, installed backend delivery or intended-recipient receipt. Callback throw/rejection and stale completion ownership are unit-tested, not browser-injected. No screen-reader reproduction or WCAG conformance claim. Evidence and five unsuccessful harness attempts documented in docs/qualification/recovery-feedback/README.md. Final run: 12 cases, zero page errors. Runtime source was unchanged throughout harness repairs."
+  "notes": "Final bundled development binary SHA256 c53f2e54e7ea510fc3abfbfbe164e74e363d3b1560aaa36a62df9fb1aaaf2c7d. Scripts, screenshots and raw dialog text are in workspace tmp/patrol-runner-readiness/browser and verify-action.mjs/verify-history.mjs. Browser requests were GET plus login only. Exact VM110 approvals and execution were performed separately through the canonical API, with independent Proxmox and SSH state checks and retained native receipts. Both temporary services, credentials and tunnel were removed and read-only control restored. Deep links have no initiating button for focus return. This receipt qualifies the named action-review change and adjacent rendered outcomes, not full Patrol/Assistant readiness."
 }

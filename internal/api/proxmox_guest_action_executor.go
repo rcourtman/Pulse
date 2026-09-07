@@ -54,6 +54,7 @@ type proxmoxGuestPostconditionObserver interface {
 }
 
 type proxmoxGuestLifecycleAgentCommander interface {
+	GetActionRunnerForHostForOrganization(organizationID, hostname string) (string, bool)
 	ExecuteProxmoxGuestLifecycle(context.Context, string, agentexec.ProxmoxGuestLifecyclePayload) (*agentexec.ProxmoxGuestLifecycleResultPayload, error)
 }
 
@@ -73,7 +74,7 @@ func (e proxmoxGuestActionExecutor) BindActionDispatch(ctx context.Context, reco
 	if err != nil {
 		return unified.ActionDispatchAttempt{}, err
 	}
-	agentID, err := e.connectedProxmoxNodeCommandAgentID(ctx, resource)
+	agentID, err := e.connectedProxmoxNodeActionRunnerID(ctx, resource)
 	if err != nil {
 		return unified.ActionDispatchAttempt{}, err
 	}
@@ -111,7 +112,7 @@ func (e proxmoxGuestActionExecutor) ExecuteAction(ctx context.Context, record un
 		return nil, err
 	}
 	vmid := resource.Proxmox.VMID
-	agentID, err := e.connectedProxmoxNodeCommandAgentID(ctx, resource)
+	agentID, err := e.connectedProxmoxNodeActionRunnerID(ctx, resource)
 	if err != nil {
 		return nil, err
 	}
@@ -123,65 +124,47 @@ func (e proxmoxGuestActionExecutor) ExecuteAction(ctx context.Context, record un
 	}
 
 	actionStartedAt := time.Now().UTC()
-	if typedAgents, ok := e.agents.(proxmoxGuestLifecycleAgentCommander); ok {
-		request, err := proxmoxGuestLifecycleRequest(attempt.ID, record.ID, string(kind), operation, resource)
-		if err != nil {
-			return nil, err
-		}
-		if attempt.OperationKind != "" && agentexec.ProxmoxGuestLifecycleOperationIdentity(agentID, request) != (operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}) {
-			return nil, fmt.Errorf("Proxmox guest lifecycle dispatch binding drift")
-		}
-		result, err := typedAgents.ExecuteProxmoxGuestLifecycle(agentCommandContext(ctx), agentID, request)
-		if err != nil {
-			return nil, err
-		}
-		if result == nil {
-			return nil, fmt.Errorf("typed Proxmox guest lifecycle returned no result")
-		}
-		if err := agentexec.ValidateProxmoxGuestLifecycleResultForRequest(request, *result); err != nil {
-			return nil, fmt.Errorf("invalid typed Proxmox guest lifecycle result: %w", err)
-		}
-		succeeded := result.ExecutionPhase == agentexec.ProxmoxGuestPhaseComplete && result.MutationCompleted && result.Error == ""
-		exitCode := 0
-		if !succeeded {
-			exitCode = 1
-		}
-		output := ""
-		if result.ReadbackRan {
-			output = "status: " + result.After.Status
-		}
-		agentVerification := &unified.ActionVerificationResult{
-			Ran: result.ReadbackRan, Command: proxmoxGuestStatusCommand(kind, vmid), Output: output,
-			Success: succeeded, RanAt: result.After.ObservedAt,
-		}
-		independentAfter, independentEvaluation := e.observeProxmoxGuestPostcondition(ctx, record.Request.ResourceID, resource, kind, operation, independentBefore, actionStartedAt)
-		return proxmoxGuestExecutionResult(record.ID, record.Request.ResourceID, agentID, kind, operation, exitCode, output, result.Error, agentVerification, independentBefore, independentAfter, independentEvaluation, actionStartedAt)
-	}
-
-	// Legacy full-trust sessions retain the historical command boundary during
-	// migration. Typed action-runner sessions can never enter this fallback:
-	// the server rejects execute_command for that runtime role.
-	command := proxmoxGuestLifecycleCommand(kind, operation, vmid)
-	result, err := e.agents.ExecuteCommand(agentCommandContext(ctx), agentID, agentexec.ExecuteCommandPayload{
-		RequestID:  attempt.ID,
-		Command:    command,
-		ApprovalID: record.ID,
-		TargetType: "agent",
-		Timeout:    proxmoxGuestLifecycleTimeout(operation),
-		Trusted:    true,
-	})
+	typedAgents := e.agents.(proxmoxGuestLifecycleAgentCommander)
+	request, err := proxmoxGuestLifecycleRequest(attempt.ID, record.ID, string(kind), operation, resource)
 	if err != nil {
 		return nil, err
 	}
-
-	output := redactActionOutput(commandOutput(result))
-	if result.ExitCode != 0 {
-		return proxmoxGuestExecutionResult(record.ID, record.Request.ResourceID, agentID, kind, operation, result.ExitCode, output, result.Error, nil, independentBefore, nil, agentexec.PostconditionEvaluation{}, actionStartedAt)
+	if attempt.OperationKind != "" && agentexec.ProxmoxGuestLifecycleOperationIdentity(agentID, request) != (operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}) {
+		return nil, fmt.Errorf("Proxmox guest lifecycle dispatch binding drift")
 	}
-
-	agentVerification := e.verifyProxmoxGuestState(ctx, agentID, record.ID, kind, vmid, operation, actionStartedAt)
+	result, err := typedAgents.ExecuteProxmoxGuestLifecycle(agentCommandContext(ctx), agentID, request)
+	agentReceivedAt := time.Now().UTC()
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, fmt.Errorf("typed Proxmox guest lifecycle returned no result")
+	}
+	if err := agentexec.ValidateProxmoxGuestLifecycleResultForRequest(request, *result); err != nil {
+		return nil, fmt.Errorf("invalid typed Proxmox guest lifecycle result: %w", err)
+	}
+	succeeded := result.MutationCompleted
+	exitCode := 0
+	if !succeeded {
+		exitCode = 1
+	}
+	output := ""
+	if result.ReadbackRan {
+		output = "status: " + result.After.Status
+	}
+	agentVerification := &unified.ActionVerificationResult{Ran: false}
+	// Completing the mutation and observing its postcondition are separate
+	// facts. A status-only read cannot establish that a reboot occurred.
+	if succeeded && result.ReadbackRan && operation != "reboot" {
+		evaluation, _ := agentexec.EvaluateCapabilityPostcondition(proxmoxPostconditionCapability(kind, operation), nil,
+			proxmoxGuestPostconditionValues(kind, result.After.Status, 0), actionStartedAt)
+		agentVerification = &unified.ActionVerificationResult{
+			Ran: evaluation.Conclusive, Command: proxmoxGuestStatusCommand(kind, vmid), Output: output,
+			Success: evaluation.Matched, RanAt: result.After.ObservedAt, Note: result.Error,
+		}
+	}
 	independentAfter, independentEvaluation := e.observeProxmoxGuestPostcondition(ctx, record.Request.ResourceID, resource, kind, operation, independentBefore, actionStartedAt)
-	return proxmoxGuestExecutionResult(record.ID, record.Request.ResourceID, agentID, kind, operation, result.ExitCode, output, result.Error, agentVerification, independentBefore, independentAfter, independentEvaluation, actionStartedAt)
+	return proxmoxGuestExecutionResult(record.ID, record.Request.ResourceID, agentID, kind, operation, exitCode, output, result.Error, agentVerification, independentBefore, independentAfter, independentEvaluation, actionStartedAt, agentReceivedAt)
 }
 
 func proxmoxGuestLifecycleRequest(attemptID, actionID, kind, operation string, resource unified.Resource) (agentexec.ProxmoxGuestLifecyclePayload, error) {
@@ -222,8 +205,15 @@ func (e proxmoxGuestActionExecutor) CheckActionAvailable(ctx context.Context, re
 	if _, _, err := e.executableProxmoxGuestResource(resource, operation); err != nil {
 		return unavailableProxmoxActionReadiness(operation, proxmoxActionUnavailableReasonCode(err), proxmoxActionUnavailableReason(err))
 	}
-	if _, err := e.connectedProxmoxNodeCommandAgentID(ctx, resource); err != nil {
-		return unavailableProxmoxActionReadiness(operation, "command_agent_disconnected", "Proxmox node command agent is not connected.")
+	if _, ok := e.agents.(proxmoxGuestLifecycleAgentCommander); !ok {
+		return unavailableProxmoxActionReadiness(operation, "typed_operation_unavailable", "Typed Proxmox lifecycle execution is not available.")
+	}
+	agentID, err := e.connectedProxmoxNodeActionRunnerID(ctx, resource)
+	if err != nil {
+		return unavailableProxmoxActionReadiness(operation, "action_runner_unavailable", "Connect a typed action runner on this Proxmox node before planning a guest action.")
+	}
+	if liveAgentOperationReceiptVersion(ctx, e.agents, agentID) != operationreceipt.ProtocolVersion {
+		return unavailableProxmoxActionReadiness(operation, "operation_receipt_unsupported", "The Proxmox action runner cannot retain durable action receipts. Update the runner or restore its writable state directory, then retry.")
 	}
 	return readiness
 }
@@ -276,23 +266,18 @@ func (e proxmoxGuestActionExecutor) executableProxmoxGuestResource(resource unif
 	return resource, kind, nil
 }
 
-func (e proxmoxGuestActionExecutor) connectedProxmoxNodeCommandAgentID(ctx context.Context, resource unified.Resource) (string, error) {
-	if e.agents == nil {
-		return "", fmt.Errorf("proxmox node command agent is not connected")
-	}
+func (e proxmoxGuestActionExecutor) connectedProxmoxNodeActionRunnerID(ctx context.Context, resource unified.Resource) (string, error) {
 	if resource.Proxmox == nil {
 		return "", fmt.Errorf("proxmox resource metadata missing")
 	}
-	if agentID := strings.TrimSpace(resource.Proxmox.LinkedAgentID); agentID != "" && isAgentCommandConnected(ctx, e.agents, agentID) {
+	runners, ok := e.agents.(proxmoxGuestLifecycleAgentCommander)
+	if !ok {
+		return "", fmt.Errorf("typed Proxmox lifecycle execution is unavailable")
+	}
+	if agentID, connected := runners.GetActionRunnerForHostForOrganization(GetOrgID(ctx), resource.Proxmox.NodeName); connected && strings.TrimSpace(agentID) != "" {
 		return agentID, nil
 	}
-	if agentID, ok := commandAgentForHost(ctx, e.agents, strings.TrimSpace(resource.Proxmox.NodeName)); ok {
-		agentID = strings.TrimSpace(agentID)
-		if agentID != "" && isAgentCommandConnected(ctx, e.agents, agentID) {
-			return agentID, nil
-		}
-	}
-	return "", fmt.Errorf("proxmox node command agent is not connected")
+	return "", fmt.Errorf("a typed action runner is not connected on the Proxmox node")
 }
 
 func proxmoxGuestKindAndHandler(resource unified.Resource) (proxmoxGuestKind, string, error) {
@@ -389,14 +374,6 @@ func isProxmoxGuestLifecycleOperation(operation string) bool {
 	}
 }
 
-func proxmoxGuestLifecycleCommand(kind proxmoxGuestKind, operation string, vmid int) string {
-	tool := "qm"
-	if kind == proxmoxGuestCT {
-		tool = "pct"
-	}
-	return strings.Join([]string{tool, strings.TrimSpace(operation), strconv.Itoa(vmid)}, " ")
-}
-
 func proxmoxGuestStatusCommand(kind proxmoxGuestKind, vmid int) string {
 	tool := "qm"
 	if kind == proxmoxGuestCT {
@@ -411,66 +388,6 @@ func proxmoxGuestLifecycleTimeout(operation string) int {
 		return 180
 	default:
 		return 120
-	}
-}
-
-func (e proxmoxGuestActionExecutor) verifyProxmoxGuestState(ctx context.Context, agentID, actionID string, kind proxmoxGuestKind, vmid int, operation string, actionStartedAt time.Time) *unified.ActionVerificationResult {
-	capability := proxmoxPostconditionCapability(kind, operation)
-	if _, ok := agentexec.LookupCapabilityPostcondition(capability); !ok {
-		return &unified.ActionVerificationResult{Ran: false, Note: "No registered postcondition is available for this Proxmox action."}
-	}
-	if strings.EqualFold(strings.TrimSpace(operation), "reboot") {
-		return &unified.ActionVerificationResult{Ran: false, Note: "The executing agent's status-only read cannot prove that the guest restarted."}
-	}
-	command := proxmoxGuestStatusCommand(kind, vmid)
-
-	var lastOutput string
-	var lastEvaluation agentexec.PostconditionEvaluation
-	for attempt := 0; attempt < 5; attempt++ {
-		if attempt > 0 {
-			timer := time.NewTimer(1 * time.Second)
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-				return &unified.ActionVerificationResult{Ran: false}
-			case <-timer.C:
-			}
-		}
-
-		result, err := e.agents.ExecuteCommand(agentCommandContext(ctx), agentID, agentexec.ExecuteCommandPayload{
-			RequestID:  fmt.Sprintf("%s-verify-%d", actionID, attempt+1),
-			Command:    command,
-			ApprovalID: actionID,
-			TargetType: "agent",
-			Timeout:    30,
-			Trusted:    true,
-		})
-		if err != nil {
-			return &unified.ActionVerificationResult{Ran: false}
-		}
-		lastOutput = redactActionOutput(commandOutput(result))
-		if result.ExitCode != 0 {
-			continue
-		}
-		lastEvaluation, _ = agentexec.EvaluateCapabilityPostcondition(capability, nil, proxmoxGuestPostconditionValues(kind, parseProxmoxGuestStatus(lastOutput), 0), actionStartedAt)
-		if lastEvaluation.Conclusive && lastEvaluation.Matched {
-			return &unified.ActionVerificationResult{
-				Ran:     true,
-				Command: command,
-				Output:  lastOutput,
-				Success: true,
-				RanAt:   time.Now().UTC(),
-			}
-		}
-	}
-
-	return &unified.ActionVerificationResult{
-		Ran:     true,
-		Command: command,
-		Output:  lastOutput,
-		Success: false,
-		RanAt:   time.Now().UTC(),
-		Note:    firstNonEmpty(lastEvaluation.ReasonCode, "postcondition was not confirmed"),
 	}
 }
 

@@ -98,6 +98,12 @@ shell/exec, unrestricted `read_file`, deploy, and trusted-origin bypasses are
 forbidden. The legacy combined command channel remains a disclosed full-trust
 migration boundary only until runner enrollment and live session parity are
 qualified; it is not safe-profile authority.
+Development admin bypass applies only when no explicit API credential is
+present. Bearer, X-API-Token and WebSocket token credentials retain normal
+validation, tenant identity and scopes. Invalid explicit tokens cannot fall
+back to development authority. This preserves the exact bearer identity needed
+for runner activation and self-revocation.
+
 The action runner necessarily has a writable host view for its closed mutation
 set, so `ProtectSystem=strict` is not a valid runner sandbox claim. Its separate
 credential, no-listener transport, typed admission, target and digest binding,
