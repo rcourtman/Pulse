@@ -17,7 +17,12 @@ describe('Toast', () => {
     ['success', 'status', 'polite'],
     ['info', 'status', 'polite'],
   ] as const)('preserves %s announcement semantics without moving focus', (type, role, live) => {
-    render(() => <><button>Recovery action</button><ToastContainer /></>);
+    render(() => (
+      <>
+        <button>Recovery action</button>
+        <ToastContainer />
+      </>
+    ));
     const action = screen.getByRole('button', { name: 'Recovery action' });
     action.focus();
 
