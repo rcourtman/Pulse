@@ -17,6 +17,16 @@
 
 Delivery-log diagnostic text is a notification-attempt projection, not an agent admission or liveness verdict. Masking embedded destination credentials preserves failure context without changing agent identities, credentials, session replacement or removal policy. Consumers must use the retained failureClass and outcome as delivery evidence only; a transport error does not establish that the monitored agent is offline.
 
+### Canonical Patrol and Assistant continuation, 2026-09-07
+
+Patrol planning uses the canonical action broker's plan-only boundary. Policy
+progression and execution remain separate and retain runner admission, trusted
+identity, approval and independent observation. An accepted plan survives later
+provider failure without authorizing dispatch. Public action references preserve
+the observer outcome and complete approval requirement. Disposable Docker and
+Proxmox VM proof and cleanup limits are recorded in
+`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`.
+
 Optional container filesystem observations add no command or lifecycle
 authority. The collector's existing disk-metrics option controls them. Native
 reads require the exact local container process identity and current namespace

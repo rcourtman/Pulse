@@ -228,7 +228,7 @@ var registryInvocationDescriptors = map[string]InvocationDescriptor{
 	// and read-kind so a concluding proposal never drives the FSM into
 	// write verification. It is additionally profile-gated: the registry
 	// policy rejects it outside the Patrol investigation profile.
-	PatrolProposeActionToolName:      staticClass(ToolCallKindRead, MutationNone),
+	PatrolProposeActionToolName:      staticClass(ToolCallKindWrite, MutationPulseState),
 	PatrolActionCapabilitiesToolName: staticClass(ToolCallKindRead, MutationNone),
 	PatrolReportFindingToolName:      staticClass(ToolCallKindWrite, MutationPulseState),
 	PatrolResolveFindingToolName:     staticClass(ToolCallKindWrite, MutationPulseState),

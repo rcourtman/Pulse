@@ -44,6 +44,7 @@ type ResourceStore interface {
 	CreateActionAudit(record ActionAuditRecord, initialEvents []ActionLifecycleEvent) (ActionAuditRecord, bool, error)
 	RecordActionAudit(record ActionAuditRecord) error
 	GetActionAudit(actionID string) (ActionAuditRecord, bool, error)
+	GetActionAuditByRequest(req ActionRequest, origin *ActionOrigin) (ActionAuditRecord, bool, error)
 	GetActionAudits(canonicalID string, since time.Time, limit int) ([]ActionAuditRecord, error)
 	RecordActionDecision(record ActionAuditRecord, event ActionLifecycleEvent) error
 	RecordActionExpiry(record ActionAuditRecord, event ActionLifecycleEvent) error
@@ -495,6 +496,7 @@ func (s *SQLiteResourceStore) initSchema() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_action_audits_canonical_created ON action_audits(canonical_id, created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_action_audits_action_id ON action_audits(action_id);
+	CREATE INDEX IF NOT EXISTS idx_action_audits_request_id ON action_audits(request_id);
 	CREATE TABLE IF NOT EXISTS action_lifecycle_events (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		action_id TEXT NOT NULL,
@@ -2223,6 +2225,7 @@ func normalizeActionAuditCreation(record ActionAuditRecord, initialEvents []Acti
 }
 
 func (s *SQLiteResourceStore) CreateActionAudit(record ActionAuditRecord, initialEvents []ActionLifecycleEvent) (ActionAuditRecord, bool, error) {
+	requestIntent := record.Request
 	record, events, err := normalizeActionAuditCreation(record, initialEvents)
 	if err != nil {
 		return ActionAuditRecord{}, false, err
@@ -2244,6 +2247,16 @@ func (s *SQLiteResourceStore) CreateActionAudit(record ActionAuditRecord, initia
 	created, err := insertActionAuditSQL(tx, record)
 	if err != nil {
 		return ActionAuditRecord{}, false, err
+	}
+	// The insert acquires SQLite's writer lock before request identity is read.
+	// Concurrent store instances therefore cannot both accept different plans
+	// for one request. A replay rolls back this tentative row and its transaction.
+	excludeID := ""
+	if created {
+		excludeID = record.ID
+	}
+	if current, found, err := getActionAuditByRequestFrom(tx, requestIntent, record.Origin, excludeID); err != nil || found {
+		return current, false, err
 	}
 	if !created {
 		current, found, err := getActionAuditFrom(tx, record.ID)
@@ -3736,6 +3749,7 @@ func changeMatchesResource(change ResourceChange, canonicalIDs []string, include
 }
 
 func (m *MemoryStore) CreateActionAudit(record ActionAuditRecord, initialEvents []ActionLifecycleEvent) (ActionAuditRecord, bool, error) {
+	requestIntent := record.Request
 	record, events, err := normalizeActionAuditCreation(record, initialEvents)
 	if err != nil {
 		return ActionAuditRecord{}, false, err
@@ -3747,6 +3761,9 @@ func (m *MemoryStore) CreateActionAudit(record ActionAuditRecord, initialEvents 
 	// path that production never sees.
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if current, found, err := m.actionAuditByRequestLocked(requestIntent, record.Origin); err != nil || found {
+		return current, false, err
+	}
 	for i := range m.actionAudits {
 		if m.actionAudits[i].ID == record.ID {
 			current := cloneActionAuditRecordForRead(m.actionAudits[i])

@@ -20,6 +20,16 @@
 
 ## Purpose
 
+### Canonical Patrol and Assistant continuation, 2026-09-07
+
+Patrol's Assistant context preserves unknown destructive risk and distinguishes
+canonical action state from legacy approval state. Transcript scrolling is owned
+by the shared Assistant message container, including streaming and Latest, so
+it cannot move outer document ancestors. Browser proof must inspect the header,
+composer, nested evidence and scroll position after streaming and viewport resize.
+The current scoped matrix is recorded in
+`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`.
+
 ### Recovery feedback composes shared controls without a timer
 
 The alerts-owned AlertQueueActionFeedback composes Card and Button rather than

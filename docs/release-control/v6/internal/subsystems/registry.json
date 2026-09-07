@@ -8546,6 +8546,7 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/monitoring/issue1595_collection_trust_test.go",
+              "internal/unifiedresources/action_request_identity_test.go",
               "internal/unifiedresources/availability_link_test.go",
               "internal/unifiedresources/history_identity_test.go",
               "internal/unifiedresources/kubernetes_registry_test.go",
@@ -8611,6 +8612,7 @@
             "exact_files": [
               "internal/ai/tools/filesystem_evidence_test.go",
               "internal/monitoring/docker_filesystem_evidence_test.go",
+              "internal/unifiedresources/action_request_identity_test.go",
               "internal/unifiedresources/action_result_v2_test.go",
               "internal/unifiedresources/availability_link_test.go",
               "internal/unifiedresources/canonical_id_pins_test.go",
@@ -8620,6 +8622,7 @@
               "internal/unifiedresources/metrics_targets_test.go",
               "internal/unifiedresources/metrics_test.go",
               "internal/unifiedresources/pbs_pmg_registry_test.go",
+              "internal/unifiedresources/policy_presentation_test.go",
               "internal/unifiedresources/registry_merge_policy_test.go",
               "internal/unifiedresources/registry_test.go",
               "internal/unifiedresources/resolve_test.go",

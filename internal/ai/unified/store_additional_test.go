@@ -406,3 +406,25 @@ type testError struct{}
 func (e *testError) Error() string {
 	return "test error"
 }
+
+func TestUnifiedStore_ResolvePreservesCanonicalPatrolTimestamp(t *testing.T) {
+	store := NewUnifiedStore(DefaultAlertToFindingConfig())
+	resolved := time.Now().Add(-time.Hour)
+	store.AddFromAI(&UnifiedFinding{ID: "patrol-replay", Source: SourceAIPatrol, ResourceID: "resource", Title: "Failure", ResolvedAt: &resolved})
+	for i := 0; i < 3; i++ {
+		if !store.Resolve("patrol-replay") {
+			t.Fatal("resolve failed")
+		}
+	}
+	got := store.Get("patrol-replay")
+	if got.ResolvedAt == nil || !got.ResolvedAt.Equal(resolved) {
+		t.Fatalf("canonical resolution moved: %v, want %v", got.ResolvedAt, resolved)
+	}
+	// A later active projection is a real reopening, not a resolution replay.
+	store.AddFromAI(&UnifiedFinding{ID: "patrol-replay", Source: SourceAIPatrol, ResourceID: "resource", Title: "Failure"})
+	store.Resolve("patrol-replay")
+	got = store.Get("patrol-replay")
+	if got.ResolvedAt == nil || !got.ResolvedAt.After(resolved) {
+		t.Fatal("newly resolved regression did not receive a new timestamp")
+	}
+}

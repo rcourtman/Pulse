@@ -207,6 +207,13 @@ func TestApprovalPlanInfoRejectsMalformedCanonicalPolicyDecision(t *testing.T) {
 		t.Fatal("cross-plan canonical provenance was accepted")
 	}
 	canonicalPlan := &unified.ActionPlan{ActionID: "act-1", Allowed: true, RequiresApproval: true, ApprovalPolicy: unified.ApprovalAdmin, ApprovalRequirement: requirement, PolicyDecision: provenance}
+	tampered := approvalPlanRequestToInfo(canonicalPlan)
+	strengthened := requirement
+	strengthened.Quorum++
+	tampered.ApprovalRequirement, _ = json.Marshal(strengthened)
+	if _, err := approvalPlanInfoToRequest(tampered); err == nil {
+		t.Fatal("relay accepted a requirement that disagrees with canonical policy provenance")
+	}
 	converted, err := approvalPlanInfoToRequest(approvalPlanRequestToInfo(canonicalPlan))
 	if err != nil || converted == nil || !reflect.DeepEqual(converted.PolicyDecision, provenance) || converted.ApprovalRequirement != requirement {
 		t.Fatalf("canonical provenance relay round trip: plan=%#v err=%v", converted, err)
@@ -1390,5 +1397,22 @@ func TestIssue1649HandleForceFailActionSettlesWedgedExecutingAction(t *testing.T
 	h.HandleForceFailAction(missingRec, actionHandlerTestRequest(missingReq, ""))
 	if missingRec.Code != http.StatusNotFound {
 		t.Fatalf("missing force-fail status = %d, body=%s", missingRec.Code, missingRec.Body.String())
+	}
+}
+
+func TestApprovalPlanInfoPreservesRequirementWithoutHistoricalPolicyProvenance(t *testing.T) {
+	requirement := unified.ApprovalRequirement{Version: 1, Floor: unified.ApprovalMultiFactor, Quorum: 2, DisallowRequester: true}
+	original := &unified.ActionPlan{ActionID: "historical-action", ApprovalPolicy: unified.ApprovalMultiFactor, ApprovalRequirement: requirement, PolicyDecision: unified.LegacyUnknownActionPolicyDecision()}
+	converted, err := approvalPlanInfoToRequest(approvalPlanRequestToInfo(original))
+	if err != nil || converted.ApprovalRequirement != requirement || !unified.IsLegacyUnknownActionPolicyDecision(converted.PolicyDecision) {
+		t.Fatalf("historical requirement was lost or provenance invented: %+v %v", converted, err)
+	}
+}
+func TestApprovalPlanInfoRejectsMalformedApprovalRequirement(t *testing.T) {
+	for _, raw := range []string{`null`, `{}`, `{"version":1,"floor":"mfa","quorum":2,"extra":true}`, `{"version":1,"floor":"mfa","quorum":2}{}`} {
+		_, err := approvalPlanInfoToRequest(&aicontracts.ActionPlanInfo{ApprovalPolicy: string(unified.ApprovalMultiFactor), ApprovalRequirement: json.RawMessage(raw)})
+		if err == nil {
+			t.Fatalf("accepted malformed approval requirement %s", raw)
+		}
 	}
 }

@@ -1645,7 +1645,7 @@ func sanitizeHandoffContextForResourcePolicy(handoffContext string, handoffResou
 }
 
 func sanitizeTextForHandoffResourcePolicy(text string, handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) string {
-	contextText := strings.TrimSpace(text)
+	contextText := text
 	resources := normalizeHandoffResources(handoffResources)
 	if contextText == "" || len(resources) == 0 || provider == nil {
 		return contextText
@@ -1666,7 +1666,7 @@ func sanitizeTextForHandoffResourcePolicy(text string, handoffResources []Handof
 		resource.AISafeSummary = aiSafeSummary
 		redacted = unifiedresources.ResourcePolicyRedactedTextWithReferences(redacted, resource, handoffResourcePolicyReferences(handoffResource, resource)...)
 	}
-	return strings.TrimSpace(redacted)
+	return redacted
 }
 
 func sanitizeStreamEventForHandoffResourcePolicy(event StreamEvent, handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) StreamEvent {

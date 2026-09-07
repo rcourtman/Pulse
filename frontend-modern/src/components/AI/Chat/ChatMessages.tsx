@@ -113,7 +113,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
 
   const jumpToLatest = () => {
     setIsPinnedToBottom(true);
-    messagesEndRef?.scrollIntoView({ behavior: 'smooth' });
+    containerRef?.scrollTo({ top: containerRef.scrollHeight, behavior: 'smooth' });
   };
 
   const textActivityFingerprint = (value?: string) =>
@@ -252,7 +252,12 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
         // Use instant scroll during active streaming for smoother experience
         const lastMsg = props.messages[props.messages.length - 1];
         const behavior = lastMsg.isStreaming ? 'instant' : 'smooth';
-        messagesEndRef.scrollIntoView({ behavior: behavior as ScrollBehavior });
+        // Scroll only the transcript. scrollIntoView also moves outer page
+        // ancestors and can push the docked Assistant outside the viewport.
+        containerRef.scrollTo({
+          top: containerRef.scrollHeight,
+          behavior: behavior as ScrollBehavior,
+        });
       }
     }
   });
@@ -261,7 +266,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
     <div class="relative flex-1 min-h-0 bg-surface">
       <div
         ref={containerRef}
-        class="h-full overflow-y-auto px-4 py-3 bg-surface"
+        class="h-full overflow-y-auto overscroll-contain px-4 py-3 bg-surface"
         data-testid="assistant-message-list"
         onScroll={updatePinnedToBottom}
       >

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
@@ -1323,6 +1324,7 @@ func TestExecuteGetResource_RegistersVMwareVMAsReadOnly(t *testing.T) {
 		ReadState:               provider.ResourceRegistry,
 	})
 	executor.SetResolvedContext(resolved)
+	wireCanonicalQueryTestPlanner(executor, provider.ResourceRegistry)
 
 	result, err := executor.executeGetResource(context.Background(), map[string]interface{}{
 		"resource_type": "vm",
@@ -1386,6 +1388,7 @@ func TestExecuteGetResource_RegistersVMwareAgentAsReadOnly(t *testing.T) {
 		ReadState:               provider.ResourceRegistry,
 	})
 	executor.SetResolvedContext(resolved)
+	wireCanonicalQueryTestPlanner(executor, provider.ResourceRegistry)
 
 	result, err := executor.executeGetResource(context.Background(), map[string]interface{}{
 		"resource_type": "agent",
@@ -2207,4 +2210,15 @@ func TestResourceTypeFromCanonicalID(t *testing.T) {
 			t.Fatalf("resourceTypeFromCanonicalID(%q) = %q, want %q", id, got, want)
 		}
 	}
+}
+
+// These refusal checks use the real planner. Cached allowed-action hints do
+// not own the action boundary and may be stale after a replay or discovery.
+func wireCanonicalQueryTestPlanner(executor *PulseToolExecutor, registry *unifiedresources.ResourceRegistry) {
+	store := unifiedresources.NewMemoryStore()
+	service := &actionlifecycle.Service{Registry: func(string) (*unifiedresources.ResourceRegistry, error) { return registry, nil }, Store: func(string) (actionlifecycle.Store, error) { return store, nil }}
+	executor.SetTypedActionPlanner(typedActionPlannerFunc(func(ctx context.Context, _ string, request unifiedresources.ActionRequest) (*unifiedresources.ActionPlan, error) {
+		plan, err := service.Plan(ctx, "default", request, unifiedresources.ActionActor{SubjectID: "operator", Kind: unifiedresources.ActionActorUser, CredentialID: "test-credential", OrgID: "default"})
+		return &plan, err
+	}))
 }

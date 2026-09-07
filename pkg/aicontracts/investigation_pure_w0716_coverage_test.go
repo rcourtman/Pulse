@@ -1,8 +1,6 @@
 package aicontracts
 
 import (
-	"errors"
-	"strings"
 	"testing"
 	"time"
 )
@@ -12,92 +10,6 @@ import (
 // ProposalFailure. These methods are deliberately nil-safe so a typed nil
 // pointer flowing through an error chain does not panic; the coverage gaps
 // were exactly these nil arms.
-func Test_w0716_contracts_OrchestratorInvestigationError_NilReceiverDefensiveBranches(t *testing.T) {
-	// Typed nil pointer of *OrchestratorInvestigationError.
-	var nilTypedErr *OrchestratorInvestigationError = (*OrchestratorInvestigationError)(nil)
-
-	if got := nilTypedErr.Error(); got != "" {
-		t.Fatalf("nil receiver Error() = %q, want %q", got, "")
-	}
-	if got := nilTypedErr.Unwrap(); got != nil {
-		t.Fatalf("nil receiver Unwrap() = %v, want nil", got)
-	}
-	if got := nilTypedErr.RunFailure(); got != nil {
-		t.Fatalf("nil receiver RunFailure() = %v, want nil", got)
-	}
-	if got := nilTypedErr.ProposalFailure(); got != nil {
-		t.Fatalf("nil receiver ProposalFailure() = %v, want nil", got)
-	}
-}
-
-// Test_w0716_contracts_OrchestratorInvestigationError_PopulatedErrorAndUnwrap
-// covers the populated arms of Error() (0% covered — never called directly by
-// existing tests) and Unwrap() (populated arm), asserting the joined string
-// carries both failure channels and Unwrap returns exactly the two errors.
-func Test_w0716_contracts_OrchestratorInvestigationError_PopulatedErrorAndUnwrap(t *testing.T) {
-	runFailure := errors.New("provider unavailable")
-	err := NewOrchestratorInvestigationError(runFailure, ErrInvestigationProposalAmbiguous)
-	oie, ok := err.(*OrchestratorInvestigationError)
-	if !ok {
-		t.Fatalf("expected *OrchestratorInvestigationError, got %T", err)
-	}
-
-	msg := oie.Error()
-	if !strings.Contains(msg, "provider unavailable") {
-		t.Fatalf("Error() missing run failure message: %q", msg)
-	}
-	if !strings.Contains(msg, ErrInvestigationProposalAmbiguous.Error()) {
-		t.Fatalf("Error() missing proposal failure message: %q", msg)
-	}
-
-	unwrapped := oie.Unwrap()
-	if len(unwrapped) != 2 {
-		t.Fatalf("Unwrap() returned %d errors, want 2", len(unwrapped))
-	}
-	if unwrapped[0] != runFailure {
-		t.Fatalf("Unwrap()[0] = %v, want %v", unwrapped[0], runFailure)
-	}
-	if unwrapped[1] != ErrInvestigationProposalAmbiguous {
-		t.Fatalf("Unwrap()[1] = %v, want %v", unwrapped[1], ErrInvestigationProposalAmbiguous)
-	}
-}
-
-// Test_w0716_contracts_NewOrchestratorInvestigationError_NilArm covers the
-// uncovered both-nil arm of NewOrchestratorInvestigationError, which must
-// return a literal nil (not a typed nil pointer) so errors.Is/!=nil checks
-// behave correctly downstream.
-func Test_w0716_contracts_NewOrchestratorInvestigationError_NilArm(t *testing.T) {
-	if got := NewOrchestratorInvestigationError(nil, nil); got != nil {
-		t.Fatalf("NewOrchestratorInvestigationError(nil, nil) = %#v, want nil", got)
-	}
-}
-
-// Test_w0716_contracts_NewOrchestratorInvestigationError_PartialFailure
-// covers the constructor's populated arm when only one channel is set,
-// confirming the other accessor returns nil and the build path works for a
-// run-only failure (mirrors a completed-but-proposal-rejected outcome).
-func Test_w0716_contracts_NewOrchestratorInvestigationError_PartialFailure(t *testing.T) {
-	runFailure := errors.New("provider unavailable")
-	err := NewOrchestratorInvestigationError(runFailure, nil)
-	if err == nil {
-		t.Fatal("expected non-nil error when only runFailure set")
-	}
-	oie, ok := err.(*OrchestratorInvestigationError)
-	if !ok {
-		t.Fatalf("expected *OrchestratorInvestigationError, got %T", err)
-	}
-	if oie.RunFailure() != runFailure {
-		t.Fatalf("RunFailure() = %v, want %v", oie.RunFailure(), runFailure)
-	}
-	if oie.ProposalFailure() != nil {
-		t.Fatalf("ProposalFailure() = %v, want nil", oie.ProposalFailure())
-	}
-}
-
-// Test_w0716_contracts_DefaultInvestigationConfig_FieldDefaults asserts every
-// default field value of the returned InvestigationConfig. The function is
-// pure and previously had 0% coverage; pinning each field guards the safety
-// ceilings and budgets against silent drift.
 func Test_w0716_contracts_DefaultInvestigationConfig_FieldDefaults(t *testing.T) {
 	cfg := DefaultInvestigationConfig()
 

@@ -2535,20 +2535,10 @@ func (s *FindingsStore) UpdateInvestigationOutcome(id, outcome string) bool {
 
 	prevOutcome := f.InvestigationOutcome
 	f.InvestigationOutcome = outcome
-	// If a fix was verified, close the loop by resolving the finding.
+	// Replaying a persisted result must not invent a later recovery event.
 	if InvestigationOutcome(outcome) == InvestigationOutcomeFixVerified {
-		now := time.Now()
-		// Only decrement active count once.
-		if f.ResolvedAt == nil && f.IsActive() {
-			s.activeCounts[f.Severity]--
-		}
-		f.ResolvedAt = &now
-		f.AutoResolved = true
-		if f.ResolveReason == "" {
-			f.ResolveReason = "Fix verified"
-		}
-		s.appendLifecycleLocked(f, "verification_passed", "Fix verified; finding resolved", f.LoopState, string(FindingLoopStateResolved), nil)
-	} else {
+		s.resolveVerifiedFindingLocked(f, prevOutcome)
+	} else if prevOutcome != outcome {
 		msg := "Investigation outcome updated"
 		if InvestigationOutcome(outcome) == InvestigationOutcomeFixFailed || InvestigationOutcome(outcome) == InvestigationOutcomeFixVerificationFailed {
 			msg = "Remediation failed verification"
@@ -2581,19 +2571,9 @@ func (s *FindingsStore) UpdateInvestigation(id, sessionID, status, outcome strin
 	f.InvestigationOutcome = outcome
 	f.LastInvestigatedAt = lastInvestigatedAt
 	f.InvestigationAttempts = attempts
-	// If a fix was verified, close the loop by resolving the finding.
 	if InvestigationOutcome(outcome) == InvestigationOutcomeFixVerified {
-		now := time.Now()
-		if f.ResolvedAt == nil && f.IsActive() {
-			s.activeCounts[f.Severity]--
-		}
-		f.ResolvedAt = &now
-		f.AutoResolved = true
-		if f.ResolveReason == "" {
-			f.ResolveReason = "Fix verified"
-		}
-		s.appendLifecycleLocked(f, "verification_passed", "Fix verified; finding resolved", f.LoopState, string(FindingLoopStateResolved), nil)
-	} else {
+		s.resolveVerifiedFindingLocked(f, prevOutcome)
+	} else if prevStatus != status || prevOutcome != outcome {
 		s.appendLifecycleLocked(f, "investigation_updated", "Investigation state updated", f.LoopState, f.LoopState, map[string]string{
 			"prev_status":  prevStatus,
 			"next_status":  status,
@@ -2605,6 +2585,27 @@ func (s *FindingsStore) UpdateInvestigation(id, sessionID, status, outcome strin
 	s.mu.Unlock()
 	s.scheduleSave()
 	return true
+}
+
+// resolveVerifiedFindingLocked projects the first verified resolution without
+// moving its timestamp or appending another verification when history is replayed.
+// A genuine regression clears ResolvedAt and can therefore resolve again.
+func (s *FindingsStore) resolveVerifiedFindingLocked(f *Finding, previousOutcome string) {
+	unresolved := f.ResolvedAt == nil
+	if unresolved {
+		if f.IsActive() {
+			s.activeCounts[f.Severity]--
+		}
+		now := time.Now()
+		f.ResolvedAt = &now
+	}
+	f.AutoResolved = true
+	if f.ResolveReason == "" {
+		f.ResolveReason = "Fix verified"
+	}
+	if unresolved || InvestigationOutcome(previousOutcome) != InvestigationOutcomeFixVerified {
+		s.appendLifecycleLocked(f, "verification_passed", "Fix verified; finding resolved", f.LoopState, string(FindingLoopStateResolved), nil)
+	}
 }
 
 // Suppress marks a finding type as permanently suppressed for a resource

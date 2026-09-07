@@ -286,7 +286,8 @@ func ResourcePolicyReference(value string, hints ...ResourceRedactionHint) Resou
 // value-based so alert, prompt, and export summaries cannot leak the same raw
 // hostname, IP, alias, platform ID, or path through nearby free-form text.
 func ResourcePolicyRedactedText(value string, resource Resource) string {
-	value = strings.TrimSpace(value)
+	// Text may be a streamed delta. Whitespace is content, not presentation
+	// padding, and must survive redaction even when no policy applies.
 	if value == "" || resource.Policy == nil {
 		return value
 	}

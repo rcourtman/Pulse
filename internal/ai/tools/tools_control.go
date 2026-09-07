@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
@@ -93,16 +92,6 @@ func (e *PulseToolExecutor) executeControlResource(ctx context.Context, args map
 	if blocked != nil {
 		return *blocked, nil
 	}
-	// Current capability evidence is the only permitted source of "not
-	// available". When the canonical record is in hand and does not advertise
-	// the action (or its lifecycle synonym), answer from that evidence now so
-	// read-only platforms are refused with the resource's real capability
-	// list even before the planner runs. The planner applies the same rule.
-	if target.canonical != nil {
-		if _, ok := advertisedActionName(*target.canonical, action); !ok {
-			return controlPlanFailureResult(target, action, actionplanner.ErrCapabilityNotFound), nil
-		}
-	}
 
 	if e.typedActionPlanner == nil {
 		return NewErrorResult(fmt.Errorf("canonical action planning is unavailable")), nil
@@ -112,7 +101,7 @@ func (e *PulseToolExecutor) executeControlResource(ctx context.Context, args map
 		return NewErrorResult(fmt.Errorf("resource %q has no canonical resource id", resourceRef)), nil
 	}
 	plan, err := e.typedActionPlanner.PlanTypedAction(ctx, e.orgID, unifiedresources.ActionRequest{
-		RequestID:      uuid.NewString(),
+		RequestID:      actionRequestIDForInvocation(ctx),
 		ResourceID:     resourceID,
 		CapabilityName: action,
 		Reason:         fmt.Sprintf("Assistant proposed %s for %s", action, resourceID),

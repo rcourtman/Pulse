@@ -85,12 +85,16 @@ type ActionDisposition struct {
 // the investigation stores only this reference, while proposal parameters
 // and lifecycle state live in the canonical action audit.
 type ActionReference struct {
-	ActionID       string         `json:"action_id"`
-	ProposalID     string         `json:"proposal_id,omitempty"`
-	ResourceID     string         `json:"resource_id"`
-	CapabilityName string         `json:"capability_name"`
-	State          string         `json:"state"`
-	Plan           ActionPlanInfo `json:"plan"`
+	// CausalResourceID is attributed by the model, not established by action acceptance.
+	CausalResourceID   string          `json:"causal_resource_id,omitempty"`
+	ActionResultV2     json.RawMessage `json:"action_result_v2,omitempty"`
+	VerificationStatus string          `json:"verification_status,omitempty"`
+	ActionID           string          `json:"action_id"`
+	ProposalID         string          `json:"proposal_id,omitempty"`
+	ResourceID         string          `json:"resource_id"`
+	CapabilityName     string          `json:"capability_name"`
+	State              string          `json:"state"`
+	Plan               ActionPlanInfo  `json:"plan"`
 }
 
 // CloneActionReference returns an immutable deep copy suitable for crossing
@@ -100,6 +104,9 @@ func CloneActionReference(reference *ActionReference) *ActionReference {
 		return nil
 	}
 	clone := *reference
+	clone.Plan.ApprovalRequirement = append(json.RawMessage(nil), reference.Plan.ApprovalRequirement...)
+	clone.ActionResultV2 = append(json.RawMessage(nil), reference.ActionResultV2...)
+	clone.Plan.PolicyDecision = append(json.RawMessage(nil), reference.Plan.PolicyDecision...)
 	clone.Plan.PredictedBlastRadius = append([]string(nil), reference.Plan.PredictedBlastRadius...)
 	if reference.Plan.Preflight != nil {
 		preflight := *reference.Plan.Preflight

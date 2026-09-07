@@ -1,38 +1,55 @@
 {
   "version": 1,
-  "base_sha": "1dcaee8ae870092f08f1692d9c81935d13229bc7",
-  "verified_at": "2026-09-07T14:17:11.679627Z",
+  "base_sha": "7e34b00d4face3ffa33a36946bb527dbfbdfd74c",
+  "verified_at": "2026-09-07T16:12:24.652755Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/hooks/useTypeToSearch.ts"
+    "frontend-modern/src/components/AI/Chat/ChatMessages.tsx",
+    "frontend-modern/src/components/patrol/ApprovalSection.tsx",
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/hooks/useTypeToSearch.ts": "6ca47c567549b1dd3b38b84e5deaf1261652c58c79c6d8a43a7d25572a1f8f0a"
+    "frontend-modern/src/components/AI/Chat/ChatMessages.tsx": "6f2bea6530d383abe81e13054ef9b7a90f4324c244166fb0a8afaac354439b48",
+    "frontend-modern/src/components/patrol/ApprovalSection.tsx": "5e7ac87d87674b4c05fe80c3933d4ab542366054e2abbfa3f96afbfe90e993a4",
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts": "781c8730a7f566831562160a31ba437b2aabd8840330f59b521894198f79b0f1"
   },
   "routes": [
-    "/alerts/thresholds/infrastructure"
+    "/patrol",
+    "/actions?action=act_fd2d0bdab1930e2d3a75faf080b8ba7a",
+    "/actions?action=act_369c466aea179f93fc69aa04a710689a",
+    "/actions?action=act_d2f137411342c995d840d529a70fbf95",
+    "/docs/ASSISTANT_ARCHITECTURE",
+    "/docs/ASSISTANT_SAFETY"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 720
+      "width": 1440,
+      "height": 1000
     },
     {
-      "width": 393,
-      "height": 727
+      "width": 900,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 1000
     }
   ],
   "states": [
-    "Populated Ceph storage thresholds with retained custom overrides",
-    "Storage Devices expanded, collapsed with inert mounted content, and reopened",
-    "Search empty, ordinary typed character, and trailing space"
+    "Approved and independently verified outcome",
+    "Rejected and expired unexecuted plans",
+    "Expanded filesystem evidence and risk",
+    "Attached finding context, explicit new session, retained saved context",
+    "Fresh streamed explanation and saved missing-access, VM, storage and rejection outcomes"
   ],
   "interactions": [
-    "Enter opens Storage Devices; Space collapses without search focus theft",
-    "Full Tab focus cycle excludes collapsed descendants and returns to disclosure",
-    "Enter reopens and Ceph edit action receives focus",
-    "Ordinary typing from focused edit button focuses search; Space in search remains input; clear restores resource rows",
-    "Inspect reopened desktop and narrow screenshots with visible disclosure and focused edit action"
+    "Open review, close, focus return and Enter reopen",
+    "Expand every investigation tool card, deep evidence scroll and actual pixel inspection",
+    "Discuss with Assistant, new-session clearing and saved-session resumption",
+    "Exact action link, terminal authority controls, reload and Escape",
+    "Stream at bottom, wheel overscroll containment, scroll away, Latest, resize while open and reachable header/composer",
+    "Session-history picker and exact persisted message read",
+    "Documentation linked navigation, reload and end-of-document scroll"
   ],
-  "notes": "Current embedded frontend and isolated core backend exercised via pulse-heavy-run; final tests/66-ceph-alert-thresholds.spec.ts passed in chromium and mobile-chrome (2 tests). Screenshots inspected in tests/integration/test-results/66-ceph-alert-thresholds-C-51ff4-the-live-thresholds-surface-{chromium,mobile-chrome}/keyboard-reopened.png. Resource APIs mocked; no installed customer, assistive-technology, WebKit, Firefox, or notification-delivery qualification. Native summary, semantic role button and nested target ownership also covered by focused unit tests; browser matrix covers the reproduced threshold/search interaction, not every hook consumer. Runtimes stopped by harness."
+  "notes": "Final runtime r34 SHA256 e1ae053e656b28af9ba0e7541a47bdeb56303d1d7912edc57b2dac2f94620bd1 matches 4,853 source inputs. Named r28 fault matrix and subsequent affected writer/streaming proofs are detailed in docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md. Fresh r34 approved explanation passed, with saved final-runtime missing-access/VM/rejected/storage explanations and deep Patrol history. Receipts: workspace tmp/patrol-planning-continuation/patrol-browser and docs-browser-r34. Initial history-locator and network-idle failures are retained separately. Only login, selected authorized API provider readiness and one explicit fresh explanation were submitted during these checks. No lab action was repeated. Independent customer environments and broader readiness remain unqualified."
 }

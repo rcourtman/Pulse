@@ -23,6 +23,16 @@
 
 Delivery-log URL masking occurs in the HTTP diagnostic projection and does not rewrite retained attempt history or destination configuration. Preserved failure context and attempt identifiers describe notification delivery only, not a restore result or storage freshness. Malformed URL diagnostics fail closed in the response; this does not delete the retained failure, change retention windows, or grant retry, storage or recovery authority.
 
+### Canonical Patrol and Assistant continuation, 2026-09-07
+
+The shared action API preserves full canonical approval requirements and actor/
+request idempotency for storage-adjacent callers. An accepted plan is not an
+executed operation or a recovery proof. The current Patrol capacity case measured
+an exhausted container tmpfs and independently reverted the disposable fixture.
+Its unexecuted restart plan does not establish product recovery or backup restore
+correctness. See `docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md` for
+exact observations and the separate unqualified backup and wider rollout gates.
+
 Container filesystem evidence is a read-only observation at a named resource
 mountpoint. It grants no storage mutation, recovery or host-capacity authority.
 A full container tmpfs does not establish host-array exhaustion. Unknown byte

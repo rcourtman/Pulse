@@ -3,7 +3,6 @@ package aicontracts
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
@@ -61,74 +60,15 @@ type OrchestratorInvestigationRequest struct {
 // produced only by a completely successful run - ready for
 // OrchestratorActionBroker.Submit.
 type OrchestratorInvestigationResult struct {
-	Content                string          `json:"content"`
-	Proposal               *ActionProposal `json:"proposal,omitempty"`
-	FailedProposalAttempts int             `json:"failed_proposal_attempts,omitempty"`
-	InputTokens            int             `json:"input_tokens"`
-	OutputTokens           int             `json:"output_tokens"`
-	ModelTurns             int             `json:"model_turns"`
-	EvidenceCalls          int             `json:"evidence_calls"`
-	ToolCalls              int             `json:"tool_calls"`
-}
-
-// Typed investigation proposal errors surfaced across the contract
-// boundary. Any of them means the run produced no actionable proposal.
-var (
-	ErrInvestigationProposalAmbiguous      = errors.New("ambiguous investigation result: multiple distinct action proposals were submitted")
-	ErrInvestigationProposalIntegrity      = errors.New("proposal integrity violation: one tool-use id submitted conflicting payloads")
-	ErrInvestigationProposalAttemptsFailed = errors.New("investigation made proposal attempts but none validated")
-)
-
-// OrchestratorInvestigationError preserves the independent runtime and
-// proposal-channel failures across the Pulse/Enterprise boundary. A proposal
-// failure may be handled as a completed needs-attention outcome only when
-// RunFailure is nil.
-type OrchestratorInvestigationError struct {
-	runFailure      error
-	proposalFailure error
-}
-
-// NewOrchestratorInvestigationError constructs the public cross-repo failure
-// without exposing mutable error fields.
-func NewOrchestratorInvestigationError(runFailure, proposalFailure error) error {
-	if runFailure == nil && proposalFailure == nil {
-		return nil
-	}
-	return &OrchestratorInvestigationError{
-		runFailure:      runFailure,
-		proposalFailure: proposalFailure,
-	}
-}
-
-func (e *OrchestratorInvestigationError) Error() string {
-	if e == nil {
-		return ""
-	}
-	return errors.Join(e.runFailure, e.proposalFailure).Error()
-}
-
-// Unwrap preserves errors.Is/errors.As behavior for both failure channels.
-func (e *OrchestratorInvestigationError) Unwrap() []error {
-	if e == nil {
-		return nil
-	}
-	return []error{e.runFailure, e.proposalFailure}
-}
-
-// RunFailure returns the provider/runtime failure, if any.
-func (e *OrchestratorInvestigationError) RunFailure() error {
-	if e == nil {
-		return nil
-	}
-	return e.runFailure
-}
-
-// ProposalFailure returns the proposal-channel failure, if any.
-func (e *OrchestratorInvestigationError) ProposalFailure() error {
-	if e == nil {
-		return nil
-	}
-	return e.proposalFailure
+	// Action survives provider failure. Its presence is not diagnosis proof or execution authority.
+	Action        *ActionReference `json:"action,omitempty"`
+	Content       string           `json:"content"`
+	Proposal      *ActionProposal  `json:"proposal,omitempty"`
+	InputTokens   int              `json:"input_tokens"`
+	OutputTokens  int              `json:"output_tokens"`
+	ModelTurns    int              `json:"model_turns"`
+	EvidenceCalls int              `json:"evidence_calls"`
+	ToolCalls     int              `json:"tool_calls"`
 }
 
 // OrchestratorFindingsStore provides access to patrol findings for the orchestrator.

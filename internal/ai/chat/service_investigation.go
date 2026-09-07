@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -36,6 +37,7 @@ type InvestigationRunRequest struct {
 	// Catalog resolves advertised resource capabilities for proposal
 	// validation (ultimately the tenant-bound action lifecycle path).
 	Catalog tools.ProposalCatalog
+	Planner tools.ProposalPlanner
 }
 
 // InvestigationRunResult is the structured outcome of one investigation
@@ -45,78 +47,24 @@ type InvestigationRunResult struct {
 	Content string
 	// Proposal is the single validated typed action proposal, nil for a
 	// valid zero-proposal conclusion.
-	Proposal *tools.CapturedProposal
-	// FailedProposalAttempts counts proposal calls that failed
-	// validation. When >0 with no captured proposal, the run error is
-	// tools.ErrProposalAttemptsFailed.
-	FailedProposalAttempts int
-	InputTokens            int
-	OutputTokens           int
-	ModelTurns             int
-	EvidenceCalls          int
-	ToolCalls              int
-}
-
-// InvestigationRunError preserves the two independent failure channels from
-// an investigation run. Proposal-only failures are valid completed runs that
-// require operator attention; RunErr means the provider/runtime itself failed
-// and must never be collapsed into that completed outcome.
-type InvestigationRunError struct {
-	runErr      error
-	proposalErr error
-}
-
-// NewInvestigationRunError constructs a two-channel investigation failure.
-// The package is internal; the exported constructor lets the API adapter's
-// boundary tests exercise the same concrete error it receives at runtime.
-func NewInvestigationRunError(runErr, proposalErr error) *InvestigationRunError {
-	if runErr == nil && proposalErr == nil {
-		return nil
-	}
-	return &InvestigationRunError{runErr: runErr, proposalErr: proposalErr}
-}
-
-func (e *InvestigationRunError) Error() string {
-	if e == nil {
-		return ""
-	}
-	return errors.Join(e.runErr, e.proposalErr).Error()
-}
-
-// Unwrap preserves errors.Is/errors.As behavior for both failure channels.
-func (e *InvestigationRunError) Unwrap() []error {
-	if e == nil {
-		return nil
-	}
-	return []error{e.runErr, e.proposalErr}
-}
-
-// RunFailure returns the provider/runtime failure, if any.
-func (e *InvestigationRunError) RunFailure() error {
-	if e == nil {
-		return nil
-	}
-	return e.runErr
-}
-
-// ProposalFailure returns the proposal-channel failure, if any.
-func (e *InvestigationRunError) ProposalFailure() error {
-	if e == nil {
-		return nil
-	}
-	return e.proposalErr
+	Proposal      *tools.CapturedProposal
+	InputTokens   int
+	OutputTokens  int
+	ModelTurns    int
+	EvidenceCalls int
+	ToolCalls     int
 }
 
 // ExecuteInvestigationStream runs one Patrol investigation under the
 // investigation execution profile and returns the structured result.
-// Proposal-channel violations (ambiguity, integrity, failed-only
-// attempts) return the result alongside the typed proposal error.
+// Planning refusals remain tool results. Provider/runtime errors return the
+// partial result so any already persisted action remains discoverable.
 func (s *Service) ExecuteInvestigationStream(ctx context.Context, req InvestigationRunRequest, callback StreamCallback) (*InvestigationRunResult, error) {
 	// Correlation identity is a precondition: without it a captured
 	// proposal could never be reconciled, so the run refuses before any
 	// provider call or session exists.
-	if strings.TrimSpace(req.Identity.FindingID) == "" || strings.TrimSpace(req.Identity.InvestigationID) == "" {
-		return nil, fmt.Errorf("investigation run requires finding and investigation identity before it can start")
+	if strings.TrimSpace(req.Identity.ProposalID) == "" || strings.TrimSpace(req.Identity.FindingID) == "" || strings.TrimSpace(req.Identity.InvestigationID) == "" {
+		return nil, fmt.Errorf("investigation run requires proposal, finding and investigation identity before it can start")
 	}
 
 	s.mu.RLock()
@@ -138,6 +86,7 @@ func (s *Service) ExecuteInvestigationStream(ctx context.Context, req Investigat
 	// One effective request executor, built before projection; the
 	// proposal capture sink is shared by design (one run, one capture).
 	capture := tools.NewProposalCapture(req.Identity, req.Catalog)
+	capture.SetPlanner(req.Planner)
 	executor := baseExecutor.Clone()
 	executor.SetControlLevel(effectiveControlLevel)
 	executor.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
@@ -212,7 +161,17 @@ func (s *Service) ExecuteInvestigationStream(ctx context.Context, req Investigat
 		return nil, err
 	}
 
-	resultMessages, runErr := loop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, callback)
+	resultMessages, runErr := loop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, func(event StreamEvent) {
+		if event.Type == "tool_end" {
+			var result ToolEndData
+			if json.Unmarshal(event.Data, &result) == nil && isInvestigationEvidenceTool(result.Name) {
+				capture.RecordEvidence(result.ID)
+			}
+		}
+		if callback != nil {
+			callback(event)
+		}
+	})
 	for _, msg := range resultMessages {
 		if msg.Role == "user" && msg.ToolResult == nil {
 			continue
@@ -222,7 +181,7 @@ func (s *Service) ExecuteInvestigationStream(ctx context.Context, req Investigat
 		}
 	}
 
-	proposal, failedAttempts, proposalErr := capture.Outcome()
+	proposal, proposalErr := capture.Outcome()
 	var contentBuilder strings.Builder
 	for _, msg := range resultMessages {
 		if msg.Role == "assistant" && msg.Content != "" {
@@ -232,21 +191,18 @@ func (s *Service) ExecuteInvestigationStream(ctx context.Context, req Investigat
 	content := contentBuilder.String()
 
 	result := &InvestigationRunResult{
-		Content:                content,
-		Proposal:               proposal,
-		FailedProposalAttempts: failedAttempts,
-		InputTokens:            loop.GetTotalInputTokens(),
-		OutputTokens:           loop.GetTotalOutputTokens(),
-		ModelTurns:             loop.GetTotalModelTurns(),
-		EvidenceCalls:          loop.GetTotalEvidenceCalls(),
-		ToolCalls:              loop.GetTotalToolCalls(),
+		Content:       content,
+		Proposal:      proposal,
+		InputTokens:   loop.GetTotalInputTokens(),
+		OutputTokens:  loop.GetTotalOutputTokens(),
+		ModelTurns:    loop.GetTotalModelTurns(),
+		EvidenceCalls: loop.GetTotalEvidenceCalls(),
+		ToolCalls:     loop.GetTotalToolCalls(),
 	}
 	if runErr != nil || proposalErr != nil {
-		// A proposal is actionable only from a completely successful
-		// run: any error nils it, and simultaneous run/proposal errors
-		// are both preserved.
-		result.Proposal = nil
-		return result, NewInvestigationRunError(runErr, proposalErr)
+		// A provider failure cannot erase a persisted action. The caller must
+		// retain its reference and must not request automatic progression.
+		return result, errors.Join(runErr, proposalErr)
 	}
 	return result, nil
 }

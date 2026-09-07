@@ -1160,6 +1160,9 @@ func TestInvestigationLoopRedactsProposalParamsEverywhereDurable(t *testing.T) {
 			}})
 			return nil
 		}
+		if len(req.Tools) == 0 {
+			t.Fatal("planning acceptance disabled further investigation tools")
+		}
 		// The provider continuation must still see the raw params from
 		// its own prior call.
 		for _, msg := range req.Messages {
@@ -1187,6 +1190,9 @@ func TestInvestigationLoopRedactsProposalParamsEverywhereDurable(t *testing.T) {
 				},
 			}}, nil
 		})
+	capture.SetPlanner(func(context.Context, tools.CapturedProposal) (ur.ActionAuditRecord, error) {
+		return ur.ActionAuditRecord{ID: "act_persisted", State: ur.ActionStatePending}, nil
+	})
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	exec.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
 	exec.SetProposalCapture(capture)
@@ -1200,7 +1206,7 @@ func TestInvestigationLoopRedactsProposalParamsEverywhereDurable(t *testing.T) {
 		context.Background(),
 		"session-investigation",
 		[]Message{{Role: "user", Content: "investigate finding f-9"}},
-		nil,
+		[]providers.Tool{{Name: agentcapabilities.PatrolProposeActionToolName}, {Name: agentcapabilities.PulseQueryToolName}},
 		func(event StreamEvent) {
 			if event.Type == "content" {
 				var data ContentData
@@ -1252,9 +1258,9 @@ func TestInvestigationLoopRedactsProposalParamsEverywhereDurable(t *testing.T) {
 	}
 
 	// The structured capture holds the validated raw values.
-	proposal, failed, outcomeErr := capture.Outcome()
-	if outcomeErr != nil || failed != 0 {
-		t.Fatalf("outcome = (%v, %d), want clean capture", outcomeErr, failed)
+	proposal, outcomeErr := capture.Outcome()
+	if outcomeErr != nil {
+		t.Fatalf("capture outcome: %v", outcomeErr)
 	}
 	if proposal == nil || proposal.Params["mode"] != "graceful" || proposal.Identity.FindingID != "f-9" || proposal.InvocationID != "p-1" {
 		t.Fatalf("captured proposal = %#v", proposal)
@@ -1301,7 +1307,13 @@ func TestInvestigationServicePreservesUncertainDiagnosisAfterProposal(t *testing
 	result, err := service.ExecuteInvestigationStream(context.Background(), InvestigationRunRequest{
 		SessionID: "uncertain-investigation", Prompt: "Investigate the issue", SystemPrompt: "Investigate using current evidence.",
 		MaxTurns: 5, MaxEvidenceCalls: 3, ResourceType: "vm",
-		Identity: tools.ProposalIdentity{FindingID: "finding-1", InvestigationID: "investigation-1"},
+		Identity: tools.ProposalIdentity{ProposalID: "request-1", FindingID: "finding-1", InvestigationID: "investigation-1"},
+		Planner: func(_ context.Context, p tools.CapturedProposal) (ur.ActionAuditRecord, error) {
+			if len(p.Identity.EvidenceIDs) != 1 || p.Identity.EvidenceIDs[0] != "evidence-1" {
+				t.Fatalf("planning lost prior completed observation: %+v", p.Identity)
+			}
+			return ur.ActionAuditRecord{ID: "act_investigation", State: ur.ActionStatePending}, nil
+		},
 		Catalog: func(context.Context, string) ([]ur.ResourceCapability, error) {
 			return []ur.ResourceCapability{{Name: "restart"}}, nil
 		},
