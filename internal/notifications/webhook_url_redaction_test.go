@@ -16,6 +16,12 @@ func TestRedactWebhookURLSecrets(t *testing.T) {
 		input string
 		want  string
 	}{
+		"slack":                            {input: "https://hooks.slack.com/services/T-test/B-test/slack-secret", want: "https://hooks.slack.com/services/REDACTED"},
+		"gov slack":                        {input: "https://hooks.slack-gov.com/services/T-test/B-test/slack-secret?token=query-secret&channel=ops", want: "https://hooks.slack-gov.com/services/REDACTED?token=REDACTED&channel=ops"},
+		"slack encoded path and authority": {input: "https://user:password@HOOKS.SLACK.COM:443/serv%69ces/T-test/B-test/slack%2Dsecret", want: "https://REDACTED@HOOKS.SLACK.COM:443/services/REDACTED"},
+		"slack legacy path":                {input: "https://hooks.slack.com/T-test/B-test/slack-secret", want: "https://hooks.slack.com/REDACTED"},
+		"unrelated services path":          {input: "https://example.com/services/status", want: "https://example.com/services/status"},
+		"slack lookalike":                  {input: "https://hooks.slack.com.example.org/services/status", want: "https://hooks.slack.com.example.org/services/status"},
 		"basic auth": {
 			input: "https://hook-user:hook-password@example.com/hook",
 			want:  "https://REDACTED@example.com/hook",
@@ -115,5 +121,30 @@ func TestWebhookRateLimitLogsRedactURLSecrets(t *testing.T) {
 	}
 	if !strings.Contains(out, "token=REDACTED") {
 		t.Fatalf("expected redacted url in logs, got %q", out)
+	}
+}
+
+func TestSlackWebhookDiagnosticsRedactPath(t *testing.T) {
+	const webhookURL = "https://hooks.slack.com/services/T-test/B-test/slack-secret"
+	cause := errors.New("connection refused")
+	original := &url.Error{Op: "Post", URL: webhookURL, Err: cause}
+	redacted := redactWebhookTransportError(original)
+	if strings.Contains(redacted.Error(), "slack-secret") || !strings.Contains(redacted.Error(), "/services/REDACTED") {
+		t.Fatalf("unsafe transport diagnostic: %v", redacted)
+	}
+	if original.URL != webhookURL || !errors.Is(redacted, cause) {
+		t.Fatal("transport error identity or cause changed")
+	}
+	var captured bytes.Buffer
+	logger := log.Logger
+	log.Logger = zerolog.New(&captured)
+	t.Cleanup(func() { log.Logger = logger })
+	nm := &NotificationManager{webhookRateLimits: make(map[string]*webhookRateLimit)}
+	for range WebhookRateLimitMax + 2 {
+		nm.checkWebhookRateLimit(webhookURL)
+	}
+	out := captured.String()
+	if !strings.Contains(out, "rate limit exceeded") || !strings.Contains(out, "/services/REDACTED") || strings.Contains(out, "slack-secret") {
+		t.Fatalf("unsafe rate-limit diagnostic: %s", out)
 	}
 }
