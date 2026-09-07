@@ -19,6 +19,24 @@
 
 ## Purpose
 
+### Incident lifecycle occurrence identity (7 September 2026)
+
+Fired, resolved and acknowledgement snapshots with a nonzero start time select
+an exact (alert identifier, occurrence start) pair, not whichever incident is
+open or latest. Replaying a retained closed occurrence must neither allocate a
+new ID nor close a newer recurrence. A distinct start remains a distinct
+occurrence even within the legacy timeline read tolerance. Zero-start legacy
+callers retain best-effort matching. `TestIncidentStore_LifecycleReplayIdentity`
+covers unchanged active evaluations, repeated fired/resolved transitions,
+JSON checkpoint reload, canonical-backed shells and delayed historical events.
+`TestIncidentStore_LifecycleRapidRecurrence` covers distinct subsecond starts.
+
+This does not migrate existing duplicate records, change bounded retention,
+make acknowledgement event replay idempotent, or prove aggregate write-byte
+reductions or recipient delivery. An evicted occurrence can still be recreated
+by replay; exact identity is guaranteed only while its shell is retained.
+
+
 Incident timeline summaries must distinguish provider conditions from metric
 threshold evidence. For `resource-incident` alert events, numeric value and
 threshold placeholders must not render as a measured comparison; retain the
