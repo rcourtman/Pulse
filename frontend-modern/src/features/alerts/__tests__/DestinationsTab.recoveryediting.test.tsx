@@ -137,12 +137,16 @@ describe('DestinationsTab recovery while editing SMTP', () => {
     vi.restoreAllMocks();
   });
 
-  it.each(([
-    ['retryTerminalFailures', 'Retry retained deliveries', 'retry'],
-    ['dismissTerminalFailures', 'Dismiss retained failures', 'dismiss'],
-  ] as const).flatMap(([action, label, verb]) =>
-    (['available', 'unavailable'] as const).map((refresh) => ({ action, label, verb, refresh })),
-  ))(
+  it.each(
+    (
+      [
+        ['retryTerminalFailures', 'Retry retained deliveries', 'retry'],
+        ['dismissTerminalFailures', 'Dismiss retained failures', 'dismiss'],
+      ] as const
+    ).flatMap(([action, label, verb]) =>
+      (['available', 'unavailable'] as const).map((refresh) => ({ action, label, verb, refresh })),
+    ),
+  )(
     'preserves unfinished edits through $action with $refresh refresh',
     async ({ action, label, verb, refresh }) => {
       const [emailConfig, setEmailConfig] = createSignal(buildEmailConfig());
@@ -222,8 +226,12 @@ describe('DestinationsTab recovery while editing SMTP', () => {
         deadLetter: 0,
       };
       if (refresh === 'unavailable') {
-        vi.mocked(NotificationsAPI.getHealth).mockRejectedValueOnce(new Error('health unavailable'));
-        vi.mocked(NotificationsAPI.getDeliveryLog).mockRejectedValueOnce(new Error('history unavailable'));
+        vi.mocked(NotificationsAPI.getHealth).mockRejectedValueOnce(
+          new Error('health unavailable'),
+        );
+        vi.mocked(NotificationsAPI.getDeliveryLog).mockRejectedValueOnce(
+          new Error('history unavailable'),
+        );
       } else {
         vi.mocked(NotificationsAPI.getHealth).mockResolvedValueOnce(healthy);
       }
@@ -246,8 +254,14 @@ describe('DestinationsTab recovery while editing SMTP', () => {
       expect(screen.getByRole('status')).toBe(status);
       expect(status).toBeEmptyDOMElement();
       if (refresh === 'unavailable') {
-        expect(await screen.findByText('Notification delivery status is unavailable')).toBeInTheDocument();
-        expect(await screen.findByText('Pulse could not read the delivery log, so recent delivery activity cannot be shown.')).toBeInTheDocument();
+        expect(
+          await screen.findByText('Notification delivery status is unavailable'),
+        ).toBeInTheDocument();
+        expect(
+          await screen.findByText(
+            'Pulse could not read the delivery log, so recent delivery activity cannot be shown.',
+          ),
+        ).toBeInTheDocument();
         expect(screen.queryByText('SMTP fixture rejected')).not.toBeInTheDocument();
       } else {
         expect(screen.getByText('SMTP fixture rejected')).toBeInTheDocument();

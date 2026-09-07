@@ -221,10 +221,12 @@ describe('recovery feedback beside delivery health', () => {
   afterEach(() => cleanup());
   it('preserves editing focus and live-region identity when failure feedback changes', () => {
     const [message, setMessage] = createSignal<string | null>(null);
-    render(() => <>
-      <input aria-label="Destination name" />
-      <AlertQueueActionFeedback message={message()} onClear={() => setMessage(null)} />
-    </>);
+    render(() => (
+      <>
+        <input aria-label="Destination name" />
+        <AlertQueueActionFeedback message={message()} onClear={() => setMessage(null)} />
+      </>
+    ));
     const input = screen.getByRole('textbox', { name: 'Destination name' });
     const status = screen.getByRole('status');
     expect(status).toHaveAttribute('aria-live', 'polite');
