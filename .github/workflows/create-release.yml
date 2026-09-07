@@ -13,6 +13,14 @@ on:
         description: 'Exact 40-character commit SHA admitted for this release'
         required: true
         type: string
+      release_source_branch:
+        description: 'Governed source branch for a merged immutable release snapshot'
+        required: false
+        type: string
+      release_pull_request:
+        description: 'Merged pull request that reviewed the immutable snapshot'
+        required: false
+        type: string
       release_notes:
         description: 'Release notes (markdown)'
         required: true
@@ -85,6 +93,10 @@ permissions:
 jobs:
   # Combined version extraction and validation (saves a checkout)
   prepare:
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
     # Stable releases use hosted runners regardless of their Windows-signing
     # decision. Prereleases retain the credential-free PVE acceleration path.
     runs-on: ${{ !contains(inputs.version, '-') && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64","pulse-pve-compile"]') }}
@@ -134,11 +146,20 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      - name: Verify reviewed release snapshot
+        id: snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SOURCE_BRANCH: ${{ inputs.release_source_branch }}
+          RELEASE_PULL_REQUEST: ${{ inputs.release_pull_request }}
+        run: python3 scripts/release_control/release_snapshot.py
+
       - name: Extract version
         id: extract
         env:
           VERSION_INPUT: ${{ inputs.version }}
           HISTORICAL_ASSET_BACKFILL_INPUT: ${{ inputs.historical_asset_backfill_only }}
+          SNAPSHOT_SOURCE_BRANCH: ${{ steps.snapshot.outputs.source_branch }}
         run: |
           set -euo pipefail
           if [[ ! "${VERSION_INPUT}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-((rc|alpha|beta)\.[0-9]+))?$ ]]; then
@@ -164,7 +185,7 @@ jobs:
             exit 1
           fi
 
-          SOURCE_BRANCH="${GITHUB_REF_NAME}"
+          SOURCE_BRANCH="${SNAPSHOT_SOURCE_BRANCH}"
           HISTORICAL_ASSET_BACKFILL_ONLY="${HISTORICAL_ASSET_BACKFILL_INPUT}"
           python3 scripts/write_github_output.py tag "${TAG}"
           python3 scripts/write_github_output.py version "${VERSION}"

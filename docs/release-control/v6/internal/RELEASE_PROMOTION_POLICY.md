@@ -254,8 +254,19 @@ without the other lanes changing the candidate underneath it.
    every third train and records the decision here.
 2. Each train has its own branch, `release/v6.N`, created from `main` at cut
    time and declared in `docs/release-control/control_plane.json` so the
-   release workflow refuses a dispatch from any other branch. `main` is never
-   frozen. A fix for something found in the candidate is backported to the
+   release workflow verifies that governed source line. `main` is never
+   frozen. A selected release is an immutable commit, not the current tip of
+   the train. Its preparation PR uses a fixed `release-candidate/<packet>`
+   ref and passes the normal protected review path into the governed line.
+   Qualification, builds and publication use that PR's exact head commit,
+   even when the merge or later train commits contain newer work. Snapshot
+   dispatch must verify the merged PR's head, canonical repository, source
+   line and continued ancestry in published history. The workflow and source
+   SHA must both equal the admitted snapshot. Later commits belong to another
+   release unless the maintainer explicitly rejects the selected candidate
+   for a concrete defect in that candidate. Merely finding newer work does
+   not invalidate qualification or restart a release.
+   A fix for something found in the candidate is backported to the
    release branch through a pull request; each backport produces the next
    `rc.N` and restarts the soak. After general availability the branch is
    the patch line for that train.
