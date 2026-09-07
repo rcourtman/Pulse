@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { CollapsibleSection, SectionActionButton, NestedGroupHeader } from '../CollapsibleSection';
 import {
@@ -171,6 +172,47 @@ describe('CollapsibleSection', () => {
     expect(onToggle).toHaveBeenNthCalledWith(1, false); // wants to expand
     // Since the controlled prop is still true, the section stays collapsed
     expect(button).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('preserves an edited threshold across controlled collapse and reopen', () => {
+    const [collapsed, setCollapsed] = createSignal(true);
+    render(() => (
+      <CollapsibleSection
+        id="snapshots"
+        title="Snapshot Age"
+        collapsed={collapsed()}
+        onToggle={setCollapsed}
+      >
+        <label>
+          Warning days
+          <input type="number" value="7" />
+        </label>
+      </CollapsibleSection>
+    ));
+
+    const disclosure = screen.getByRole('button', { name: 'Snapshot Age' });
+    const panel = document.getElementById(disclosure.getAttribute('aria-controls')!);
+    expect(panel).toHaveAttribute('inert');
+    expect(panel).toHaveAttribute('aria-hidden', 'true');
+
+    fireEvent.click(disclosure);
+    expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+    expect(panel).not.toHaveAttribute('inert');
+    expect(panel).not.toHaveAttribute('aria-hidden');
+    const input = screen.getByRole('spinbutton', { name: 'Warning days' });
+    fireEvent.input(input, { target: { value: '14' } });
+
+    fireEvent.click(disclosure);
+    expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+    expect(panel).toHaveAttribute('inert');
+    expect(panel).toHaveAttribute('aria-hidden', 'true');
+
+    fireEvent.click(disclosure);
+    expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+    expect(panel).not.toHaveAttribute('inert');
+    expect(panel).not.toHaveAttribute('aria-hidden');
+    expect(screen.getByRole('spinbutton', { name: 'Warning days' })).toBe(input);
+    expect(input).toHaveValue(14);
   });
 
   it('shows "Disabled" badge when isGloballyDisabled is true', () => {

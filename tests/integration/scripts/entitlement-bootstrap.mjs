@@ -5,6 +5,9 @@ import { spawn } from 'node:child_process';
 const truthyValues = new Set(['1', 'true', 'yes', 'on']);
 
 const BILLING_PROFILES = {
+  // General-purpose organization/billing fixture, not a white-label runtime.
+  // white_label deliberately hides commercial routes via security/status;
+  // commercial suppression belongs in dedicated boundary scenarios.
   'multi-tenant': {
     capabilities: [
       'advanced_reporting',
@@ -25,7 +28,6 @@ const BILLING_PROFILES = {
       'sso',
       'unlimited',
       'update_alerts',
-      'white_label',
     ],
     limits: {},
     meters_enabled: [],

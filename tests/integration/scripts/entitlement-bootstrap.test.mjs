@@ -36,6 +36,16 @@ test('buildBillingState returns enterprise capabilities for multi-tenant profile
   assert.ok(state.capabilities.includes('rbac'));
 });
 
+test('general-purpose entitlement profiles keep commercial routes available', () => {
+  for (const profile of ['multi-tenant', 'infra']) {
+    const state = buildBillingState(profile);
+    assert.ok(
+      !state.capabilities.includes('white_label'),
+      `${profile} must not opt the shared runtime into commercial suppression`,
+    );
+  }
+});
+
 test('applyRequestedEntitlementProfile writes a billing state file when a path is provided', async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'pulse-entitlement-'));
   const billingPath = path.join(dir, 'billing.json');
