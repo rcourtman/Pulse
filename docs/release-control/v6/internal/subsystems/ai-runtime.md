@@ -54,6 +54,10 @@ remain outside this guarantee. Legacy shell lookup retains its time tolerance;
 events preceding the selected shell's exact opening are not projected into it.
 `TestIncidentStore_CanonicalProjectionOccurrenceBounds` verifies both boundaries,
 subsecond starts, unordered successors and unrelated alert/resource isolation.
+It also checkpoints all retained shells to JSON, reconstructs the incident store
+and replays a firing: projected identity/state stays identical and the unchanged
+checkpoint is not replaced. The canonical timeline stays in memory; this is not
+a durable event-store restart or installed-process write-rate measurement.
 
 ### Unchanged incident JSON checkpoints
 
