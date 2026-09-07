@@ -14,11 +14,20 @@ import { Router, Route } from '@solidjs/router';
 import { AlertsAPI } from '/src/api/alerts';
 import { NotificationsAPI } from '/src/api/notifications';
 import { OverviewTab } from '/src/features/alerts/OverviewTab';
-import { DestinationsTab } from '/src/features/alerts/tabs/DestinationsTab';
+import { AlertsConfigurationSurface } from '/src/features/alerts/AlertsConfigurationSurface';
 import { ToastContainer } from '/src/components/Toast/Toast';
 import '/src/index.css';
 window.health = 'degraded'; window.action = 'reject';
 window.mutations = 0;
+window.configReads = 0; window.configWrites = []; window.savedPingUrls = [];
+AlertsAPI.getConfig = async () => {window.configReads++; return {overrides:{}};};
+AlertsAPI.getDeadManConfig = async () => ({pingUrl:'https://example.invalid/original'});
+NotificationsAPI.getEmailConfig = async () => ({enabled:false,to:[]});
+NotificationsAPI.getAppriseConfig = async () => ({enabled:false,targets:[]});
+AlertsAPI.updateConfig = async (value) => {window.configWrites.push(value); return {success:true};};
+NotificationsAPI.updateEmailConfig = async () => ({});
+NotificationsAPI.updateAppriseConfig = async (value) => value;
+AlertsAPI.updateDeadManConfig = async (value) => {window.savedPingUrls.push(value); return {};};
 NotificationsAPI.getHealth = async () => {
   if(window.health === 'error') throw new Error('scripted offline');
   return {queue:{status:window.health, attentionRequired:window.health==='healthy'?0:2, failed:2,deadLetter:0}};
@@ -37,15 +46,14 @@ function Overview() {return <OverviewTab overrides={[]} activeAlerts={{}} update
 showQuickTip={()=>false} dismissQuickTip={noop} showAcknowledged={()=>true}
 setShowAcknowledged={noop} alertsDisabled={()=>false}/>;}
 function Destinations() {
-const [pingUrl, setPingUrl] = createSignal('');
-window.unsaved = false;
-window.editedPingUrl = pingUrl;
-return <DestinationsTab
-emailConfig={()=>({enabled:false,provider:'smtp',from:'',server:'',username:'',password:'',port:587,to:[],tls:true,startTLS:true,replyTo:'',maxRetries:3,retryDelay:5,rateLimit:60})} setEmailConfig={noop}
-appriseConfig={()=>({enabled:false,mode:'cli',targetsText:'',configKey:'',serverUrl:'',timeoutSeconds:30,apiKey:'',apiKeyHeader:'X-API-KEY',hasApiKey:false,skipTlsVerify:false,cliPath:'apprise'})} setAppriseConfig={noop}
-configLoadError={()=>null} isRetrying={()=>false} isLoadingDestinations={()=>false} onRetryLoad={noop}
-webhooks={()=>[]} setHasUnsavedChanges={(value)=>{window.unsaved=value;}} deadManPingUrl={pingUrl} setDeadManPingUrl={setPingUrl}
-pushMinimumSeverity={()=>'all'} setPushMinimumSeverity={noop}/>;}
+const [unsaved, setUnsaved] = createSignal(false);
+window.unsaved = unsaved;
+return <AlertsConfigurationSurface activeTab={()=>'destinations'}
+allResources={()=>[]} byType={()=>[]} children={()=>[]} activeAlerts={{}}
+removeAlerts={noop} setOverviewOverrides={noop}
+hasUnsavedChanges={unsaved} setHasUnsavedChanges={setUnsaved}
+alertsActivationState={()=>'active'} alertsActivationConfig={()=>({enabled:true})}/>;}
+
 function Fixture() {return <main class="p-4"><ToastContainer/>{location.pathname.endsWith('destinations')?<Destinations/>:<Overview/>}</main>;}
 render(()=><Router><Route path="/qualification/*" component={Fixture}/></Router>,document.getElementById('root'));
 `;
@@ -141,7 +149,7 @@ try {
           });
           throw error;
         });
-        // A synthetic unsaved value, never submitted to a backend.
+        // Synthetic value owned by the real settings parent; APIs remain scripted.
         const editedUrl = "https://example.invalid/unsaved-recovery-check";
         const pingInput = page.getByLabel(
           "Healthchecks-compatible success ping URL",
@@ -150,10 +158,25 @@ try {
         const assertEditRetained = async () => {
           if (surface !== "destinations") return;
           assert.equal(await pingInput.inputValue(), editedUrl);
-          assert.equal(await page.evaluate(() => window.editedPingUrl()), editedUrl);
-          assert.equal(await page.evaluate(() => window.unsaved), true);
+          assert.equal(await page.evaluate(() => window.unsaved()), true);
+          assert.equal(
+            await page
+              .getByText("You have unsaved changes", { exact: true })
+              .count(),
+            1,
+          );
+          assert.equal(await page.evaluate(() => window.configReads), 1);
+          assert.deepEqual(await page.evaluate(() => window.configWrites), []);
+          assert.deepEqual(await page.evaluate(() => window.savedPingUrls), []);
         };
         if (surface === "destinations") {
+          // Wait for the real configuration/destination load before editing.
+          await page.waitForFunction(
+            () =>
+              document.querySelector('input[id^="alert-deadman-url-"]')
+                ?.value === "https://example.invalid/original",
+          );
+          assert.equal(await page.evaluate(() => window.unsaved()), false);
           await pingInput.fill(editedUrl);
           await assertEditRetained();
         }
@@ -268,6 +291,30 @@ try {
           true,
         );
         await assertEditRetained();
+        if (surface === "destinations") {
+          // Prove the retained value reaches the real parent's save path, only
+          // after an explicit Save. This is not backend persistence evidence.
+          await page
+            .getByRole("button", { name: "Save Changes", exact: true })
+            .click();
+          await page.waitForFunction(
+            () => window.savedPingUrls.length === 1 && !window.unsaved(),
+          );
+          assert.deepEqual(await page.evaluate(() => window.savedPingUrls), [
+            editedUrl,
+          ]);
+          assert.equal(
+            await page.evaluate(() => window.configWrites.length),
+            1,
+          );
+          assert.equal(await pingInput.inputValue(), editedUrl);
+          assert.equal(
+            await page
+              .getByText("You have unsaved changes", { exact: true })
+              .count(),
+            0,
+          );
+        }
         assert.deepEqual(errors, []);
         await page.close();
         cases++;
@@ -280,7 +327,7 @@ try {
       unsavedEditCases,
       viewports: [1440, 900, 390],
       scope:
-        "Real OverviewTab and DestinationsTab, shared toast and feedback in Chromium; scripted API only, not installed delivery or recipient receipt.",
+        "Real OverviewTab and AlertsConfigurationSurface with configuration/destination state, shared toast and feedback in Chromium; scripted API only, not installed delivery or recipient receipt.",
     }),
   );
 } finally {
