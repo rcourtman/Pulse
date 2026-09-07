@@ -72,6 +72,38 @@ func TestRedactWebhookURLSecrets(t *testing.T) {
 	}
 }
 
+func TestRedactWebhookDiagnosticSecrets(t *testing.T) {
+	tests := map[string]struct {
+		input string
+		want  string
+	}{
+		"embedded query credential": {
+			input: "post https://hooks.example.test/notify?token=supersecret returned 401",
+			want:  "post https://hooks.example.test/notify?token=REDACTED returned 401",
+		},
+		"embedded userinfo": {
+			input: "request to https://hook-user:hook-password@example.test/hook failed",
+			want:  "request to https://REDACTED@example.test/hook failed",
+		},
+		"plain diagnostic": {
+			input: "connection refused",
+			want:  "connection refused",
+		},
+		"malformed embedded URL": {
+			input: "post https://hook-user:hook-password@example.test/%zz failed",
+			want:  invalidWebhookURLDiagnostic,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := RedactWebhookDiagnosticSecrets(test.input); got != test.want {
+				t.Fatalf("RedactWebhookDiagnosticSecrets() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestRedactWebhookTransportErrorPreservesBehaviorWithoutToken(t *testing.T) {
 	cause := errors.New("connection refused")
 	original := &url.Error{

@@ -700,6 +700,10 @@ actual rate-limit log output. These queue-free tests establish local diagnostic
 redaction, not destination receipt, installed recovery or release qualification.
 No claim is made that arbitrary custom path/query secrets are recognised.
 
+Delivery-log errors use `RedactWebhookDiagnosticSecrets` so URLs embedded in
+otherwise useful error text receive the same masking without discarding the
+surrounding status context. Malformed embedded URLs still fail closed.
+
 ### Slack webhook diagnostic path confidentiality
 
 The same helper masks paths on the exact `hooks.slack.com` and
