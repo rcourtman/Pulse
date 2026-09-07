@@ -1152,3 +1152,59 @@ func TestIncidentStore_LifecycleRapidRecurrence(t *testing.T) {
 		t.Fatal("old resolution closed rapid recurrence")
 	}
 }
+
+func TestIncidentStore_CanonicalProjectionOccurrenceBounds(t *testing.T) {
+	for _, gap := range []time.Duration{2 * time.Minute, 500 * time.Millisecond} {
+		t.Run(gap.String(), func(t *testing.T) {
+			store := NewIncidentStore(IncidentStoreConfig{})
+			canonical := unifiedresources.NewMemoryStore()
+			store.SetResourceTimelineStore(canonical)
+			start := time.Now().UTC().Add(-time.Hour)
+			old := &alerts.Alert{ID: "alert-bounds", ResourceID: "pbs", StartTime: start}
+			store.RecordAlertFired(old)
+			// Deliberately insert successors out of time order. The earliest
+			// matching next start, not insertion order, is the upper boundary.
+			for _, offset := range []time.Duration{3 * gap, gap} {
+				next := old.Clone()
+				next.StartTime = start.Add(offset)
+				store.RecordAlertFired(next)
+			}
+			// Neither another alert nor another resource may shorten the window.
+			other := old.Clone()
+			other.ID = "unrelated-alert"
+			other.StartTime = start.Add(gap / 4)
+			store.RecordAlertFired(other)
+			other.ID = old.ID
+			other.ResourceID = "other-resource"
+			other.StartTime = start.Add(gap / 3)
+			store.RecordAlertFired(other)
+
+			end := start.Add(gap - time.Nanosecond)
+			for _, event := range []struct {
+				at   time.Time
+				kind unifiedresources.ChangeKind
+			}{
+				{start.Add(-time.Nanosecond), unifiedresources.ChangeAlertResolved},
+				{start, unifiedresources.ChangeAlertFired},
+				{end, unifiedresources.ChangeAlertResolved},
+				{start.Add(gap), unifiedresources.ChangeAlertFired},
+				{start.Add(2 * gap), unifiedresources.ChangeAlertAcknowledged},
+			} {
+				change := unifiedresources.BuildAlertTimelineChange(old.ResourceID, event.kind, event.at, "", unifiedresources.AlertTimelineChange{AlertIdentifier: old.ID})
+				if err := canonical.RecordChange(*change); err != nil {
+					t.Fatal(err)
+				}
+			}
+			projected := store.GetTimelineByAlertAt(old.ID, start)
+			if projected == nil || len(projected.Events) != 2 {
+				t.Fatalf("expected only this occurrence's fired/resolved events, got %+v", projected)
+			}
+			if !projected.Events[0].Timestamp.Equal(start) || !projected.Events[1].Timestamp.Equal(end) {
+				t.Fatalf("wrong inclusive lower/exclusive upper boundary: %+v", projected.Events)
+			}
+			if projected.Status != IncidentStatusResolved || projected.ClosedAt == nil || !projected.ClosedAt.Equal(end) || projected.Acknowledged {
+				t.Fatalf("another occurrence changed historical state: %+v", projected)
+			}
+		})
+	}
+}
