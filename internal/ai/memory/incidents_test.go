@@ -1059,3 +1059,152 @@ func TestIncidentStore_RecordNote_NonexistentIncident(t *testing.T) {
 		t.Error("expected false for non-existent incident")
 	}
 }
+
+// Lifecycle replay may revisit a closed occurrence after checkpoint restart,
+// including while a newer occurrence of the same alert is already active.
+func TestIncidentStore_LifecycleReplayIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		name               string
+		restart, canonical bool
+	}{
+		{name: "memory"},
+		{name: "checkpoint-restart", restart: true},
+		{name: "canonical", canonical: true},
+		{name: "canonical-checkpoint-restart", restart: true, canonical: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := NewIncidentStore(IncidentStoreConfig{})
+			wantClosedEvents, wantOpenEvents := 2, 1
+			if tc.canonical {
+				store.SetResourceTimelineStore(unifiedresources.NewMemoryStore())
+				wantClosedEvents, wantOpenEvents = 0, 0
+			}
+			start := time.Now().Add(-time.Hour).UTC()
+			old := &alerts.Alert{ID: "pbs-connectivity", ResourceID: "pbs", StartTime: start}
+			store.RecordAlertFired(old)
+			for i := 0; i < 10; i++ {
+				store.RecordAlertFired(old)
+			}
+			if len(store.incidents) != 1 {
+				t.Fatal("unchanged active evaluations duplicated incident identity")
+			}
+			oldID := store.incidents[0].ID
+			end := start.Add(time.Minute)
+			store.RecordAlertResolved(old, end)
+			if tc.restart {
+				// Synchronous JSON checkpoint/reload isolates application lifecycle
+				// identity from asynchronous scheduling and external event stores.
+				store.dataDir = t.TempDir()
+				store.filePath = store.dataDir + "/ai_incidents.json"
+				if err := store.saveToDisk(); err != nil {
+					t.Fatal(err)
+				}
+				reloaded := NewIncidentStore(IncidentStoreConfig{})
+				reloaded.filePath = store.filePath
+				if err := reloaded.loadFromDisk(); err != nil {
+					t.Fatal(err)
+				}
+				store = reloaded
+				if tc.canonical {
+					store.SetResourceTimelineStore(unifiedresources.NewMemoryStore())
+				}
+			}
+			for i := 0; i < 10; i++ {
+				store.RecordAlertFired(old)
+				store.RecordAlertResolved(old, end)
+			}
+			if len(store.incidents) != 1 {
+				t.Fatalf("replayed one occurrence produced %d distinct incident shells", len(store.incidents))
+			}
+			if store.incidents[0].ID != oldID || len(store.incidents[0].Events) != wantClosedEvents {
+				t.Fatal("replay changed incident identity or duplicated lifecycle events")
+			}
+			newAlert := old.Clone()
+			newAlert.StartTime = end.Add(time.Second)
+			store.RecordAlertFired(newAlert)
+			if len(store.incidents) != 2 {
+				t.Fatal("genuine recurrence did not open a separate incident")
+			}
+			newID := store.incidents[1].ID
+			store.RecordAlertResolved(old, end)
+			store.RecordAlertAcknowledged(old, "historical-actor")
+			if len(store.incidents) != 2 || store.incidents[1].ID != newID || store.incidents[1].OccurrenceClosedAt != nil || len(store.incidents[1].Events) != wantOpenEvents {
+				t.Fatal("late historical lifecycle event mutated the active recurrence")
+			}
+		})
+	}
+}
+
+func TestIncidentStore_LifecycleRapidRecurrence(t *testing.T) {
+	store := NewIncidentStore(IncidentStoreConfig{})
+	first := &alerts.Alert{ID: "same-alert", StartTime: time.Now().Add(-time.Minute)}
+	store.RecordAlertFired(first)
+	// A missed resolution must not merge distinct starts, even within the
+	// tolerance used by legacy timeline reads.
+	second := first.Clone()
+	second.StartTime = first.StartTime.Add(500 * time.Millisecond)
+	store.RecordAlertFired(second)
+	if len(store.incidents) != 2 {
+		t.Fatalf("distinct occurrence starts merged: got %d incident shells", len(store.incidents))
+	}
+	store.RecordAlertResolved(first, first.StartTime.Add(100*time.Millisecond))
+	if store.incidents[1].OccurrenceClosedAt != nil {
+		t.Fatal("old resolution closed rapid recurrence")
+	}
+}
+
+func TestIncidentStore_CanonicalProjectionOccurrenceBounds(t *testing.T) {
+	for _, gap := range []time.Duration{2 * time.Minute, 500 * time.Millisecond} {
+		t.Run(gap.String(), func(t *testing.T) {
+			store := NewIncidentStore(IncidentStoreConfig{})
+			canonical := unifiedresources.NewMemoryStore()
+			store.SetResourceTimelineStore(canonical)
+			start := time.Now().UTC().Add(-time.Hour)
+			old := &alerts.Alert{ID: "alert-bounds", ResourceID: "pbs", StartTime: start}
+			store.RecordAlertFired(old)
+			// Deliberately insert successors out of time order. The earliest
+			// matching next start, not insertion order, is the upper boundary.
+			for _, offset := range []time.Duration{3 * gap, gap} {
+				next := old.Clone()
+				next.StartTime = start.Add(offset)
+				store.RecordAlertFired(next)
+			}
+			// Neither another alert nor another resource may shorten the window.
+			other := old.Clone()
+			other.ID = "unrelated-alert"
+			other.StartTime = start.Add(gap / 4)
+			store.RecordAlertFired(other)
+			other.ID = old.ID
+			other.ResourceID = "other-resource"
+			other.StartTime = start.Add(gap / 3)
+			store.RecordAlertFired(other)
+
+			end := start.Add(gap - time.Nanosecond)
+			for _, event := range []struct {
+				at   time.Time
+				kind unifiedresources.ChangeKind
+			}{
+				{start.Add(-time.Nanosecond), unifiedresources.ChangeAlertResolved},
+				{start, unifiedresources.ChangeAlertFired},
+				{end, unifiedresources.ChangeAlertResolved},
+				{start.Add(gap), unifiedresources.ChangeAlertFired},
+				{start.Add(2 * gap), unifiedresources.ChangeAlertAcknowledged},
+			} {
+				change := unifiedresources.BuildAlertTimelineChange(old.ResourceID, event.kind, event.at, "", unifiedresources.AlertTimelineChange{AlertIdentifier: old.ID})
+				if err := canonical.RecordChange(*change); err != nil {
+					t.Fatal(err)
+				}
+			}
+			projected := store.GetTimelineByAlertAt(old.ID, start)
+			if projected == nil || len(projected.Events) != 2 {
+				t.Fatalf("expected only this occurrence's fired/resolved events, got %+v", projected)
+			}
+			if !projected.Events[0].Timestamp.Equal(start) || !projected.Events[1].Timestamp.Equal(end) {
+				t.Fatalf("wrong inclusive lower/exclusive upper boundary: %+v", projected.Events)
+			}
+			if projected.Status != IncidentStatusResolved || projected.ClosedAt == nil || !projected.ClosedAt.Equal(end) || projected.Acknowledged {
+				t.Fatalf("another occurrence changed historical state: %+v", projected)
+			}
+		})
+	}
+}

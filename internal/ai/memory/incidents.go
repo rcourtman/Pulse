@@ -361,7 +361,10 @@ func (s *IncidentStore) RecordAlertFired(alert *alerts.Alert) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	shell := s.findOpenIncidentByAlertIdentifierLocked(alert.ID)
+	shell := s.findLifecycleOccurrenceLocked(alert)
+	if alert.StartTime.IsZero() {
+		shell = s.findOpenIncidentByAlertIdentifierLocked(alert.ID)
+	}
 	if shell == nil {
 		shell = newIncidentShellFromAlert(alert)
 		s.incidents = append(s.incidents, shell)
@@ -373,6 +376,9 @@ func (s *IncidentStore) RecordAlertFired(alert *alerts.Alert) {
 				"threshold": alert.Threshold,
 			})
 		}
+	} else if incidentOccurrenceClosedAt(shell) != nil {
+		// A replayed fired event must not reopen a completed occurrence.
+		return
 	} else {
 		updateIncidentShellFromAlert(shell, alert)
 	}
@@ -434,10 +440,18 @@ func (s *IncidentStore) RecordAlertResolved(alert *alerts.Alert, resolvedAt time
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	shell := s.findOpenIncidentByAlertIdentifierLocked(alert.ID)
+	shell := s.findLifecycleOccurrenceLocked(alert)
+	if alert.StartTime.IsZero() {
+		shell = s.findOpenIncidentByAlertIdentifierLocked(alert.ID)
+	}
 	if shell == nil {
 		shell = newIncidentShellFromAlert(alert)
 		s.incidents = append(s.incidents, shell)
+	}
+
+	// Resolution replay is idempotent, including after a checkpoint reload.
+	if incidentOccurrenceClosedAt(shell) != nil {
+		return
 	}
 
 	if resolvedAt.IsZero() {
@@ -999,6 +1013,20 @@ func (s *IncidentStore) loadProjectedIncidentEvents(incident *Incident, timeline
 		since = since.Add(-incidentStartMatchTolerance)
 	}
 
+	// Retained shells identify exact occurrences. Canonical history is keyed by
+	// alert identifier, so without an upper bound an old incident absorbs every
+	// later recurrence and can appear open again. Do not use the legacy read
+	// tolerance to include events from a preceding subsecond occurrence either.
+	var nextStart time.Time
+	s.mu.RLock()
+	for _, shell := range s.incidents {
+		if shell != nil && shell.AlertIdentifier == alertIdentifier && shell.ResourceID == resourceID &&
+			shell.OpenedAt.After(incident.OpenedAt) && (nextStart.IsZero() || shell.OpenedAt.Before(nextStart)) {
+			nextStart = shell.OpenedAt
+		}
+	}
+	s.mu.RUnlock()
+
 	changes, err := timelineStore.GetRecentChanges(resourceID, since, projectedIncidentChangeLimit)
 	if err != nil || len(changes) == 0 {
 		return nil
@@ -1011,6 +1039,10 @@ func (s *IncidentStore) loadProjectedIncidentEvents(incident *Incident, timeline
 		}
 		event, ok := incidentEventFromResourceChange(change)
 		if !ok {
+			continue
+		}
+		if (!incident.OpenedAt.IsZero() && event.Timestamp.Before(incident.OpenedAt)) ||
+			(!nextStart.IsZero() && !event.Timestamp.Before(nextStart)) {
 			continue
 		}
 		events = append(events, event)
@@ -1320,8 +1352,28 @@ func updateIncidentShellFromAlert(shell *incidentShell, alert *alerts.Alert) {
 	shell.Message = alert.Message
 }
 
+// Lifecycle snapshots carry the exact occurrence start. Unlike legacy read
+// repair, they must not use a time tolerance or select an unrelated open/latest
+// incident: delayed transitions and replay can arrive after a genuine recurrence.
+func (s *IncidentStore) findLifecycleOccurrenceLocked(alert *alerts.Alert) *incidentShell {
+	if alert.ID == "" {
+		return nil
+	}
+	if alert.StartTime.IsZero() {
+		// Legacy callers without an occurrence key retain best-effort matching.
+		return s.findLatestIncidentByAlertIdentifierLocked(alert.ID)
+	}
+	for i := len(s.incidents) - 1; i >= 0; i-- {
+		shell := s.incidents[i]
+		if shell != nil && shell.AlertIdentifier == alert.ID && shell.OpenedAt.Equal(alert.StartTime) {
+			return shell
+		}
+	}
+	return nil
+}
+
 func (s *IncidentStore) ensureIncidentForAlertLocked(alert *alerts.Alert) *incidentShell {
-	shell := s.findLatestIncidentByAlertIdentifierLocked(alert.ID)
+	shell := s.findLifecycleOccurrenceLocked(alert)
 	if shell == nil {
 		shell = newIncidentShellFromAlert(alert)
 		s.incidents = append(s.incidents, shell)
