@@ -1,50 +1,38 @@
 {
   "version": 1,
-  "base_sha": "09ab5c2d0ae6e02fcc5280853782a8142646e40f",
-  "verified_at": "2026-09-07T10:45:50.469666Z",
+  "base_sha": "1dcaee8ae870092f08f1692d9c81935d13229bc7",
+  "verified_at": "2026-09-07T14:17:11.679627Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx"
+    "frontend-modern/src/hooks/useTypeToSearch.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx": "ea0301d5ee7bee7b064f8e7fd8db43a54a74bc4488c0a87285d7c52151a5e07b"
+    "frontend-modern/src/hooks/useTypeToSearch.ts": "6ca47c567549b1dd3b38b84e5deaf1261652c58c79c6d8a43a7d25572a1f8f0a"
   },
   "routes": [
-    "/actions?action=act_9ec8d575b777a5f8fc70561376a52381",
-    "/actions?action=act_3384576233bf55aa3182537ad02d81d4",
-    "/actions?action=act_7687850d214e9c5f7038a436c6cc2ff7",
-    "/actions?action=act_e5e1f06da3dc42215a97360731d7e36b",
-    "/actions?action=act_185eebf5dfc24652e6332881dbe94f6c"
+    "/alerts/thresholds/infrastructure"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 1000
+      "width": 1280,
+      "height": 720
     },
     {
-      "width": 900,
-      "height": 1000
-    },
-    {
-      "width": 390,
-      "height": 1000
+      "width": 393,
+      "height": 727
     }
   ],
   "states": [
-    "VM110 start and stop awaiting exact-plan approval",
-    "Completed VM110 start and stop with independent Proxmox verification",
-    "Expanded independent observer evidence with original observation and Pulse receipt labels",
-    "Expanded durable delivery record with agent-specific observation label",
-    "Retained completed Docker restart with independent evidence",
-    "Retained rejected Docker restart without execution controls",
-    "Retained expired Docker restart with refresh offered and no execution controls"
+    "Populated Ceph storage thresholds with retained custom overrides",
+    "Storage Devices expanded, collapsed with inert mounted content, and reopened",
+    "Search empty, ordinary typed character, and trailing space"
   ],
   "interactions": [
-    "Inspect exact target identity, approval controls and planned state before API-authorized execution",
-    "Open and close policy evidence, evidence details and delivery identifiers using keyboard focus and Enter",
-    "Scroll nested action review and inspect readable evidence, wrapping, stacking and reachable footer at all widths",
-    "Close with Escape and explicit close control, reopen exact action link and reload persisted state",
-    "Inspect final pixels and verify no document horizontal overflow"
+    "Enter opens Storage Devices; Space collapses without search focus theft",
+    "Full Tab focus cycle excludes collapsed descendants and returns to disclosure",
+    "Enter reopens and Ceph edit action receives focus",
+    "Ordinary typing from focused edit button focuses search; Space in search remains input; clear restores resource rows",
+    "Inspect reopened desktop and narrow screenshots with visible disclosure and focused edit action"
   ],
-  "notes": "Final bundled development binary SHA256 c53f2e54e7ea510fc3abfbfbe164e74e363d3b1560aaa36a62df9fb1aaaf2c7d. Scripts, screenshots and raw dialog text are in workspace tmp/patrol-runner-readiness/browser and verify-action.mjs/verify-history.mjs. Browser requests were GET plus login only. Exact VM110 approvals and execution were performed separately through the canonical API, with independent Proxmox and SSH state checks and retained native receipts. Both temporary services, credentials and tunnel were removed and read-only control restored. Deep links have no initiating button for focus return. This receipt qualifies the named action-review change and adjacent rendered outcomes, not full Patrol/Assistant readiness."
+  "notes": "Current embedded frontend and isolated core backend exercised via pulse-heavy-run; final tests/66-ceph-alert-thresholds.spec.ts passed in chromium and mobile-chrome (2 tests). Screenshots inspected in tests/integration/test-results/66-ceph-alert-thresholds-C-51ff4-the-live-thresholds-surface-{chromium,mobile-chrome}/keyboard-reopened.png. Resource APIs mocked; no installed customer, assistive-technology, WebKit, Firefox, or notification-delivery qualification. Native summary, semantic role button and nested target ownership also covered by focused unit tests; browser matrix covers the reproduced threshold/search interaction, not every hook consumer. Runtimes stopped by harness."
 }
