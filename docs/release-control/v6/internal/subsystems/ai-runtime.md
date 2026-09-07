@@ -25,6 +25,17 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Unchanged incident JSON checkpoints
+
+Incident-memory checkpoints compare the serialized snapshot with bounded bytes
+from the existing recovery file before replacing it. Byte-identical snapshots
+do not rewrite the file, including after restart. Changed snapshots retain the
+atomic replacement path; missing files and failed writes must remain retryable.
+This does not change occurrence identity, retention or notification timing, nor
+does it eliminate snapshot serialization. Proof:
+`internal/ai/memory/incidents_unchanged_test.go` covers unchanged evaluations,
+metadata, restart, resolution/recurrence, file loss and failed-write retry.
+
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
 Canonical investigation planning runs inside the model's tool call. The model

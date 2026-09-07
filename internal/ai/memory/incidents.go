@@ -1,8 +1,10 @@
 package memory
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -274,7 +276,7 @@ type IncidentStore struct {
 	mu                    sync.RWMutex
 	saveMu                sync.Mutex
 	savePending           atomic.Bool  // a queued save will capture the latest state; further requests coalesce
-	savesCompleted        atomic.Int64 // completed saveToDisk passes, observable by tests
+	savesCompleted        atomic.Int64 // completed JSON replacements, observable by tests
 	incidents             []*incidentShell
 	maxIncidents          int
 	maxEvents             int
@@ -1527,6 +1529,19 @@ func (s *IncidentStore) saveToDisk() error {
 	data, err := json.Marshal(snapshot)
 	if err != nil {
 		return err
+	}
+
+	// Coalescing handles concurrent bursts, but sequential lifecycle replays
+	// can also produce identical snapshots. Compare the actual recovery file
+	// rather than caching a hash: restarts, failed writes and missing files
+	// must not prevent the next checkpoint from restoring durable state.
+	if file, err := os.Open(s.filePath); err == nil {
+		// One extra byte detects a longer file without an unbounded read.
+		existing, readErr := io.ReadAll(io.LimitReader(file, int64(len(data))+1))
+		file.Close()
+		if readErr == nil && bytes.Equal(existing, data) {
+			return nil
+		}
 	}
 
 	tmpFile := s.filePath + ".tmp"
