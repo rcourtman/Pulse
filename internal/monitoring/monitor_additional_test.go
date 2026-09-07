@@ -909,7 +909,7 @@ func TestCorrelatedGuestMemoryNextPoll(t *testing.T) {
 			}
 			registry := unifiedresources.NewRegistry(store)
 			total, used := int64(8000), int64(8000)
-			registry.IngestResources([]unifiedresources.Resource{
+			resources := []unifiedresources.Resource{
 				{ID: "vm-test", Type: unifiedresources.ResourceTypeVM, Name: "firewall", Status: unifiedresources.StatusOnline, LastSeen: now,
 					Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox},
 					Proxmox: &unifiedresources.ProxmoxData{SourceID: guestID, Instance: "pve-a", NodeName: "node1", VMID: 111, RuntimeStatus: "running"},
@@ -917,9 +917,34 @@ func TestCorrelatedGuestMemoryNextPoll(t *testing.T) {
 				{ID: "agent-test", Type: unifiedresources.ResourceTypeAgent, Name: "firewall-agent", Status: unifiedresources.ResourceStatus(tc.status), LastSeen: now.Add(-tc.age),
 					Sources: []unifiedresources.DataSource{unifiedresources.SourceAgent},
 					Agent:   &unifiedresources.AgentData{AgentID: "agent-test", Stale: tc.status == "offline", Memory: &unifiedresources.AgentMemoryMeta{Total: 8000, Used: 2800, Free: 5200, UsageUnavailable: tc.unavailable}}},
-			})
+			}
+			registry.IngestResources(resources)
+			if len(registry.VMs()) != 1 || len(registry.Hosts()) != 0 {
+				t.Fatal("initial registry did not merge linked guest")
+			}
+			// Rebuild from source evidence and the retained link store, not a
+			// previously merged resource or the old in-memory matcher.
+			registry = unifiedresources.NewRegistry(store)
+			registry.IngestResources(resources)
 			if len(registry.VMs()) != 1 || len(registry.Hosts()) != 0 {
 				t.Fatalf("expected one merged VM and no standalone hosts")
+			}
+
+			// A simultaneous guest with the same node name and VMID must not
+			// inherit this instance's agent memory.
+			registry.IngestRecords(unifiedresources.SourceProxmox, []unifiedresources.IngestRecord{{
+				SourceID: makeGuestID("pve-b", "node1", 111),
+				Resource: unifiedresources.Resource{
+					Type: unifiedresources.ResourceTypeVM, Name: "other-firewall",
+					Status: unifiedresources.StatusOnline, LastSeen: now,
+					Proxmox: &unifiedresources.ProxmoxData{
+						SourceID: makeGuestID("pve-b", "node1", 111),
+						Instance: "pve-b", NodeName: "node1", VMID: 111, RuntimeStatus: "running",
+					},
+				},
+			}})
+			if len(registry.VMs()) != 2 {
+				t.Fatal("duplicate VMIDs from separate instances were not preserved")
 			}
 			mon := &Monitor{state: models.NewState(), rateTracker: NewRateTracker(), config: &config.Config{}, resourceStore: unifiedresources.NewMonitorAdapter(registry)}
 			prev := mon.previousGuestContextForInstance("pve-a")
@@ -974,6 +999,11 @@ func TestCorrelatedGuestMemoryNextPoll(t *testing.T) {
 			other := mon.previousGuestContextForInstance("pve-b")
 			if len(other.hostAgentsByVMID) != 0 {
 				t.Fatal("correlated agent crossed instance boundary")
+			}
+			otherID := makeGuestID("pve-b", "node1", 111)
+			_, otherUsed, otherSource := mon.resolveGuestStatusMemory(context.Background(), &stubPVEClient{}, "pve-b", "other-firewall", "node1", 111, otherID, &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, other.hostAgentsByVMID, 8000, "", &VMMemoryRaw{})
+			if otherUsed != 8000 || otherSource != "status-mem" {
+				t.Fatalf("other instance inherited agent memory: used=%d source=%s", otherUsed, otherSource)
 			}
 		})
 	}
