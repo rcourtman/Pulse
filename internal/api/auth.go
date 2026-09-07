@@ -670,7 +670,7 @@ func snapshotLocalAuthCredentialsLocked(cfg *config.Config) (string, string) {
 
 func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, writeDefaultFailure bool) bool {
 	// Dev mode bypass for all auth (disabled by default)
-	if adminBypassEnabled() {
+	if adminBypassAppliesToRequest(r) {
 		if w != nil {
 			// Set headers for standard admin user
 			w.Header().Set("X-Authenticated-User", "admin")
@@ -1019,7 +1019,7 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 func RequireAuth(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Dev mode bypass for all auth (disabled by default)
-		if adminBypassEnabled() {
+		if adminBypassAppliesToRequest(r) {
 			log.Debug().
 				Str("path", r.URL.Path).
 				Msg("Auth bypass enabled for dev mode")
@@ -1051,7 +1051,7 @@ func RequireAuth(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc 
 func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Dev mode bypass for admin endpoints (disabled by default)
-		if adminBypassEnabled() {
+		if adminBypassAppliesToRequest(r) {
 			log.Debug().
 				Str("path", r.URL.Path).
 				Msg("Admin bypass enabled for dev mode")
@@ -1305,7 +1305,7 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 	defer config.Mu.RUnlock()
 
 	// Dev mode bypass
-	if adminBypassEnabled() {
+	if adminBypassAppliesToRequest(r) {
 		return attachAdminBypassContext(attachUserContext(r, "admin"))
 	}
 
@@ -1398,6 +1398,15 @@ func getAPITokenRecordFromRequest(r *http.Request) *config.APITokenRecord {
 	clone := record.Clone()
 	return &clone
 }
+
+// Explicit credentials retain their identity and scope even in development.
+// The convenience bypass must not turn a runner into an unbound admin or let
+// an invalid bearer credential fall back to ambient development authority.
+func adminBypassAppliesToRequest(r *http.Request) bool {
+	_, explicitToken := explicitAPITokenFromRequest(r)
+	return !explicitToken && adminBypassEnabled()
+}
+
 func adminBypassEnabled() bool {
 	adminBypassState.once.Do(func() {
 		adminBypassState.enabled, adminBypassState.declined = resolveAdminBypassEnv()

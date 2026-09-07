@@ -2083,6 +2083,12 @@ func TestRequireAdmin_ProxyAuthTrimSpacesInRoles(t *testing.T) {
 }
 
 func TestRequireAdmin_NoProxyAuthAuthenticatedAllowed(t *testing.T) {
+	resetFailedLogins()
+	t.Cleanup(resetFailedLogins)
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+	InitSessionStore(t.TempDir())
+
 	// When proxy auth is not configured, authenticated users are considered admins
 	hashedPass, _ := auth.HashPassword("password123")
 	cfg := &config.Config{
@@ -2185,6 +2191,9 @@ func TestRequireAuth_APIOnlyModeAcceptsValidToken(t *testing.T) {
 }
 
 func TestRequireAuth_InvalidBasicAuthRejectsRequest(t *testing.T) {
+	resetFailedLogins()
+	t.Cleanup(resetFailedLogins)
+
 	hashedPass, _ := auth.HashPassword("password123")
 	cfg := &config.Config{
 		AuthUser: "testuser",
@@ -2210,6 +2219,9 @@ func TestRequireAuth_InvalidBasicAuthRejectsRequest(t *testing.T) {
 }
 
 func TestRequireAuth_InvalidBasicAuthAPIPathReturnsJSON(t *testing.T) {
+	resetFailedLogins()
+	t.Cleanup(resetFailedLogins)
+
 	hashedPass, _ := auth.HashPassword("password123")
 	cfg := &config.Config{
 		AuthUser: "testuser",
@@ -2235,6 +2247,9 @@ func TestRequireAuth_InvalidBasicAuthAPIPathReturnsJSON(t *testing.T) {
 }
 
 func TestRequireAuth_InvalidBasicAuthAcceptJSONReturnsJSON(t *testing.T) {
+	resetFailedLogins()
+	t.Cleanup(resetFailedLogins)
+
 	hashedPass, _ := auth.HashPassword("password123")
 	cfg := &config.Config{
 		AuthUser: "testuser",
@@ -2258,6 +2273,9 @@ func TestRequireAuth_InvalidBasicAuthAcceptJSONReturnsJSON(t *testing.T) {
 }
 
 func TestRequireAuth_InvalidBasicAuthNonAPIReturnsPlainText(t *testing.T) {
+	resetFailedLogins()
+	t.Cleanup(resetFailedLogins)
+
 	hashedPass, _ := auth.HashPassword("password123")
 	cfg := &config.Config{
 		AuthUser: "testuser",
@@ -2282,6 +2300,12 @@ func TestRequireAuth_InvalidBasicAuthNonAPIReturnsPlainText(t *testing.T) {
 }
 
 func TestRequireAuth_ValidBasicAuthAllowsAccess(t *testing.T) {
+	resetFailedLogins()
+	t.Cleanup(resetFailedLogins)
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+	InitSessionStore(t.TempDir())
+
 	hashedPass, _ := auth.HashPassword("password123")
 	cfg := &config.Config{
 		AuthUser: "testuser",

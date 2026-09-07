@@ -2569,3 +2569,207 @@ expansion, reachable controls and dialog placement. Reload, keyboard expansion,
 Escape and close checks passed. The current browser receipt supersedes the earlier
 artifact binding for this slice. Missing-access continuity, VM dispatch and
 Assistant orchestration failures remain separate open qualification defects.
+
+### Typed Proxmox runner qualification, 2026-09-07
+
+The previous filesystem/history slice was committed as
+`3a4a3fd62bb8d36660f6f0756ed8b58338f39d83` and pushed to PR #1951 with
+auto-merge enabled. Exact staged pre-commit and pre-push hooks passed on the
+non-root worker against tree `90e4b6e3e59d6bcd514f0f5af1ff3d69bc8adb8a`.
+All required checks passed and PR #1951 merged as
+`09ab5c2d0ae6e02fcc5280853782a8142646e40f`. The advisory benchmark reported
+four NormalizeSegment microbenchmark regressions against unchanged source.
+That observation is not a failure of the required feature qualification.
+
+The VM110 execution error was recovered from the backend log: the server
+rejected the generic command session because Proxmox guest lifecycle requires
+a typed action runner. This is separate from the earlier SQLite plan-write
+failure. Planning and binding previously accepted generic connection presence,
+while the real execution path checked the credential-bound role. Existing
+Proxmox API tests exercised a shell fallback instead of that real typed path.
+
+The current source resolves a unique, currently admitted typed runner for the
+owning node and tenant. It rejects legacy, revoked, pending, fenced and
+ambiguous sessions and requires durable receipt support before plan persistence.
+The dispatch guard checks the actual selected connection. The API shell
+fallback is removed and its tests use typed payloads. Mutation completion no
+longer substitutes for readback evidence, and a status-only reboot read remains
+inconclusive without independent uptime evidence. The full agentexec race suite
+and focused Proxmox API race cases pass on the worker (9.062 and 3.295 seconds).
+
+The rebuilt development server artifact is
+`b4aa4f9c47e3740ac6c409e91d9ab84beb25c0dff3b8641ce04872929df58004`, with
+native Linux runner
+`42ab7aa4f7c0c2f825586d5ae536254b8282924cb056cd4d65fce53a19c43b44`.
+The live VM110 qualification is in progress. Two fixture setup attempts stopped
+before runner registration: an executable placed on Delly's noexec `/run`, then
+a temporary service name that did not satisfy the canonical
+`pulse-agent-runner.service` containment dependency. Both attempts restored the
+stopped VM, revoked the temporary credential and removed the private tunnel.
+These are test setup failures, not successful execution proofs. Runtime
+restrictions were retained. No production agent was changed.
+
+With the canonical service name, the runner passed containment and WebSocket
+registration, then activation returned HTTP403. A single isolated diagnostic
+request recovered the exact reason: `Action runner bearer credential required`.
+The managed development runtime enables admin bypass, which returned a generic
+admin context before extracting the supplied bearer token. The exact-token
+activation endpoint correctly refused that missing identity. The shared auth
+path now preserves normal validation and scopes whenever explicit credentials
+are present. This does not weaken activation or change production auth mode.
+The third fixture and diagnostic credentials were revoked and all temporary
+services and tunnels removed. Final rebuilt qualification remains pending.
+
+The auth regression group passed with race detection (7.863 seconds), including
+explicit-token development bypass, runner issuance/activation and Basic auth.
+Six direct Basic-auth fixtures now reset their shared lockout state. The two
+successful-auth fixtures also initialize and close their own session store.
+Earlier grouped failures came from process-global lockout contamination, and
+isolated successful-auth cases exposed missing session initialization. Runtime
+lockout behavior was not changed.
+
+Artifact `c1233ccf5e1fc7872f9e30c1e372019d8037468603ad92fdd62f0d0d9882fa0b`
+registered and activated the exact runner credential successfully. Restarting
+the dev server had removed the previous live monitored-host identity, so the
+qualification fixture now starts a separate monitoring-only collector with a
+fresh report and report/config scopes, then issues the separate action-runner
+credential. Stale retained resource metadata does not establish that prerequisite.
+Both temporary services and credentials are removed at cleanup.
+
+The first full typed run produced Gemini plan
+`act_9c97005e3eca1a957bb172e7d123fdda` in session
+`c6627f40-8087-4d70-bc79-52cfd86560fb` for exactly VM110 on Delly. It consumed
+51,259 input and 861 output tokens and reported $0.041673. Canonical approval
+and execution completed the start, with an independent Proxmox API observation
+of running state and a separate SSH `qm status` confirmation. The restoration
+stop `act_2ab4ded219d68854368b445f08234939` likewise completed and independently
+confirmed stopped state. All temporary services, credentials and tunnels were
+removed, the original production agent PID1565 was retained and control returned
+to read-only.
+
+That run exposed a shared evidence label saying `Agent observed` for independent
+Proxmox API evidence. The shared decision packet now uses `Observed` while
+retaining the named observer and separate receipt time. Nine existing decision
+packet tests and the worker production frontend build passed. The replacement
+bundled artifact is
+`7504f38902ce90edd9dbf961a78c2ab4fc7a21ac232e9447c984ff89ca79c525`.
+A final repeated lifecycle and browser matrix is in progress. The earlier stop
+browser pass was interrupted by login rate limiting because the fixture signed
+in per viewport. Browser contexts now reuse their authenticated session, with
+no product auth or rate-limit relaxation. The redundant read/verification turn
+following a planned Assistant control remains an open orchestration defect.
+
+The final-label repeat invalidated a claim of reliable repeated VM execution.
+Plan `act_c59346a6cfcddaee4e70f0870e2ec16e` was approved, but result projection
+returned HTTP500 with `normalize Proxmox agent readback evidence: invalid action
+evidence: receivedAt predates observedAt`. The durable audit remained executing
+with a receipt-pending attempt. The fixture cleanup restored stopped state and
+removed both temporary services, credentials and tunnel. The exact action was
+then force-failed with inconclusive execution truth through the operator API.
+It was not retried or relabelled successful.
+
+A bounded SSH time sample measured Delly between 44.95 and 205.19 milliseconds
+ahead of the Mac, without changing either clock. The shared evidence normalizer
+incorrectly required receiver wall time to follow observer wall time across
+machines. Canonical evidence now preserves both original UTC timestamps and
+binds them into the digest. Capability-specific freshness checks remain required.
+Docker and host-update projectors no longer clamp a valid observation to receipt
+time. The Proxmox path captures the actual receipt boundary before its independent
+observation and bounds agent readback freshness separately. Stale or excessive
+clock skew leaves verification inconclusive without discarding completed execution.
+The final shared action-result/evidence race selection passed in 2.339 seconds.
+The final API cross-clock, typed Proxmox, Docker/Proxmox contract and explicit
+authentication selection passed with race detection in 9.287 seconds on
+`pulse-dev`. This followed the independent release preflight through the normal
+allocator, without a Mac heavy-test fallback or lock bypass.
+
+The final enterprise development binary has SHA256
+`c53f2e54e7ea510fc3abfbfbe164e74e363d3b1560aaa36a62df9fb1aaaf2c7d`.
+Its source manifest matches the final runtime and frontend files. Gemini session
+`22bcd9ee-52ba-4733-8b6c-5f1e8d2bb32f` prepared one exact VM110 start plan,
+using 88,539 input tokens and 1,106 output tokens at $0.07055175. Start action
+`act_9ec8d575b777a5f8fc70561376a52381` and restoration stop action
+`act_3384576233bf55aa3182537ad02d81d4` both completed with independently
+confirmed Proxmox state. Their retained native receipts are terminal, report
+completed mutation and preserve original running/stopped readback timestamps.
+
+Playwright passed pending and completed review states for both actions at
+1440x1000, 900x1000 and 390x1000. Final pixels were inspected, including expanded
+independent evidence, keyboard focus, nested scrolling and reachable footers.
+Keyboard disclosures, Escape, explicit close, exact-link reopen and reload all
+passed. Independent evidence now says `Observed`, while the delivery record's
+agent-specific timestamp retains its accurate label. The same final build passed
+retained completed, rejected and expired Docker action review smoke at all three
+widths. Approvals and execution used the exact plan hashes through the canonical
+API. Browser writes were limited to login.
+
+Cleanup restored stopped VM110, preserved production agent PID1565, removed both
+temporary services and their private directories, revoked both credentials,
+closed the tunnel and restored read-only control. A fresh plan then returned
+HTTP409 `action_runner_unavailable`, matching stopped-resource readiness.
+Worker receipts are in workspace `tmp/patrol-runner-readiness/runtime/clock-final-build/`.
+Live, native receipt and browser artifacts are in
+`tmp/patrol-runner-readiness/{vm-transaction.json,browser/}`. This qualifies the
+named typed runner and clock-fix slice, not the full redesign or autonomous modes.
+The action-review regression fixture now includes a real independent observation
+with distinct observer and receiver clocks, rather than an empty evidence list.
+
+### Next canonical planning boundary
+
+The remaining missing-access defect is broader than an absent prompt hint.
+`ProposalCatalog` returns static capability definitions. `ProposalCapture`
+validates and holds a proposal, but the actual broker plans it only after the
+model has finished. `ProposalCapture.Outcome` also converts any unsuccessful
+proposal attempt followed by a no-action conclusion into an investigation error.
+Those rules prevent the model from incorporating canonical planning refusal and
+can override a valid decision to stop. Assistant's separate verification FSM
+then mistakes its own successful plan submission for executed infrastructure.
+
+The next implementation should put canonical planning results into the model's
+actual tool turn. Separate broker planning from policy-authorized execution,
+using the existing action lifecycle for both. A proposal tool should return the
+persisted plan reference or exact planning refusal before the model concludes.
+Current availability belongs beside the capability schema, with the canonical
+planner rechecking it. Keep the trusted finding/investigation/proposal identity,
+non-sensitive parameters, tenant authority and idempotency. Canonical action
+identity must replace the duplicate request-local proposal fingerprint/state
+machine. A later provider error must not erase an already persisted plan.
+Policy-authorized execution remains a separate lifecycle transition with its
+current authority recheck, and its eventual outcome is reconciled through the
+same linked action. The investigation profile must not acquire unrestricted
+command execution or approval authority.
+
+Remove the generic Assistant resolve/write/verify policy machine rather than
+reclassifying protected controls as reads. Registered invocation permissions and
+the canonical action lifecycle already enforce the real authority boundaries.
+Preserve actual assistant prose and tool results in the transcript. Model-owned
+investigation can select further evidence without a tool-count proxy forcing
+another turn or manufacturing verification.
+
+The final-label repeat provides direct evidence for this change. Session
+`c601dcaf-2666-4357-95a9-14149ae84e2f` first correctly explained that VM110's
+start plan awaited approval. The harness then forced another model turn to
+verify a write that had not executed. The model queried the stopped VM and its
+history, adding a second conclusion about the unchanged state. Remove the
+semantic lifecycle-request gate and first-tool-before-question counters in the
+same orchestration review. Tool availability, current evidence and the user's
+request should inform model judgment. Keep explicit resource identity,
+permission checks, approved action binding and configured spend limits as
+mechanical boundaries.
+
+Required proof includes live missing-runner refusal visible before the final
+conclusion, unavailable and healthy no-action conclusions without false failure,
+a capability becoming unavailable between lookup and planning, repeated same
+plan identity without duplicate action, provider failure after a persisted plan,
+unchanged approval/control/tenant restrictions, retained original assistant prose,
+and an approved or rejected plan continuing through the shared action history.
+This is the next implementation plan, not a claim that those changes exist.
+
+Qualification must distinguish an expected planning or access refusal from a
+defective tool result. The current scorer fails every nonzero failed-tool count,
+and its summary-term, resource-name and evidence-count checks do not establish
+semantic diagnosis accuracy. Add scenario-owned expected-refusal proof without
+waiving unexpected errors. Retain semantic review against independent ground
+truth, as the earlier storage false diagnosis demonstrated. Population-level
+diagnosis, false-alarm, missed-problem and end-to-end latency rates remain unknown
+from adoption and outcome buckets alone.

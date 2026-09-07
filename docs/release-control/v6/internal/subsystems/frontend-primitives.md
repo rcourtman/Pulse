@@ -20,6 +20,12 @@
 
 ## Purpose
 
+The shared action evidence disclosure preserves the named observer independently
+of the executor. Its observation timestamp uses the neutral label `Observed`,
+followed by the separate Pulse receipt time. Independent Proxmox API evidence
+must not be labelled as an agent observation. Browser qualification expands
+this disclosure in completed action reviews at desktop and narrow widths.
+
 Disk I/O presentation preserves each observed direction independently. Shared
 formatting renders a missing rate as a dash and measured idle as numeric zero.
 Partial observations cannot form a complete throughput total for sorting or

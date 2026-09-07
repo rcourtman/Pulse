@@ -920,11 +920,10 @@ host name and dispatches a trusted internal container command after action
 approval, storage and recovery consumers may observe only the resulting action
 audit and verification evidence; they must not reinterpret that trusted command
 path as recovery authority or a storage-owned action transport. Canonical
-Docker action evidence may bind a raw, freshness-validated agent observation
-that is slightly ahead of the server clock to the server receipt boundary;
-storage/recovery consumers must preserve that evidence rather than treating
-normal bounded clock skew as recovery failure, and must not apply the same
-clamp to observations outside the API-owned freshness window.
+Docker action evidence preserves both the raw, freshness-validated observer
+clock and the server receipt clock. Storage/recovery consumers must not treat
+bounded positive skew as recovery failure or rewrite timestamps to make stale
+or excessively future evidence appear valid.
 Container restart declares rollback unavailable. Its canonical
 `ActionResultV2.compensation` therefore records support `unavailable` and status
 `not_available`; neither same-agent readback nor a distinct direct-daemon
@@ -6017,3 +6016,13 @@ Malformed, oversized, symlink and non-regular archive paths fail visibly. Missin
 archives remain distinguishable from a valid archive with no matching window.
 The original recording times and historical status must never establish current
 source freshness or active recording.
+
+### Proxmox guest action runner authority
+
+The API-owned Proxmox guest executor plans and dispatches only through a live
+tenant-admitted typed action runner with durable operation receipts. Generic
+node telemetry or a legacy command session cannot authorize a recovery action,
+and the executor has no raw-command fallback. Missing runner admission is
+reported by canonical action readiness before a plan is persisted. Typed
+mutation completion and independently observed guest recovery remain separate
+results. A running guest alone cannot prove a reboot.

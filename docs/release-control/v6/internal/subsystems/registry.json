@@ -8611,6 +8611,7 @@
             "exact_files": [
               "internal/ai/tools/filesystem_evidence_test.go",
               "internal/monitoring/docker_filesystem_evidence_test.go",
+              "internal/unifiedresources/action_result_v2_test.go",
               "internal/unifiedresources/availability_link_test.go",
               "internal/unifiedresources/canonical_id_pins_test.go",
               "internal/unifiedresources/clone_test.go",

@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -40,10 +39,7 @@ func TestProxmoxStoppedDetectorProposalApprovalDispatchIndependentVerificationAn
 		snapshot:  models.StateSnapshot{LastUpdate: stopped.LastSeen},
 		resources: []unified.Resource{stopped},
 	})
-	agents := &fakeDockerActionAgentCommander{results: []*agentexec.CommandResultPayload{
-		{RequestID: "dispatch", Success: true, ExitCode: 0, Stdout: "start requested"},
-		{RequestID: "verify", Success: true, ExitCode: 0, Stdout: "status: running"},
-	}}
+	agents := &fakeProxmoxActionAgentCommander{}
 	observer := &fakeProxmoxGuestPostconditionObserver{observations: []proxmoxGuestPostconditionObservation{
 		proxmoxGuestActionObservation(now.Add(-time.Second), "stopped", 0, "proxmox-control-plane:default:homelab"),
 		proxmoxGuestActionObservation(now.Add(time.Minute), "running", 5, "proxmox-control-plane:default:homelab"),
@@ -109,7 +105,7 @@ func TestProxmoxStoppedDetectorProposalApprovalDispatchIndependentVerificationAn
 	if truth.Verification.Evidence[0].ObserverKind != "proxmox_control_plane" || truth.Verification.Evidence[0].ObserverTrustDomain == truth.Verification.Evidence[0].ExecutorTrustDomain {
 		t.Fatalf("independent evidence=%#v", truth.Verification.Evidence[0])
 	}
-	if len(agents.calls) != 2 || agents.calls[0].Command != "qm start 160" || agents.calls[1].Command != "qm status 160" {
+	if len(agents.calls) != 1 || agents.calls[0].GuestKind != "vm" || agents.calls[0].Operation != "start" || agents.calls[0].VMID != 160 {
 		t.Fatalf("typed Proxmox calls=%#v", agents.calls)
 	}
 

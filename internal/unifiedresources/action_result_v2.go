@@ -255,9 +255,9 @@ func normalizeActionEvidenceFields(evidence ActionEvidence) (ActionEvidence, err
 	}
 	evidence.ObservedAt = evidence.ObservedAt.UTC()
 	evidence.ReceivedAt = evidence.ReceivedAt.UTC()
-	if evidence.ReceivedAt.Before(evidence.ObservedAt) {
-		return ActionEvidence{}, fmt.Errorf("%w: receivedAt predates observedAt", ErrInvalidActionEvidence)
-	}
+	// Observer and receiver timestamps belong to separate clocks. Preserve
+	// both facts without imposing cross-clock ordering or rewriting either.
+	// Capability-specific verification owns freshness and clock-skew limits.
 	if evidence.ID == "" || evidence.ObserverID == "" || evidence.ObserverKind == "" || evidence.ObserverTrustDomain == "" || evidence.ExecutorTrustDomain == "" || evidence.Method == "" || evidence.SubjectID == "" {
 		return ActionEvidence{}, fmt.Errorf("%w: evidence identity, observer kind, trust domains, method, and subject required", ErrInvalidActionEvidence)
 	}

@@ -1347,10 +1347,10 @@ execution; lifecycle surfaces still consume only the resource payload, action
 readiness, and action-audit result rather than issuing or approving
 command-agent grants themselves. Because the agent and Pulse server have
 independent clocks, the API-owned Docker result projector validates raw
-lifecycle/update chronology within its bounded skew window and then binds a
-slightly future valid observation to the server receipt boundary for canonical
-evidence. Agent lifecycle consumers must not reject that bounded case, widen
-the skew window, or clamp stale/excessively future evidence into validity.
+lifecycle/update chronology within its bounded skew window, then preserves
+both original timestamps in canonical evidence. Agent lifecycle consumers
+must not reject bounded skew, widen the freshness window, or rewrite stale
+or excessively future evidence into validity.
 Inside a containerized Unified Agent, the closed start/stop/restart command
 must inspect and mutate through the Docker / Podman module's already-connected
 daemon API; it must not depend on a second `docker` or `podman` executable being
@@ -1504,7 +1504,14 @@ Proxmox VM and LXC lifecycle affordances follow the same adjacent boundary:
 lifecycle and fleet surfaces may consume backend-advertised `start`,
 `shutdown`, `reboot`, and `stop` capabilities and typed `actionReadiness`, but
 the only execution path is the API-owned action executor that resolves a
-connected Proxmox node command agent and records action audit plus verification.
+credential-admitted typed action runner for the Proxmox node and records action audit plus verification.
+`GetActionRunnerForHostForOrganization` resolves exactly one live runner from
+tenant-scoped credential admission. Legacy command sessions, pending or fenced
+activation, revoked credentials and ambiguous host matches are not readiness.
+The actual dispatch session must satisfy the same closed role/capability
+contract. A session replacement cannot inherit a preceding lookup's authority.
+Durable operation-receipt support is required before planning. There is no
+API executor fallback to raw `qm` or `pct` commands.
 Lifecycle surfaces must not run `qm` / `pct`, SSH to a node, call Proxmox
 mutation APIs, or substitute a guest-local agent to perform VM/LXC lifecycle
 control.

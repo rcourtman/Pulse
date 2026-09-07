@@ -1,25 +1,20 @@
 {
   "version": 1,
-  "base_sha": "560dbf314c4fc3744f52aa4e5a6a204cafe3aa7d",
-  "verified_at": "2026-09-07T08:40:47Z",
+  "base_sha": "09ab5c2d0ae6e02fcc5280853782a8142646e40f",
+  "verified_at": "2026-09-07T10:45:50.469666Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/AI/Chat/index.tsx",
-    "frontend-modern/src/components/AI/FindingsPanel.tsx",
-    "frontend-modern/src/components/patrol/ApprovalSection.tsx",
-    "frontend-modern/src/types/resource.ts"
+    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/AI/Chat/index.tsx": "a31459ed9eeda0e96a192c0b6b471746c1a6da70cd8c68ab75b833ca763071f8",
-    "frontend-modern/src/components/AI/FindingsPanel.tsx": "92f1fd73740cb71c868c2d7054323d43f93ebc53dbb5cacdc1f828c5c2f2a868",
-    "frontend-modern/src/components/patrol/ApprovalSection.tsx": "b04e131f5a82d538f37aa9cb3aadaf0f7303266cfc318ff04a42a8f7f6a4f6ba",
-    "frontend-modern/src/types/resource.ts": "54217a487ce295d433a9e016bf655ab8572a903383ae0516fdd52e5004524ea7"
+    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx": "ea0301d5ee7bee7b064f8e7fd8db43a54a74bc4488c0a87285d7c52151a5e07b"
   },
   "routes": [
-    "/patrol",
-    "/actions?action=act_185eebf5dfc24652e6332881dbe94f6c",
+    "/actions?action=act_9ec8d575b777a5f8fc70561376a52381",
+    "/actions?action=act_3384576233bf55aa3182537ad02d81d4",
     "/actions?action=act_7687850d214e9c5f7038a436c6cc2ff7",
-    "/actions?action=act_e5e1f06da3dc42215a97360731d7e36b"
+    "/actions?action=act_e5e1f06da3dc42215a97360731d7e36b",
+    "/actions?action=act_185eebf5dfc24652e6332881dbe94f6c"
   ],
   "viewports": [
     {
@@ -36,26 +31,20 @@
     }
   ],
   "states": [
-    "Activity with All findings including resolved records",
-    "Expired action with needs-attention investigation and retained linked action",
-    "Completed action with independent verification",
-    "Rejected action without execution controls",
-    "Expanded investigation thread with raw filesystem evidence and nested output scroll",
-    "Assistant empty conversation with attached finding",
-    "New Assistant conversation with context cleared and ordinary starters restored",
-    "Existing Assistant conversation loaded from recent sessions",
-    "Reloaded exact action review"
+    "VM110 start and stop awaiting exact-plan approval",
+    "Completed VM110 start and stop with independent Proxmox verification",
+    "Expanded independent observer evidence with original observation and Pulse receipt labels",
+    "Expanded durable delivery record with agent-specific observation label",
+    "Retained completed Docker restart with independent evidence",
+    "Retained rejected Docker restart without execution controls",
+    "Retained expired Docker restart with refresh offered and no execution controls"
   ],
   "interactions": [
-    "Keyboard focus and Enter open the finding review and investigation thread",
-    "Expand tool results and scroll inside the native filesystem observation output",
-    "Discuss with Assistant retains the finding and expired action context without unrelated starters",
-    "Start new Assistant session clears context and restores welcome and recent sessions",
-    "Load existing session and inspect its transcript",
-    "Follow exact Actions links, inspect planned state and recorded independent verification",
-    "Expand policy evidence, evidence details and delivery identifiers with keyboard",
-    "Reload exact action URLs, close with Escape and the explicit close button",
-    "Inspect desktop, intermediate and narrow placement, nested scrolling, footer reachability and document overflow"
+    "Inspect exact target identity, approval controls and planned state before API-authorized execution",
+    "Open and close policy evidence, evidence details and delivery identifiers using keyboard focus and Enter",
+    "Scroll nested action review and inspect readable evidence, wrapping, stacking and reachable footer at all widths",
+    "Close with Escape and explicit close control, reopen exact action link and reload persisted state",
+    "Inspect final pixels and verify no document horizontal overflow"
   ],
-  "notes": "Real bundled development runtime SHA256 1f1f71d2fd77b89f43a980d1e990a4010d2ec467502551555d5ab702f1aa71e6. Playwright scripts and screenshots are in workspace tmp/patrol-filesystem-evidence/{storage-browser,action-browser}. Final pixels were reviewed after transitions settled. Browser proof covers the named changes, not full product readiness. Independent qualification still fails missing-access continuity and VM execution. An existing Assistant verification-policy message leaking into historical transcript is retained as a separate canonical orchestration gap. Mock mode is off. Browser scripts allow only login and selected-provider readiness POSTs. Repeated after the shared incremental alert-history change. Eighteen bounded concurrent attention-summary requests completed and the final goroutine check found no history walkers. This functional check is not a workstation performance benchmark."
+  "notes": "Final bundled development binary SHA256 c53f2e54e7ea510fc3abfbfbe164e74e363d3b1560aaa36a62df9fb1aaaf2c7d. Scripts, screenshots and raw dialog text are in workspace tmp/patrol-runner-readiness/browser and verify-action.mjs/verify-history.mjs. Browser requests were GET plus login only. Exact VM110 approvals and execution were performed separately through the canonical API, with independent Proxmox and SSH state checks and retained native receipts. Both temporary services, credentials and tunnel were removed and read-only control restored. Deep links have no initiating button for focus return. This receipt qualifies the named action-review change and adjacent rendered outcomes, not full Patrol/Assistant readiness."
 }

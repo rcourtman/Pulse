@@ -61,6 +61,54 @@ func TestActionRefusalReasonCodeContractAndAlreadySatisfiedCleanup(t *testing.T)
 
 func allowAllTestTokens(string, string, string) bool { return true }
 
+func TestActionRunnerHostResolutionUsesLiveTenantAdmission(t *testing.T) {
+	s := NewServerWithAdmissionValidator(func(string, string, string) (AgentAdmission, bool) {
+		return AgentAdmission{}, false
+	}, func(a AgentAdmission) bool { return a.TokenID != "revoked" })
+	add := func(org, id, host, role, capability, token string) *agentConn {
+		ac := &agentConn{
+			admission: AgentAdmission{OrganizationID: org, AgentID: id, Hostname: host, RuntimeRole: role, ActionCapability: capability, TokenID: token},
+			agent:     ConnectedAgent{AgentID: id, Hostname: host, RuntimeRole: RuntimeRoleActionRunner, ActionCapability: ActionCapabilityTypedV1, OperationReceiptVersion: 1},
+			done:      make(chan struct{}),
+		}
+		s.agents[agentSessionKey(org, id)] = ac
+		return ac
+	}
+	// Self-reported role/capability must not override credential admission.
+	add("org-a", "legacy", "delly", RuntimeRoleLegacyFullTrust, "", "legacy")
+	add("org-a", "unsupported", "delly", RuntimeRoleActionRunner, "unknown", "unsupported")
+	add("org-a", "revoked", "delly", RuntimeRoleActionRunner, ActionCapabilityTypedV1, "revoked")
+	add("org-b", "other-tenant", "delly", RuntimeRoleActionRunner, ActionCapabilityTypedV1, "valid")
+	if _, err := s.ExecuteProxmoxGuestLifecycle(WithOrganizationID(context.Background(), "org-a"), "legacy", boundProxmoxGuestLifecycle(t)); err == nil || !strings.Contains(err.Error(), "requires a typed action-runner session") {
+		t.Fatalf("legacy session reached typed dispatch: %v", err)
+	}
+	if id, ok := s.GetActionRunnerForHostForOrganization("org-a", "delly"); ok || id != "" {
+		t.Fatalf("non-admitted runner resolved: %q, %v", id, ok)
+	}
+	valid := add("org-a", "runner", "delly.home", RuntimeRoleActionRunner, ActionCapabilityTypedV1, "valid")
+	if id, ok := s.GetActionRunnerForHostForOrganization("org-a", "delly"); !ok || id != "runner" {
+		t.Fatalf("typed runner not resolved through canonical hostname: %q, %v", id, ok)
+	}
+	add("org-a", "ambiguous", "delly.home", RuntimeRoleActionRunner, ActionCapabilityTypedV1, "valid")
+	if id, ok := s.GetActionRunnerForHostForOrganization("org-a", "delly"); ok || id != "" {
+		t.Fatalf("ambiguous runner resolved: %q, %v", id, ok)
+	}
+	delete(s.agents, agentSessionKey("org-a", "ambiguous"))
+	s.actionRunnerPromotionFences[agentSessionKey("org-a", "runner")] = &ActionRunnerSessionPromotion{}
+	if id, ok := s.GetActionRunnerForHostForOrganization("org-a", "delly"); ok || id != "" {
+		t.Fatalf("fenced runner resolved: %q, %v", id, ok)
+	}
+	delete(s.actionRunnerPromotionFences, agentSessionKey("org-a", "runner"))
+	delete(s.agents, agentSessionKey("org-a", "runner"))
+	s.pendingActionRunners[agentSessionKey("org-a", "runner")] = valid
+	if id, ok := s.GetActionRunnerForHostForOrganization("org-a", "delly"); ok || id != "" {
+		t.Fatalf("pending runner resolved: %q, %v", id, ok)
+	}
+	if id, ok := s.GetActionRunnerForHostForOrganization("org-b", "delly"); !ok || id != "other-tenant" {
+		t.Fatalf("tenant isolation lost: %q, %v", id, ok)
+	}
+}
+
 func TestNewServerRequiresValidateToken(t *testing.T) {
 	defer func() {
 		if recover() == nil {
