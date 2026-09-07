@@ -82,8 +82,6 @@ type branchcov0725amTelemetry struct {
 }
 
 func (t *branchcov0725amTelemetry) RecordStrictResolutionBlock(_, _ string) {}
-func (t *branchcov0725amTelemetry) RecordAutoRecoveryAttempt(_, _ string)   {}
-func (t *branchcov0725amTelemetry) RecordAutoRecoverySuccess(_, _ string)   {}
 func (t *branchcov0725amTelemetry) RecordRoutingMismatchBlock(tool, targetKind, childKind string) {
 	t.routingMismatchCalls++
 	t.lastTool = tool

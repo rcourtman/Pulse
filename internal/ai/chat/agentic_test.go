@@ -569,134 +569,45 @@ func TestToolCallKey(t *testing.T) {
 	})
 }
 
-func TestLoopDetection(t *testing.T) {
-	// Simulate the loop detection logic from executeWithTools
-	const maxIdenticalCalls = 3
-
-	t.Run("allows up to maxIdenticalCalls", func(t *testing.T) {
-		recentCallCounts := make(map[string]int)
-		input := map[string]interface{}{"action": "get", "resource_type": "lxc"}
-		key := toolCallKey("pulse_discovery", input)
-
-		for i := 0; i < maxIdenticalCalls; i++ {
-			recentCallCounts[key]++
-			assert.LessOrEqual(t, recentCallCounts[key], maxIdenticalCalls,
-				"call %d should be allowed", i+1)
-		}
-	})
-
-	t.Run("blocks call exceeding maxIdenticalCalls", func(t *testing.T) {
-		recentCallCounts := make(map[string]int)
-		input := map[string]interface{}{"action": "get", "resource_type": "lxc"}
-		key := toolCallKey("pulse_discovery", input)
-
-		// Simulate 3 allowed calls
-		for i := 0; i < maxIdenticalCalls; i++ {
-			recentCallCounts[key]++
-		}
-
-		// 4th call should be blocked
-		recentCallCounts[key]++
-		assert.Greater(t, recentCallCounts[key], maxIdenticalCalls,
-			"4th identical call should exceed limit")
-	})
-
-	t.Run("different calls tracked independently", func(t *testing.T) {
-		recentCallCounts := make(map[string]int)
-		input1 := map[string]interface{}{"action": "get", "resource_id": "100"}
-		input2 := map[string]interface{}{"action": "get", "resource_id": "200"}
-		key1 := toolCallKey("pulse_discovery", input1)
-		key2 := toolCallKey("pulse_discovery", input2)
-
-		// Call key1 three times
-		for i := 0; i < maxIdenticalCalls; i++ {
-			recentCallCounts[key1]++
-		}
-
-		// key2 should still be fine
-		recentCallCounts[key2]++
-		assert.Equal(t, 1, recentCallCounts[key2])
-		assert.Equal(t, maxIdenticalCalls, recentCallCounts[key1])
-	})
-}
-
-func TestLoopDetectionIntegration(t *testing.T) {
-	// Integration test: run the agentic loop with a provider that keeps
-	// calling the same tool, and verify the 4th identical call is blocked.
-	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
-	mockProvider := &MockProvider{}
-	loop := NewAgenticLoop(mockProvider, executor, "You are a helper")
-	ctx := context.Background()
-	sessionID := "loop-detect-session"
-	messages := []Message{{Role: "user", Content: "discover lxc 100"}}
-
-	callCount := 0
-	// The provider will keep requesting the same tool call up to 5 times
-	mockProvider.On("ChatStream", mock.Anything, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
-		callback := args.Get(2).(providers.StreamCallback)
-		callCount++
-
-		// Check if we got a LOOP_DETECTED error in the messages — if so, stop calling tools
-		req := args.Get(1).(providers.ChatRequest)
-		for _, msg := range req.Messages {
-			if msg.ToolResult != nil && strings.Contains(msg.ToolResult.Content, "LOOP_DETECTED") {
-				// Model should stop — emit content and no tool calls
-				callback(providers.StreamEvent{
-					Type: "content",
-					Data: providers.ContentEvent{Text: "I'll try a different approach."},
-				})
-				callback(providers.StreamEvent{
-					Type: "done",
-					Data: providers.DoneEvent{},
-				})
-				return
+// Repeated observations and recovery after missing access remain model decisions.
+// The configured turn limit, rather than an inferred diagnosis of a stuck model,
+// bounds the run.
+func TestAgenticLoop_RepeatedCallsRemainAvailableWithinExplicitBudget(t *testing.T) {
+	for _, toolName := range []string{"pulse_query", "pulse_read"} {
+		t.Run(toolName, func(t *testing.T) {
+			executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{StateProvider: &mockStateProvider{}})
+			provider := &stubStreamingProvider{}
+			turn := 0
+			provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+				turn++
+				require.NotEmpty(t, req.Tools, "call counts and prior tool errors must not remove authority")
+				if turn <= 4 {
+					callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{ID: fmt.Sprintf("recheck-%d", turn), Name: toolName, Input: map[string]interface{}{"action": "health"}}}}})
+				} else {
+					callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "The observations do not establish recovery."}})
+					callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+				}
+				return nil
 			}
-		}
-
-		// Keep calling the same tool
-		callback(providers.StreamEvent{
-			Type: "tool_start",
-			Data: providers.ToolStartEvent{ID: fmt.Sprintf("call_%d", callCount), Name: "pulse_discovery"},
+			loop := NewAgenticLoop(provider, executor, "base prompt")
+			loop.SetMaxTurns(6)
+			results, err := loop.Execute(context.Background(), "repeat-observation", []Message{{Role: "user", Content: "Check whether recovery persists."}}, func(StreamEvent) {})
+			require.NoError(t, err)
+			require.Equal(t, 5, turn)
+			toolResults := 0
+			for _, msg := range results {
+				if msg.ToolResult == nil {
+					continue
+				}
+				toolResults++
+				require.NotContains(t, msg.ToolResult.Content, "LOOP_DETECTED")
+				if toolName == "pulse_read" {
+					require.True(t, msg.ToolResult.IsError, "malformed reads must still be refused by the executor")
+				}
+			}
+			require.Equal(t, 4, toolResults)
 		})
-		callback(providers.StreamEvent{
-			Type: "done",
-			Data: providers.DoneEvent{
-				ToolCalls: []providers.ToolCall{
-					{
-						ID:   fmt.Sprintf("call_%d", callCount),
-						Name: "pulse_discovery",
-						Input: map[string]interface{}{
-							"action":        "get",
-							"resource_type": "lxc",
-							"resource_id":   "100",
-							"target_id":     "node1",
-						},
-					},
-				},
-			},
-		})
-	})
-
-	var events []StreamEvent
-	results, err := loop.Execute(ctx, sessionID, messages, func(event StreamEvent) {
-		events = append(events, event)
-	})
-
-	assert.NoError(t, err)
-
-	// Verify LOOP_DETECTED appears in at least one tool result
-	foundLoopDetected := false
-	for _, msg := range results {
-		if msg.ToolResult != nil && strings.Contains(msg.ToolResult.Content, "LOOP_DETECTED") {
-			foundLoopDetected = true
-			break
-		}
 	}
-	assert.True(t, foundLoopDetected, "expected LOOP_DETECTED in tool results")
-
-	// The loop should have stopped (model returned content after seeing LOOP_DETECTED)
-	// Total calls: 4 tool-calling turns (3 allowed + 1 blocked) + 1 final content turn = 5
-	assert.LessOrEqual(t, callCount, 6, "loop should terminate after detection")
 }
 
 func TestTruncateForLog(t *testing.T) {

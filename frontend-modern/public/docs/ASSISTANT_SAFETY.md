@@ -1,100 +1,64 @@
 # Pulse Assistant safety architecture
 
-The state machine that governs what the Pulse Assistant is allowed to do
-during a chat session, the tool classification it runs on, and the invariants
-it holds.
-
-The point of this machine is structural. Prompt wording can be argued with by
-a model, and drifts as prompts are edited. These rules are enforced in code,
-in `internal/ai/chat/fsm.go`, so neither a model nor a future prompt change
-can talk its way past them.
+Pulse enforces authority at the shared tool and action boundaries. The model
+owns interpretation, investigation and action judgment within those boundaries.
+A sequence of tool calls cannot establish that a diagnosis is correct.
 
 ## Tool kinds
 
-Every tool call is classified before it runs.
+Every tool call uses the shared `agentcapabilities` classification.
 
 | Kind | Meaning |
 |---|---|
 | `resolve` | Discovery and query tools that find resources |
-| `read` | Read-only tools such as logs, metrics, status, and config |
-| `write` | Mutating tools such as restart, stop, start, delete, and file write |
+| `read` | Read-only tools such as logs, metrics, status and config |
+| `write` | Tools that change Pulse state or infrastructure through governed operations |
 | `user_input` | Interactive tools that ask you something |
 
-Classification is `ClassifyToolCall`, which delegates to the shared
-`agentcapabilities` classifier so the Assistant and the rest of the agent
-surface agree on what counts as a write.
+`ClassifyToolCall` delegates to the shared classifier. A write classification
+is not proof that infrastructure executed or that an action succeeded.
+Canonical planning itself can persist Pulse state without changing a resource.
 
-## States
+## Enforced authority
 
-A session starts in `RESOLVING` and moves between four states.
+Execution profiles and tool permissions limit the capabilities available to a
+run. The canonical action lifecycle validates the target, capability, parameters,
+actor and current policy. It persists the action plan and requires the applicable
+approval before execution. The model cannot grant itself permission by describing
+a change as safe or by performing an unrelated read first.
 
-| State | What it means |
-|---|---|
-| `RESOLVING` | No validated target yet, so resources must be discovered first |
-| `READING` | A target is established and querying is allowed |
-| `WRITING` | Transitional, entered around a mutation |
-| `VERIFYING` | A write happened and evidence has not been gathered since |
+Turn, evidence and cost budgets remain explicit bounds. Scheduling, tenant and
+actor identity, idempotency and execution verification belong to their owning
+services. They do not infer the quality or completeness of a diagnosis.
 
-Transitions on a successful tool call are as follows.
+## Evidence and outcomes
 
-- A `resolve` or `read` in `RESOLVING` moves the session to `READING`.
-- A `write` from any state moves the session to `VERIFYING`, records the tool
-  and timestamp, and clears the read-after-write flag.
-- A `resolve` or `read` while in `VERIFYING` sets read-after-write, which is
-  what satisfies the verification requirement.
-- A `user_input` call does not advance state at all, because asking you a
-  question is neither discovery nor verification.
+A plan is an intended change. An approval is an authorization decision. An
+execution receipt reports what the executor did. Independent verification
+establishes the recorded postcondition through a separate observer at a named
+time. These facts remain distinct even when one action record links them.
 
-`CompleteVerification` returns a verified session from `VERIFYING` to
-`READING` so further writes become possible.
+Assistant can read the canonical action record with `pulse_query action=action`
+and its exact `action_id`. The result retains plan context, recorded decisions
+and `ActionResultV2` provenance. Missing records or missing access remain unknown.
+A cached resource status or absent timeline entry cannot negate an execution
+receipt. A successful execution alone does not prove that the original problem
+was resolved.
 
-## The invariants
+## Model responsibility and limits
 
-**No writing without a validated target.** A `write` attempted in `RESOLVING`
-is blocked. The model must establish what it is acting on before it acts.
+The model chooses when to read, ask, plan or conclude within the available
+capabilities and explicit budgets. Assistant does not require an unrelated read
+after every write, infer verification from a call sequence, or rewrite saved
+answers because they contain lifecycle words. Model conclusions can still be
+wrong. Regression tests, real-model qualification and independent observations
+are needed to assess useful diagnosis and verified customer outcomes.
 
-**No writing again until the last write is verified.** A `write` attempted in
-`VERIFYING` is blocked until a read or resolve has run since the write.
-
-**No final answer about an unverified change.** `CanFinalAnswer` refuses while
-the session is in `VERIFYING` with no read-after-write. The Assistant cannot
-tell you it restarted something and then decline to look at whether the
-restart worked.
-
-**Repeated attempts do not wear the gate down.** Consecutive blocked writes in
-`VERIFYING` increment a counter, and that counter is telemetry only. There is
-no attempt threshold after which the verification requirement is waived.
-
-**Reads are never blocked.** No state blocks a `read`, `resolve`, or
-`user_input`. The machine constrains mutation and the claims made about
-mutation, not information gathering.
-
-## Blocked calls and recovery
-
-A blocked call returns an `FSMBlockedError` carrying the state, the tool, the
-tool kind, a reason, and a recoverable flag. It surfaces to the model with the
-stable code `ErrCodeFSMBlocked` rather than as prose, so the model can branch
-on the code.
-
-Blocks are recoverable rather than terminal. The session tracks a pending
-recovery per blocked operation, and a later successful call of the same tool
-clears it. Pending recoveries expire after ten minutes.
-
-## Resetting
-
-`Reset` returns the session to `RESOLVING` and clears all tracking, which is
-what a full session clear does.
-
-`ResetKeepProgress` is the softer variant used when context is cleared but
-pinned items are kept. It drops verification tracking and moves a `VERIFYING`
-session back to `READING`, without discarding that a target was established.
-
-Note that `WroteThisEpisode` means "wrote at all during this session" rather
-than "wrote during the current verification cycle", and `CompleteVerification`
-deliberately leaves it set.
+The wider Patrol and Assistant redesign remains under qualification. Local
+fixture results do not establish reliability across customer environments.
 
 ## Related reading
 
-- [AI features](AI.md) for the overview and configuration.
-- [Patrol deep dive](PATROL_ARCHITECTURE.md) for the scheduled analysis
-  runtime, which is a separate loop from the Assistant.
+- [Assistant deep dive](ASSISTANT_ARCHITECTURE.md) for the execution loop.
+- [AI features](AI.md) for configuration.
+- [Patrol deep dive](PATROL_ARCHITECTURE.md) for the separate scheduled runtime.

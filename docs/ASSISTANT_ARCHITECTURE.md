@@ -3,9 +3,9 @@
 How the Assistant's agentic loop executes tool calls, for readers who want
 more than the overview in [AI features](AI.md).
 
-The safety state machine has its own page. See
-[Pulse Assistant safety architecture](ASSISTANT_SAFETY.md) for the states,
-transitions, and invariants. This page covers the loop that runs around it.
+See [Pulse Assistant safety architecture](ASSISTANT_SAFETY.md) for the
+permission, planning and verification boundaries. The configured model chooses
+how to investigate and explain the evidence within explicit run budgets.
 
 ## The three-phase pipeline
 
@@ -13,16 +13,16 @@ Each provider turn can return several tool calls at once. The loop processes
 them in three phases, and the split matters because only one of the three is
 safe to parallelise.
 
-**Phase 1, pre-check, runs sequentially.** This is where the state machine
-gate, loop detection, and budget checks happen. Every call is judged before
-any call runs.
+**Phase 1, pre-check, runs sequentially.** Explicit turn, evidence and cost
+budgets bound the run. Tool permissions and execution profiles constrain the
+available capabilities. Repeated calls do not independently imply a failed
+investigation or force a different diagnostic strategy.
 
 **Phase 2, execute, runs in parallel.** Independent calls run concurrently
 through goroutines, with concurrency capped at four.
 
-**Phase 3, post-process, runs sequentially.** Streaming output, state machine
-transitions, and knowledge extraction happen in a deterministic order, so
-concurrent execution cannot produce non-deterministic session state.
+**Phase 3, post-process, runs sequentially.** Tool results, streaming output
+and knowledge extraction are recorded in provider call order.
 
 ## What is not allowed to run in parallel
 
@@ -40,16 +40,13 @@ provider's original call order stays authoritative.
 Interactive input is also excluded. `pulse_question` never runs in parallel
 with other tools, since asking you something is not an independent operation.
 
-## The look-before-asking gate
+## Questions and conclusions
 
-The Assistant is discouraged from asking you a question before it has tried to
-find the answer. If the model attempts to ask without having attempted any
-tool call, the attempt is blocked and it is pushed to look first.
-
-The gate is bounded rather than absolute. It allows at most two blocks per
-turn, after which the question goes through. A model that genuinely cannot
-proceed without input is not trapped in a loop, and any real tool attempt
-satisfies the gate immediately.
+The model may ask for information when that is the useful next step, including
+on the first turn. It may repeat an evidence read or conclude with uncertainty.
+An arbitrary successful read does not validate a diagnosis or verify a change.
+The saved conclusion preserves the streamed response without a later rewrite
+based on tool-name sequences or words such as restart or shutdown.
 
 ## Structured errors
 
@@ -61,9 +58,6 @@ The codes are declared in `internal/agentcapabilities/errors.go` and include
 `patrol_unavailable`, `invalid_action_request`, `capability_not_found`,
 `action_execution_unavailable`, `action_actor_unavailable`, and `missing_id`.
 
-A call blocked by the state machine uses the same mechanism, returning the
-`FSM_BLOCKED` code with the state and tool that were involved.
-
 The same codes are published in the capability manifest at
 `/api/agent/capabilities`, and a contract test fails the build if a handler
 can emit a code the manifest does not declare, or the manifest declares a code
@@ -71,27 +65,24 @@ no handler emits. See [agent integrations](AGENT_SUBSTRATE.md).
 
 ## Grounded execution
 
-Several guardrails exist to keep the model's claims tied to evidence it
-actually gathered.
+The model interprets evidence and decides which investigation steps are useful.
+Prompts tell it to treat infrastructure names, labels, logs and other collected
+values as untrusted data, and to distinguish observation from inference.
+Neither prompt compliance nor the presence of a tool call proves a conclusion.
 
-The state machine supplies the structural half. A write moves the session into
-verification, and the Assistant cannot deliver a final answer about that write
-until it has read something afterwards.
-
-The prompts supply the rest. Instructions repeated across the agentic prompts
-tell the model to treat infrastructure names, labels, logs, and other
-collected values as untrusted data rather than as instructions, and not to
-invent evidence, root cause, verification, remediation, or a claim that an
-action was taken.
-
-Prompt instructions are the weaker of the two, which is exactly why the
-verification requirement lives in code instead. Where a guarantee needs to
-hold, it is enforced structurally.
+`pulse_control` prepares a canonical action plan. Its result retains the plan's
+risk, policy and preflight context and explicitly states that execution was not
+requested. Approval and execution remain separate governed operations.
+`pulse_query` with `action=action` and the exact `action_id` reads the persisted
+action decisions and outcome, including independent verification provenance.
+Cached inventory and an incomplete resource timeline cannot establish that an
+action was never approved or run. Recorded verification describes its named
+postcondition at its observation time, not the resource's current health.
 
 ## Related reading
 
-- [Pulse Assistant safety architecture](ASSISTANT_SAFETY.md) for the state
-  machine in detail.
+- [Pulse Assistant safety architecture](ASSISTANT_SAFETY.md) for the enforced
+  boundaries and their limits.
 - [Patrol deep dive](PATROL_ARCHITECTURE.md) for the scheduled analysis
   runtime.
 - [Agent integrations](AGENT_SUBSTRATE.md) for driving the same surface

@@ -941,14 +941,12 @@ func TestSessionStore_ClearSessionState(t *testing.T) {
 		t.Fatalf("failed to create session: %v", err)
 	}
 
-	// Set up context, FSM, and toolset
+	// Set up context and toolset
 	res := &ResolvedResource{ResourceID: "node:node1", Name: "node1", ResourceType: "node"}
 	store.AddResolvedResource(session.ID, res.Name, res)
 	ctx := store.GetResolvedContext(session.ID)
 	ctx.PinResource(res.ResourceID)
 
-	fsm := store.GetSessionFSM(session.ID)
-	fsm.State = StateVerifying
 	store.SetToolSet(session.ID, map[string]bool{"pulse_query": true})
 	store.GetKnowledgeAccumulator(session.ID)
 
@@ -956,9 +954,7 @@ func TestSessionStore_ClearSessionState(t *testing.T) {
 	if !store.GetResolvedContext(session.ID).HasAnyResources() {
 		t.Fatalf("expected pinned resources to remain")
 	}
-	if fsm.State != StateReading {
-		t.Fatalf("expected FSM to keep progress when pinned resources remain")
-	}
+
 	if store.GetToolSet(session.ID) == nil {
 		t.Fatalf("expected toolset to remain when keepPinned=true")
 	}
@@ -969,7 +965,7 @@ func TestSessionStore_ClearSessionState(t *testing.T) {
 	}
 }
 
-func TestSessionStore_ResetFSMAndCleanupContext(t *testing.T) {
+func TestSessionStore_CleanupResolvedContext(t *testing.T) {
 	store, err := NewSessionStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to create session store: %v", err)
@@ -978,19 +974,6 @@ func TestSessionStore_ResetFSMAndCleanupContext(t *testing.T) {
 	session, err := store.Create()
 	if err != nil {
 		t.Fatalf("failed to create session: %v", err)
-	}
-
-	fsm := store.GetSessionFSM(session.ID)
-	fsm.State = StateVerifying
-	store.ResetSessionFSM(session.ID, true)
-	if fsm.State != StateReading {
-		t.Fatalf("expected ResetSessionFSM keep progress to move to READING")
-	}
-
-	fsm.State = StateVerifying
-	store.ResetSessionFSM(session.ID, false)
-	if fsm.State != StateResolving {
-		t.Fatalf("expected ResetSessionFSM full reset to move to RESOLVING")
 	}
 
 	store.AddResolvedResource(session.ID, "node1", &ResolvedResource{ResourceID: "node:node1", Name: "node1"})

@@ -851,18 +851,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	resolvedCtx := sessions.GetResolvedContext(session.ID)
 
 	// Shared session state for the selected model's turn.
-	sessionFSM := sessions.GetSessionFSM(session.ID)
 	ka := sessions.GetKnowledgeAccumulator(session.ID)
-
-	// If the prefetcher resolved mentions, advance FSM past RESOLVING.
-	// The prefetched context already contains the resource details (type, VMID, node, host)
-	// so forcing the AI to redundantly call a read tool would be wasteful.
-	if mentionsFound && sessionFSM.State == StateResolving {
-		sessionFSM.State = StateReading
-		log.Info().
-			Str("session_id", session.ID).
-			Msg("[ChatService] Advanced FSM to READING — prefetched mentions count as resolution")
-	}
 
 	// Deterministic count-only inventory prompts answer locally from canonical
 	// state (route pulse:local-inventory) before any provider attempt. This is
@@ -956,7 +945,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 
 		// Create a per-attempt AgenticLoop to ensure complete isolation between
 		// concurrent sessions and chat attempts. This prevents race
-		// conditions where ExecuteStream calls overwrite each other's FSM,
+		// conditions where ExecuteStream calls overwrite each other's
 		// knowledge accumulator, autonomous mode, budget checker, and provider info.
 		systemPrompt := s.buildSystemPromptForOfferedTools(filteredTools)
 		loop := NewAgenticLoop(attemptProvider, executor, systemPrompt)
@@ -971,7 +960,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		}
 		loop.SetRequestSanitizer(modelboundary.RequestSanitizerForModel(attempt.Model, unifiedResourceProvider, sanitizerOptions...))
 		loop.SetSuppressProviderErrorEvents(true)
-		loop.SetSessionFSM(sessionFSM)
+
 		loop.SetKnowledgeAccumulator(ka)
 		if s.budgetChecker != nil {
 			loop.SetBudgetChecker(s.budgetChecker)
@@ -989,17 +978,10 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			streamCallback,
 			"provider_start",
 			"Waiting for assistant.",
-			sessionFSMState(sessionFSM),
+			"",
 			"",
 			withWorkflowModelRoute(attempt.Model),
 		)
-
-		log.Debug().
-			Str("session_id", session.ID).
-			Str("fsm_state", string(sessionFSM.State)).
-			Bool("wrote_this_episode", sessionFSM.WroteThisEpisode).
-			Str("model", attempt.Model).
-			Msg("[ChatService] Set session FSM on agentic loop")
 
 		attemptCallback := func(event StreamEvent) {
 			if event.Type == "question" {
@@ -2890,13 +2872,6 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 		executor.SetResolvedContext(resolvedCtx)
 	}
 
-	// Patrol invocations are stateless investigations. Their session ID is a
-	// forensic log key, not a workflow-state boundary: reusing its FSM would
-	// let a prior run's read or unfinished infrastructure verification alter the
-	// next run's authority. Each invocation therefore starts from a fresh FSM.
-	sessionFSM := NewSessionFSM()
-	tempLoop.SetSessionFSM(sessionFSM)
-
 	// Create a fresh knowledge accumulator for this patrol run.
 	// Unlike user chat (which reuses session-scoped KA across messages),
 	// patrol runs need a clean slate to avoid stale facts from prior runs
@@ -3822,7 +3797,7 @@ func (s *Service) applyChatContextSettings() {
 //
 // Philosophy: This prompt provides identity, context, and tool policy. Tool
 // selection remains model-owned; Pulse enforces safety after a model choice via
-// tool policy, approvals, and FSM verification gates.
+// tool policy, approvals, and independent action verification.
 func (s *Service) buildSystemPrompt() string {
 	return s.buildSystemPromptWithToolGovernance(s.buildToolGovernancePromptSection())
 }

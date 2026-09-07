@@ -15,10 +15,12 @@ import LoaderCircleIcon from 'lucide-solid/icons/loader-circle';
 import XCircleIcon from 'lucide-solid/icons/x-circle';
 import type { ToolExecution, PendingTool, ToolCancellation } from './types';
 import { copyToClipboard } from '@/utils/clipboard';
-import { CopyValueButton } from '@/components/shared/Button';
+import { ButtonLink, CopyValueButton } from '@/components/shared/Button';
+import { aiChatStore } from '@/stores/aiChat';
 import { getToolCallResultTextClass } from '@/utils/patrolRunPresentation';
 import {
   getToolLabel,
+  canonicalToolActionURL,
   isPlaceholderToolInputSummary,
   parseToolCommandPreview,
   parseToolInputSummary,
@@ -330,6 +332,9 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   const inputText = createMemo(() => toolValueText(props.tool.input));
   const detailInputText = createMemo(() => toolDetailInputText(inputText(), props.tool.rawInput));
   const outputText = createMemo(() => toolValueText(props.tool.output));
+  const actionURL = createMemo(() =>
+    canonicalToolActionURL(props.tool.name, props.tool.success, outputText()),
+  );
   const inputSummary = createMemo(() =>
     parseToolInputSummary(inputText(), props.tool.name, props.tool.rawInput),
   );
@@ -545,6 +550,19 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
             </Show>
           </div>
         </div>
+
+        <Show when={actionURL()}>
+          <div class="border-t border-border-subtle px-3 py-2">
+            <ButtonLink
+              href={actionURL()}
+              size="sm"
+              variant="secondary"
+              onClick={() => aiChatStore.close()}
+            >
+              Review action
+            </ButtonLink>
+          </div>
+        </Show>
 
         <Show when={showInlineOutputPreview()}>
           <div class="border-t border-border-subtle bg-surface-alt">

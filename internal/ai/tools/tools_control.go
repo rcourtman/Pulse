@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -127,17 +128,20 @@ func (e *PulseToolExecutor) executeControlResource(ctx context.Context, args map
 		}
 	}
 	return NewJSONResult(map[string]interface{}{
-		"planned":           true,
-		"action_id":         plan.ActionID,
-		"resource_id":       resourceID,
-		"resource_name":     target.displayName(),
-		"requested_action":  action,
-		"capability":        capability,
-		"requires_approval": plan.RequiresApproval,
-		"approval_policy":   plan.ApprovalPolicy,
-		"plan_hash":         plan.PlanHash,
-		"expires_at":        plan.ExpiresAt,
-		"message":           "Typed action planned. Pulse owns approval, execution, and verification from here; do not ask the user to run the action manually.",
+		"planned":             true,
+		"plan":                plan,
+		"action_url":          "/actions?action=" + url.QueryEscape(plan.ActionID),
+		"execution_requested": false,
+		"action_id":           plan.ActionID,
+		"resource_id":         resourceID,
+		"resource_name":       target.displayName(),
+		"requested_action":    action,
+		"capability":          capability,
+		"requires_approval":   plan.RequiresApproval,
+		"approval_policy":     plan.ApprovalPolicy,
+		"plan_hash":           plan.PlanHash,
+		"expires_at":          plan.ExpiresAt,
+		"message":             "Plan saved in Pulse Actions. This tool did not request execution. Approval and execution are separate recorded steps. The current Actions review provides the approval and run controls. Read pulse_query with action=action and this action_id for the current persisted decision and outcome. Only that recorded action outcome can establish execution and independent verification.",
 	}), nil
 }
 

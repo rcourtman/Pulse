@@ -59,7 +59,7 @@ func (e *PulseToolExecutor) registerKnowledgeTools() {
 Actions:
 - remember: Save a note about a resource for future reference
 - recall: Retrieve saved notes about a resource
-- incidents: Read retained canonical resource history, including observed state changes, alerts and executed actions. Records preserve observation time, source and any known occurrence time. This is not continuous health or filesystem-capacity coverage. Use pulse_summarize for retained metrics.
+- incidents: Read retained canonical resource history, including observed state changes, alerts and executed actions. Records preserve observation time, source and any known occurrence time. This is not continuous health or filesystem-capacity coverage. Use pulse_summarize for retained metrics. For a specific action decision or verified execution outcome, use pulse_query action=action with its action_id. Missing timeline events do not prove an action was never executed.
 - correlate: Get correlated events around a timestamp
 
 Examples:

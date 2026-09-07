@@ -3,7 +3,6 @@ package chat
 import (
 	"context"
 	"testing"
-	"time"
 )
 
 func TestAbortSession(t *testing.T) {
@@ -49,25 +48,5 @@ func TestResolvedContext_TouchInitializesMap(t *testing.T) {
 	}
 	if _, ok := ctx.lastAccessed["node:1"]; !ok {
 		t.Fatalf("expected access time to be recorded")
-	}
-}
-
-func TestSessionFSM_CleanupExpiredRecoveries(t *testing.T) {
-	fsm := &SessionFSM{}
-	fsm.cleanupExpiredRecoveries()
-	if fsm.PendingRecoveries == nil {
-		t.Fatalf("expected pending recoveries to be initialized")
-	}
-
-	now := time.Now()
-	fsm.PendingRecoveries["old"] = &PendingRecovery{CreatedAt: now.Add(-2 * RecoveryTTL)}
-	fsm.PendingRecoveries["new"] = &PendingRecovery{CreatedAt: now.Add(-time.Minute)}
-
-	fsm.cleanupExpiredRecoveries()
-	if _, ok := fsm.PendingRecoveries["old"]; ok {
-		t.Fatalf("expected expired recovery to be removed")
-	}
-	if _, ok := fsm.PendingRecoveries["new"]; !ok {
-		t.Fatalf("expected recent recovery to remain")
 	}
 }

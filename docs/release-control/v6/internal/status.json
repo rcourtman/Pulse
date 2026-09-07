@@ -3011,7 +3011,7 @@
     },
     {
       "id": "RA29",
-      "summary": "Pulse intelligence comes from the operator-selected large language model using governed Pulse tools over data the model cannot reach on its own: agent-collected machine evidence, canonical APIs, metrics, discovery records, and resource state. Interactive Pulse Assistant chat therefore behaves like a governed LLM tool surface, not a Pulse-authored intent router: the operator's selected model receives the user turn and governed tools, decides whether tools are needed, and Pulse must not use prompt heuristics to force tool_choice, force a named tool, retry because an expected tool was not used, hide tools from the model by keyword detection, rewrite recent-context turns into Pulse-targeted instructions, fuzzy-match plain chat text into resource context before the model acts, synthesize/prefill/auto-submit product-authored Assistant prompts from handoffs, keyword-match prior remediation history into suggested fixes, or generate Patrol handoff attention/decision/remediation guidance before the model reasons. Pulse only provides current context and enforces approvals, resource resolution, FSM gates, and tool policy after that model choice; any model-visible policy block must describe the boundary without naming a required next tool. The chat surface must echo user messages before network/session creation finishes and must not render Pulse-owned explore or internal workflow status cards as assistant output.",
+      "summary": "Pulse intelligence comes from the operator-selected large language model using governed Pulse tools over data the model cannot reach on its own: agent-collected machine evidence, canonical APIs, metrics, discovery records, and resource state. Interactive Pulse Assistant chat therefore behaves like a governed LLM tool surface, not a Pulse-authored intent router: the operator's selected model receives the user turn and governed tools, decides whether tools are needed, and Pulse must not use prompt heuristics to force tool_choice, force a named tool, retry because an expected tool was not used, hide tools from the model by keyword detection, rewrite recent-context turns into Pulse-targeted instructions, fuzzy-match plain chat text into resource context before the model acts, synthesize/prefill/auto-submit product-authored Assistant prompts from handoffs, keyword-match prior remediation history into suggested fixes, or generate Patrol handoff attention/decision/remediation guidance before the model reasons. Pulse only provides current context and enforces approvals, canonical resource resolution, explicit budgets, tool policy and independent action verification after that model choice; any model-visible policy block must describe the boundary without naming a required next tool. The chat surface must echo user messages before network/session creation finishes and must not render Pulse-owned explore or internal workflow status cards as assistant output. Generic read/write sequences, proposal acceptance, successful-call counts and failed-call streaks must not stand in for diagnosis, verified recovery or action judgment. Saved history preserves the assistant prose actually streamed.",
       "kind": "invariant",
       "blocking_level": "repo-ready",
       "proof_type": "automated",
@@ -3032,7 +3032,7 @@
             "./internal/ai/chat",
             "./internal/api",
             "-run",
-            "TestBuildPatrolRunAssistantHandoffUsesBackendSafeRunContext|TestFSM|TestService_ExecuteStream_InteractiveChatLetsModelChooseTools|TestHandleChat_|TestContract_AIHandler",
+            "TestBuildPatrolRunAssistantHandoffUsesBackendSafeRunContext|TestAgenticLoop_ModelPlansBulkLifecycleWithoutSyntheticVerification|TestAgenticLoop_ModelMayConcludeWithoutAnAction|TestAgenticLoop_AllowsModelClarificationBeforeAnyRead|TestAgenticLoop_RepeatedCallsRemainAvailableWithinExplicitBudget|TestService_ExecuteStream_InteractiveChatLetsModelChooseTools|TestHandleChat_|TestContract_AIHandler",
             "-count=1"
           ]
         },
@@ -3356,6 +3356,11 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/ai/chat/agentic_action_gate_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/ai/chat/agentic_additional_test.go",
           "kind": "file"
         },
@@ -3381,16 +3386,6 @@
         },
         {
           "repo": "pulse",
-          "path": "internal/ai/chat/fsm.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/ai/chat/fsm_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
           "path": "internal/ai/chat/read_routing_hints.go",
           "kind": "file"
         },
@@ -3412,6 +3407,11 @@
         {
           "repo": "pulse",
           "path": "internal/ai/chat/service_tooling_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/chat/tool_kind.go",
           "kind": "file"
         },
         {
@@ -10201,7 +10201,7 @@
     },
     {
       "id": "patrol-assistant-customer-outcome-qualification",
-      "summary": "The redesign goal remains open. The executable plan and source-bound historical receipts are in docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md. Ownership, evidence/history/risk corrections and removal of proposal-as-proof and proxy diagnosis rules have landed through PR1928/1929/1934/1935 and PR1951, with enterprise broker refusal handling in PR22. The telemetry baseline of 127 paid installations, 71 Patrol-enabled and 23 with Assistant usage does not establish linked customer effectiveness. Real Gemini storage, healthy, dependency, approved-restart and rejected-restart cases passed their named semantic oracles and cleanup. Native filesystem evidence preserves capacity, inodes, source, observation time and unavailable errors. Shared history WAL isolation, indexed paging and incremental replay passed race and bounded functional qualification. Current linked completed/rejected/expired actions and Assistant attached/cleared context passed browser matrices at 1440, 900 and 390 pixels in PR1951. The next slice aligns Proxmox planning and dispatch with unique credential-admitted typed runners and preserves explicit bearer identity under development admin bypass. A first live typed VM110 start and restoration stop both completed with independent Proxmox confirmation. A repeated run exposed a separate shared timestamp contract bug: small positive agent clock skew discarded the completed result and left receipt-pending state. The exact action was closed with inconclusive truth after independent fixture restoration. The uncommitted canonical correction preserves original observer/receiver timestamps, removes Docker and host-update clamping, and bounds Proxmox readback freshness without discarding execution. Final worker shared-evidence and API race proofs passed, followed by a source-bound Darwin enterprise build. The repeated VM110 start and restoration stop both completed with independent Proxmox confirmation and retained terminal native receipts. Pending/completed VM reviews and retained completed/rejected/expired Docker reviews passed final-build Playwright and pixel inspection at 1440, 900 and 390 pixels. Both temporary credentials, services and tunnel were removed, production agent identity was preserved, read-only control was restored and a fresh missing-runner plan refused with HTTP409. This bounded homelab qualification does not qualify the full redesign or autonomous modes. Missing-access q-20260907-074158-110e8868 safely refused execution and retained unknown cause, but proposal capture precedes availability validation, so the model could not incorporate the refusal in its conclusion. The next model-context work must expose canonical current readiness before the decision and preserve submission truth. Assistant still treats a prepared action as an executed write, forces redundant verification, and overwrites retained prose with an internal instruction. Canonical action lifecycle must own execution and verification truth. Remaining scope includes pre-dispatch/reconciliation failure truth, responsive mount details, incident-memory listing/aliases and failed-read propagation, unsupported filters, typed compatibility lookup, legacy direction availability, Docker-host history, backup coverage, broader model qualification and startup latency. Autonomous modes remain unqualified. Independent volunteered Pro environments remain a wider-readiness gate. The explicit Claude subscription refusal was not retried. Do not mark the goal or candidate complete from this one homelab.",
+      "summary": "The redesign remains open. The executable plan, evidence-backed contract, honest telemetry baseline and source-bound historical receipts are in docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md. Evidence/history/risk corrections landed through PR1928/1929/1934/1935/1951 and enterprise PR22. PR1955 merged as 62f6931c1fc2e46511876139ea20904752ea208c with typed Proxmox runner admission, preserved clock provenance, independent VM110 start/stop confirmation and final-build action-review Playwright proof at 1440, 900 and 390 pixels. Temporary fixtures were removed and a missing-runner plan refused with HTTP409. The current continuation slice removes the generic resolve/write/verify machine, semantic lifecycle-request correction, question/read counters, repeated-call and failed-turn proxies, and inferred self-correction metrics. Chat race and tool-package proofs pass. The source-bound worker enterprise build is installed for required real-model and browser qualification, which is not yet complete. Canonical planning acceptance/refusal must still move inside the investigation tool turn, retain persisted action references across provider failures and separate planning from policy-authorized progression. Scenario-owned expected-refusal scoring and the remaining healthy/unhealthy/dependency/missing-access/storage-or-backup/approved/rejected live matrix remain required. Historical incident-memory, unsupported-filter, compatibility, backup, autonomy and startup-latency gaps must be reconciled against current evidence rather than silently counted complete. Adoption counts of 127 paid installations, 71 Patrol-enabled installations and 23 Assistant users do not measure effectiveness. Fourteen verified resolutions from one installation do not establish population diagnosis, false-alarm, missed-problem or latency rates, which remain unknown. Autonomous modes and independent volunteered Pro environments remain unqualified wider-rollout gates. Preserve the explicit subscription-provider refusal without retry or bypass. Do not close this gap or the candidate while required qualification remains unperformed.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-09-05",
@@ -10401,7 +10401,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "patrol-planning-continuation-coverage-gap-patrol-assistant-customer-outcome-qualification",
+      "agent_id": "patrol-planning-continuation",
+      "summary": "Canonical planning inside the model tool turn, model-owned continuation and exact refusal/outcome qualification",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-09-07T11:10:27Z",
+      "heartbeat_at": "2026-09-07T12:29:13Z",
+      "expires_at": "2026-09-07T16:29:13Z",
+      "work_item": {
+        "kind": "coverage-gap",
+        "id": "patrol-assistant-customer-outcome-qualification"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

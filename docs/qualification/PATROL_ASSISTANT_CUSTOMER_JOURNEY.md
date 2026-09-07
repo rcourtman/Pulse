@@ -2773,3 +2773,262 @@ waiving unexpected errors. Retain semantic review against independent ground
 truth, as the earlier storage false diagnosis demonstrated. Population-level
 diagnosis, false-alarm, missed-problem and end-to-end latency rates remain unknown
 from adoption and outcome buckets alone.
+
+### Canonical planning and model-owned continuation, 2026-09-07
+
+This is the active implementation slice after the typed-runner handoff. The
+runner and clock-evidence change is committed as `2a7019b0fa02587446e55af3838603d1c6924dba`
+in PR #1955, merged as `62f6931c1fc2e46511876139ea20904752ea208c`
+on 2026-09-07 at 11:29 UTC. Its worker, disposable VM and browser proof is
+complete, and the local default branch includes the merge. Its historical proof
+does not qualify the changes below.
+
+Required boundaries (the independent continuation removal is being qualified
+first, followed by canonical planning and linked progression):
+
+1. Expose current executor-owned readiness beside canonical capability schemas.
+   Recheck admission inside the canonical planner. Unknown readiness stays
+   unknown and no catalog lookup grants execution authority.
+2. Persist a canonical action plan during the proposal tool call and return its
+   exact identity or refusal to the model. Remove the request-local proposal
+   fingerprint, ambiguity and failed-attempt judgment machine. Keep trusted
+   finding/investigation identity, sensitive-parameter refusal and canonical
+   idempotency. Classify plan persistence as a Pulse-state write, with only that
+   named write permitted to the investigation profile.
+3. Keep policy-authorized progression separate from planning. Continue the same
+   action reference through investigation, Assistant, decision and independently
+   verified outcome. A provider failure cannot erase a persisted action or
+   convert it into executed recovery.
+4. Remove generic resolve/write/verify gating, semantic lifecycle-request
+   detection and first-tool-before-question counters. Remove forced completion
+   based on proposal acceptance, successful writes or failed-tool counts.
+   Preserve explicit run/evidence/spend budgets, cancellation, invocation policy,
+   canonical target binding and independent action verification.
+5. Qualify expected refusals against scenario-owned truth without permitting
+   unexpected failures. Mechanical keyword/count checks are not semantic
+   diagnosis proof. Run affected regression and race suites on the worker, then
+   inspect actual real-model conclusions and independent lab outcomes.
+
+The final-build interaction matrix covers `/patrol`, contextual Assistant and
+exact `/actions?action=...` links at 1440x1000, 900x1000 and 390x1000. Exercise
+unknown cause and unavailable execution, pending approval, rejected and completed
+actions, retained provider failure, attached context, new/existing sessions,
+expanded tool evidence, reload, keyboard focus, Escape, outside dismissal,
+scrolling and focus return. Inspect pixels and the persisted transcript after
+the last source change. Record model, source hashes, permission posture, known
+faults and healthy controls, latency, cost limits, action IDs and cleanup.
+
+Required negative regressions include readiness loss between lookup and plan,
+same-plan replay without a duplicate action, conflicting requests without
+erasing an existing plan, provider failure after persistence, a valid no-action
+conclusion after refusal, and unchanged tenant/control/approval restrictions.
+Live qualification must include healthy, unhealthy, dependency, missing-access,
+storage-or-backup, approved and rejected cases. Existing passes are historical
+until their affected contracts are requalified. The subscription refusal remains
+untouched. Wider rollout still requires independent volunteered environments.
+
+Measurement interpretation is explicit: the previously recorded 127 paid
+installations, 71 Patrol-enabled installations and 23 Assistant users measure
+adoption. Fourteen verified resolutions from one installation do not establish
+a population success rate. Useful-diagnosis, false-alarm, missed-problem and
+end-to-end latency population baselines are unknown. Named lab observations
+and reviewed action postconditions provide local evidence with their own
+denominators, never substitutes for those missing population measurements.
+
+### Continuation removal in progress, 2026-09-07
+
+The first independent source slice removes the generic Assistant workflow
+state machine, semantic lifecycle-request correction, first-read-before-question
+counter, repeated-call counter and three-error forced stop. It also removes
+inferred self-correction counters. Explicit budgets, cancellation, canonical
+invocation/target policy and approval/execution verification are retained.
+Preparing a plan leaves investigation tools available and never creates a
+synthetic verification episode. Streamed prose is preserved in saved history.
+
+The first worker compile exposed three leftover references in tests and one
+unused local variable. These were repaired. The next package run was explicitly
+aborted after its old interaction corpus waited for an unanswered first-turn
+question. Its stack confirmed `executeQuestionTool`, not a runtime deadlock.
+That scenario now supplies an answer through `Service.AnswerQuestion` and has a
+10-second context deadline. Neither failed attempt counts as qualification.
+The fresh chat/tools package run, current-build real-model proof and browser
+matrix are still pending. Canonical planning in the tool turn and the remaining
+live scenario matrix are not implemented by this slice.
+
+Preliminary real-model evidence from the first continuation build is not final
+qualification. Gemini session `3a64ec04-fdd4-491c-a160-eab905554c02` selected the
+canonical VM, attempted planning, received the actual missing-runner refusal and
+explained it without claiming execution. The run took 7.813 seconds and cost
+$0.017526 (21,618 input and 350 output tokens). A proof-script session read used
+the wrong URL suffix, then recovered `/messages` without repeating inference.
+
+The disposable VM plan in session `f778f25e-ddce-4b35-9563-b791134cf26d` took
+9.552 seconds and remained pending approval without a synthetic verification
+turn. Its prose nevertheless implied that approval would automatically execute
+the admin-class VM action. Actual Actions UI requires a separate Run for this
+class. The typed control result only said Pulse owned the remaining workflow.
+It now returns the complete canonical plan, an exact action URL and explicit
+`execution_requested: false`, with factual separation of approval, execution
+and independently recorded outcome. This is a tool-context correction, not a
+harness rule judging or rewriting the model's answer.
+
+The first rejected-state browser check also failed because the local embedded
+frontend directory copied into that build predated the current frontend source.
+The browser showed the rejected action in History but lacked the current review
+header. Rebuild embedded assets from the exported source before repeating the
+entire affected matrix. This packaging failure is not counted as a UI pass.
+Action `act_268983bb9d1f1705c9fd871419ddcf73` was rejected without execution,
+VM110 stayed stopped, both temporary services and tokens were removed, and
+read-only control was restored. Final-source proof remains pending.
+
+The second bundled build bound 4,843 source/module/frontend files and passed
+chat/tools race suites plus action lifecycle regression. Its missing-runner
+session `bd322787-3c1d-450b-82c1-7129e3ac0298` explained the refusal in 8.795
+seconds. Saved-history browser inspection found another real semantic defect:
+the canonical plan call was labelled `run command`, and backend progress called
+it execution. The shared tool presentation and live progress now explicitly
+identify preparation of an action plan. Permission classification is unchanged.
+This source change requires fresh build and browser proof before landing.
+
+Two browser-script assumptions were also corrected without changing the
+product: Assistant is explicitly reopened after reload, and the full-width
+mobile panel is dismissed through its close control or Escape because no
+backdrop pixels are exposed. Desktop backdrop dismissal and keyboard focus
+return remain applicable checks. Script failures do not count as passes.
+
+#### Rejected local qualification, final continuation source r4
+
+Binary `ed9aba14161fba582ab39ec129969f8ffb49a84d49bf0f48648736e80a713dd8`
+matched 4,843 source/module/frontend files. Worker chat race tests passed in
+13.757 seconds, both tool-presentation files passed 62 tests and the frontend
+build passed. An earlier repeated build was rejected because a transfer put six
+changed files under a nested directory. Byte comparisons found that mismatch
+before installation, and the duplicate files were removed after correct transfer.
+
+Missing-runner session `dbf9e9f2-e923-46de-aef9-b3a44aef4fb2` took 12.763
+seconds, returned the actual planning refusal and created no action. Saved
+history at `/patrol` rendered the plan attempt accurately at 1440x1000,
+900x1000 and 390x1000. Expanded evidence, keyboard opening, Escape/focus return,
+reopening, reload and applicable backdrop/close dismissal passed.
+
+Session `e29a3169-475d-46d9-ac4a-2f7547cb1cc1` prepared action
+`act_3df7160a0611c2628fbbeca8099b681e` in 8.563 seconds. Its rejection caused
+no execution, independently checked through Proxmox. Assistant explained the
+rejection in 5.861 seconds and created no further action. When explicitly asked
+again, it prepared `act_b8a46526da0b24adf6c0c6af195e88cb` in 5.158 seconds.
+The latter was approved, executed and independently verified running. Actions
+review passed pending, rejected and completed states at all three widths,
+including expanded policy, observer and delivery details, dismissal and reload.
+
+The Assistant continuation **failed**. Asked for the completed action's outcome,
+it queried cached resource inventory and the resource timeline, then stated
+that the action was never approved or executed and the VM had remained offline.
+The canonical action record and independent Proxmox observer contradicted that
+claim. The absence of a current action-audit read capability was a real shared
+evidence-access gap. Passing execution and browser assertions did not qualify
+that model conclusion. The response took 7.992 seconds.
+
+The next source revision adds `pulse_query action=action` with an exact
+`action_id`. It reads the tenant-pinned canonical audit, retaining full plan
+risk/context and canonical `ActionResultV2` observation provenance, while
+excluding request parameters, credential bindings and raw driver output. Tool
+context names the difference between recorded action outcome, inventory and
+incomplete resource history. The model owns whether and how to investigate
+those facts. Generic progress no longer infers infrastructure execution from
+a write classification. Requalify the entire affected continuation matrix.
+
+Restoration action `act_be3a853728b4e872ea44b7f179ebe22f` independently
+verified VM110 stopped. Both temporary services, credentials and the reverse
+SSH tunnel were removed. Read-only control was restored and the production
+agent was unchanged. Receipts and failed transcripts remain in workspace
+`tmp/patrol-planning-continuation/vm-transaction-r4-outcome-access-failure.json`.
+
+#### Action outcome access qualification, r5
+
+Binary `6854b7155caafd289cd7f2ff1ad975f952e2f9204e870f90c0793c0dc5f1a65a`
+matched 4,845 source/module/frontend files. Chat race proof passed in 13.848
+seconds. The tools race suite passed in 62.414 seconds after a new fixture was
+corrected to include its required actor identity. Final action-read regression
+passed after the recorded-decision projection was added. Both presentation
+files passed 63 tests, and the frontend build passed.
+
+The previously failed session read the canonical completed action and its
+independent observer evidence correctly in 6.972 seconds, without creating an
+action. A fresh missing-runner session
+`211cbaa5-fbd3-49b5-b622-8d7f416b35d2` returned the actual refusal in 11.787
+seconds. Fresh VM session `4bb71619-a39d-475f-ad2e-5996417cc3c6` took 12.074
+seconds to prepare `act_43dd318fa8577d79167a6f66b2460907`, 8.799 seconds to
+explain its recorded rejection, 7.712 seconds to prepare the explicitly requested
+replacement `act_9bdd65533a8c0d1e526845012a931b10`, and 5.965 seconds to explain
+its approved, executed and independently confirmed running outcome. The latter
+two explanation turns chose the canonical action query. Neither explanation
+created another plan. These are five named successful model turns plus one
+retrospective outcome read, not population success or latency estimates.
+
+Restoration `act_31ea9abb7591c83f466055a4eacd5abe` independently confirmed
+VM110 stopped. Both fixture services and tokens, the reverse tunnel and the
+temporary control-level change were restored. This proves local execution and
+model continuation for this bounded VM fixture only.
+
+The saved-history browser pass exposed clipped inline action URLs at 390 pixels.
+The shared Assistant markdown styling now wraps inline code, and canonical plan
+and outcome tool cards expose a native `Review action` link derived from their
+bound action ID rather than a model-authored destination. Opening it closes the
+Assistant overlay before Actions review. This frontend-only correction requires
+fresh browser qualification. It does not change the already checked model or
+backend source. Existing sessions remain available through Recent Assistant
+sessions after reload. The browser receipt must explicitly resume and re-read
+that saved session, rather than count the transient empty bootstrap as a pass.
+
+#### Final Assistant presentation proof, r6
+
+The final bundled binary is
+`db840916eb4adec3c8c0d916bda4dd7d7ce7588ed5fc9c4be4ba9f8d1a1584d4`.
+Its manifest binds 4,845 source/module/frontend files. Compared with r5, only
+`MessageItem.tsx`, `ToolExecutionBlock.tsx` and `toolPresentation.ts` changed.
+Model-facing Go source is byte-identical to the r5 real-model and disposable-VM
+proof. Final targeted frontend verification passed 292 tests in four files,
+and the final bundled frontend build passed. A lint attempt against a plain
+source export failed because the planning-docs check requires Git. It is not a
+passing hook receipt. Landing hooks must run against the exact staged tree in
+a real worker checkout.
+
+At `/patrol`, the missing-runner and verified-VM sessions were reopened from
+Recent Assistant sessions at 1440x1000, 900x1000 and 390x1000. The browser
+verified the exact session read on initial resume and again after reload,
+expanded every tool card, scrolled the saved conversation and inspected actual
+pixels. Inline action identifiers and URLs now wrap within the mobile message
+area. Keyboard launch, Escape and focus return, reopening, desktop backdrop
+dismissal and mobile close dismissal passed. The verified-VM native `Review
+action` link closed Assistant and opened the exact completed action review at
+all three widths. The browser waits for the dialog opening animation before
+capturing its pixels. Earlier captures taken mid-animation are not evidence of
+a stable rendered state.
+
+The script and screenshot receipts are retained under workspace
+`tmp/patrol-planning-continuation/assistant-browser`, with labels
+`no-runner-r6` and `verified-vm-r6`. The temporary VM fixture remains stopped,
+its credentials and services removed, and development control remains read-only.
+This closes the affected Assistant continuation and presentation slice only.
+Patrol canonical planning during the model turn, proposal-capture retirement,
+request identity binding and the complete fresh diagnostic scenario matrix
+remain required work. The subscription-provider refusal remains preserved.
+No population reliability estimate or production-wide readiness follows from
+this one-maintainer fixture.
+
+Final r6 action-review regression also passed the rejected start, completed
+start and completed restoration-stop deep links at all three widths. Policy,
+independent observer and delivery disclosures, nested scrolling, keyboard
+activation, Escape, explicit close and persisted reload were exercised.
+
+The first exact-tree landing hook rejected stale public architecture claims
+about the removed look-before-asking counter. Both Assistant architecture pages
+and their shipped mirrors now describe the canonical permission and evidence
+boundaries. The corresponding drift test retains the real tool-kind and
+concurrency contracts and removes the retired state-machine checks. Playwright
+opened `/docs/ASSISTANT_SAFETY` and `/docs/ASSISTANT_ARCHITECTURE` against the
+current Vite build at 1440x1000 and 390x1000, checked linked navigation, reload,
+end-of-document scrolling, actual pixels and absence of horizontal overflow.
+Receipts are in `tmp/patrol-planning-continuation/docs-browser`. The pinned
+worker formatter also restored indentation in an unchanged preflight helper.
+That formatting-only difference does not change the qualified runtime behavior.

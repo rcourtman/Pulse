@@ -760,17 +760,13 @@ Patrol investigation profiles do not. A successful proposal remains
 `uncovered/observer_proposed`: this tool has no validator, installer, execution,
 health-lease, or infrastructure-action authority. It remains a governed write
 for invocation policy, but its returned revision and observer identity are the
-authoritative persisted Pulse-state record; like Patrol finding-lifecycle
-writes, it neither enters nor satisfies the infrastructure read-after-write
-FSM. This separation prevents a non-executable proposal from trapping a Watch
-run in a verification loop while preserving mandatory verification after any
-real infrastructure mutation.
-In the detection profile, a scoped objective-planning run may execute
-`patrol_propose_observer` directly from `RESOLVING` because core supplied the
-exact objective identity and current optimistic revision and the store
-revalidates both atomically. That exception does not apply to finding writes,
-interactive or investigation profiles, or `VERIFYING`; an observer proposal
-can never bypass verification owed by a real infrastructure mutation.
+authoritative persisted Pulse-state record. It cannot establish infrastructure
+recovery. The objective identity and optimistic revision are supplied by core
+and revalidated atomically by the store. The scoped objective mission has one
+permitted handoff, after which its remaining turn explains that persisted
+scheduling decision. Interactive and investigation profiles cannot invoke this
+objective write. Real infrastructure outcomes require canonical independent
+verification, regardless of later model reads or claims.
 The proposal also carries a closed `evidence_fit` classification. `direct`
 means the predicate itself measures the full retained outcome; `proxy` means it
 is a useful correlated wake signal only. Core validates, installs, evaluates,
@@ -891,7 +887,7 @@ cheap local detection into model-owned diagnosis and governed action.
 13. `internal/agentcapabilities/events.go` shared with `api-contracts`: the Pulse Intelligence event vocabulary is both the canonical API SSE event contract and the AI runtime adapter notification contract for Assistant and external-agent surfaces.
 14. `internal/agentcapabilities/governance_prompt.go` shared with `api-contracts`: the Pulse Intelligence surface-affordance-resolved model-facing operating-instruction, tool-governance prompt, reusable provider-tool governance description, Assistant-native offered-tool filtering, and Assistant-native interactive question-tool governance projections are both the Assistant system-prompt governance section and the shared API/agent vocabulary for action mode, approval posture, MCP affordance advertisement, and non-registry interaction-tool boundaries.
 15. `internal/agentcapabilities/http.go` shared with `api-contracts`: the Pulse Intelligence agent HTTP substrate is both the API capabilities invocation contract and the shared AI runtime adapter execution primitive for MCP and reference agent clients.
-16. `internal/agentcapabilities/invocation.go` shared with `api-contracts`: the canonical registry-owned invocation descriptors (per-tool discriminator, enum-exact case coverage, closed workflow-kind and mutation-target vocabularies, deep-copied lookups, fail-closed classification with unknown targets denied at policy evaluation) are both the native Assistant/FSM safety-classification contract and the canonical API/agent governed-invocation policy contract consumed by provider projection and registry runtime enforcement; canonical tool names cannot carry descriptor overrides.
+16. `internal/agentcapabilities/invocation.go` shared with `api-contracts`: the canonical registry-owned invocation descriptors (per-tool discriminator, enum-exact case coverage, closed workflow-kind and mutation-target vocabularies, deep-copied lookups, fail-closed classification with unknown targets denied at policy evaluation) are both the native Assistant invocation safety-classification contract and the canonical API/agent governed-invocation policy contract consumed by provider projection and registry runtime enforcement; canonical tool names cannot carry descriptor overrides.
 17. `internal/agentcapabilities/manifest.go` shared with `api-contracts`: the canonical Pulse Intelligence agent capabilities manifest declaration, including capability display titles, manifest-owned finding lifecycle schemas, manifest-owned governed action schemas and routes, manifest-owned external-adapter surface tool contracts, and manifest-owned structured output schemas, is both the API discovery payload source and the AI runtime projection contract for Pulse Assistant and MCP-facing agent tools.
 18. `internal/agentcapabilities/markdown.go` shared with `api-contracts`: the Pulse Intelligence manifest Markdown projection, including manifest-owned capability titles, surface-filtered Pulse MCP tool/error inventories, and prompt labels, is both the canonical API/agent documentation projection and the AI runtime onboarding projection for Assistant-compatible external-agent surfaces.
 19. `internal/agentcapabilities/mcp.go` shared with `api-contracts`: the Pulse Intelligence MCP protocol version, JSON-RPC, method dispatch, method payload, surface-tool-contract-gated initialize operating-instruction and capability advertisement payload, manifest surface-filtered tools/list and tools/call execution bridge, manifest surface-gated resources/list and resources/read bridge, manifest-owned and surface-affordance-gated workflow prompt projection, protocol wire aliases, resource and prompt handler gates, and notification projection collectively define the external-agent adapter wire contract over the shared Pulse Intelligence tool core; MCP initialize, tools/call execution, resource list/read projection, and prompt list/get projection must enter through manifest-owned surface and workflow-prompt contracts so raw capability slices cannot bypass the published external-adapter contract.
@@ -905,7 +901,7 @@ cheap local detection into model-owned diagnosis and governed action.
 25. `internal/agentcapabilities/sse.go` shared with `api-contracts`: the Pulse Intelligence SSE subscription transport and record parser are both the canonical API event-stream consumption contract and the AI runtime adapter push bridge contract for MCP and reference agent clients.
 26. `internal/agentcapabilities/surface_contract.go` shared with `api-contracts`: the Pulse Intelligence operator-surface affordance contract, shared surface-affordance, surface-tool identity, Assistant surface tool filtering, normalized external surface tool resolver, surface lookup, affordance labels, and manifest-published external-adapter surface tool allowlist projection are both the canonical API manifest surface model and the AI runtime prompt and onboarding guardrail for Assistant and MCP-facing surfaces.
 27. `internal/agentcapabilities/text_tool_invocation.go` shared with `api-contracts`: the Pulse Intelligence text tool invocation parser, internal approval argument, and current_resource handle vocabulary are both the Assistant approved-action execution projection and the shared tool-call params bridge for governed Pulse Intelligence tool calls, with MCP tools/call compatibility staying at the adapter edge.
-28. `internal/agentcapabilities/tool_call.go` shared with `api-contracts`: the Pulse Intelligence shared tool-call params, normalization, validation, direct registry preparation, registry-entrypoint failure result helpers, and provider/registry tool-call safety classification are both the native Assistant execution/FSM contract and the canonical API/agent tools/call compatibility contract for governed Pulse Intelligence tool calls; the shared invocation-blocked result is the stable refusal for every profile-denied mutation (pulse-state and infrastructure alike).
+28. `internal/agentcapabilities/tool_call.go` shared with `api-contracts`: the Pulse Intelligence shared tool-call params, normalization, validation, direct registry preparation, registry-entrypoint failure result helpers, and provider/registry tool-call safety classification are both the native Assistant execution contract and the canonical API/agent tools/call compatibility contract for governed Pulse Intelligence tool calls; the shared invocation-blocked result is the stable refusal for every profile-denied mutation (pulse-state and infrastructure alike).
 29. `internal/agentcapabilities/tool_execution.go` shared with `api-contracts`: the Pulse Intelligence neutral capability tool HTTP execution helper and direct tool execution output/error mapper are both the Assistant-native direct execution contract and the canonical API/agent request/response execution contract, with MCP adapters consuming the neutral helpers only after the shared MCP manifest-surface execution bridge has applied the published surface tool contract.
 30. `internal/agentcapabilities/tool_marker.go` shared with `api-contracts`: the Pulse Intelligence Assistant tool marker vocabulary and approval/policy marker parser are both the Assistant structured tool-result compatibility contract and the canonical API/agent branching contract for governed tool outcomes.
 31. `internal/agentcapabilities/tool_names.go` shared with `api-contracts`: the Pulse Intelligence registry tool-name vocabulary is both the native Assistant execution/display contract and the canonical API/agent tool identity contract for MCP-facing external-agent adapters.
@@ -1380,8 +1376,8 @@ arguments, or pre-approved action replay semantics. Structured tool
 response envelopes, tool error-code vocabulary, the structured tool-result
 error-code parser, and the `verification.ok` evidence parser also live there
 so Assistant blocked/failed tool outcomes, provider call params, agent-facing
-tool failure contracts, FSM block/recovery codes, recovery tracking, and
-write-tool self-verification semantics cannot drift. The legacy-compatible Assistant tool markers
+tool failure contracts and structured verification payloads cannot drift.
+A tool verification payload is not independently verified action recovery. The legacy-compatible Assistant tool markers
 for approval-required and policy-blocked outcomes also live there, including
 the stable `APPROVAL_REQUIRED:` / `POLICY_BLOCKED:` prefixes, payload `type`
 values, formatter helpers, parser helpers, and the typed approval-required
@@ -1667,7 +1663,7 @@ tool-call artifact detection and streaming partial-tool-name holding must use
 `agentcapabilities.SplitTrailingProviderToolNamePrefix` with that shared catalog,
 so Assistant and future adapter boundaries do not fork DSML/XML/pipe/JSON/function
 leak semantics. Chat may own waiting for user answers, UI event
-emission, and FSM user-input behavior, but it must not carry a chat-local
+emission, and user-answer delivery, but it must not carry a chat-local
 provider schema, description, tool-list append rule, prompt-filter rule, parser,
 tool identity, or provider artifact detector for that interaction.
 That schema boundary is also a copy boundary: registry tool definitions must
@@ -3830,10 +3826,9 @@ resolve canonical/source IDs and unique aliases before collection, reject
    even when the model changes an unambiguous key spelling between runs.
 2. Keep AI runtime and shared API proof routing aligned in `registry.json`
 3. Preserve explicit coverage for chat, Patrol, remediation, and cost-control behavior when AI runtime changes. Interactive Assistant and Patrol tool selection must remain model-owned: Pulse may provide governed context, tools, approval state, resource-resolution facts, safety policy, and neutral resource-scoped action history, but it must not add prompt-keyword routers, expected-tool retries, auto-recovery tool calls, keyword-matched prior-fix suggestions, or Pulse-authored remediation/finding fallbacks that choose the next investigative or corrective action for the model.
-   Assistant FSM gates remain safety boundaries after the model chooses a tool:
-   repeated model attempts must not waive post-write verification or allow a
-   new state-changing tool before the model has supplied current verification
-   evidence through an allowed read/resolve path.
+   Canonical invocation policy and the action lifecycle own authorization and
+   independent verification. A successful follow-up read does not establish an
+   action outcome, and no generic read/write sequence grants action authority.
    Assistant restored-session and recent-session context is also model-bound
    context, not an identity-policy bypass: when the referenced unified resource
    is governed or redacted, backend context builders must use the resource
@@ -5669,7 +5664,7 @@ the selected model owns the decision to answer directly, ask a question, read
 context, or request an action. Pulse must not use prompt heuristics to force
 `tool_choice=any`, force a named tool, retry because an expected tool was not
 used, or hide tools from the model based on keyword detection. Pulse
-enforcement starts after that model choice: approval mode, FSM gates, strict
+enforcement starts after that model choice: approval mode, strict
 resource resolution, and tool policy remain the safety boundary.
 Session continuity context follows the same boundary: Pulse may provide
 neutral recent-resource facts and explicit resource addressing facts, but it
@@ -7817,17 +7812,13 @@ projection and therefore can remove tools but cannot add authority.
 
 The internal Patrol request bridge carries the explicit run limit, caller-owned
 tool allowlist and execution identity. It no longer carries an evaluator's
-signal-count-derived report budget. Each invocation receives a fresh
-infrastructure workflow FSM and resolved-resource context. Its stable session
-ID is a forensic-log key and cannot import prior-run read authority, resource
-aliases, validated targets or unfinished verification state.
-While that fresh FSM is resolving, Patrol state-only writes bypass the generic
-infrastructure read-before-write gate because their server-owned run adapters
-already validate exact finding scope, active finding identity, complete
-findings-read preconditions, or exact objective revision. The exception is
-limited to the Patrol detection profile and resolving state; infrastructure
-writes remain blocked, and a preceding infrastructure write's verification
-state can never be bypassed by a finding lifecycle call.
+signal-count-derived report budget. Each invocation receives fresh resolved
+resource context. Its stable session ID is a forensic-log key and cannot import
+prior-run resource aliases or validated targets. The generic infrastructure
+resolve/write/verify state machine is removed. Server-owned run adapters enforce
+exact finding scope, active identity, complete findings-read preconditions and
+objective revision. Invocation policy still forbids infrastructure mutations
+from detection and investigation profiles.
 
 An explicitly scoped Watch may carry related hosts or dependencies in its
 effective runtime snapshot as model evidence, but active, dismissed, and
@@ -7999,48 +7990,58 @@ Menu-opening controls remain buttons, and the mobile bar continues to own
 boundaries are unchanged. Mobile navigation and AppLayout tests pin the route
 and focus behavior.
 
-### Advertised lifecycle actions are submitted, never narrated
+### Model-owned continuation and canonical action authority
 
-When an operator asks the Assistant to perform a lifecycle action (start,
-stop, shutdown, reboot/restart) and a canonical resource the session has
-resolved advertises that capability, the Assistant submits `pulse_control`
-for each target and lets the shared action lifecycle decide availability
-through planning, approval, execution, and verification. It may report a
-limitation only from a tool result in the current turn; an assumed
-prerequisite (QEMU guest agent, "discovery binding", "session state") or a
-manual `qm`/`pct` instruction for an action Pulse offers is a contract
-violation (GitHub issue #1782). Three structural guarantees enforce this:
+Assistant chooses whether further evidence, clarification or a governed action
+is useful from the request and current evidence. Lifecycle words in user prose
+are not an instruction parser. No tool-count or read/write sequence decides
+whether the answer is acceptable. The runtime preserves exactly the assistant
+prose it streamed, including uncertainty or a no-action conclusion. It never
+replaces that saved answer with a provider-only correction.
 
-- `pulse_control` binds its `resource_id` to the canonical unified resource.
-  Session context is consulted first; a reference absent from the session
-  that resolves uniquely in the unified inventory is registered and planned,
-  an ambiguous name is refused with the candidate canonical ids, and a
-  lookup miss names the exact `pulse_query` recovery call. The plan request
-  carries the canonical unified id (never the session-scoped
-  `kind:host:uid`), and the legacy per-executor action list is not a gate:
-  whether the action exists is the action lifecycle's decision from the
-  resource's advertised capabilities (`internal/ai/tools/control_targets.go`).
-  A capability the resource does not advertise comes back as
-  `ACTION_NOT_ALLOWED` tool evidence listing the currently advertised
-  capabilities.
-- Recoverable ordering blocks (the RESOLVING FSM state, a strict-resolution
-  miss) name the read-only step to take first and state that they are not a
-  limitation to report; the shared operating instructions say the same and
-  require the governed action tool for advertised capabilities.
-- The agentic loop's advertised-action gate refuses, once per run, a
-  tool-free final answer when the operator's message requests a lifecycle
-  action, `pulse_control` was offered, no `pulse_control` call reached
-  execution, and at least one session-resolved resource currently advertises
-  the action. The refusal is a provider-only user-role correction naming the
-  exact calls per target; it fails open on the next prose answer so a model
-  with tool-evidenced reasons not to act is never livelocked
-  (`internal/ai/chat/agentic_action_gate.go`).
+The model must use canonical capability and readiness facts when explaining an
+action or limitation. Invented QEMU guest-agent or discovery-session prerequisites
+remain diagnosis defects to catch in real-model qualification (issue #1782).
+They are not repaired by regex-based instructions forcing a control call.
+`pulse_control` still binds a canonical resource through the shared target
+resolver, returns ambiguity or missing-resource evidence when resolution fails,
+and plans through the shared lifecycle. Approval requirements, tenant identity,
+current availability and independent verification remain canonical authorities.
+Typed control results retain the complete canonical plan (including approval
+requirements, preflight, related-resource scope and rollback facts), an exact
+Actions URL and `execution_requested: false`. Approval and execution are
+separate recorded steps, and the current Actions controls own their ordering.
+A prepared plan awaiting approval is not an executed write. A subsequent read,
+self-reported verification flag or successful call cannot establish recovery.
 
-Proofs: `internal/ai/tools/control_targets_test.go`,
-`internal/ai/chat/agentic_action_gate_test.go` (the #1782 transcript against
-a scripted provider), `internal/agentcapabilities/governance_prompt_test.go`,
-and the live eval `ProxmoxBulkLifecycleActionScenario` in
-`internal/ai/eval/scenarios.go`.
+`pulse_query action=action` reads an exact action ID from the tenant-pinned
+canonical audit. It retains the full plan, recorded decisions, origin and
+canonical `ActionResultV2`, including independent observer identity and timestamps.
+It exposes no request parameters, credential bindings or raw driver output.
+Missing records remain unavailable evidence. Cached inventory and absent timeline
+events cannot establish that an action was never approved or executed. The
+recorded postcondition is time-bounded evidence, not a current-health guarantee.
+
+The runtime retains the configured turn, evidence-call, token and spend limits,
+cancellation and registered invocation permissions. Repeated identical reads
+and several failed calls do not independently remove tools. These may be useful
+rechecks or evidence of missing access. The model chooses how to continue within
+those explicit limits. First-turn clarification is delivered through the normal
+interactive question protocol without demanding an unrelated read first.
+
+Removed metrics include workflow-machine blocks and inferred policy-block
+self-correction opportunities/success. Actual strict-resolution and routing
+refusal counts remain operational counters, not useful-diagnosis or recovery
+measurements. Independent action receipts and labelled qualification truth own
+outcome verification.
+
+Regression sources: `internal/ai/chat/agentic_action_gate_test.go`,
+`internal/ai/chat/agentic_look_gate_test.go`, `internal/ai/chat/agentic_test.go`,
+`internal/ai/tools/control_targets_test.go`. Current-source real-model and browser
+qualification is recorded in the customer-journey plan. Historical passes do
+not satisfy that gate. Patrol's request-local proposal capture and its forced
+final turn remain an explicitly unfinished boundary until canonical planning
+acceptance/refusal is returned inside the tool call.
 
 ### Alert-mirroring findings fold under the alert; flapping collapses to one row
 

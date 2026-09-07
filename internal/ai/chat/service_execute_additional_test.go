@@ -1793,7 +1793,6 @@ func TestService_ExecuteStream_RequestAutonomousOverrideClampsToolExecutor(t *te
 	if err != nil {
 		t.Fatalf("failed to create session store: %v", err)
 	}
-	store.GetSessionFSM("sess-request-override").State = StateReading
 
 	agentServer := &recordingAgentServer{}
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{

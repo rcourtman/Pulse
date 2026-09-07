@@ -1,6 +1,23 @@
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 
+export const canonicalToolActionURL = (name: string, success: boolean, output: string) => {
+  if (!success || (name !== 'pulse_control' && name !== 'pulse_query')) return '';
+  try {
+    const record = JSON.parse(output);
+    const canonical =
+      name === 'pulse_control'
+        ? record.planned === true
+        : record.source === 'canonical_action_audit';
+    const id = record.action_id;
+    if (!canonical || typeof id !== 'string' || !id || record.plan?.actionId !== id) return '';
+    return `/actions?action=${encodeURIComponent(id)}`;
+  } catch {
+    return '';
+  }
+};
+
 export const getToolLabel = (name: string) => {
+  if (name === 'pulse_control') return 'plan';
   if (name === 'run_command' || name === 'pulse_run_command') return 'cmd';
   if (name === 'fetch_url' || name === 'pulse_fetch_url') return 'fetch';
   if (name === 'get_infrastructure_state' || name === 'pulse_get_infrastructure_state')
@@ -21,7 +38,8 @@ const normalizedToolName = (name?: string) => (name || '').trim().replace(/^puls
 
 export const pendingToolActionLabel = (name?: string) => {
   const tool = normalizedToolName(name);
-  if (tool === 'run_command' || tool === 'control') return 'Writing command...';
+  if (tool === 'control') return 'Preparing action plan...';
+  if (tool === 'run_command') return 'Writing command...';
   if (tool === 'read') return 'Preparing read...';
   if (tool === 'query') return 'Preparing query...';
   if (tool === 'fetch_url') return 'Fetching URL...';
@@ -39,7 +57,7 @@ export const pendingToolActionLabel = (name?: string) => {
 
 export const pendingToolActionState = (name?: string) => {
   const tool = normalizedToolName(name);
-  if (tool === 'run_command' || tool === 'control') return 'writing';
+  if (tool === 'run_command') return 'writing';
   if (tool === 'query') return 'preparing';
   if (tool === 'fetch_url') return 'fetching';
   if (tool === 'get_disk_health') return 'checking';
@@ -433,6 +451,8 @@ const formatQueryInputSummary = (record: Record<string, unknown>) => {
   const node = inlineValue(stringField(record, ['node', 'host']));
 
   switch (action) {
+    case 'action':
+      return 'read recorded action outcome';
     case 'search':
       return query ? `search "${query}"` : 'search resources';
     case 'list':
@@ -482,6 +502,10 @@ const formatStructuredInputSummary = (
   }
 
   const tool = normalizedToolName(toolName);
+  if (tool === 'control' && record.type === 'resource') {
+    const action = stringField(record, ['action']);
+    return `${action ? `Plan ${formatIdentifierLabel(action)}` : 'Plan action'}${targetSuffix(record)}`;
+  }
   if (tool === 'read') {
     return formatPulseReadInputSummary(record) || 'read resource';
   }
