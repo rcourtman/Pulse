@@ -21,18 +21,21 @@ const SETTINGS_SHELL_ROUTES = [
   {
     route: '/settings/organization',
     title: 'Organization Overview',
+    mobileTitle: 'Overview',
     description: 'Review organization metadata, membership footprint, and ownership.',
     requiresMultiTenant: true,
   },
   {
     route: '/settings/organization/access',
     title: 'Organization Access',
+    mobileTitle: 'Access',
     description: 'Manage organization invitations, member roles, and ownership transfers.',
     requiresMultiTenant: true,
   },
   {
     route: '/settings/organization/billing',
     title: 'Billing & Usage',
+    mobileTitle: 'Billing',
     description:
       'Review your organization plan, applicable usage policies, and subscription status for paid access.',
     requiresMultiTenant: true,
@@ -50,13 +53,14 @@ const SETTINGS_SHELL_ROUTES = [
   },
   {
     route: '/settings/system-ai',
+    canonicalRoute: '/settings/pulse-intelligence/provider',
     title: 'Provider & Models',
     description:
       'Configure providers, default models, provider health, budget, and usage for Pulse Intelligence.',
   },
   {
     route: '/settings/system-updates',
-    title: 'Updates',
+    title: 'Pulse server updates',
     description:
       'Manage Pulse server runtime version checks, update channels, and automatic updates. Agent updates stay under Infrastructure.',
   },
@@ -144,8 +148,13 @@ test.describe('Settings shell consistency', () => {
         await expect(navigation).toBeHidden();
       }
 
-      const pageHeading = page.getByRole('heading', { level: 1, name: panel.title });
+      // The compact mobile header uses the navigation label, not the
+      // desktop page title (SettingsPageShell + settingsNavCatalog).
+      const title = isMobile && 'mobileTitle' in panel ? panel.mobileTitle : panel.title;
+      const pageHeading = page.getByRole('heading', { level: 1, name: title, exact: true });
       await expect(pageHeading, `${panel.route} should render the canonical page-shell heading`).toBeVisible();
+      const canonicalRoute = 'canonicalRoute' in panel ? panel.canonicalRoute : panel.route;
+      await expect(page).toHaveURL(new RegExp(`${canonicalRoute}$`));
       if (!isMobile) {
         // Panel descriptions are desktop-only copy (hidden sm:block).
         await expect(
