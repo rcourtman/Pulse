@@ -189,6 +189,20 @@ describe('DestinationsTab recovery while editing SMTP', () => {
       expect(screen.getByText('SMTP fixture rejected')).toBeInTheDocument();
       expect(NotificationsAPI.getDeliveryLog).toHaveBeenCalledTimes(1);
 
+      // Cancelling after a failure must not erase that evidence or start work.
+      vi.mocked(window.confirm).mockReturnValueOnce(false);
+      fireEvent.click(screen.getByRole('button', { name: label }));
+      expect(NotificationsAPI[action]).toHaveBeenCalledTimes(1);
+      expect(NotificationsAPI.getHealth).toHaveBeenCalledTimes(1);
+      expect(NotificationsAPI.getDeliveryLog).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('button', { name: label })).toBeEnabled();
+      expect(screen.getByRole('status')).toBe(status);
+      expect(status).toHaveTextContent('Unable to ' + verb);
+      expect(editor).toHaveFocus();
+      expect(editor).toHaveValue('unfinished.smtp.example');
+      expect(dirty).not.toHaveBeenCalledWith(false);
+      expect(screen.getByText('SMTP fixture rejected')).toBeInTheDocument();
+
       let accept!: (result: { success: boolean; affected: number }) => void;
       vi.mocked(NotificationsAPI[action]).mockReturnValueOnce(
         new Promise((resolve) => {
