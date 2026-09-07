@@ -1,20 +1,25 @@
 {
   "version": 1,
-  "base_sha": "09ab5c2d0ae6e02fcc5280853782a8142646e40f",
-  "verified_at": "2026-09-07T10:45:50.469666Z",
+  "base_sha": "62f6931c1fc2e46511876139ea20904752ea208c",
+  "verified_at": "2026-09-07T12:53:14.214716Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx"
+    "frontend-modern/src/components/AI/Chat/MessageItem.tsx",
+    "frontend-modern/src/components/AI/Chat/ToolExecutionBlock.tsx",
+    "frontend-modern/src/components/AI/Chat/toolPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx": "ea0301d5ee7bee7b064f8e7fd8db43a54a74bc4488c0a87285d7c52151a5e07b"
+    "frontend-modern/src/components/AI/Chat/MessageItem.tsx": "7716b32126cf0d6c8a3a02626fc8c6dd298d226d341ab96929b54e9a74a7c13f",
+    "frontend-modern/src/components/AI/Chat/ToolExecutionBlock.tsx": "b114cb8d0148c1a5fcded7bcf45c133e8dd331cbdc65b69afee48ab639918d84",
+    "frontend-modern/src/components/AI/Chat/toolPresentation.ts": "aa8f35614cc48559c01417039006d1c63877602ea931ae3e5a47acc5329eed8f"
   },
   "routes": [
-    "/actions?action=act_9ec8d575b777a5f8fc70561376a52381",
-    "/actions?action=act_3384576233bf55aa3182537ad02d81d4",
-    "/actions?action=act_7687850d214e9c5f7038a436c6cc2ff7",
-    "/actions?action=act_e5e1f06da3dc42215a97360731d7e36b",
-    "/actions?action=act_185eebf5dfc24652e6332881dbe94f6c"
+    "/patrol",
+    "/actions?action=act_43dd318fa8577d79167a6f66b2460907",
+    "/actions?action=act_9bdd65533a8c0d1e526845012a931b10",
+    "/actions?action=act_31ea9abb7591c83f466055a4eacd5abe",
+    "/docs/ASSISTANT_SAFETY",
+    "/docs/ASSISTANT_ARCHITECTURE"
   ],
   "viewports": [
     {
@@ -31,20 +36,23 @@
     }
   ],
   "states": [
-    "VM110 start and stop awaiting exact-plan approval",
-    "Completed VM110 start and stop with independent Proxmox verification",
-    "Expanded independent observer evidence with original observation and Pulse receipt labels",
-    "Expanded durable delivery record with agent-specific observation label",
-    "Retained completed Docker restart with independent evidence",
-    "Retained rejected Docker restart without execution controls",
-    "Retained expired Docker restart with refresh offered and no execution controls"
+    "Saved missing-runner planning refusal",
+    "Saved rejected action and explanation",
+    "Saved independently verified VM start outcome and explanation",
+    "Expanded canonical planning and outcome tool cards",
+    "Native exact-action review from Assistant with overlay closed",
+    "Rejected action and completed start/stop reviews",
+    "Expanded policy, independent observer and durable delivery details",
+    "Narrow inline action identifiers and URLs wrap within the message area"
   ],
   "interactions": [
-    "Inspect exact target identity, approval controls and planned state before API-authorized execution",
-    "Open and close policy evidence, evidence details and delivery identifiers using keyboard focus and Enter",
-    "Scroll nested action review and inspect readable evidence, wrapping, stacking and reachable footer at all widths",
-    "Close with Escape and explicit close control, reopen exact action link and reload persisted state",
-    "Inspect final pixels and verify no document horizontal overflow"
+    "Keyboard launch, Escape dismissal and launcher focus return",
+    "Resume exact saved session before and after reload, verify matching session GET",
+    "Expand every tool card, scroll conversation, inspect actual pixels",
+    "Keyboard activate native Review action, verify exact destination and usable dialog after animation",
+    "Desktop backdrop and narrow close-button dismissal",
+    "Action evidence disclosures with focus and Enter, nested scrolling, Escape, explicit close, deep-link reopen and reload",
+    "Inspect 1440, 900 and 390 pixel layouts, wrapping, stacking and absence of horizontal overflow"
   ],
-  "notes": "Final bundled development binary SHA256 c53f2e54e7ea510fc3abfbfbe164e74e363d3b1560aaa36a62df9fb1aaaf2c7d. Scripts, screenshots and raw dialog text are in workspace tmp/patrol-runner-readiness/browser and verify-action.mjs/verify-history.mjs. Browser requests were GET plus login only. Exact VM110 approvals and execution were performed separately through the canonical API, with independent Proxmox and SSH state checks and retained native receipts. Both temporary services, credentials and tunnel were removed and read-only control restored. Deep links have no initiating button for focus return. This receipt qualifies the named action-review change and adjacent rendered outcomes, not full Patrol/Assistant readiness."
+  "notes": "Final bundled binary SHA256 db840916eb4adec3c8c0d916bda4dd7d7ce7588ed5fc9c4be4ba9f8d1a1584d4. Runtime manifest matches 4,845 files. Only the three named frontend files differ from r5, whose model-facing backend passed fresh real-model refusal, rejection and independently verified VM execution/continuation proof. Final Playwright receipts and pixels are in workspace tmp/patrol-planning-continuation/assistant-browser (no-runner-r6, verified-vm-r6) and browser. Browser requests were reads plus login and existing provider readiness checks, with no action mutations. Temporary VM services, credentials and tunnel were removed and read-only posture restored. This receipt covers this continuation/presentation slice only. Remaining Patrol planning and diagnostic matrix qualification and independent-environment rollout evidence are still required. Architecture and safety documentation were subsequently corrected with their shipped mirrors, and inspected against the current Vite build at 1440x1000 and 390x1000, including navigation, reload and end-of-document pixels. Receipts are in docs-browser. Worker formatting changed indentation only in a Go preflight helper after the bundled proof."
 }

@@ -26,11 +26,6 @@ type SessionStore struct {
 	// because infrastructure state may have changed
 	resolvedContexts map[string]*ResolvedContext
 
-	// sessionFSMs holds per-session workflow state machines (in-memory only)
-	// These track the RESOLVING -> READING -> WRITING -> VERIFYING workflow
-	// to ensure structural guarantees (must discover before write, verify after write)
-	sessionFSMs map[string]*SessionFSM
-
 	// sessionToolSets holds per-session tool allowlists (in-memory only).
 	// These keep tool availability stable across turns while allowing additive expansion.
 	sessionToolSets map[string]map[string]bool
@@ -472,7 +467,6 @@ func NewSessionStore(dataDir string) (*SessionStore, error) {
 	store := &SessionStore{
 		dataDir:               sessionsDir,
 		resolvedContexts:      make(map[string]*ResolvedContext),
-		sessionFSMs:           make(map[string]*SessionFSM),
 		sessionToolSets:       make(map[string]map[string]bool),
 		knowledgeAccumulators: make(map[string]*KnowledgeAccumulator),
 		summaryCache:          make(map[string]sessionSummaryCacheEntry),
@@ -973,9 +967,8 @@ func (s *SessionStore) Delete(id string) error {
 	}
 	s.saveSummaryIndex()
 
-	// Also clean up resolved context, FSM, and knowledge accumulator
+	// Also clean up resolved context and knowledge accumulator
 	delete(s.resolvedContexts, id)
-	delete(s.sessionFSMs, id)
 	delete(s.sessionToolSets, id)
 	delete(s.knowledgeAccumulators, id)
 
@@ -1638,19 +1631,6 @@ func (s *SessionStore) GetResolvedContext(sessionID string) *ResolvedContext {
 	return ctx
 }
 
-// GetSessionFSM returns the workflow FSM for a session, creating one if needed
-func (s *SessionStore) GetSessionFSM(sessionID string) *SessionFSM {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	fsm, ok := s.sessionFSMs[sessionID]
-	if !ok {
-		fsm = NewSessionFSM()
-		s.sessionFSMs[sessionID] = fsm
-	}
-	return fsm
-}
-
 // GetKnowledgeAccumulator returns the knowledge accumulator for a session, creating one if needed.
 // For user chat sessions, this persists across messages (facts accumulate during a conversation).
 func (s *SessionStore) GetKnowledgeAccumulator(sessionID string) *KnowledgeAccumulator {
@@ -1675,21 +1655,6 @@ func (s *SessionStore) NewKnowledgeAccumulatorForRun(sessionID string) *Knowledg
 	ka := NewKnowledgeAccumulator()
 	s.knowledgeAccumulators[sessionID] = ka
 	return ka
-}
-
-// ResetSessionFSM resets the FSM for a session (e.g., after context clear)
-func (s *SessionStore) ResetSessionFSM(sessionID string, keepProgress bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	fsm, ok := s.sessionFSMs[sessionID]
-	if ok {
-		if keepProgress {
-			fsm.ResetKeepProgress()
-		} else {
-			fsm.Reset()
-		}
-	}
 }
 
 // AddResolvedResource adds a resolved resource to a session's context
@@ -1740,10 +1705,10 @@ func (s *SessionStore) ClearResolvedContext(sessionID string) {
 	delete(s.resolvedContexts, sessionID)
 }
 
-// ClearSessionState clears both resolved context and FSM coherently.
+// ClearSessionState clears the retained resource and conversation context.
 // This is the preferred method when clearing session state.
-// - keepPinned=false: Full reset (RESOLVING state, no resources)
-// - keepPinned=true: Keep pinned resources, FSM stays in READING if resources exist
+// - keepPinned=false: Clear resource bindings and retained model context.
+// - keepPinned=true: Keep explicitly pinned resources.
 func (s *SessionStore) ClearSessionState(sessionID string, keepPinned bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1762,31 +1727,10 @@ func (s *SessionStore) ClearSessionState(sessionID string, keepPinned bool) {
 		}
 	}
 
-	// Reset FSM coherently with context state
-	fsm, hasFSM := s.sessionFSMs[sessionID]
-	if hasFSM {
-		if !keepPinned {
-			// Full reset: back to RESOLVING (must discover again)
-			fsm.Reset()
-		} else if hasCtx && ctx.HasAnyResources() {
-			// Pinned resources remain: keep progress (stay in READING if possible)
-			fsm.ResetKeepProgress()
-		} else {
-			// keepPinned=true but no resources left: must rediscover
-			fsm.Reset()
-		}
-	}
-
 	log.Debug().
 		Str("session_id", sessionID).
 		Bool("keep_pinned", keepPinned).
 		Bool("has_resources", hasCtx && ctx.HasAnyResources()).
-		Str("fsm_state", func() string {
-			if hasFSM {
-				return string(fsm.State)
-			}
-			return "none"
-		}()).
 		Msg("[SessionStore] Cleared session state")
 }
 

@@ -169,6 +169,16 @@ func TestExecuteControlResource_PlansAdvertisedRebootAgainstCanonicalID(t *testi
 		t.Fatalf("plan CapabilityName = %q, want reboot", plans.requests[0].CapabilityName)
 	}
 	payload := decodeControlPayload(t, result)
+	if payload["execution_requested"] != false {
+		t.Fatalf("planning must expose that execution was not requested: %+v", payload)
+	}
+	planPayload, ok := payload["plan"].(map[string]any)
+	if !ok || planPayload["planHash"] != "hash-1" || planPayload["approvalPolicy"] != string(unifiedresources.ApprovalAdmin) {
+		t.Fatalf("canonical plan metadata was lost: %+v", payload)
+	}
+	if link, _ := payload["action_url"].(string); link != "/actions?action="+payload["action_id"].(string) {
+		t.Fatalf("action link does not address the persisted plan: %q", link)
+	}
 	if payload["planned"] != true || payload["requires_approval"] != true {
 		t.Fatalf("expected planned action awaiting approval, got %+v", payload)
 	}

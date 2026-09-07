@@ -175,7 +175,7 @@ func Test_w0716_agentic_toolExecutionProgressMessage(t *testing.T) {
 		{name: "query reads inventory", toolName: agentcapabilities.PulseQueryToolName, want: "Reading inventory."},
 		{name: "read reads target", toolName: agentcapabilities.PulseReadToolName, want: "Reading target."},
 		{name: "bare read alias reads target", toolName: "read", want: "Reading target."},
-		{name: "governed write control", toolName: agentcapabilities.PulseControlToolName, toolKind: ToolKindWrite, want: "Executing governed action."},
+		{name: "governed write control", toolName: agentcapabilities.PulseControlToolName, toolKind: ToolKindWrite, want: "Preparing action plan."},
 		{name: "patrol report finding lifecycle", toolName: agentcapabilities.PatrolReportFindingToolName, toolKind: ToolKindWrite, want: "Executing governed action."},
 		{name: "unknown tool generic running", toolName: "some_other_tool", want: "Running."},
 		{name: "unknown write tool not in governed set", toolName: "mystery_writer", toolKind: ToolKindWrite, want: "Running."},
@@ -244,7 +244,7 @@ func Test_w0716_agentic_emitToolStartEvent(t *testing.T) {
 
 	t.Run("emits tool_start with projected input", func(t *testing.T) {
 		var got []StreamEvent
-		emitToolStartEvent(func(e StreamEvent) { got = append(got, e) }, "id-1", agentcapabilities.PulseControlToolName, map[string]interface{}{"command": "uptime"})
+		emitToolStartEvent(func(e StreamEvent) { got = append(got, e) }, "id-1", agentcapabilities.PulseControlToolName, map[string]interface{}{"type": "resource", "action": "start", "resource_id": "vm-110"})
 		if len(got) != 1 || got[0].Type != "tool_start" {
 			t.Fatalf("expected one tool_start event, got %+v", got)
 		}
@@ -255,13 +255,13 @@ func Test_w0716_agentic_emitToolStartEvent(t *testing.T) {
 		if data.ID != "id-1" || data.Name != agentcapabilities.PulseControlToolName {
 			t.Fatalf("unexpected id/name: %+v", data)
 		}
-		if data.Input != "Running: uptime" {
+		if data.Input != "Plan start on vm-110" {
 			t.Fatalf("input not projected through frontend formatter: %q", data.Input)
 		}
 		if data.Phase != "running" {
 			t.Fatalf("phase = %q, want running", data.Phase)
 		}
-		if !strings.Contains(data.RawInput, "uptime") {
+		if !strings.Contains(data.RawInput, "vm-110") {
 			t.Fatalf("raw input missing command: %q", data.RawInput)
 		}
 	})
@@ -310,7 +310,7 @@ func Test_w0716_agentic_emitToolEndEvent(t *testing.T) {
 
 	t.Run("emits tool_end with projected input and output", func(t *testing.T) {
 		var got []StreamEvent
-		emitToolEndEvent(func(e StreamEvent) { got = append(got, e) }, "id-1", agentcapabilities.PulseControlToolName, map[string]interface{}{"command": "uptime"}, "ok output", true)
+		emitToolEndEvent(func(e StreamEvent) { got = append(got, e) }, "id-1", agentcapabilities.PulseControlToolName, map[string]interface{}{"type": "resource", "action": "start", "resource_id": "vm-110"}, "ok output", true)
 		if len(got) != 1 || got[0].Type != "tool_end" {
 			t.Fatalf("expected one tool_end event, got %+v", got)
 		}
@@ -321,7 +321,7 @@ func Test_w0716_agentic_emitToolEndEvent(t *testing.T) {
 		if data.ID != "id-1" || data.Name != agentcapabilities.PulseControlToolName {
 			t.Fatalf("unexpected id/name: %+v", data)
 		}
-		if data.Input != "Running: uptime" {
+		if data.Input != "Plan start on vm-110" {
 			t.Fatalf("input not projected: %q", data.Input)
 		}
 		if data.Output != "ok output" || !data.Success {

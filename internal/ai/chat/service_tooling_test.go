@@ -800,38 +800,6 @@ func TestAgenticLoopUsesSharedProviderToolResultConstruction(t *testing.T) {
 	}
 }
 
-func TestAgenticLoopUsesSharedVerificationEvidenceParser(t *testing.T) {
-	agenticSrc, err := os.ReadFile("agentic.go")
-	if err != nil {
-		t.Fatalf("read agentic.go: %v", err)
-	}
-	if !strings.Contains(string(agenticSrc), "agentcapabilities.ToolResultHasVerificationOK(resultText)") {
-		t.Fatalf("agentic loop must use the shared tool-result verification parser for write self-verification")
-	}
-
-	verificationSrc, err := os.ReadFile("agentic_verification.go")
-	if err != nil {
-		t.Fatalf("read agentic_verification.go: %v", err)
-	}
-	if strings.Contains(string(verificationSrc), "func toolResultHasVerificationOK(") {
-		t.Fatalf("chat must not preserve a local verification evidence parser")
-	}
-}
-
-func TestAgenticLoopUsesSharedToolResultErrorCodeParser(t *testing.T) {
-	src, err := os.ReadFile("agentic.go")
-	if err != nil {
-		t.Fatalf("read agentic.go: %v", err)
-	}
-	text := string(src)
-	if !strings.Contains(text, "agentcapabilities.ToolResultHasErrorCode(resultText, agentcapabilities.ErrCodeStrictResolution)") {
-		t.Fatalf("agentic loop must use the shared tool-result error-code parser for strict-resolution recovery")
-	}
-	if strings.Contains(text, `strings.Contains(resultText, "STRICT_RESOLUTION")`) {
-		t.Fatalf("agentic loop must not branch on local strict-resolution string matching")
-	}
-}
-
 func TestProviderMessageConversionUsesSharedProviderToolResultConstruction(t *testing.T) {
 	src, err := os.ReadFile("agentic_context.go")
 	if err != nil {

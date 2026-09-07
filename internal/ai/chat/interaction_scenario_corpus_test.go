@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -100,11 +101,12 @@ type interactionScenario struct {
 	name string
 	// promise states the user-visible behavior this scenario pins, in plain
 	// language. If a change makes this scenario fail, that promise broke.
-	promise  string
-	prompt   string
-	calls    []scriptedProviderCall
-	maxTurns int
-	wantErr  bool
+	promise        string
+	prompt         string
+	calls          []scriptedProviderCall
+	maxTurns       int
+	wantErr        bool
+	answerQuestion bool
 	// orderedTypes must appear in the recorded event stream as a
 	// subsequence (other events may interleave).
 	orderedTypes []string
@@ -186,17 +188,18 @@ func interactionScenarios() []interactionScenario {
 			},
 		},
 		{
-			name:    "natural first question produces an answer, not a question",
-			promise: "a first-action elicitation (\"which resource do you mean?\") issued before any tool attempt is refused invisibly and the model is steered to look with tools — the user asking a natural first question reads an answer, never a clarification card",
-			prompt:  "are there any alerts I should look at?",
+			name:           "model-selected clarification is answered before investigation",
+			promise:        "a model-selected first-turn question reaches the user and its answer returns through the same session before investigation continues",
+			prompt:         "help me choose what to check",
+			answerQuestion: true,
 			calls: []scriptedProviderCall{
 				providerQuestionToolCall("call_q1"),
 				providerQueryToolCall("call_r1"),
 				providerContentDone("No active alerts right now — everything looks healthy."),
 			},
 			maxTurns:          6,
-			orderedTypes:      []string{"session", "tool_start", "tool_end", "content", "done"},
-			forbiddenTypes:    []string{"question", "error"},
+			orderedTypes:      []string{"session", "question", "tool_start", "tool_end", "content", "done"},
+			forbiddenTypes:    []string{"error"},
 			answerMustContain: []string{"No active alerts"},
 		},
 		{
@@ -251,8 +254,19 @@ func TestInteractionScenarioCorpus(t *testing.T) {
 			if sc.maxTurns > 0 {
 				req.MaxTurns = sc.maxTurns
 			}
-			execErr := service.ExecuteStream(context.Background(), req, func(event StreamEvent) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			execErr := service.ExecuteStream(ctx, req, func(event StreamEvent) {
 				eventLog = append(eventLog, event.Type+"|"+string(event.Data))
+				if event.Type == "question" && sc.answerQuestion {
+					var question QuestionData
+					if err := json.Unmarshal(event.Data, &question); err != nil {
+						t.Fatal(err)
+					}
+					if err := service.AnswerQuestion(ctx, question.QuestionID, []QuestionAnswer{{ID: "q1", Value: "fleet"}}); err != nil {
+						t.Fatal(err)
+					}
+				}
 				if event.Type == "content" {
 					var data ContentData
 					if err := json.Unmarshal(event.Data, &data); err == nil {

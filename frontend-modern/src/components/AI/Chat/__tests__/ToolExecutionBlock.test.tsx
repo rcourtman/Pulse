@@ -11,6 +11,8 @@ import {
 import toolExecutionBlockSource from '../ToolExecutionBlock.tsx?raw';
 import { ASSISTANT_FAST_TOOL_COMPLETION_SETTLE_MS } from '../streamActivityTiming';
 import type { ToolExecution, PendingTool, ToolCancellation } from '../types';
+import { aiChatStore } from '@/stores/aiChat';
+import { Router, Route } from '@solidjs/router';
 
 afterEach(() => {
   cleanup();
@@ -56,6 +58,35 @@ const FAST_TOOL_SETTLE_TEST_MS = ASSISTANT_FAST_TOOL_COMPLETION_SETTLE_MS + 80;
 // ============================================================
 
 describe('ToolExecutionBlock', () => {
+  it('opens the canonical action review without leaving Assistant over the review dialog', () => {
+    const close = vi.spyOn(aiChatStore, 'close');
+    render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={() => (
+            <ToolExecutionBlock
+              tool={makeTool({
+                name: 'pulse_query',
+                output: JSON.stringify({
+                  source: 'canonical_action_audit',
+                  action_id: 'act-proof',
+                  plan: { actionId: 'act-proof' },
+                }),
+              })}
+            />
+          )}
+        />
+      </Router>
+    ));
+    const link = screen.getByRole('link', { name: 'Review action' });
+    expect(link).toHaveAttribute('href', '/actions?action=act-proof');
+    link.addEventListener('click', (event) => event.preventDefault());
+    fireEvent.click(link);
+    expect(close).toHaveBeenCalledOnce();
+    close.mockRestore();
+  });
+
   it('keeps tool copy controls on the shared CopyValueButton primitive', () => {
     expect(toolExecutionBlockSource).toContain('@/components/shared/Button');
     expect(toolExecutionBlockSource).toContain('CopyValueButton');

@@ -163,7 +163,7 @@ func TestInvestigationEvidenceBudgetHelpers(t *testing.T) {
 
 }
 
-func TestAgenticLoopPatrolInvestigationRejectsUnadvertisedToolBeforeFSM(t *testing.T) {
+func TestAgenticLoopPatrolInvestigationRejectsUnadvertisedToolBeforeExecution(t *testing.T) {
 	provider := &stubStreamingProvider{}
 	var requests []providers.ChatRequest
 	turn := 0
@@ -186,7 +186,7 @@ func TestAgenticLoopPatrolInvestigationRejectsUnadvertisedToolBeforeFSM(t *testi
 	executor.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
 	loop := NewAgenticLoop(provider, executor, "system")
 	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
-	loop.SetSessionFSM(NewSessionFSM())
+
 	loop.SetMaxTurns(4)
 
 	var rejected ToolEndData
@@ -208,8 +208,8 @@ func TestAgenticLoopPatrolInvestigationRejectsUnadvertisedToolBeforeFSM(t *testi
 	if err != nil {
 		t.Fatalf("ExecuteWithTools: %v", err)
 	}
-	if rejected.Success || !strings.Contains(rejected.Output, "TOOL_NOT_ADVERTISED") || strings.Contains(rejected.Output, "FSM blocked") {
-		t.Fatalf("unknown tool result = %+v, want exact-manifest rejection before FSM", rejected)
+	if rejected.Success || !strings.Contains(rejected.Output, "TOOL_NOT_ADVERTISED") {
+		t.Fatalf("unknown tool result = %+v, want exact-manifest rejection before execution", rejected)
 	}
 	if !strings.Contains(rejected.Output, agentcapabilities.PulseQueryToolName) || !strings.Contains(rejected.Output, agentcapabilities.PatrolProposeActionToolName) {
 		t.Fatalf("unknown tool correction did not use exact turn manifest: %q", rejected.Output)
@@ -300,119 +300,8 @@ func TestIsPatrolFindingLifecycleWrite(t *testing.T) {
 		agentcapabilities.PulseQueryToolName,
 	} {
 		if isPatrolFindingLifecycleWrite(toolName) {
-			t.Fatalf("did not expect %s to bypass infrastructure verification transition", toolName)
+			t.Fatalf("did not expect %s to mutate finding lifecycle state", toolName)
 		}
-	}
-}
-
-func TestIsPatrolStateOnlyWrite(t *testing.T) {
-	for _, toolName := range []string{
-		agentcapabilities.PatrolReportFindingToolName,
-		agentcapabilities.PatrolAssessFindingToolName,
-		agentcapabilities.PatrolResolveFindingToolName,
-		agentcapabilities.PatrolProposeObserverToolName,
-	} {
-		if !isPatrolStateOnlyWrite(toolName) {
-			t.Fatalf("expected %s to bypass infrastructure verification transition", toolName)
-		}
-		if kind := ClassifyToolCall(toolName, nil); kind != ToolKindWrite {
-			t.Fatalf("%s must retain governed write classification, got %s", toolName, kind)
-		}
-	}
-
-	for _, toolName := range []string{
-		agentcapabilities.PatrolGetFindingsToolName,
-		agentcapabilities.PulseControlToolName,
-		agentcapabilities.PulseQueryToolName,
-	} {
-		if isPatrolStateOnlyWrite(toolName) {
-			t.Fatalf("did not expect %s to bypass infrastructure verification transition", toolName)
-		}
-	}
-}
-
-func TestApplySuccessfulToolFSM_SeparatesFindingStateFromInfrastructureVerification(t *testing.T) {
-	fsm := NewSessionFSM()
-	fsm.State = StateReading
-	if !applySuccessfulToolFSM(fsm, ToolKindWrite, agentcapabilities.PatrolReportFindingToolName) {
-		t.Fatal("expected accepted Patrol finding report to use the lifecycle path")
-	}
-	if fsm.State != StateReading || fsm.WroteThisEpisode || fsm.ReadAfterWrite {
-		t.Fatalf("finding report changed infrastructure FSM: %+v", fsm)
-	}
-
-	fsm.OnToolSuccess(ToolKindWrite, agentcapabilities.PulseControlToolName)
-	if fsm.State != StateVerifying {
-		t.Fatalf("expected real infrastructure write to require verification, got %s", fsm.State)
-	}
-	if !applySuccessfulToolFSM(fsm, ToolKindWrite, agentcapabilities.PatrolAssessFindingToolName) {
-		t.Fatal("expected accepted Patrol assessment to use the lifecycle path")
-	}
-	if fsm.State != StateVerifying || fsm.ReadAfterWrite {
-		t.Fatalf("finding assessment satisfied or escaped infrastructure verification: %+v", fsm)
-	}
-
-	if !applySuccessfulToolFSM(fsm, ToolKindWrite, agentcapabilities.PatrolProposeObserverToolName) {
-		t.Fatal("expected accepted Patrol observer proposal to use the state-only path")
-	}
-	if fsm.State != StateVerifying || fsm.ReadAfterWrite {
-		t.Fatalf("observer proposal satisfied or escaped infrastructure verification: %+v", fsm)
-	}
-}
-
-func TestApplySuccessfulToolFSM_ObserverProposalDoesNotRequireInfrastructureVerification(t *testing.T) {
-	fsm := NewSessionFSM()
-	fsm.State = StateReading
-	if !applySuccessfulToolFSM(fsm, ToolKindWrite, agentcapabilities.PatrolProposeObserverToolName) {
-		t.Fatal("expected accepted Patrol observer proposal to use the state-only path")
-	}
-	if fsm.State != StateReading || fsm.WroteThisEpisode || fsm.ReadAfterWrite {
-		t.Fatalf("observer proposal changed infrastructure FSM: %+v", fsm)
-	}
-}
-
-func TestPatrolStateWritesUseOnlyCoreValidatedDetectionTarget(t *testing.T) {
-	fsm := NewSessionFSM()
-	for _, toolName := range []string{
-		agentcapabilities.PatrolReportFindingToolName,
-		agentcapabilities.PatrolAssessFindingToolName,
-		agentcapabilities.PatrolResolveFindingToolName,
-		agentcapabilities.PatrolProposeObserverToolName,
-	} {
-		if !patrolWriteHasCoreValidatedTarget(tools.ProfilePatrolDetection, fsm, toolName) {
-			t.Fatalf("expected %s to use its core-validated Patrol target", toolName)
-		}
-	}
-	for _, test := range []struct {
-		profile  tools.ExecutionProfile
-		state    SessionState
-		toolName string
-	}{
-		{tools.ProfilePatrolInvestigation, StateResolving, agentcapabilities.PatrolProposeObserverToolName},
-		{tools.ProfileInteractiveAssistant, StateResolving, agentcapabilities.PatrolProposeObserverToolName},
-		{tools.ProfilePatrolDetection, StateVerifying, agentcapabilities.PatrolProposeObserverToolName},
-		{tools.ProfilePatrolDetection, StateVerifying, agentcapabilities.PatrolReportFindingToolName},
-		{tools.ProfilePatrolDetection, StateResolving, agentcapabilities.PulseControlToolName},
-	} {
-		fsm.State = test.state
-		if patrolWriteHasCoreValidatedTarget(test.profile, fsm, test.toolName) {
-			t.Fatalf("unexpected core-target exception for profile=%v state=%s tool=%s", test.profile, test.state, test.toolName)
-		}
-	}
-}
-
-func TestAppendFSMVerificationPrompt_EndsWithUserInstruction(t *testing.T) {
-	messages := []providers.Message{{Role: "assistant", Content: "unverified conclusion"}}
-	got := appendFSMVerificationPrompt(messages, "verify the changed target")
-	if len(got) != 2 {
-		t.Fatalf("verification messages = %d, want 2", len(got))
-	}
-	last := got[len(got)-1]
-	if last.Role != "user" || last.Content != "verify the changed target" {
-		t.Fatalf("verification anchor = %+v, want user-role instruction", last)
-	}
-	if messages[0].Content != "unverified conclusion" {
-		t.Fatalf("helper mutated existing provider history: %+v", messages)
 	}
 }
 
