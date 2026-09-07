@@ -603,3 +603,17 @@ Queue-free regression tests cover both hosts, encoded and legacy paths,
 lookalike/unrelated hosts, transport errors and actual rate-limit log output.
 This does not establish customer exposure, recipient receipt or recognition of
 arbitrary custom webhook secrets.
+
+### Discord webhook diagnostic path confidentiality
+
+On exact `discord.com` and legacy `discordapp.com` hosts, the shared redactor
+masks the suffix after `/webhooks/`, including the webhook ID and token.
+Versioned API prefixes remain visible; encoded paths, host casing and ports
+cannot bypass masking. Unrelated paths and lookalike hosts are unchanged.
+Configured destinations and transport error causes are not modified.
+
+[Discord's webhook reference](https://docs.discord.com/developers/resources/webhook)
+identifies the secure webhook token and token-authorised operations. Focused
+synthetic regressions cover helper output, transport diagnostics and actual
+rate-limit logs. This is not evidence of customer exposure, recipient receipt,
+release qualification, or protection of arbitrary custom-host credentials.
