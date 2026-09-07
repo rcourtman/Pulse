@@ -15,6 +15,8 @@
 
 ## Purpose
 
+The resource adapter fast delta path must remain content-equivalent to the full merge for explicit Proxmox memory withdrawal. An absent canonical metric plus incoming Proxmox usageUnavailable clears the old display value; store patch operations must emit that clear even when only the raw facet key changed. This bounded per-changed-row check must not introduce an estate-wide scan or defeat untouched-row identity preservation. Adapter tests cover both delta paths and store writes, including trusted-zero recovery and ordinary partial omission.
+
 The PR #1935 log-level parser benchmark remains an unresolved environment-bound
 observation. Two CI comparisons on unchanged parser source report +10.04 and
 +10.23 percent for the empty-string case, with stable base/candidate binaries.

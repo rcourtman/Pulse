@@ -1,55 +1,35 @@
 {
   "version": 1,
-  "base_sha": "7e34b00d4face3ffa33a36946bb527dbfbdfd74c",
-  "verified_at": "2026-09-07T16:12:24.652755Z",
+  "base_sha": "c857802df6b00e61e2229eea411d6675deff2d8a",
+  "verified_at": "2026-09-07T22:03:54.189527Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/AI/Chat/ChatMessages.tsx",
-    "frontend-modern/src/components/patrol/ApprovalSection.tsx",
-    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts"
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/AI/Chat/ChatMessages.tsx": "6f2bea6530d383abe81e13054ef9b7a90f4324c244166fb0a8afaac354439b48",
-    "frontend-modern/src/components/patrol/ApprovalSection.tsx": "5e7ac87d87674b4c05fe80c3933d4ab542366054e2abbfa3f96afbfe90e993a4",
-    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts": "781c8730a7f566831562160a31ba437b2aabd8840330f59b521894198f79b0f1"
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "ce1f8f2aef4b04b64dd2533c09458349811ba7cec9ec2e4bd8634b8e9c3c848f"
   },
   "routes": [
-    "/patrol",
-    "/actions?action=act_fd2d0bdab1930e2d3a75faf080b8ba7a",
-    "/actions?action=act_369c466aea179f93fc69aa04a710689a",
-    "/actions?action=act_d2f137411342c995d840d529a70fbf95",
-    "/docs/ASSISTANT_ARCHITECTURE",
-    "/docs/ASSISTANT_SAFETY"
+    "/proxmox"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 1000
-    },
-    {
-      "width": 900,
-      "height": 1000
+      "width": 1280,
+      "height": 900
     },
     {
       "width": 390,
-      "height": 1000
+      "height": 844
     }
   ],
   "states": [
-    "Approved and independently verified outcome",
-    "Rejected and expired unexecuted plans",
-    "Expanded filesystem evidence and risk",
-    "Attached finding context, explicit new session, retained saved context",
-    "Fresh streamed explanation and saved missing-access, VM, storage and rejection outcomes"
+    "Canonical 100% to 35%; stale/offline/unavailable agent evidence retains trusted 100%.",
+    "Explicit Proxmox withdrawal with omitted canonical memory: table N/A, Memory section absent.",
+    "Measured-zero recovery: table 0%, Memory Total and Free both 100 MB; second cluster stays 80%."
   ],
   "interactions": [
-    "Open review, close, focus return and Enter reopen",
-    "Expand every investigation tool card, deep evidence scroll and actual pixel inspection",
-    "Discuss with Assistant, new-session clearing and saved-session resumption",
-    "Exact action link, terminal authority controls, reload and Escape",
-    "Stream at bottom, wheel overscroll containment, scroll away, Latest, resize while open and reachable header/composer",
-    "Session-history picker and exact persisted message read",
-    "Documentation linked navigation, reload and end-of-document scroll"
+    "Open guest drawer; deliver synthetic canonical socket snapshots while open.",
+    "Resize to desktop and narrow Chromium; scroll recovered Memory into view above fixed navigation; inspect all five final screenshots."
   ],
-  "notes": "Final runtime r34 SHA256 e1ae053e656b28af9ba0e7541a47bdeb56303d1d7912edc57b2dac2f94620bd1 matches 4,853 source inputs. Named r28 fault matrix and subsequent affected writer/streaming proofs are detailed in docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md. Fresh r34 approved explanation passed, with saved final-runtime missing-access/VM/rejected/storage explanations and deep Patrol history. Receipts: workspace tmp/patrol-planning-continuation/patrol-browser and docs-browser-r34. Initial history-locator and network-idle failures are retained separately. Only login, selected authorized API provider readiness and one explicit fresh explanation were submitted during these checks. No lab action was repeated. Independent customer environments and broader readiness remain unqualified."
+  "notes": "Synthetic Desktop Chrome acceptance only, not touch/mobile-device, installed poller, FreeBSD reporter or alert-delivery proof. Base reproduced stale 100% after withdrawal; adapter repair passed final Chromium test without retries and pageerror assertion. Earlier fixture wrongly expected raw-facet total after withdrawal; useWorkloads maps canonical metrics only. Two selector/absent-section failures and first passing but bottom-nav-obscured screenshot run are retained, not counted as final visual acceptance. Final four transition screenshots show withdrawn section absent and recovered Total/Free in frame at both widths; initial 35% screenshot is table-only. Evidence: /var/lib/pulse-maintainer/queue/staging/20260907T215015Z-web-product/ (moves to completed): browser-base.log, browser-repair.log, browser-repair-selector.log, browser-canonical.log, browser-final.log, final-report/data/*.png. Browser command: pulse-heavy-run -- bash wrapper starting Vite 127.0.0.1:5187 then PLAYWRIGHT_BASE_URL=http://127.0.0.1:5187 playwright test tests/86-hybrid-memory-browser.spec.ts --project=chromium --retries=0; Vite stopped by wrapper trap."
 }

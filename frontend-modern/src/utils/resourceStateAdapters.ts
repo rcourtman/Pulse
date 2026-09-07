@@ -867,6 +867,13 @@ const mergeCanonicalSourceFacet = <T extends JsonRecord>(
     ? mergeRecord(incomingFacet, existingFacet)
     : incomingFacet;
 
+// A missing field alone can be a partial snapshot. Explicit unavailable raw
+// evidence plus no canonical metric means the producer has withdrawn memory;
+// retaining the previous display metric would hide that state.
+const hasWithdrawnProxmoxMemory = (incoming: Resource): boolean =>
+  incoming.memory == null &&
+  asBoolean(asRecord(asRecord(incoming.proxmox)?.memory)?.usageUnavailable) === true;
+
 export const mergeCanonicalResource = (incoming: Resource, existing?: Resource): Resource => {
   if (!existing) {
     return canonicalizeRealtimeResource(incoming);
@@ -876,6 +883,7 @@ export const mergeCanonicalResource = (incoming: Resource, existing?: Resource):
   return {
     ...existingCanonical,
     ...incoming,
+    ...(hasWithdrawnProxmoxMemory(incoming) ? { memory: undefined } : {}),
     clusterId: incoming.clusterId ?? existingCanonical.clusterId,
     platformScopes: normalizeSourcePlatformScopes(
       incoming.platformScopes ?? existingCanonical.platformScopes,
@@ -1105,8 +1113,8 @@ const applyFastResourceMergePatch = (
       (platformDataLeaves ??= []).push(key.slice(FAST_MERGE_PLATFORM_DATA_PREFIX.length));
       continue;
     }
-    // A merge-patch deletion removed the key from the raw row; the full merge's
-    // `...incoming` spread would keep the existing display value, so keep it.
+    // A merge-patch deletion normally preserves the richer display value.
+    // Explicitly withdrawn Proxmox memory is cleared below, as in the full merge.
     if (!(key in rawIncoming)) continue;
     const value = rawIncoming[key];
     if (key === 'proxmox') {
@@ -1137,6 +1145,7 @@ const applyFastResourceMergePatch = (
     }
     next.platformData = nextPlatformData;
   }
+  if (hasWithdrawnProxmoxMemory(incoming)) next.memory = undefined;
   return next as unknown as Resource;
 };
 
@@ -1159,6 +1168,11 @@ export const buildFastResourceStorePatchOps = (
 ): FastResourceStorePatchOp[] => {
   const record = rawStoreValue(row as unknown as JsonRecord);
   const ops: FastResourceStorePatchOp[] = [];
+  // Unavailability can also arrive with a raw Proxmox facet change rather
+  // than a memory key (the canonical metric may already be absent on wire).
+  if (!keys.includes('memory') && hasWithdrawnProxmoxMemory(row)) {
+    ops.push({ key: 'memory', value: undefined, mode: 'set' });
+  }
   const platformData = asRecord(record.platformData);
   for (const key of keys) {
     if (key.startsWith(FAST_MERGE_PLATFORM_DATA_PREFIX)) {

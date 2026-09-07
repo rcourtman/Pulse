@@ -1181,6 +1181,58 @@ describe('resourceStateAdapters unavailable memory contract', () => {
     },
   } as unknown as Resource['proxmox'];
 
+  it('clears a previous metric when a snapshot explicitly reports unavailable memory', () => {
+    const previous = createNodeResource({});
+    const incoming = { ...previous, proxmox: unavailableProxmoxMemory };
+    delete incoming.memory; // JSON omitempty, not an explicit undefined property.
+    const [merged] = mergeCanonicalResourceSnapshot([incoming], [previous]);
+    expect(nodeFromResource(merged)?.memory.usageUnavailable).toBe(true);
+    expect(merged.memory).toBeUndefined();
+  });
+
+  it('clears withdrawn memory through both delta paths and emits the store clear', () => {
+    const previous = {
+      ...createNodeResource({}),
+      type: 'vm',
+      proxmox: unavailableProxmoxMemory,
+    } as Resource;
+    const incoming = { ...previous };
+    delete incoming.memory;
+    for (const keys of [undefined, new Map([[previous.id, ['memory']]])]) {
+      const [merged] = mergeCanonicalResourceDeltaSnapshot(
+        [incoming],
+        [previous],
+        new Set([previous.id]),
+        keys,
+      );
+      expect(merged.memory).toBeUndefined();
+      expect(buildFastResourceStorePatchOps(merged, ['memory'])).toEqual([
+        { key: 'memory', value: undefined, mode: 'set' },
+      ]);
+      expect(buildFastResourceStorePatchOps(merged, ['proxmox'])).toContainEqual({
+        key: 'memory',
+        value: undefined,
+        mode: 'set',
+      });
+    }
+  });
+
+  it('retains richer memory on partial omission without unavailable evidence', () => {
+    const previous = createNodeResource({});
+    const incoming = { ...previous };
+    delete incoming.memory;
+    const [merged] = mergeCanonicalResourceSnapshot([incoming], [previous]);
+    expect(merged.memory).toEqual(previous.memory);
+  });
+
+  it('accepts a newly trusted metric after an unavailable snapshot', () => {
+    const previous = { ...createNodeResource({}), proxmox: unavailableProxmoxMemory };
+    delete previous.memory;
+    const incoming = { ...previous, memory: { current: 0, total: 8192, used: 0 } };
+    const [merged] = mergeCanonicalResourceSnapshot([incoming], [previous]);
+    expect(nodeFromResource(merged)?.memory).toMatchObject({ usage: 0, usageUnavailable: false });
+  });
+
   it('preserves explicit unavailable usage when no trusted metric exists', () => {
     const node = nodeFromResource({
       ...createNodeResource({}),
