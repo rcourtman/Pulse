@@ -42,6 +42,19 @@ make acknowledgement event replay idempotent, or prove aggregate write-byte
 reductions or recipient delivery. An evicted occurrence can still be recreated
 by replay; exact identity is guaranteed only while its shell is retained.
 
+Canonical timeline reads for retained incident shells select events from the
+shell's exact opening time up to (but not including) the next retained opening
+for the same alert/resource. A newer firing must not reopen an older resolved
+incident, and a subsecond recurrence must not inherit its predecessor's
+resolution or acknowledgement. Local analysis annotations remain attached to
+their shell. This is a read-projection boundary, not event deletion or a change
+to notification delivery. Canonical-only fallback when no shell is retained,
+missing recurrence boundaries after retention, and already-duplicated shells
+remain outside this guarantee. Legacy shell lookup retains its time tolerance;
+events preceding the selected shell's exact opening are not projected into it.
+`TestIncidentStore_CanonicalProjectionOccurrenceBounds` verifies both boundaries,
+subsecond starts, unordered successors and unrelated alert/resource isolation.
+
 ### Unchanged incident JSON checkpoints
 
 Incident-memory checkpoints compare the serialized snapshot with bounded bytes

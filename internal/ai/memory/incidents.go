@@ -1013,6 +1013,20 @@ func (s *IncidentStore) loadProjectedIncidentEvents(incident *Incident, timeline
 		since = since.Add(-incidentStartMatchTolerance)
 	}
 
+	// Retained shells identify exact occurrences. Canonical history is keyed by
+	// alert identifier, so without an upper bound an old incident absorbs every
+	// later recurrence and can appear open again. Do not use the legacy read
+	// tolerance to include events from a preceding subsecond occurrence either.
+	var nextStart time.Time
+	s.mu.RLock()
+	for _, shell := range s.incidents {
+		if shell != nil && shell.AlertIdentifier == alertIdentifier && shell.ResourceID == resourceID &&
+			shell.OpenedAt.After(incident.OpenedAt) && (nextStart.IsZero() || shell.OpenedAt.Before(nextStart)) {
+			nextStart = shell.OpenedAt
+		}
+	}
+	s.mu.RUnlock()
+
 	changes, err := timelineStore.GetRecentChanges(resourceID, since, projectedIncidentChangeLimit)
 	if err != nil || len(changes) == 0 {
 		return nil
@@ -1025,6 +1039,10 @@ func (s *IncidentStore) loadProjectedIncidentEvents(incident *Incident, timeline
 		}
 		event, ok := incidentEventFromResourceChange(change)
 		if !ok {
+			continue
+		}
+		if (!incident.OpenedAt.IsZero() && event.Timestamp.Before(incident.OpenedAt)) ||
+			(!nextStart.IsZero() && !event.Timestamp.Before(nextStart)) {
 			continue
 		}
 		events = append(events, event)
