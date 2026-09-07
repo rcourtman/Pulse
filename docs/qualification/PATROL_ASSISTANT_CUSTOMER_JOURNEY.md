@@ -3491,3 +3491,24 @@ stopped because the registry's explicit store-proof list did not name the new
 persistence/concurrency regression and the new policy-redaction regression.
 No contract-neutral or completion override was used. The full hook must pass on
 the revised exact tree before commit.
+
+
+### Core delivery check correction, 2026-09-07
+
+Core PR1960's initial head `c501376843431e1812abd42da16888b462b41dc3`
+passed full frontend tests, both non-API backend race shards, all eight E2E
+shards, governance, security and paired benchmarks. Its API race suite ran
+1607.764 seconds and reported one failing test:
+`TestContract_AssistantFindingContextUsesModelOnlyHandoff`. The guard expected
+thirteen spaces before `runResult.ModelTurns`, although gofmt correctly changed
+field alignment after the result structure changed. No runtime assertion or
+race failure was reported by that shard.
+
+The static wiring guard now normalizes whitespace before comparing its required
+snippets. It still requires the same identifiers and wiring, and its forbidden
+adapter assertions remain intact. The correction changes only the test, not
+model behavior or the qualified runtime. The exact failing test and repository
+checks must pass before this delivery is counted complete. The failed API job is
+[101809873027](https://github.com/rcourtman/Pulse/actions/runs/34143221580/job/101809873027),
+with its raw log retained in workspace
+`tmp/patrol-planning-continuation/core-api-c501.log`.

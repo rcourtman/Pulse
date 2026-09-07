@@ -10405,11 +10405,11 @@
     {
       "id": "patrol-planning-continuation-coverage-gap-patrol-assistant-customer-outcome-qualification",
       "agent_id": "patrol-planning-continuation",
-      "summary": "Complete canonical planning, outcome history, linked Assistant qualification and scoped landing",
+      "summary": "Finish verified core landing and record the separate wider rollout gate",
       "target_id": "v6-product-lane-expansion",
       "claimed_at": "2026-09-07T11:10:27Z",
-      "heartbeat_at": "2026-09-07T15:35:32Z",
-      "expires_at": "2026-09-07T17:35:32Z",
+      "heartbeat_at": "2026-09-07T17:02:18Z",
+      "expires_at": "2026-09-07T19:02:18Z",
       "work_item": {
         "kind": "coverage-gap",
         "id": "patrol-assistant-customer-outcome-qualification"

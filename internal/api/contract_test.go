@@ -1197,6 +1197,9 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	}
 
 	settingsHandlerText := string(settingsHandlerSource)
+	// Gofmt aligns keyed fields with their neighbours. Wiring checks must not
+	// fail merely because adding or removing another field changes that padding.
+	settingsHandlerWiring := strings.Join(strings.Fields(settingsHandlerText), " ")
 	// Patrol remediation now enters as a typed action proposal through the
 	// required action broker; the investigation adapter carries no
 	// command execution, no autonomy, and no command-shaped approval
@@ -1210,7 +1213,7 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"ModelTurns:             runResult.ModelTurns",
 		"EvidenceCalls:          runResult.EvidenceCalls",
 	} {
-		if !strings.Contains(settingsHandlerText, required) {
+		if !strings.Contains(settingsHandlerWiring, strings.Join(strings.Fields(required), " ")) {
 			t.Fatalf("ai_handlers.go must wire the typed investigation proposal channel: missing %q", required)
 		}
 	}
