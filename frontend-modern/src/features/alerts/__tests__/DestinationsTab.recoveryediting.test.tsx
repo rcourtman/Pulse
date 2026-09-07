@@ -168,6 +168,7 @@ describe('DestinationsTab recovery while editing SMTP', () => {
       const editor = screen.getByRole('textbox', { name: 'SMTP server' });
       fireEvent.input(editor, { target: { value: 'unfinished.smtp.example' } });
       expect(dirty).toHaveBeenCalledWith(true);
+      dirty.mockClear();
       const status = screen.getByRole('status');
 
       let reject!: (error: Error) => void;
@@ -184,6 +185,7 @@ describe('DestinationsTab recovery while editing SMTP', () => {
       expect(editor).toHaveFocus();
       expect(editor).toHaveValue('unfinished.smtp.example');
       expect(emailConfig().server).toBe('unfinished.smtp.example');
+      expect(dirty).not.toHaveBeenCalledWith(false);
       expect(screen.getByText('SMTP fixture rejected')).toBeInTheDocument();
       expect(NotificationsAPI.getDeliveryLog).toHaveBeenCalledTimes(1);
 
@@ -212,6 +214,7 @@ describe('DestinationsTab recovery while editing SMTP', () => {
       expect(editor).toHaveFocus();
       expect(editor).toHaveValue('unfinished.smtp.example');
       expect(emailConfig().server).toBe('unfinished.smtp.example');
+      expect(dirty).not.toHaveBeenCalledWith(false);
       expect(screen.getByRole('status')).toBe(status);
       expect(status).toBeEmptyDOMElement();
       expect(screen.getByText('SMTP fixture rejected')).toBeInTheDocument();
