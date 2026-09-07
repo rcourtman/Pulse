@@ -621,3 +621,19 @@ identifies the secure webhook token and token-authorised operations. Focused
 synthetic regressions cover helper output, transport diagnostics and actual
 rate-limit logs. This is not evidence of customer exposure, recipient receipt,
 release qualification, or protection of arbitrary custom-host credentials.
+
+### Telegram diagnostic path parsing
+
+Telegram bot-path masking operates on the parsed, decoded URL path and clears
+RawPath after replacement. This covers percent-encoded bot prefixes without
+mistaking a hostname or a URL inside a query for a bot path. Method suffixes,
+query diagnostics and fragments remain intact; configured destinations and
+transport-error causes are unchanged. Host-independent masking is retained for
+local API servers, which are supported by the
+[Telegram API documentation](https://core.telegram.org/bots/api#making-requests).
+
+Focused regression tests cover escaped prefixes/tokens, local servers, missing
+method suffixes, query URLs, fragments, transport errors and rate-limit logs.
+This is diagnostic containment, not evidence of customer exposure or recipient
+delivery. Arbitrary path secrets and unrecognised query credentials remain
+outside this bounded change.
