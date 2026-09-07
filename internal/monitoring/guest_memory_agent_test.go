@@ -174,6 +174,68 @@ func TestGetVMAgentMemAvailableCachesResults(t *testing.T) {
 	})
 }
 
+func TestGetVMAgentMemoryAvailabilityExpiresFailureAndRecovers(t *testing.T) {
+	t.Parallel()
+	for _, failure := range []struct {
+		name string
+		err  error
+	}{
+		{name: "request error", err: errors.New("guest unavailable")},
+		{name: "missing memory source"},
+	} {
+		t.Run(failure.name, func(t *testing.T) {
+			mon := &Monitor{}
+			initial := proxmox.LinuxMemoryAvailability{
+				Total: 8192, Available: 4096, EffectiveAvailable: 4096,
+				Source: "meminfo-available",
+			}
+			client := &guestMemoryAgentTestClient{stubPVEClient: &stubPVEClient{}, memInfo: &initial}
+			key := guestMemoryCacheKey("pve-a", "node1", 100)
+			read := func() (proxmox.LinuxMemoryAvailability, error) {
+				return mon.getVMAgentMemoryAvailability(context.Background(), client, "pve-a", "node1", 100)
+			}
+			// Age entries directly: no sleeps or wall-clock boundary races.
+			expire := func(ttl time.Duration) {
+				t.Helper()
+				entry := mon.vmAgentMemCache[key]
+				entry.fetchedAt = time.Now().Add(-ttl - time.Second)
+				mon.vmAgentMemCache[key] = entry
+			}
+			if got, err := read(); err != nil || got != initial {
+				t.Fatalf("initial read = %+v, %v", got, err)
+			}
+			client.memInfo = &proxmox.LinuxMemoryAvailability{}
+			client.memErr = failure.err
+			if got, err := read(); err != nil || got != initial || client.memCalls != 1 {
+				t.Fatalf("unexpired cache = %+v, %v; calls = %d", got, err, client.memCalls)
+			}
+			expire(vmAgentMemCacheTTL)
+			if got, err := read(); err == nil || got != (proxmox.LinuxMemoryAvailability{}) || client.memCalls != 2 {
+				t.Fatalf("expired cache must not serve stale success: %+v, %v; calls = %d", got, err, client.memCalls)
+			}
+			if entry := mon.vmAgentMemCache[key]; !entry.negative || entry.info.Source != "" || entry.available != 0 {
+				t.Fatalf("failure retained positive memory: %+v", entry)
+			}
+			// Explicit zero available is a valid full-pressure observation, not
+			// another missing sample; it must replace the expired negative entry.
+			recovered := proxmox.LinuxMemoryAvailability{Total: 8192, Source: "meminfo-available"}
+			client.memInfo, client.memErr = &recovered, nil
+			if got, err := read(); err == nil || got.Source != "" || client.memCalls != 2 {
+				t.Fatalf("negative backoff = %+v, %v; calls = %d", got, err, client.memCalls)
+			}
+			expire(vmAgentMemNegativeTTL)
+			for i := 0; i < 2; i++ {
+				if got, err := read(); err != nil || got != recovered || client.memCalls != 3 {
+					t.Fatalf("recovery read %d = %+v, %v; calls = %d", i, got, err, client.memCalls)
+				}
+			}
+			if mon.vmAgentMemCache[key].negative {
+				t.Fatal("valid zero-available recovery remained negative")
+			}
+		})
+	}
+}
+
 func TestGetVMAgentMemAvailableRetriesKnownNonWindowsGuestSoonerAfterNegativeCache(t *testing.T) {
 	t.Parallel()
 
