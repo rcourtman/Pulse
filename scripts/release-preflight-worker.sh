@@ -96,6 +96,23 @@ if [ "$(node -p "process.versions.node.split('.')[0]")" != "24" ]; then
   exit 3
 fi
 
+playwright_container_user() {
+  local security_options
+  security_options="$(docker info --format '{{json .SecurityOptions}}')" || return
+  python3 - "$security_options" "$(id -u):$(id -g)" <<'PY'
+import json
+import sys
+
+options = json.loads(sys.argv[1])
+if not isinstance(options, list) or not all(isinstance(value, str) for value in options):
+    raise SystemExit("Docker security options must be a JSON list of strings.")
+# Container root maps to the daemon owner on rootless Docker. Reusing that
+# owner's host UID instead selects an unrelated subordinate host identity.
+print("0:0" if "name=rootless" in options else sys.argv[2])
+PY
+}
+PLAYWRIGHT_CONTAINER_USER="$(playwright_container_user)"
+
 mkdir -p \
   "$CACHE_DIR/go-build" \
   "$CACHE_DIR/go-mod" \
@@ -204,11 +221,29 @@ run_backend() {
   fi
 }
 
+run_playwright() {
+  docker run --rm \
+    --network host \
+    --ipc host \
+    --user "$PLAYWRIGHT_CONTAINER_USER" \
+    --env CI=true \
+    --env HOME=/tmp \
+    --env "PULSE_E2E_DIAGNOSTIC=${PULSE_E2E_DIAGNOSTIC:-}" \
+    --env "PLAYWRIGHT_BASE_URL=${PULSE_E2E_BASE_URL}" \
+    --volume "$REPOSITORY_DIR/tests/integration:/work" \
+    --workdir /work \
+    "$PLAYWRIGHT_IMAGE" \
+    node /work/node_modules/@playwright/test/cli.js "$@"
+}
+
 run_integration_prep() {
   phase integration-dependencies npm --prefix tests/integration ci
   PLAYWRIGHT_VERSION="$(node -p "require('./tests/integration/node_modules/@playwright/test/package.json').version")"
   PLAYWRIGHT_IMAGE="mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble"
   phase playwright-image docker pull "$PLAYWRIGHT_IMAGE"
+  # Check the real mount and locked CLI before the expensive test suites and
+  # image build. Never let npx download a different browser test version.
+  phase playwright-runtime run_playwright --version
   phase mock-github-image docker build --tag pulse-mock-github:test tests/integration/mock-github-server
 }
 
@@ -257,21 +292,6 @@ else
     --tag pulse:test \
     .
 fi
-run_playwright() {
-  docker run --rm \
-    --network host \
-    --ipc host \
-    --user "$(id -u):$(id -g)" \
-    --env CI=true \
-    --env HOME=/tmp \
-    --env "PULSE_E2E_DIAGNOSTIC=${PULSE_E2E_DIAGNOSTIC:-}" \
-    --env "PLAYWRIGHT_BASE_URL=${PULSE_E2E_BASE_URL}" \
-    --volume "$REPOSITORY_DIR/tests/integration:/work" \
-    --workdir /work \
-    "$PLAYWRIGHT_IMAGE" \
-    npx playwright test "$@"
-}
-
 run_rehearsal_smoke() {
   cd tests/integration
   export MOCK_CHECKSUM_ERROR=false
@@ -281,7 +301,7 @@ run_rehearsal_smoke() {
   export PULSE_E2E_DIAGNOSTIC=1
   docker compose -f docker-compose.test.yml up -d --wait
   timeout 60 sh -c 'until curl -fsS ${PULSE_E2E_BASE_URL}/api/health >/dev/null; do sleep 2; done'
-  run_playwright tests/00-diagnostic.spec.ts --project=chromium --reporter=list
+  run_playwright test tests/00-diagnostic.spec.ts --project=chromium --reporter=list
   local status
   status="$(curl -s -o "$RUN_DIR/update-status.json" -w '%{http_code}' ${PULSE_E2E_BASE_URL}/api/updates/status || true)"
   case "$status" in
@@ -306,7 +326,7 @@ run_release_smoke() {
   timeout 60 sh -c 'until docker inspect --format="{{json .State.Health.Status}}" pulse-mock-github | grep -q healthy; do sleep 2; done'
   timeout 60 sh -c 'until docker inspect --format="{{json .State.Health.Status}}" pulse-test-server | grep -q healthy; do sleep 2; done'
   timeout 60 sh -c 'until curl -fsS ${PULSE_E2E_BASE_URL}/api/health >/dev/null; do sleep 2; done'
-  run_playwright tests/95-release-smoke.spec.ts --project=chromium --reporter=list
+  run_playwright test tests/95-release-smoke.spec.ts --project=chromium --reporter=list
   docker compose -f docker-compose.test.yml down -v
 }
 
