@@ -64,8 +64,8 @@ reproduction evidence, not a representative customer success rate.
 | 1. Product contract and baseline | Map the current loop and sources of judgment. Record telemetry populations and gaps. | Every identified decision has an owner. Activity is not labelled usefulness. | Complete for this redesign scope. Contract, ownership decisions and baseline limits are recorded. |
 | 2. Shared evidence | Preserve canonical risk reasons and SMART counters, source/time semantics and history across tools/turns. | Regression tests preserve unknown versus zero and all canonical evidence. Real responses can inspect the same facts as the product. | Implemented and qualified for the named shared-evidence defects. Canonical disk detail, risk and cadence pass real data-path proof. Affected package and concurrency checks pass. Integrated CI later exposed remaining query and allocation regressions. The final bounded query-reuse correction passes complete selected exact-base worker comparisons and full metrics/database and focused race checks. Final landing CI passed and PRs #1928 and #1929 merged. Real-model interpretation failures remain tracked in step 5. |
 | 3. Diagnostic orchestration | Correct proposal-as-proof. Audit triage budgets, unmatched-signal evaluation, assessment completion and investigation cutoffs. | No code-written causal conclusion. No quality inferred from tool, flag or finding counts. Each retained pass has an objective reason. Safety boundaries and incomplete outcomes remain explicit. | Proposal promotion and capture inference were removed in c5d2f56dda. Commit 668af3fe6b removes investigation success-call floors, checkpoint instructions and generic call-count wrap-up rules. The detection slice removes contextless follow-up passes, flag/report-count policy and first-finding completion modes. Full chat and AI suites, focused API and conversation race tests pass. Real-model/action outcome qualification remains open. |
-| 4. Issue through verified outcome | Follow existing issue/investigation/action records into Assistant, approval, execution and independent readback. | Accepted proposal is visibly distinct from execution and verification. Rejected or unsupported actions do not become success. Uncertainty can survive an action proposal. | Approved/rejected Docker execution paths passed named live oracles. Expired-state and attached-context browser repairs passed the named current-runtime matrices. Missing-command-access remains a recorded contract gap. |
-| 5. Ground-truth qualification and landing | Extend existing qualification tooling only where necessary. Exercise healthy/unhealthy, dependency, missing-access, storage/backup and approved/rejected action cases. Inspect the final browser journey at desktop and narrow widths. | Record exact source/model/permissions, evidence, decisions, faults/misses, latency and verification. Fix in-scope failures, pass appropriate proofs and land scoped commits. | Partial. Installed native filesystem evidence and real storage diagnosis now pass semantic review, alongside healthy/dependency and approved/rejected Docker cases. Current-source browser and shared history race proofs pass. Landing, missing-access continuity and VM lifecycle qualification remain open. |
+| 4. Issue through verified outcome | Follow existing issue/investigation/action records into Assistant, approval, execution and independent readback. | Accepted proposal is visibly distinct from execution and verification. Rejected or unsupported actions do not become success. Uncertainty can survive an action proposal. | Implemented and locally qualified. Canonical planning returns inside the model turn, actor/request replay is persistent, and accepted actions survive later provider failure. Approved/rejected Docker and missing-runner/VM journeys passed independent live oracles. Final r34 history, action-state, attached-context and Assistant continuation matrices pass. Scoped delivery remains required. |
+| 5. Ground-truth qualification and landing | Extend existing qualification tooling only where necessary. Exercise healthy/unhealthy, dependency, missing-access, storage/backup and approved/rejected action cases. Inspect the final browser journey at desktop and narrow widths. | Record exact source/model/permissions, evidence, decisions, faults/misses, latency and verification. Fix in-scope failures, pass appropriate proofs and land scoped commits. | Local implementation qualification performed for the named matrix. r28 real Gemini runs cover healthy, unhealthy, dependency, storage capacity, missing access, approved and rejected actions, with independent Docker and VM observations. Later projection/streaming fixes have affected race proof and final r34 Playwright proof. Scoped landing remains pending. Independent customer environments, backup/restore, unattended autonomy and population reliability remain separate unqualified gates. |
 
 Use one shared runtime and the existing qualification runner, not a second
 product intelligence engine or a new parallel lifecycle. Preserve independent
@@ -3032,3 +3032,483 @@ end-of-document scrolling, actual pixels and absence of horizontal overflow.
 Receipts are in `tmp/patrol-planning-continuation/docs-browser`. The pinned
 worker formatter also restored indentation in an unchanged preflight helper.
 That formatting-only difference does not change the qualified runtime behavior.
+
+### Canonical request identity follow-through, 2026-09-07
+
+The Assistant continuation/evidence slice is committed as
+`e37353f937cbd665ab5f593843f67ed67dbc5748` and submitted in PR #1957 with automatic
+merge requested. Its exact staged tree
+`07e84669e69de86f98fcbdba5866f311ddf194bf` passed the full worker pre-commit hook.
+The preceding pre-push lint/typecheck receipt covers identical runtime source,
+with only the final qualification prose and browser receipt added afterwards.
+Heavy hooks ran on the worker, and the Mac commit/push reused that proof rather
+than starting the forbidden local workload. Merge state must be checked before
+claiming the change is on remote main.
+
+The next shared change binds each nonempty action request ID to the trusted
+actor and the first persisted canonical plan. Current action IDs include mutable
+resource/policy snapshots, so matching the action ID alone permits one request
+to create another plan after drift. The proposed root fix checks request identity
+in the canonical store, atomically with creation, without adding a diagnostic
+state machine. SQLite obtains its writer lock before checking competing accepted
+requests and rolls back tentative replay rows. Original plan, expiry, decisions
+and outcome remain authoritative. Conflicting intent or origin refuses the
+replay, and an explicit new request ID is required for a new plan. Unbound legacy
+records retain their prior action-ID semantics. Tests must cover concurrent
+store instances, reopen, changed intent, actor isolation and replay without a
+live resource registry. This work is in progress and is not yet qualified.
+
+The store proof also covers distinct inputs that collide only after redaction.
+Those are not treated as matching intent. If the persisted request has lost
+information to redaction, exact replay equality remains unknown and refuses,
+without creating a replacement or deleting the original action. This is an
+explicit limit. Normal non-sensitive replay remains deterministic.
+
+Assistant planning now derives its request identity from the trusted saved user
+turn and provider invocation ID. Replaying that invocation retains its request
+identity, while a new user turn can request a new action. Calls without a bound
+invocation identity retain fresh-request semantics. The adapter no longer makes
+a separate capability-admission decision before the canonical planner, which
+owns both persisted replay and admission of a new plan. These additional runtime
+changes require final-source regression and live qualification before landing.
+
+Before live qualification of this request/planning slice, exercise:
+
+- First canonical plan and its exact pending-approval review.
+- Same actor/request after resource or policy drift, retaining original plan,
+  expiry, decisions and outcome without a second action or execution.
+- Changed intent under the same request, returning the stable HTTP 409
+  `action_request_conflict`, with original history unchanged.
+- An explicitly new request and a new Assistant user turn, each able to create
+  its own plan under current admission policy.
+- Rejected and independently completed actions reopened by exact ID, including
+  Assistant continuation, persisted session reload and native review links.
+- Desktop, intermediate and narrow layouts, expanded policy/observer/delivery
+  details, keyboard activation, Escape, dismissal, focus return and scrolling.
+
+The core broker now has a separate plan-only entrypoint, sharing the canonical
+planning implementation while omitting policy progression. Wiring that entrypoint
+into model-visible investigation turns, removing proposal capture as an outcome
+channel, retaining persisted action references across provider failure and
+repeating the full diagnostic matrix remain unfinished. This addition alone is
+not the completed Patrol planning migration.
+
+
+### Canonical planning implementation in progress, 2026-09-07 13:50 UTC
+
+The next source slice replaces the investigation proposal capture state machine
+with a core-owned plan-only callback. The tool returns the persisted canonical
+plan and action identity during the model turn. Planning no longer forces a
+prose-only next turn. Later conflicting calls preserve the accepted action.
+Completed tool observations are attached at planning time and later reads do not
+rewrite that accepted origin. Provider failure retains the known action in the
+investigation and does not request policy progression. These changes are not yet
+qualified or landed. Tests that asserted proposal ambiguity erased history are
+being replaced with preservation, concurrency and refusal-continuation tests.
+
+The request identity r16 targeted race proof passed in actionlifecycle,
+unifiedresources, agentcapabilities and API. The full actionlifecycle race suite
+passed in 6.940 seconds. The full API race command reached its 600-second total
+package timeout with the named security test only just starting. This is not a
+passing full-package receipt. An isolated security-test run and the r17 invocation
+identity proof are queued through the shared heavy-work allocator behind release
+preflight. No allocator lock or provider refusal has been bypassed.
+
+Remaining executable steps: compile and run changed core and enterprise boundary
+regressions, repair any failures, build a source-bound development artifact on the
+worker, repeat the documented action interaction matrix at desktop/intermediate/
+mobile widths, run the unhealthy/healthy/dependency/missing-access/storage and
+approved/rejected real-model disposable-lab scenarios, retain exact results and
+cleanup receipts, run landing hooks and land scoped changes. The local completion
+gate remains open. Wider customer rollout remains separately unqualified.
+
+### Qualification export correction, 2026-09-07 14:10 UTC
+
+The first enterprise r18 compile used a stale shared core export. Its setup
+replaced the scratch export root while a core proof was queued. That compile
+also ran outside the required heavy-work allocator and failed before tests.
+It is not qualification evidence. The stale queued proofs and a duplicate
+isolated API invocation were cancelled. The original isolated API test remains
+queued. No release-preflight process was interrupted.
+
+The corrected r19 commands use the shared allocator, the non-root maintainer
+identity and checksum preconditions for 33 core source/document paths and three
+enterprise files. Source transfer and formatting completed before queueing.
+These checks bind the forthcoming receipts to the tested content, but they do
+not replace the still-required live model, disposable-lab and browser proof.
+
+The canonical sensitive-parameter guard now runs in the action lifecycle after
+request replay lookup, so an accepted plan can still be read when the live
+capability registry becomes unavailable. The Patrol broker sets that guard from
+trusted core context. Missing request identity refuses before any action is
+created. Model-supplied sensitive values remain prohibited.
+
+
+### Canonical planning regression status, 2026-09-07 14:24 UTC
+
+The r21 checksum-bound targeted race command passed actionlifecycle, unified
+resources, tools, chat, API, agent capabilities and public contracts. The full
+enterprise investigation race suite passed in 1.135 seconds. The previously
+named API security test passed in the targeted API command (5.240 seconds for
+the complete selected API set). This does not retroactively pass the earlier
+600-second full API package run.
+
+The r22 full chat, agent-capability and public-contract race suites passed.
+Two tools tests still depended on the retired adapter-level capability veto.
+They now exercise the real canonical lifecycle for VMware refusal. The r23 full
+tools race suite passed, and a Go 1.26.8 Darwin development build succeeded with
+SHA256 c00d6557fa8d5e5637d315e09e4535c3da0d5245cc2f9d6bce903fbd532cf15c.
+That artifact has not been installed or live-qualified. A final approval-context
+projection repair was identified afterwards and requires the next build.
+
+The proposal-attempt counter, ambiguity/integrity outcome state machine and
+its separate error transport have been removed from the primary contracts.
+A planning refusal is an ordinary tool result. A persisted action remains in
+history after a later refusal or provider failure. Normal provider failures
+remain errors and cannot become completed diagnosis outcomes.
+
+Delivery PR 1957 is still pending. Its benchmark check reported five route
+normalization microbenchmarks above the configured threshold. A paired exact
+base/candidate worker reproduction reproduced three slowdowns despite unchanged
+normalization source. The compiled-code comparison remains under investigation.
+No failed check has been overridden. Required live scenario and Playwright
+qualification for the current planning source remain unperformed.
+
+
+### 2026-09-07 current planning proof and qualification handoff
+
+The r24/r25 targeted approval projection and complete enterprise investigation
+race suites passed on Go 1.26.8. Source binding found three stale export files
+before live installation: the browser receipt, static Safety document and a
+repository documentation test. These were corrected explicitly. No live proof
+is claimed for either intermediate artifact.
+
+The r26 qualification package race suite passed in 7.983 seconds and the full
+enterprise investigation race suite passed in 1.133 seconds. The qualification
+scorer now retains failed tool calls as telemetry without treating any refusal
+as an automatic diagnosis failure. Scenario-owned truth and independent action
+oracles remain required. Existing keyword checks are mechanical transcript
+checks, not semantic evidence of useful diagnosis or recommendation safety.
+Each new live result still requires review against the independent fixture
+observations and exact action/outcome records.
+
+The task-specific r26 browser interaction matrix is retained at workspace
+`tmp/patrol-planning-continuation/live-r26/interaction-matrix.md`. It covers
+Assistant history, exact action continuation, pending/rejected/completed action
+states, evidence expansions, keyboard dismissal and focus return, reload, and
+1440/900/390 widths. Required current-source real-model and browser qualification
+remains unperformed at this entry. The subscription-provider refusal remains
+preserved. Wider independent-customer rollout evidence is a separate open gate.
+
+
+The installed r26 binary is
+`0e390e8f8362bcc7dc10b51ee5eb5cf6a2232b2f736b38ab681eae7162838a78`.
+All 4,850 source/module/frontend file hashes matched its worker export before
+installation. Runtime reports Go 1.26.8 and version
+`0.0.0-dev-pro+patrol-planning-r26`. Its generic version endpoint still reports
+release/stable metadata, so artifact SHA and source manifest are the proof
+identity, not those generic labels.
+
+Real Gemini missing-runner session `6fe14195-e9dd-416e-9e96-3bb500359cf4`
+completed in 11.636 seconds and correctly reported the unavailable host typed
+runner. It made three planning attempts, including an unnecessary numeric-ID
+lookup miss. No action succeeded and no guest-agent prerequisite was invented.
+The inventory tool exposed an unavailable disk percentage as -100 for the stopped
+VM. That value did not drive the conclusion, but remains an explicit metric
+projection defect to resolve before claiming general diagnostic data quality.
+
+Real Gemini session `83407929-bec4-493e-99ce-20295725ca86` prepared rejected
+start `act_68699d9b3caed37f85faaaaf9c70ff3e` in 9.578 seconds and explained its
+unexecuted terminal result in 7.499 seconds. A distinct approved start
+`act_42404c31949a96963aa3e6794bace969` was prepared in 5.867 seconds. Pulse
+independently observed the VM running through Proxmox, and Assistant queried
+that exact action and explained approval, successful execution and independent
+verification in 6.645 seconds. Neither explanation created another plan.
+Restoration stop `act_2265d24450898a678ae3a1dc34034faa` independently confirmed
+stopped. Runner, both temporary tokens and tunnel were removed, control was
+restored and the production agent remained unchanged.
+
+Playwright exercised the pending/rejected/completed action records at
+1440/900/390 and Assistant history, seven tool expansions, reload and the native
+exact-action review link. Pixel inspection confirmed the settled desktop
+Assistant header and narrow action outcome were usable. An initial screenshot
+during scrolling clipped the header, so the affected pass was repeated after
+scroll settlement. These passes qualify the named VM journey only. Docker
+healthy/unhealthy/dependency/storage and Patrol-origin plan continuation remain
+required. Local receipts and the independent interpretation are under workspace
+`tmp/patrol-planning-continuation/live-r26/`.
+
+
+### Current canonical planning qualification, r28 to r30
+
+The r28 binary SHA256 is
+`c515516beb61fe902f2c3d1fdd50f4f9bf2185cc33f15d529027d93b2eeaba54`.
+It contains the canonical unavailable-disk correction and the revised investigation
+prompt. Unavailable disk usage is absent rather than -100 or a fabricated zero.
+The prompt distinguishes the observed failure mechanism from an unobserved
+origin. It does not manufacture a cause from an accepted plan or require
+per-call gap narration. Targeted core metric and tool checks and the complete
+enterprise investigation race suite passed on Go 1.26.8.
+
+All following cases used the authorized `openrouter:google/gemini-3.8-flash`
+route, disposable fixtures and independent fault/revert/cleanup oracles. Each is
+one current repetition, not a statistically representative reliability sample.
+Earlier failed attempts remain failed. Scorer grounding fields are keyword
+checks. The interpretation below comes from reviewing the model conclusion
+against the observed fixture and canonical action records.
+
+| Case and run | Observed result | Watch / complete scenario seconds |
+|---|---|---|
+| Healthy `q-20260907-150813-a08381f0` | No finding on healthy controls. No injected fault, so recall is not applicable despite the scorer's vacuous value of 1. | 5.803 / 20.296 |
+| Unhealthy `q-20260907-150920-a22e598e` | Identified the one unhealthy container and left the healthy sibling alone. Correctly left its internal cause unknown and named the next diagnostic read. Watch-only case. | 11.948 / 47.460 |
+| Dependency `q-20260907-150204-5cd9ff3b` | Followed the client symptom to the stopped dependency. Distinguished the observed outage mechanism from the unknown reason it stopped. Canonical start plan `act_488eb1b9e5fb2d79e361bc163206ae19` required approval. No product execution or recovery is claimed. | 11.370 / 52.437 |
+| Storage `q-20260907-150004-1bbdf26d` | Identified an exhausted 8 MiB tmpfs, zero free space and ENOSPC. Distinguished unknown origin and the data-loss implication of clearing volatile storage. Plan `act_d2f137411342c995d840d529a70fbf95` remained unexecuted and later expired. Fixture reversion independently restored capacity and health, which is lab recovery rather than a verified product action. | 10.244 / 50.562 |
+| Approved `q-20260907-150350-f75852dd` | Identified the failed PID health probe without inventing why the process died. Action `act_fd2d0bdab1930e2d3a75faf080b8ba7a` was approved, executed and independently observed healthy through the Docker daemon. Finding `cd8d247cf83bce25` retained the linked investigation and verified outcome. | 10.232 / 89.633 |
+| Rejected `q-20260907-150613-16ba31eb` | Identified the same observed failure mechanism and retained uncertainty. Action `act_369c466aea179f93fc69aa04a710689a` was rejected. Independent observation confirmed the fault remained, with no execution promoted into success. | 9.388 / 39.133 |
+
+The five injected Docker faults were found with zero measured misses and zero
+extra findings in these exact runs. This does not estimate population recall or
+false-alarm rates. Scenario totals include collection and workflow waiting, not
+just model latency. Watch estimates range from US$0.007354 to US$0.015235 and
+exclude separate investigation calls. They are not complete journey spend.
+Provider-side key limits remain the budget authority. Population useful diagnosis,
+false alarms, missed problems, journey latency and verified-outcome rates remain
+unknown beyond the honest adoption baseline above.
+
+Missing-runner session `ecd14a20-6855-466e-942c-02fee00f30ef` completed in
+9.336 seconds, reported the unavailable typed runner and did not create a
+successful action or invent an in-guest agent prerequisite. VM session
+`baf00cce-0f5c-4f7b-88d3-7040559c5ae3` prepared rejected start
+`act_c007cc3882625e10ef84c28f571590ab`, explained its unexecuted outcome,
+prepared approved start `act_cb9cfb3d10031015a063bfcb1f46e90b`, and explained
+its independent Proxmox running observation. These four turns took 10.273,
+7.068, 5.533 and 6.304 seconds. Both explanations queried the existing exact
+action and created no replacement. Restoration stop
+`act_96826d092451c76c3063d2a7e270549d` independently confirmed stopped.
+Playwright exercised pending, rejected, completed start and completed stop at
+1440, 900 and 390 pixels. Those backend outcomes remain source-bound to r28.
+
+All Docker fixtures passed independent cleanup, repeated cleanup no-op and
+unchanged-inventory checks. VM110 was restored stopped, temporary runner,
+collector and command tokens were revoked, and the tunnel stopped. Tower's
+temporary collector and command token were removed and its original development
+collector restored at 15:12 UTC. Both production agents remained unchanged.
+Patrol is paused and control is read-only. Raw local receipts are in workspace
+`tmp/patrol-planning-continuation/live-r28/` and the Tower restoration transaction
+in `live-r26/tower-agent-transaction-r3.json`.
+
+The r29 frontend correction stopped projecting unknown legacy destructive risk
+as false, removed a synthetic legacy fix, and distinguishes a completed canonical
+action from an approval. It passed type checking and 143 focused frontend tests.
+Real linked Assistant session `46a5bb5c-5d51-45f8-8856-ca65cdb5034f` read the
+approved action once and correctly explained the independent historical outcome,
+unobserved process-exit cause and later fixture removal. Browser pixels failed:
+chunk-boundary spaces and newlines were lost. The shared handoff-policy sanitizer
+trimmed every content delta. The r30 change preserves whitespace through policy
+redaction and tests concatenated streamed and stored text while retaining
+redaction. Final current-source browser proof is required before this is qualified.
+
+PR #1957 merged as `a66b8e11d7ca9ed5660ffd8725a1461661ca2fdf` at 14:24:04 UTC.
+Its benchmark check failed. No manual override was issued by this task, and that
+failure is not reclassified as a pass. The remaining implementation is a separate
+scoped delivery. Local main was safely fast-forwarded to `7e34b00d4f` with task
+changes preserved. The worker export received the exact 31 newly committed
+files before the r30 build. Qualification of the affected final browser journey
+and verified landing remain open. Independent volunteered environments remain a
+separate wider rollout gate. The subscription-provider refusal is preserved.
+
+
+### Verified-history replay correction, r31
+
+The r30 real-model explanation was readable and correctly cited the canonical
+Docker observation time. It also exposed a separate persisted-history defect:
+`UpdateInvestigation` and `UpdateInvestigationOutcome` assigned `time.Now()` to
+an already resolved finding and appended another verification event when the
+same result was replayed. Startup reconciliation could therefore move the
+finding resolution time without a new recovery. The canonical action observer
+time remained intact.
+
+Both writers now share one verified-resolution projection. It preserves an
+existing resolution timestamp, appends verification only for a new outcome or
+an unresolved finding, and allows a genuinely regressed finding to resolve again.
+Unchanged non-resolution status/outcome replays do not append fake transitions.
+Regression coverage checks both writers, repeated replay, active counts and a
+new resolution after regression. Previously rewritten timestamps are not guessed
+back into history. Their exact recovery evidence remains the canonical action's
+independent observation. A current-runtime restart/read comparison and repeated
+browser qualification remain required for this correction.
+
+
+The follow-through separated the stores: the Patrol source still held the correct
+15:05:29 UTC resolution, while the unified finding supplied to Assistant had a
+later timestamp. The router first projects the source finding and then invokes
+`UnifiedStore.Resolve`, which unconditionally replaced that projected timestamp.
+The r32 correction makes this shared resolver preserve a recorded resolution and
+still timestamp a genuinely reopened finding. A regression covers that exact
+projection-plus-resolve sequence. The r31 writer fix remains necessary for
+idempotent source updates, but was not alone the complete fix for the observed
+Assistant discrepancy. Full affected r31 race suites passed, including chat,
+unified resources, lifecycle, tools, qualification and public contracts.
+
+
+### Final browser follow-through, r33
+
+The r32 source-bound runtime is
+`ed1b38e9744f613b52e747ecc53fb669cdad3210bce7cf619c39919cc047cfb8`.
+An authenticated before/after restart comparison proved the timestamp repair:
+Patrol retained `2026-09-07T16:05:29.047446+01:00`, while the unified record
+changed from the incorrect startup time `16:26:35.673544+01:00` back to that
+exact source time. There was still exactly one source verification event.
+The canonical source could repair this projection without guessing history.
+
+Real Assistant session `93998cc0-cf4c-4ca3-8011-ff27dde0f227` explained the
+approved outcome at 15:05:29 UTC and retained uncertainty about the original
+process exit. Storage continuation `9d92a098-9f6f-4b05-8f37-e9cfea8c7425`
+read the exact expired action, distinguished no execution from recovery,
+identified the measured tmpfs exhaustion and attributed finding closure to
+later resource removal rather than the unexecuted plan. These are semantic
+continuation results, not another fault-injection repetition.
+
+Pixel review exposed an additional desktop defect after streaming: the end
+anchor's `scrollIntoView` could scroll the outer document and leave the docked
+Assistant outside the viewport. The shared transcript component now scrolls its
+own container for both streaming and Latest. It still respects a reader who has
+scrolled away from live output. Existing scrolling regressions now check the
+owned container and no ancestor scrolling. The final matrix adds streaming,
+manual scroll-away, Latest, document position, reachable header/composer and
+resize while open. This is required browser qualification, not a screenshot-only
+cosmetic claim.
+
+### Scope reconciliation
+
+The current local matrix satisfies the requested storage-or-backup branch with
+an actual capacity fault. Backup coverage, restore correctness and independent
+backup-source failure remain unqualified and cannot inherit that result. The
+old incident-memory listing and typed compatibility-ID adapter remain isolated
+modernization residuals. Primary diagnosis uses canonical resource queries and
+history. Their earlier limitations are not represented as corrected here.
+Unsupported-filter failures from earlier transcripts remain historical failures,
+while current named canonical queries pass the recorded scenarios. This does not
+qualify every filter or legacy adapter. The fixed retained-history contention has
+functional concurrency proof, not a worker performance benchmark. Current
+scenario and Assistant timings are observations, not latency SLO qualification.
+Unattended action execution and broader autonomy remain outside the approved and
+rejected operator-mediated lab proof. Independent volunteered environments remain
+the wider rollout gate. These residuals stay in the owning coverage gap rather
+than being silently treated as product-wide readiness.
+
+
+The fresh-stream matrix then distinguished wheel overscroll from programmatic
+scrolling. At the transcript bottom, an 800-pixel wheel event moved the outer
+page from scrollY 41 to 841 while the transcript stayed at its maximum. The
+shared transcript now also contains overscroll, preventing end-of-conversation
+wheel input from chaining into the page. The failed r33 browser runs remain
+failed. The r34 affected matrix must repeat after this final frontend change.
+
+
+### Final source-bound qualification, r34, 2026-09-07
+
+The final bundled runtime is `0.0.0-dev-pro+patrol-planning-r34`, SHA256
+`e1ae053e656b28af9ba0e7541a47bdeb56303d1d7912edc57b2dac2f94620bd1`.
+The source binding matched 4,853 Go, module and frontend files. Relative to the
+r28 fault matrix, the only later non-test Go changes are the shared whitespace
+redactor, chat presentation redaction, Patrol resolution writer and unified
+resolution writer. Planning, investigation prompts, execution and capability
+logic are identical. The r28 fault matrix is not misrepresented as a new r34
+repetition. The changed writers have package race proof and current-runtime
+restart, real-model continuation and browser follow-through.
+
+Worker proof passed the affected AI findings tests and full chat, unified
+resources, action lifecycle, agent capabilities, tools, qualification and public
+contract race suites in r31. The r32 unified-store race suite passed after the
+final timestamp correction. Final r34 frontend type checking, 178 tests across
+five affected files, Vite build and the full enterprise investigation race suite
+passed. The earlier full API timeout remains a timeout, alongside the narrower
+passing API/contract proofs. The earlier PR1957 benchmark failure is still not a
+pass and no benchmark claim is added here.
+
+Fresh r34 Assistant session `6a0b9f67-97fc-4966-9674-1060df61cf7b` explained
+finding `cd8d247cf83bce25` and exact action
+`act_fd2d0bdab1930e2d3a75faf080b8ba7a`. It retained the independent recovery
+observation at 15:05:29 UTC, uncertainty about the initial process death and the
+separate later fixture removal. Model response time was 11.970 seconds and the
+whole browser interaction took 32.815 seconds. No new action was requested.
+
+At `/patrol`, final Playwright covered 1440x1000, 900x1000 and 390x1000:
+approved, rejected and expired-storage finding reviews, all investigation tool
+cards, deeply scrolled filesystem measurements, Discuss with Assistant,
+attached finding context, explicit new-session context clearing, resuming saved
+context, exact Actions links, terminal controls, reload and Escape. Storage
+retained the expired plan and its risk. Rejection remained distinct from an
+executed recovery. The approved action retained independent verification.
+Actual desktop, intermediate and narrow pixels were inspected.
+
+Fresh streamed approved explanation and saved rejected/storage explanations
+passed wheel scrolling at the transcript end, scrolling away, Latest, resize
+while open, unchanged outer document position and reachable header/composer at
+all three widths. Saved missing-access session
+`ecd14a20-6855-466e-942c-02fee00f30ef` and VM action/outcome session
+`baf00cce-0f5c-4f7b-88d3-7040559c5ae3` were selected through the session-history
+picker, their exact message reads checked, all tool details expanded and the
+same three-width scrolling matrix passed without model submissions. The
+missing-access explanation retains the actual missing typed-runner refusal.
+It does not invent a guest-agent requirement or claim an accepted action.
+
+The first history scripts crossed asynchronous initial row replacement and
+failed on detached locators. A network-idle wait also timed out on this live
+monitoring page. The final script waits for the explicit history response,
+opens the review through the user control, closes it, checks returned focus and
+reopens with Enter. A separate 12-second check retained the exact row node,
+keyboard focus and open selection. These failed script attempts are preserved,
+not counted as product passes. Both shipped Assistant documentation routes also
+passed desktop/narrow linked navigation, reload, deepest scroll and no overflow.
+
+Receipts live under workspace `tmp/patrol-planning-continuation/patrol-browser`:
+`approved-explained-r34`, `approved-history-r34`, `storage-history-r34d`,
+`rejected-history-r34b`, `rejected-resumed-r34`, `storage-resumed-r34`,
+`missing-access-saved-r34b`, `vm-outcomes-saved-r34` and `review-refresh-r34`.
+Documentation receipts are in `docs-browser-r34`. The committed browser receipt
+binds the three changed frontend runtime files to exact content hashes.
+
+The named local implementation matrix is performed. This does not complete the
+production-wide readiness gate. Independent volunteered customer environments,
+population diagnosis/false-alarm/miss/latency evidence, backup/restore and wider
+unattended autonomy remain unqualified. Local delivery still requires scoped
+core and enterprise commits through their repository workflow. Preserve the
+explicit subscription-provider refusal with no retry, rephrasing or bypass.
+
+
+Final r34 action review also reopened VM rejected Start, independently verified
+Start and independently verified restoration Stop at 1440, 900 and 390 widths.
+Policy/evidence/delivery disclosures, deepest outcome, Escape, explicit close,
+reopen and reload passed with login as the only write. Exact-action receipts are
+in `patrol-browser/vm-actions-r34`.
+
+The first exact staged-tree hook passed sensitivity/gitleaks, source formatting,
+documentation mirrors, browser binding and governance staging, then correctly
+stopped because the registry's explicit store-proof list did not name the new
+`action_request_identity_test.go`. The owning proof map now includes that actual
+persistence/concurrency regression and the new policy-redaction regression.
+No contract-neutral or completion override was used. The full hook must pass on
+the revised exact tree before commit.
+
+
+### Core delivery check correction, 2026-09-07
+
+Core PR1960's initial head `c501376843431e1812abd42da16888b462b41dc3`
+passed full frontend tests, both non-API backend race shards, all eight E2E
+shards, governance, security and paired benchmarks. Its API race suite ran
+1607.764 seconds and reported one failing test:
+`TestContract_AssistantFindingContextUsesModelOnlyHandoff`. The guard expected
+thirteen spaces before `runResult.ModelTurns`, although gofmt correctly changed
+field alignment after the result structure changed. No runtime assertion or
+race failure was reported by that shard.
+
+The static wiring guard now normalizes whitespace before comparing its required
+snippets. It still requires the same identifiers and wiring, and its forbidden
+adapter assertions remain intact. The correction changes only the test, not
+model behavior or the qualified runtime. The exact failing test and repository
+checks must pass before this delivery is counted complete. The failed API job is
+[101809873027](https://github.com/rcourtman/Pulse/actions/runs/34143221580/job/101809873027),
+with its raw log retained in workspace
+`tmp/patrol-planning-continuation/core-api-c501.log`.

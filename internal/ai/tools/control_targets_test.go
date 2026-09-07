@@ -348,6 +348,10 @@ func TestExecuteControlResource_UnadvertisedCapabilityIsToolEvidence(t *testing.
 	if !result.IsError {
 		t.Fatalf("expected a boundary result, got %+v", result)
 	}
+	if len(plans.requests) != 1 {
+		t.Fatalf("capability admission must use the canonical planner, requests=%d", len(plans.requests))
+	}
+
 	response := decodeControlToolResponse(t, result)
 	if response.Error == nil || response.Error.Code != agentcapabilities.ErrCodeActionNotAllowed {
 		t.Fatalf("expected %s, got %+v", agentcapabilities.ErrCodeActionNotAllowed, response.Error)
@@ -410,5 +414,27 @@ func TestSessionTargetsAdvertisingAction_IgnoresContextsWithoutEnumeration(t *te
 	executor.SetResolvedContext(resolved)
 	if targets := executor.SessionTargetsAdvertisingAction("reboot"); len(targets) != 0 {
 		t.Fatalf("a context that cannot enumerate must yield no gate evidence, got %+v", targets)
+	}
+}
+
+func TestControlPlanRequestIdentityFollowsTrustedTurnAndInvocation(t *testing.T) {
+	vm := controlTestProxmoxVM("identity-vm", 101, "pve", true)
+	plans := &recordedPlan{}
+	executor := NewPulseToolExecutor(ExecutorConfig{UnifiedResourceProvider: &stubUnifiedResourceProvider{resources: []unifiedresources.Resource{vm}}, ControlLevel: ControlLevelControlled, TypedActionPlanner: plans.planner(nil)})
+	invocation := ToolInvocation{ID: "provider-call-1", Name: agentcapabilities.PulseControlToolName, Arguments: map[string]interface{}{"type": "resource", "resource_id": vm.ID, "action": "reboot"}}
+	for _, messageID := range []string{"user-turn-1", "user-turn-1", "user-turn-2"} {
+		result, err := executor.ExecuteInvocation(WithInvocationScope(context.Background(), "session-1", messageID), invocation)
+		if err != nil || result.IsError {
+			t.Fatalf("planning failed: %#v %v", result, err)
+		}
+	}
+	if len(plans.requests) != 3 {
+		t.Fatalf("requests=%d", len(plans.requests))
+	}
+	if plans.requests[0].RequestID != plans.requests[1].RequestID {
+		t.Fatal("replayed invocation minted another request identity")
+	}
+	if plans.requests[0].RequestID == plans.requests[2].RequestID {
+		t.Fatal("a new user turn reused the previous action request")
 	}
 }

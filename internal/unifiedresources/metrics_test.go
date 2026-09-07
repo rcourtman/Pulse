@@ -518,3 +518,29 @@ func TestMetricsFromDockerContainerMockFallbackSynthesizesIO(t *testing.T) {
 		t.Fatalf("expected synthesized diskWrite > 0, got %+v", metrics.DiskWrite)
 	}
 }
+
+func TestCanonicalDiskUsagePreservesUnavailableAndObservedZero(t *testing.T) {
+	for _, usage := range []float64{-1, math.NaN(), math.Inf(1), 101, 0, 25} {
+		disk := models.Disk{Total: 1024, Usage: usage}
+		for name, metrics := range map[string]*ResourceMetrics{
+			"vm":          metricsFromVM(models.VM{Disk: disk}),
+			"container":   metricsFromContainer(models.Container{Disk: disk}),
+			"node":        metricsFromProxmoxNode(models.Node{Disk: disk}),
+			"host":        metricsFromHost(models.Host{Disks: []models.Disk{disk}}),
+			"docker host": metricsFromDockerHost(models.DockerHost{Disks: []models.Disk{disk}}),
+		} {
+			valid := usage == 0 || usage == 25
+			if (metrics.Disk != nil) != valid {
+				t.Fatalf("%s usage %v produced disk metric %+v", name, usage, metrics.Disk)
+			}
+			if valid && metrics.Disk.Percent != usage {
+				t.Fatalf("%s lost observed usage %v: %+v", name, usage, metrics.Disk)
+			}
+		}
+	}
+	for _, used := range []int64{-1, 1025} {
+		if metricsFromVM(models.VM{Disk: models.Disk{Total: 1024, Used: used}}).Disk != nil {
+			t.Fatalf("contradictory disk usage %d was projected", used)
+		}
+	}
+}

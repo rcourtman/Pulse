@@ -594,7 +594,12 @@ func approvalPlanRequestToInfo(plan *unifiedresources.ActionPlan) *aicontracts.A
 		return nil
 	}
 	policyDecision, _ := json.Marshal(plan.PolicyDecision)
+	var requirement json.RawMessage
+	if plan.ApprovalRequirement.Version != 0 {
+		requirement, _ = json.Marshal(plan.ApprovalRequirement)
+	}
 	return &aicontracts.ActionPlanInfo{
+		ApprovalRequirement:  requirement,
 		ActionID:             plan.ActionID,
 		RequestID:            plan.RequestID,
 		Allowed:              plan.Allowed,
@@ -636,13 +641,33 @@ func approvalPlanInfoToRequest(plan *aicontracts.ActionPlanInfo) (*unifiedresour
 			return nil, fmt.Errorf("invalid canonical action policy decision: %w", err)
 		}
 	}
+	requirement := policyDecision.ApprovalRequirement
+	if len(plan.ApprovalRequirement) > 0 {
+		var supplied *unifiedresources.ApprovalRequirement
+		decoder := json.NewDecoder(bytes.NewReader(plan.ApprovalRequirement))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&supplied); err != nil || supplied == nil {
+			return nil, fmt.Errorf("invalid canonical approval requirement")
+		}
+		if err := decoder.Decode(&struct{}{}); err != io.EOF {
+			return nil, fmt.Errorf("invalid canonical approval requirement: trailing content")
+		}
+		if err := unifiedresources.ValidateApprovalRequirement(*supplied, unifiedresources.ActionApprovalLevel(plan.ApprovalPolicy)); err != nil {
+			return nil, fmt.Errorf("invalid canonical approval requirement: %w", err)
+		}
+		if policyDecision.Version != 0 && *supplied != policyDecision.ApprovalRequirement {
+			return nil, fmt.Errorf("canonical approval requirement disagrees with policy provenance")
+		}
+		requirement = *supplied
+	}
+
 	converted := &unifiedresources.ActionPlan{
 		ActionID:             plan.ActionID,
 		RequestID:            plan.RequestID,
 		Allowed:              plan.Allowed,
 		RequiresApproval:     plan.RequiresApproval,
 		ApprovalPolicy:       unifiedresources.ActionApprovalLevel(plan.ApprovalPolicy),
-		ApprovalRequirement:  policyDecision.ApprovalRequirement,
+		ApprovalRequirement:  requirement,
 		PredictedBlastRadius: append([]string(nil), plan.PredictedBlastRadius...),
 		RollbackAvailable:    plan.RollbackAvailable,
 		Message:              plan.Message,

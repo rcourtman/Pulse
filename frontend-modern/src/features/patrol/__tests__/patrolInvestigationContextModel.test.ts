@@ -536,7 +536,7 @@ describe('patrolInvestigationContextModel', () => {
     expect(handoff).not.toHaveProperty('prompt');
     expect(handoff.context.briefing).toMatchObject({
       actionLabel: 'Discuss Patrol assessment',
-      safetyNote: 'Diagnostics and remediation require governed approval.',
+      safetyNote: 'Use diagnostic tools within current permissions. New actions remain governed.',
     });
     expect(handoff.context.handoffContext).not.toContain('Recommended Next Step');
   });
@@ -1025,6 +1025,7 @@ describe('patrolInvestigationContextModel', () => {
         approvalRequestedAt: '2026-05-06T12:00:00Z',
         approvalExpiresAt: '2026-05-06T12:10:00Z',
         actionId: 'restart-nginx',
+        actionState: 'pending',
         actionRequestedBy: 'pulse_patrol',
         actionApprovalPolicy: 'operator',
         actionRequiresApproval: true,

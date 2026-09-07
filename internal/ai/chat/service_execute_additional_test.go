@@ -3903,3 +3903,36 @@ func TestService_ExecuteStream_DeliversCloudSafeOperationalContextToCloudModel(t
 		assertCloudSafe(t, (*captured)[len(*captured)-1].Content)
 	})
 }
+
+func TestHandoffResourcePolicyStreamPreservesChunkWhitespace(t *testing.T) {
+	provider := handoffUnifiedProvider{resources: map[unifiedresources.ResourceType][]unifiedresources.Resource{
+		unifiedresources.ResourceTypeSystemContainer: {{ID: "system-container:ha-node:101", Type: unifiedresources.ResourceTypeSystemContainer, Name: "homeassistant", Tags: []string{"sensitive"}, Storage: &unifiedresources.StorageMeta{Path: "/var/lib/homeassistant"}}},
+	}}
+	resources := []HandoffResource{{ID: "system-container:ha-node:101", Name: "homeassistant", Type: "system-container", Node: "ha-node"}}
+	chunks := []string{"### Summary", " of recorded outcome", "\n\n", "1. Health", " ", "passed.\n", "2. Path: ", "/var/lib/homeassistant", "\n\n"}
+	var streamed strings.Builder
+	for _, chunk := range chunks {
+		encoded, err := json.Marshal(ContentData{Text: chunk})
+		if err != nil {
+			t.Fatal(err)
+		}
+		event := sanitizeStreamEventForHandoffResourcePolicy(StreamEvent{Type: "content", Data: encoded}, resources, provider)
+		event, ok := event.ClientSafe()
+		if !ok {
+			t.Fatalf("dropped content chunk %q", chunk)
+		}
+		var data ContentData
+		if err := json.Unmarshal(event.Data, &data); err != nil {
+			t.Fatal(err)
+		}
+		streamed.WriteString(data.Text)
+	}
+	want := "### Summary of recorded outcome\n\n1. Health passed.\n2. Path: " + unifiedresources.ResourcePolicyRedactedLabel + "\n\n"
+	if got := streamed.String(); got != want {
+		t.Fatalf("streamed = %q, want %q", got, want)
+	}
+	whole := sanitizeTextForHandoffResourcePolicy(strings.Join(chunks, ""), resources, provider)
+	if whole != want {
+		t.Fatalf("stored text = %q, want %q", whole, want)
+	}
+}

@@ -25,6 +25,23 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Canonical Patrol and Assistant continuation, 2026-09-07
+
+Canonical investigation planning runs inside the model's tool call. The model
+receives the persisted plan or refusal before choosing its next step. Accepted
+planning does not end the model turn or establish a diagnosis. Accepted action
+identity survives a later provider failure, which remains a separate failure.
+Completed tool results supply evidence identity. Tool starts and proposed prose
+do not become observations. Explicit run budgets, authority and independent
+verification remain deterministic.
+
+Patrol and unified finding replay preserve the original resolution time and do
+not append another verification event. A genuine regression can resolve again.
+Handoff-policy redaction preserves streamed whitespace. Assistant scrolling owns
+only the transcript container and cannot move outer page ancestors. Current
+qualification, failures and wider rollout limits are recorded in
+`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`.
+
 Patrol investigation's mode contract states its non-interactive read/proposal
 boundary and asks for diagnosis, supporting evidence and remaining uncertainty.
 It does not prescribe restarting an unhealthy container or require a peer

@@ -20,6 +20,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 // Executor runs a previously planned and approved action through the
@@ -66,6 +67,7 @@ type RefreshPlanner func(ctx context.Context, orgID string, previous unified.Act
 type Store interface {
 	CreateActionAudit(record unified.ActionAuditRecord, initialEvents []unified.ActionLifecycleEvent) (unified.ActionAuditRecord, bool, error)
 	GetActionAudit(actionID string) (unified.ActionAuditRecord, bool, error)
+	GetActionAuditByRequest(req unified.ActionRequest, origin *unified.ActionOrigin) (unified.ActionAuditRecord, bool, error)
 	RecordActionDecision(record unified.ActionAuditRecord, event unified.ActionLifecycleEvent) error
 	RecordActionExpiry(record unified.ActionAuditRecord, event unified.ActionLifecycleEvent) error
 	RecordActionExecutionStart(record unified.ActionAuditRecord, event unified.ActionLifecycleEvent) error
@@ -179,6 +181,9 @@ func (s *Service) WithPolicyMutation(write func() error) error {
 // PlanOptions carries broker-owned planning metadata that must never be
 // accepted from a public transport request body.
 type PlanOptions struct {
+	// RequireOperatorSensitiveParams prevents model-originated secrets from
+	// entering a new action. Existing request replay is resolved first.
+	RequireOperatorSensitiveParams bool
 	// Actor is trusted server context. Public transports derive it from the
 	// authenticated request and internal brokers stamp their fixed identity.
 	Actor unified.ActionActor
@@ -441,6 +446,30 @@ func (s *Service) PlanWithOptions(ctx context.Context, orgID string, req unified
 		return unified.ActionPlan{}, &actionplanner.ValidationError{Field: "resourceId", Message: "resource id is required"}
 	}
 
+	req = NormalizeRequest(req)
+	store, err := s.store(orgID)
+	if err != nil {
+		return unified.ActionPlan{}, err
+	}
+	current, found, replayErr := store.GetActionAuditByRequest(req, opts.Origin)
+	if replayErr == nil && found {
+		return current.Plan, nil
+	}
+	if replayErr != nil && !errors.Is(replayErr, unified.ErrActionIdentityConflict) {
+		return unified.ActionPlan{}, &PersistError{Op: "action request identity", Err: replayErr}
+	}
+
+	if replayErr != nil {
+		// Only a possible lifecycle alias needs live catalog resolution. Other
+		// conflicts remain conflicts even when the registry is unavailable.
+		synonym, isSynonym := lifecycleCapabilitySynonym(req.CapabilityName)
+		canonicalCandidate := req
+		canonicalCandidate.CapabilityName = current.Request.CapabilityName
+		if !found || !isSynonym || synonym != current.Request.CapabilityName || !unified.ActionRequestReplayMatches(current, canonicalCandidate, opts.Origin) {
+			return unified.ActionPlan{}, &PersistError{Op: "action request identity", Err: replayErr}
+		}
+	}
+
 	registry, err := s.registry(orgID)
 	if err != nil {
 		return unified.ActionPlan{}, err
@@ -450,6 +479,27 @@ func (s *Service) PlanWithOptions(ctx context.Context, orgID string, req unified
 		return unified.ActionPlan{}, &ResourceNotFoundError{ResourceID: req.ResourceID}
 	}
 	req.CapabilityName = resolveAdvertisedCapabilityName(resource.Capabilities, req.CapabilityName)
+	// An input alias may resolve to the stored canonical capability. Only the
+	// resource's actual catalog can establish that equivalence.
+	if replayErr != nil {
+		current, found, replayErr = store.GetActionAuditByRequest(req, opts.Origin)
+		if replayErr != nil {
+			return unified.ActionPlan{}, &PersistError{Op: "action request identity", Err: replayErr}
+		}
+		if found {
+			return current.Plan, nil
+		}
+	}
+
+	if opts.RequireOperatorSensitiveParams {
+		if capability, found := actionplanner.FindCapability(resource.Capabilities, req.CapabilityName); found {
+			for _, param := range capability.Params {
+				if value, present := req.Params[param.Name]; param.IsSensitive && present && value != nil {
+					return unified.ActionPlan{}, fmt.Errorf("%w: parameter %q on capability %q", aicontracts.ErrSensitiveParamsRequireOperator, param.Name, req.CapabilityName)
+				}
+			}
+		}
+	}
 
 	planner := actionplanner.Planner{}
 	var plan unified.ActionPlan
@@ -490,10 +540,6 @@ func (s *Service) PlanWithOptions(ctx context.Context, orgID string, req unified
 		}
 	}
 
-	store, err := s.store(orgID)
-	if err != nil {
-		return unified.ActionPlan{}, err
-	}
 	record, created, err := persistPlanAudit(store, req, plan, opts.Origin)
 	if err != nil {
 		return unified.ActionPlan{}, &PersistError{Op: "action plan audit", Err: err}

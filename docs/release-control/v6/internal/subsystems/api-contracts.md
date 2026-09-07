@@ -20,6 +20,22 @@
 
 ## Purpose
 
+### Canonical Patrol and Assistant continuation, 2026-09-07
+
+Canonical planning owns persisted actor/request idempotency. The same trusted
+request and exact normalized intent return the original plan before live registry
+admission. A different intent under that identity returns
+`action_request_conflict` (HTTP 409), including persistence-wrapped conflicts.
+Concurrent inserts cannot create two accepted actions. Planning does not approve
+or execute. Assistant invocation identity binds session, user message and provider
+tool-call identity. Patrol uses its explicit proposal identity.
+
+Public action references preserve causal resource identity, versioned independent
+outcomes and canonical approval requirements, including quorum, MFA and requester
+exclusion. Projection rejects malformed requirement metadata rather than silently
+downgrading it. Current regression and lab limits are in
+`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`.
+
 Action reconciliation refreshes the durable product investigation record from
 the authoritative session/action even when the finding outcome already matches.
 The same builder owns initial completion and later refresh. Original prose,

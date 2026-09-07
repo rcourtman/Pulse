@@ -44,13 +44,13 @@ func (e *PulseToolExecutor) registerProposeTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name: agentcapabilities.PatrolProposeActionToolName,
-			Description: `Propose ONE typed remediation action for the finding under investigation. Side-effect-free: the proposal is validated and recorded for governed planning and approval; nothing executes now.
+			Description: `Propose ONE typed remediation action for the finding under investigation. This persists a canonical action plan and returns its actual planning result. Planning requests no approval or execution. Continue investigating or explaining that result as needed within the configured budget.
 
 Reference an advertised resource capability (see the resource's capability catalog) and fill only its declared parameters. Never place secrets in params - sensitive parameters are supplied by an operator at approval time.
 
 If the evidence establishes a causal resource, identify it separately from the action target. Otherwise omit causal_resource_id. Explain the observed problem, why the proposed action should help, and any uncertainty. An action can address a symptom without establishing its underlying cause.
 
-Submit at most one proposal per investigation. If no safe remediation exists, conclude without proposing.`,
+Create at most one action per investigation. Replaying the same accepted request returns its existing action. Changed intent after acceptance requires a new operator-requested investigation. If no safe remediation exists, conclude without proposing.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -82,9 +82,9 @@ Submit at most one proposal per investigation. If no safe remediation exists, co
 			return exec.executeProposeAction(ctx, args)
 		},
 		Governance: ToolGovernance{
-			ActionMode:      ToolActionRead,
+			ActionMode:      ToolActionWrite,
 			ApprovalPolicy:  ToolApprovalScopeOnly,
-			ApprovalSummary: "side-effect-free proposal capture; the proposed action itself is planned and approved on the canonical action lifecycle",
+			ApprovalSummary: "persists a canonical action plan without approval or execution",
 			Summary:         "Records one validated typed action proposal during a Patrol investigation; planning, approval, and execution stay governed.",
 		},
 	})
@@ -165,21 +165,23 @@ func (e *PulseToolExecutor) executeProposeAction(ctx context.Context, args map[s
 		params = map[string]interface{}{}
 	}
 	if resourceID == "" || capabilityName == "" || reason == "" {
-		capture.RecordFailedAttempt()
 		return NewErrorResult(fmt.Errorf("resource_id, capability_name, and reason are required")), nil
 	}
 
-	if err := validateProposalAgainstCatalog(ctx, capture.catalog, resourceID, capabilityName, params); err != nil {
-		capture.RecordFailedAttempt()
+	record, err := capture.Submit(ctx, InvocationIDFromContext(ctx), resourceID, causalResourceID, capabilityName, reason, params)
+	if err != nil {
+		if record != nil && record.ID != "" {
+			return NewErrorResult(fmt.Errorf("action %s exists but planning continuation failed: %w; inspect its canonical action history before another request", record.ID, err)), nil
+		}
 		return NewErrorResult(err), nil
 	}
-
-	if err := capture.Submit(InvocationIDFromContext(ctx), resourceID, causalResourceID, capabilityName, reason, params); err != nil {
-		return NewErrorResult(err), nil
-	}
-	return NewTextResult(fmt.Sprintf(
-		"Proposal recorded: capability %q on resource %q. The action broker still needs to validate it after this investigation. No action has been created or executed.",
-		capabilityName, resourceID)), nil
+	return NewJSONResult(map[string]interface{}{
+		"action_id": record.ID, "action_url": "/actions?action_id=" + record.ID,
+		"state": record.State, "plan": record.Plan,
+		"action_result_v2":    unified.CanonicalActionResultV2(*record),
+		"execution_requested": false,
+		"evidence_limit":      "Plan acceptance is not proof of diagnosis or resolution. Continue from observed evidence and the independent action outcome.",
+	}), nil
 }
 
 // canonicalProposalResourceID keeps provider coordinates discovered during an

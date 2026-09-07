@@ -110,10 +110,9 @@ func TestApplyGatesBranches(t *testing.T) {
 			wantSub:   "duplicate tool calls 2 exceed 1",
 		},
 		{
-			name:      "any failed tool call rejected",
+			name:      "failed tool calls remain telemetry without determining diagnosis",
 			setup:     func(s *Score, m *Manifest) { s.FailedToolCalls = 1 },
-			wantCount: 1,
-			wantSub:   "failed tool calls 1 exceed qualification maximum 0",
+			wantCount: 0,
 		},
 		{
 			name:      "input tokens exceed p95 budget",

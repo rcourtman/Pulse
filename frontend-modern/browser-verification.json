@@ -1,25 +1,25 @@
 {
   "version": 1,
-  "base_sha": "62f6931c1fc2e46511876139ea20904752ea208c",
-  "verified_at": "2026-09-07T12:53:14.214716Z",
+  "base_sha": "7e34b00d4face3ffa33a36946bb527dbfbdfd74c",
+  "verified_at": "2026-09-07T16:12:24.652755Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/AI/Chat/MessageItem.tsx",
-    "frontend-modern/src/components/AI/Chat/ToolExecutionBlock.tsx",
-    "frontend-modern/src/components/AI/Chat/toolPresentation.ts"
+    "frontend-modern/src/components/AI/Chat/ChatMessages.tsx",
+    "frontend-modern/src/components/patrol/ApprovalSection.tsx",
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/AI/Chat/MessageItem.tsx": "7716b32126cf0d6c8a3a02626fc8c6dd298d226d341ab96929b54e9a74a7c13f",
-    "frontend-modern/src/components/AI/Chat/ToolExecutionBlock.tsx": "b114cb8d0148c1a5fcded7bcf45c133e8dd331cbdc65b69afee48ab639918d84",
-    "frontend-modern/src/components/AI/Chat/toolPresentation.ts": "aa8f35614cc48559c01417039006d1c63877602ea931ae3e5a47acc5329eed8f"
+    "frontend-modern/src/components/AI/Chat/ChatMessages.tsx": "6f2bea6530d383abe81e13054ef9b7a90f4324c244166fb0a8afaac354439b48",
+    "frontend-modern/src/components/patrol/ApprovalSection.tsx": "5e7ac87d87674b4c05fe80c3933d4ab542366054e2abbfa3f96afbfe90e993a4",
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts": "781c8730a7f566831562160a31ba437b2aabd8840330f59b521894198f79b0f1"
   },
   "routes": [
     "/patrol",
-    "/actions?action=act_43dd318fa8577d79167a6f66b2460907",
-    "/actions?action=act_9bdd65533a8c0d1e526845012a931b10",
-    "/actions?action=act_31ea9abb7591c83f466055a4eacd5abe",
-    "/docs/ASSISTANT_SAFETY",
-    "/docs/ASSISTANT_ARCHITECTURE"
+    "/actions?action=act_fd2d0bdab1930e2d3a75faf080b8ba7a",
+    "/actions?action=act_369c466aea179f93fc69aa04a710689a",
+    "/actions?action=act_d2f137411342c995d840d529a70fbf95",
+    "/docs/ASSISTANT_ARCHITECTURE",
+    "/docs/ASSISTANT_SAFETY"
   ],
   "viewports": [
     {
@@ -36,23 +36,20 @@
     }
   ],
   "states": [
-    "Saved missing-runner planning refusal",
-    "Saved rejected action and explanation",
-    "Saved independently verified VM start outcome and explanation",
-    "Expanded canonical planning and outcome tool cards",
-    "Native exact-action review from Assistant with overlay closed",
-    "Rejected action and completed start/stop reviews",
-    "Expanded policy, independent observer and durable delivery details",
-    "Narrow inline action identifiers and URLs wrap within the message area"
+    "Approved and independently verified outcome",
+    "Rejected and expired unexecuted plans",
+    "Expanded filesystem evidence and risk",
+    "Attached finding context, explicit new session, retained saved context",
+    "Fresh streamed explanation and saved missing-access, VM, storage and rejection outcomes"
   ],
   "interactions": [
-    "Keyboard launch, Escape dismissal and launcher focus return",
-    "Resume exact saved session before and after reload, verify matching session GET",
-    "Expand every tool card, scroll conversation, inspect actual pixels",
-    "Keyboard activate native Review action, verify exact destination and usable dialog after animation",
-    "Desktop backdrop and narrow close-button dismissal",
-    "Action evidence disclosures with focus and Enter, nested scrolling, Escape, explicit close, deep-link reopen and reload",
-    "Inspect 1440, 900 and 390 pixel layouts, wrapping, stacking and absence of horizontal overflow"
+    "Open review, close, focus return and Enter reopen",
+    "Expand every investigation tool card, deep evidence scroll and actual pixel inspection",
+    "Discuss with Assistant, new-session clearing and saved-session resumption",
+    "Exact action link, terminal authority controls, reload and Escape",
+    "Stream at bottom, wheel overscroll containment, scroll away, Latest, resize while open and reachable header/composer",
+    "Session-history picker and exact persisted message read",
+    "Documentation linked navigation, reload and end-of-document scroll"
   ],
-  "notes": "Final bundled binary SHA256 db840916eb4adec3c8c0d916bda4dd7d7ce7588ed5fc9c4be4ba9f8d1a1584d4. Runtime manifest matches 4,845 files. Only the three named frontend files differ from r5, whose model-facing backend passed fresh real-model refusal, rejection and independently verified VM execution/continuation proof. Final Playwright receipts and pixels are in workspace tmp/patrol-planning-continuation/assistant-browser (no-runner-r6, verified-vm-r6) and browser. Browser requests were reads plus login and existing provider readiness checks, with no action mutations. Temporary VM services, credentials and tunnel were removed and read-only posture restored. This receipt covers this continuation/presentation slice only. Remaining Patrol planning and diagnostic matrix qualification and independent-environment rollout evidence are still required. Architecture and safety documentation were subsequently corrected with their shipped mirrors, and inspected against the current Vite build at 1440x1000 and 390x1000, including navigation, reload and end-of-document pixels. Receipts are in docs-browser. Worker formatting changed indentation only in a Go preflight helper after the bundled proof."
+  "notes": "Final runtime r34 SHA256 e1ae053e656b28af9ba0e7541a47bdeb56303d1d7912edc57b2dac2f94620bd1 matches 4,853 source inputs. Named r28 fault matrix and subsequent affected writer/streaming proofs are detailed in docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md. Fresh r34 approved explanation passed, with saved final-runtime missing-access/VM/rejected/storage explanations and deep Patrol history. Receipts: workspace tmp/patrol-planning-continuation/patrol-browser and docs-browser-r34. Initial history-locator and network-idle failures are retained separately. Only login, selected authorized API provider readiness and one explicit fresh explanation were submitted during these checks. No lab action was repeated. Independent customer environments and broader readiness remain unqualified."
 }

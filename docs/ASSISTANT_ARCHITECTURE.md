@@ -79,6 +79,13 @@ Cached inventory and an incomplete resource timeline cannot establish that an
 action was never approved or run. Recorded verification describes its named
 postcondition at its observation time, not the resource's current health.
 
+Patrol investigation planning uses the same lifecycle. Its planning tool returns
+an accepted action or a refusal during the investigation, so the model can
+continue from the real result. Planning does not end the investigation or prove
+its diagnosis. A later model failure retains any action already created and
+does not request automatic execution. Assistant can explain and continue that
+same action through its recorded decisions and independent outcome.
+
 ## Related reading
 
 - [Pulse Assistant safety architecture](ASSISTANT_SAFETY.md) for the enforced

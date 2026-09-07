@@ -28,9 +28,8 @@ const (
 	// absent: all existing-finding closure crosses the assessed lifecycle.
 	ProfilePatrolDetection
 	// ProfilePatrolInvestigation is the Patrol investigation posture:
-	// non-interactive and structurally read-only - no infrastructure and
-	// no Pulse-state mutations. Typed remediation leaves the profile only
-	// as a side-effect-free, mutation-none action proposal.
+	// non-interactive, with no infrastructure mutations. The sole Pulse-state
+	// write is canonical action planning without approval or execution.
 	ProfilePatrolInvestigation
 )
 
@@ -88,7 +87,7 @@ func (e *PulseToolExecutor) ApplyExecutionProfile(profile ExecutionProfile) {
 	case ProfilePatrolInvestigation:
 		e.isAutonomous = false
 		e.denyInfrastructureMutations = true
-		e.pulseStateAllowlist = map[string]bool{}
+		e.pulseStateAllowlist = map[string]bool{agentcapabilities.PatrolProposeActionToolName: true}
 	default:
 		e.denyInfrastructureMutations = false
 		// Interactive Assistant is conversation/read/session authority.

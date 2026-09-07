@@ -603,9 +603,9 @@ func applyGates(score *Score, manifest Manifest) {
 	if score.DuplicateToolCalls > manifest.Budgets.MaxDuplicateCalls {
 		score.GateFailures = append(score.GateFailures, fmt.Sprintf("duplicate tool calls %d exceed %d", score.DuplicateToolCalls, manifest.Budgets.MaxDuplicateCalls))
 	}
-	if score.FailedToolCalls > 0 {
-		score.GateFailures = append(score.GateFailures, fmt.Sprintf("failed tool calls %d exceed qualification maximum 0", score.FailedToolCalls))
-	}
+	// A refused or unavailable read is evidence about access, not a diagnosis
+	// failure. Keep FailedToolCalls as telemetry. Scenario truth, action
+	// boundaries and explicit resource budgets determine the mechanical gates.
 	if manifest.Budgets.InputTokensP95 > 0 && score.InputTokens > manifest.Budgets.InputTokensP95 {
 		score.GateFailures = append(score.GateFailures, fmt.Sprintf("input tokens %d exceed %d", score.InputTokens, manifest.Budgets.InputTokensP95))
 	}

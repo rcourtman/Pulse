@@ -394,6 +394,8 @@ func writeActionPlanError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusInternalServerError, "resource_registry_unavailable", sanitizeErrorForClient(err, "Resource registry unavailable"))
 	case errors.Is(err, actionlifecycle.ErrStoreUnavailable):
 		writeJSONError(w, http.StatusServiceUnavailable, "action_audit_unavailable", "Action audit history is not available")
+	case errors.Is(err, unified.ErrActionIdentityConflict):
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionRequestConflict, "This request ID is already bound to different action intent or ambiguous historical plans. Review the existing action history before creating a new request.")
 	case errors.As(err, &persist):
 		writeJSONError(w, http.StatusInternalServerError, "action_audit_persist_failed", sanitizeErrorForClient(err, "Failed to persist action audit"))
 	default:

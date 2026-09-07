@@ -2,15 +2,12 @@ package tools
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"sync"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -57,6 +54,7 @@ type ProposalIdentity struct {
 
 // CapturedProposal is one validated typed action proposal.
 type CapturedProposal struct {
+	Action       *unified.ActionAuditRecord
 	InvocationID string
 	Identity     ProposalIdentity
 	ResourceID   string
@@ -74,43 +72,19 @@ type CapturedProposal struct {
 // (ultimately the tenant-bound action lifecycle Capabilities path).
 type ProposalCatalog func(ctx context.Context, resourceID string) ([]unified.ResourceCapability, error)
 
-// Typed terminal proposal errors surfaced on the structured run result.
-var (
-	// ErrProposalAmbiguous: two distinct valid proposal calls were made.
-	// The run's proposal is invalidated - concurrency makes "first"
-	// nondeterministic, so ambiguity latches terminally.
-	ErrProposalAmbiguous = errors.New("ambiguous investigation result: multiple distinct action proposals were submitted")
-	// ErrProposalIntegrity: the same tool-use ID re-submitted a different
-	// payload. Latches terminally and invalidates the capture.
-	ErrProposalIntegrity = errors.New("proposal integrity violation: one tool-use id submitted conflicting payloads")
-	// ErrProposalAttemptsFailed: no proposal was captured but proposal
-	// attempts failed validation - this is an error outcome, never the
-	// valid zero-proposal conclusion.
-	ErrProposalAttemptsFailed = errors.New("investigation made proposal attempts but none validated")
-)
+// ProposalPlanner is the core-owned plan-only boundary. It persists a canonical
+// action and returns its audit record. It grants no approval or execution.
+type ProposalPlanner func(context.Context, CapturedProposal) (unified.ActionAuditRecord, error)
 
-type proposalCaptureState int
-
-const (
-	proposalCaptureEmpty proposalCaptureState = iota
-	proposalCaptureHeld
-	proposalCaptureAmbiguous
-	proposalCaptureIntegrityViolated
-)
-
-// ProposalCapture is the request-local sink for typed action proposals.
-// One capture serves one investigation run; executor clones share it
-// deliberately so every provider attempt lands in the same sink. State
-// latches terminally: a second distinct valid proposal (or a conflicting
-// replay) invalidates the captured proposal for the whole run.
+// ProposalCapture retains the accepted action for one explicitly budgeted
+// investigation. Canonical request identity owns replay and conflicts. A later
+// refused call or provider failure cannot erase an already persisted action.
 type ProposalCapture struct {
-	mu             sync.Mutex
-	identity       ProposalIdentity
-	catalog        ProposalCatalog
-	state          proposalCaptureState
-	proposal       *CapturedProposal
-	fingerprint    string
-	failedAttempts int
+	mu       sync.Mutex
+	identity ProposalIdentity
+	catalog  ProposalCatalog
+	planner  ProposalPlanner
+	proposal *CapturedProposal
 }
 
 func (i ProposalIdentity) clone() ProposalIdentity {
@@ -118,14 +92,26 @@ func (i ProposalIdentity) clone() ProposalIdentity {
 	return i
 }
 
-// NewProposalCapture builds the sink with trusted identity and the
-// capability catalog used for validation. The identity is deep-cloned so
-// later caller-side mutation cannot alter captured correlation.
 func NewProposalCapture(identity ProposalIdentity, catalog ProposalCatalog) *ProposalCapture {
-	return &ProposalCapture{
-		identity: identity.clone(),
-		catalog:  catalog,
+	return &ProposalCapture{identity: identity.clone(), catalog: catalog}
+}
+
+func (c *ProposalCapture) SetPlanner(planner ProposalPlanner) { c.planner = planner }
+
+// RecordEvidence binds completed observations, including explicit access
+// refusals, to the action origin. An ID links to a result, not a diagnosis proof.
+func (c *ProposalCapture) RecordEvidence(id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if strings.TrimSpace(id) == "" {
+		return
 	}
+	for _, existing := range c.identity.EvidenceIDs {
+		if existing == id {
+			return
+		}
+	}
+	c.identity.EvidenceIDs = append(c.identity.EvidenceIDs, id)
 }
 
 func (c *ProposalCapture) Capabilities(ctx context.Context, resourceID string) ([]unified.ResourceCapability, error) {
@@ -158,163 +144,62 @@ func cloneParams(params map[string]interface{}) (map[string]interface{}, error) 
 	return clone, nil
 }
 
-func proposalFingerprint(resourceID, causalResourceID, capabilityName, reason string, params map[string]interface{}) (string, error) {
-	payload := struct {
-		ResourceID       string                 `json:"resourceId"`
-		CausalResourceID string                 `json:"causalResourceId"`
-		CapabilityName   string                 `json:"capabilityName"`
-		Reason           string                 `json:"reason"`
-		Params           map[string]interface{} `json:"params"`
-	}{resourceID, causalResourceID, capabilityName, reason, params}
-	encoded, err := json.Marshal(payload)
+// Submit consults the canonical planner during the tool call. Serialization
+// enforces the one-action budget while the durable store owns idempotency.
+func (c *ProposalCapture) Submit(ctx context.Context, invocationID, resourceID, causalResourceID, capabilityName, reason string, params map[string]interface{}) (*unified.ActionAuditRecord, error) {
+	if strings.TrimSpace(invocationID) == "" {
+		return nil, errors.New("action planning requires a tool invocation identity")
+	}
+	params, err := cloneParams(params)
 	if err != nil {
-		return "", fmt.Errorf("proposal payload is not fingerprintable")
+		return nil, err
 	}
-	sum := sha256.Sum256(encoded)
-	return hex.EncodeToString(sum[:]), nil
-}
-
-// RecordFailedAttempt tallies a proposal call that failed validation.
-// Failed attempts never count as proposals, but their presence turns a
-// zero-proposal run into a typed error rather than a valid conclusion.
-func (c *ProposalCapture) RecordFailedAttempt() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.failedAttempts++
-}
-
-// Submit records one validated proposal call. Semantics by call identity
-// and payload fingerprint:
-//   - first valid call: captured;
-//   - same ID, same payload: idempotent replay (still captured);
-//   - same ID, different payload: terminal integrity error, capture
-//     invalidated;
-//   - distinct ID, valid payload: terminal ambiguity, capture invalidated
-//     (concurrent execution makes "first" nondeterministic, so neither
-//     call wins).
-func (c *ProposalCapture) Submit(invocationID, resourceID, causalResourceID, capabilityName, reason string, params map[string]interface{}) error {
-	invocationID = strings.TrimSpace(invocationID)
-	if invocationID == "" {
-		c.mu.Lock()
-		c.failedAttempts++
-		c.mu.Unlock()
-		return fmt.Errorf("proposal call carries no tool-use id; cannot establish call identity")
+	if c.planner == nil {
+		return nil, errors.New("canonical action planning is unavailable for this investigation")
 	}
-	params, cloneErr := cloneParams(params)
-	if cloneErr != nil {
-		c.mu.Lock()
-		c.failedAttempts++
-		c.mu.Unlock()
-		return cloneErr
+	identity := c.identity.clone()
+	// Replay keeps the evidence attached at first acceptance. Later observations
+	// remain in the investigation history and cannot rewrite accepted intent.
+	if c.proposal != nil {
+		identity = c.proposal.Identity.clone()
 	}
-	fingerprint, fingerprintErr := proposalFingerprint(resourceID, causalResourceID, capabilityName, reason, params)
-	if fingerprintErr != nil {
-		c.mu.Lock()
-		c.failedAttempts++
-		c.mu.Unlock()
-		return fingerprintErr
-	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	switch c.state {
-	case proposalCaptureAmbiguous:
-		return ErrProposalAmbiguous
-	case proposalCaptureIntegrityViolated:
-		return ErrProposalIntegrity
-	case proposalCaptureEmpty:
-		c.state = proposalCaptureHeld
-		c.fingerprint = fingerprint
-		c.proposal = &CapturedProposal{
-			InvocationID:     invocationID,
-			Identity:         c.identity.clone(),
-			ResourceID:       resourceID,
-			CausalResourceID: causalResourceID,
-			CapabilityName:   capabilityName,
-			Params:           params,
-			Reason:           reason,
+	proposal := CapturedProposal{InvocationID: invocationID, Identity: identity, ResourceID: resourceID, CausalResourceID: causalResourceID, CapabilityName: capabilityName, Reason: reason, Params: params}
+	record, err := c.planner(ctx, proposal)
+	if record.ID != "" {
+		proposal.Action = &record
+		if c.proposal == nil {
+			c.proposal = &proposal
+		} else {
+			c.proposal.Action = &record
 		}
-		return nil
-	default: // proposalCaptureHeld
-		if c.proposal != nil && c.proposal.InvocationID == invocationID {
-			if c.fingerprint == fingerprint {
-				// Idempotent replay of the same call.
-				return nil
-			}
-			c.state = proposalCaptureIntegrityViolated
-			c.proposal = nil
-			return ErrProposalIntegrity
-		}
-		c.state = proposalCaptureAmbiguous
-		c.proposal = nil
-		return ErrProposalAmbiguous
 	}
-}
-
-// Outcome reports the run's terminal proposal state: the captured
-// proposal (nil for a valid zero-proposal run) or the typed error that
-// invalidated the run. Zero proposals with failed attempts is an error,
-// never a valid conclusion.
-func (c *ProposalCapture) Outcome() (*CapturedProposal, int, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	switch c.state {
-	case proposalCaptureAmbiguous:
-		return nil, c.failedAttempts, ErrProposalAmbiguous
-	case proposalCaptureIntegrityViolated:
-		return nil, c.failedAttempts, ErrProposalIntegrity
-	case proposalCaptureHeld:
-		proposal := *c.proposal
-		proposal.Identity = proposal.Identity.clone()
-		clonedParams, err := cloneParams(proposal.Params)
-		if err != nil {
-			// Unreachable in practice (params cloned on capture), but a
-			// proposal that cannot be copied must not be actionable.
-			return nil, c.failedAttempts, err
-		}
-		proposal.Params = clonedParams
-		return &proposal, c.failedAttempts, nil
-	default:
-		if c.failedAttempts > 0 {
-			return nil, c.failedAttempts, ErrProposalAttemptsFailed
-		}
-		return nil, 0, nil
-	}
-}
-
-// validateProposalAgainstCatalog checks the proposal against the
-// resource's advertised capability contract. Error messages never echo
-// parameter values: proposal params exist only transiently for provider
-// continuation and validation.
-func validateProposalAgainstCatalog(ctx context.Context, catalog ProposalCatalog, resourceID, capabilityName string, params map[string]interface{}) error {
-	if catalog == nil {
-		return errors.New("no capability catalog is wired for proposal validation")
-	}
-	capabilities, err := catalog(ctx, resourceID)
 	if err != nil {
-		return fmt.Errorf("capability catalog lookup failed for resource %q", resourceID)
-	}
-	// Exact-name resolution and full parameter validation are the
-	// planner's canonical implementations, so proposal acceptance and
-	// planning can never drift on matching, types, enums, patterns,
-	// required presence, or malformed capability schemas.
-	capability, found := actionplanner.FindCapability(capabilities, capabilityName)
-	if !found {
-		return fmt.Errorf("resource %q does not advertise capability %q", resourceID, capabilityName)
-	}
-	// Proposal-specific ratchet on top of planning: investigations must
-	// never carry sensitive values (operators supply those at approval
-	// time on the canonical surface).
-	for _, param := range capability.Params {
-		if !param.IsSensitive {
-			continue
+		if c.proposal != nil {
+			return c.proposal.Action, err
 		}
-		if value, ok := params[param.Name]; ok && value != nil {
-			return fmt.Errorf("parameter %q is sensitive and must be supplied by an operator on the canonical approval surface, never by an investigation", param.Name)
-		}
+		return proposal.Action, err
 	}
-	if err := actionplanner.ValidateParams(params, capability.Params); err != nil {
-		return fmt.Errorf("proposal parameters are invalid for capability %q: %s", capabilityName, err.Error())
+	if record.ID == "" {
+		return nil, errors.New("canonical planner returned no persisted action identity")
 	}
-	return nil
+	return &record, nil
+}
+
+func (c *ProposalCapture) Outcome() (*CapturedProposal, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.proposal == nil {
+		return nil, nil
+	}
+	encoded, err := json.Marshal(c.proposal)
+	if err != nil {
+		return nil, err
+	}
+	var proposal CapturedProposal
+	if err = json.Unmarshal(encoded, &proposal); err != nil {
+		return nil, err
+	}
+	return &proposal, nil
 }

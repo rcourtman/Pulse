@@ -13,6 +13,7 @@ const (
 	AgentErrCodeFindingActionNotAllowed    = "finding_action_not_allowed"
 	AgentErrCodePatrolUnavailable          = "patrol_unavailable"
 	AgentErrCodeInvalidActionRequest       = "invalid_action_request"
+	AgentErrCodeActionRequestConflict      = "action_request_conflict"
 	AgentErrCodeCapabilityNotFound         = "capability_not_found"
 	AgentErrCodeActionExecutionUnavailable = "action_execution_unavailable"
 	AgentErrCodeActionActorUnavailable     = "action_actor_unavailable"

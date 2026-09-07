@@ -19,11 +19,19 @@ func metricsFromProxmoxNode(node models.Node) *ResourceMetrics {
 		percent := percentFromUsage(node.Memory.Usage)
 		metrics.Memory = &MetricValue{Used: &node.Memory.Used, Total: &node.Memory.Total, Percent: percent, Unit: "bytes", Source: SourceProxmox}
 	}
-	if node.Disk.Total > 0 {
+	if hasObservedDiskUsage(node.Disk) {
 		percent := percentFromUsage(node.Disk.Usage)
 		metrics.Disk = &MetricValue{Used: &node.Disk.Used, Total: &node.Disk.Total, Percent: percent, Unit: "bytes", Source: SourceProxmox}
 	}
 	return metrics
+}
+
+// hasObservedDiskUsage prevents unavailable legacy disk observations from
+// becoming a negative percentage or a clamped, apparently idle measurement in
+// the canonical resource model. Capacity alone does not establish used space.
+func hasObservedDiskUsage(disk models.Disk) bool {
+	return disk.Total > 0 && disk.Used >= 0 && disk.Used <= disk.Total &&
+		disk.Usage >= 0 && disk.Usage <= 100 && !math.IsNaN(disk.Usage) && !math.IsInf(disk.Usage, 0)
 }
 
 func metricsFromHost(host models.Host) *ResourceMetrics {
@@ -95,7 +103,7 @@ func buildHostMetricPayload(
 	}
 	if len(disks) > 0 {
 		disk := disks[0]
-		if disk.Total > 0 {
+		if hasObservedDiskUsage(disk) {
 			percent := percentFromReportedPercent(disk.Usage)
 			metrics.Disk = &MetricValue{Used: &disk.Used, Total: &disk.Total, Percent: percent, Unit: "bytes", Source: source}
 		}
@@ -193,7 +201,7 @@ func buildVMMetricPayload(
 		percent := percentFromUsage(memory.Usage)
 		metrics.Memory = &MetricValue{Used: &memory.Used, Total: &memory.Total, Percent: percent, Unit: "bytes", Source: source}
 	}
-	if disk.Total > 0 {
+	if hasObservedDiskUsage(disk) {
 		percent := percentFromUsage(disk.Usage)
 		metrics.Disk = &MetricValue{Used: &disk.Used, Total: &disk.Total, Percent: percent, Unit: "bytes", Source: source}
 	}
@@ -347,7 +355,7 @@ func metricsFromKubernetesCluster(cluster models.KubernetesCluster, linkedHosts 
 
 		if len(host.Disks) > 0 {
 			disk := host.Disks[0]
-			if disk.Total > 0 {
+			if hasObservedDiskUsage(disk) {
 				diskTotal += disk.Total
 				diskUsed += disk.Used
 			}

@@ -15,6 +15,21 @@
 
 ## Purpose
 
+### Canonical Patrol and Assistant continuation, 2026-09-07
+
+Canonical action state and legacy approval state remain distinct in Assistant
+handoff. Unknown destructive risk stays unknown. A plan does not synthesize an
+old command-shaped fix. The linked investigation retains accepted action identity
+and original diagnostic uncertainty even if a later provider turn fails.
+
+The current storage-capacity run identifies the actual exhausted tmpfs, while the
+earlier host-capacity misdiagnosis remains a failed historical result. Approved
+and rejected Docker and Proxmox VM cases have independent named observations.
+The current local qualification and exact limits supersede earlier pending-work
+notes below only for those named cases. See
+`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. Wider volunteered
+customer environments, backup recovery and unattended autonomy remain unqualified.
+
 Action reconciliation refreshes the durable product investigation record from
 the authoritative session/action even when the finding outcome already matches.
 The same builder owns initial completion and later refresh. Original prose,

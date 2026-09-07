@@ -3,15 +3,15 @@ package tools
 import (
 	"context"
 	"errors"
-	"strings"
-	"sync"
-	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
+	"fmt"
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"reflect"
+	"sync"
+	"testing"
 )
 
 func testProposalCatalog() ProposalCatalog {
@@ -68,129 +68,6 @@ func executePropose(t *testing.T, exec *PulseToolExecutor, id string, args map[s
 	return result
 }
 
-// The essential proof: two concurrent valid proposal calls latch terminal
-// ambiguity with a nil proposal, regardless of execution order.
-func TestConcurrentValidProposalsLatchAmbiguityWithNoProposal(t *testing.T) {
-	capture := NewProposalCapture(ProposalIdentity{ProposalID: "prop-1", FindingID: "f-1", InvestigationID: "inv-1"}, testProposalCatalog())
-	exec := newInvestigationExecutor(t, capture)
-
-	second := proposeArgs()
-	second["reason"] = "an alternative remediation"
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() { defer wg.Done(); executePropose(t, exec, "call-a", proposeArgs()) }()
-	go func() { defer wg.Done(); executePropose(t, exec, "call-b", second) }()
-	wg.Wait()
-
-	proposal, _, err := capture.Outcome()
-	if !errors.Is(err, ErrProposalAmbiguous) {
-		t.Fatalf("outcome error = %v, want ErrProposalAmbiguous", err)
-	}
-	if proposal != nil {
-		t.Fatalf("ambiguous run must invalidate the captured proposal, got %#v", proposal)
-	}
-}
-
-func TestProposalReplaySemanticsByInvocationID(t *testing.T) {
-	capture := NewProposalCapture(ProposalIdentity{InvestigationID: "inv-1"}, testProposalCatalog())
-	exec := newInvestigationExecutor(t, capture)
-
-	executePropose(t, exec, "call-a", proposeArgs())
-	// Same ID, same payload: idempotent replay.
-	replay := executePropose(t, exec, "call-a", proposeArgs())
-	assert.Contains(t, replay.Content[0].Text, "Proposal recorded")
-
-	proposal, failed, err := capture.Outcome()
-	require.NoError(t, err)
-	require.NotNil(t, proposal)
-	assert.Equal(t, 0, failed)
-	assert.Equal(t, "call-a", proposal.InvocationID)
-	assert.Equal(t, "inv-1", proposal.Identity.InvestigationID)
-
-	// Same ID, different payload: terminal integrity error, capture
-	// invalidated.
-	mutated := proposeArgs()
-	mutated["reason"] = "changed my mind"
-	conflict := executePropose(t, exec, "call-a", mutated)
-	assert.Contains(t, conflict.Content[0].Text, "integrity")
-
-	proposal, _, err = capture.Outcome()
-	if !errors.Is(err, ErrProposalIntegrity) {
-		t.Fatalf("outcome error = %v, want ErrProposalIntegrity", err)
-	}
-	assert.Nil(t, proposal)
-}
-
-func TestFailedAttemptsWithoutSuccessAreATypedError(t *testing.T) {
-	capture := NewProposalCapture(ProposalIdentity{}, testProposalCatalog())
-	exec := newInvestigationExecutor(t, capture)
-
-	bad := proposeArgs()
-	bad["capability_name"] = "detonate"
-	result := executePropose(t, exec, "call-a", bad)
-	assert.Contains(t, result.Content[0].Text, "does not advertise")
-
-	proposal, failed, err := capture.Outcome()
-	if !errors.Is(err, ErrProposalAttemptsFailed) {
-		t.Fatalf("outcome error = %v, want ErrProposalAttemptsFailed", err)
-	}
-	assert.Nil(t, proposal)
-	assert.Equal(t, 1, failed)
-
-	// A clean zero-proposal run stays a valid conclusion.
-	clean := NewProposalCapture(ProposalIdentity{}, testProposalCatalog())
-	proposal, failed, err = clean.Outcome()
-	require.NoError(t, err)
-	assert.Nil(t, proposal)
-	assert.Equal(t, 0, failed)
-}
-
-func TestProposalAllowsUncertainCauseWithoutInventingAttribution(t *testing.T) {
-	capture := NewProposalCapture(ProposalIdentity{InvestigationID: "inv-1"}, testProposalCatalog())
-	exec := newInvestigationExecutor(t, capture)
-	args := proposeArgs()
-	delete(args, "causal_resource_id")
-	args["reason"] = "The service is stopped. A restart may restore service, but the cause is unknown."
-	result := executePropose(t, exec, "recovery-1", args)
-	require.False(t, result.IsError, "%+v", result)
-	proposal, failed, err := capture.Outcome()
-	require.NoError(t, err)
-	require.NotNil(t, proposal)
-	assert.Empty(t, proposal.CausalResourceID)
-	assert.Equal(t, args["reason"], proposal.Reason)
-	assert.Equal(t, "vm:42", proposal.ResourceID)
-	assert.Zero(t, failed)
-	// Unknown cause does not weaken invocation integrity or grant execution.
-	changed := proposeArgs()
-	changed["reason"] = args["reason"]
-	result = executePropose(t, exec, "recovery-1", changed)
-	assert.True(t, result.IsError)
-	proposal, _, err = capture.Outcome()
-	assert.Nil(t, proposal)
-	assert.ErrorIs(t, err, ErrProposalIntegrity)
-}
-
-func TestSensitiveProposalParamsRejectedWithoutEcho(t *testing.T) {
-	capture := NewProposalCapture(ProposalIdentity{}, testProposalCatalog())
-	exec := newInvestigationExecutor(t, capture)
-
-	args := proposeArgs()
-	args["capability_name"] = "join_cluster"
-	args["params"] = map[string]interface{}{"join_token": "super-secret-token-value"}
-	result := executePropose(t, exec, "call-a", args)
-	text := result.Content[0].Text
-	assert.Contains(t, text, "sensitive")
-	assert.NotContains(t, text, "super-secret-token-value", "refusals must never echo parameter values")
-
-	proposal, failed, err := capture.Outcome()
-	if !errors.Is(err, ErrProposalAttemptsFailed) {
-		t.Fatalf("outcome error = %v, want ErrProposalAttemptsFailed", err)
-	}
-	assert.Nil(t, proposal)
-	assert.Equal(t, 1, failed)
-}
-
 func TestProposeActionIsInvestigationProfileOnly(t *testing.T) {
 	for _, profile := range []ExecutionProfile{ProfileInteractiveAssistant, ProfilePatrolDetection} {
 		exec := NewPulseToolExecutor(ExecutorConfig{})
@@ -220,7 +97,7 @@ func TestProposeActionIsInvestigationProfileOnly(t *testing.T) {
 	}
 
 	// Under investigation the tool is both offered and executable.
-	capture := NewProposalCapture(ProposalIdentity{}, testProposalCatalog())
+	capture := newPlanningCapture()
 	exec := newInvestigationExecutor(t, capture)
 	offered := false
 	for _, tool := range exec.registry.ListTools(exec.invocationPolicy()) {
@@ -230,289 +107,143 @@ func TestProposeActionIsInvestigationProfileOnly(t *testing.T) {
 	}
 	assert.True(t, offered, "investigation profile must offer patrol_propose_action")
 	result := executePropose(t, exec, "call-a", proposeArgs())
-	assert.Contains(t, result.Content[0].Text, "Proposal recorded")
+	assert.False(t, result.IsError)
+	assert.Contains(t, result.Content[0].Text, "act_existing")
 }
 
-func TestActionCapabilitiesCanFollowInvestigationToCausalResource(t *testing.T) {
-	capture := NewProposalCapture(ProposalIdentity{}, testProposalCatalog())
-	exec := newInvestigationExecutor(t, capture)
-
-	result, err := exec.ExecuteInvocation(context.Background(), ToolInvocation{
-		ID:        "catalog-a",
-		Name:      agentcapabilities.PatrolActionCapabilitiesToolName,
-		Arguments: map[string]interface{}{"resource_id": "vm:42"},
-	})
-	require.NoError(t, err)
-	require.NotEmpty(t, result.Content)
-	payload := result.Content[0].Text
-	assert.Contains(t, payload, `"resource_id":"vm:42"`)
-	assert.Contains(t, payload, `"name":"restart"`)
-	assert.Contains(t, payload, `"name":"join_token"`)
-	assert.Contains(t, payload, `"sensitive":true`)
-
-	proposal, failed, outcomeErr := capture.Outcome()
-	require.NoError(t, outcomeErr)
-	assert.Nil(t, proposal)
-	assert.Zero(t, failed, "catalog reads must not consume proposal cardinality or count as failed proposals")
-}
-
-func TestActionCapabilitiesCanonicalizeResolvedDockerCoordinate(t *testing.T) {
-	const (
-		canonicalID = "app-container-abc123"
-		containerID = "92847aa6ab18fef9fc6e619f5b8350948"
-		agentID     = "agent-f4f64c6cc2cc062e"
-	)
-	catalog := func(_ context.Context, resourceID string) ([]unified.ResourceCapability, error) {
-		if resourceID != canonicalID {
-			return nil, errors.New("resource not found")
+// The callback stands in for the separately race-tested canonical lifecycle.
+// It accepts one immutable request and refuses conflicting reuse of its ID.
+func newPlanningCapture() *ProposalCapture {
+	c := NewProposalCapture(ProposalIdentity{ProposalID: "p1", FindingID: "f1", InvestigationID: "i1"}, testProposalCatalog())
+	var first *CapturedProposal
+	c.SetPlanner(func(ctx context.Context, p CapturedProposal) (unified.ActionAuditRecord, error) {
+		if err := validateProposalAgainstCatalog(ctx, c.catalog, p.ResourceID, p.CapabilityName, p.Params); err != nil {
+			return unified.ActionAuditRecord{}, err
 		}
-		return []unified.ResourceCapability{{Name: "start"}}, nil
-	}
-	provider := &stubUnifiedResourceProvider{resources: []unified.Resource{{
-		ID:   canonicalID,
-		Type: unified.ResourceTypeAppContainer,
-		Docker: &unified.DockerData{
-			AgentID:     agentID,
-			ContainerID: containerID,
-		},
-	}}}
-	capture := NewProposalCapture(ProposalIdentity{}, catalog)
-	exec := NewPulseToolExecutor(ExecutorConfig{UnifiedResourceProvider: provider})
-	exec.ApplyExecutionProfile(ProfilePatrolInvestigation)
-	exec.SetProposalCapture(capture)
-	rawCoordinate := "docker:" + agentID + ":" + containerID
-
-	result, err := exec.ExecuteInvocation(context.Background(), ToolInvocation{
-		ID:        "catalog-docker",
-		Name:      agentcapabilities.PatrolActionCapabilitiesToolName,
-		Arguments: map[string]interface{}{"resource_id": rawCoordinate},
-	})
-	require.NoError(t, err)
-	require.NotEmpty(t, result.Content)
-	assert.Contains(t, result.Content[0].Text, `"resource_id":"`+canonicalID+`"`)
-	assert.Contains(t, result.Content[0].Text, `"name":"start"`)
-
-	proposalResult := executePropose(t, exec, "proposal-docker", map[string]interface{}{
-		"resource_id":        rawCoordinate,
-		"causal_resource_id": rawCoordinate,
-		"capability_name":    "start",
-		"reason":             "restore the stopped worker",
-	})
-	assert.Contains(t, proposalResult.Content[0].Text, canonicalID)
-	proposal, failed, outcomeErr := capture.Outcome()
-	require.NoError(t, outcomeErr)
-	require.NotNil(t, proposal)
-	assert.Zero(t, failed)
-	assert.Equal(t, canonicalID, proposal.ResourceID)
-}
-
-func TestActionCapabilitiesCanonicalizePulseReadAppContainerCoordinate(t *testing.T) {
-	const (
-		canonicalID = "app-container-abc123"
-		containerID = "92847aa6ab18fef9fc6e619f5b8350948"
-		hostname    = "pulse-patrol-lab"
-	)
-	catalog := func(_ context.Context, resourceID string) ([]unified.ResourceCapability, error) {
-		if resourceID != canonicalID {
-			return nil, errors.New("resource not found")
+		if first != nil && (p.Reason != first.Reason || !reflect.DeepEqual(p.Params, first.Params)) {
+			return unified.ActionAuditRecord{}, unified.ErrActionIdentityConflict
 		}
-		return []unified.ResourceCapability{{Name: "restart"}}, nil
-	}
-	provider := &stubUnifiedResourceProvider{resources: []unified.Resource{{
-		ID: canonicalID, Type: unified.ResourceTypeAppContainer,
-		Docker: &unified.DockerData{Hostname: hostname, ContainerID: containerID},
-	}}}
-	capture := NewProposalCapture(ProposalIdentity{}, catalog)
-	exec := NewPulseToolExecutor(ExecutorConfig{UnifiedResourceProvider: provider})
-	exec.ApplyExecutionProfile(ProfilePatrolInvestigation)
-	exec.SetProposalCapture(capture)
-	rawCoordinate := "app-container:" + hostname + ":" + containerID
-
-	result, err := exec.ExecuteInvocation(context.Background(), ToolInvocation{
-		ID: "catalog-pulse-read", Name: agentcapabilities.PatrolActionCapabilitiesToolName,
-		Arguments: map[string]interface{}{"resource_id": rawCoordinate},
-	})
-	require.NoError(t, err)
-	require.NotEmpty(t, result.Content)
-	assert.Contains(t, result.Content[0].Text, `"resource_id":"`+canonicalID+`"`)
-
-	proposalResult := executePropose(t, exec, "proposal-pulse-read", map[string]interface{}{
-		"resource_id": rawCoordinate, "causal_resource_id": rawCoordinate, "capability_name": "restart", "reason": "restore container health",
-	})
-	assert.Contains(t, proposalResult.Content[0].Text, canonicalID)
-	proposal, failed, outcomeErr := capture.Outcome()
-	require.NoError(t, outcomeErr)
-	require.NotNil(t, proposal)
-	assert.Zero(t, failed)
-	assert.Equal(t, canonicalID, proposal.ResourceID)
-}
-
-func TestActionCapabilitiesDoNotCanonicalizeAmbiguousContainerID(t *testing.T) {
-	const containerID = "shared-container-id"
-	provider := &stubUnifiedResourceProvider{resources: []unified.Resource{
-		{ID: "app-container-a", Type: unified.ResourceTypeAppContainer, Docker: &unified.DockerData{ContainerID: containerID, AgentID: "agent-a"}},
-		{ID: "app-container-b", Type: unified.ResourceTypeAppContainer, Docker: &unified.DockerData{ContainerID: containerID, AgentID: "agent-b"}},
-	}}
-	capture := NewProposalCapture(ProposalIdentity{}, func(_ context.Context, resourceID string) ([]unified.ResourceCapability, error) {
-		if resourceID != containerID {
-			t.Fatalf("ambiguous reference was rewritten to %q", resourceID)
+		if first == nil {
+			copy := p
+			first = &copy
 		}
-		return nil, errors.New("ambiguous resource")
+		return unified.ActionAuditRecord{ID: "act_existing", State: unified.ActionStatePending}, nil
 	})
-	exec := NewPulseToolExecutor(ExecutorConfig{UnifiedResourceProvider: provider})
-	exec.ApplyExecutionProfile(ProfilePatrolInvestigation)
-	exec.SetProposalCapture(capture)
-
-	result, err := exec.ExecuteInvocation(context.Background(), ToolInvocation{
-		ID:        "catalog-ambiguous",
-		Name:      agentcapabilities.PatrolActionCapabilitiesToolName,
-		Arguments: map[string]interface{}{"resource_id": containerID},
+	return c
+}
+func TestPlanningConflictRetainsAcceptedAction(t *testing.T) {
+	c := newPlanningCapture()
+	exec := newInvestigationExecutor(t, c)
+	require.False(t, executePropose(t, exec, "call-a", proposeArgs()).IsError)
+	changed := proposeArgs()
+	changed["reason"] = "different intent"
+	require.True(t, executePropose(t, exec, "call-b", changed).IsError)
+	got, err := c.Outcome()
+	require.NoError(t, err)
+	require.Equal(t, "act_existing", got.Action.ID)
+	require.Equal(t, proposeArgs()["reason"], got.Reason)
+	require.False(t, executePropose(t, exec, "call-c", proposeArgs()).IsError)
+}
+func TestConcurrentPlanningConflictDoesNotErasePersistedAction(t *testing.T) {
+	c := newPlanningCapture()
+	exec := newInvestigationExecutor(t, c)
+	changed := proposeArgs()
+	changed["reason"] = "alternative intent"
+	var wg sync.WaitGroup
+	for i, args := range []map[string]interface{}{proposeArgs(), changed} {
+		wg.Add(1)
+		go func(i int, args map[string]interface{}) {
+			defer wg.Done()
+			executePropose(t, exec, []string{"a", "b"}[i], args)
+		}(i, args)
+	}
+	wg.Wait()
+	got, err := c.Outcome()
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, "act_existing", got.Action.ID)
+}
+func TestPlanningRefusalDoesNotDetermineDiagnosis(t *testing.T) {
+	c := newPlanningCapture()
+	exec := newInvestigationExecutor(t, c)
+	args := proposeArgs()
+	args["capability_name"] = "unavailable"
+	require.True(t, executePropose(t, exec, "a", args).IsError)
+	got, err := c.Outcome()
+	require.NoError(t, err)
+	require.Nil(t, got)
+	require.False(t, executePropose(t, exec, "b", proposeArgs()).IsError)
+}
+func TestPlanningKeepsCompletedEvidenceSnapshotAndCopiesResult(t *testing.T) {
+	c := newPlanningCapture()
+	exec := newInvestigationExecutor(t, c)
+	c.RecordEvidence("completed-read")
+	require.False(t, executePropose(t, exec, "a", proposeArgs()).IsError)
+	c.RecordEvidence("later-read")
+	require.False(t, executePropose(t, exec, "b", proposeArgs()).IsError)
+	got, err := c.Outcome()
+	require.NoError(t, err)
+	require.Equal(t, []string{"completed-read"}, got.Identity.EvidenceIDs)
+	got.Identity.EvidenceIDs[0] = "modified"
+	got.Action.ID = "modified"
+	got.Params["mode"] = "modified"
+	again, err := c.Outcome()
+	require.NoError(t, err)
+	require.Equal(t, "act_existing", again.Action.ID)
+	require.Equal(t, "graceful", again.Params["mode"])
+}
+func TestKnownActionSurvivesPlanningReadFailure(t *testing.T) {
+	c := NewProposalCapture(ProposalIdentity{}, nil)
+	c.SetPlanner(func(context.Context, CapturedProposal) (unified.ActionAuditRecord, error) {
+		return unified.ActionAuditRecord{ID: "act_known"}, errors.New("audit read unavailable")
 	})
+	result := executePropose(t, newInvestigationExecutor(t, c), "a", proposeArgs())
+	require.True(t, result.IsError)
+	require.Contains(t, result.Content[0].Text, "act_known")
+	got, err := c.Outcome()
 	require.NoError(t, err)
-	require.NotEmpty(t, result.Content)
-	assert.Contains(t, result.Content[0].Text, "capability catalog lookup failed")
+	require.Equal(t, "act_known", got.Action.ID)
+}
+func TestPlanningRequiresCorePlanner(t *testing.T) {
+	c := NewProposalCapture(ProposalIdentity{}, testProposalCatalog())
+	result := executePropose(t, newInvestigationExecutor(t, c), "a", proposeArgs())
+	require.True(t, result.IsError)
+	require.Contains(t, result.Content[0].Text, "planning is unavailable")
 }
 
-func TestActionCapabilitiesRequiresInvestigationCatalog(t *testing.T) {
-	exec := newInvestigationExecutor(t, nil)
-	result, err := exec.ExecuteInvocation(context.Background(), ToolInvocation{
-		ID:        "catalog-a",
-		Name:      agentcapabilities.PatrolActionCapabilitiesToolName,
-		Arguments: map[string]interface{}{"resource_id": "vm:42"},
-	})
-	require.NoError(t, err)
-	require.NotEmpty(t, result.Content)
-	assert.Contains(t, result.Content[0].Text, "not available")
-}
-
-func TestProposalExposureProjectorRedactsParams(t *testing.T) {
-	args := proposeArgs()
-	redacted := agentcapabilities.RedactToolCallArgumentsForExposure(agentcapabilities.PatrolProposeActionToolName, args)
-	assert.Equal(t, agentcapabilities.RedactedProposalParamsMarker, redacted["params"])
-	assert.Equal(t, "vm:42", redacted["resource_id"])
-	assert.Equal(t, "vm:42", redacted["causal_resource_id"])
-	// The transient map used for provider continuation and validation is
-	// untouched.
-	if _, ok := args["params"].(map[string]interface{}); !ok {
-		t.Fatal("projector must not mutate the original arguments")
+// validateProposalAgainstCatalog checks the proposal against the
+// resource's advertised capability contract. Error messages never echo
+// parameter values: proposal params exist only transiently for provider
+// continuation and validation.
+func validateProposalAgainstCatalog(ctx context.Context, catalog ProposalCatalog, resourceID, capabilityName string, params map[string]interface{}) error {
+	if catalog == nil {
+		return errors.New("no capability catalog is wired for proposal validation")
 	}
-	if !strings.Contains(redacted["reason"].(string), "recover") {
-		t.Fatal("non-parameter fields stay exposed")
+	capabilities, err := catalog(ctx, resourceID)
+	if err != nil {
+		return fmt.Errorf("capability catalog lookup failed for resource %q", resourceID)
 	}
-	// Other tools pass through unchanged.
-	other := agentcapabilities.RedactToolCallArgumentsForExposure("pulse_query", args)
-	if _, ok := other["params"].(map[string]interface{}); !ok {
-		t.Fatal("non-proposal tools must not be redacted")
+	// Exact-name resolution and full parameter validation are the
+	// planner's canonical implementations, so proposal acceptance and
+	// planning can never drift on matching, types, enums, patterns,
+	// required presence, or malformed capability schemas.
+	capability, found := actionplanner.FindCapability(capabilities, capabilityName)
+	if !found {
+		return fmt.Errorf("resource %q does not advertise capability %q", resourceID, capabilityName)
 	}
-}
-
-func TestCapturedProposalIsImmuneToCallerMutation(t *testing.T) {
-	capture := NewProposalCapture(ProposalIdentity{InvestigationID: "inv-1", EvidenceIDs: []string{"ev-1"}}, testProposalCatalog())
-	args := proposeArgs()
-	params := args["params"].(map[string]interface{})
-
-	require.NoError(t, capture.Submit("call-a", "vm:42", "vm:42", "restart", "recover", params))
-
-	// Mutating the caller's map after validation must not change the
-	// actionable proposal (or its fingerprint identity).
-	params["mode"] = "force"
-
-	proposal, _, err := capture.Outcome()
-	require.NoError(t, err)
-	require.NotNil(t, proposal)
-	assert.Equal(t, "graceful", proposal.Params["mode"])
-
-	// Mutating the returned copy must not affect a later outcome read.
-	proposal.Params["mode"] = "force"
-	proposal.Identity.EvidenceIDs[0] = "tampered"
-	again, _, err := capture.Outcome()
-	require.NoError(t, err)
-	assert.Equal(t, "graceful", again.Params["mode"])
-	assert.Equal(t, "ev-1", again.Identity.EvidenceIDs[0])
-}
-
-func TestProposalCapabilityMatchingIsExactLikePlanning(t *testing.T) {
-	capture := NewProposalCapture(ProposalIdentity{}, testProposalCatalog())
-	exec := newInvestigationExecutor(t, capture)
-
-	// The catalog advertises "restart"; a case-mismatched proposal must
-	// fail exactly as planning would, so acceptance and planning never
-	// drift on name resolution.
-	args := proposeArgs()
-	args["capability_name"] = "Restart"
-	result := executePropose(t, exec, "call-a", args)
-	assert.Contains(t, result.Content[0].Text, "does not advertise")
-
-	_, failed, err := capture.Outcome()
-	assert.Equal(t, 1, failed)
-	if !errors.Is(err, ErrProposalAttemptsFailed) {
-		t.Fatalf("outcome error = %v, want ErrProposalAttemptsFailed", err)
-	}
-}
-
-func TestProposalValidationUsesCanonicalPlannerRules(t *testing.T) {
-	capture := NewProposalCapture(ProposalIdentity{}, testProposalCatalog())
-	exec := newInvestigationExecutor(t, capture)
-
-	// Empty required value: planner treats whitespace as missing.
-	args := proposeArgs()
-	args["params"] = map[string]interface{}{"mode": "   "}
-	result := executePropose(t, exec, "call-a", args)
-	assert.Contains(t, result.Content[0].Text, "invalid for capability")
-
-	// Wrong type for an enum string parameter.
-	args = proposeArgs()
-	args["params"] = map[string]interface{}{"mode": 42}
-	result = executePropose(t, exec, "call-b", args)
-	assert.Contains(t, result.Content[0].Text, "invalid for capability")
-
-	_, failed, err := capture.Outcome()
-	assert.Equal(t, 2, failed)
-	if !errors.Is(err, ErrProposalAttemptsFailed) {
-		t.Fatalf("outcome error = %v, want ErrProposalAttemptsFailed", err)
-	}
-}
-
-func TestProposeActionSchemaExposesOnlyModelAuthoredFields(t *testing.T) {
-	exec := NewPulseToolExecutor(ExecutorConfig{})
-	exec.ApplyExecutionProfile(ProfilePatrolInvestigation)
-	exec.SetProposalCapture(NewProposalCapture(ProposalIdentity{}, testProposalCatalog()))
-
-	for _, tool := range exec.registry.ListTools(exec.invocationPolicy()) {
-		if tool.Name != agentcapabilities.PatrolProposeActionToolName {
+	// Proposal-specific ratchet on top of planning: investigations must
+	// never carry sensitive values (operators supply those at approval
+	// time on the canonical surface).
+	for _, param := range capability.Params {
+		if !param.IsSensitive {
 			continue
 		}
-		assert.ElementsMatch(t,
-			[]string{"resource_id", "causal_resource_id", "capability_name", "params", "reason"},
-			mapKeys(tool.InputSchema.Properties),
-		)
-		assert.NotContains(t, tool.InputSchema.Required, "causal_resource_id")
-		return
+		if value, ok := params[param.Name]; ok && value != nil {
+			return fmt.Errorf("parameter %q is sensitive and must be supplied by an operator on the canonical approval surface, never by an investigation", param.Name)
+		}
 	}
-	t.Fatal("patrol_propose_action missing from investigation projection")
-}
-
-func TestProposeActionRejectsUnknownAndInternalFieldsBeforeCapture(t *testing.T) {
-	capture := NewProposalCapture(ProposalIdentity{FindingID: "trusted-f", InvestigationID: "trusted-i"}, testProposalCatalog())
-	exec := newInvestigationExecutor(t, capture)
-
-	for _, field := range []string{"finding_id", "investigation_id", agentcapabilities.ApprovalArgumentKey} {
-		args := proposeArgs()
-		args[field] = "model-authored"
-		result := executePropose(t, exec, "call-"+field, args)
-		assert.Contains(t, result.Content[0].Text, "invalid tools/call params")
+	if err := actionplanner.ValidateParams(params, capability.Params); err != nil {
+		return fmt.Errorf("proposal parameters are invalid for capability %q: %s", capabilityName, err.Error())
 	}
-
-	proposal, failed, err := capture.Outcome()
-	require.NoError(t, err)
-	assert.Nil(t, proposal)
-	assert.Zero(t, failed, "schema rejection must occur before the proposal handler records an attempt")
-}
-
-func mapKeys[V any](values map[string]V) []string {
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	return keys
+	return nil
 }
