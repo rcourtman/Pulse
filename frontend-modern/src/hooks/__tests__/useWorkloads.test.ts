@@ -296,6 +296,52 @@ describe('useWorkloads', () => {
     dispose();
   });
 
+  it('tracks canonical hybrid VM memory without substituting nested agent readings', async () => {
+    // #1962: synthetic snapshots exercise Web reactivity, not poller recovery.
+    const buildVM = (instance: string, percent?: number) => ({
+      id: `${instance}-pve1-101`, type: 'vm', name: `${instance}-vm`,
+      status: 'running', platformType: 'proxmox-pve', sourceType: 'hybrid',
+      sources: ['proxmox', 'agent'],
+      proxmox: { vmid: 101, nodeName: 'pve1', instance },
+      memory: percent === undefined ? undefined : {
+        current: percent, used: percent * 1024, total: 100 * 1024,
+      },
+      agent: { memory: { used: 35 * 1024, total: 100 * 1024, usage: 35 } },
+    }) as any;
+    const otherVM = buildVM('cluster-b', 80);
+    const [snapshot, setSnapshot] = createSignal([buildVM('cluster-a', 100), otherVM]);
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useWorkloads(() => true, { resourceSnapshot: snapshot });
+    });
+    try {
+      await flushAsync();
+      const target = () => result!.workloads().find((vm) => vm.name === 'cluster-a-vm')!;
+      const other = () => result!.workloads().find((vm) => vm.name === 'cluster-b-vm')!;
+      expect(target().memory.usage).toBe(100);
+      expect(other().memory.usage).toBe(80);
+      setSnapshot([buildVM('cluster-a', 35), otherVM]);
+      await flushAsync();
+      expect(target().memory).toMatchObject({ usage: 35, used: 35 * 1024, total: 100 * 1024 });
+      expect(other().memory.usage).toBe(80);
+      // Missing canonical telemetry must not revive the nested agent's old value.
+      setSnapshot([buildVM('cluster-a'), otherVM]);
+      await flushAsync();
+      expect(target().memory.usageUnavailable).toBe(true);
+      expect(target().telemetryAvailability?.memory).toBe(false);
+      expect(other().memory.usage).toBe(80);
+      setSnapshot([buildVM('cluster-a', 0), otherVM]);
+      await flushAsync();
+      expect(target().memory).toMatchObject({ usage: 0, usageUnavailable: false });
+      expect(target().telemetryAvailability?.memory).toBe(true);
+      expect(apiFetchJSONMock).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
   it('keeps row identity stable for guests whose data did not change', async () => {
     const buildGuest = (id: string, vmid: number, cpu: number) =>
       ({
