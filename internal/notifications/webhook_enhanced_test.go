@@ -252,6 +252,18 @@ func TestParseRetryAfterBackoff(t *testing.T) {
 			ok:         true,
 		},
 		{
+			name:       "large seconds cannot overflow duration",
+			retryAfter: "9223372036854775807",
+			want:       WebhookMaxBackoff,
+			ok:         true,
+		},
+		{
+			name:       "large negative seconds stay immediate",
+			retryAfter: "-9223372036854775807",
+			want:       0,
+			ok:         true,
+		},
+		{
 			name:       "http date capped at max backoff",
 			retryAfter: "Fri, 13 Mar 2026 19:05:00 GMT",
 			want:       WebhookMaxBackoff,

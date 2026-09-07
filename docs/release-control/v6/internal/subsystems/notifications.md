@@ -121,6 +121,24 @@ stable opaque routing identities and must not expose credentials.
 
 ## Current State
 
+### Webhook retry delay conversion
+
+`parseRetryAfterBackoff` bounds parsed integer seconds before multiplying by
+`time.Second`, so large provider values cannot overflow into an immediate
+retry. Signed 64-bit integer parsing makes this independent of native integer
+width. Positive parsed seconds above the existing `WebhookMaxBackoff` cap
+return that cap (30 seconds); non-positive parsed values retain the existing
+immediate fallback. HTTP-date parsing and invalid-value fallback are unchanged;
+integers outside signed 64-bit range remain invalid. Negative-value acceptance
+is compatibility behaviour, not the non-negative delay-seconds grammar of
+[RFC 9110 section 10.2.3](https://www.rfc-editor.org/rfc/rfc9110.html#section-10.2.3).
+
+`TestParseRetryAfterBackoff` in
+`internal/notifications/webhook_enhanced_test.go` pins both large positive and
+negative overflow cases alongside ordinary seconds, dates, whitespace and
+invalid inputs. This is pure parser proof: it does not establish elapsed HTTP
+retry timing, queue persistence, provider acceptance or recipient receipt.
+
 Notification-management HTTP production and its unit/contract proof now live
 together under `internal/api/alerting/`. Router-level scope and integration
 tests remain in `internal/api`, while the compatibility aliases there keep the
