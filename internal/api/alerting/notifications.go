@@ -1076,7 +1076,7 @@ func (h *NotificationHandlers) GetDeliveryLog(w http.ResponseWriter, r *http.Req
 	// can embed credentials.
 	for i := range entries {
 		if entries[i].ErrorMessage != "" {
-			entries[i].ErrorMessage = notifications.RedactWebhookURLSecrets(entries[i].ErrorMessage)
+			entries[i].ErrorMessage = notifications.RedactWebhookDiagnosticSecrets(entries[i].ErrorMessage)
 		}
 	}
 

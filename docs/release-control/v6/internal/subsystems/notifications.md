@@ -570,3 +570,40 @@ email, webhook and Apprise, firing and recovery, and global versus destination
 disablement. This corrects false successful queue/audit records; it does not
 establish maintenance-window expiry, stop an already-started provider request,
 or repair historical false-success records.
+
+### Webhook diagnostic userinfo confidentiality
+
+`RedactWebhookURLSecrets` masks the entire URL userinfo (including username-only
+credentials), before its existing Telegram-path and query-secret redaction.
+Unparseable URLs produce `[invalid webhook URL]`, not a raw credential-bearing
+fallback. Valid destination host/path and non-secret query fields remain useful
+for diagnosis. Transport-error redaction copies the URL error and retains its
+underlying cause without changing the original error or the configured URL.
+This follows the credential-exclusion principle in the
+[OWASP Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html#data-to-exclude).
+
+Regression tests cover plain/encoded/user-only credentials, malformed URLs,
+non-authority at signs, combined path/query redaction, error unwrapping and
+actual rate-limit log output. These queue-free tests establish local diagnostic
+redaction, not destination receipt, installed recovery or release qualification.
+No claim is made that arbitrary custom path/query secrets are recognised.
+
+Delivery-log errors use `RedactWebhookDiagnosticSecrets` so URLs embedded in
+otherwise useful error text receive the same masking without discarding the
+surrounding status context. Malformed embedded URLs still fail closed.
+
+### Slack webhook diagnostic path confidentiality
+
+The same helper masks paths on the exact `hooks.slack.com` and
+`hooks.slack-gov.com` hosts. `/services/` remains as a diagnostic marker; legacy
+paths become `/REDACTED`. Matching uses the parsed, case-insensitive hostname
+and clears the encoded path representation, so ports and escaped path segments
+do not bypass masking. Other hosts retain their diagnostic paths. Userinfo and
+known query credentials remain redacted; configured destinations are unchanged.
+
+[Slack's incoming-webhook documentation](https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/)
+identifies the webhook URL as secret and documents GovSlack's separate domain.
+Queue-free regression tests cover both hosts, encoded and legacy paths,
+lookalike/unrelated hosts, transport errors and actual rate-limit log output.
+This does not establish customer exposure, recipient receipt or recognition of
+arbitrary custom webhook secrets.
