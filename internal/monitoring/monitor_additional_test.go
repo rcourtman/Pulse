@@ -1014,3 +1014,52 @@ type correlatedMemoryClient struct{ stubPVEClient }
 func (*correlatedMemoryClient) GetVMStatus(context.Context, string, int) (*proxmox.VMStatus, error) {
 	return &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, nil
 }
+
+// Automatic VM correlation is a link hint, not a cross-type registry merge.
+// Keep this separate from TestCorrelatedGuestMemoryNextPoll's retained links.
+func TestAutomaticGuestMemoryLinkNextPoll(t *testing.T) {
+	now := time.Now()
+	guestID := makeGuestID("pve-a", "node1", 111)
+	otherID := makeGuestID("pve-b", "node1", 111)
+	snapshot := models.StateSnapshot{VMs: []models.VM{
+		{ID: guestID, Instance: "pve-a", Node: "node1", VMID: 111, Name: "firewall", Status: "running", LastSeen: now},
+		{ID: otherID, Instance: "pve-b", Node: "node1", VMID: 111, Name: "other-firewall", Status: "running", LastSeen: now},
+	}}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	mon := &Monitor{state: models.NewState(), resourceStore: unifiedresources.NewMonitorAdapter(registry)}
+	node, linkedVM, ct := mon.findLinkedProxmoxEntityWithHints("firewall.example.test", "", nil)
+	if node != "" || linkedVM != guestID || ct != "" {
+		t.Fatalf("automatic link = %q/%q/%q", node, linkedVM, ct)
+	}
+	snapshot.Hosts = []models.Host{{ID: "guest-agent", Hostname: "firewall.example.test", LinkedVMID: linkedVM, Status: "online", LastSeen: now, Memory: models.Memory{Total: 8000, Used: 2800, Free: 5200, Usage: 35}}}
+	// Reconstruct using source snapshots, without a manual link store.
+	registry = unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	mon.resourceStore = unifiedresources.NewMonitorAdapter(registry)
+	if len(registry.VMs()) != 2 || len(registry.Hosts()) != 1 {
+		t.Fatal("automatic hint unexpectedly merged the agent into a VM")
+	}
+	for _, tc := range []struct {
+		instance, id string
+		used         uint64
+		source       string
+	}{
+		{"pve-a", guestID, 2800, "agent"}, {"pve-b", otherID, 8000, "status-mem"},
+	} {
+		prev := mon.previousGuestContextForInstance(tc.instance)
+		_, used, source := mon.resolveGuestStatusMemory(context.Background(), &stubPVEClient{}, tc.instance, "firewall", "node1", 111, tc.id, &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, prev.hostAgentsByVMID, 8000, "", &VMMemoryRaw{})
+		if used != tc.used || source != tc.source {
+			t.Fatalf("%s used=%d source=%s", tc.instance, used, source)
+		}
+	}
+	// A matching name in another instance must prevent automatic selection.
+	snapshot.VMs[1].Name = "firewall"
+	registry = unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	mon.resourceStore = unifiedresources.NewMonitorAdapter(registry)
+	node, linkedVM, ct = mon.findLinkedProxmoxEntityWithHints("firewall.example.test", "", nil)
+	if node != "" || linkedVM != "" || ct != "" {
+		t.Fatalf("ambiguous hostname selected %q/%q/%q", node, linkedVM, ct)
+	}
+}
