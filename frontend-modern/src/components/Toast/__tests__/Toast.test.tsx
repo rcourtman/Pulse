@@ -11,6 +11,27 @@ describe('Toast', () => {
     vi.useRealTimers();
   });
 
+  it.each([
+    ['error', 'alert', 'assertive'],
+    ['warning', 'alert', 'assertive'],
+    ['success', 'status', 'polite'],
+    ['info', 'status', 'polite'],
+  ] as const)('preserves %s announcement semantics without moving focus', (type, role, live) => {
+    render(() => <><button>Recovery action</button><ToastContainer /></>);
+    const action = screen.getByRole('button', { name: 'Recovery action' });
+    action.focus();
+
+    window.showToast(type, 'Recovery result', 'Action context');
+
+    const announcement = screen.getByRole(role);
+    expect(announcement).toHaveAttribute('aria-live', live);
+    expect(announcement).toHaveAttribute('aria-atomic', 'true');
+    expect(announcement).toHaveTextContent('Recovery result');
+    expect(announcement).toHaveTextContent('Action context');
+    expect(action).toHaveFocus();
+    expect(screen.queryByRole(role === 'alert' ? 'status' : 'alert')).not.toBeInTheDocument();
+  });
+
   it('keeps all toasts created within a batch', () => {
     render(() => <ToastContainer />);
 
