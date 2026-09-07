@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-li
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotificationsAPI, type NotificationHealth } from '@/api/notifications';
+import { notificationStore } from '@/stores/notifications';
 import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import { DestinationsTab } from '../tabs/DestinationsTab';
 import type { UIAppriseConfig, UIEmailConfig } from '../types';
@@ -136,12 +137,14 @@ describe('DestinationsTab recovery while editing SMTP', () => {
     vi.restoreAllMocks();
   });
 
-  it.each([
+  it.each(([
     ['retryTerminalFailures', 'Retry retained deliveries', 'retry'],
     ['dismissTerminalFailures', 'Dismiss retained failures', 'dismiss'],
-  ] as const)(
-    'preserves unfinished edits through rejected and accepted %s',
-    async (action, label, verb) => {
+  ] as const).flatMap(([action, label, verb]) =>
+    (['available', 'unavailable'] as const).map((refresh) => ({ action, label, verb, refresh })),
+  ))(
+    'preserves unfinished edits through $action with $refresh refresh',
+    async ({ action, label, verb, refresh }) => {
       const [emailConfig, setEmailConfig] = createSignal(buildEmailConfig());
       const [appriseConfig, setAppriseConfig] = createSignal(buildAppriseConfig());
       const dirty = vi.fn();
@@ -218,11 +221,22 @@ describe('DestinationsTab recovery while editing SMTP', () => {
         failed: 0,
         deadLetter: 0,
       };
-      vi.mocked(NotificationsAPI.getHealth).mockResolvedValueOnce(healthy);
+      if (refresh === 'unavailable') {
+        vi.mocked(NotificationsAPI.getHealth).mockRejectedValueOnce(new Error('health unavailable'));
+        vi.mocked(NotificationsAPI.getDeliveryLog).mockRejectedValueOnce(new Error('history unavailable'));
+      } else {
+        vi.mocked(NotificationsAPI.getHealth).mockResolvedValueOnce(healthy);
+      }
+      vi.mocked(notificationStore.error).mockClear();
       fireEvent.click(screen.getByRole('button', { name: label }));
       editor.focus();
       accept({ success: true, affected: 85 });
-      await waitFor(() => expect(screen.queryByRole('button', { name: label })).toBeNull());
+      if (refresh === 'available') {
+        await waitFor(() => expect(screen.queryByRole('button', { name: label })).toBeNull());
+      } else {
+        await screen.findByText('Notification delivery status is unavailable');
+        await waitFor(() => expect(screen.getByRole('button', { name: label })).toBeEnabled());
+      }
       await waitFor(() => expect(NotificationsAPI.getDeliveryLog).toHaveBeenCalledTimes(2));
       expect(screen.getByRole('textbox', { name: 'SMTP server' })).toBe(editor);
       expect(editor).toHaveFocus();
@@ -231,7 +245,17 @@ describe('DestinationsTab recovery while editing SMTP', () => {
       expect(dirty).not.toHaveBeenCalledWith(false);
       expect(screen.getByRole('status')).toBe(status);
       expect(status).toBeEmptyDOMElement();
-      expect(screen.getByText('SMTP fixture rejected')).toBeInTheDocument();
+      if (refresh === 'unavailable') {
+        expect(await screen.findByText('Notification delivery status is unavailable')).toBeInTheDocument();
+        expect(await screen.findByText('Pulse could not read the delivery log, so recent delivery activity cannot be shown.')).toBeInTheDocument();
+        expect(screen.queryByText('SMTP fixture rejected')).not.toBeInTheDocument();
+      } else {
+        expect(screen.getByText('SMTP fixture rejected')).toBeInTheDocument();
+      }
+      // A failed read must not relabel an accepted mutation as rejected.
+      expect(notificationStore.success).toHaveBeenCalledTimes(1);
+      expect(notificationStore.error).not.toHaveBeenCalled();
+      expect(NotificationsAPI.getHealth).toHaveBeenCalledTimes(2);
       expect(NotificationsAPI[action]).toHaveBeenCalledTimes(2);
     },
   );
