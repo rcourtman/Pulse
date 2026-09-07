@@ -21,6 +21,20 @@ func RedactWebhookURLSecrets(urlString string) string {
 		urlString = parsed.String()
 	}
 
+	// Slack incoming webhook paths are credentials, including legacy paths.
+	// Match the parsed host, not a substring, and discard RawPath so escaped
+	// credentials cannot survive URL.String(). Do not change the destination.
+	switch strings.ToLower(parsed.Hostname()) {
+	case "hooks.slack.com", "hooks.slack-gov.com":
+		if strings.HasPrefix(parsed.Path, "/services/") {
+			parsed.Path = "/services/REDACTED"
+		} else {
+			parsed.Path = "/REDACTED"
+		}
+		parsed.RawPath = ""
+		urlString = parsed.String()
+	}
+
 	// Telegram bot credentials are path components rather than query values.
 	if idx := strings.Index(urlString, "/bot"); idx != -1 {
 		if endIdx := strings.Index(urlString[idx+4:], "/"); endIdx != -1 {
