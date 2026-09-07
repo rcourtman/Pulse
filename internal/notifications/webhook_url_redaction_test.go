@@ -53,6 +53,13 @@ func TestRedactWebhookURLSecrets(t *testing.T) {
 			input: "https://gotify.example/message?token=gotify-secret",
 			want:  "https://gotify.example/message?token=REDACTED",
 		},
+		"telegram escaped prefix":           {input: "https://api.telegram.org/%62ot123:telegram-secret/sendMessage", want: "https://api.telegram.org/botREDACTED/sendMessage"},
+		"telegram escaped token":            {input: "https://api.telegram.org/bot123:telegram%2Dsecret/sendMessage", want: "https://api.telegram.org/botREDACTED/sendMessage"},
+		"telegram local escaped prefix":     {input: "http://localhost:8081/%62ot123:telegram-secret/sendMessage", want: "http://localhost:8081/botREDACTED/sendMessage"},
+		"telegram no method with URL query": {input: "https://api.telegram.org/bot123:telegram-secret?next=https://example.org/status", want: "https://api.telegram.org/botREDACTED?next=https://example.org/status"},
+		"telegram fragment":                 {input: "https://api.telegram.org/bot123:telegram-secret#diagnostic", want: "https://api.telegram.org/botREDACTED#diagnostic"},
+		"bot hostname is not a path":        {input: "https://bot.example.org/hook?channel=ops", want: "https://bot.example.org/hook?channel=ops"},
+		"bot query is not a path":           {input: "https://example.org/hook?next=https://bot.example.org/status", want: "https://example.org/hook?next=https://bot.example.org/status"},
 		"telegram path and query": {
 			input: "https://api.telegram.org/bot123:secret/send?token=query-secret",
 			want:  "https://api.telegram.org/botREDACTED/send?token=REDACTED",
@@ -176,6 +183,31 @@ func TestDiscordWebhookDiagnosticsRedactPath(t *testing.T) {
 	}
 	out := captured.String()
 	if !strings.Contains(out, "rate limit exceeded") || !strings.Contains(out, "/api/webhooks/REDACTED") || strings.Contains(out, "discord-secret") {
+		t.Fatalf("unsafe rate-limit diagnostic: %s", out)
+	}
+}
+
+func TestTelegramWebhookDiagnosticsRedactPath(t *testing.T) {
+	const webhookURL = "https://api.telegram.org/%62ot123:telegram-secret/sendMessage"
+	cause := errors.New("connection refused")
+	original := &url.Error{Op: "Post", URL: webhookURL, Err: cause}
+	redacted := redactWebhookTransportError(original)
+	if strings.Contains(redacted.Error(), "telegram-secret") || !strings.Contains(redacted.Error(), "/botREDACTED/sendMessage") {
+		t.Fatalf("unsafe transport diagnostic: %v", redacted)
+	}
+	if original.URL != webhookURL || !errors.Is(redacted, cause) {
+		t.Fatal("transport error identity or cause changed")
+	}
+	var captured bytes.Buffer
+	logger := log.Logger
+	log.Logger = zerolog.New(&captured)
+	t.Cleanup(func() { log.Logger = logger })
+	nm := &NotificationManager{webhookRateLimits: make(map[string]*webhookRateLimit)}
+	for range WebhookRateLimitMax + 2 {
+		nm.checkWebhookRateLimit(webhookURL)
+	}
+	out := captured.String()
+	if !strings.Contains(out, "rate limit exceeded") || !strings.Contains(out, "/botREDACTED/sendMessage") || strings.Contains(out, "telegram-secret") {
 		t.Fatalf("unsafe rate-limit diagnostic: %s", out)
 	}
 }

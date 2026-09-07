@@ -44,15 +44,18 @@ func RedactWebhookURLSecrets(urlString string) string {
 		}
 	}
 
-	// Telegram bot credentials are path components rather than query values.
-	if idx := strings.Index(urlString, "/bot"); idx != -1 {
-		if endIdx := strings.Index(urlString[idx+4:], "/"); endIdx != -1 {
-			urlString = urlString[:idx+4] + "REDACTED" + urlString[idx+4+endIdx:]
-		} else if queryIdx := strings.Index(urlString[idx+4:], "?"); queryIdx != -1 {
-			urlString = urlString[:idx+4] + "REDACTED" + urlString[idx+4+queryIdx:]
-		} else {
-			urlString = urlString[:idx+4] + "REDACTED"
+	// Telegram also supports local API servers, so retain host-independent
+	// masking, but inspect only the decoded path. Searching the whole URL
+	// misses escaped prefixes and can mistake hostnames or query URLs for
+	// bot credentials. Clear RawPath to prevent escaped secrets resurfacing.
+	if idx := strings.Index(parsed.Path, "/bot"); idx != -1 {
+		end := len(parsed.Path)
+		if suffix := strings.Index(parsed.Path[idx+4:], "/"); suffix != -1 {
+			end = idx + 4 + suffix
 		}
+		parsed.Path = parsed.Path[:idx+4] + "REDACTED" + parsed.Path[end:]
+		parsed.RawPath = ""
+		urlString = parsed.String()
 	}
 
 	queryIndex := strings.Index(urlString, "?")
