@@ -4,6 +4,10 @@ The customer job is: "Tell me what needs my attention, explain why, and help me
 deal with it without creating more work." Patrol owns the issue and investigation.
 Assistant explains that same issue and uses existing governed action contracts.
 
+The local redesign and named qualification matrix are delivered. See
+[verified delivery and remaining gate](#verified-local-delivery-and-remaining-release-gate)
+for the exact source and CI results. Production-wide readiness remains open.
+
 ## Active redesign plan, 2026-09-05
 
 The maintainer requested a whole-design assessment and an explicit goal to
@@ -34,11 +38,10 @@ The design review reproduced a concrete trust violation in
 called an evidence checkpoint, inserted into the final Root Cause section, and
 the completion prompt forbids downgrading it in the reviewed baseline. Acceptance establishes that a
 proposal was recorded, not that its causal claim is true. This mechanism must
-be corrected before the diagnosis/action journey can qualify. The current
-working change removes both insertion paths and the duplicated proposal prompt
-state. A full-service regression now preserves the exact uncertain conclusion in the
-stream, returned result and persisted session after evidence and proposal turns.
-The full live investigation journey remains to be qualified.
+be corrected before the diagnosis/action journey can qualify. The delivered change removes both insertion paths and the duplicated proposal
+prompt state. A full-service regression preserves the exact uncertain conclusion
+in the stream, returned result and persisted session after evidence and proposal
+turns. The named live investigation and outcome matrix is performed below.
 
 ### Baseline and measurement limits
 
@@ -62,10 +65,10 @@ reproduction evidence, not a representative customer success rate.
 | Step | Work | Acceptance | Current state |
 |---|---|---|---|
 | 1. Product contract and baseline | Map the current loop and sources of judgment. Record telemetry populations and gaps. | Every identified decision has an owner. Activity is not labelled usefulness. | Complete for this redesign scope. Contract, ownership decisions and baseline limits are recorded. |
-| 2. Shared evidence | Preserve canonical risk reasons and SMART counters, source/time semantics and history across tools/turns. | Regression tests preserve unknown versus zero and all canonical evidence. Real responses can inspect the same facts as the product. | Implemented and qualified for the named shared-evidence defects. Canonical disk detail, risk and cadence pass real data-path proof. Affected package and concurrency checks pass. Integrated CI later exposed remaining query and allocation regressions. The final bounded query-reuse correction passes complete selected exact-base worker comparisons and full metrics/database and focused race checks. Final landing CI passed and PRs #1928 and #1929 merged. Real-model interpretation failures remain tracked in step 5. |
-| 3. Diagnostic orchestration | Correct proposal-as-proof. Audit triage budgets, unmatched-signal evaluation, assessment completion and investigation cutoffs. | No code-written causal conclusion. No quality inferred from tool, flag or finding counts. Each retained pass has an objective reason. Safety boundaries and incomplete outcomes remain explicit. | Proposal promotion and capture inference were removed in c5d2f56dda. Commit 668af3fe6b removes investigation success-call floors, checkpoint instructions and generic call-count wrap-up rules. The detection slice removes contextless follow-up passes, flag/report-count policy and first-finding completion modes. Full chat and AI suites, focused API and conversation race tests pass. Real-model/action outcome qualification remains open. |
-| 4. Issue through verified outcome | Follow existing issue/investigation/action records into Assistant, approval, execution and independent readback. | Accepted proposal is visibly distinct from execution and verification. Rejected or unsupported actions do not become success. Uncertainty can survive an action proposal. | Implemented and locally qualified. Canonical planning returns inside the model turn, actor/request replay is persistent, and accepted actions survive later provider failure. Approved/rejected Docker and missing-runner/VM journeys passed independent live oracles. Final r34 history, action-state, attached-context and Assistant continuation matrices pass. Scoped delivery remains required. |
-| 5. Ground-truth qualification and landing | Extend existing qualification tooling only where necessary. Exercise healthy/unhealthy, dependency, missing-access, storage/backup and approved/rejected action cases. Inspect the final browser journey at desktop and narrow widths. | Record exact source/model/permissions, evidence, decisions, faults/misses, latency and verification. Fix in-scope failures, pass appropriate proofs and land scoped commits. | Local implementation qualification performed for the named matrix. r28 real Gemini runs cover healthy, unhealthy, dependency, storage capacity, missing access, approved and rejected actions, with independent Docker and VM observations. Later projection/streaming fixes have affected race proof and final r34 Playwright proof. Scoped landing remains pending. Independent customer environments, backup/restore, unattended autonomy and population reliability remain separate unqualified gates. |
+| 2. Shared evidence | Preserve canonical risk reasons and SMART counters, source/time semantics and history across tools/turns. | Regression tests preserve unknown versus zero and all canonical evidence. Real responses can inspect the same facts as the product. | Implemented and qualified for the named shared-evidence defects. Canonical disk detail, risk and cadence pass real data-path proof. Affected package and concurrency checks pass. Integrated CI later exposed remaining query and allocation regressions. The final bounded query-reuse correction passes complete selected exact-base worker comparisons and full metrics/database and focused race checks. Final landing CI passed and PRs #1928 and #1929 merged. Historical interpretation failures and the later corrected qualification are retained in step 5. |
+| 3. Diagnostic orchestration | Correct proposal-as-proof. Audit triage budgets, unmatched-signal evaluation, assessment completion and investigation cutoffs. | No code-written causal conclusion. No quality inferred from tool, flag or finding counts. Each retained pass has an objective reason. Safety boundaries and incomplete outcomes remain explicit. | Proposal promotion and capture inference were removed in c5d2f56dda. Commit 668af3fe6b removes investigation success-call floors, checkpoint instructions and generic call-count wrap-up rules. The detection slice removes contextless follow-up passes, flag/report-count policy and first-finding completion modes. Full chat and AI suites, focused API and conversation race tests pass. The later source-bound real-model/action matrix is performed and recorded below. Wider rollout qualification remains open. |
+| 4. Issue through verified outcome | Follow existing issue/investigation/action records into Assistant, approval, execution and independent readback. | Accepted proposal is visibly distinct from execution and verification. Rejected or unsupported actions do not become success. Uncertainty can survive an action proposal. | Implemented and locally qualified. Canonical planning returns inside the model turn, actor/request replay is persistent, and accepted actions survive later provider failure. Approved/rejected Docker and missing-runner/VM journeys passed independent live oracles. Final r34 history, action-state, attached-context and Assistant continuation matrices pass. Core PR1960 and enterprise PR23 landed the verified source pair. |
+| 5. Ground-truth qualification and landing | Extend existing qualification tooling only where necessary. Exercise healthy/unhealthy, dependency, missing-access, storage/backup and approved/rejected action cases. Inspect the final browser journey at desktop and narrow widths. | Record exact source/model/permissions, evidence, decisions, faults/misses, latency and verification. Fix in-scope failures, pass appropriate proofs and land scoped commits. | Local implementation qualification performed for the named matrix. r28 real Gemini runs cover healthy, unhealthy, dependency, storage capacity, missing access, approved and rejected actions, with independent Docker and VM observations. Later projection/streaming fixes have affected race proof and final r34 Playwright proof. Core PR1960 and enterprise PR23 landed the verified source pair. Independent customer environments, backup/restore, unattended autonomy and population reliability remain separate unqualified gates. |
 
 Use one shared runtime and the existing qualification runner, not a second
 product intelligence engine or a new parallel lifecycle. Preserve independent
@@ -87,13 +90,15 @@ scoring to make the model pass.
 | Generic wrap-up counters | Removed the 12/18-call tool-result instructions and four silent-turn cutoff. | Explicit run limits bound work. Counts and silence do not establish evidential sufficiency. A twenty-read regression preserves available tools, observations and the model conclusion. |
 | Authority and execution boundaries | Tenant identity, capability schemas, approvals, invocation IDs, parameter redaction and independent readback. | Keep and prove unchanged when diagnostic policy is simplified. These enforce objective invariants. |
 
-This is an audited change list, not a claim that the changes are already made.
-Each removal must run its focused regression and affected complete journey.
+This table retains the audited removal decisions. The execution-order table and
+final source-bound qualification and delivery sections record their completed
+implementation proofs and the separate remaining rollout gate.
 
 ### Completion and external dependencies
 
-The local implementation goal remains open until required qualification is
-performed. The maintainer authorized Gemini 3.8 Flash through OpenRouter with a
+The named local implementation qualification is performed and delivered.
+Production-wide readiness remains open. The maintainer authorized Gemini 3.8
+Flash through OpenRouter with a
 US$5 key limit and one-day expiry on 2026-09-06. That supported route passes the
 streaming readiness and initial live Watch and dependency cases recorded below.
 The earlier Claude subscription refusal belongs to the exact synthetic
@@ -3512,3 +3517,101 @@ checks must pass before this delivery is counted complete. The failed API job is
 [101809873027](https://github.com/rcourtman/Pulse/actions/runs/34143221580/job/101809873027),
 with its raw log retained in workspace
 `tmp/patrol-planning-continuation/core-api-c501.log`.
+
+
+### Verified local delivery and remaining release gate
+
+Core [PR1960](https://github.com/rcourtman/Pulse/pull/1960) merged as
+`a42e3800d9a1b5ea185823469e891f44bc698c2c`, carrying implementation commit
+`c501376843431e1812abd42da16888b462b41dc3`. Its pre-merge qualification check rollup
+contained 28 successful checks on final head
+`17aa972f357292415322eba09d607cc9fe3f3fe3`, including the correction to
+the contract test's whitespace comparison. The full Build and Test run is
+[34146504729](https://github.com/rcourtman/Pulse/actions/runs/34146504729), and
+Core E2E is
+[34146504686](https://github.com/rcourtman/Pulse/actions/runs/34146504686).
+Initial head c5013768 failed the API source-contract assertion described above.
+Its other checks, including its paired benchmark, passed. The exact failing
+contract test subsequently passed under the race detector in 1.064 seconds.
+The complete API race suite then passed in 1997.577 seconds on final head
+17aa972f, recorded in job 101819688313 and workspace
+`tmp/patrol-planning-continuation/core-api-17aa.log`.
+These current results do not rewrite PR1957's earlier failed benchmark.
+The initial c5013768 paired benchmark gate uses >10% and p<0.05. NormalizeSegment
+long-token, short-name and medium-name timings increased 8.55%, 6.69% and
+8.38% respectively (n=10), below that gate's threshold. Passing the gate is
+not a claim of zero timing change or a production latency SLO.
+
+The first benchmark attempt on final head 17aa972f failed only
+`ParseLogLevel/#00`, 4.886 ns versus 5.422 ns, +10.99% (p=0.000, n=10),
+on an AMD EPYC 9V74. Auto-merge was disabled while that failure was examined.
+The preceding c5013768 CI run on an Intel Xeon 6973P-C measured 2.339 ns
+versus 2.504 ns, +7.03%, below the gate. Neither the parser nor its benchmark
+source changed between base and candidate. Their compiled parser instruction
+sequence was identical apart from relocated addresses, which does not prove
+identical microarchitectural timing.
+
+A worker reproduction compared exact base 7e34b00d and candidate 17aa972f
+on one Intel i5-10600 with Go 1.26.8 and GOMAXPROCS=4, ten alternating pairs
+at each of 100 ms and 1 s. Empty-input results were 5.637 ns versus 5.402 ns
+(-4.17%, p=0.010) and 5.482 ns versus 5.358 ns (p=0.149). No log-level
+subcase crossed the regression gate. Load was 2.09/2.22/1.41 before and 1.50/1.99/1.52 after.
+This did not reproduce the CI failure. It justified one controlled rerun of
+the failed benchmark job with the same source, threshold and sample policy.
+The rerun, job 101827584247 on an AMD EPYC 7763, measured 6.488 ns versus
+7.126 ns, +9.84% (p=0.000, n=10), below the unchanged >10% gate. This is
+a measured timing increase, not zero regression. That later passing check
+does not erase the first failed measurement or establish its precise cause.
+Raw comparisons and disassembly are retained in
+workspace `tmp/patrol-planning-continuation/loglevel-17aa/`, and the failed CI
+log is `core-benchmarks-17aa.log` beside that directory. The passing retry
+log is `core-benchmarks-17aa-retry.log` in the same workspace directory.
+No padding, parser
+optimization or threshold exception was introduced to force the result.
+
+Enterprise [PR23](https://github.com/rcourtman/pulse-enterprise/pull/23) merged
+as `b9fa43dcf0ee743652b20d1a866da8ca9c82cdbd`, carrying
+`b3d122751db7d5380f18956a1c9865b81b5d0123`. Its main-branch
+[Build & Test 34143454705](https://github.com/rcourtman/pulse-enterprise/actions/runs/34143454705)
+passed. `PULSE_TEST_REVISION` pins the companion to the exact public-core
+implementation commit above. The full investigation race suite also passed on
+the worker after checking that the pin matched the actual core checkout.
+
+The configured pre-commit hook passed on exact tree
+`6d43182ea31783feaa50493e91a21b084a9edaad`, unchanged before and after the hook.
+The new proof-file mappings and their two existing lookup assertions were
+corrected before that pass. All source formatting was unchanged. The Mac's
+redundant pre-push lint attempt was stopped. The same frontend lint and type
+checking had already passed on the worker, where heavy verification belongs.
+The corrected contract test and its progress record passed the same complete
+hook on tree `477e03b4b493b41fd52f75cbf5c273b87bdfbd05`, unchanged before and
+after the hook. The later non-runtime browser receipt and contract-test source
+are the only changes among the 4,853 recorded inputs. The exact committed
+public/private comparison is retained in workspace
+`tmp/patrol-planning-continuation/delivered-source-equivalence.json`. Delivered
+runtime production source and the installed r34 binary remain byte-identical
+to final browser proof.
+
+The local implementation and the named regression, real-model, disposable-lab
+and Playwright matrix are performed and delivered. The earlier historical
+paragraphs preserve failed attempts and then-current open work. This section and
+the execution-order table state the current local disposition.
+
+**Classification: release_gate.** Production-wide readiness remains unqualified
+until evidence extends beyond this maintainer homelab to independent volunteered
+customer environments, with actual diagnoses, false alarms, missed problems,
+latency and verified outcomes reviewed against known conditions. Deployment
+count or a passing lab score cannot satisfy that gate. Backup/restore, unattended
+autonomy, all-filter compatibility and population latency SLOs also do not
+inherit the named local proof. The canonical coverage gap and candidate remain
+open. The next qualification step is an explicitly volunteered independent
+environment
+with its source/model/permissions recorded, operator-confirmed known conditions,
+negative controls where safe, retained investigation and action identities,
+end-to-end timings, and independent outcome observation. Review actual
+conclusions against those conditions, record misses and false alarms alongside
+successes, and retain unavailable evidence as unknown. This requires the relevant
+operator access and consent. Do not manufacture it from adoption telemetry or
+repeat maintainer-lab runs as a substitute. No production rollout or release was
+performed. The explicit subscription-provider refusal remains preserved without
+retry or bypass.
