@@ -1031,6 +1031,7 @@ func (s *SQLiteResourceStore) migrateResourceChangesSchema() error {
 
 func (s *SQLiteResourceStore) ensureResourceChangesIndexes() error {
 	indexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_resource_changes_time ON resource_changes(observed_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_resource_changes_canonical_time ON resource_changes(canonical_id, observed_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_resource_changes_kind_time ON resource_changes(kind, observed_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_resource_changes_source_type_time ON resource_changes(source_type, observed_at DESC)`,

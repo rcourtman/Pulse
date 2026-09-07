@@ -44,6 +44,36 @@ function createResource(overrides: Partial<Resource> = {}): Resource {
 }
 
 describe('Resource Type Guards', () => {
+  it('keeps mount exhaustion and unavailable observations separate from aggregate disk usage', () => {
+    const resource = createResource({
+      type: 'app-container',
+      disk: { current: 20 },
+      docker: {
+        filesystems: [
+          {
+            mountpoint: '/cache',
+            source: 'linux-proc-root-statfs',
+            observedAt: '2026-09-07T08:00:00Z',
+            type: 'tmpfs',
+            usage: { capacityBytes: 8388608, freeBytes: 0, availableBytes: 0 },
+          },
+          {
+            mountpoint: '/restricted',
+            source: 'linux-proc-root-statfs',
+            observedAt: '2026-09-07T08:00:00Z',
+            error: 'namespace access unavailable',
+          },
+        ],
+      },
+    });
+
+    expect(getDiskPercent(resource)).toBe(20);
+    const observations = resource.docker?.filesystems;
+    expect(observations?.[0].usage?.availableBytes).toBe(0);
+    expect(observations?.[1].usage).toBeUndefined();
+    expect(observations?.[1].error).toBe('namespace access unavailable');
+  });
+
   it('retains Docker helper collection completeness on the host facet', () => {
     const resource = createResource({
       type: 'docker-host',

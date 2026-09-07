@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
@@ -4061,6 +4062,13 @@ func (v DockerContainerView) Mounts() []DockerMountMeta {
 		return nil
 	}
 	return cloneDockerMountMetaSlice(v.r.Docker.Mounts)
+}
+
+func (v DockerContainerView) Filesystems() []filesystem.Observation {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return filesystem.Clone(v.r.Docker.Filesystems)
 }
 
 func (v DockerContainerView) UpdateStatus() *DockerUpdateStatusMeta {

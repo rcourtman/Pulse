@@ -24,6 +24,7 @@ import type { ActionAuditState, PatrolActionReference } from '@/types/actionAudi
 interface ApprovalSectionProps {
   findingId: string;
   findingStatus?: string;
+  hasAction?: boolean;
   investigationOutcome?: string;
   findingTitle?: string;
   resourceName?: string;
@@ -89,9 +90,13 @@ function capabilityLabel(value: string): string {
 
 export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   const [investigation] = createResource(
-    () => ({ findingId: props.findingId, outcome: props.investigationOutcome }),
-    async ({ findingId, outcome }) => {
-      if (!outcome || !FIX_RELATED_OUTCOMES.has(outcome)) return null;
+    () => ({
+      findingId: props.findingId,
+      outcome: props.investigationOutcome,
+      hasAction: props.hasAction,
+    }),
+    async ({ findingId, outcome, hasAction }) => {
+      if (!hasAction && (!outcome || !FIX_RELATED_OUTCOMES.has(outcome))) return null;
       try {
         return await AIAPI.getInvestigation(findingId);
       } catch {
@@ -114,7 +119,10 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
     }
   });
   const shouldShow = createMemo(() =>
-    Boolean(props.investigationOutcome && FIX_RELATED_OUTCOMES.has(props.investigationOutcome)),
+    Boolean(
+      props.hasAction ||
+      (props.investigationOutcome && FIX_RELATED_OUTCOMES.has(props.investigationOutcome)),
+    ),
   );
 
   const handleDiscuss = (event: Event) => {

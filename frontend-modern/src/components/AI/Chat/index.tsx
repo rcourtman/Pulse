@@ -5006,15 +5006,21 @@ export const AIChat: Component<AIChatProps> = (props) => {
             onUseModelRoute={switchToModelRoute}
             queuedFollowUps={chat.queuedFollowUps()}
             queuedFollowUpsPaused={chat.queuedFollowUpsPaused()}
-            onSuggestedPrompt={(prompt) => {
-              void chat.sendMessage(prompt, undefined, undefined);
-            }}
+            onSuggestedPrompt={
+              contextBriefing()
+                ? undefined
+                : (prompt) => {
+                    void chat.sendMessage(prompt, undefined, undefined);
+                  }
+            }
             onEditQueuedFollowUp={editQueuedFollowUp}
             onCancelQueuedFollowUp={(id) => {
               chat.cancelQueuedFollowUp(id);
               focusComposer();
             }}
-            recentSessions={selectQuickResumeSessions(sessions(), chat.sessionId())}
+            recentSessions={
+              contextBriefing() ? [] : selectQuickResumeSessions(sessions(), chat.sessionId())
+            }
             onLoadSession={handleLoadSession}
           />
 

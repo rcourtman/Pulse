@@ -90,6 +90,8 @@ type Filter struct {
 	// id they have fully applied so a walk visits only the un-projected tail
 	// instead of the whole log.
 	AfterID int64
+	// ThroughID fixes an inclusive replay boundary while new events arrive.
+	ThroughID int64
 }
 
 const (
@@ -107,6 +109,7 @@ const (
 // Close are no-ops and Query returns no events.
 type Store struct {
 	db        *sql.DB
+	readDB    *sql.DB
 	dbPath    string
 	events    chan Event
 	stop      chan struct{}
@@ -168,14 +171,16 @@ func openDSN(dbPath, dsn string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open alert event log: %w", err)
 	}
-	// Single connection: the write path is one goroutine, and WAL keeps the
-	// rare reads from blocking behind it for long.
+	// Serialize durable transactions on their own connection. Disk-backed WAL
+	// readers use a separate, read-only pool so history cannot occupy the only
+	// connection while an alert transition holds the manager's state lock.
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 	db.SetConnMaxLifetime(0)
 
 	s := &Store{
 		db:        db,
+		readDB:    db,
 		dbPath:    dbPath,
 		events:    make(chan Event, appendBufferSize),
 		stop:      make(chan struct{}),
@@ -185,6 +190,21 @@ func openDSN(dbPath, dsn string) (*Store, error) {
 	if err := s.initSchema(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("init alert event log schema: %w", err)
+	}
+	if dbPath != ":memory:" {
+		reader, err := sql.Open("sqlite", sqliteDSN(dbPath)+"&mode=ro&_pragma=query_only(1)")
+		if err != nil {
+			db.Close()
+			return nil, fmt.Errorf("open alert event reader: %w", err)
+		}
+		reader.SetMaxOpenConns(2)
+		reader.SetMaxIdleConns(2)
+		if err := reader.Ping(); err != nil {
+			reader.Close()
+			db.Close()
+			return nil, fmt.Errorf("initialize alert event reader: %w", err)
+		}
+		s.readDB = reader
 	}
 
 	s.wg.Add(1)
@@ -600,9 +620,47 @@ func (s *Store) pruneOld() {
 
 func (s *Store) pruneEventsBefore(cutoff time.Time) {
 	cutoffValue := cutoff.UTC().Format(time.RFC3339Nano)
-	if _, err := s.db.Exec(`DELETE FROM alert_events WHERE occurred_at < ?`, cutoffValue); err != nil {
+	tx, err := s.db.Begin()
+	if err != nil {
+		log.Error().Err(err).Msg("alert event log prune failed")
+		return
+	}
+	defer tx.Rollback()
+	result, err := tx.Exec(`DELETE FROM alert_events WHERE occurred_at < ?`, cutoffValue)
+	if err == nil {
+		var deleted int64
+		deleted, err = result.RowsAffected()
+		if err == nil && deleted > 0 {
+			_, err = tx.Exec(`INSERT INTO alert_store_meta (key, value) VALUES ('retention_revision', '1')
+				ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1`)
+		}
+	}
+	if err == nil {
+		err = tx.Commit()
+	}
+	if err != nil {
 		log.Error().Err(err).Msg("alert event log prune failed")
 	}
+}
+
+// ReplayBoundary identifies the durable append tail and any removal of retained
+// events. Projections can reuse a fold and read only new IDs. Retention changes
+// invalidate that fold, including deletion of older events below its cursor.
+type ReplayBoundary struct {
+	LastID            int64
+	RetentionRevision int64
+}
+
+func (s *Store) ReplayBoundary() (ReplayBoundary, error) {
+	var boundary ReplayBoundary
+	if s == nil {
+		return boundary, fmt.Errorf("event log is not enabled")
+	}
+	err := s.readDB.QueryRow(`SELECT
+		COALESCE((SELECT MAX(id) FROM alert_events), 0),
+		COALESCE((SELECT CAST(value AS INTEGER) FROM alert_store_meta WHERE key = 'retention_revision'), 0)
+	`).Scan(&boundary.LastID, &boundary.RetentionRevision)
+	return boundary, err
 }
 
 // Flush blocks until every diagnostic event appended before the call has been
@@ -692,7 +750,7 @@ func (s *Store) Query(filter Filter) ([]Event, error) {
 	query += " ORDER BY occurred_at DESC, id DESC LIMIT ?"
 	args = append(args, limit)
 
-	rows, err := s.db.Query(query, args...)
+	rows, err := s.readDB.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query alert event log: %w", err)
 	}
@@ -708,8 +766,8 @@ func (s *Store) Query(filter Filter) ([]Event, error) {
 
 // WalkOldest visits every matching event oldest first. It uses bounded keyset
 // pages so a complete history projection is not truncated by Query's public
-// safety cap and does not hold the store's single database connection for the
-// full scan. A positive filter Limit caps the total visits; zero walks all
+// safety cap or retain a reader connection for the full scan.
+// A positive filter Limit caps the total visits; zero walks all
 // matching rows.
 func (s *Store) WalkOldest(filter Filter, visit func(Event) error) error {
 	if s == nil {
@@ -719,7 +777,6 @@ func (s *Store) WalkOldest(filter Filter, visit func(Event) error) error {
 		return fmt.Errorf("event visitor is required")
 	}
 
-	baseWhere, baseArgs := eventFilterWhere(filter)
 	visited := 0
 	cursorOccurredAt := ""
 	var cursorID int64
@@ -736,21 +793,9 @@ func (s *Store) WalkOldest(filter Filter, visit func(Event) error) error {
 			}
 		}
 
-		where := append([]string(nil), baseWhere...)
-		args := append([]any(nil), baseArgs...)
-		if cursorOccurredAt != "" {
-			where = append(where, "(occurred_at > ? OR (occurred_at = ? AND id > ?))")
-			args = append(args, cursorOccurredAt, cursorOccurredAt, cursorID)
-		}
+		query, args := historyPageQuery(filter, cursorOccurredAt, cursorID, pageLimit)
 
-		query := "SELECT id, occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details, snapshot FROM alert_events"
-		if len(where) > 0 {
-			query += " WHERE " + strings.Join(where, " AND ")
-		}
-		query += " ORDER BY occurred_at ASC, id ASC LIMIT ?"
-		args = append(args, pageLimit)
-
-		rows, err := s.db.Query(query, args...)
+		rows, err := s.readDB.Query(query, args...)
 		if err != nil {
 			return fmt.Errorf("walk alert event log: %w", err)
 		}
@@ -777,6 +822,30 @@ func (s *Store) WalkOldest(filter Filter, visit func(Event) error) error {
 		cursorOccurredAt = last.OccurredAt.UTC().Format(time.RFC3339Nano)
 		cursorID = last.ID
 	}
+}
+
+// historyPageQuery selects bounded IDs before reading wide event payloads.
+// A replay watermark must seek by durable ID, not scan the time index from the
+// beginning on every catch-up. Alert-specific reads use their chronological
+// index. Full-history walks seek by event time between pages.
+func historyPageQuery(filter Filter, cursorOccurredAt string, cursorID int64, pageLimit int) (string, []any) {
+	where, args := eventFilterWhere(filter)
+	if cursorOccurredAt != "" {
+		where = append(where, "(occurred_at, id) > (?, ?)")
+		args = append(args, cursorOccurredAt, cursorID)
+	}
+	index := " INDEXED BY idx_alert_events_time"
+	if filter.AfterID > 0 {
+		index = " NOT INDEXED" // SQLite seeks the INTEGER PRIMARY KEY for id > ?.
+	} else if strings.TrimSpace(filter.AlertID) != "" {
+		index = " INDEXED BY idx_alert_events_alert"
+	}
+	query := "WITH page AS MATERIALIZED (SELECT id, occurred_at FROM alert_events" + index
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	query += " ORDER BY occurred_at ASC, id ASC LIMIT ?) SELECT e.id, e.occurred_at, e.event_type, e.alert_id, e.resource_id, e.resource_name, e.alert_type, e.level, e.reason, e.message, e.details, e.snapshot FROM page JOIN alert_events AS e ON e.id = page.id ORDER BY page.occurred_at ASC, page.id ASC"
+	return query, append(args, pageLimit)
 }
 
 func eventFilterWhere(filter Filter) ([]string, []any) {
@@ -811,6 +880,10 @@ func eventFilterWhere(filter Filter) ([]string, []any) {
 	if filter.AfterID > 0 {
 		where = append(where, "id > ?")
 		args = append(args, filter.AfterID)
+	}
+	if filter.ThroughID > 0 {
+		where = append(where, "id <= ?")
+		args = append(args, filter.ThroughID)
 	}
 	return where, args
 }
@@ -864,6 +937,11 @@ func (s *Store) Close() {
 	s.closeOnce.Do(func() {
 		close(s.stop)
 		s.wg.Wait()
+		if s.readDB != s.db {
+			if err := s.readDB.Close(); err != nil {
+				log.Error().Err(err).Msg("alert event reader close failed")
+			}
+		}
 		if err := s.db.Close(); err != nil {
 			log.Error().Err(err).Msg("alert event log close failed")
 		}

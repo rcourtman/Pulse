@@ -32,6 +32,8 @@ const {
     onUseModelRoute?: (modelId: string, messageId?: string) => void;
     queuedFollowUps?: QueuedFollowUp[];
     queuedFollowUpsPaused?: boolean;
+    onSuggestedPrompt?: (prompt: string) => void;
+    recentSessions?: unknown[];
     onEditQueuedFollowUp?: (id: string) => void;
     onCancelQueuedFollowUp?: (id: string) => void;
   }> = [];
@@ -330,6 +332,8 @@ vi.mock('../ChatMessages', () => ({
     onUseModelRoute?: (modelId: string, messageId?: string) => void;
     queuedFollowUps?: QueuedFollowUp[];
     queuedFollowUpsPaused?: boolean;
+    onSuggestedPrompt?: (prompt: string) => void;
+    recentSessions?: unknown[];
     onEditQueuedFollowUp?: (id: string) => void;
     onCancelQueuedFollowUp?: (id: string) => void;
   }) => {
@@ -1765,6 +1769,9 @@ describe('AIChat', () => {
       renderChat();
 
       expect(screen.getByLabelText('Assistant context')).toBeInTheDocument();
+      const messagesProps = mockChatMessagesProps.at(-1);
+      expect(messagesProps?.onSuggestedPrompt).toBeUndefined();
+      expect(messagesProps?.recentSessions).toEqual([]);
       expect(screen.queryByTestId('assistant-workflow-starters')).not.toBeInTheDocument();
       expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
       expect(screen.getByText('High CPU usage on web-server')).toBeInTheDocument();
@@ -1774,6 +1781,11 @@ describe('AIChat', () => {
         screen.queryByRole('button', { name: 'Explain recent changes and correlations' }),
       ).not.toBeInTheDocument();
       expect(screen.queryByText('systemctl restart workload.service')).not.toBeInTheDocument();
+    });
+
+    it('offers ordinary conversation starters when no finding context is attached', () => {
+      renderChat();
+      expect(mockChatMessagesProps.at(-1)?.onSuggestedPrompt).toBeTypeOf('function');
     });
 
     it('renders safe briefing actions as links when a route is attached', () => {

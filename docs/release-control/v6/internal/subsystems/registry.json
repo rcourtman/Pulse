@@ -1619,6 +1619,7 @@
               "internal/config/host_continuity_test.go",
               "internal/models/metrics_types_test.go",
               "internal/monitoring/availability_probe_agent_test.go",
+              "internal/monitoring/docker_filesystem_evidence_test.go",
               "internal/monitoring/docker_metric_presence_test.go",
               "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
               "internal/monitoring/monitor_host_agents_test.go",
@@ -1663,6 +1664,7 @@
               "internal/agenttarget/config_test.go",
               "internal/agenttls/config_test.go",
               "internal/dockeragent/agent_internal_test.go",
+              "internal/dockeragent/container_filesystems_test.go",
               "internal/dockeragent/multi_target_test.go",
               "internal/dockeragent/report_size_test.go",
               "internal/kubernetesagent/agent_new_test.go",
@@ -2757,6 +2759,8 @@
               "internal/alerts/config/evaluation_windows_test.go",
               "internal/alerts/config_validation_test.go",
               "internal/alerts/eventlog/eventlog_snapshot_test.go",
+              "internal/alerts/eventlog/eventlog_test.go",
+              "internal/alerts/eventlog/reader_isolation_test.go",
               "internal/alerts/external_probe_test.go",
               "internal/alerts/filter_evaluation_test.go",
               "internal/alerts/guest_snapshot_test.go",
@@ -5831,12 +5835,14 @@
       "contract": "docs/release-control/v6/internal/subsystems/monitoring.md",
       "owned_prefixes": [
         "internal/availabilityprobe/",
+        "internal/filesystemprobe/",
         "internal/fleethealth/",
         "internal/maintenancesentinel/",
         "internal/monitoring/",
         "internal/servicediscovery/",
         "internal/storagehealth/",
         "internal/truenas/",
+        "pkg/agents/filesystem/",
         "pkg/diskinventory/",
         "pkg/pbs/"
       ],
@@ -5847,6 +5853,7 @@
         "internal/config/guest_metadata.go",
         "internal/config/host_continuity.go",
         "internal/dockeragent/collect.go",
+        "internal/dockeragent/container_filesystems.go",
         "internal/dockeragent/docker_client.go",
         "internal/dockeragent/swarm.go",
         "internal/kubernetesagent/agent.go",
@@ -5972,6 +5979,7 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/config/host_continuity_test.go",
+              "internal/monitoring/docker_filesystem_evidence_test.go",
               "internal/monitoring/docker_metric_presence_test.go",
               "internal/monitoring/issue1485_unraid_lifecycle_test.go",
               "internal/monitoring/issue1595_collection_trust_test.go",
@@ -6095,7 +6103,9 @@
               "internal/dockeragent/agent_cpu_test.go",
               "internal/dockeragent/agent_internal_test.go",
               "internal/dockeragent/blockio_presence_test.go",
+              "internal/dockeragent/collect_tmpfs_live_test.go",
               "internal/dockeragent/collect_tmpfs_test.go",
+              "internal/dockeragent/container_filesystems_test.go",
               "internal/dockeragent/swarm_coverage_test.go"
             ]
           },
@@ -6155,6 +6165,7 @@
               "internal/models/issue1639_pbs_collision_test.go",
               "internal/models/metrics_types_test.go",
               "internal/models/state_host_test.go",
+              "internal/monitoring/docker_filesystem_evidence_test.go",
               "internal/monitoring/docker_metric_presence_test.go",
               "internal/monitoring/issue1595_collection_trust_test.go",
               "internal/monitoring/monitor_full_coverage_test.go",
@@ -6163,7 +6174,8 @@
               "internal/monitoring/monitor_package_updates_test.go",
               "internal/unifiedresources/adapter_coverage_test.go",
               "internal/unifiedresources/registry_test.go",
-              "pkg/agents/docker/blockio_presence_test.go"
+              "pkg/agents/docker/blockio_presence_test.go",
+              "pkg/agents/filesystem/report_test.go"
             ]
           },
           {
@@ -6399,6 +6411,27 @@
               "internal/monitoring/reload_test.go",
               "internal/monitoring/truenas_poller_test.go",
               "internal/unifiedresources/code_standards_test.go"
+            ]
+          },
+          {
+            "id": "filesystem-observations",
+            "label": "Native namespace-bound filesystem observation and report proof",
+            "match_prefixes": [
+              "internal/filesystemprobe/",
+              "pkg/agents/filesystem/"
+            ],
+            "match_files": [
+              "internal/dockeragent/container_filesystems.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/dockeragent/collect_tmpfs_live_test.go",
+              "internal/dockeragent/container_filesystems_test.go",
+              "internal/filesystemprobe/observer_linux_test.go",
+              "internal/filesystemprobe/observer_test.go",
+              "internal/monitoring/docker_filesystem_evidence_test.go",
+              "pkg/agents/filesystem/report_test.go"
             ]
           }
         ],
@@ -8077,7 +8110,9 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/resourceIdentity.test.ts",
+              "internal/ai/tools/filesystem_evidence_test.go",
               "internal/hostagent/issue1595_sas_collection_test.go",
+              "internal/monitoring/docker_filesystem_evidence_test.go",
               "internal/monitoring/issue1595_collection_trust_test.go",
               "internal/truenas/contract_test.go",
               "internal/unifiedresources/availability_projection_test.go",
@@ -8108,6 +8143,8 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
+              "internal/ai/tools/filesystem_evidence_test.go",
+              "internal/monitoring/docker_filesystem_evidence_test.go",
               "internal/monitoring/issue1595_collection_trust_test.go",
               "internal/unifiedresources/adapter_coverage_test.go",
               "internal/unifiedresources/adapters_test.go",
@@ -8519,6 +8556,7 @@
               "internal/unifiedresources/resolved_host_set_test.go",
               "internal/unifiedresources/resource_operator_state_policy_test.go",
               "internal/unifiedresources/snapshot_source_filter_test.go",
+              "internal/unifiedresources/store_history_index_test.go",
               "internal/unifiedresources/store_test.go"
             ]
           },
@@ -8571,6 +8609,8 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/ai/tools/filesystem_evidence_test.go",
+              "internal/monitoring/docker_filesystem_evidence_test.go",
               "internal/unifiedresources/availability_link_test.go",
               "internal/unifiedresources/canonical_id_pins_test.go",
               "internal/unifiedresources/clone_test.go",
@@ -8585,6 +8625,7 @@
               "internal/unifiedresources/resolved_host_set_test.go",
               "internal/unifiedresources/resource_operator_state_policy_test.go",
               "internal/unifiedresources/snapshot_source_filter_test.go",
+              "internal/unifiedresources/store_history_index_test.go",
               "internal/unifiedresources/store_test.go"
             ]
           }

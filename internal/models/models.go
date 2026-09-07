@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/proxmoxidentity"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
@@ -1165,6 +1166,7 @@ type DockerContainer struct {
 	RootFilesystemBytes int64                        `json:"rootFilesystemBytes,omitempty"`
 	BlockIO             *DockerContainerBlockIO      `json:"blockIo,omitempty"`
 	Mounts              []DockerContainerMount       `json:"mounts,omitempty"`
+	Filesystems         []filesystem.Observation     `json:"filesystems,omitempty"`
 	Podman              *DockerPodmanContainer       `json:"podman,omitempty"`
 	UpdateStatus        *DockerContainerUpdateStatus `json:"updateStatus,omitempty"` // Image update detection status
 }

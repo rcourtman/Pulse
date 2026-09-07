@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
@@ -673,6 +674,7 @@ func (c DockerContainer) ToFrontend() DockerContainerFrontend {
 		}
 		container.Mounts = mounts
 	}
+	container.Filesystems = filesystem.Clone(c.Filesystems)
 
 	if c.Podman != nil {
 		container.Podman = &DockerPodmanContainerFrontend{

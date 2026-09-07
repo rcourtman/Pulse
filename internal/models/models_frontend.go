@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
@@ -471,6 +472,7 @@ type DockerContainerFrontend struct {
 	RootFilesystemBytes int64                                `json:"rootFilesystemBytes,omitempty"`
 	BlockIO             *DockerContainerBlockIOFrontend      `json:"blockIo,omitempty"`
 	Mounts              []DockerContainerMountFrontend       `json:"mounts"`
+	Filesystems         []filesystem.Observation             `json:"filesystems,omitempty"`
 	Podman              *DockerPodmanContainerFrontend       `json:"podman,omitempty"`
 	UpdateStatus        *DockerContainerUpdateStatusFrontend `json:"updateStatus,omitempty"`
 }

@@ -64,8 +64,8 @@ reproduction evidence, not a representative customer success rate.
 | 1. Product contract and baseline | Map the current loop and sources of judgment. Record telemetry populations and gaps. | Every identified decision has an owner. Activity is not labelled usefulness. | Complete for this redesign scope. Contract, ownership decisions and baseline limits are recorded. |
 | 2. Shared evidence | Preserve canonical risk reasons and SMART counters, source/time semantics and history across tools/turns. | Regression tests preserve unknown versus zero and all canonical evidence. Real responses can inspect the same facts as the product. | Implemented and qualified for the named shared-evidence defects. Canonical disk detail, risk and cadence pass real data-path proof. Affected package and concurrency checks pass. Integrated CI later exposed remaining query and allocation regressions. The final bounded query-reuse correction passes complete selected exact-base worker comparisons and full metrics/database and focused race checks. Final landing CI passed and PRs #1928 and #1929 merged. Real-model interpretation failures remain tracked in step 5. |
 | 3. Diagnostic orchestration | Correct proposal-as-proof. Audit triage budgets, unmatched-signal evaluation, assessment completion and investigation cutoffs. | No code-written causal conclusion. No quality inferred from tool, flag or finding counts. Each retained pass has an objective reason. Safety boundaries and incomplete outcomes remain explicit. | Proposal promotion and capture inference were removed in c5d2f56dda. Commit 668af3fe6b removes investigation success-call floors, checkpoint instructions and generic call-count wrap-up rules. The detection slice removes contextless follow-up passes, flag/report-count policy and first-finding completion modes. Full chat and AI suites, focused API and conversation race tests pass. Real-model/action outcome qualification remains open. |
-| 4. Issue through verified outcome | Follow existing issue/investigation/action records into Assistant, approval, execution and independent readback. | Accepted proposal is visibly distinct from execution and verification. Rejected or unsupported actions do not become success. Uncertainty can survive an action proposal. | Existing foundation, full journey qualification pending. |
-| 5. Ground-truth qualification and landing | Extend existing qualification tooling only where necessary. Exercise healthy/unhealthy, dependency, missing-access, storage/backup and approved/rejected action cases. Inspect the final browser journey at desktop and narrow widths. | Record exact source/model/permissions, evidence, decisions, faults/misses, latency and verification. Fix in-scope failures, pass appropriate proofs and land scoped commits. | Partial. Regression, controlled browser and live collector evidence are recorded below. Real-model diagnosis, linked approval/action outcomes and installed collector qualification remain open. |
+| 4. Issue through verified outcome | Follow existing issue/investigation/action records into Assistant, approval, execution and independent readback. | Accepted proposal is visibly distinct from execution and verification. Rejected or unsupported actions do not become success. Uncertainty can survive an action proposal. | Approved/rejected Docker execution paths passed named live oracles. Expired-state and attached-context browser repairs passed the named current-runtime matrices. Missing-command-access remains a recorded contract gap. |
+| 5. Ground-truth qualification and landing | Extend existing qualification tooling only where necessary. Exercise healthy/unhealthy, dependency, missing-access, storage/backup and approved/rejected action cases. Inspect the final browser journey at desktop and narrow widths. | Record exact source/model/permissions, evidence, decisions, faults/misses, latency and verification. Fix in-scope failures, pass appropriate proofs and land scoped commits. | Partial. Installed native filesystem evidence and real storage diagnosis now pass semantic review, alongside healthy/dependency and approved/rejected Docker cases. Current-source browser and shared history race proofs pass. Landing, missing-access continuity and VM lifecycle qualification remain open. |
 
 Use one shared runtime and the existing qualification runner, not a second
 product intelligence engine or a new parallel lifecycle. Preserve independent
@@ -2255,3 +2255,317 @@ intermittent bootstrap connection screen. The complete final matrix passed
 after removing redundant immediate navigations from the proof driver, without
 claiming a bootstrap fix. Source bindings are in
 `frontend-modern/browser-verification.json`.
+
+### Next implementation: resource filesystem observations
+
+PR #1935 merged as `560dbf314c4fc3744f52aa4e5a6a204cafe3aa7d`.
+Its API race suite and other CI checks passed. The log-level-parser benchmark
+failed twice in CI, at +10.04 and +10.23 percent. Ten alternating exact-base worker samples did not
+reproduce that regression (5.449 ns versus 5.357 ns, p=.436), with unchanged
+parser source and unchanged thresholds. This is not a new product-readiness claim.
+The repeated CI observation remains open. No further retry was requested.
+
+The next slice is in progress and is not qualified. Its required work is:
+
+1. Collect filesystem capacity, available blocks and finite inode inventory at
+   the resource's actual mountpoints. Preserve observation time and native
+   source. Keep configuration, image layers, filesystem capacity and resource
+   quotas distinct. A failed read carries no numeric usage payload.
+2. Bind native Linux reads to the exact inspected container process and its
+   runtime cgroup, confine path resolution to the process root, and revalidate
+   container identity after collection. Remote or unattested process namespaces
+   remain unavailable. No container binary or general command permission is used.
+3. Bound stalled filesystem reads without accumulating repeated kernel calls.
+   Carry observations through report ingestion, snapshot cloning, the unified
+   resource and both shared model query paths. Replace old observations on a
+   later failed or absent report instead of presenting stale usage as current.
+4. Review accumulated investigation instructions that prescribe restart or peer
+   investigation. Preserve objective tool/proposal/permission contracts while
+   leaving diagnosis and evidence selection to the model.
+5. Qualify actual storage diagnosis and recovery against the bounded tmpfs
+   oracle, then check healthy, dependency, missing-access and action regressions.
+   Review the complete causal claims and recommendations, independently of the
+   existing lexical score. Backup and independent-environment coverage remain
+   separate open requirements.
+
+Browser matrix for the final source and current build: at 1440, 900 and 390 by
+1000, inspect `/patrol` finding details, investigation messages with measured
+and unavailable filesystem evidence, Assistant handoff and its final diagnosis,
+and the adjacent container details. Exercise loading/error presentation,
+disclosures, keyboard controls, scrolling/overflow, dismissal/focus return and
+reload. The approved/rejected action-history journey must remain intact. No
+browser or real-model pass is claimed by this implementation plan.
+
+Native observer race tests passed in 1.031s and the shared report tests in
+1.010s on pulse-dev with Go 1.26.8. Test binaries cross-compile for Linux arm64,
+Linux 386 and Darwin arm64. Targeted collection identity, report ingestion,
+stale-observation replacement and both model-query projections passed.
+
+The first real collector fixture ran as the unprivileged worker account. Docker
+API access succeeded, but opening the root-owned process namespace failed with
+permission denied. No numeric usage was emitted and independent cleanup passed.
+The separate positive test ran the precompiled collector fixture as UID 0,
+matching Tower's native development-agent privilege, without changing any
+installed service or permissions. It measured the exact 8,388,608-byte tmpfs:
+8,380,416 bytes available at baseline, zero under the independent pressure fault,
+and 8,380,416 after recovery. Container health changed healthy/unhealthy/healthy.
+The restored-baseline sample remained healthy with 8,372,224 bytes available.
+Teardown, second cleanup no-op and inventory restoration all passed.
+
+The native fixture binary SHA-256 was
+`c275a530f332237b1c1fff06e31a0194929f9929edcba4aa09423da168869b1a`.
+The full root-native log SHA-256 is
+`83b62f1cab9b5a6d597447b672c964bee26bd9187801dd80b0069c1251ba3e5f`,
+retained at workspace `tmp/patrol-filesystem-evidence/live/native-live.log`.
+This establishes native collection on that worker privilege profile. It does
+not establish an installed homelab agent, model diagnosis or wider deployment
+support. The prompt change and final query description still need their final
+regressions and all runtime/browser/model qualification above.
+
+The first installed runtime attempt exposed two additional qualification defects.
+The native observer was incorrectly gated by `CollectDiskMetrics`, although the
+unified agent disables that flag to avoid expensive image-layer sizing. Native
+mountpoint observations now run independently, with a regression for that exact
+configuration. No installed-agent diagnosis pass is inferred from the earlier
+collector-only proof.
+
+The real backend also stalled agent reports and resource reads while the Patrol
+attention page reconstructed alert history. A goroutine capture showed history
+occupying the event store's only database connection, a durable lifecycle append
+waiting for it while holding the alert manager lock, and monitoring/API reads
+waiting for that lock. The existing query sorted full event snapshots before
+selecting each page. The owning event store now separates read-only WAL readers
+from its serialized writer and selects chronological page IDs before loading
+snapshots. The actual database query plans show the former temporary sort and
+the replacement time-index scan plus primary-key payload reads. The new disk
+regression holds a read snapshot open while requiring a durable write to finish,
+rejects a mutation through the reader and verifies committed data from a new
+snapshot. Event-store race tests and alert history/recovery tests passed.
+
+Run `q-20260906-220538-71a19f74` stopped at preflight because the runner had
+retained monitor mode. The corrected approval-mode run
+`q-20260906-220615-f15cef02` detected the intended unhealthy resource, but its
+detection took 163.581 seconds during the database contention. It was cancelled
+before investigation qualification completed. Cancellation interrupted the
+recovery measurement, so no recovery pass is claimed. The independent final
+teardown removed both owned containers and their network, the second cleanup
+was a no-op and the original inventory was restored. Tower's original runtime,
+persistent binary and token were restored, the temporary command token revoked
+and its absence verified, and this transaction's backups/candidate removed.
+The production agent retained PID 752388 throughout. The first browser attempts
+reached the slow connection state and are failures, not final browser proof.
+The native-agent wiring and event-store fixes still require fresh runtime,
+model, browser and delivery qualification.
+
+A diagnostic startup stack subsequently identified a distinct canonical resource
+history scan. Incident catch-up called global `GetRecentChanges` while the
+resource store lacked a leading observation-time index. That query occupied the
+store connection while initial registry change emission waited. The actual
+database has the canonical non-null `observed_at` schema. Its query plan showed
+a table scan and temporary sort. The store now creates the missing global
+chronological index, with an existing-database upgrade/query-plan/ordering test.
+This is a second fix requiring a new backend build and live qualification.
+Legacy timestamp fallback query plans remain outside this canonical-schema
+proof and need separate migration qualification.
+
+Run `q-20260906-224128-a59214cb` passed preflight and independently established
+the disposable storage fault, then was cancelled during collection convergence.
+The local hot-development watcher completed an earlier build and replaced the
+backend during the run, despite the later verification lock. The replacement
+used Go 1.27.1 and had SHA-256
+`6eb9b4e30e7fa4a11d71accbfe9b9922133e1d885b5910aec0e267a54e37fd7f`,
+which differs from the pinned worker artifact. This run reached no model turn
+and supplies no diagnosis evidence. Both owned containers and their network
+were removed, repeat cleanup was a no-op and the original inventory was restored.
+Final qualification must wait for the pinned artifact and verify that no earlier
+build is still able to replace it.
+
+The second Tower transaction was fully rolled back: original development binary
+and token restored, temporary command token revoked with absence verified, owned
+backups/candidate removed, and production PID 752388 unchanged. The restored
+development PID was 2398103. The rollback also persisted paused Patrol and monitor
+autonomy through the authenticated API.
+
+Review of the replacement history query found that its unconditional time-index
+hint also forced retained-history scans for replay watermarks and individual
+alerts. A read-only empty-tail probe of the actual event database returned no
+rows in both cases, but the forced time scan took 0.14939 seconds versus 0.00006
+seconds for a primary-key seek in the native SQLite observer. These timings are
+a diagnostic comparison, not a Go runtime performance qualification. The owning
+page query now seeks durable IDs for an explicit replay watermark and uses the
+alert-specific chronological index for an alert bound. Full chronological walks
+retain their time-index paging. An EXPLAIN regression uses the actual composed
+query and rejects full retained-history scans for both filtered cases. The
+queued backend build is superseded by this source change and requires fresh
+event-store/history proof before a final artifact can be qualified.
+
+The focused actual-query plan regression passed locally on Go 1.27.1 in 0.791
+seconds. This was a single non-race test for quick feedback against the warm
+development cache. It does not replace the pending pinned Go 1.26.8 worker race,
+history and artifact qualification.
+
+The final worker event-store race suite passed in 3.981 seconds and the targeted
+alert-history/recovery checks passed in 1.274 seconds. The resulting Darwin Pro
+artifact SHA-256 is
+`bef2a3cce5a18f0d2c14badc4ba14f3ffffe454777ccd83f9b641a893b80ea38`.
+After deployment, the running executable inode matched that artifact. The global
+resource-history index was present. Authenticated preflight confirmed Gemini
+3.8 Flash in all three selectors, read-only control and paused Patrol. Resource
+listing took 0.647 seconds. The first attention summary took 21.265 seconds and
+a repeat took 0.968 seconds. The first-read delay remains a measured startup
+latency limit, not a qualified latency improvement.
+
+The completion audit also confirmed that the existing Proxmox bulk lifecycle
+evaluation denies approval and proves planning only. VM execution and independent
+verification remain required by the candidate-lane contract. The explicitly
+disposable FreeBSD agent-lab VM 110 on delly is stopped and available as a bounded
+fixture. Pulse identifies it as `vm-e8cc8be82e584c58`, but reports the node command
+agent disconnected. The existing separate development unit is inactive and
+disabled, while the production unit is active. No VM lifecycle pass is claimed
+from inventory, planning or the Docker action results.
+
+Final browser review must also cover an expired unexecuted action: Patrol's
+investigation, durable finding record and Assistant context must say needs
+attention, while the linked action retains its precise expired state. Original
+model prose remains retained evidence. An attached finding suppresses generic
+empty-chat starters and unrelated recent sessions. Exercise attached and cleared
+context, empty and existing conversations, close/reopen, keyboard focus, reload,
+and expired/completed/rejected action links at 1440, 900 and 390 pixels wide.
+The prior storage browser pass exposed both defects and does not qualify these
+repairs.
+
+Installed native filesystem case `q-20260906-232102-5316b904` passed the runner and
+independent semantic review. The model queried the actual 8,388,608-byte tmpfs
+with zero free/available bytes, then obtained ENOSPC logs and attributed the
+unhealthy container to that mount. Its recommendation distinguished temporary
+restart of ephemeral storage from long-term size/retention changes. The case
+recorded a proposal only. Recovery proof came from independent filler removal,
+which restored 8,347,648 available bytes and healthy status. The healthy neighbour
+remained unaffected and teardown/inventory restoration passed. Detection took
+31.121 seconds of model time, collection took 24.825 seconds, and the runner
+recorded 107.490 seconds end-to-end. The scorecard's US$0.01331325 is Watch cost,
+not a claim about complete investigation billing.
+
+Fresh current-prompt cases `q-20260907-073028-5b5ab1f1` (dependency) and
+`q-20260907-073212-807e363b` (healthy control) passed with cleanup. Semantic review
+confirmed that investigation identified the stopped upstream dependency and
+proposed starting that dependency, while healthy Watch produced no finding.
+Approved action `q-20260907-073416-1d33864c` retained exact finding/investigation/
+action and plan-hash linkage and reached independently verified healthy recovery.
+The uncertain diagnostic prose is retained, so executed recovery is not presented
+as proof that the model knew the original cause.
+
+Rejected restart `q-20260907-073601-2d6b13ae` passed with an authoritative rejected
+action, no execution and unchanged inventory after teardown. Tower transaction
+r3 restored its exact original runtime and persistent binaries and token,
+revoked the temporary command token and removed its backups. Production agent
+PID 752388 remained unchanged.
+
+Missing-command-access replay `q-20260907-074158-110e8868` safely detected the
+unhealthy container, retained needs-attention and did not execute. It failed
+the approved-remediation scenario, as expected for unavailable execution, and
+is not a remediation pass. Investigation reported the absent agent and unknown
+internal cause, but still captured a restart proposal that the canonical broker
+subsequently refused. The stored submission error says no action was created.
+This exposes a remaining contract gap: action availability needs to reach the
+model before its conclusion, so it can explain the unavailable recovery path
+without relying on a later orchestration failure. Do not describe this as a
+qualified seamless missing-access journey. Fixture teardown and independent
+safety/recovery oracles passed.
+
+VM110 qualification on 2026-09-07 remains incomplete. The existing development
+unit pointed to an old control-plane address and had an invalid token. Each
+attempt restored the original binary/token and inactive, disabled unit. A
+temporary runtime-only service override pointed the bounded test at this Mac,
+and fresh command registration then passed. Read-only Assistant correctly
+withheld control. Under temporarily enabled approval-required control, Gemini
+created exact-target start plan `act_72dde1ef1b7b67884e66f6c4608faae8` and
+explicitly said it had not executed. The first plan attempt returned SQLITE_BUSY
+and the model retried successfully. The test then approved the canonical plan.
+Execution returned HTTP500 with the durable action left executing and its
+attempt receipt-pending. No lifecycle pass is claimed. VM110 was independently
+confirmed stopped after cleanup, the original agent and read-only control were
+restored, all temporary tokens and runtime overrides were removed, and production
+agent PID1565 stayed unchanged. The owning durable action execution/reconciliation
+contract needs investigation before another lifecycle qualification. This is
+a product failure found by qualification, not evidence of successful recovery.
+
+The Mac hot-dev verification lock from the previous session had expired before
+the morning source edits. A local automatic build replaced the previous runtime
+at 07:33:58 UTC. Morning Docker case receipts still prove their observed
+behavior but must not be attributed to the earlier pinned Darwin artifact. A
+fresh live lock and explicit worker artifact deployment now bind final browser
+qualification. The last restart also exposed a multi-minute bootstrap delay.
+Healthy request timings after startup do not qualify that bootstrap latency.
+
+The stranded VM qualification action was closed through the canonical operator
+force-fail endpoint after independent stopped-state and inactive-agent checks.
+The audit retains an inconclusive failed outcome. It was not deleted, retried
+or converted into successful execution.
+
+Final browser artifact `e223f46accfc35102d671dd21793b5508bd64cd1dac4784c0d41c0f50b8f55b2`
+contains native filesystem/history changes, expired-outcome hydration and
+action-presence-based Patrol history, plus contextual Assistant starter
+visibility. The pinned worker API regression passes, including expired
+hydration without invented verification. Frontend type-check and 417 tests
+covering Assistant, FindingsPanel and ApprovalSection pass. The artifact is
+source-bound to the final runtime changes, while subsequent edits add tests and
+qualification documentation only. Full staged-hook verification remains the
+last landing check.
+
+Final Playwright interaction matrices passed at 1440x1000, 900x1000 and
+390x1000 on `/patrol` and exact expired/completed/rejected `/actions?action=...`
+links. Pixel review covered settled dialog placement, nested tool-output
+scrolling, native filesystem provenance/counters, retained action history,
+independent verification, keyboard disclosures, reload, Escape and explicit
+close. Attached empty Assistant context hides unrelated starters. New session
+clears context and restores welcome/recent sessions. Loading an existing
+session keeps the transcript accessible. Source hashes and exact routes are in
+`frontend-modern/browser-verification.json`. Browser proof covers these named
+changes, not whole-product readiness.
+
+Existing-session inspection exposed another canonical orchestration residual:
+`internal/ai/chat/agentic.go` replaces retained assistant prose with an internal
+FSM verification instruction even though it withholds that instruction from
+the live callback. A planned `pulse_control` action triggered this write gate
+despite no execution. The next orchestration slice must use actual action
+execution/verification facts and keep internal provider instructions out of
+customer transcripts. This is not qualified by the context-visibility fix.
+
+A subsequent live check on 2026-09-07 invalidated the earlier assumption that
+history paging alone was sufficient. `/api/ai/patrol/attention/summary` exceeded
+30 seconds. A goroutine capture showed 107 full-history walkers, with two reading
+retained snapshot payloads and the others waiting for the bounded reader pool.
+The same complete history fold was being repeated independently for every poll.
+The current change shares a derived chronological fold at a durable event-ID
+boundary, reads only its new tail, and rebuilds after retention, delayed older
+events or store replacement. Tombstones and live overlays retain their original
+semantics. New regression, rebuild and current-runtime browser proof are required
+before this slice lands. The previous artifact and browser receipt remain
+historical evidence rather than proof of this additional change.
+
+The follow-up history change passed the full eventlog race suite (3.827 seconds),
+focused history/projection/migration/parity race tests (4.048 seconds), and then
+the complete alerts package race suite (23.785 seconds) on the non-root worker.
+The replacement Darwin Pro artifact is
+`1f1f71d2fd77b89f43a980d1e990a4010d2ec467502551555d5ab702f1aa71e6`.
+Source hashes bind all six changed alerts files and the unchanged final frontend.
+
+After installation, the first attention summary completed in 4.695 seconds.
+Eighteen authenticated requests with at most six concurrent callers all returned
+HTTP200. The first six took 4.457 to 4.514 seconds, the remaining twelve took
+0.319 to 0.705 seconds, and the final stack check found zero history walkers.
+This is bounded functional recovery evidence, not a performance benchmark.
+The interactive Mac load was above five and wider load qualification remains a
+worker responsibility. No fault, provider call or infrastructure action was
+needed for this concurrency check.
+
+Both complete Playwright scripts passed again against that replacement artifact:
+`/patrol` storage evidence, expired action and Assistant attached/new/existing
+states, plus completed and rejected action handoffs. Viewports were 1440x1000,
+900x1000 and 390x1000. Current pixels were reviewed for native measurement output,
+nested scrolling, action state, independent verification, drawer content, policy
+expansion, reachable controls and dialog placement. Reload, keyboard expansion,
+Escape and close checks passed. The current browser receipt supersedes the earlier
+artifact binding for this slice. Missing-access continuity, VM dispatch and
+Assistant orchestration failures remain separate open qualification defects.

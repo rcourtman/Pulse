@@ -15,6 +15,15 @@
 
 ## Purpose
 
+The PR #1935 log-level parser benchmark remains an unresolved environment-bound
+observation. Two CI comparisons on unchanged parser source report +10.04 and
++10.23 percent for the empty-string case, with stable base/candidate binaries.
+Ten alternating exact-base worker samples report 5.449 versus 5.357 ns (p=.436)
+and unchanged allocations. Identical source does not invalidate the CI timing,
+and the worker result does not turn it into a pass. No further rerun or threshold
+relaxation is justified by that reproduction. The implementation merged as
+560dbf314c4fc3744f52aa4e5a6a204cafe3aa7d, independently of this open observation.
+
 The Docker/app-container history families `dockercontainer` and `docker` use
 separate physical `.observed` series for new disk capacity and block-I/O
 measurements. Older disk series lack the required presence/capacity semantics

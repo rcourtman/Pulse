@@ -1,5 +1,13 @@
 # Unified Resources Contract
 
+Canonical cross-resource history reads must have an index on observation time.
+Incident reconstruction requests recent changes across the estate, so indexes
+whose first column is a resource ID, kind or source do not satisfy that access
+path. Existing databases acquire the global chronological index on open.
+Qualification checks the query plan and chronological limits after reopening a
+database that predates the index. A bounded recent-history request must not scan
+and sort the complete canonical change table while startup and ingestion wait.
+
 ## Contract Metadata
 
 ```json
@@ -14,6 +22,15 @@
 ```
 
 ## Purpose
+
+Canonical Docker resource metadata carries the shared filesystem observation
+contract unchanged. Adapters, retained resource clones and typed views own
+their nested usage values. Per-mount filesystem capacity never populates a
+container-wide disk percentage or quota, and unavailable observations never
+retain earlier numeric usage. The source-specific Docker facet remains the
+owner of these observations. Shared model queries project the same observation
+objects for both Patrol and Assistant. Ingestion and model-query filesystem
+regressions cover measured zero, unavailable reads and replacement of old data.
 
 Action review distinguishes the recorded plan from live or executed facts. The
 shared decision packet labels its state and expiry as planning-time evidence,

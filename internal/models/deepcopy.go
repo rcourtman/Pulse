@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
@@ -491,6 +492,7 @@ func cloneDockerContainer(src DockerContainer) DockerContainer {
 	dest.Networks = append([]DockerContainerNetworkLink(nil), src.Networks...)
 	dest.BlockIO = cloneDockerContainerBlockIO(src.BlockIO)
 	dest.Mounts = append([]DockerContainerMount(nil), src.Mounts...)
+	dest.Filesystems = filesystem.Clone(src.Filesystems)
 	dest.Podman = cloneDockerPodmanContainer(src.Podman)
 	dest.UpdateStatus = cloneDockerContainerUpdateStatus(src.UpdateStatus)
 	return dest.NormalizeCollections()
