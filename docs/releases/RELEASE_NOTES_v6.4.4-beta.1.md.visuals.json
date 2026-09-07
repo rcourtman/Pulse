@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "decision": "No screenshots are proposed because the release-critical changes concern ordering, restart persistence, retry finality, missing-observation handling, and accessibility semantics. Static images cannot demonstrate those outcomes, and delivery-warning styling is not materially changed.",
+  "captures": []
+}

@@ -1272,6 +1272,13 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 
 	releaseNotesPath := repoFile("docs", "releases", "RELEASE_NOTES_v"+version+".md")
 	changelogPath := repoFile("docs", "releases", "V6_CHANGELOG_v"+version+".md")
+	releaseBranch := requiredReleaseBranchForVersion(t, version)
+	packetLabel := "release candidate"
+	if _, suffix, found := strings.Cut(version, "-"); found {
+		if stage, _, found := strings.Cut(suffix, "."); found && stage != "rc" {
+			packetLabel = stage
+		}
+	}
 
 	assertFileContainsAllNormalized(t, releaseNotesPath,
 		"# Pulse v"+version+" Release Notes",
@@ -1298,7 +1305,7 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"Version: `v"+version+"`",
 		"Previous stable: `v"+previous+"`",
 		"Rollback target: `v"+previous+"`",
-		"Promotion path: exact-SHA single-build release candidate from `main`",
+		"Promotion path: exact-SHA single-build release candidate from `"+releaseBranch+"`",
 		comparisonSummary,
 		"carries the complete `v6.4.2` change set",
 		"no longer pin a guest in Backup Running",
@@ -1336,12 +1343,12 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
 		"docs/releases/RELEASE_NOTES_v"+version+".md",
 		"docs/releases/V6_CHANGELOG_v"+version+".md",
-		"current v6 release candidate packet",
+		"current v6 "+packetLabel+" packet",
 	)
 	assertFileContainsAll(t, repoFile("docs", "UPGRADE_v6.md"),
 		"docs/releases/RELEASE_NOTES_v"+version+".md",
 		"docs/releases/V6_CHANGELOG_v"+version+".md",
-		"current v6 release candidate packet",
+		"current v6 "+packetLabel+" packet",
 	)
 	assertFileContainsAll(t, repoFile("deploy", "helm", "pulse", "Chart.yaml"),
 		"version: "+version,
