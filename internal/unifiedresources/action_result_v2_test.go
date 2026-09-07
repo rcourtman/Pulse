@@ -462,3 +462,31 @@ func TestCompensationStateShapeValidationMatrix(t *testing.T) {
 		})
 	}
 }
+
+func TestActionEvidencePreservesSeparateObserverAndReceiverClocks(t *testing.T) {
+	for _, skew := range []time.Duration{-2 * time.Second, 0, 2 * time.Second} {
+		t.Run(skew.String(), func(t *testing.T) {
+			evidence := actionResultTestEvidence(ActionEvidenceAgentAttested)[0]
+			evidence.ObservedAt = evidence.ReceivedAt.Add(skew)
+			got, err := NormalizeActionEvidence(evidence)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !got.ObservedAt.Equal(evidence.ObservedAt) || !got.ReceivedAt.Equal(evidence.ReceivedAt) {
+				t.Fatalf("cross-clock evidence was rewritten: %#v", got)
+			}
+			changed := got
+			changed.Digest = ""
+			changed.ObservedAt = changed.ObservedAt.Add(time.Millisecond)
+			digest, err := ActionEvidenceDigest(changed)
+			if err != nil || digest == got.Digest {
+				t.Fatalf("observation clock is not bound to digest: %s, %v", digest, err)
+			}
+			changed = got
+			changed.ReceivedAt = time.Time{}
+			if _, err := NormalizeActionEvidence(changed); !errors.Is(err, ErrInvalidActionEvidence) {
+				t.Fatalf("missing receipt time was accepted: %v", err)
+			}
+		})
+	}
+}

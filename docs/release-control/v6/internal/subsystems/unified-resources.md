@@ -23,6 +23,21 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+Action evidence preserves observer and receiver timestamps as separate clock
+facts, normalized to UTC and bound into the canonical digest. The shared
+normalizer requires both timestamps but cannot infer their ordering across
+machines. Capability-owned freshness, request binding and same-clock mutation
+chronology remain prerequisites for claiming verification. Positive clock skew
+must not discard a completed execution or rewrite its observed timestamp.
+Cross-clock normalization and Proxmox/Docker/host result regressions cover this
+boundary, including stale and excessive-skew negative cases.
+
+The shared action evidence disclosure preserves the named observer independently
+of the executor. Its observation timestamp uses the neutral label `Observed`,
+followed by the separate Pulse receipt time. Independent Proxmox API evidence
+must not be labelled as an agent observation. Browser qualification expands
+this disclosure in completed action reviews at desktop and narrow widths.
+
 Canonical Docker resource metadata carries the shared filesystem observation
 contract unchanged. Adapters, retained resource clones and typed views own
 their nested usage values. Per-mount filesystem capacity never populates a

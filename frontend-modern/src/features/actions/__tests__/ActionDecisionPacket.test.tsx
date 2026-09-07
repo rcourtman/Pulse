@@ -80,7 +80,22 @@ const audit: ActionAuditRecord = {
         status: 'confirmed',
         evidenceClass: 'independent',
         summary: 'A separate observer saw the target state.',
-        evidence: [],
+        evidence: [
+          {
+            version: 1,
+            id: 'observation-1',
+            observerId: 'docker-daemon:edge',
+            observerKind: 'docker_daemon',
+            observerTrustDomain: 'docker-daemon:edge',
+            executorTrustDomain: 'agent:host-1',
+            method: 'direct_daemon_readback',
+            subjectId: 'docker:container:edge',
+            observedAt: '2026-07-12T00:01:02Z',
+            receivedAt: '2026-07-12T00:01:00Z',
+            summary: 'The daemon independently observed a healthy container.',
+            digest: 'sha256:observation-1',
+          },
+        ],
       },
       compensation: { support: 'unavailable', status: 'not_available' },
     },
@@ -106,6 +121,16 @@ describe('ActionDecisionPacket', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Confirmed by independent observer')).toBeInTheDocument();
     expect(screen.getByText('Source: Independent observer')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Evidence details'));
+    expect(
+      screen.getByText('Observed by docker-daemon:edge · docker-daemon:edge'),
+    ).toBeInTheDocument();
+    const observedAt = new Date('2026-07-12T00:01:02Z').toLocaleString();
+    const receivedAt = new Date('2026-07-12T00:01:00Z').toLocaleString();
+    expect(
+      screen.getByText(`Observed ${observedAt} · Pulse received ${receivedAt}`),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Agent observed /)).not.toBeInTheDocument();
   });
 
   it.each([

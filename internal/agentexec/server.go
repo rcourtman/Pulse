@@ -2547,13 +2547,6 @@ func (s *Server) ExecuteProxmoxGuestLifecycle(ctx context.Context, agentID strin
 	if err := ValidateProxmoxGuestLifecyclePayload(&req); err != nil {
 		return nil, err
 	}
-	ac, ok := s.connectionForContext(ctx, agentID)
-	if !ok {
-		return nil, fmt.Errorf("agent %s not connected", agentID)
-	}
-	if ac.admission.RuntimeRole != RuntimeRoleActionRunner || ac.admission.ActionCapability != ActionCapabilityTypedV1 {
-		return nil, fmt.Errorf("Proxmox guest lifecycle requires a typed action-runner session")
-	}
 	identity := ProxmoxGuestLifecycleOperationIdentity(agentID, req)
 	return dispatchTypedDockerContainerOperation(ctx, s, agentID, req.RequestID, req.Timeout, identity, req.GuestKind+":"+strconv.Itoa(req.VMID),
 		MsgTypeProxmoxGuestLifecycle, req, s.pendingProxmoxGuestLifecycles, "Proxmox guest lifecycle",
@@ -2585,6 +2578,11 @@ func dispatchTypedDockerContainerOperation[Res any](
 	}
 	if ac.agent.OperationReceiptVersion != operationreceipt.ProtocolVersion {
 		return nil, fmt.Errorf("agent does not support durable operation receipts")
+	}
+	// Check the session that will actually carry the request. Checking before
+	// this lookup would allow a replacement connection to inherit the result.
+	if msgType == MsgTypeProxmoxGuestLifecycle && !isTypedActionRunner(ac) {
+		return nil, fmt.Errorf("Proxmox guest lifecycle requires a typed action-runner session")
 	}
 
 	respCh := make(chan Res, 1)
@@ -2908,6 +2906,44 @@ func (s *Server) IsAgentConnectedForOrganization(organizationID, agentID string)
 // hostname-equivalence contract shared with the unified identity layer.
 func (s *Server) GetAgentForHost(hostname string) (string, bool) {
 	return s.GetAgentForHostForOrganization(defaultOrganizationID, hostname)
+}
+
+func isTypedActionRunner(ac *agentConn) bool {
+	return ac != nil && ac.admission.RuntimeRole == RuntimeRoleActionRunner &&
+		ac.admission.ActionCapability == ActionCapabilityTypedV1
+}
+
+// GetActionRunnerForHostForOrganization resolves exactly one currently admitted
+// typed runner for a canonical host. A collector or legacy command session is
+// not action-runner authority. Pending, fenced and revoked sessions are excluded
+// by the same admission check used at dispatch.
+func (s *Server) GetActionRunnerForHostForOrganization(organizationID, hostname string) (string, bool) {
+	if s == nil || strings.TrimSpace(hostname) == "" {
+		return "", false
+	}
+	organizationID = normalizeOrganizationID(organizationID)
+	s.mu.RLock()
+	ids := make([]string, 0, len(s.agents))
+	for _, ac := range s.agents {
+		if normalizeOrganizationID(ac.admission.OrganizationID) == organizationID &&
+			unifiedresources.HostnamesEquivalent(ac.admission.Hostname, hostname) {
+			ids = append(ids, ac.agent.AgentID)
+		}
+	}
+	s.mu.RUnlock()
+	matched := ""
+	for _, agentID := range ids {
+		ac, ok := s.connectionForOrganization(organizationID, agentID)
+		if !ok || !isTypedActionRunner(ac) ||
+			!unifiedresources.HostnamesEquivalent(ac.admission.Hostname, hostname) {
+			continue
+		}
+		if matched != "" {
+			return "", false
+		}
+		matched = agentID
+	}
+	return matched, matched != ""
 }
 
 // GetAgentForHostForOrganization resolves a hostname only within one tenant.

@@ -21597,51 +21597,21 @@ func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchOneTypedOp
 	}
 }
 
-func TestContract_DockerActionEvidenceBoundsPositiveAgentClockSkewAtReceipt(t *testing.T) {
-	source, err := os.ReadFile("docker_container_action_result.go")
-	if err != nil {
-		t.Fatalf("read docker_container_action_result.go: %v", err)
-	}
-	src := string(source)
-	for _, snippet := range []string{
-		"freshDockerLifecycleObservation(facts.Before.ObservedAt, facts.After.ObservedAt, receivedAt)",
-		"freshDockerUpdateObservation(facts.After.ObservedAt, receivedAt)",
-		"func dockerActionEvidenceTimes(observedAt, receivedAt time.Time) (time.Time, time.Time)",
-		"if observedAt.After(receivedAt) {",
-		"observedAt = receivedAt",
-	} {
-		if !strings.Contains(src, snippet) {
-			t.Fatalf("Docker action evidence must preserve bounded clock-skew handling snippet %q", snippet)
-		}
-	}
-	if calls := strings.Count(src, "dockerActionEvidenceTimes("); calls != 5 {
-		t.Fatalf("Docker lifecycle/update agent and independent evidence must all use the receipt-boundary helper; calls = %d, want 5", calls)
-	}
-}
-
-func TestContract_ProxmoxLifecycleActionsResolveNodeCommandAgentAndVerifyState(t *testing.T) {
+func TestContract_ProxmoxLifecycleActionsResolveTypedRunnerAndVerifyState(t *testing.T) {
 	source, err := os.ReadFile("proxmox_guest_action_executor.go")
 	if err != nil {
-		t.Fatalf("read proxmox_guest_action_executor.go: %v", err)
+		t.Fatal(err)
 	}
 	src := string(source)
-	for _, snippet := range []string{
-		"func (e proxmoxGuestActionExecutor) connectedProxmoxNodeCommandAgentID(ctx context.Context, resource unified.Resource) (string, error)",
-		"resource.Proxmox.LinkedAgentID",
-		"commandAgentForHost(ctx, e.agents, strings.TrimSpace(resource.Proxmox.NodeName))",
-		"Trusted:    true",
-		"func (e proxmoxGuestActionExecutor) verifyProxmoxGuestState(",
-		"proxmoxGuestStatusCommand(kind, vmid)",
-		"agentexec.EvaluateCapabilityPostcondition",
-		"func (e proxmoxGuestActionExecutor) observeProxmoxGuestPostcondition(",
-	} {
-		if !strings.Contains(src, snippet) {
-			t.Fatalf("proxmox lifecycle executor must pin command-agent/trusted verification snippet %q", snippet)
+	for _, forbidden := range []string{"ExecuteCommand(", "commandAgentForHost(", "isAgentCommandConnected("} {
+		if strings.Contains(src, forbidden) {
+			t.Fatalf("Proxmox lifecycle contains legacy dispatch path %q", forbidden)
 		}
 	}
-	if strings.Index(src, "if agentID := strings.TrimSpace(resource.Proxmox.LinkedAgentID)") >
-		strings.Index(src, "commandAgentForHost(ctx, e.agents, strings.TrimSpace(resource.Proxmox.NodeName))") {
-		t.Fatal("proxmox lifecycle executor must try the linked Proxmox node agent before falling back to node hostname resolution")
+	for _, required := range []string{"GetActionRunnerForHostForOrganization", "ExecuteProxmoxGuestLifecycle", "ValidateProxmoxGuestLifecycleResultForRequest", "observeProxmoxGuestPostcondition"} {
+		if !strings.Contains(src, required) {
+			t.Fatalf("Proxmox lifecycle missing typed dispatch contract %q", required)
+		}
 	}
 
 	router, err := os.ReadFile("router.go")

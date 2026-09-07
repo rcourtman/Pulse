@@ -303,7 +303,7 @@ export const ActionDecisionPacket: Component<{
                             Observed by {evidence.observerId} · {evidence.observerTrustDomain}
                           </div>
                           <div class="text-muted">
-                            Agent observed {new Date(evidence.observedAt).toLocaleString()} · Pulse
+                            Observed {new Date(evidence.observedAt).toLocaleString()} · Pulse
                             received {new Date(evidence.receivedAt).toLocaleString()}
                           </div>
                         </li>

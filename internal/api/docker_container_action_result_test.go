@@ -71,7 +71,7 @@ func TestDockerContainerExecutionResultStaleReadbackIsInconclusive(t *testing.T)
 	}
 }
 
-func TestDockerContainerExecutionResultClampsBoundedPositiveAgentClockSkew(t *testing.T) {
+func TestDockerContainerExecutionResultPreservesBoundedPositiveAgentClockSkew(t *testing.T) {
 	receivedAt := time.Now().UTC()
 	facts := dockerResultFacts(receivedAt.Add(2*time.Second), true, true, true, true)
 	result, err := dockerContainerExecutionResult("app-container:fixture", "agent-1", agentexec.DockerContainerLifecyclePayload{Operation: agentexec.DockerContainerOperationRestart}, facts, nil, receivedAt)
@@ -82,8 +82,8 @@ func TestDockerContainerExecutionResultClampsBoundedPositiveAgentClockSkew(t *te
 	if verification.Status != unified.ActionVerificationConfirmed || len(verification.Evidence) != 1 {
 		t.Fatalf("verification = %#v", verification)
 	}
-	if !verification.Evidence[0].ObservedAt.Equal(receivedAt) || !verification.Evidence[0].ReceivedAt.Equal(receivedAt) {
-		t.Fatalf("evidence timestamps = observed %s received %s, want receipt boundary %s", verification.Evidence[0].ObservedAt, verification.Evidence[0].ReceivedAt, receivedAt)
+	if !verification.Evidence[0].ObservedAt.Equal(facts.After.ObservedAt) || !verification.Evidence[0].ReceivedAt.Equal(receivedAt) {
+		t.Fatalf("evidence timestamps = observed %s received %s, want original observation and receipt boundary %s", verification.Evidence[0].ObservedAt, verification.Evidence[0].ReceivedAt, receivedAt)
 	}
 }
 
@@ -100,7 +100,7 @@ func TestDockerContainerExecutionResultRejectsExcessivePositiveAgentClockSkew(t 
 	}
 }
 
-func TestDockerContainerUpdateExecutionResultClampsBoundedPositiveAgentClockSkew(t *testing.T) {
+func TestDockerContainerUpdateExecutionResultPreservesBoundedPositiveAgentClockSkew(t *testing.T) {
 	receivedAt := time.Now().UTC()
 	observedAt := receivedAt.Add(2 * time.Second)
 	facts := agentexec.DockerContainerUpdateResultPayload{
@@ -116,8 +116,8 @@ func TestDockerContainerUpdateExecutionResultClampsBoundedPositiveAgentClockSkew
 	if verification.Status != unified.ActionVerificationConfirmed || len(verification.Evidence) != 1 {
 		t.Fatalf("verification = %#v", verification)
 	}
-	if !verification.Evidence[0].ObservedAt.Equal(receivedAt) || !verification.Evidence[0].ReceivedAt.Equal(receivedAt) {
-		t.Fatalf("evidence timestamps = observed %s received %s, want receipt boundary %s", verification.Evidence[0].ObservedAt, verification.Evidence[0].ReceivedAt, receivedAt)
+	if !verification.Evidence[0].ObservedAt.Equal(observedAt) || !verification.Evidence[0].ReceivedAt.Equal(receivedAt) {
+		t.Fatalf("evidence timestamps = observed %s received %s, want original observation and receipt boundary %s", verification.Evidence[0].ObservedAt, verification.Evidence[0].ReceivedAt, receivedAt)
 	}
 }
 

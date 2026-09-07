@@ -4460,7 +4460,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 
 			// Dev mode bypass for admin endpoints (disabled by default)
-			if adminBypassEnabled() {
+			if adminBypassAppliesToRequest(req) {
 				log.Debug().
 					Str("path", req.URL.Path).
 					Msg("Admin bypass enabled - skipping global auth")

@@ -9,7 +9,7 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/performance-and-scalability.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": ["api-contracts", "frontend-primitives"]
+  "dependency_subsystem_ids": ["frontend-primitives"]
 }
 ```
 
@@ -560,7 +560,11 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    the provider-authored runtime power state. `useWorkloads.ts` carries both
    values; selectors must not collapse warning health into `Stopped` or add a
    second resource lookup to recover it.
-4. Keep shared auth gating in `internal/api/router.go` cheap and local: pre-auth quick-setup and recovery routing may short-circuit on loopback/session/token checks, but they must not trigger chart, metrics, or broad persistence fan-out on the protected request hot path.
+4. Development bypass checks inspect only the current request's explicit
+   credential presence and the existing cached development flag. Explicit
+   tokens continue through canonical authentication and scoped identity, without
+   introducing a separate auth cache or persistence scan.
+   Keep shared auth gating in `internal/api/router.go` cheap and local: pre-auth quick-setup and recovery routing may short-circuit on loopback/session/token checks, but they must not trigger chart, metrics, or broad persistence fan-out on the protected request hot path.
    Agent command authorization is likewise a dispatch-time point lookup and
    atomic approval consume, not a route-wide scan or request-hot-path fan-out;
    grant signing and WebSocket writes happen only after that bounded verifier

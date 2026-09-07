@@ -2653,10 +2653,10 @@ a new API state machine, queue contract, or verification-accounting field.
    applies, and the action audit remains the approval and lifecycle source of
    truth. Docker lifecycle and image-update result evidence must validate raw
    agent chronology against the bounded freshness/skew window before canonical
-   normalization. When that valid raw observation is slightly ahead of the
-   server clock, the API conservatively binds its canonical `ObservedAt` to the
-   server `ReceivedAt` boundary; stale or excessively future observations stay
-   inconclusive and must never be made fresh by clamping.
+   normalization. Canonical evidence preserves the original `ObservedAt` and
+   server `ReceivedAt` even when the observer clock is slightly ahead. Stale
+   or excessively future observations stay inconclusive and must never be
+   made fresh by rewriting timestamps.
    The version-2 independent Docker observation contract carries a canonical
    daemon health state as well as lifecycle state. For start and restart, the
    API may confirm the postcondition only when the container is running and
@@ -9405,7 +9405,17 @@ inconclusive result. It must never downgrade execution success or fabricate
 independence.
 
 Proxmox VM and LXC lifecycle execution now consumes that same two-axis truth
-contract in production. The node agent remains the executor, while the API
+contract in production. Planning and dispatch resolve the same tenant-admitted
+typed action runner on the owning Proxmox node. Generic command connectivity
+or a telemetry-linked agent ID does not satisfy that authority. Missing typed
+transport, runner admission or durable receipts returns the existing
+`action_execution_unavailable` response before plan persistence, with
+`typed_operation_unavailable`, `action_runner_unavailable` or
+`operation_receipt_unsupported` readiness detail. Resource responses expose the
+same readiness. The executor has no raw-command fallback. Its typed receipt's
+`MutationCompleted` establishes execution completion separately from readback,
+and a status-only reboot read remains inconclusive.
+ The node agent remains the executor, while the API
 composition root injects the tenant-scoped monitoring client as a direct
 Proxmox control-plane observer. Fresh, identity-matched control-plane reads use
 an `agent:*`-distinct trust domain and are digest-bound into `ActionResultV2`;
@@ -10728,3 +10738,12 @@ result and unavailable services cannot establish a current count. The old
 coordinator never received production alert callbacks, so its zero was not a
 measurement. The legacy listing's broader canonical query and read-error
 modernization remains open under the customer-outcome qualification gap.
+
+### Explicit credentials during development qualification
+
+Development admin bypass must not replace an explicit bearer or API-token
+identity with a generic admin. Shared auth context, authentication and admin
+gates retain the explicit credential's normal validation and scopes. In
+particular, runner activation and self-revocation continue to require the exact
+credential-bound host and tenant, including in the managed development runtime.
+Invalid explicit credentials cannot fall back to the convenience bypass.

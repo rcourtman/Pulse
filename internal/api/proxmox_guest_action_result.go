@@ -10,7 +10,7 @@ import (
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-func proxmoxGuestExecutionResult(actionID, resourceID, agentID string, kind proxmoxGuestKind, operation string, exitCode int, output, commandError string, agentVerification *unified.ActionVerificationResult, independentBefore, independentAfter *proxmoxGuestPostconditionObservation, independentEvaluation agentexec.PostconditionEvaluation, actionStartedAt time.Time) (*unified.ExecutionResult, error) {
+func proxmoxGuestExecutionResult(actionID, resourceID, agentID string, kind proxmoxGuestKind, operation string, exitCode int, output, commandError string, agentVerification *unified.ActionVerificationResult, independentBefore, independentAfter *proxmoxGuestPostconditionObservation, independentEvaluation agentexec.PostconditionEvaluation, actionStartedAt, agentReceivedAt time.Time) (*unified.ExecutionResult, error) {
 	executionSummary := fmt.Sprintf("Proxmox guest %s command exited with status %d.", strings.TrimSpace(operation), exitCode)
 	execution := unified.ActionExecutionTruth{Status: unified.ActionExecutionSucceeded, Summary: executionSummary}
 	verification := unified.ActionVerificationTruth{Status: unified.ActionVerificationInconclusive, EvidenceClass: unified.ActionEvidenceNone, ReasonCode: "agent_readback_inconclusive", Summary: "The executing agent did not return a conclusive postcondition read."}
@@ -21,6 +21,9 @@ func proxmoxGuestExecutionResult(actionID, resourceID, agentID string, kind prox
 		execution.Summary = strings.TrimSpace(firstNonEmpty(commandError, output, executionSummary))
 		verification = unified.ActionVerificationTruth{Status: unified.ActionVerificationNotAttempted, EvidenceClass: unified.ActionEvidenceNone}
 		legacy.ErrorMessage = execution.Summary
+	} else if agentVerification != nil && agentVerification.Ran && !freshProxmoxAgentReadback(agentVerification.RanAt, agentReceivedAt) {
+		verification.ReasonCode = "stale_agent_readback"
+		verification.Summary = "The executing agent readback had missing, stale, or excessively skewed timestamps."
 	} else if agentVerification != nil && agentVerification.Ran {
 		agentSummary := strings.TrimSpace(firstNonEmpty(agentVerification.Note, agentVerification.Output, "The executing agent read the Proxmox guest postcondition."))
 		evidence, err := unified.NormalizeActionEvidence(unified.ActionEvidence{
@@ -33,7 +36,7 @@ func proxmoxGuestExecutionResult(actionID, resourceID, agentID string, kind prox
 			Method:              "server_owned_proxmox_cli_status",
 			SubjectID:           resourceID,
 			ObservedAt:          agentVerification.RanAt.UTC(),
-			ReceivedAt:          time.Now().UTC(),
+			ReceivedAt:          agentReceivedAt.UTC(),
 			Summary:             agentSummary,
 		})
 		if err != nil {
@@ -124,4 +127,13 @@ func usableIndependentProxmoxBeforeObservation(actionStartedAt time.Time, observ
 	observedAt := observation.Snapshot.ObservedAt.UTC()
 	receivedAt := observation.ReceivedAt.UTC()
 	return !observedAt.After(actionStartedAt.UTC()) && !observedAt.After(receivedAt.Add(5*time.Minute)) && !observedAt.Before(receivedAt.Add(-15*time.Minute))
+}
+
+// A request-bound runner observation may use a different clock. Freshness
+// limits qualify the readback without rewriting either clock or discarding
+// completed execution when only its verification is unusable.
+func freshProxmoxAgentReadback(observedAt, receivedAt time.Time) bool {
+	return !observedAt.IsZero() && !receivedAt.IsZero() &&
+		!observedAt.Before(receivedAt.Add(-15*time.Minute)) &&
+		!observedAt.After(receivedAt.Add(5*time.Minute))
 }
