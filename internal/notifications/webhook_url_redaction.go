@@ -33,6 +33,15 @@ func RedactWebhookURLSecrets(urlString string) string {
 		}
 		parsed.RawPath = ""
 		urlString = parsed.String()
+	case "discord.com", "discordapp.com":
+		// Discord webhook IDs and tokens follow /webhooks/ in both
+		// unversioned and versioned API paths. Mask the entire suffix,
+		// including escaped credentials and compatibility endpoint paths.
+		if idx := strings.Index(parsed.Path, "/webhooks/"); idx != -1 {
+			parsed.Path = parsed.Path[:idx] + "/webhooks/REDACTED"
+			parsed.RawPath = ""
+			urlString = parsed.String()
+		}
 	}
 
 	// Telegram bot credentials are path components rather than query values.
