@@ -266,6 +266,36 @@ class ReleasePreflightTest(unittest.TestCase):
         self.assertLess(block.index("done\n"), block.index("run_frontend_tests\n"))
         self.assertLess(block.index("run_frontend_tests\n"), block.index("run_backend\n"))
 
+    def test_backend_preserves_exit_and_collects_after_failure(self):
+        worker = (ROOT / 'scripts/release-preflight-worker.sh').read_text()
+        function = re.search(r'^run_backend\(\) \(\n.*?^\)', worker, re.M | re.S).group(0)
+        for profile in ('release', 'rehearsal'):
+            for code in (0, 17):
+                for telemetry_code in (0, 9):
+                    with self.subTest(profile=profile, code=code, telemetry_code=telemetry_code):
+                        # Stub only operations: execute the real backend shell function
+                        # under errexit, without any product tests or data mutation.
+                        script = f'''set -euo pipefail
+PROFILE={profile}
+TEST_DATA_DIR=unused
+ACTUAL_GO=go-test-fixture
+rm() {{ :; }}
+mkdir() {{ :; }}
+python3() {{ echo "snapshot $2"; return {telemetry_code}; }}
+phase() {{ echo "phase $1"; return {code}; }}
+{function}
+run_backend
+echo CONTINUED
+'''
+                        result = subprocess.run(['bash', '-c', script], text=True, capture_output=True)
+                        self.assertEqual(result.returncode, code, result.stderr)
+                        self.assertIn('snapshot before', result.stdout)
+                        self.assertIn('snapshot after', result.stdout)
+                        self.assertIn(f'RELEASE_BACKEND_EXIT {code}', result.stdout)
+                        self.assertEqual('CONTINUED' in result.stdout, code == 0)
+                        self.assertIn('backend-serial' if profile == 'rehearsal' else 'backend-race-sharded', result.stdout)
+
+
     def test_browser_mount_identity_and_locked_cli_follow_the_docker_daemon(self) -> None:
         worker = (ROOT / "scripts/release-preflight-worker.sh").read_text()
         functions = []

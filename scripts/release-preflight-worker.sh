@@ -180,7 +180,17 @@ run_frontend_tests() {
   phase frontend-tests npm --prefix frontend-modern test
 }
 
-run_backend() {
+# Keep evidence in stdout: the exact preflight launcher retains its log even
+# when its disposable worker directory is removed after failure. This subshell
+# retains errexit semantics; do not wrap run_backend in an `if` or `||` list.
+run_backend() (
+  backend_resource_snapshot() {
+    python3 ./scripts/release-resource-snapshot.py "$1" ||
+      echo "RELEASE_RESOURCE_SNAPSHOT unavailable boundary=$1" >&2
+  }
+  trap 'status=$?; backend_resource_snapshot after; echo "RELEASE_BACKEND_EXIT ${status}"; exit "$status"' EXIT
+  backend_resource_snapshot before
+  echo "RELEASE_BACKEND_TOOLCHAIN ${ACTUAL_GO}"
   rm -rf "$TEST_DATA_DIR"
   mkdir -p "$TEST_DATA_DIR"
   if [ "$PROFILE" = "rehearsal" ]; then
@@ -190,7 +200,7 @@ run_backend() {
       --data-root "$TEST_DATA_DIR" \
       --api-shards auto
   fi
-}
+)
 
 run_playwright() {
   docker run --rm \
