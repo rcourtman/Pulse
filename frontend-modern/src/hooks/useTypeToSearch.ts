@@ -198,10 +198,15 @@ const handleTypeToSearchKeyDown = (event: KeyboardEvent) => {
 
   // Space activates focused buttons/disclosures on keyup. Capturing its
   // keydown for search prevents that native action and steals focus.
-  if (event.key === ' ' && [event.target, document.activeElement].some(
-    (target) => target instanceof HTMLElement &&
-      Boolean(target.closest('button, summary, [role="button"]')),
-  )) return;
+  if (
+    event.key === ' ' &&
+    [event.target, document.activeElement].some(
+      (target) =>
+        target instanceof HTMLElement &&
+        Boolean(target.closest('button, summary, [role="button"]')),
+    )
+  )
+    return;
 
   if (!isPrintableSearchKey(event)) return;
 
