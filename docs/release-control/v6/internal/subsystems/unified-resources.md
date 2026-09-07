@@ -23,6 +23,18 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+**VM-linked agent memory read — issue #1962 (7 September 2026)**
+
+`VMView.LinkedAgentMemory` exposes a value-copy of the agent's own memory sample
+for the poller's existing fallback. It must not read merged platform-priority
+metrics or use aggregate VM liveness as agent freshness. Missing/non-online agent
+source status, explicit agent staleness, unavailable usage and invalid capacity
+or counters are rejected. Trusted zero usage remains valid. Registry freshness
+policy remains authoritative; this accessor introduces no second timeout.
+`TestVMViewLinkedAgentMemory` pins those boundaries; monitoring's
+`TestCorrelatedGuestMemoryNextPoll` verifies the manually merged row through the
+next-poll consumers. Existing host-list membership and metric priority are unchanged.
+
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
 Persisted action request identity is scoped to the trusted actor and exact

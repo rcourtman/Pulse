@@ -2231,3 +2231,39 @@ func TestView_VMViewUsesProviderNeutralVirtualMachineFallback(t *testing.T) {
 		t.Fatalf("CPUs() = %d, want 6", got)
 	}
 }
+
+func TestVMViewLinkedAgentMemory(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		status      string
+		stale       bool
+		total, used int64
+		unavailable bool
+		want        bool
+	}{
+		{name: "live", status: "online", total: 8000, used: 2800, want: true},
+		{name: "trusted zero", status: "online", total: 8000, want: true},
+		{name: "offline", status: "offline", total: 8000, used: 2800},
+		{name: "stale source", status: "stale", total: 8000, used: 2800},
+		{name: "stale agent", status: "online", stale: true, total: 8000, used: 2800},
+		{name: "unknown source", total: 8000, used: 2800},
+		{name: "negative", status: "online", total: 8000, used: -1},
+		{name: "over capacity", status: "online", total: 8000, used: 8001},
+		{name: "no capacity", status: "online"},
+		{name: "unavailable", status: "online", total: 8000, used: 2800, unavailable: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &Resource{Status: StatusOnline, Agent: &AgentData{Stale: tc.stale, Memory: &AgentMemoryMeta{Total: tc.total, Used: tc.used, UsageUnavailable: tc.unavailable}}, SourceStatus: map[DataSource]SourceStatus{SourceAgent: {Status: tc.status}}, Metrics: &ResourceMetrics{Memory: &MetricValue{Percent: 100}}}
+			memory, ok := NewVMView(r).LinkedAgentMemory()
+			if ok != tc.want {
+				t.Fatalf("valid=%v want=%v memory=%+v", ok, tc.want, memory)
+			}
+			if ok && (memory.Used != tc.used || memory.Usage != float64(tc.used)/float64(tc.total)*100) {
+				t.Fatalf("not agent memory: %+v", memory)
+			}
+		})
+	}
+	if _, ok := (VMView{}).LinkedAgentMemory(); ok {
+		t.Fatal("nil view has memory")
+	}
+}
