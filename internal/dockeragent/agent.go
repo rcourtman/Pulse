@@ -22,8 +22,10 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenthelper"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttarget"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
+	"github.com/rcourtman/pulse-go-rewrite/internal/filesystemprobe"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 )
@@ -130,6 +132,10 @@ func setAgentHeaders(req *http.Request, token string) {
 
 // Agent collects Docker / Podman metrics and posts them to Pulse.
 type Agent struct {
+	filesystemObserver filesystemprobe.Observer
+	// Optional native-read seam for collection boundary tests. Production uses
+	// the bounded filesystemObserver above.
+	observeFilesystems  func(context.Context, filesystemprobe.ContainerRequest) ([]filesystem.Observation, error)
 	cfg                 Config
 	docker              dockerClient
 	helperInventory     ContainerInventory

@@ -225,6 +225,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/config/host_continuity_test.go",
                         "internal/models/metrics_types_test.go",
                         "internal/monitoring/availability_probe_agent_test.go",
+                        "internal/monitoring/docker_filesystem_evidence_test.go",
                         "internal/monitoring/docker_metric_presence_test.go",
                         "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
                         "internal/monitoring/monitor_host_agents_test.go",
@@ -283,6 +284,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 "diskinventory-collection-trust",
                 "agent-fleet-diagnostics-runtime",
                 "monitoring-runtime",
+                "filesystem-observations",
             ],
         )
         self.assertEqual(
@@ -356,7 +358,9 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/dockeragent/agent_cpu_test.go",
                         "internal/dockeragent/agent_internal_test.go",
                         "internal/dockeragent/blockio_presence_test.go",
+                        "internal/dockeragent/collect_tmpfs_live_test.go",
                         "internal/dockeragent/collect_tmpfs_test.go",
+                        "internal/dockeragent/container_filesystems_test.go",
                         "internal/dockeragent/swarm_coverage_test.go",
                     ],
                 }
@@ -454,6 +458,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/config/host_continuity_test.go",
                         "internal/models/metrics_types_test.go",
                         "internal/monitoring/availability_probe_agent_test.go",
+                        "internal/monitoring/docker_filesystem_evidence_test.go",
                         "internal/monitoring/docker_metric_presence_test.go",
                         "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
                         "internal/monitoring/monitor_host_agents_test.go",
@@ -485,6 +490,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "test_prefixes": [],
                     "exact_files": [
                         "internal/config/host_continuity_test.go",
+                        "internal/monitoring/docker_filesystem_evidence_test.go",
                         "internal/monitoring/docker_metric_presence_test.go",
                         "internal/monitoring/issue1485_unraid_lifecycle_test.go",
                         "internal/monitoring/issue1595_collection_trust_test.go",

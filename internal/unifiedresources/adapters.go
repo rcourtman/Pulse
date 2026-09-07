@@ -12,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
@@ -2459,6 +2460,7 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 		Capabilities: dockerContainerLifecycleCapabilities(ct, host, runtime, now),
 	}
 	resource.Docker = docker
+	resource.Docker.Filesystems = filesystem.Clone(ct.Filesystems)
 	identity := ResourceIdentity{
 		Hostnames: uniqueStrings([]string{ct.Name}),
 	}

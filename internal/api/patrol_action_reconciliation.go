@@ -146,6 +146,8 @@ func patrolOutcomeForActionAudit(audit unifiedresources.ActionAuditRecord) aicon
 	switch audit.State {
 	case unifiedresources.ActionStatePlanned, unifiedresources.ActionStatePending, unifiedresources.ActionStateApproved, unifiedresources.ActionStateExecuting:
 		return aicontracts.OutcomeFixQueued
+	case unifiedresources.ActionStateExpired:
+		return aicontracts.OutcomeNeedsAttention
 	case unifiedresources.ActionStateRejected:
 		return aicontracts.OutcomeFixRejected
 	case unifiedresources.ActionStateFailed, unifiedresources.ActionStateCompleted:

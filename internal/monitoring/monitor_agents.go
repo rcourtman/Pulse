@@ -24,6 +24,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	unraidstatus "github.com/rcourtman/pulse-go-rewrite/internal/unraid"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
@@ -2406,6 +2407,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			}
 			container.Mounts = mounts
 		}
+		container.Filesystems = filesystem.Clone(payload.Filesystems)
 
 		containers = append(containers, container)
 	}

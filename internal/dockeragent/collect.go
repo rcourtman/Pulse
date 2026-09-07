@@ -761,6 +761,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		RootFilesystemBytes: rootFsBytes,
 		BlockIO:             blockIO,
 		Mounts:              mounts,
+		Filesystems:         a.collectContainerFilesystems(containerCtx, summary.ID, inspect, mounts),
 	}
 
 	if a.runtime == RuntimePodman {

@@ -119,6 +119,10 @@ type Manager struct {
 	// absent or has been durably imported. Reads keep using JSON while migration
 	// is incomplete or the event store reports a write failure.
 	eventHistoryAuthoritative atomic.Bool
+	// One derived history fold per event store. Readers share catch-up work,
+	// while live alert overlays remain fresh and outside this mutex.
+	historyProjectionMu sync.Mutex
+	historyProjection   *historyProjection
 	// activeStateAuthoritative is true only when events.db owns restart state.
 	// active-alerts.json remains an atomic recovery mirror, never a competing
 	// source while the SQLite projection is healthy.

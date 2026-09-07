@@ -3,6 +3,7 @@ package dockeragent
 import (
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	hostagent "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
@@ -74,37 +75,38 @@ type HostSecurityInfo struct {
 
 // Container captures the runtime state for a Docker container at report time.
 type Container struct {
-	ID                  string             `json:"id"`
-	Name                string             `json:"name"`
-	Image               string             `json:"image"`
-	ImageDigest         string             `json:"imageDigest,omitempty"` // Current image digest for update detection
-	CreatedAt           time.Time          `json:"createdAt"`
-	State               string             `json:"state"`
-	Status              string             `json:"status"`
-	Health              string             `json:"health,omitempty"`
-	HealthcheckTargets  []string           `json:"healthcheckTargets,omitempty"`
-	CPUPercent          float64            `json:"cpuPercent"`
-	MemoryUsageBytes    int64              `json:"memoryUsageBytes"`
-	MemoryLimitBytes    int64              `json:"memoryLimitBytes"`
-	MemoryPercent       float64            `json:"memoryPercent"`
-	UptimeSeconds       int64              `json:"uptimeSeconds"`
-	RestartCount        int                `json:"restartCount"`
-	ExitCode            int                `json:"exitCode"`
-	OOMKilled           *bool              `json:"oomKilled,omitempty"`
-	StartedAt           *time.Time         `json:"startedAt,omitempty"`
-	FinishedAt          *time.Time         `json:"finishedAt,omitempty"`
-	Ports               []ContainerPort    `json:"ports,omitempty"`
-	Labels              map[string]string  `json:"labels,omitempty"`
-	Env                 []string           `json:"env,omitempty"`
-	Networks            []ContainerNetwork `json:"networks,omitempty"`
-	NetworkRXBytes      uint64             `json:"networkRxBytes,omitempty"`
-	NetworkTXBytes      uint64             `json:"networkTxBytes,omitempty"`
-	WritableLayerBytes  int64              `json:"writableLayerBytes,omitempty"`
-	RootFilesystemBytes int64              `json:"rootFilesystemBytes,omitempty"`
-	BlockIO             *ContainerBlockIO  `json:"blockIo,omitempty"`
-	Mounts              []ContainerMount   `json:"mounts,omitempty"`
-	Podman              *PodmanContainer   `json:"podman,omitempty"`
-	UpdateStatus        *UpdateStatus      `json:"updateStatus,omitempty"` // Image update detection status
+	ID                  string                   `json:"id"`
+	Name                string                   `json:"name"`
+	Image               string                   `json:"image"`
+	ImageDigest         string                   `json:"imageDigest,omitempty"` // Current image digest for update detection
+	CreatedAt           time.Time                `json:"createdAt"`
+	State               string                   `json:"state"`
+	Status              string                   `json:"status"`
+	Health              string                   `json:"health,omitempty"`
+	HealthcheckTargets  []string                 `json:"healthcheckTargets,omitempty"`
+	CPUPercent          float64                  `json:"cpuPercent"`
+	MemoryUsageBytes    int64                    `json:"memoryUsageBytes"`
+	MemoryLimitBytes    int64                    `json:"memoryLimitBytes"`
+	MemoryPercent       float64                  `json:"memoryPercent"`
+	UptimeSeconds       int64                    `json:"uptimeSeconds"`
+	RestartCount        int                      `json:"restartCount"`
+	ExitCode            int                      `json:"exitCode"`
+	OOMKilled           *bool                    `json:"oomKilled,omitempty"`
+	StartedAt           *time.Time               `json:"startedAt,omitempty"`
+	FinishedAt          *time.Time               `json:"finishedAt,omitempty"`
+	Ports               []ContainerPort          `json:"ports,omitempty"`
+	Labels              map[string]string        `json:"labels,omitempty"`
+	Env                 []string                 `json:"env,omitempty"`
+	Networks            []ContainerNetwork       `json:"networks,omitempty"`
+	NetworkRXBytes      uint64                   `json:"networkRxBytes,omitempty"`
+	NetworkTXBytes      uint64                   `json:"networkTxBytes,omitempty"`
+	WritableLayerBytes  int64                    `json:"writableLayerBytes,omitempty"`
+	RootFilesystemBytes int64                    `json:"rootFilesystemBytes,omitempty"`
+	BlockIO             *ContainerBlockIO        `json:"blockIo,omitempty"`
+	Mounts              []ContainerMount         `json:"mounts,omitempty"`
+	Filesystems         []filesystem.Observation `json:"filesystems,omitempty"`
+	Podman              *PodmanContainer         `json:"podman,omitempty"`
+	UpdateStatus        *UpdateStatus            `json:"updateStatus,omitempty"` // Image update detection status
 }
 
 // ContainerPort tracks an exposed container port mapping.

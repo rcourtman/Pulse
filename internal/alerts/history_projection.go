@@ -10,6 +10,7 @@ package alerts
 
 import (
 	"encoding/json"
+	"errors"
 	"sort"
 	"time"
 
@@ -38,64 +39,7 @@ func (m *Manager) AlertHistoryFromEvents(since time.Time, limit int) ([]Alert, b
 		return nil, false
 	}
 
-	// Fold oldest to newest through the store's bounded-page walker. The
-	// ordinary Query API intentionally caps responses at 1,000 rows, which is
-	// appropriate for callers but not for reconstructing a complete history
-	// window on a noisy installation.
-	occurrences := make(map[string]*historyOccurrence)
-	order := make([]string, 0)
-	err := store.WalkOldest(eventlog.Filter{
-		Types: []string{
-			eventlog.TypeFired,
-			eventlog.TypeRefired,
-			eventlog.TypeResolved,
-			eventlog.TypeAcknowledged,
-			eventlog.TypeUnacknowledged,
-			eventlog.TypeSnoozed,
-			eventlog.TypeUnsnoozed,
-			eventlog.TypeEscalated,
-			eventlog.TypeHistoryImported,
-			eventlog.TypeHistoryCleared,
-		},
-		Since: since,
-	}, func(event eventlog.Event) error {
-		if event.Type == eventlog.TypeHistoryCleared {
-			// The user cleared history: everything before the tombstone
-			// leaves the projection. The log itself stays append-only.
-			occurrences = make(map[string]*historyOccurrence)
-			order = order[:0]
-			return nil
-		}
-		if len(event.Snapshot) == 0 {
-			return nil
-		}
-		var snapshot Alert
-		if err := json.Unmarshal(event.Snapshot, &snapshot); err != nil {
-			return nil
-		}
-		key := historyOccurrenceKey(event.AlertID, &snapshot)
-		occ, exists := occurrences[key]
-		if !exists {
-			occ = &historyOccurrence{alert: snapshot, firstEvent: event.OccurredAt}
-			occurrences[key] = occ
-			order = append(order, key)
-		} else {
-			occ.alert = mergeHistoryAlertSnapshots(occ.alert, snapshot)
-		}
-		occ.lastEvent = event.OccurredAt
-		if event.Type == eventlog.TypeResolved {
-			occ.resolved = true
-			// The JSON history's resolve path stamps the entry's LastSeen
-			// with the resolution time so the row reflects the true
-			// duration; mirror that.
-			if event.OccurredAt.After(occ.alert.LastSeen) {
-				occ.alert.LastSeen = event.OccurredAt
-			}
-		} else {
-			occ.resolved = false
-		}
-		return nil
-	})
+	occurrences, order, err := m.historyOccurrences(store, since)
 	if err != nil {
 		return nil, false
 	}
@@ -154,4 +98,130 @@ func (m *Manager) AlertHistoryFromEvents(since time.Time, limit int) ([]Alert, b
 		results = append(results, occurrences[order[i]].alert)
 	}
 	return m.applyCurrentNodeDisplayNames(canonicalizeAlertHistoryForOutput(results)), true
+}
+
+// historyProjection is a disposable fold of the durable log, never a second
+// source of truth. Its cursor is bounded by a committed event ID. Old imports,
+// retention and store replacement rebuild it using the original chronological
+// fold. A moving Since window keeps its original event-filter semantics and
+// does not evict the full-history fold used by attention and normal polling.
+type historyProjection struct {
+	store       *eventlog.Store
+	boundary    eventlog.ReplayBoundary
+	lastTimeKey string
+	occurrences map[string]*historyOccurrence
+	order       []string
+}
+
+var errHistoryEventBeforeCursor = errors.New("new history event precedes the folded chronology")
+
+func newHistoryProjection(store *eventlog.Store) *historyProjection {
+	return &historyProjection{store: store, occurrences: make(map[string]*historyOccurrence)}
+}
+
+func (p *historyProjection) fold(since time.Time, throughID int64) error {
+	if throughID == 0 || throughID == p.boundary.LastID {
+		return nil
+	}
+	return p.store.WalkOldest(eventlog.Filter{
+		Types: []string{
+			eventlog.TypeFired, eventlog.TypeRefired, eventlog.TypeResolved,
+			eventlog.TypeAcknowledged, eventlog.TypeUnacknowledged,
+			eventlog.TypeSnoozed, eventlog.TypeUnsnoozed, eventlog.TypeEscalated,
+			eventlog.TypeHistoryImported, eventlog.TypeHistoryCleared,
+		},
+		Since: since, AfterID: p.boundary.LastID, ThroughID: throughID,
+	}, func(event eventlog.Event) error {
+		// Match the log's (occurred_at, id) ordering. Equal timestamps are
+		// safe because all appended IDs exceed the preceding boundary.
+		timeKey := event.OccurredAt.UTC().Format(time.RFC3339Nano)
+		if timeKey < p.lastTimeKey {
+			return errHistoryEventBeforeCursor
+		}
+		p.lastTimeKey = timeKey
+		if event.Type == eventlog.TypeHistoryCleared {
+			// The user cleared history: everything before the tombstone
+			// leaves the projection. The log itself stays append-only.
+			p.occurrences = make(map[string]*historyOccurrence)
+			p.order = p.order[:0]
+			return nil
+		}
+		if len(event.Snapshot) == 0 {
+			return nil
+		}
+		var snapshot Alert
+		if err := json.Unmarshal(event.Snapshot, &snapshot); err != nil {
+			return nil
+		}
+		key := historyOccurrenceKey(event.AlertID, &snapshot)
+		occ, exists := p.occurrences[key]
+		if !exists {
+			occ = &historyOccurrence{alert: snapshot, firstEvent: event.OccurredAt}
+			p.occurrences[key] = occ
+			p.order = append(p.order, key)
+		} else {
+			occ.alert = mergeHistoryAlertSnapshots(occ.alert, snapshot)
+		}
+		occ.lastEvent = event.OccurredAt
+		if event.Type == eventlog.TypeResolved {
+			occ.resolved = true
+			// The JSON history's resolve path stamps the entry's LastSeen
+			// with the resolution time so the row reflects the true
+			// duration; mirror that.
+			if event.OccurredAt.After(occ.alert.LastSeen) {
+				occ.alert.LastSeen = event.OccurredAt
+			}
+		} else {
+			occ.resolved = false
+		}
+		return nil
+	})
+}
+
+func (m *Manager) historyOccurrences(store *eventlog.Store, since time.Time) (map[string]*historyOccurrence, []string, error) {
+	m.historyProjectionMu.Lock()
+	defer m.historyProjectionMu.Unlock()
+	for {
+		boundary, err := store.ReplayBoundary()
+		if err != nil {
+			m.historyProjection = nil
+			return nil, nil, err
+		}
+		p := m.historyProjection
+		if !since.IsZero() || p == nil || p.store != store ||
+			p.boundary.RetentionRevision != boundary.RetentionRevision || p.boundary.LastID > boundary.LastID {
+			p = newHistoryProjection(store)
+		}
+		err = p.fold(since, boundary.LastID)
+		if errors.Is(err, errHistoryEventBeforeCursor) {
+			p = newHistoryProjection(store)
+			err = p.fold(since, boundary.LastID)
+		}
+		if err != nil {
+			m.historyProjection = nil
+			return nil, nil, err
+		}
+		after, err := store.ReplayBoundary()
+		if err != nil {
+			m.historyProjection = nil
+			return nil, nil, err
+		}
+		if after.RetentionRevision != boundary.RetentionRevision {
+			m.historyProjection = nil
+			continue
+		}
+		p.boundary = boundary
+		if since.IsZero() {
+			m.historyProjection = p
+		}
+		// The live-state overlay and callers may mutate their result. Never
+		// let those changes contaminate the durable fold or another reader.
+		occurrences := make(map[string]*historyOccurrence, len(p.occurrences))
+		for key, occurrence := range p.occurrences {
+			copy := *occurrence
+			copy.alert = *occurrence.alert.Clone()
+			occurrences[key] = &copy
+		}
+		return occurrences, append([]string(nil), p.order...), nil
+	}
 }

@@ -434,6 +434,30 @@ default construction path still restores.
 
 ## Shared Boundaries
 
+History reads must not occupy the connection used to commit alert lifecycle
+transitions. Disk-backed event logs use a bounded read-only WAL pool alongside
+the serialized durable writer. An open history snapshot cannot block a durable
+append or acquire mutation authority. In-memory test stores retain their single
+connection because their private database is connection-local.
+
+Chronological replay selects bounded event IDs in time-index order before
+loading snapshots and details. Pages preserve occurrence-time and ID ordering,
+type filters, durable-ID watermarks and caller limits without sorting all
+retained payloads for every page. A full history read remains complete, and
+history reconstruction must not truncate silently at the public query limit.
+
+Normal history polling shares one manager-owned chronological fold and advances
+it only through newly committed event IDs. Its inclusive replay boundary keeps
+concurrent appends out of the current pass. The event log remains authoritative:
+retention removal advances a revision in the same transaction, late historical
+events force chronological reconstruction, and replacing or disabling the store
+discards the fold. Clear-history tombstones still remove preceding occurrences.
+Live active-alert overlays and returned objects are independent clones. Explicit
+Since queries preserve their existing event-window semantics without evicting
+the normal full-history fold. Repeated attention requests must not replay all
+retained snapshots independently or accumulate behind the history connection pool.
+
+
 PBS node-status availability is distinct from connectivity. While a connected
 PBS carries monitoring-owned `NodeMetricsUnavailable` evidence, CPU and memory
 evaluation must not treat zero-valued placeholders as recovery. Existing

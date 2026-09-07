@@ -17,6 +17,31 @@
 
 ## Purpose
 
+Container filesystem observations are native, resource-scoped reads. The shared
+`pkg/agents/filesystem` contract keeps measurement time, mountpoint, source,
+filesystem type and optional usage together. Unavailable reads have an error
+and no usage. Capacity/free/available counters describe the filesystem visible
+there, not a container quota, image layer or host-wide capacity diagnosis.
+Finite inode inventory is optional independently of byte capacity.
+
+The Docker collector requires a local Unix runtime endpoint, an exact full
+container ID, a matching process cgroup and a stable inspected PID/start time.
+Linux reads through the held process-root descriptor using confined openat2
+resolution and fstatfs, without executing container programs. A remote daemon,
+unattested or inaccessible namespace, unsupported kernel or changed process
+produces unavailable evidence. This path does not grant ptrace, root, helper
+or command privileges. Ordinary root-owned containers may therefore remain
+unavailable to an unprivileged collector even when its Docker socket is usable.
+
+One native probe per container may remain in flight, with a bounded wait and
+an observer-wide limit. Timeout does not start replacement syscalls or reuse
+late measurements. Report ingestion and snapshot conversion clone all nested
+usage fields. A later failed or absent observation replaces prior capacity.
+Proof surfaces are the filesystemprobe native/timeout tests, shared report
+tests, container collection boundary tests, ingestion regression and the
+opt-in owned tmpfs collector fixture. Installed-agent and model qualification
+are tracked separately in PATROL_ASSISTANT_CUSTOMER_JOURNEY.md.
+
 Docker mount collection preserves both native `Mounts` records and entries
 reported only in `HostConfig.Tmpfs`. Existing reported destinations remain
 authoritative. Additional tmpfs destinations are ordered deterministically,

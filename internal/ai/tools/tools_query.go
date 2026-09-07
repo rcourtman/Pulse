@@ -12,6 +12,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	"github.com/rs/zerolog/log"
 )
 
@@ -2151,7 +2152,7 @@ func (e *PulseToolExecutor) registerQueryTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseQueryToolName,
-			Description: `Query and search canonical infrastructure resources. Start here to discover systems, workloads, storage, and disks by name. Actions: search, get, config, topology, list, health. Health returns the connection overview by default, or the canonical resource projection when resource_id is provided. command_agent_connected describes live command transport, independently of monitoring collection or freshness. Missing connection fields were not observed. can_execute describes connected transport with control enabled, not approval for a particular operation.`,
+			Description: `Query and search canonical infrastructure resources. Start here to discover systems, workloads, storage, and disks by name. Actions: search, get, config, topology, list, health. For app-container get, filesystems reports observed capacity at each mountpoint, not container quotas. An observation error has no usage payload. Mounts describe configuration. Health returns the connection overview by default, or the canonical resource projection when resource_id is provided. command_agent_connected describes live command transport, independently of monitoring collection or freshness. Missing connection fields were not observed. can_execute describes connected transport with control enabled, not approval for a particular operation.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -5064,6 +5065,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 						ReadWrite:   m.RW,
 					})
 				}
+				response.Filesystems = filesystem.Clone(resource.Docker.Filesystems)
 			}
 
 			if reg, ok := resolvedAppContainerRegistration(resource); ok {
@@ -5126,6 +5128,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 			response.Image = container.Image()
 			response.Health = container.Health()
 			response.HealthcheckTargets = container.HealthcheckTargets()
+			response.Filesystems = container.Filesystems()
 			response.CPU = ResourceCPU{
 				Percent: container.CPUPercent(),
 			}

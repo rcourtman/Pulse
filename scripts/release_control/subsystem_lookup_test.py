@@ -4327,6 +4327,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/config/host_continuity_test.go",
                 "internal/models/metrics_types_test.go",
                 "internal/monitoring/availability_probe_agent_test.go",
+                "internal/monitoring/docker_filesystem_evidence_test.go",
                 "internal/monitoring/docker_metric_presence_test.go",
                 "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
                 "internal/monitoring/monitor_host_agents_test.go",
@@ -4350,6 +4351,7 @@ class SubsystemLookupTest(unittest.TestCase):
             monitoring_match["verification_requirement"]["exact_files"],
             [
                 "internal/config/host_continuity_test.go",
+                "internal/monitoring/docker_filesystem_evidence_test.go",
                 "internal/monitoring/docker_metric_presence_test.go",
                 "internal/monitoring/issue1485_unraid_lifecycle_test.go",
                 "internal/monitoring/issue1595_collection_trust_test.go",
@@ -4473,6 +4475,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/unifiedresources/resolved_host_set_test.go",
                 "internal/unifiedresources/resource_operator_state_policy_test.go",
                 "internal/unifiedresources/snapshot_source_filter_test.go",
+                "internal/unifiedresources/store_history_index_test.go",
                 "internal/unifiedresources/store_test.go",
             ],
         )
@@ -4504,6 +4507,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/unifiedresources/resolved_host_set_test.go",
                 "internal/unifiedresources/resource_operator_state_policy_test.go",
                 "internal/unifiedresources/snapshot_source_filter_test.go",
+                "internal/unifiedresources/store_history_index_test.go",
                 "internal/unifiedresources/store_test.go",
             ],
         )
