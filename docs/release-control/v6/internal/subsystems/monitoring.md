@@ -17,6 +17,19 @@
 
 ## Purpose
 
+**Correlated VM memory fallback — issue #1962 (7 September 2026)**
+
+The next Proxmox guest poll indexes live agent memory embedded in VM read views,
+not only standalone host views. Keys retain the instance/node/VMID scope. This
+restores the existing host-agent fallback when correlation removes the standalone
+host row; it does not change preferred QEMU memory sources or platform metric
+merge priority. Agent-source freshness and unavailable/invalid memory fail closed.
+`TestCorrelatedGuestMemoryNextPoll` exercises real manual registry merging,
+next-poll resolution, VM construction, card read-state projection, diagnostic
+snapshots and actual memory-threshold evaluation, plus stale/offline/unavailable
+samples and other-instance lookup. It is synthetic runtime proof, not a live
+FreeBSD installation, automatic identity-match or browser receipt.
+
 Container filesystem observations are native, resource-scoped reads. The shared
 `pkg/agents/filesystem` contract keeps measurement time, mountpoint, source,
 filesystem type and optional usage together. Unavailable reads have an error
