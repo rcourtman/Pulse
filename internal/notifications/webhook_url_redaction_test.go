@@ -16,6 +16,13 @@ func TestRedactWebhookURLSecrets(t *testing.T) {
 		input string
 		want  string
 	}{
+		"discord":                          {input: "https://discord.com/api/webhooks/123/discord-secret", want: "https://discord.com/api/webhooks/REDACTED"},
+		"discord versioned":                {input: "https://discord.com/api/v10/webhooks/123/discord-secret", want: "https://discord.com/api/v10/webhooks/REDACTED"},
+		"discord legacy":                   {input: "https://discordapp.com/api/webhooks/123/discord-secret", want: "https://discordapp.com/api/webhooks/REDACTED"},
+		"discord encoded":                  {input: "https://user:password@DISCORD.COM:443/api/webhooks/123/discord%2Dsecret", want: "https://REDACTED@DISCORD.COM:443/api/webhooks/REDACTED"},
+		"discord query":                    {input: "https://discord.com/api/webhooks/123/discord-secret?wait=true&token=query-secret", want: "https://discord.com/api/webhooks/REDACTED?wait=true&token=REDACTED"},
+		"discord lookalike":                {input: "https://discord.com.example.org/api/webhooks/status", want: "https://discord.com.example.org/api/webhooks/status"},
+		"discord unrelated":                {input: "https://discord.com/api/status", want: "https://discord.com/api/status"},
 		"slack":                            {input: "https://hooks.slack.com/services/T-test/B-test/slack-secret", want: "https://hooks.slack.com/services/REDACTED"},
 		"gov slack":                        {input: "https://hooks.slack-gov.com/services/T-test/B-test/slack-secret?token=query-secret&channel=ops", want: "https://hooks.slack-gov.com/services/REDACTED?token=REDACTED&channel=ops"},
 		"slack encoded path and authority": {input: "https://user:password@HOOKS.SLACK.COM:443/serv%69ces/T-test/B-test/slack%2Dsecret", want: "https://REDACTED@HOOKS.SLACK.COM:443/services/REDACTED"},
@@ -177,6 +184,30 @@ func TestSlackWebhookDiagnosticsRedactPath(t *testing.T) {
 	}
 	out := captured.String()
 	if !strings.Contains(out, "rate limit exceeded") || !strings.Contains(out, "/services/REDACTED") || strings.Contains(out, "slack-secret") {
+		t.Fatalf("unsafe rate-limit diagnostic: %s", out)
+	}
+}
+func TestDiscordWebhookDiagnosticsRedactPath(t *testing.T) {
+	const webhookURL = "https://discord.com/api/webhooks/123/discord-secret"
+	cause := errors.New("connection refused")
+	original := &url.Error{Op: "Post", URL: webhookURL, Err: cause}
+	redacted := redactWebhookTransportError(original)
+	if strings.Contains(redacted.Error(), "discord-secret") || !strings.Contains(redacted.Error(), "/api/webhooks/REDACTED") {
+		t.Fatalf("unsafe transport diagnostic: %v", redacted)
+	}
+	if original.URL != webhookURL || !errors.Is(redacted, cause) {
+		t.Fatal("transport error identity or cause changed")
+	}
+	var captured bytes.Buffer
+	logger := log.Logger
+	log.Logger = zerolog.New(&captured)
+	t.Cleanup(func() { log.Logger = logger })
+	nm := &NotificationManager{webhookRateLimits: make(map[string]*webhookRateLimit)}
+	for range WebhookRateLimitMax + 2 {
+		nm.checkWebhookRateLimit(webhookURL)
+	}
+	out := captured.String()
+	if !strings.Contains(out, "rate limit exceeded") || !strings.Contains(out, "/api/webhooks/REDACTED") || strings.Contains(out, "discord-secret") {
 		t.Fatalf("unsafe rate-limit diagnostic: %s", out)
 	}
 }
