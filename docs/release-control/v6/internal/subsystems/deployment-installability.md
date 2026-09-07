@@ -15,6 +15,29 @@
 
 ## Purpose
 
+### Backend preflight resource evidence
+
+The exact-source worker brackets the backend phase with bounded, read-only
+resource snapshots in stdout so the launcher's retained log keeps evidence
+when the disposable worker directory is removed after failure. The records
+include the actual Go toolchain, backend exit status, allowlisted runtime
+settings and host/cgroup counters including mapped ancestors. Environment
+and process-command dumps, credentials and application data are excluded.
+Unmapped hierarchies, missing counters and collection failures are unavailable
+evidence, not zero pressure. Collection failure must neither replace a backend
+failure nor prevent its ordinary after-boundary observation.
+
+The backend retains errexit semantics, original exit status, test commands,
+concurrency and qualification thresholds. Phase-boundary evidence cannot
+localise contention to a test, establish causation or clear historical adverse
+qualification; abrupt termination may omit the after record. The executed
+worker-function fixtures in
+`scripts/release_control/internal/release_preflight_test.py` prove successful
+and failed backend exits with successful and failed telemetry for both worker
+profiles. Collector hierarchy and confidentiality fixtures remain in
+`scripts/release_control/internal/release_resource_snapshot_test.py`. Neither
+fixture constitutes full-suite or installed-release qualification.
+
 ### Benchmark qualification evidence
 
 The Build and Test benchmark job retains `bench-metadata.txt` together with
