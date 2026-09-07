@@ -2,6 +2,7 @@ import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NotificationsAPI } from '@/api/notifications';
+import { notificationStore } from '@/stores/notifications';
 
 import { useNotificationDeliveryHealth } from '../useNotificationDeliveryHealth';
 
@@ -13,10 +14,16 @@ vi.mock('@/api/notifications', () => ({
   },
 }));
 
+vi.mock('@/stores/notifications', () => ({
+  notificationStore: { success: vi.fn(), error: vi.fn() },
+}));
+
 const healthWith = (status: string) => ({ queue: { status, failed: 3, deadLetter: 1 } }) as never;
 
 describe('useNotificationDeliveryHealth', () => {
   beforeEach(() => {
+    vi.mocked(notificationStore.success).mockReset();
+    vi.mocked(notificationStore.error).mockReset();
     vi.mocked(NotificationsAPI.getHealth).mockReset();
     vi.mocked(NotificationsAPI.dismissTerminalFailures).mockReset();
     vi.mocked(NotificationsAPI.retryTerminalFailures).mockReset();
@@ -200,6 +207,13 @@ describe('useNotificationDeliveryHealth', () => {
           expect(NotificationsAPI[action]).toHaveBeenCalledOnce();
           expect(NotificationsAPI.getHealth).toHaveBeenCalledTimes(3);
           expect(onAfterQueueAction).toHaveBeenCalledOnce();
+          // A failed health read must not reclassify an accepted queue mutation.
+          expect(notificationStore.success).toHaveBeenCalledWith(
+            action === 'retryTerminalFailures'
+              ? '2 retained deliveries queued for retry.'
+              : '2 retained failures dismissed.',
+          );
+          expect(notificationStore.error).not.toHaveBeenCalled();
           expect(state.deliveryHealth()).toBeNull();
           expect(state.deliveryHealthUnavailable()).toBe(true);
           expect(state.deliveryNeedsAttention()).toBe(true);
@@ -242,6 +256,15 @@ describe('useNotificationDeliveryHealth', () => {
             expect(NotificationsAPI[action]).toHaveBeenCalledTimes(outcome === 'rejected' ? 1 : 0);
             expect(NotificationsAPI.getHealth).toHaveBeenCalledTimes(1);
             expect(onAfterQueueAction).not.toHaveBeenCalled();
+            expect(notificationStore.success).not.toHaveBeenCalled();
+            expect(notificationStore.error).toHaveBeenCalledTimes(outcome === 'rejected' ? 1 : 0);
+            if (outcome === 'rejected') {
+              expect(notificationStore.error).toHaveBeenCalledWith(
+                action === 'retryTerminalFailures'
+                  ? 'Unable to retry retained notification deliveries.'
+                  : 'Unable to dismiss retained notification failures.',
+              );
+            }
             expect(state.deliveryHealth()).toBe(health);
             expect(state.deliveryNeedsAttention()).toBe(true);
             expect(state.deliveryHealthUnavailable()).toBe(false);
