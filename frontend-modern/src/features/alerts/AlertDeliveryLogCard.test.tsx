@@ -273,6 +273,51 @@ describe('AlertDeliveryLogCard', () => {
     expect(screen.queryByRole('list')).not.toBeInTheDocument();
   });
 
+  it('hides held rows during an outage and restores their current state on recovery', () => {
+    const [unavailable, setUnavailable] = createSignal(false);
+    const [heldEvents, setHeldEvents] = createSignal<AlertEvent[]>([
+      {
+        id: 4,
+        occurredAt: '2026-09-07T08:00:00Z',
+        type: 'notification_deferred',
+        alertId: 'quiet-hours-alert',
+        resourceName: 'nas-quiet',
+        alertType: 'usage',
+        reason: 'quiet_hours:performance',
+        message: 'Notification deferred by quiet hours.',
+      },
+    ]);
+    render(() => (
+      <AlertDeliveryLogCard
+        log={{ ...log, entries: [] }}
+        unavailable={unavailable()}
+        refreshing={false}
+        onRefresh={vi.fn()}
+        webhooks={[]}
+        heldEvents={heldEvents()}
+      />
+    ));
+
+    expect(screen.getByText('Deferred')).toBeInTheDocument();
+    setUnavailable(true);
+    expect(screen.getByRole('alert')).toHaveTextContent(/could not read the delivery log/);
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
+    expect(screen.queryByText('nas-quiet (usage)')).not.toBeInTheDocument();
+    expect(screen.queryByText(/No alert deliveries were attempted/)).not.toBeInTheDocument();
+
+    setUnavailable(false);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText('Deferred')).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+
+    setUnavailable(true);
+    setHeldEvents([]);
+    setUnavailable(false);
+    expect(screen.queryByText('Deferred')).not.toBeInTheDocument();
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
+    expect(screen.getByText(/No alert deliveries were attempted/)).toBeInTheDocument();
+  });
+
   it('reports an unreadable log as unavailable instead of empty', () => {
     render(() => (
       <AlertDeliveryLogCard
