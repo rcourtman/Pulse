@@ -271,7 +271,7 @@ before money changes hands.
 ### Evaluating without a licence
 
 Self-service evaluation is available from the signed provider bundle published
-with Pulse v6.2.1. Use this exact release asset and its integrity sidecars; do
+with Pulse v6.4.1. Use this exact release asset and its integrity sidecars; do
 **not** download the moving `main` branch archive or run its `setup.sh` as
 root. For a later release, first confirm its release page contains the
 versioned provider archive, checksum, and SSH signature before changing the
@@ -281,7 +281,7 @@ Download the versioned asset, verify it with Pulse's pinned release key, and
 only then extract and run the guided setup:
 
 ```bash
-export PULSE_VERSION=v6.2.1
+export PULSE_VERSION=v6.4.1
 export PULSE_MSP_BUNDLE="pulse-provider-msp-${PULSE_VERSION}.tar.gz"
 export PULSE_RELEASE_BASE="https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}"
 
@@ -301,8 +301,11 @@ cd "pulse-provider-msp-${PULSE_VERSION}"
 sudo -E bash ./setup.sh
 ```
 
-The v6.2.1 evaluation request is anonymous. If you want setup help, start from
-the [Pulse MSP evaluation page](https://pulserelay.pro/msp.html#evaluate) first;
+The evaluation request is anonymous unless you export
+`PULSE_PROVIDER_MSP_EVAL_EMAIL` before running `setup.sh`, in which case that
+address is attached to the licence so you can be contacted about it. If you
+want setup help, start from the
+[Pulse MSP evaluation page](https://pulserelay.pro/msp.html#evaluate) first;
 that contact request remains separate from the licence activation.
 
 The host needs Ubuntu 24.04 or similar, a domain you can point at it, and
@@ -313,9 +316,10 @@ Traefik dnsChallenge provider works by setting `ACME_DNS_PROVIDER` in `.env`
 and putting that provider's credential variables in `dns-credentials.env`.
 
 Leave `CP_PROVIDER_MSP_LICENSE_FILE` blank and `setup.sh` self-issues a
-2-client evaluation licence. The v6.2.1 bundle sends only the public half of
-the signing key generated on your host. The private key, client inventory,
-credentials, and contact details never leave the machine. You can then onboard
+2-client evaluation licence. The v6.4.1 bundle sends the public half of the
+signing key generated on your host, a setup-stage marker, and a signup-source
+label. The private key, client inventory, and credentials never leave the
+machine, and no contact detail is sent unless you set one. You can then onboard
 two real clients and confirm the isolation boundary on your own infrastructure
 before buying.
 
