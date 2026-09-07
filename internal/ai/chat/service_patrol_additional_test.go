@@ -264,7 +264,7 @@ func TestService_ExecutePatrolStream_Success(t *testing.T) {
 	}
 }
 
-func TestService_ExecutePatrolStream_UsesFreshFSMAndAcceptsCoreValidatedFindingWrite(t *testing.T) {
+func TestService_ExecutePatrolStream_AcceptsCoreValidatedFindingWriteWithoutSyntheticRead(t *testing.T) {
 	store, err := NewSessionStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to create session store: %v", err)
@@ -272,14 +272,6 @@ func TestService_ExecutePatrolStream_UsesFreshFSMAndAcceptsCoreValidatedFindingW
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	recorder := &patrolReportRecorder{checked: true}
 	executor.SetPatrolFindingCreator(recorder)
-
-	// A previous invocation may have ended while verifying an infrastructure
-	// write. The shared session ID is only a forensic key for Patrol and must not
-	// carry that workflow state into the next detection run.
-	staleFSM := store.GetSessionFSM("patrol-main")
-	staleFSM.State = StateVerifying
-	staleFSM.WroteThisEpisode = true
-	staleFSM.ReadAfterWrite = false
 
 	service := &Service{
 		started:  true,
@@ -340,9 +332,7 @@ func TestService_ExecutePatrolStream_UsesFreshFSMAndAcceptsCoreValidatedFindingW
 	if providerCalls != 2 {
 		t.Fatalf("provider calls = %d, want report plus bounded summary", providerCalls)
 	}
-	if staleFSM.State != StateVerifying || staleFSM.ReadAfterWrite {
-		t.Fatalf("Patrol invocation mutated persisted forensic-session FSM: %+v", staleFSM)
-	}
+
 }
 
 func TestRestrictPatrolProviderToolsFailsClosed(t *testing.T) {

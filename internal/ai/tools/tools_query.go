@@ -2152,14 +2152,18 @@ func (e *PulseToolExecutor) registerQueryTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseQueryToolName,
-			Description: `Query and search canonical infrastructure resources. Start here to discover systems, workloads, storage, and disks by name. Actions: search, get, config, topology, list, health. For app-container get, filesystems reports observed capacity at each mountpoint, not container quotas. An observation error has no usage payload. Mounts describe configuration. Health returns the connection overview by default, or the canonical resource projection when resource_id is provided. command_agent_connected describes live command transport, independently of monitoring collection or freshness. Missing connection fields were not observed. can_execute describes connected transport with control enabled, not approval for a particular operation.`,
+			Description: `Query and search canonical infrastructure resources. Start here to discover systems, workloads, storage, and disks by name. Actions: search, get, config, topology, list, health, action. Use action with action_id to read the canonical persisted plan, decision state and independently verified execution outcome. Inventory and incident history can lag execution and cannot establish whether an action was approved or run. For app-container get, filesystems reports observed capacity at each mountpoint, not container quotas. An observation error has no usage payload. Mounts describe configuration. Health returns the connection overview by default, or the canonical resource projection when resource_id is provided. command_agent_connected describes live command transport, independently of monitoring collection or freshness. Missing connection fields were not observed. can_execute describes connected transport with control enabled, not approval for a particular operation.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"action": {
 						Type:        "string",
 						Description: "Query action to perform",
-						Enum:        []string{"search", "get", "config", "topology", "list", "health"},
+						Enum:        []string{"search", "get", "config", "topology", "list", "health", "action"},
+					},
+					"action_id": {
+						Type:        "string",
+						Description: "Exact canonical action ID (for action=action). Reads current persisted state without approving, executing or refreshing the plan.",
 					},
 					"query": {
 						Type:        "string",
@@ -3632,6 +3636,8 @@ func matchesCanonicalResourceID(resource unifiedresources.Resource, resourceID s
 func (e *PulseToolExecutor) executeQuery(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	action, _ := args["action"].(string)
 	switch action {
+	case "action":
+		return e.executeQueryAction(ctx, args)
 	case "search":
 		return e.executeSearchResources(ctx, args)
 	case "get":
@@ -3645,7 +3651,7 @@ func (e *PulseToolExecutor) executeQuery(ctx context.Context, args map[string]in
 	case "health":
 		return e.executeGetHealth(ctx, args)
 	default:
-		return NewErrorResult(fmt.Errorf("unknown action: %s. Use: search, get, config, topology, list, health", action)), nil
+		return NewErrorResult(fmt.Errorf("unknown action: %s. Use: search, get, config, topology, list, health, action", action)), nil
 	}
 }
 

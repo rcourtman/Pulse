@@ -136,34 +136,11 @@ func TestPatrolArchitectureDocMatchesInvestigationLimits(t *testing.T) {
 	}
 }
 
-func TestAssistantSafetyDocMatchesSessionStateMachine(t *testing.T) {
-	source := readRepoFile(t, "internal/ai/chat/fsm.go")
+func TestAssistantSafetyDocMatchesToolKinds(t *testing.T) {
 	doc := readRepoFile(t, assistantSafetyDoc)
-
-	states := constStringValues(t, source, `State\w+\s+SessionState\s*=\s*"([A-Z_]+)"`)
-	assertDocumentsValues(t, assistantSafetyDoc, doc, states, "session state")
-
-	documentedStates := docTableCodeValues(doc, "| State | What it means |")
-	for _, value := range documentedStates {
-		if !containsString(states, value) {
-			t.Errorf("%s documents session state %q which is not declared in internal/ai/chat/fsm.go", assistantSafetyDoc, value)
-		}
-	}
-
-	// Tool kinds drive the transitions, so a new kind changes the machine's
-	// behaviour and must reach the document. They are an int iota, so the wire
-	// names come from the String method rather than from the const block.
 	kindSource := readRepoFile(t, "internal/agentcapabilities/tool_call.go")
 	kinds := constStringValues(t, kindSource, `case ToolCallKind\w+:\s*\n\s*return "([a-z_]+)"`)
 	assertDocumentsValues(t, assistantSafetyDoc, doc, kinds, "tool kind")
-
-	ttl := singleConstValue(t, source, `RecoveryTTL\s*=\s*(\d+)\s*\*\s*time\.Minute`, "RecoveryTTL")
-	if ttl != "10" {
-		t.Errorf("RecoveryTTL is now %s minutes; %s still says ten minutes", ttl, assistantSafetyDoc)
-	}
-	if !strings.Contains(doc, "ten minutes") {
-		t.Errorf("%s no longer states the pending-recovery expiry", assistantSafetyDoc)
-	}
 }
 
 func TestAssistantArchitectureDocMatchesAgentErrorCodes(t *testing.T) {
@@ -230,14 +207,6 @@ func docNamedErrorCodes(doc string) []string {
 func TestAssistantArchitectureDocMatchesLoopBounds(t *testing.T) {
 	source := readRepoFile(t, "internal/ai/chat/agentic.go")
 	doc := readRepoFile(t, assistantArchitectureDoc)
-
-	blocks := singleConstValue(t, source, `maxLookGateBlocks\s*=\s*(\d+)`, "maxLookGateBlocks")
-	if blocks != "2" {
-		t.Errorf("maxLookGateBlocks is now %s; %s still says the gate allows two blocks", blocks, assistantArchitectureDoc)
-	}
-	if !strings.Contains(doc, "two blocks") {
-		t.Errorf("%s no longer states the look-before-asking gate bound", assistantArchitectureDoc)
-	}
 
 	// The concurrency cap is described in the parallel-execution comment rather
 	// than a named constant, so the comment itself is the contract.

@@ -1,15 +1,6 @@
 package chat
 
-// Regression transcript for GitHub issue #1782. A paying operator asked the
-// Assistant (Gemini, Controlled mode) to reboot five Windows VMs matching a
-// name pattern. The model resolved all five with pulse_query, then ended the
-// run with a markdown report ("Next steps", an invented prerequisite) and
-// never submitted pulse_control. The expected behaviour is one governed
-// pulse_control plan per target, each awaiting approval in Pulse.
-//
-// The scripted provider below reproduces the field transcript turn by turn.
-// On a build without the advertised-action gate the run ends at turn 2 with
-// the report and zero pulse_control calls, which is the failing assertion.
+// Model-owned continuation retains actual tool authority and conversation evidence.
 
 import (
 	"context"
@@ -24,16 +15,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/require"
 )
-
-const gateTestReport = `## Summary
-I found five Windows VMs matching "win": win-01, win-02, win-03, win-04, win-05.
-
-## Limitation
-The reboot could not be scheduled because these VMs are not yet bound to a discovery session in the current context.
-
-## Next steps
-1. Run a discovery for the VMs.
-2. Ask me again and I will reboot them.`
 
 func gateTestProxmoxVM(name string, vmid int) unifiedresources.Resource {
 	capabilities := []unifiedresources.ResourceCapability{}
@@ -117,220 +98,90 @@ func gateTestControlCalls(vms []unifiedresources.Resource, action string) []prov
 	return calls
 }
 
-func gateTestContainsBlock(req providers.ChatRequest) bool {
-	for _, msg := range req.Messages {
-		if msg.Role == "user" && strings.Contains(msg.Content, "BLOCKED: the user asked you to reboot") {
-			return true
-		}
-	}
-	return false
-}
-
-// TestAgenticLoop_BulkLifecycleRequestEndsInPulseControlPlans is the #1782
-// transcript: resolve five VMs, try to end with a report, and prove the run
-// instead submits one governed plan per target before answering.
-func TestAgenticLoop_BulkLifecycleRequestEndsInPulseControlPlans(t *testing.T) {
+func TestAgenticLoop_ModelPlansBulkLifecycleWithoutSyntheticVerification(t *testing.T) {
 	vms := []unifiedresources.Resource{
-		gateTestProxmoxVM("win-01", 101),
-		gateTestProxmoxVM("win-02", 102),
-		gateTestProxmoxVM("win-03", 103),
-		gateTestProxmoxVM("win-04", 104),
-		gateTestProxmoxVM("win-05", 105),
+		gateTestProxmoxVM("win-01", 101), gateTestProxmoxVM("win-02", 102),
+		gateTestProxmoxVM("win-03", 103), gateTestProxmoxVM("win-04", 104), gateTestProxmoxVM("win-05", 105),
 	}
 	planner := &gateTestPlanner{}
-	exec := newGateTestExecutor(t, planner, vms...)
-
-	var (
-		mu               sync.Mutex
-		turn             int
-		blockSeenAtTurn  int
-		requestsPerTurn  []providers.ChatRequest
-		reportStreamed   bool
-		finalAnswerTurns int
-	)
+	executor := newGateTestExecutor(t, planner, vms...)
+	const final = "Five reboot plans are awaiting approval. No VM has been restarted."
+	turn := 0
 	provider := &stubStreamingProvider{}
-	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
-		mu.Lock()
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
 		turn++
-		current := turn
-		requestsPerTurn = append(requestsPerTurn, req)
-		if gateTestContainsBlock(req) && blockSeenAtTurn == 0 {
-			blockSeenAtTurn = current
-		}
-		mu.Unlock()
-
-		switch current {
+		switch turn {
 		case 1:
-			// The model resolves the targets exactly as in the field.
-			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{
-				ToolCalls: []providers.ToolCall{{
-					ID:    "q-1",
-					Name:  "pulse_query",
-					Input: map[string]interface{}{"action": "search", "query": "win", "type": "vm"},
-				}},
-			}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{ID: "q-1", Name: "pulse_query", Input: map[string]interface{}{"action": "search", "query": "win", "type": "vm"}}}}})
 		case 2:
-			// The field failure: a report with an invented prerequisite.
-			mu.Lock()
-			reportStreamed = true
-			mu.Unlock()
-			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: gateTestReport}})
-			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
-		case 3:
-			// Steered by the gate, the model submits one plan per target.
-			require.True(t, gateTestContainsBlock(req), "turn 3 must carry the advertised-action correction")
 			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: gateTestControlCalls(vms, "reboot")}})
-		case 4:
-			// Post-write verification read demanded by the FSM.
-			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{
-				ToolCalls: []providers.ToolCall{{
-					ID:    "q-2",
-					Name:  "pulse_query",
-					Input: map[string]interface{}{"action": "search", "query": "win", "type": "vm"},
-				}},
-			}})
-		default:
-			mu.Lock()
-			finalAnswerTurns++
-			mu.Unlock()
-			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "Planned a reboot for all five VMs; approve them in Pulse to proceed."}})
+		case 3:
+			require.NotEmpty(t, req.Tools, "preparing plans must leave investigation tools available")
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: final}})
 			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		default:
+			t.Fatalf("unexpected synthetic continuation turn %d", turn)
 		}
 		return nil
 	}
-
-	loop := NewAgenticLoop(provider, exec, "base prompt")
-	loop.SetSessionFSM(NewSessionFSM())
-
-	messages, err := loop.ExecuteWithTools(
-		context.Background(),
-		"gate-session",
-		[]Message{{Role: "user", Content: "Reboot all my Windows VMs whose name starts with win-. There should be five of them."}},
-		nil,
-		func(StreamEvent) {},
-	)
+	var streamed strings.Builder
+	loop := NewAgenticLoop(provider, executor, "Use canonical capability facts and explain pending approval honestly.")
+	messages, err := loop.ExecuteWithTools(context.Background(), "bulk-plans", []Message{{Role: "user", Content: "Reboot the five Windows VMs matching win-."}}, nil, func(event StreamEvent) {
+		if event.Type == "content" {
+			var data ContentData
+			require.NoError(t, json.Unmarshal(event.Data, &data))
+			streamed.WriteString(data.Text)
+		}
+	})
 	require.NoError(t, err)
-
+	require.Equal(t, 3, turn)
+	require.Len(t, planner.snapshot(), 5)
+	var saved strings.Builder
 	planned := map[string]bool{}
 	for _, msg := range messages {
-		if msg.ToolResult != nil && msg.ToolResult.ToolUseID == "q-1" {
-			require.False(t, msg.ToolResult.IsError, "resolution query must succeed: %s", msg.ToolResult.Content)
-			require.Contains(t, msg.ToolResult.Content, "win-05", "resolution query must list every target: %s", msg.ToolResult.Content)
+		if msg.Role == "assistant" {
+			saved.WriteString(msg.Content)
 		}
 		if msg.ToolResult == nil || !strings.HasPrefix(msg.ToolResult.ToolUseID, "c-") {
 			continue
 		}
-		require.False(t, msg.ToolResult.IsError, "pulse_control must plan, not error: %s", msg.ToolResult.Content)
+		require.False(t, msg.ToolResult.IsError, msg.ToolResult.Content)
 		var payload map[string]any
-		require.NoError(t, json.Unmarshal([]byte(msg.ToolResult.Content), &payload), msg.ToolResult.Content)
-		require.Equal(t, true, payload["planned"], payload)
-		require.Equal(t, true, payload["requires_approval"], "Controlled mode plans wait for approval: %v", payload)
-		require.Equal(t, "reboot", payload["capability"], payload)
+		require.NoError(t, json.Unmarshal([]byte(msg.ToolResult.Content), &payload))
+		require.Equal(t, true, payload["planned"])
+		require.Equal(t, true, payload["requires_approval"])
 		planned[fmt.Sprint(payload["resource_id"])] = true
 	}
-	require.Len(t, planned, len(vms), "one governed plan per resolved target; got %v", planned)
-
-	requests := planner.snapshot()
-	require.Len(t, requests, len(vms))
-	for _, req := range requests {
-		require.True(t, strings.HasPrefix(req.ResourceID, "vm-pve-win-0"), "plans must carry the canonical unified id, got %q", req.ResourceID)
-		require.Equal(t, "reboot", req.CapabilityName)
-	}
-
-	mu.Lock()
-	defer mu.Unlock()
-	require.True(t, reportStreamed, "the scripted field report must have been produced")
-	require.Equal(t, 3, blockSeenAtTurn, "the gate must refuse the report once and steer the very next turn")
-	require.Equal(t, 1, finalAnswerTurns, "after planning and verifying, the answer is accepted")
-	require.Len(t, requestsPerTurn, 5)
-	require.True(t, hasFinalAssistantText(messages))
+	require.Len(t, planned, 5)
+	require.Equal(t, final, streamed.String())
+	require.Equal(t, streamed.String(), saved.String(), "saved history must preserve the answer that was streamed")
 }
 
-// TestAgenticLoop_AdvertisedActionGateFailsOpenAfterOneRefusal pins the
-// bounded escape hatch: a model that still answers in prose after the single
-// correction is not livelocked, and the run ends with its answer.
-func TestAgenticLoop_AdvertisedActionGateFailsOpenAfterOneRefusal(t *testing.T) {
-	vms := []unifiedresources.Resource{gateTestProxmoxVM("win-01", 101)}
-	planner := &gateTestPlanner{}
-	exec := newGateTestExecutor(t, planner, vms...)
-
-	turn := 0
-	provider := &stubStreamingProvider{}
-	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
-		turn++
-		if turn == 1 {
-			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{
-				ToolCalls: []providers.ToolCall{{ID: "q-1", Name: "pulse_query", Input: map[string]interface{}{"action": "search", "query": "win"}}},
-			}})
-			return nil
-		}
-		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "I will not reboot win-01: its console shows an in-progress Windows update (pulse_read evidence above)."}})
-		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
-		return nil
-	}
-
-	loop := NewAgenticLoop(provider, exec, "base prompt")
-	loop.SetSessionFSM(NewSessionFSM())
-	messages, err := loop.ExecuteWithTools(context.Background(), "gate-failopen", []Message{{Role: "user", Content: "please reboot win-01"}}, nil, func(StreamEvent) {})
-	require.NoError(t, err)
-	require.Equal(t, 3, turn, "query, refused prose, accepted prose")
-	require.Empty(t, planner.snapshot(), "the gate steers; it never submits on the model's behalf")
-	require.True(t, hasFinalAssistantText(messages))
-}
-
-// TestAgenticLoop_AdvertisedActionGateLeavesQuestionsAlone pins that an
-// operator asking *about* a lifecycle event keeps a normal investigative
-// answer: the gate only applies to action requests.
-func TestAgenticLoop_AdvertisedActionGateLeavesQuestionsAlone(t *testing.T) {
-	vms := []unifiedresources.Resource{gateTestProxmoxVM("win-01", 101)}
-	planner := &gateTestPlanner{}
-	exec := newGateTestExecutor(t, planner, vms...)
-
-	turn := 0
-	provider := &stubStreamingProvider{}
-	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
-		turn++
-		require.False(t, gateTestContainsBlock(req), "a question must never trip the advertised-action gate")
-		if turn == 1 {
-			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{
-				ToolCalls: []providers.ToolCall{{ID: "q-1", Name: "pulse_query", Input: map[string]interface{}{"action": "search", "query": "win"}}},
-			}})
-			return nil
-		}
-		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "win-01 is running; nothing in the current state explains a reboot."}})
-		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
-		return nil
-	}
-
-	loop := NewAgenticLoop(provider, exec, "base prompt")
-	loop.SetSessionFSM(NewSessionFSM())
-	_, err := loop.ExecuteWithTools(context.Background(), "gate-question", []Message{{Role: "user", Content: "Why did win-01 reboot last night?"}}, nil, func(StreamEvent) {})
-	require.NoError(t, err)
-	require.Equal(t, 2, turn)
-	require.Empty(t, planner.snapshot())
-}
-
-func TestRequestedLifecycleAction(t *testing.T) {
-	cases := []struct {
-		text   string
-		action string
-		ok     bool
-	}{
-		{"Reboot all my Windows VMs matching win-*", "reboot", true},
-		{"can you restart the five win VMs?", "reboot", true},
-		{"Please power-cycle win-01", "reboot", true},
-		{"shut down win-02 gracefully", "shutdown", true},
-		{"stop win-03 now", "stop", true},
-		{"start win-04 again", "start", true},
-		{"Why did win-01 reboot last night?", "", false},
-		{"Is it safe to stop win-02?", "", false},
-		{"Should I restart win-03?", "", false},
-		{"how is my infrastructure doing?", "", false},
-		{"", "", false},
-	}
-	for _, tc := range cases {
-		action, ok := requestedLifecycleAction(tc.text)
-		require.Equal(t, tc.ok, ok, tc.text)
-		require.Equal(t, tc.action, action, tc.text)
+func TestAgenticLoop_ModelMayConcludeWithoutAnAction(t *testing.T) {
+	for _, prompt := range []string{"Please reboot win-01", "Why did win-01 reboot last night?"} {
+		t.Run(prompt, func(t *testing.T) {
+			planner := &gateTestPlanner{}
+			executor := newGateTestExecutor(t, planner, gateTestProxmoxVM("win-01", 101))
+			turn := 0
+			const answer = "The current snapshot cannot establish whether rebooting is appropriate. I have prepared no action."
+			provider := &stubStreamingProvider{}
+			provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+				turn++
+				if turn == 1 {
+					callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{ID: "q-1", Name: "pulse_query", Input: map[string]interface{}{"action": "search", "query": "win"}}}}})
+				} else {
+					require.Equal(t, 2, turn, "lifecycle words must not force a corrective provider turn")
+					callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: answer}})
+					callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+				}
+				return nil
+			}
+			loop := NewAgenticLoop(provider, executor, "base prompt")
+			messages, err := loop.ExecuteWithTools(context.Background(), "no-action", []Message{{Role: "user", Content: prompt}}, nil, func(StreamEvent) {})
+			require.NoError(t, err)
+			require.Equal(t, 2, turn)
+			require.Empty(t, planner.snapshot())
+			require.Equal(t, answer, messages[len(messages)-1].Content)
+		})
 	}
 }

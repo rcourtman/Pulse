@@ -22,7 +22,7 @@ const commandPreview = (input: string, tool: string, rawInput?: string): string 
 describe('pendingToolActionLabel', () => {
   it('maps every known tool to its in-progress verb, honoring pulse_ normalization', () => {
     expect(pendingToolActionLabel('pulse_run_command')).toBe('Writing command...');
-    expect(pendingToolActionLabel('pulse_control')).toBe('Writing command...');
+    expect(pendingToolActionLabel('pulse_control')).toBe('Preparing action plan...');
     expect(pendingToolActionLabel('pulse_read')).toBe('Preparing read...');
     expect(pendingToolActionLabel('pulse_query')).toBe('Preparing query...');
     expect(pendingToolActionLabel('pulse_fetch_url')).toBe('Fetching URL...');
@@ -56,7 +56,7 @@ describe('pendingToolActionLabel', () => {
 describe('pendingToolActionState', () => {
   it('classifies write, prepare, fetch, and check tools distinctly', () => {
     expect(pendingToolActionState('pulse_run_command')).toBe('writing');
-    expect(pendingToolActionState('pulse_control')).toBe('writing');
+    expect(pendingToolActionState('pulse_control')).toBe('preparing');
     expect(pendingToolActionState('pulse_query')).toBe('preparing');
     expect(pendingToolActionState('pulse_fetch_url')).toBe('fetching');
     expect(pendingToolActionState('pulse_get_disk_health')).toBe('checking');

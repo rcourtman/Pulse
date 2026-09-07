@@ -190,7 +190,6 @@ func (s *Service) ExecuteInvestigationStream(ctx context.Context, req Investigat
 		return nil, fmt.Errorf("failed to ensure investigation session: %w", err)
 	}
 	executor.SetResolvedContext(sessions.GetResolvedContext(session.ID))
-	loop.SetSessionFSM(sessions.GetSessionFSM(session.ID))
 	loop.SetKnowledgeAccumulator(sessions.NewKnowledgeAccumulatorForRun(session.ID))
 
 	userMsg := Message{

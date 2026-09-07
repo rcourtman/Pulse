@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
 // maxLabelLen is the maximum length for a metric label value
@@ -29,10 +28,6 @@ func sanitizeLabel(s string) string {
 // AIMetrics manages Prometheus instrumentation for AI chat safety/reliability.
 // These metrics help prove the structural guarantees stay fixed over time.
 type AIMetrics struct {
-	// FSM blocks - tracks when workflow gates prevent unsafe actions
-	fsmToolBlock  *prometheus.CounterVec
-	fsmFinalBlock *prometheus.CounterVec
-
 	// Strict resolution blocks - tracks when undiscovered resources are blocked
 	strictResolutionBlock *prometheus.CounterVec
 
@@ -41,10 +36,6 @@ type AIMetrics struct {
 
 	// Phantom detection - tracks hallucinated tool execution claims
 	phantomDetected *prometheus.CounterVec
-
-	// Policy-block self-correction - tracks model-owned follow-up after blocked tools.
-	autoRecoveryAttempt *prometheus.CounterVec
-	autoRecoverySuccess *prometheus.CounterVec
 
 	// Loop health - tracks agentic loop iterations
 	agenticIterations *prometheus.CounterVec
@@ -66,24 +57,6 @@ func GetAIMetrics() *AIMetrics {
 
 func newAIMetrics() *AIMetrics {
 	m := &AIMetrics{
-		fsmToolBlock: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Namespace: "pulse",
-				Subsystem: "ai",
-				Name:      "fsm_tool_block_total",
-				Help:      "Total FSM blocks of tool execution by state, tool, and kind",
-			},
-			[]string{"state", "tool", "kind"},
-		),
-		fsmFinalBlock: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Namespace: "pulse",
-				Subsystem: "ai",
-				Name:      "fsm_final_block_total",
-				Help:      "Total FSM blocks of final answer by state",
-			},
-			[]string{"state"},
-		),
 		strictResolutionBlock: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Namespace: "pulse",
@@ -111,24 +84,6 @@ func newAIMetrics() *AIMetrics {
 			},
 			[]string{"provider", "model"},
 		),
-		autoRecoveryAttempt: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Namespace: "pulse",
-				Subsystem: "ai",
-				Name:      "auto_recovery_attempt_total",
-				Help:      "Total model self-correction opportunities after policy blocks by error code and tool",
-			},
-			[]string{"error_code", "tool"},
-		),
-		autoRecoverySuccess: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Namespace: "pulse",
-				Subsystem: "ai",
-				Name:      "auto_recovery_success_total",
-				Help:      "Total successful model-owned follow-ups after policy blocks by error code and tool",
-			},
-			[]string{"error_code", "tool"},
-		),
 		agenticIterations: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Namespace: "pulse",
@@ -142,27 +97,13 @@ func newAIMetrics() *AIMetrics {
 
 	// Register all metrics
 	prometheus.MustRegister(
-		m.fsmToolBlock,
-		m.fsmFinalBlock,
 		m.strictResolutionBlock,
 		m.routingMismatchBlock,
 		m.phantomDetected,
-		m.autoRecoveryAttempt,
-		m.autoRecoverySuccess,
 		m.agenticIterations,
 	)
 
 	return m
-}
-
-// RecordFSMToolBlock records when FSM blocks a tool execution
-func (m *AIMetrics) RecordFSMToolBlock(state SessionState, tool string, kind ToolKind) {
-	m.fsmToolBlock.WithLabelValues(string(state), sanitizeLabel(tool), kind.String()).Inc()
-}
-
-// RecordFSMFinalBlock records when FSM blocks a final answer
-func (m *AIMetrics) RecordFSMFinalBlock(state SessionState) {
-	m.fsmFinalBlock.WithLabelValues(string(state)).Inc()
 }
 
 // RecordStrictResolutionBlock records when strict resolution blocks an action
@@ -182,18 +123,6 @@ func (m *AIMetrics) RecordRoutingMismatchBlock(tool, targetKind, childKind strin
 // RecordPhantomDetected records when phantom execution is detected
 func (m *AIMetrics) RecordPhantomDetected(provider, model string) {
 	m.phantomDetected.WithLabelValues(sanitizeLabel(provider), sanitizeLabel(model)).Inc()
-}
-
-// RecordAutoRecoveryAttempt records when the model receives a recoverable policy block.
-// Definition: "we returned policy facts and the model may decide the next step"
-func (m *AIMetrics) RecordAutoRecoveryAttempt(errorCode, tool string) {
-	m.autoRecoveryAttempt.WithLabelValues(sanitizeLabel(errorCode), sanitizeLabel(tool)).Inc()
-}
-
-// RecordAutoRecoverySuccess records a successful model-owned follow-up after a policy block.
-// Definition: "a previously blocked operation later succeeded without Pulse forcing a tool retry"
-func (m *AIMetrics) RecordAutoRecoverySuccess(errorCode, tool string) {
-	m.autoRecoverySuccess.WithLabelValues(sanitizeLabel(errorCode), sanitizeLabel(tool)).Inc()
 }
 
 // RecordAgenticIteration records an agentic loop iteration (one LLM call).
@@ -219,22 +148,6 @@ func NewAIMetricsTelemetryCallback() *AIMetricsTelemetryCallback {
 func (c *AIMetricsTelemetryCallback) RecordStrictResolutionBlock(tool, action string) {
 	if c.metrics != nil {
 		c.metrics.RecordStrictResolutionBlock(tool, action)
-		// Strict resolution returns policy facts; the model owns any follow-up.
-		c.metrics.RecordAutoRecoveryAttempt(agentcapabilities.ErrCodeStrictResolution, tool)
-	}
-}
-
-// RecordAutoRecoveryAttempt implements tools.TelemetryCallback
-func (c *AIMetricsTelemetryCallback) RecordAutoRecoveryAttempt(errorCode, tool string) {
-	if c.metrics != nil {
-		c.metrics.RecordAutoRecoveryAttempt(errorCode, tool)
-	}
-}
-
-// RecordAutoRecoverySuccess implements tools.TelemetryCallback
-func (c *AIMetricsTelemetryCallback) RecordAutoRecoverySuccess(errorCode, tool string) {
-	if c.metrics != nil {
-		c.metrics.RecordAutoRecoverySuccess(errorCode, tool)
 	}
 }
 
@@ -242,7 +155,5 @@ func (c *AIMetricsTelemetryCallback) RecordAutoRecoverySuccess(errorCode, tool s
 func (c *AIMetricsTelemetryCallback) RecordRoutingMismatchBlock(tool, targetKind, childKind string) {
 	if c.metrics != nil {
 		c.metrics.RecordRoutingMismatchBlock(tool, targetKind, childKind)
-		// Routing mismatch returns policy facts; the model owns any follow-up.
-		c.metrics.RecordAutoRecoveryAttempt(agentcapabilities.ErrCodeRoutingMismatch, tool)
 	}
 }

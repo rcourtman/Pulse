@@ -1,5 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { parseToolInputSummary } from '../toolPresentation';
+import { canonicalToolActionURL, parseToolInputSummary } from '../toolPresentation';
+
+describe('canonical action links', () => {
+  it('uses the bound action identity, never a supplied destination URL', () => {
+    const output = JSON.stringify({
+      planned: true,
+      action_id: 'act-proof',
+      plan: { actionId: 'act-proof' },
+      action_url: 'https://untrusted.invalid',
+    });
+    expect(canonicalToolActionURL('pulse_control', true, output)).toBe('/actions?action=act-proof');
+    expect(canonicalToolActionURL('pulse_control', false, output)).toBe('');
+    expect(canonicalToolActionURL('pulse_read', true, output)).toBe('');
+    expect(
+      canonicalToolActionURL(
+        'pulse_control',
+        true,
+        JSON.stringify({ planned: true, action_id: 'act-proof', plan: { actionId: 'different' } }),
+      ),
+    ).toBe('');
+  });
+});
 
 const readSummary = (record: Record<string, unknown>) =>
   parseToolInputSummary(JSON.stringify(record), 'pulse_read');
@@ -53,6 +74,12 @@ describe('formatPulseReadInputSummary (read tool)', () => {
 });
 
 describe('formatQueryInputSummary (query tool)', () => {
+  it('identifies a canonical action read separately from current resource state', () => {
+    expect(querySummary({ action: 'action', action_id: 'act-proof' })).toBe(
+      'read recorded action outcome',
+    );
+  });
+
   it('summarizes search with and without a query term', () => {
     expect(querySummary({ action: 'search', query: 'web-101' })).toBe('search "web-101"');
     expect(querySummary({ action: 'search' })).toBe('search resources');
@@ -94,6 +121,12 @@ describe('formatQueryInputSummary (query tool)', () => {
 });
 
 describe('formatStructuredInputSummary mode split (read vs run_command vs control)', () => {
+  it('describes a typed lifecycle request as planning, including a refused request', () => {
+    expect(controlSummary({ type: 'resource', action: 'start', resource_id: 'vm-110' })).toBe(
+      'Plan start on vm-110',
+    );
+  });
+
   it('routes run_command and control to write mode, producing "Run command"', () => {
     expect(runCommandSummary({ command: 'systemctl restart nginx' })).toBe('Run command');
     expect(controlSummary({ command: 'reboot', target_host: 'node-1' })).toBe(

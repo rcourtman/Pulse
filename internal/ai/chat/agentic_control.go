@@ -108,14 +108,6 @@ func (a *AgenticLoop) currentExecutionProfile() tools.ExecutionProfile {
 	return a.executionProfile
 }
 
-// SetSessionFSM sets the workflow FSM for the current session.
-// This must be called before ExecuteWithTools to enable structural guarantees.
-func (a *AgenticLoop) SetSessionFSM(fsm *SessionFSM) {
-	a.mu.Lock()
-	a.sessionFSM = fsm
-	a.mu.Unlock()
-}
-
 // SetKnowledgeAccumulator sets the knowledge accumulator for fact extraction.
 // This must be called before Execute to enable knowledge accumulation.
 func (a *AgenticLoop) SetKnowledgeAccumulator(ka *KnowledgeAccumulator) {

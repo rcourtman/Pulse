@@ -24,8 +24,13 @@ func formatToolInputForFrontend(toolName string, input map[string]interface{}, e
 		rawInput = string(inputBytes)
 	}
 
+	if toolName == agentcapabilities.PulseControlToolName {
+		action, _ := input["action"].(string)
+		resource, _ := input["resource_id"].(string)
+		return fmt.Sprintf("Plan %s on %s", action, resource), rawInput
+	}
 	// Special handling for command execution tools to avoid showing raw JSON.
-	if toolName == agentcapabilities.PulseControlToolName || toolName == agentcapabilities.PulseRunCommandToolName || toolName == "control" {
+	if toolName == agentcapabilities.PulseRunCommandToolName || toolName == "control" {
 		if cmd, ok := input["command"].(string); ok {
 			return fmt.Sprintf("Running: %s", cmd), rawInput
 		}

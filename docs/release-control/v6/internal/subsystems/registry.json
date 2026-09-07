@@ -629,7 +629,7 @@
     },
     {
       "path": "internal/agentcapabilities/invocation.go",
-      "rationale": "the canonical registry-owned invocation descriptors (per-tool discriminator, enum-exact case coverage, closed workflow-kind and mutation-target vocabularies, deep-copied lookups, fail-closed classification with unknown targets denied at policy evaluation) are both the native Assistant/FSM safety-classification contract and the canonical API/agent governed-invocation policy contract consumed by provider projection and registry runtime enforcement; canonical tool names cannot carry descriptor overrides",
+      "rationale": "the canonical registry-owned invocation descriptors (per-tool discriminator, enum-exact case coverage, closed workflow-kind and mutation-target vocabularies, deep-copied lookups, fail-closed classification with unknown targets denied at policy evaluation) are both the native Assistant invocation safety-classification contract and the canonical API/agent governed-invocation policy contract consumed by provider projection and registry runtime enforcement; canonical tool names cannot carry descriptor overrides",
       "subsystems": [
         "ai-runtime",
         "api-contracts"
@@ -733,7 +733,7 @@
     },
     {
       "path": "internal/agentcapabilities/tool_call.go",
-      "rationale": "the Pulse Intelligence shared tool-call params, normalization, validation, direct registry preparation, registry-entrypoint failure result helpers, and provider/registry tool-call safety classification are both the native Assistant execution/FSM contract and the canonical API/agent tools/call compatibility contract for governed Pulse Intelligence tool calls; the shared invocation-blocked result is the stable refusal for every profile-denied mutation (pulse-state and infrastructure alike)",
+      "rationale": "the Pulse Intelligence shared tool-call params, normalization, validation, direct registry preparation, registry-entrypoint failure result helpers, and provider/registry tool-call safety classification are both the native Assistant execution contract and the canonical API/agent tools/call compatibility contract for governed Pulse Intelligence tool calls; the shared invocation-blocked result is the stable refusal for every profile-denied mutation (pulse-state and infrastructure alike)",
       "subsystems": [
         "ai-runtime",
         "api-contracts"

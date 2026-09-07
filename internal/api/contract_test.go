@@ -19526,33 +19526,6 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		}
 	}
 
-	agenticVerificationSource, err := os.ReadFile(filepath.Join("..", "ai", "chat", "agentic_verification.go"))
-	if err != nil {
-		t.Fatalf("read internal/ai/chat/agentic_verification.go: %v", err)
-	}
-	if strings.Contains(string(agenticVerificationSource), `func toolResultHasVerificationOK(`) {
-		t.Error("chat FSM verification evidence parsing must live in shared agentcapabilities, not a chat-local helper")
-	}
-	agenticSource, err := os.ReadFile(filepath.Join("..", "ai", "chat", "agentic.go"))
-	if err != nil {
-		t.Fatalf("read internal/ai/chat/agentic.go: %v", err)
-	}
-	if !strings.Contains(string(agenticSource), `agentcapabilities.ToolResultHasVerificationOK(resultText)`) {
-		t.Error("chat FSM self-verification must consume the shared tool-result verification parser")
-	}
-	if !strings.Contains(string(agenticSource), `agentcapabilities.ToolResultHasErrorCode(resultText, agentcapabilities.ErrCodeStrictResolution)`) {
-		t.Error("chat strict-resolution recovery must consume the shared tool-result error-code parser")
-	}
-	if strings.Contains(string(agenticSource), `strings.Contains(resultText, "STRICT_RESOLUTION")`) {
-		t.Error("chat strict-resolution recovery must not use local string matching")
-	}
-	if !strings.Contains(string(agenticSource), `agentcapabilities.ErrCodeFSMBlocked`) {
-		t.Error("chat FSM recovery tracking must consume the shared FSM-blocked error code")
-	}
-	if strings.Contains(string(agenticSource), `"FSM_BLOCKED"`) {
-		t.Error("chat FSM recovery tracking must not hard-code the FSM-blocked error code")
-	}
-
 	toolMarkerSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "tool_marker.go"))
 	if err != nil {
 		t.Fatalf("read internal/agentcapabilities/tool_marker.go: %v", err)
@@ -19801,11 +19774,11 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		}
 	}
 
-	assistantFSMSource, err := os.ReadFile(filepath.Join("..", "ai", "chat", "fsm.go"))
+	assistantToolKindSource, err := os.ReadFile(filepath.Join("..", "ai", "chat", "tool_kind.go"))
 	if err != nil {
-		t.Fatalf("read internal/ai/chat/fsm.go: %v", err)
+		t.Fatalf("read internal/ai/chat/tool_kind.go: %v", err)
 	}
-	assistantFSMSrc := string(assistantFSMSource)
+	assistantToolKindSrc := string(assistantToolKindSource)
 	for _, fragment := range []string{
 		`type ToolKind = agentcapabilities.ToolCallKind`,
 		`ToolKindResolve = agentcapabilities.ToolCallKindResolve`,
@@ -19814,8 +19787,8 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		`ToolKindUserInput = agentcapabilities.ToolCallKindUserInput`,
 		`return agentcapabilities.ClassifyToolCall(toolName, args)`,
 	} {
-		if !strings.Contains(assistantFSMSrc, fragment) {
-			t.Errorf("Assistant FSM must consume shared tool-call safety classification; missing %s", fragment)
+		if !strings.Contains(assistantToolKindSrc, fragment) {
+			t.Errorf("Assistant must consume shared tool-call safety classification; missing %s", fragment)
 		}
 	}
 	for _, fragment := range []string{
@@ -19827,8 +19800,8 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		`readActions := map[string]bool`,
 		`actionLower := strings.ToLower(action)`,
 	} {
-		if strings.Contains(assistantFSMSrc, fragment) {
-			t.Errorf("Assistant FSM must not keep local tool-call safety classification; found %s", fragment)
+		if strings.Contains(assistantToolKindSrc, fragment) {
+			t.Errorf("Assistant must not keep local tool-call safety classification; found %s", fragment)
 		}
 	}
 
