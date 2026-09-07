@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "completions": [
+    {
+      "incomplete_commit": "a2dbb27a68463adb02b614e9927174543f5b7799",
+      "completion_commit": "5f99f5c13fcc547e5e34286dfe873415a4876cfa",
+      "reason": "Preserve the reviewed diagnostic-redaction commit while evaluating its separately reviewed contracts and API proof as one historical completion unit."
+    }
+  ]
+}

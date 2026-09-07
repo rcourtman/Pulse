@@ -104,15 +104,31 @@ jobs:
             fi
             reason=$(git log -1 --format='%(trailers:key=Contract-Neutral,valueonly,separator=; )' "${commit}" | tr '\n' ' ')
             echo "::group::canonical completion guard @ ${commit}"
+            set +e
+            python3 scripts/release_control/canonical_completion_history.py \
+              --commit "${commit}" --head "${head_sha}"
+            completion_status=$?
+            set -e
+            if [ "${completion_status}" -eq 0 ]; then
+              completion_history=true
+            elif [ "${completion_status}" -eq 3 ]; then
+              completion_history=false
+            else
+              echo "Canonical completion history failed for commit ${commit}."
+              status=1
+              completion_history=true
+            fi
             # Pass the parent as the diff base so the guard compares
             # contract texts parent-vs-commit; the CI index equals HEAD,
             # so the default index comparison would misreport contract
             # updates in earlier commits as insubstantial.
-            if ! git diff-tree --no-commit-id --name-only -r "${commit}" \
-              | PULSE_ALLOW_CONTRACT_NEUTRAL_COMMIT="${reason}" python3 scripts/release_control/canonical_completion_guard.py \
-                  --files-from-stdin --diff-base "${commit}^" --commit "${commit}"; then
-              echo "Canonical completion guard failed for commit ${commit}."
-              status=1
+            if [ "${completion_history}" != true ]; then
+              if ! git diff-tree --no-commit-id --name-only -r "${commit}" \
+                | PULSE_ALLOW_CONTRACT_NEUTRAL_COMMIT="${reason}" python3 scripts/release_control/canonical_completion_guard.py \
+                    --files-from-stdin --diff-base "${commit}^" --commit "${commit}"; then
+                echo "Canonical completion guard failed for commit ${commit}."
+                status=1
+              fi
             fi
             if ! git diff-tree --no-commit-id --name-only -r "${commit}" \
               | python3 scripts/release_control/browser_verification_guard.py \
@@ -145,6 +161,9 @@ jobs:
 
       - name: Run canonical completion guard unit tests
         run: python3 scripts/release_control/canonical_completion_guard_test.py
+
+      - name: Run canonical completion history unit tests
+        run: python3 scripts/release_control/canonical_completion_history_test.py
 
       - name: Run browser verification guard unit tests
         run: python3 scripts/release_control/browser_verification_guard_test.py
