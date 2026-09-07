@@ -787,6 +787,22 @@ export interface ResourceVirtualMachineMeta {
   vcpus?: number;
 }
 
+// Native filesystem counters at a resource mountpoint. These are not resource
+// quotas. Failed observations omit usage, while measured zero stays numeric.
+export interface FilesystemObservation {
+  mountpoint: string;
+  source: string;
+  observedAt: string;
+  type?: string;
+  usage?: {
+    capacityBytes: number;
+    freeBytes: number;
+    availableBytes: number;
+    inodes?: { capacity: number; free: number };
+  };
+  error?: string;
+}
+
 // Docker runtime, container, and Swarm service projection emitted by the
 // canonical adapter. Host resources use the runtime fields on the Docker
 // platform hosts table; `app-container` resources use the container fields
@@ -881,6 +897,7 @@ export interface ResourceDockerMeta {
     mode?: string;
     rw?: boolean;
   }>;
+  filesystems?: FilesystemObservation[];
   networks?: Array<{
     name?: string;
     ipv4?: string;

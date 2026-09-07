@@ -128,6 +128,22 @@ func TestCollectContainerStorageFaultLive(t *testing.T) {
 				if matches != 1 {
 					t.Fatalf("expected one storage mount in report, got %d", matches)
 				}
+				measured := false
+				for _, observation := range report.Filesystems {
+					if observation.Mountpoint != destination {
+						continue
+					}
+					measured = true
+					if observation.Error != "" || observation.Usage == nil || observation.Type != "tmpfs" || observation.Usage.CapacityBytes != 8<<20 || observation.ObservedAt.IsZero() {
+						t.Fatalf("missing native tmpfs capacity: %+v", observation)
+					}
+					if (phase == "storage-full") != (observation.Usage.AvailableBytes == 0) {
+						t.Fatalf("%s tmpfs availability contradicts independent oracle: %+v", phase, observation)
+					}
+				}
+				if !measured {
+					t.Fatal("collected report omitted the affected filesystem observation")
+				}
 				t.Logf("%s raw_mount_count=%d native_tmpfs_options=%q", phase, len(inspect.Mounts), options)
 			}
 			t.Logf("%s %s report=%s", phase, alias, encoded)

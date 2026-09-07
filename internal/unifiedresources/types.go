@@ -7,6 +7,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
@@ -1152,6 +1153,7 @@ type DockerData struct {
 	Labels             map[string]string           `json:"labels,omitempty"`
 	Networks           []DockerNetworkMeta         `json:"networks,omitempty"`
 	Mounts             []DockerMountMeta           `json:"mounts,omitempty"`
+	Filesystems        []filesystem.Observation    `json:"filesystems,omitempty"`
 	UpdateStatus       *DockerUpdateStatusMeta     `json:"updateStatus,omitempty"`
 
 	// Service-specific fields (populated when Resource.Type == ResourceTypeDockerService)

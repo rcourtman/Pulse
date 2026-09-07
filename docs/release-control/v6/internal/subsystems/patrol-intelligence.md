@@ -2622,3 +2622,16 @@ reasoning and real remediation in
 `docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`. The repeatable browser
 proof is `scripts/check-patrol-assistant-journey.mjs`. A passing scripted
 response does not establish a useful customer outcome or model qualification.
+
+### Expired action continuity (2026-09-07)
+
+An expired, unexecuted canonical action maps the investigation outcome to
+`needs_attention`. It creates no recovery verification evidence. The durable
+finding record and investigation retain the expired action identity and
+original model evidence. Findings and the inline action history render a linked
+action from that identity independently of the outcome vocabulary. Changing
+from queued to needs-attention must not hide its Actions link or Assistant
+handoff. The attached Assistant context suppresses unrelated empty-chat
+starters and recent sessions. Starting a new conversation clears that context
+and restores the ordinary welcome surface. Regression and current-browser
+qualification are recorded in the customer-journey qualification document.

@@ -10201,7 +10201,7 @@
     },
     {
       "id": "patrol-assistant-customer-outcome-qualification",
-      "summary": "The redesign goal remains open. The plan, historical receipts and exact source bindings are in docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md. Patrol owns investigation and Assistant continues the same issue. Observations, hypotheses, accepted proposals, execution and independently verified outcomes remain distinct. The recorded baseline of 127 paid installations, 71 Patrol-enabled, 23 with Assistant calls and fourteen verified resolutions from one installation does not establish representative customer success. Schema17 outcome/provider/cost fields had no adoption. Shared evidence/history/risk and removal of proposal-as-proof and proxy completion policy landed through PR1928/1929. PR1934 merged canonical tool/transcript identity. PR1935 contains subsequent canonical history, measurement-presence, command-connectivity, tmpfs context, exact Gemini pricing, retained broker errors and result-bearing transcript corrections. Enterprise broker refusal handling merged in PR22. Real Gemini Watch, healthy-control and client-to-dependency cases passed. With explicit authority for a temporary current development agent and scoped token, approved restart q-20260906-193013-12d25545 passed exact plan/origin binding, explicit approval, execution and independent recovery. Rejected restart q-20260906-193207-7095dad5 passed exact rejection and independent non-execution. All test resources were removed, original development binaries/token restored, temporary tokens revoked, scheduled Patrol paused in monitor mode and production agent PID preserved. Storage collection failure was traced to qualification pagination beyond the API page cap of 100 and corrected with full-package regression proof. Installed storage q-20260906-193613-556ef23d passed the existing scorecard but FAILED semantic diagnosis review: the model falsely attributed an exhausted container tmpfs to Tower/array capacity despite available mount configuration. A capacity read required approval. Storage remains unqualified, and lexical/identifier scoring must not be treated as causal correctness. Next storage work needs canonical authorized filesystem evidence and independent semantic review without benchmark-specific diagnosis rules or weakened command approval. Real browser review additionally exposed an embedded investigation record left fix_queued after verified recovery and hidden action history on resolved findings. Current action reconciliation refreshes the durable record through the canonical builder, preserves prose/evidence/rollback, repairs missed transitions without duplicate publication, and retains completed action history and resolved Assistant context. Final worker regressions and source-bound runtime/browser proof pass at 1440, 900 and 390 widths, including completed/rejected history and read-only Assistant handoff. The exact staged hook and PR1935 landing gate integration. Other residuals include canonical incident-memory listing/aliases and failed-read propagation, unsupported filters, typed compatibility ID lookup, legacy direction availability, Docker-host history, responsive mount details, backup coverage and broader model qualification. Independent volunteered Pro environments remain a wider-readiness gate. Autonomous modes remain unqualified. The earlier Claude refusal was not retried.",
+      "summary": "The redesign goal remains open. The executable plan and historical source-bound receipts are in docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md. Product ownership, evidence/history/risk corrections and removal of proposal-as-proof and proxy completion rules have landed through PR1928/1929/1934/1935, with enterprise broker refusal handling in PR22. The telemetry baseline of 127 paid installations, 71 Patrol-enabled and 23 with Assistant usage does not establish linked customer effectiveness. Native container filesystem observations now preserve exact bytes, inodes, source, observation time and explicit unavailable errors through collection, ingestion, canonical resources and model tools. The installed native collector and real Gemini storage case q-20260906-232102-5316b904 passed independent semantic review: the model identified the exhausted 8 MiB container tmpfs and ENOSPC, rather than misattributing host array capacity. Recovery was independently observed after fixture filler removal, not after executing the proposal. Fresh healthy, dependency, approved-restart and rejected-restart cases passed their named oracles and cleanup. Tower's original binaries/token were restored, temporary tokens revoked and production agent preserved. Shared event-history WAL isolation, bounded indexed paging and a global resource-history index pass targeted race/query-plan proof. Browser review found expired actions still marked queued, generic starters beside attached Assistant context, and linked action history hidden by outcome-based visibility. Repairs pass final source-bound browser qualification for linked completed/rejected/expired actions and attached/cleared Assistant context at 1440, 900 and 390 pixels. The current slice is awaiting staged-hook verification and landing. Missing-access q-20260907-074158-110e8868 safely refused execution and retained unknown cause, but remains an unqualified journey: proposal capture precedes canonical availability validation, leaving the model unable to incorporate the refusal in its conclusion. The next canonical work must expose current action availability to model decisions and preserve definitive submission truth through the shared journey. Disposable VM110 received an exact Gemini-generated plan and explicit canonical approval. Execution returned HTTP500 and left receipt-pending durable state. The stopped VM, original inactive agent and read-only control were restored, temporary tokens revoked, and the action was closed through operator force-fail with inconclusive evidence. VM execution remains unqualified and its durable dispatch/reconciliation path is the next required root investigation. An additional reproduced orchestration gap replaces retained Assistant prose with an internal verification instruction and treats planned controls as executed writes. The canonical action lifecycle, not generic tool-use state, must own execution/verification truth. Residuals include responsive mount details, canonical incident-memory listing/aliases and failed-read propagation, unsupported filters, typed compatibility ID lookup, legacy direction availability, Docker-host history, backup coverage, broader model qualification and startup latency. Autonomous modes remain unqualified. Independent volunteered Pro environments remain a wider-readiness gate. The explicit Claude subscription refusal was not retried. Do not mark the goal or candidate complete from a scorecard or this one homelab. A later current-runtime attention-summary request timed out after 30 seconds. The captured stacks showed 107 independent full-history walkers. The shared incremental history fold now passes durable replay boundary, retention and concurrent-reader regressions, full alerts/eventlog race suites, eighteen bounded live attention requests and repeated current-runtime browser matrices. Exact staged landing checks remain pending.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-09-05",
@@ -10213,6 +10213,7 @@
       ],
       "subsystem_ids": [
         "ai-runtime",
+        "alerts",
         "api-contracts",
         "frontend-primitives",
         "monitoring",
@@ -10385,6 +10386,7 @@
       ],
       "subsystem_ids": [
         "ai-runtime",
+        "alerts",
         "api-contracts",
         "frontend-primitives",
         "monitoring",
@@ -10399,7 +10401,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "patrol-filesystem-evidence-coverage-gap-patrol-assistant-customer-outcome-qualification",
+      "agent_id": "patrol-filesystem-evidence",
+      "summary": "Finish filesystem evidence, shared expired-action outcome repair and contextual Assistant qualification.",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-09-07T07:33:08Z",
+      "heartbeat_at": "2026-09-07T07:33:08Z",
+      "expires_at": "2026-09-07T09:33:08Z",
+      "work_item": {
+        "kind": "coverage-gap",
+        "id": "patrol-assistant-customer-outcome-qualification"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

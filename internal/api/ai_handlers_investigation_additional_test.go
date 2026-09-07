@@ -829,3 +829,59 @@ func TestAgentCommandAdapter_FindAgentForTarget(t *testing.T) {
 		t.Fatalf("expected empty agent when multiple connected, got %q", got)
 	}
 }
+
+func TestPatrolExpiredActionHydrationRemovesQueuedOutcomeWithoutRewritingEvidence(t *testing.T) {
+	investigations := newTestInvestigationStore()
+	investigation := investigations.Create("finding-1", "session-1")
+	investigation.Status = aicontracts.InvestigationStatusCompleted
+	investigation.Outcome = aicontracts.OutcomeFixQueued
+	investigation.Summary = "Cause uncertain. Restart proposed for review."
+	investigation.EvidenceIDs = []string{"observed-health"}
+	investigations.Update(investigation)
+	svc := ai.NewService(nil, nil)
+	svc.SetStateProvider(&MockStateProvider{})
+	patrol := svc.GetPatrolService()
+	findings := patrol.GetFindings()
+	findings.Add(&ai.Finding{ID: "finding-1", ResourceID: "vm:42", Title: "Unhealthy service", Severity: ai.FindingSeverityWarning,
+		InvestigationStatus: string(investigation.Status), InvestigationOutcome: string(aicontracts.OutcomeNeedsAttention)})
+	// Reproduce the persisted mismatch after an outcome already reconciled.
+	record := ai.BuildFindingInvestigationRecord(findings.Get("finding-1"), investigation)
+	record.Rollback = []string{"Retained rollback evidence"}
+	record.Impact = "Original service impact absent from the later finding projection."
+	findings.UpdateInvestigationRecord("finding-1", record)
+	audits := unifiedresources.NewMemoryStore()
+	audit := unifiedresources.ActionAuditRecord{
+		ID: "act-1", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(), State: unifiedresources.ActionStateExpired,
+		Request: unifiedresources.ActionRequest{RequestID: "proposal-1", ResourceID: "vm:42", CapabilityName: "restart", RequestedBy: "pulse_patrol"},
+		Plan:    unifiedresources.ActionPlan{ActionID: "act-1", RequestID: "proposal-1", Allowed: true},
+		Origin:  &unifiedresources.ActionOrigin{Surface: patrolActionOriginSurface, FindingID: "finding-1", InvestigationID: investigation.ID, ProposalID: "proposal-1"},
+	}
+	if _, _, err := audits.CreateActionAudit(audit, nil); err != nil {
+		t.Fatal(err)
+	}
+	handler := &AISettingsHandler{defaultAIService: svc,
+		investigationStores:   map[string]aicontracts.InvestigationStore{"default": investigations},
+		resourceStoreProvider: func(string) (unifiedresources.ResourceStore, error) { return audits, nil },
+	}
+	var published []*ai.Finding
+	patrol.SetUnifiedFindingCallback(func(f *ai.Finding) bool { published = append(published, f); return true })
+	published = nil // Ignore the initial synchronization when registering the callback.
+	handler.hydratePatrolInvestigationAction("default", investigation)
+	got := findings.Get("finding-1").InvestigationRecord
+	if got.Outcome != aicontracts.OutcomeNeedsAttention || got.Action == nil || got.Action.State != "expired" {
+		t.Fatalf("durable record did not reconcile: %#v", got)
+	}
+	if got.Conclusion != investigation.Summary || got.Impact != record.Impact || got.Confidence != record.Confidence || !reflect.DeepEqual(got.Rollback, record.Rollback) || !reflect.DeepEqual(got.Evidence, record.Evidence) {
+		t.Fatalf("retained investigation evidence changed: %#v", got)
+	}
+	if len(got.Verification) != 0 {
+		t.Fatalf("unexecuted expired action invented verification: %#v", got.Verification)
+	}
+	if len(published) != 1 || published[0].InvestigationRecord.Outcome != aicontracts.OutcomeNeedsAttention {
+		t.Fatalf("reconciled record was not published: record=%#v published=%#v", got, published)
+	}
+	handler.hydratePatrolInvestigationAction("default", investigation)
+	if len(published) != 1 {
+		t.Fatal("duplicate hydration republished unchanged record")
+	}
+}

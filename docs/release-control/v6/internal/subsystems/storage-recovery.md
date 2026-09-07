@@ -21,6 +21,14 @@
 
 ## Purpose
 
+Container filesystem evidence is a read-only observation at a named resource
+mountpoint. It grants no storage mutation, recovery or host-capacity authority.
+A full container tmpfs does not establish host-array exhaustion. Unknown byte
+or inode inventory remains unavailable, and no image-layer count substitutes
+for observed filesystem capacity. Shared queries preserve native source and
+time for model interpretation. Qualification must compare the diagnosis with
+the independent storage fault, not merely match resource IDs or ENOSPC terms.
+
 Container image-layer sizes do not establish filesystem capacity. Docker
 resource metrics omit that invalid ratio, and retained queries exclude legacy
 ambiguous disk observations while preserving new valid provider measurements.

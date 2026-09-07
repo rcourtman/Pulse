@@ -42,6 +42,9 @@ func (m *Manager) SetEventLog(store *eventlog.Store) {
 		return
 	}
 	previous := m.eventLog.Swap(store)
+	m.historyProjectionMu.Lock()
+	m.historyProjection = nil
+	m.historyProjectionMu.Unlock()
 	authoritative := store != nil && m.historyManager != nil &&
 		!m.historyManager.StorageFileExists() &&
 		!m.historyManager.ImportedStorageFileExists() &&

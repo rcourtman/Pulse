@@ -479,6 +479,15 @@ enums locally.
 
 ## Shared Boundaries
 
+Canonical Patrol action hydration maps an expired action to `needs_attention`
+and preserves its exact action reference, original investigation prose and
+retained finding evidence. An expired proposal creates no execution or
+verification evidence. Hydration repairs the investigation and durable finding
+record from the same authoritative audit and does not publish duplicate updates.
+The API regression for expired hydration covers missed callbacks and unchanged
+historical evidence. The linked action remains discoverable after its outcome
+stops being queued.
+
 ### Independent Docker update readback
 
 `dockerContainerUpdateExecutionResult` must not promote replacement-ID equality

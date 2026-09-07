@@ -67,7 +67,11 @@ describe('ApprovalSection typed action handoff', () => {
     window.history.replaceState({}, '', '/');
   });
 
-  const renderSection = (investigationOutcome: string, findingStatus = 'active') =>
+  const renderSection = (
+    investigationOutcome: string,
+    findingStatus = 'active',
+    hasAction = false,
+  ) =>
     render(() => (
       <Router>
         <Route
@@ -76,6 +80,7 @@ describe('ApprovalSection typed action handoff', () => {
             <ApprovalSection
               findingId="finding-1"
               findingStatus={findingStatus}
+              hasAction={hasAction}
               investigationOutcome={investigationOutcome}
             />
           )}
@@ -135,6 +140,29 @@ describe('ApprovalSection typed action handoff', () => {
     expect(screen.getByRole('link', { name: /review in actions/i })).toHaveAttribute(
       'href',
       '/actions?action=act-1',
+    );
+  });
+
+  it('retains an expired action and Assistant handoff when the issue needs attention', async () => {
+    getInvestigationMock.mockResolvedValue({
+      ...investigation(actionReference('expired')),
+      outcome: 'needs_attention',
+    });
+
+    renderSection('needs_attention', 'active', true);
+
+    expect(await screen.findByRole('link', { name: /view outcome in actions/i })).toHaveAttribute(
+      'href',
+      '/actions?action=act-1',
+    );
+    expect(screen.getByText('Expired')).toBeInTheDocument();
+    expect(screen.queryByText('Outcome verified')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /discuss with assistant/i }));
+    expect(openMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        handoffContext: expect.stringContaining('expired'),
+        autonomousMode: false,
+      }),
     );
   });
 

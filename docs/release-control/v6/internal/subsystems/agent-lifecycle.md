@@ -15,6 +15,15 @@
 
 ## Purpose
 
+Optional container filesystem observations add no command or lifecycle
+authority. The collector's existing disk-metrics option controls them. Native
+reads require the exact local container process identity and current namespace
+access. Inaccessible root-owned namespaces remain unavailable to unprivileged
+collectors even when Docker API reads work. No failure widens privileges or
+falls back to container exec. A post-read inspect rejects observations from a
+restarted/replaced process. These counters do not modify token scopes, helper
+operations, enrollment, removal, configuration or agent identity.
+
 Docker mount reports include tmpfs configuration from `HostConfig.Tmpfs`
 through the existing optional mount array. This adds collection evidence only.
 It does not change admission, enrollment, execution permissions or agent

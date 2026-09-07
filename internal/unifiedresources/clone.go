@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
@@ -314,6 +315,7 @@ func cloneDockerData(in *DockerData) *DockerData {
 	out.EngineLabels = cloneStringMap(in.EngineLabels)
 	out.Networks = cloneDockerNetworkMetaSlice(in.Networks)
 	out.Mounts = cloneDockerMountMetaSlice(in.Mounts)
+	out.Filesystems = filesystem.Clone(in.Filesystems)
 	out.UpdateStatus = cloneDockerUpdateStatusMeta(in.UpdateStatus)
 	out.BlockIO = cloneDockerContainerBlockIOMeta(in.BlockIO)
 	out.Podman = cloneDockerPodmanContainerMeta(in.Podman)

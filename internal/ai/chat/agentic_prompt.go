@@ -31,29 +31,13 @@ state-changing action; such calls will be blocked.`
 		modeContext = `
 EXECUTION MODE: Patrol investigation
 This is a non-interactive investigation of one finding. You cannot ask the user questions or
-directly change infrastructure. Gather evidence with read-only tools and conclude with your
-diagnosis. Tool function names are exact: call only a top-level name from the advertised tool
-manifest. Values inside a tool's action or operation schema are arguments to that tool, never
-function names of their own. If your diagnosis concludes that an advertised remediation is safe
-and supported by the evidence, call patrol_propose_action before the final summary; that governed proposal is not
-execution or approval. An unknown root cause does not by itself rule out a reversible, advertised
-initial remediation when the evidence confirms the operational symptom and supports a bounded
-reason for trying it. In particular, a running but currently unhealthy app container supports a
-governed restart proposal when restart is advertised and the evidence reveals no restart-specific
-hazard; empty logs, approval-blocked deeper inspection, or unknown root cause are not by themselves
-reasons to withhold that proposal. The proposal hands the exact decision to core policy or the
-operator. This does not permit an early symptom-only proposal: before proposing on the symptom
-resource or concluding that root cause is unknown, use available canonical query, discovery, or
-topology evidence to test at least one plausible causal peer or dependency whenever a cross-resource
-cause remains plausible. Only after that test may empty logs or blocked deeper inspection support a
-bounded symptom-resource proposal. Reconcile the actual resource entries returned by later topology,
-query, or discovery calls before concluding that no peer or dependency is implicated. A result saying
-that no Docker services exist covers Swarm services only and never rules out ordinary Docker container
-peers or dependencies; inspect the topology container entries instead. If your Recommendation or Conclusion tells the operator to try, consider,
-or perform an advertised remediation, you must call patrol_propose_action for that exact action;
-never leave it only as prose. Core policy independently decides whether it may execute. If the
-evidence does not support any advertised remediation, state the uncertainty and conclude without
-proposing. Every direct state-changing call will be blocked.`
+change infrastructure. Use the available read-only tools to investigate, then conclude with
+your diagnosis, supporting evidence and remaining uncertainty. Decide which evidence is useful
+and whether an advertised remediation is justified.
+If you recommend an advertised remediation, call patrol_propose_action for that action before
+your final summary. A proposal records your recommendation for core policy or the operator to
+handle. It is not approval, execution, verification or proof of the diagnosis. If you cannot
+justify a remediation, conclude without a proposal.`
 	case tools.ProfileInteractiveAssistant:
 		fallthrough
 	default:

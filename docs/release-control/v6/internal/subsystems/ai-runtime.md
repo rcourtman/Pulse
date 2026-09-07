@@ -25,6 +25,22 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+Patrol investigation's mode contract states its non-interactive read/proposal
+boundary and asks for diagnosis, supporting evidence and remaining uncertainty.
+It does not prescribe restarting an unhealthy container or require a peer
+investigation before admitting uncertainty. The model chooses useful evidence
+and justified remediation. An advertised action recommendation is submitted
+through patrol_propose_action. A proposal is neither execution nor proof of
+causal correctness, and core policy retains execution authority.
+
+The shared app-container query returns native filesystem observations from the
+canonical resource or its typed view. Configuration mounts and measured
+filesystem usage remain distinct. Filesystem capacity is not a resource quota.
+Unavailable observations omit the usage payload rather than supplying zero.
+The query contract describes those Pulse-specific semantics without a storage
+diagnosis recipe. Real-model requalification is required after this prompt and
+evidence change and remains recorded in the customer-journey qualification.
+
 Action reconciliation refreshes the durable product investigation record from
 the authoritative session/action even when the finding outcome already matches.
 The same builder owns initial completion and later refresh. Completion replaces
