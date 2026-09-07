@@ -278,7 +278,8 @@ test.describe('Ceph alert thresholds', () => {
       .getByRole('heading', { name: 'Storage Devices' })
       .getByRole('button');
     if ((await storageToggle.getAttribute('aria-expanded')) === 'false') {
-      await storageToggle.click();
+      await storageToggle.focus();
+      await page.keyboard.press('Enter');
     }
     await expect(storageToggle).toHaveAttribute('aria-expanded', 'true');
     await expect(page.getByText('ceph-pool', { exact: true })).toBeVisible();
@@ -287,5 +288,46 @@ test.describe('Ceph alert thresholds', () => {
     await expect(page.getByRole('button', { name: 'Edit thresholds for ceph-pool' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Revert to defaults for data_replication' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Edit thresholds for data_replication' })).toBeVisible();
+
+    // Exercise native keyboard activation and focus exclusion in a real
+    // browser: DOM-only tests cannot establish inert tab-order behaviour.
+    const contentId = await storageToggle.getAttribute('aria-controls');
+    expect(contentId).toBeTruthy();
+    const content = page.locator(`[id="${contentId}"]`);
+    const editPool = page.getByRole('button', { name: 'Edit thresholds for ceph-pool' });
+    await editPool.focus();
+    await expect(editPool).toBeFocused();
+    await storageToggle.focus();
+    await page.keyboard.press('Space');
+    await expect(storageToggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(content).toHaveAttribute('inert', '');
+    await expect(content).toHaveAttribute('aria-hidden', 'true');
+
+    // Walk the complete focus cycle, rather than checking only the first
+    // header action after the toggle. Hidden descendants remain mounted.
+    const focusableCount = await page.locator('button, a[href], input, select, textarea, [tabindex]').count();
+    for (let step = 0; step <= focusableCount; step += 1) {
+      await page.keyboard.press('Tab');
+      expect(await content.evaluate((element) => element.contains(document.activeElement))).toBe(false);
+      if (await storageToggle.evaluate((element) => element === document.activeElement)) break;
+    }
+    await expect(storageToggle).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(storageToggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(content).not.toHaveAttribute('inert');
+    await editPool.focus();
+    await expect(editPool).toBeFocused();
+    await storageToggle.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: test.info().outputPath('keyboard-reopened.png') });
+
+    const search = page.getByPlaceholder('Search resources...');
+    await expect(search).toHaveValue('');
+    await page.keyboard.press('c');
+    await expect(search).toBeFocused();
+    await expect(search).toHaveValue('c');
+    await page.keyboard.press('Space');
+    await expect(search).toHaveValue('c ');
+    await search.fill('');
+    await expect(page.getByText('ceph-pool', { exact: true })).toBeVisible();
   });
 });

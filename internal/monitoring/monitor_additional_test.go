@@ -885,3 +885,181 @@ func TestApplyStorageFallbackAndRecordNodeMetrics_PersistsTemperatureHistory(t *
 		t.Fatalf("temperature history = %+v, want one point at 64C", points)
 	}
 }
+
+// Exercise the registry's real manual merge, followed by the next guest poll's
+// fallback lookup. A healthy platform row must not revive an offline agent.
+func TestCorrelatedGuestMemoryNextPoll(t *testing.T) {
+	for _, tc := range []struct {
+		name, status string
+		age          time.Duration
+		unavailable  bool
+		want         uint64
+	}{
+		{name: "live", status: "online", want: 2800},
+		{name: "offline", status: "offline", want: 8000},
+		{name: "stale", status: "online", age: time.Hour, want: 8000},
+		{name: "unavailable", status: "online", unavailable: true, want: 8000},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			now := time.Now()
+			guestID := makeGuestID("pve-a", "node1", 111)
+			store := unifiedresources.NewMemoryStore()
+			if err := store.AddLink(unifiedresources.ResourceLink{ResourceA: "vm-test", ResourceB: "agent-test", PrimaryID: "agent-test"}); err != nil {
+				t.Fatal(err)
+			}
+			registry := unifiedresources.NewRegistry(store)
+			total, used := int64(8000), int64(8000)
+			resources := []unifiedresources.Resource{
+				{ID: "vm-test", Type: unifiedresources.ResourceTypeVM, Name: "firewall", Status: unifiedresources.StatusOnline, LastSeen: now,
+					Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+					Proxmox: &unifiedresources.ProxmoxData{SourceID: guestID, Instance: "pve-a", NodeName: "node1", VMID: 111, RuntimeStatus: "running"},
+					Metrics: &unifiedresources.ResourceMetrics{Memory: &unifiedresources.MetricValue{Total: &total, Used: &used, Percent: 100, Source: unifiedresources.SourceProxmox}}},
+				{ID: "agent-test", Type: unifiedresources.ResourceTypeAgent, Name: "firewall-agent", Status: unifiedresources.ResourceStatus(tc.status), LastSeen: now.Add(-tc.age),
+					Sources: []unifiedresources.DataSource{unifiedresources.SourceAgent},
+					Agent:   &unifiedresources.AgentData{AgentID: "agent-test", Stale: tc.status == "offline", Memory: &unifiedresources.AgentMemoryMeta{Total: 8000, Used: 2800, Free: 5200, UsageUnavailable: tc.unavailable}}},
+			}
+			registry.IngestResources(resources)
+			if len(registry.VMs()) != 1 || len(registry.Hosts()) != 0 {
+				t.Fatal("initial registry did not merge linked guest")
+			}
+			// Rebuild from source evidence and the retained link store, not a
+			// previously merged resource or the old in-memory matcher.
+			registry = unifiedresources.NewRegistry(store)
+			registry.IngestResources(resources)
+			if len(registry.VMs()) != 1 || len(registry.Hosts()) != 0 {
+				t.Fatalf("expected one merged VM and no standalone hosts")
+			}
+
+			// A simultaneous guest with the same node name and VMID must not
+			// inherit this instance's agent memory.
+			registry.IngestRecords(unifiedresources.SourceProxmox, []unifiedresources.IngestRecord{{
+				SourceID: makeGuestID("pve-b", "node1", 111),
+				Resource: unifiedresources.Resource{
+					Type: unifiedresources.ResourceTypeVM, Name: "other-firewall",
+					Status: unifiedresources.StatusOnline, LastSeen: now,
+					Proxmox: &unifiedresources.ProxmoxData{
+						SourceID: makeGuestID("pve-b", "node1", 111),
+						Instance: "pve-b", NodeName: "node1", VMID: 111, RuntimeStatus: "running",
+					},
+				},
+			}})
+			if len(registry.VMs()) != 2 {
+				t.Fatal("duplicate VMIDs from separate instances were not preserved")
+			}
+			mon := &Monitor{state: models.NewState(), rateTracker: NewRateTracker(), config: &config.Config{}, resourceStore: unifiedresources.NewMonitorAdapter(registry)}
+			prev := mon.previousGuestContextForInstance("pve-a")
+			raw := VMMemoryRaw{}
+			_, got, source := mon.resolveGuestStatusMemory(context.Background(), &stubPVEClient{}, "pve-a", "firewall", "node1", 111, guestID, &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, prev.hostAgentsByVMID, 8000, "", &raw)
+			if got != tc.want {
+				t.Fatalf("used=%d source=%s want=%d", got, source, tc.want)
+			}
+			if tc.want == 2800 && (source != "agent" || raw.HostAgentUsed != 2800 || raw.HostAgentTotal != 8000) {
+				t.Fatalf("missing agent diagnostic evidence: %s %+v", source, raw)
+			}
+			if tc.want == 8000 && source != "status-mem" {
+				t.Fatalf("unsafe fallback source %s", source)
+			}
+			vm, buildRaw, buildSource, _, _, ok := mon.buildVMFromClusterResource(context.Background(), "pve-a",
+				proxmox.ClusterResource{Type: "qemu", Status: "running", Node: "node1", VMID: 111, Name: "firewall", MaxMem: 8000, Mem: 8100},
+				&correlatedMemoryClient{}, guestID, prev.hostAgentsByVMID, nil)
+			if !ok || vm.Memory.Used != int64(tc.want) || vm.Memory.Usage != float64(tc.want)/80 || buildSource != source || buildRaw.HostAgentUsed != raw.HostAgentUsed {
+				t.Fatalf("builder disagrees with resolver: %+v source=%s raw=%+v", vm.Memory, buildSource, buildRaw)
+			}
+			projection := unifiedresources.NewRegistry(nil)
+			projection.IngestSnapshot(models.StateSnapshot{VMs: []models.VM{vm}})
+			if got := projection.VMs()[0].MemoryPercent(); got != vm.Memory.Usage {
+				t.Fatalf("read-state card projection=%v want=%v", got, vm.Memory.Usage)
+			}
+
+			manager := alerts.NewManagerWithDataDir(t.TempDir())
+			defer manager.Stop()
+			cfg := manager.GetConfig()
+			cfg.Enabled = true
+			cfg.ActivationState = alerts.ActivationActive
+			cfg.GuestDefaults = alerts.ThresholdConfig{Memory: &alerts.HysteresisThreshold{Trigger: 85, Clear: 80}}
+			cfg.TimeThresholds = map[string]int{"guest": 0}
+			manager.UpdateConfig(cfg)
+			mon.alertManager = manager
+			for i := 0; i < 2; i++ {
+				if _, ok := mon.handleClusterVMResource(context.Background(), "pve-a", proxmox.ClusterResource{Type: "qemu", Status: "running", Node: "node1", VMID: 111, Name: "firewall", MaxMem: 8000, Mem: 8100}, guestID, &correlatedMemoryClient{}, nil, prev.hostAgentsByVMID); !ok {
+					t.Fatal("poll handler skipped VM")
+				}
+			}
+			snapshots := mon.GetDiagnosticSnapshots().Guests
+			if len(snapshots) != 1 || snapshots[0].Memory.Usage != vm.Memory.Usage || snapshots[0].MemorySource != source {
+				t.Fatalf("diagnostics disagree: %+v", snapshots)
+			}
+			active := manager.GetActiveAlerts()
+			if tc.want == 2800 && len(active) != 0 {
+				t.Fatalf("35 percent generated alerts: %+v", active)
+			}
+			if tc.want == 8000 && (len(active) != 1 || active[0].Value != 100) {
+				t.Fatalf("100 percent did not generate matching alert: %+v", active)
+			}
+			other := mon.previousGuestContextForInstance("pve-b")
+			if len(other.hostAgentsByVMID) != 0 {
+				t.Fatal("correlated agent crossed instance boundary")
+			}
+			otherID := makeGuestID("pve-b", "node1", 111)
+			_, otherUsed, otherSource := mon.resolveGuestStatusMemory(context.Background(), &stubPVEClient{}, "pve-b", "other-firewall", "node1", 111, otherID, &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, other.hostAgentsByVMID, 8000, "", &VMMemoryRaw{})
+			if otherUsed != 8000 || otherSource != "status-mem" {
+				t.Fatalf("other instance inherited agent memory: used=%d source=%s", otherUsed, otherSource)
+			}
+		})
+	}
+}
+
+type correlatedMemoryClient struct{ stubPVEClient }
+
+func (*correlatedMemoryClient) GetVMStatus(context.Context, string, int) (*proxmox.VMStatus, error) {
+	return &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, nil
+}
+
+// Automatic VM correlation is a link hint, not a cross-type registry merge.
+// Keep this separate from TestCorrelatedGuestMemoryNextPoll's retained links.
+func TestAutomaticGuestMemoryLinkNextPoll(t *testing.T) {
+	now := time.Now()
+	guestID := makeGuestID("pve-a", "node1", 111)
+	otherID := makeGuestID("pve-b", "node1", 111)
+	snapshot := models.StateSnapshot{VMs: []models.VM{
+		{ID: guestID, Instance: "pve-a", Node: "node1", VMID: 111, Name: "firewall", Status: "running", LastSeen: now},
+		{ID: otherID, Instance: "pve-b", Node: "node1", VMID: 111, Name: "other-firewall", Status: "running", LastSeen: now},
+	}}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	mon := &Monitor{state: models.NewState(), resourceStore: unifiedresources.NewMonitorAdapter(registry)}
+	node, linkedVM, ct := mon.findLinkedProxmoxEntityWithHints("firewall.example.test", "", nil)
+	if node != "" || linkedVM != guestID || ct != "" {
+		t.Fatalf("automatic link = %q/%q/%q", node, linkedVM, ct)
+	}
+	snapshot.Hosts = []models.Host{{ID: "guest-agent", Hostname: "firewall.example.test", LinkedVMID: linkedVM, Status: "online", LastSeen: now, Memory: models.Memory{Total: 8000, Used: 2800, Free: 5200, Usage: 35}}}
+	// Reconstruct using source snapshots, without a manual link store.
+	registry = unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	mon.resourceStore = unifiedresources.NewMonitorAdapter(registry)
+	if len(registry.VMs()) != 2 || len(registry.Hosts()) != 1 {
+		t.Fatal("automatic hint unexpectedly merged the agent into a VM")
+	}
+	for _, tc := range []struct {
+		instance, id string
+		used         uint64
+		source       string
+	}{
+		{"pve-a", guestID, 2800, "agent"}, {"pve-b", otherID, 8000, "status-mem"},
+	} {
+		prev := mon.previousGuestContextForInstance(tc.instance)
+		_, used, source := mon.resolveGuestStatusMemory(context.Background(), &stubPVEClient{}, tc.instance, "firewall", "node1", 111, tc.id, &proxmox.VMStatus{MaxMem: 8000, Mem: 8100}, prev.hostAgentsByVMID, 8000, "", &VMMemoryRaw{})
+		if used != tc.used || source != tc.source {
+			t.Fatalf("%s used=%d source=%s", tc.instance, used, source)
+		}
+	}
+	// A matching name in another instance must prevent automatic selection.
+	snapshot.VMs[1].Name = "firewall"
+	registry = unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	mon.resourceStore = unifiedresources.NewMonitorAdapter(registry)
+	node, linkedVM, ct = mon.findLinkedProxmoxEntityWithHints("firewall.example.test", "", nil)
+	if node != "" || linkedVM != "" || ct != "" {
+		t.Fatalf("ambiguous hostname selected %q/%q/%q", node, linkedVM, ct)
+	}
+}

@@ -43,6 +43,9 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 		guestID := makeGuestID(modelVM.Instance, modelVM.Node, modelVM.VMID)
 		if guestID != "" {
 			ctx.vmsByID[guestID] = modelVM
+			if memory, ok := vm.LinkedAgentMemory(); ok {
+				ctx.hostAgentsByVMID[guestID] = models.Host{LinkedVMID: guestID, Status: "online", Memory: memory}
+			}
 		}
 	}
 

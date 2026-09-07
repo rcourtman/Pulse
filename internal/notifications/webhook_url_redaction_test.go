@@ -16,10 +16,52 @@ func TestRedactWebhookURLSecrets(t *testing.T) {
 		input string
 		want  string
 	}{
+		"malformed query name":             {input: "https://example.test/hook?%zz=secret", want: invalidWebhookURLDiagnostic},
+		"encoded lookalike":                {input: "https://example.test/hook?extra_%74oken=visible&channel=ops#fragment", want: "https://example.test/hook?extra_%74oken=visible&channel=ops#fragment"},
+		"discord":                          {input: "https://discord.com/api/webhooks/123/discord-secret", want: "https://discord.com/api/webhooks/REDACTED"},
+		"discord versioned":                {input: "https://discord.com/api/v10/webhooks/123/discord-secret", want: "https://discord.com/api/v10/webhooks/REDACTED"},
+		"discord legacy":                   {input: "https://discordapp.com/api/webhooks/123/discord-secret", want: "https://discordapp.com/api/webhooks/REDACTED"},
+		"discord encoded":                  {input: "https://user:password@DISCORD.COM:443/api/webhooks/123/discord%2Dsecret", want: "https://REDACTED@DISCORD.COM:443/api/webhooks/REDACTED"},
+		"discord query":                    {input: "https://discord.com/api/webhooks/123/discord-secret?wait=true&token=query-secret", want: "https://discord.com/api/webhooks/REDACTED?wait=true&token=REDACTED"},
+		"discord lookalike":                {input: "https://discord.com.example.org/api/webhooks/status", want: "https://discord.com.example.org/api/webhooks/status"},
+		"discord unrelated":                {input: "https://discord.com/api/status", want: "https://discord.com/api/status"},
+		"slack":                            {input: "https://hooks.slack.com/services/T-test/B-test/slack-secret", want: "https://hooks.slack.com/services/REDACTED"},
+		"gov slack":                        {input: "https://hooks.slack-gov.com/services/T-test/B-test/slack-secret?token=query-secret&channel=ops", want: "https://hooks.slack-gov.com/services/REDACTED?token=REDACTED&channel=ops"},
+		"slack encoded path and authority": {input: "https://user:password@HOOKS.SLACK.COM:443/serv%69ces/T-test/B-test/slack%2Dsecret", want: "https://REDACTED@HOOKS.SLACK.COM:443/services/REDACTED"},
+		"slack legacy path":                {input: "https://hooks.slack.com/T-test/B-test/slack-secret", want: "https://hooks.slack.com/REDACTED"},
+		"unrelated services path":          {input: "https://example.com/services/status", want: "https://example.com/services/status"},
+		"slack lookalike":                  {input: "https://hooks.slack.com.example.org/services/status", want: "https://hooks.slack.com.example.org/services/status"},
+		"basic auth": {
+			input: "https://hook-user:hook-password@example.com/hook",
+			want:  "https://REDACTED@example.com/hook",
+		},
+		"username only": {
+			input: "https://hook-user@example.com/hook",
+			want:  "https://REDACTED@example.com/hook",
+		},
+		"encoded credentials with other secrets": {
+			input: "https://hook%40user:p%40ss@example.com/bot123:secret/send?token=query-secret&channel=ops",
+			want:  "https://REDACTED@example.com/botREDACTED/send?token=REDACTED&channel=ops",
+		},
+		"malformed credential URL": {
+			input: "https://hook-user:hook-password@example.com/%zz",
+			want:  "[invalid webhook URL]",
+		},
+		"at sign outside authority": {
+			input: "https://example.com/hooks/@ops?channel=team@ops",
+			want:  "https://example.com/hooks/@ops?channel=team@ops",
+		},
 		"gotify token": {
 			input: "https://gotify.example/message?token=gotify-secret",
 			want:  "https://gotify.example/message?token=REDACTED",
 		},
+		"telegram escaped prefix":           {input: "https://api.telegram.org/%62ot123:telegram-secret/sendMessage", want: "https://api.telegram.org/botREDACTED/sendMessage"},
+		"telegram escaped token":            {input: "https://api.telegram.org/bot123:telegram%2Dsecret/sendMessage", want: "https://api.telegram.org/botREDACTED/sendMessage"},
+		"telegram local escaped prefix":     {input: "http://localhost:8081/%62ot123:telegram-secret/sendMessage", want: "http://localhost:8081/botREDACTED/sendMessage"},
+		"telegram no method with URL query": {input: "https://api.telegram.org/bot123:telegram-secret?next=https://example.org/status", want: "https://api.telegram.org/botREDACTED?next=https://example.org/status"},
+		"telegram fragment":                 {input: "https://api.telegram.org/bot123:telegram-secret#diagnostic", want: "https://api.telegram.org/botREDACTED#diagnostic"},
+		"bot hostname is not a path":        {input: "https://bot.example.org/hook?channel=ops", want: "https://bot.example.org/hook?channel=ops"},
+		"bot query is not a path":           {input: "https://example.org/hook?next=https://bot.example.org/status", want: "https://example.org/hook?next=https://bot.example.org/status"},
 		"telegram path and query": {
 			input: "https://api.telegram.org/bot123:secret/send?token=query-secret",
 			want:  "https://api.telegram.org/botREDACTED/send?token=REDACTED",
@@ -39,20 +81,55 @@ func TestRedactWebhookURLSecrets(t *testing.T) {
 	}
 }
 
+func TestRedactWebhookDiagnosticSecrets(t *testing.T) {
+	tests := map[string]struct {
+		input string
+		want  string
+	}{
+		"embedded query credential": {
+			input: "post https://hooks.example.test/notify?token=supersecret returned 401",
+			want:  "post https://hooks.example.test/notify?token=REDACTED returned 401",
+		},
+		"embedded userinfo": {
+			input: "request to https://hook-user:hook-password@example.test/hook failed",
+			want:  "request to https://REDACTED@example.test/hook failed",
+		},
+		"plain diagnostic": {
+			input: "connection refused",
+			want:  "connection refused",
+		},
+		"malformed embedded URL": {
+			input: "post https://hook-user:hook-password@example.test/%zz failed",
+			want:  invalidWebhookURLDiagnostic,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := RedactWebhookDiagnosticSecrets(test.input); got != test.want {
+				t.Fatalf("RedactWebhookDiagnosticSecrets() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestRedactWebhookTransportErrorPreservesBehaviorWithoutToken(t *testing.T) {
 	cause := errors.New("connection refused")
 	original := &url.Error{
 		Op:  "Post",
-		URL: "https://gotify.example/message?token=gotify-secret",
+		URL: "https://hook-user:hook-password@gotify.example/message?token=gotify-secret",
 		Err: cause,
 	}
 
 	redacted := redactWebhookTransportError(original)
-	if strings.Contains(redacted.Error(), "gotify-secret") {
+	if strings.Contains(redacted.Error(), "gotify-secret") || strings.Contains(redacted.Error(), "hook-password") || strings.Contains(redacted.Error(), "hook-user") {
 		t.Fatalf("redacted transport error exposed token: %v", redacted)
 	}
 	if !strings.Contains(redacted.Error(), "token=REDACTED") {
 		t.Fatalf("redacted transport error omitted diagnostic URL shape: %v", redacted)
+	}
+	if original.URL != "https://hook-user:hook-password@gotify.example/message?token=gotify-secret" {
+		t.Fatal("redaction mutated the original transport error")
 	}
 	if !errors.Is(redacted, cause) {
 		t.Fatal("redacted transport error no longer unwraps to its original cause")
@@ -67,7 +144,7 @@ func TestRedactWebhookTransportErrorPreservesBehaviorWithoutToken(t *testing.T) 
 // likely to fire repeatedly.
 func TestWebhookRateLimitLogsRedactURLSecrets(t *testing.T) {
 	const secret = "gotify-secret"
-	webhookURL := "https://gotify.example/message?token=" + secret
+	webhookURL := "https://hook-user:hook-password@gotify.example/message?token=" + secret
 
 	var captured bytes.Buffer
 	original := log.Logger
@@ -87,10 +164,84 @@ func TestWebhookRateLimitLogsRedactURLSecrets(t *testing.T) {
 	if !strings.Contains(out, "rate limit exceeded") {
 		t.Fatalf("expected the rate-limit drop to be logged, got %q", out)
 	}
-	if strings.Contains(out, secret) {
+	if strings.Contains(out, secret) || strings.Contains(out, "hook-password") || strings.Contains(out, "hook-user") {
 		t.Fatalf("webhook token leaked into logs: %q", out)
 	}
 	if !strings.Contains(out, "token=REDACTED") {
 		t.Fatalf("expected redacted url in logs, got %q", out)
+	}
+}
+
+func TestSlackWebhookDiagnosticsRedactPath(t *testing.T) {
+	const webhookURL = "https://hooks.slack.com/services/T-test/B-test/slack-secret"
+	cause := errors.New("connection refused")
+	original := &url.Error{Op: "Post", URL: webhookURL, Err: cause}
+	redacted := redactWebhookTransportError(original)
+	if strings.Contains(redacted.Error(), "slack-secret") || !strings.Contains(redacted.Error(), "/services/REDACTED") {
+		t.Fatalf("unsafe transport diagnostic: %v", redacted)
+	}
+	if original.URL != webhookURL || !errors.Is(redacted, cause) {
+		t.Fatal("transport error identity or cause changed")
+	}
+	var captured bytes.Buffer
+	logger := log.Logger
+	log.Logger = zerolog.New(&captured)
+	t.Cleanup(func() { log.Logger = logger })
+	nm := &NotificationManager{webhookRateLimits: make(map[string]*webhookRateLimit)}
+	for range WebhookRateLimitMax + 2 {
+		nm.checkWebhookRateLimit(webhookURL)
+	}
+	out := captured.String()
+	if !strings.Contains(out, "rate limit exceeded") || !strings.Contains(out, "/services/REDACTED") || strings.Contains(out, "slack-secret") {
+		t.Fatalf("unsafe rate-limit diagnostic: %s", out)
+	}
+}
+func TestDiscordWebhookDiagnosticsRedactPath(t *testing.T) {
+	const webhookURL = "https://discord.com/api/webhooks/123/discord-secret"
+	cause := errors.New("connection refused")
+	original := &url.Error{Op: "Post", URL: webhookURL, Err: cause}
+	redacted := redactWebhookTransportError(original)
+	if strings.Contains(redacted.Error(), "discord-secret") || !strings.Contains(redacted.Error(), "/api/webhooks/REDACTED") {
+		t.Fatalf("unsafe transport diagnostic: %v", redacted)
+	}
+	if original.URL != webhookURL || !errors.Is(redacted, cause) {
+		t.Fatal("transport error identity or cause changed")
+	}
+	var captured bytes.Buffer
+	logger := log.Logger
+	log.Logger = zerolog.New(&captured)
+	t.Cleanup(func() { log.Logger = logger })
+	nm := &NotificationManager{webhookRateLimits: make(map[string]*webhookRateLimit)}
+	for range WebhookRateLimitMax + 2 {
+		nm.checkWebhookRateLimit(webhookURL)
+	}
+	out := captured.String()
+	if !strings.Contains(out, "rate limit exceeded") || !strings.Contains(out, "/api/webhooks/REDACTED") || strings.Contains(out, "discord-secret") {
+		t.Fatalf("unsafe rate-limit diagnostic: %s", out)
+	}
+}
+
+func TestTelegramWebhookDiagnosticsRedactPath(t *testing.T) {
+	const webhookURL = "https://api.telegram.org/%62ot123:telegram-secret/sendMessage"
+	cause := errors.New("connection refused")
+	original := &url.Error{Op: "Post", URL: webhookURL, Err: cause}
+	redacted := redactWebhookTransportError(original)
+	if strings.Contains(redacted.Error(), "telegram-secret") || !strings.Contains(redacted.Error(), "/botREDACTED/sendMessage") {
+		t.Fatalf("unsafe transport diagnostic: %v", redacted)
+	}
+	if original.URL != webhookURL || !errors.Is(redacted, cause) {
+		t.Fatal("transport error identity or cause changed")
+	}
+	var captured bytes.Buffer
+	logger := log.Logger
+	log.Logger = zerolog.New(&captured)
+	t.Cleanup(func() { log.Logger = logger })
+	nm := &NotificationManager{webhookRateLimits: make(map[string]*webhookRateLimit)}
+	for range WebhookRateLimitMax + 2 {
+		nm.checkWebhookRateLimit(webhookURL)
+	}
+	out := captured.String()
+	if !strings.Contains(out, "rate limit exceeded") || !strings.Contains(out, "/botREDACTED/sendMessage") || strings.Contains(out, "telegram-secret") {
+		t.Fatalf("unsafe rate-limit diagnostic: %s", out)
 	}
 }

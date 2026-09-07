@@ -206,8 +206,7 @@ func TestGetDeliveryLogReturnsEntriesWithRedactedErrors(t *testing.T) {
 		response.Entries[0].AlertIDs[0] != "vm-offline-101" {
 		t.Fatalf("failed entry = %#v", response.Entries[0])
 	}
-	if strings.Contains(response.Entries[0].ErrorMessage, "supersecret") ||
-		!strings.Contains(response.Entries[0].ErrorMessage, "token=REDACTED") {
+	if response.Entries[0].ErrorMessage != "post https://hooks.example.test/notify?token=REDACTED returned 401" {
 		t.Fatalf("error message not redacted: %q", response.Entries[0].ErrorMessage)
 	}
 	if response.WindowDays != 30 ||
@@ -328,4 +327,40 @@ func containsAny(value string, needles ...string) bool {
 		}
 	}
 	return false
+}
+
+// These are response-boundary checks, not just URL-helper checks.
+func TestGetDeliveryLogDiagnosticContext(t *testing.T) {
+	for _, tc := range []struct{ name, input, want string }{
+		{"plain", "connection refused", "connection refused"},
+		{"encoded repeated query", "Post https://example.test/hook?%74oken=secret&token=secret&channel=ops failed", "Post https://example.test/hook?%74oken=REDACTED&token=REDACTED&channel=ops failed"},
+		{"userinfo", "Post https://user:password@example.test/hook: timeout", "Post https://REDACTED@example.test/hook: timeout"},
+		{"malformed", "Post https://user:password@example.test/%zz: timeout", "[invalid webhook URL]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			manager := new(MockNotificationManager)
+			monitor := new(MockNotificationMonitor)
+			monitor.On("GetNotificationManager").Return(manager).Once()
+			manager.On("GetDeliveryLog", mock.Anything, 0).Return([]notifications.DeliveryLogEntry{
+				{NotificationID: "attempt-1", ErrorMessage: tc.input, FailureClass: "transport"},
+			}, nil).Once()
+			rec := httptest.NewRecorder()
+			NewNotificationHandlers(nil, monitor).GetDeliveryLog(rec, httptest.NewRequest(http.MethodGet, "/api/notifications/delivery-log", nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d", rec.Code)
+			}
+			var response struct {
+				Entries []notifications.DeliveryLogEntry `json:"entries"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+				t.Fatal(err)
+			}
+			if len(response.Entries) != 1 || response.Entries[0].ErrorMessage != tc.want ||
+				response.Entries[0].NotificationID != "attempt-1" || response.Entries[0].FailureClass != "transport" {
+				t.Fatalf("unexpected delivery projection: %#v", response)
+			}
+			manager.AssertExpectations(t)
+			monitor.AssertExpectations(t)
+		})
+	}
 }

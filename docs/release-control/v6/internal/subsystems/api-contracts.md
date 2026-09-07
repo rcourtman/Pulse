@@ -20,6 +20,8 @@
 
 ## Purpose
 
+The delivery-log response redacts embedded webhook URLs in errorMessage rather than treating the entire diagnostic as a URL. Non-secret operation and failure context survive alongside notificationId, destinationId, outcome, failureClass and attempts; malformed URL diagnostics fail closed. The HTTP payload proof is TestContract_DeliveryDiagnosticPayload; notification handler tests pin plain, credential-bearing and malformed errors. No response keys or route permissions change.
+
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
 Canonical planning owns persisted actor/request idempotency. The same trusted

@@ -121,6 +121,24 @@ stable opaque routing identities and must not expose credentials.
 
 ## Current State
 
+### Webhook retry delay conversion
+
+`parseRetryAfterBackoff` bounds parsed integer seconds before multiplying by
+`time.Second`, so large provider values cannot overflow into an immediate
+retry. Signed 64-bit integer parsing makes this independent of native integer
+width. Positive parsed seconds above the existing `WebhookMaxBackoff` cap
+return that cap (30 seconds); non-positive parsed values retain the existing
+immediate fallback. HTTP-date parsing and invalid-value fallback are unchanged;
+integers outside signed 64-bit range remain invalid. Negative-value acceptance
+is compatibility behaviour, not the non-negative delay-seconds grammar of
+[RFC 9110 section 10.2.3](https://www.rfc-editor.org/rfc/rfc9110.html#section-10.2.3).
+
+`TestParseRetryAfterBackoff` in
+`internal/notifications/webhook_enhanced_test.go` pins both large positive and
+negative overflow cases alongside ordinary seconds, dates, whitespace and
+invalid inputs. This is pure parser proof: it does not establish elapsed HTTP
+retry timing, queue persistence, provider acceptance or recipient receipt.
+
 Notification-management HTTP production and its unit/contract proof now live
 together under `internal/api/alerting/`. Router-level scope and integration
 tests remain in `internal/api`, while the compatibility aliases there keep the
@@ -664,3 +682,94 @@ acceptance stops after the second attempt. This checks the sender's wrapped
 errors and retry termination, not only the failure classifier. The in-memory
 plain-SMTP fixture sends no external mail and does not qualify TLS, installed
 recipient receipt or queue persistence.
+
+### Webhook diagnostic userinfo confidentiality
+
+`RedactWebhookURLSecrets` masks the entire URL userinfo (including username-only
+credentials), before its existing Telegram-path and query-secret redaction.
+Unparseable URLs produce `[invalid webhook URL]`, not a raw credential-bearing
+fallback. Valid destination host/path and non-secret query fields remain useful
+for diagnosis. Transport-error redaction copies the URL error and retains its
+underlying cause without changing the original error or the configured URL.
+This follows the credential-exclusion principle in the
+[OWASP Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html#data-to-exclude).
+
+Regression tests cover plain/encoded/user-only credentials, malformed URLs,
+non-authority at signs, combined path/query redaction, error unwrapping and
+actual rate-limit log output. These queue-free tests establish local diagnostic
+redaction, not destination receipt, installed recovery or release qualification.
+No claim is made that arbitrary custom path/query secrets are recognised.
+
+Delivery-log errors use `RedactWebhookDiagnosticSecrets` so URLs embedded in
+otherwise useful error text receive the same masking without discarding the
+surrounding status context. Malformed embedded URLs still fail closed.
+
+### Slack webhook diagnostic path confidentiality
+
+The same helper masks paths on the exact `hooks.slack.com` and
+`hooks.slack-gov.com` hosts. `/services/` remains as a diagnostic marker; legacy
+paths become `/REDACTED`. Matching uses the parsed, case-insensitive hostname
+and clears the encoded path representation, so ports and escaped path segments
+do not bypass masking. Other hosts retain their diagnostic paths. Userinfo and
+known query credentials remain redacted; configured destinations are unchanged.
+
+[Slack's incoming-webhook documentation](https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/)
+identifies the webhook URL as secret and documents GovSlack's separate domain.
+Queue-free regression tests cover both hosts, encoded and legacy paths,
+lookalike/unrelated hosts, transport errors and actual rate-limit log output.
+This does not establish customer exposure, recipient receipt or recognition of
+arbitrary custom webhook secrets.
+
+### Discord webhook diagnostic path confidentiality
+
+On exact `discord.com` and legacy `discordapp.com` hosts, the shared redactor
+masks the suffix after `/webhooks/`, including the webhook ID and token.
+Versioned API prefixes remain visible; encoded paths, host casing and ports
+cannot bypass masking. Unrelated paths and lookalike hosts are unchanged.
+Configured destinations and transport error causes are not modified.
+
+[Discord's webhook reference](https://docs.discord.com/developers/resources/webhook)
+identifies the secure webhook token and token-authorised operations. Focused
+synthetic regressions cover helper output, transport diagnostics and actual
+rate-limit logs. This is not evidence of customer exposure, recipient receipt,
+release qualification, or protection of arbitrary custom-host credentials.
+
+### Telegram diagnostic path parsing
+
+Telegram bot-path masking operates on the parsed, decoded URL path and clears
+RawPath after replacement. This covers percent-encoded bot prefixes without
+mistaking a hostname or a URL inside a query for a bot path. Method suffixes,
+query diagnostics and fragments remain intact; configured destinations and
+transport-error causes are unchanged. Host-independent masking is retained for
+local API servers, which are supported by the
+[Telegram API documentation](https://core.telegram.org/bots/api#making-requests).
+
+Focused regression tests cover escaped prefixes/tokens, local servers, missing
+method suffixes, query URLs, fragments, transport errors and rate-limit logs.
+This is diagnostic containment, not evidence of customer exposure or recipient
+delivery. Arbitrary path secrets and unrecognised query credentials remain
+outside this bounded change.
+
+### Bounded diagnostic confidentiality: query representations and bypass callers
+
+Recognised query names are exactly token, apikey, api_key, key, secret and
+password after one URL query decode. Every repeated occurrence is masked,
+including mixed literal/escaped names. Unrelated names, ordering and values
+remain intact; invalid name escapes fail closed. This is diagnostic projection,
+not mutation of configured destinations or a claim to recognise arbitrary secrets.
+
+Resolved ntfy must apply the same transport-error projection before both its
+error log and returned error. Common HTTP execution preserves payload bytes,
+event identity and error causes; URLs containing userinfo remain rejected by
+outbound validation even though historical diagnostic userinfo is masked.
+
+The caller matrix and retained Delivery regression tests exercise URL/message
+helpers, actual rate-limit logs, common transport and resolved-ntfy transport
+errors/logs with synthetic secrets. HTTP delivery-log regression verifies encoded
+and repeated query credentials while retaining diagnostic context and entry
+identity. Existing exact-output tables bound Slack/GovSlack/legacy, Discord,
+Telegram/local paths, malformed URLs and non-secret lookalikes. Earlier proof
+missed decoded query representations and a separate ntfy transport caller:
+provider-only helper examples were not sufficient sink coverage. This contract
+does not assert arbitrary response-body/third-party error secrecy, installed
+recipient delivery, candidate qualification or historical customer exposure.

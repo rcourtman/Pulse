@@ -38,6 +38,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/alerting"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/chartapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/configapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/resourceapi"
@@ -46,6 +47,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
@@ -24733,5 +24735,53 @@ func TestSecurityStatusCurrentUserForScopedLocalSession(t *testing.T) {
 		} else if _, ok := payload["currentUsername"]; ok {
 			t.Error("public response exposes currentUsername")
 		}
+	}
+}
+
+// Embedding the interface makes any unexpected mutation fail rather than
+// supplying no-op write methods to this read-only API contract fixture.
+type diagnosticContractManager struct{ alerting.NotificationManager }
+
+func (diagnosticContractManager) GetDeliveryLog(time.Time, int) ([]notifications.DeliveryLogEntry, error) {
+	return []notifications.DeliveryLogEntry{{
+		NotificationID: "attempt-1", DestinationID: "ops", Outcome: notifications.DeliveryOutcomeFailed,
+		ErrorMessage: "post https://example.test/hook?token=fixture-secret returned 401",
+		FailureClass: "authentication", Attempts: 3,
+	}}, nil
+}
+
+type diagnosticContractMonitor struct{ alerting.NotificationMonitor }
+
+func (diagnosticContractMonitor) GetNotificationManager() alerting.NotificationManager {
+	return diagnosticContractManager{}
+}
+
+func TestContract_DeliveryDiagnosticPayload(t *testing.T) {
+	rec := httptest.NewRecorder()
+	alerting.NewNotificationHandlers(nil, diagnosticContractMonitor{}).GetDeliveryLog(rec,
+		httptest.NewRequest(http.MethodGet, "/api/notifications/delivery-log", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	var response struct {
+		Entries []map[string]interface{} `json:"entries"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Entries) != 1 {
+		t.Fatalf("entry count = %d", len(response.Entries))
+	}
+	for key, want := range map[string]interface{}{
+		"notificationId": "attempt-1", "destinationId": "ops", "outcome": "failed",
+		"failureClass": "authentication", "attempts": float64(3),
+		"errorMessage": "post https://example.test/hook?token=REDACTED returned 401",
+	} {
+		if got := response.Entries[0][key]; got != want {
+			t.Errorf("%s = %v, want %v", key, got, want)
+		}
+	}
+	if strings.Contains(rec.Body.String(), "fixture-secret") {
+		t.Fatal("response exposed destination credential")
 	}
 }

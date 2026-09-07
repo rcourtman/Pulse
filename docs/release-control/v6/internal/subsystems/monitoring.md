@@ -17,6 +17,36 @@
 
 ## Purpose
 
+**Availability backfill preserves concurrent discovery changes (7 September 2026)**
+
+The backfill List snapshot is a work list, not an authoritative record to save.
+Read the current discovery, derive a missing suggestion from its current identity,
+and persist under one store write lock. State-provider reads stay outside that
+lock. Preserve newer identity, URL, engine version, user notes and existing
+(including dismissed) proposals; never resurrect a discovery deleted after List.
+A failed persistence attempt remains an error without installing the proposed
+change in cache. `TestService_BackfillPreservesConcurrentManualRepair` in `service_test.go`
+deterministically pauses SetReadState
+backfill after List, completes manual ESPHome repair, then resumes backfill and
+checks both cache and encrypted restart.
+`TestStore_BackfillAvailabilitySuggestionUsesCurrentRecord` in `store_test.go`
+covers current-identity
+inference, dismissal, deletion, unsupported identity and persistence failure.
+This is discovery state-integrity proof, not incident or notification acceptance.
+
+**Correlated VM memory fallback — issue #1962 (7 September 2026)**
+
+The next Proxmox guest poll indexes live agent memory embedded in VM read views,
+not only standalone host views. Keys retain the instance/node/VMID scope. This
+restores the existing host-agent fallback when correlation removes the standalone
+host row; it does not change preferred QEMU memory sources or platform metric
+merge priority. Agent-source freshness and unavailable/invalid memory fail closed.
+`TestCorrelatedGuestMemoryNextPoll` exercises real manual registry merging,
+next-poll resolution, VM construction, card read-state projection, diagnostic
+snapshots and actual memory-threshold evaluation, plus stale/offline/unavailable
+samples and other-instance lookup. It is synthetic runtime proof, not a live
+FreeBSD installation, automatic identity-match or browser receipt.
+
 Container filesystem observations are native, resource-scoped reads. The shared
 `pkg/agents/filesystem` contract keeps measurement time, mountpoint, source,
 filesystem type and optional usage together. Unavailable reads have an error

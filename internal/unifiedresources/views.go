@@ -75,6 +75,24 @@ type VMView struct{ r *Resource }
 
 func NewVMView(r *Resource) VMView { return VMView{r: r} }
 
+// LinkedAgentMemory returns the agent's own sample, not the platform-priority
+// merged metric. Freshness belongs to the agent source, not the VM row.
+func (v VMView) LinkedAgentMemory() (models.Memory, bool) {
+	if v.r == nil || v.r.Agent == nil || v.r.Agent.Stale || v.r.Agent.Memory == nil {
+		return models.Memory{}, false
+	}
+	if status, ok := v.r.SourceStatus[SourceAgent]; !ok || status.Status != "online" {
+		return models.Memory{}, false
+	}
+	m := v.r.Agent.Memory
+	memory := models.Memory{Total: m.Total, Used: m.Used, Free: m.Free, Cache: m.Cache, UsageUnavailable: m.UsageUnavailable}
+	if m.Total <= 0 {
+		return models.Memory{}, false
+	}
+	memory.Usage = float64(m.Used) / float64(m.Total) * 100
+	return memory, memory.HasKnownUsage()
+}
+
 func (v VMView) String() string { return fmt.Sprintf("VMView(%s, %q)", v.ID(), v.Name()) }
 
 func (v VMView) ID() string {

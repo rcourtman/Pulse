@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -2665,5 +2666,97 @@ func TestService_ListDiscoveriesByTarget_DoesNotBridgeSharedHostnames(t *testing
 	}
 	if len(own) != 1 {
 		t.Fatalf("expected estate B to keep finding its own record, got %d", len(own))
+	}
+}
+
+// Pause the first snapshot read, which backfill performs after Store.List.
+// Other reads remain available to the concurrent manual discovery.
+type backfillBarrierState struct {
+	unifiedresources.ReadState
+	first  atomic.Bool
+	listed chan struct{}
+	resume chan struct{}
+}
+
+func (s *backfillBarrierState) VMs() []*unifiedresources.VMView {
+	if s.first.CompareAndSwap(false, true) {
+		close(s.listed)
+		<-s.resume
+	}
+	return s.ReadState.VMs()
+}
+
+func TestService_BackfillPreservesConcurrentManualRepair(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(store, nil, DefaultConfig())
+	rs := readStateFromSnapshot(StateSnapshot{Containers: []Container{
+		{VMID: 102, Name: "esphome", Node: "pve1", Status: "running"},
+	}})
+	// Set up the fixture before starting the asynchronous backfill.
+	service.readState = rs
+	service.SetCommandScanningEnabled(true)
+	service.SetAIAnalyzer(&stubAnalyzer{response: `{}`})
+	service.collectFingerprints(context.Background())
+	id := MakeResourceID(ResourceTypeSystemContainer, "pve1", "102")
+	fp, err := store.GetFingerprint(id)
+	if err != nil || fp == nil {
+		t.Fatalf("fingerprint: %v, %v", fp, err)
+	}
+	if err := store.Save(&ResourceDiscovery{
+		ID: id, ResourceType: ResourceTypeSystemContainer, TargetID: "pve1", ResourceID: "102",
+		Hostname: "esphome", ServiceType: "unknown", ServiceName: "Unknown Service", Category: CategoryUnknown,
+		Fingerprint: fp.Hash, FingerprintedAt: fp.GeneratedAt, FingerprintSchemaVersion: fp.SchemaVersion,
+		CLIAccessVersion: CLIAccessVersion,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	barrier := &backfillBarrierState{ReadState: rs, listed: make(chan struct{}), resume: make(chan struct{})}
+	var release sync.Once
+	unblock := func() { release.Do(func() { close(barrier.resume) }) }
+	service.SetReadState(barrier)
+	t.Cleanup(func() { unblock(); service.backfillCancel(); <-service.backfillDone })
+	select {
+	case <-barrier.listed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("backfill did not reach snapshot barrier")
+	}
+	summary, err := service.RunManualDiscoveryRefresh(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.DiscoveredCount != 1 || summary.FailedCount != 0 {
+		t.Fatalf("refresh: %+v", summary)
+	}
+	repaired, err := store.Get(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repaired.ServiceType != "esphome" {
+		t.Fatalf("manual repair failed: %q", repaired.ServiceType)
+	}
+	unblock()
+	select {
+	case <-service.backfillDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("backfill did not finish")
+	}
+	// Read through a new encrypted store as well as the live cache.
+	restarted, err := NewStore(filepath.Dir(store.dataDir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, reader := range map[string]*Store{"cache": store, "disk": restarted} {
+		got, err := reader.Get(id)
+		if err != nil || got == nil {
+			t.Fatalf("%s read: %v", name, err)
+		}
+		if got.ServiceType != repaired.ServiceType || got.ServiceName != repaired.ServiceName ||
+			got.SuggestedURL != repaired.SuggestedURL || got.DiscoveryEngineVersion != repaired.DiscoveryEngineVersion {
+			t.Errorf("%s: backfill overwrote manual repair: type=%q name=%q URL=%q engine=%d", name,
+				got.ServiceType, got.ServiceName, got.SuggestedURL, got.DiscoveryEngineVersion)
+		}
 	}
 }

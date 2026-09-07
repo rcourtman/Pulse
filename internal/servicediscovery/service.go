@@ -3514,14 +3514,11 @@ func (s *Service) backfillAvailabilitySuggestions(ctx context.Context) {
 		}
 
 		externalIP := s.getResourceExternalIP(req)
-		suggestion := SuggestAvailabilityProbe(d, externalIP)
-		if suggestion != nil {
-			d.SuggestedAvailabilityProbe = suggestion
-			if err := s.store.Save(d); err != nil {
-				log.Warn().Err(err).Str("id", d.ID).Msg("Failed to save backfilled availability suggestion")
-			} else {
-				updated++
-			}
+		changed, err := s.store.backfillAvailabilitySuggestion(d.ID, externalIP)
+		if err != nil {
+			log.Warn().Err(err).Str("id", d.ID).Msg("Failed to save backfilled availability suggestion")
+		} else if changed {
+			updated++
 		}
 	}
 

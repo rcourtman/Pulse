@@ -21,6 +21,8 @@
 
 ## Purpose
 
+Delivery-log URL masking occurs in the HTTP diagnostic projection and does not rewrite retained attempt history or destination configuration. Preserved failure context and attempt identifiers describe notification delivery only, not a restore result or storage freshness. Malformed URL diagnostics fail closed in the response; this does not delete the retained failure, change retention windows, or grant retry, storage or recovery authority.
+
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
 The shared action API preserves full canonical approval requirements and actor/

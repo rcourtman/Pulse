@@ -224,6 +224,9 @@ scripts/release_control/
 scripts/release_control/*
 !scripts/release_control/canonical_completion_guard.py
 !scripts/release_control/canonical_completion_guard_test.py
+!scripts/release_control/canonical_completion_history.json
+!scripts/release_control/canonical_completion_history.py
+!scripts/release_control/canonical_completion_history_test.py
 !scripts/release_control/commercial_cancellation_reactivation_proof.py
 !scripts/release_control/commercial_cancellation_reactivation_rehearsal.py
 !scripts/release_control/contract_audit.py

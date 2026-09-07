@@ -482,7 +482,15 @@ func parseRetryAfterBackoff(retryAfter string, now time.Time) (time.Duration, bo
 		return backoff
 	}
 
-	if seconds, err := strconv.Atoi(retryAfter); err == nil {
+	if seconds, err := strconv.ParseInt(retryAfter, 10, 64); err == nil {
+		// Clamp in seconds before conversion: multiplying an untrusted value
+		// by time.Second can overflow and turn a long delay into no delay.
+		if seconds <= 0 {
+			return 0, true
+		}
+		if seconds > int64(WebhookMaxBackoff/time.Second) {
+			return WebhookMaxBackoff, true
+		}
 		return clampBackoff(time.Duration(seconds) * time.Second), true
 	}
 

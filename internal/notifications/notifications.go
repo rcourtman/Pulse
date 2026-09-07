@@ -2776,6 +2776,7 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 
 	resp, err := n.webhookClient.Do(req)
 	if err != nil {
+		err = redactWebhookTransportError(err)
 		log.Error().
 			Err(err).
 			Str("webhook", webhook.Name).

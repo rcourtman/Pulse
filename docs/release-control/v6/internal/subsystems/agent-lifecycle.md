@@ -15,6 +15,8 @@
 
 ## Purpose
 
+Delivery-log diagnostic text is a notification-attempt projection, not an agent admission or liveness verdict. Masking embedded destination credentials preserves failure context without changing agent identities, credentials, session replacement or removal policy. Consumers must use the retained failureClass and outcome as delivery evidence only; a transport error does not establish that the monitored agent is offline.
+
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
 Patrol planning uses the canonical action broker's plan-only boundary. Policy
