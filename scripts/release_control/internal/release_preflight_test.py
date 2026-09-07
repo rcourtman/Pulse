@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import json
 import pathlib
 import re
 import subprocess
@@ -264,6 +265,66 @@ class ReleasePreflightTest(unittest.TestCase):
         self.assertNotIn("run_backend &", block)
         self.assertLess(block.index("done\n"), block.index("run_frontend_tests\n"))
         self.assertLess(block.index("run_frontend_tests\n"), block.index("run_backend\n"))
+
+    def test_browser_mount_identity_and_locked_cli_follow_the_docker_daemon(self) -> None:
+        worker = (ROOT / "scripts/release-preflight-worker.sh").read_text()
+        functions = []
+        for name in ("playwright_container_user", "run_playwright"):
+            match = re.search(rf"^{name}\(\) \{{\n.*?^\}}", worker, re.MULTILINE | re.DOTALL)
+            self.assertIsNotNone(match, name)
+            functions.append(match.group(0))
+        for options, info_rc, valid, expected_user in (
+            (["name=seccomp,profile=builtin", "name=rootless"], 0, True, "0:0"),
+            (["name=seccomp,profile=builtin"], 0, True, f"{os.getuid()}:{os.getgid()}"),
+            ([], 42, False, None),
+            ({"rootless": True}, 0, False, None),
+            (None, 0, False, None),
+        ):
+            with self.subTest(options=options, info_rc=info_rc), tempfile.TemporaryDirectory() as raw:
+                temp = pathlib.Path(raw)
+                docker = temp / "docker"
+                docker.write_text(
+                    f"#!{sys.executable}\n"
+                    "import json,os,pathlib,sys\n"
+                    "if sys.argv[1] == 'info':\n"
+                    "    print(os.environ['TEST_SECURITY_OPTIONS'])\n"
+                    "    raise SystemExit(int(os.environ['TEST_INFO_RC']))\n"
+                    "pathlib.Path(os.environ['TEST_CONTAINER_STARTED']).touch()\n"
+                    "print(json.dumps(sys.argv[1:]))\n"
+                )
+                docker.chmod(0o755)
+                started = temp / "started"
+                script = "set -euo pipefail\n" + "\n".join(functions) + "\n"
+                script += 'PLAYWRIGHT_CONTAINER_USER="$(playwright_container_user)"\n'
+                script += "run_playwright --version\n"
+                script += "run_playwright test tests/00-diagnostic.spec.ts --project=chromium\n"
+                result = subprocess.run(
+                    ["bash", "-c", script], capture_output=True, text=True, check=False,
+                    env={**os.environ, "PATH": f"{temp}:{os.environ['PATH']}",
+                         "TEST_SECURITY_OPTIONS": json.dumps(options), "TEST_INFO_RC": str(info_rc),
+                         "TEST_CONTAINER_STARTED": str(started),
+                         "REPOSITORY_DIR": str(temp / "private workspace"),
+                         "PLAYWRIGHT_IMAGE": "locked-playwright-image",
+                         "PULSE_E2E_BASE_URL": "http://127.0.0.1:27655"},
+                )
+                self.assertEqual(valid, result.returncode == 0, result.stderr)
+                self.assertEqual(valid, started.exists())
+                if not valid:
+                    continue
+                calls = [json.loads(line) for line in result.stdout.splitlines()]
+                self.assertEqual(2, len(calls))
+                for args in calls:
+                    self.assertEqual(expected_user, args[args.index("--user") + 1])
+                    self.assertEqual(f"{temp}/private workspace/tests/integration:/work",
+                                     args[args.index("--volume") + 1])
+                    self.assertIn("node", args)
+                    self.assertIn("/work/node_modules/@playwright/test/cli.js", args)
+                    self.assertNotIn("npx", args)
+                self.assertEqual("--version", calls[0][-1])
+                self.assertEqual(["test", "tests/00-diagnostic.spec.ts", "--project=chromium"], calls[1][-3:])
+        prep = worker[worker.index("run_integration_prep() {"):worker.index("# Static frontend checks")]
+        self.assertLess(prep.index("phase playwright-image"), prep.index("phase playwright-runtime"))
+        self.assertIn("phase playwright-runtime run_playwright --version", prep)
 
     def test_api_shard_plan_is_deterministic_complete_and_disjoint(self) -> None:
         test_names = [

@@ -970,6 +970,14 @@ artifact-selection behaviour.
    Worker startup must compare the complete `go`-prefixed toolchain identity
    from `go.mod` with `go env GOVERSION` so a formatting mismatch cannot reject
    an otherwise exact toolchain or conceal a real version drift.
+   Browser smoke must preserve private workspace ownership across the Docker
+   user-namespace boundary. On rootless Docker, container `0:0` maps to the
+   daemon owner; on rootful Docker, the browser uses the worker's host UID/GID.
+   The worker must read the daemon's security options, reject unreadable or
+   malformed identity information, and probe the mounted, lockfile-installed
+   Playwright CLI before the expensive suites and image build. It must not
+   download a replacement CLI or broaden checkout permissions to hide a mount
+   identity failure.
    Race-instrumented Go builds must place `GOTMPDIR` under the worker's
    persistent run directory and remove that bounded scratch directory on exit;
    a small WSL `/tmp` tmpfs must not turn release qualification into a false
