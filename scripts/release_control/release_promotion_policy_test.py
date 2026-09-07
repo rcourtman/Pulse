@@ -1595,6 +1595,31 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("did not produce a valid promotion metadata envelope", workflow)
         self.assertIn("Do not use this artifact to clear", workflow)
 
+    def test_release_dispatch_rejects_source_or_workflow_drift_before_checkout(self) -> None:
+        workflow = yaml.safe_load(read(".github/workflows/create-release.yml"))
+        steps = workflow["jobs"]["prepare"]["steps"]
+        self.assertEqual(steps[0]["name"], "Verify admitted source commit")
+        self.assertIn("actions/checkout@", steps[1]["uses"])
+        expected = "a" * 40
+        other = "b" * 40
+        for admitted, source, workflow_sha, succeeds in (
+            (expected, expected, expected, True),
+            (expected, other, expected, False),
+            (expected, expected, other, False),
+            (expected, other, other, False),
+            ("", expected, expected, False),
+            ("main", expected, expected, False),
+            ("a" * 39, expected, expected, False),
+        ):
+            with self.subTest(admitted=admitted, source=source, workflow=workflow_sha):
+                result = subprocess.run(
+                    ["bash", "-c", steps[0]["run"]],
+                    env={"PATH": os.defpath, "EXPECTED_SOURCE_SHA": admitted,
+                         "GITHUB_SHA": source, "GITHUB_WORKFLOW_SHA": workflow_sha},
+                    capture_output=True, text=True, check=False,
+                )
+                self.assertEqual(result.returncode == 0, succeeds, result.stdout + result.stderr)
+
     def test_release_workflow_enforces_rc_lineage_soak_and_v5_notice(self) -> None:
         content = read(".github/workflows/create-release.yml")
         update_demo_workflow = read(".github/workflows/update-demo-server.yml")
@@ -1694,6 +1719,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("build_rollback_section", renderer)
         self.assertIn("promotion metadata out of customer notes", renderer)
         self.assertIn("historical_asset_backfill_only:", content)
+        self.assertIn("expected_source_sha:", content)
+        self.assertIn('EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}', content)
+        self.assertIn('"${GITHUB_SHA}" != "${EXPECTED_SOURCE_SHA}"', content)
+        self.assertIn('"${GITHUB_WORKFLOW_SHA}" != "${EXPECTED_SOURCE_SHA}"', content)
         self.assertIn("Repair an already-published release packet in place without rebuilding binaries", content)
         self.assertIn("draft: true", content)
         self.assertIn("activate_release:", content)

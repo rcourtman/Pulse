@@ -933,6 +933,10 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 	convergenceWorkflow := string(convergenceContent)
 	required := []string{
 		`historical_asset_backfill_only:`,
+		`expected_source_sha:`,
+		`EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}`,
+		`"${GITHUB_SHA}" != "${EXPECTED_SOURCE_SHA}"`,
+		`"${GITHUB_WORKFLOW_SHA}" != "${EXPECTED_SOURCE_SHA}"`,
 		`description: 'Repair an already-published release packet in place without rebuilding binaries'`,
 		`SYFT_VERSION="1.42.4"`,
 		`SYFT_ARCHIVE="syft_${SYFT_VERSION}_linux_amd64.tar.gz"`,
