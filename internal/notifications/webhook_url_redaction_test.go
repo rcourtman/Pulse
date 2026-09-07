@@ -16,6 +16,26 @@ func TestRedactWebhookURLSecrets(t *testing.T) {
 		input string
 		want  string
 	}{
+		"basic auth": {
+			input: "https://hook-user:hook-password@example.com/hook",
+			want:  "https://REDACTED@example.com/hook",
+		},
+		"username only": {
+			input: "https://hook-user@example.com/hook",
+			want:  "https://REDACTED@example.com/hook",
+		},
+		"encoded credentials with other secrets": {
+			input: "https://hook%40user:p%40ss@example.com/bot123:secret/send?token=query-secret&channel=ops",
+			want:  "https://REDACTED@example.com/botREDACTED/send?token=REDACTED&channel=ops",
+		},
+		"malformed credential URL": {
+			input: "https://hook-user:hook-password@example.com/%zz",
+			want:  "[invalid webhook URL]",
+		},
+		"at sign outside authority": {
+			input: "https://example.com/hooks/@ops?channel=team@ops",
+			want:  "https://example.com/hooks/@ops?channel=team@ops",
+		},
 		"gotify token": {
 			input: "https://gotify.example/message?token=gotify-secret",
 			want:  "https://gotify.example/message?token=REDACTED",
@@ -43,16 +63,19 @@ func TestRedactWebhookTransportErrorPreservesBehaviorWithoutToken(t *testing.T) 
 	cause := errors.New("connection refused")
 	original := &url.Error{
 		Op:  "Post",
-		URL: "https://gotify.example/message?token=gotify-secret",
+		URL: "https://hook-user:hook-password@gotify.example/message?token=gotify-secret",
 		Err: cause,
 	}
 
 	redacted := redactWebhookTransportError(original)
-	if strings.Contains(redacted.Error(), "gotify-secret") {
+	if strings.Contains(redacted.Error(), "gotify-secret") || strings.Contains(redacted.Error(), "hook-password") || strings.Contains(redacted.Error(), "hook-user") {
 		t.Fatalf("redacted transport error exposed token: %v", redacted)
 	}
 	if !strings.Contains(redacted.Error(), "token=REDACTED") {
 		t.Fatalf("redacted transport error omitted diagnostic URL shape: %v", redacted)
+	}
+	if original.URL != "https://hook-user:hook-password@gotify.example/message?token=gotify-secret" {
+		t.Fatal("redaction mutated the original transport error")
 	}
 	if !errors.Is(redacted, cause) {
 		t.Fatal("redacted transport error no longer unwraps to its original cause")
@@ -67,7 +90,7 @@ func TestRedactWebhookTransportErrorPreservesBehaviorWithoutToken(t *testing.T) 
 // likely to fire repeatedly.
 func TestWebhookRateLimitLogsRedactURLSecrets(t *testing.T) {
 	const secret = "gotify-secret"
-	webhookURL := "https://gotify.example/message?token=" + secret
+	webhookURL := "https://hook-user:hook-password@gotify.example/message?token=" + secret
 
 	var captured bytes.Buffer
 	original := log.Logger
@@ -87,7 +110,7 @@ func TestWebhookRateLimitLogsRedactURLSecrets(t *testing.T) {
 	if !strings.Contains(out, "rate limit exceeded") {
 		t.Fatalf("expected the rate-limit drop to be logged, got %q", out)
 	}
-	if strings.Contains(out, secret) {
+	if strings.Contains(out, secret) || strings.Contains(out, "hook-password") || strings.Contains(out, "hook-user") {
 		t.Fatalf("webhook token leaked into logs: %q", out)
 	}
 	if !strings.Contains(out, "token=REDACTED") {
