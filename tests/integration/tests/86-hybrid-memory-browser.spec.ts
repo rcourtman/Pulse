@@ -163,17 +163,73 @@ test("hybrid guest memory follows canonical snapshots in the browser", async ({
       page.locator(".workload-row").filter({ hasText: "cluster-b-vm" }),
     ).toContainText("80%");
   }
-  resources = [vm("cluster-a", 0), vm("cluster-b", 80)];
-  send();
-  await expect(memoryCell).toContainText("0%");
-  await expect(memoryCell).not.toContainText("N/A");
-  await expect(drawer).toContainText("100 MB");
-  await expect(
-    page.locator(".workload-row").filter({ hasText: "cluster-b-vm" }),
-  ).toContainText("80%");
-  expect(errors).toEqual([]);
-  await testInfo.attach("hybrid-memory-measured-zero", {
-    body: await page.screenshot(),
-    contentType: "image/png",
+  // Workload details use canonical metrics only: withdrawal removes the Memory
+  // section; recovery restores it. Do not invent Usage UI or raw-facet totals.
+  const memoryDetails = drawer.locator("tbody").filter({
+    has: page.locator("th").filter({ hasText: /^Memory$/ }),
   });
+  for (const viewport of [
+    { width: 1280, height: 900 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    resources = [
+      {
+        ...vm("cluster-a"),
+        proxmox: {
+          ...vm("cluster-a").proxmox,
+          memory: {
+            total: 100 * 1024 * 1024,
+            used: 0,
+            free: 0,
+            usage: 0,
+            usageUnavailable: true,
+          },
+        },
+      } as ReturnType<typeof vm>,
+      vm("cluster-b", 80),
+    ];
+    send();
+    await expect(memoryCell).toContainText("N/A");
+    await expect(memoryCell).not.toContainText("100%");
+    await expect(memoryDetails).toHaveCount(0);
+    await expect(drawer.getByText("Free", { exact: true })).toHaveCount(0);
+    await drawer.scrollIntoViewIfNeeded();
+    await expect(drawer).toBeInViewport();
+    await expect(
+      page.locator(".workload-row").filter({ hasText: "cluster-b-vm" }),
+    ).toContainText("80%");
+    await testInfo.attach(`withdrawn-memory-${viewport.width}`, {
+      body: await page.screenshot(),
+      contentType: "image/png",
+    });
+
+    resources = [vm("cluster-a", 0), vm("cluster-b", 80)];
+    send();
+    await expect(memoryCell).toContainText("0%");
+    await expect(memoryCell).not.toContainText("N/A");
+    // Centre the recovered details above the fixed narrow-screen navigation.
+    await memoryDetails.evaluate((element) =>
+      element.scrollIntoView({ block: "center", inline: "nearest" }),
+    );
+    await expect.poll(async () => {
+      const box = await memoryDetails.boundingBox();
+      return box ? box.y + box.height : Infinity;
+    }).toBeLessThan(viewport.height - 64);
+    await expect(memoryDetails).toBeInViewport({ ratio: 1 });
+    await expect(memoryDetails).toContainText("100 MB");
+    await expect(
+      memoryDetails.locator("tr").filter({
+        has: page.getByText("Free", { exact: true }),
+      }),
+    ).toContainText("100 MB");
+    await expect(
+      page.locator(".workload-row").filter({ hasText: "cluster-b-vm" }),
+    ).toContainText("80%");
+    await testInfo.attach(`recovered-memory-${viewport.width}`, {
+      body: await page.screenshot(),
+      contentType: "image/png",
+    });
+  }
+  expect(errors).toEqual([]);
 });
