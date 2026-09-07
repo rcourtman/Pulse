@@ -333,6 +333,7 @@ func containsAny(value string, needles ...string) bool {
 func TestGetDeliveryLogDiagnosticContext(t *testing.T) {
 	for _, tc := range []struct{ name, input, want string }{
 		{"plain", "connection refused", "connection refused"},
+		{"encoded repeated query", "Post https://example.test/hook?%74oken=secret&token=secret&channel=ops failed", "Post https://example.test/hook?%74oken=REDACTED&token=REDACTED&channel=ops failed"},
 		{"userinfo", "Post https://user:password@example.test/hook: timeout", "Post https://REDACTED@example.test/hook: timeout"},
 		{"malformed", "Post https://user:password@example.test/%zz: timeout", "[invalid webhook URL]"},
 	} {
