@@ -1234,3 +1234,95 @@ func TestStore_GetStaleResources(t *testing.T) {
 		t.Fatalf("expected GetStaleResources to return list error")
 	}
 }
+
+func TestStore_BackfillAvailabilitySuggestionUsesCurrentRecord(t *testing.T) {
+	for _, scenario := range []string{"new identity", "existing dismissed proposal", "deleted", "unsupported", "write failure"} {
+		t.Run(scenario, func(t *testing.T) {
+			dir := t.TempDir()
+			store, err := NewStore(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			id := MakeResourceID(ResourceTypeSystemContainer, "pve1", "102")
+			old := &ResourceDiscovery{ID: id, Hostname: "esphome", ServiceType: "unknown"}
+			if err := store.Save(old); err != nil {
+				t.Fatal(err)
+			}
+			work, err := store.List()
+			if err != nil || len(work) != 1 {
+				t.Fatalf("List: %v, %v", work, err)
+			}
+			current := cloneResourceDiscovery(old)
+			current.ServiceType = "redis"
+			current.ServiceName = "New Redis"
+			current.UserNotes = "operator note after list"
+			if scenario == "existing dismissed proposal" {
+				current.SuggestedAvailabilityProbe = SuggestAvailabilityProbe(current, "192.0.2.20")
+				current.DismissedAvailabilityProbeFingerprint = current.SuggestedAvailabilityProbe.EvidenceFingerprint
+			}
+			if scenario == "unsupported" {
+				current.ServiceType = "unknown"
+				current.Hostname = "unidentified"
+			}
+			if err := store.Save(current); err != nil {
+				t.Fatal(err)
+			}
+			before, err := store.Get(id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if scenario == "deleted" {
+				if err := store.Delete(id); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if scenario == "write failure" {
+				// A directory at the temporary file path causes a real persistence error.
+				if err := os.Mkdir(store.getFilePath(id)+".tmp", 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			changed, err := store.backfillAvailabilitySuggestion(work[0].ID, "192.0.2.10")
+			if scenario == "write failure" {
+				if err == nil || changed {
+					t.Fatalf("expected failed write, got changed=%v err=%v", changed, err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			if changed != (scenario == "new identity") {
+				t.Fatalf("unexpected changed=%v", changed)
+			}
+			restarted, err := NewStore(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for name, reader := range map[string]*Store{"cache": store, "disk": restarted} {
+				got, err := reader.Get(id)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if scenario == "deleted" {
+					if got != nil {
+						t.Errorf("%s: deleted discovery resurrected", name)
+					}
+					continue
+				}
+				want := cloneResourceDiscovery(before)
+				if scenario == "new identity" {
+					want.SuggestedAvailabilityProbe = SuggestAvailabilityProbe(before, "192.0.2.10")
+					want.UpdatedAt = got.UpdatedAt
+					if got.SuggestedAvailabilityProbe == nil || got.SuggestedAvailabilityProbe.Port != 6379 {
+						t.Fatalf("%s: suggestion not derived from current Redis identity", name)
+					}
+				}
+				// JSON comparison ignores time.Time's process-local monotonic clock.
+				gotJSON, _ := json.Marshal(got)
+				wantJSON, _ := json.Marshal(want)
+				if string(gotJSON) != string(wantJSON) {
+					t.Errorf("%s: backfill changed unrelated/current fields", name)
+				}
+			}
+		})
+	}
+}

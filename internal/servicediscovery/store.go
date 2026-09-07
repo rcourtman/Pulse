@@ -381,7 +381,11 @@ func (s *Store) marshalDiscoveryForStorage(discovery *ResourceDiscovery) ([]byte
 func (s *Store) Save(d *ResourceDiscovery) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.saveLocked(d)
+}
 
+// saveLocked requires s.mu to be held for writing.
+func (s *Store) saveLocked(d *ResourceDiscovery) error {
 	if d.ID == "" {
 		return fmt.Errorf("discovery ID is required")
 	}
@@ -433,7 +437,11 @@ func (s *Store) Get(id string) (*ResourceDiscovery, error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.getLocked(id)
+}
 
+// getLocked requires s.mu to be held for writing (loads may migrate files).
+func (s *Store) getLocked(id string) (*ResourceDiscovery, error) {
 	filePath := s.getFilePath(id)
 	activePath := filePath
 	data, migratedPlaintext, err := s.loadDiscoveryFileData(filePath, maxDiscoveryFileReadBytes)
@@ -479,6 +487,30 @@ func (s *Store) Get(id string) (*ResourceDiscovery, error) {
 	s.cacheTime[id] = time.Now()
 
 	return cloneResourceDiscovery(&discovery), nil
+}
+
+// backfillAvailabilitySuggestion reads, derives and persists under one lock.
+// A List snapshot is only a work list: never write its stale identity or resurrect
+// a deleted discovery. State/monitor reads must happen before taking this lock.
+func (s *Store) backfillAvailabilitySuggestion(id, externalIP string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	current, err := s.getLocked(id)
+	if err != nil || current == nil {
+		return false, err
+	}
+	if current.SuggestedAvailabilityProbe != nil {
+		return false, nil
+	}
+	suggestion := SuggestAvailabilityProbe(current, externalIP)
+	if suggestion == nil {
+		return false, nil
+	}
+	current.SuggestedAvailabilityProbe = suggestion
+	if err := s.saveLocked(current); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // GetByResource retrieves a discovery by resource type and ID.

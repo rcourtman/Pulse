@@ -1,0 +1,18 @@
+--- FAIL: TestRedactWebhookURLSecrets (0.00s)
+    --- FAIL: TestRedactWebhookURLSecrets/telegram_escaped_prefix (0.00s)
+        webhook_url_redaction_test.go:76: RedactWebhookURLSecrets() = "https://api.telegram.org/%62ot123:telegram-secret/sendMessage", want "https://api.telegram.org/botREDACTED/sendMessage"
+    --- FAIL: TestRedactWebhookURLSecrets/telegram_local_escaped_prefix (0.00s)
+        webhook_url_redaction_test.go:76: RedactWebhookURLSecrets() = "http://localhost:8081/%62ot123:telegram-secret/sendMessage", want "http://localhost:8081/botREDACTED/sendMessage"
+    --- FAIL: TestRedactWebhookURLSecrets/telegram_no_method_with_URL_query (0.00s)
+        webhook_url_redaction_test.go:76: RedactWebhookURLSecrets() = "https://api.telegram.org/botREDACTED//example.org/status", want "https://api.telegram.org/botREDACTED?next=https://example.org/status"
+    --- FAIL: TestRedactWebhookURLSecrets/bot_query_is_not_a_path (0.00s)
+        webhook_url_redaction_test.go:76: RedactWebhookURLSecrets() = "https://example.org/hook?next=https://botREDACTED/status", want "https://example.org/hook?next=https://bot.example.org/status"
+    --- FAIL: TestRedactWebhookURLSecrets/telegram_fragment (0.00s)
+        webhook_url_redaction_test.go:76: RedactWebhookURLSecrets() = "https://api.telegram.org/botREDACTED", want "https://api.telegram.org/botREDACTED#diagnostic"
+    --- FAIL: TestRedactWebhookURLSecrets/bot_hostname_is_not_a_path (0.00s)
+        webhook_url_redaction_test.go:76: RedactWebhookURLSecrets() = "https://botREDACTED/hook?channel=ops", want "https://bot.example.org/hook?channel=ops"
+--- FAIL: TestTelegramWebhookDiagnosticsRedactPath (0.00s)
+    webhook_url_redaction_test.go:228: unsafe transport diagnostic: Post "https://api.telegram.org/%62ot123:telegram-secret/sendMessage": connection refused
+FAIL
+FAIL	github.com/rcourtman/pulse-go-rewrite/internal/notifications	0.005s
+FAIL

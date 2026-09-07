@@ -607,3 +607,57 @@ Queue-free regression tests cover both hosts, encoded and legacy paths,
 lookalike/unrelated hosts, transport errors and actual rate-limit log output.
 This does not establish customer exposure, recipient receipt or recognition of
 arbitrary custom webhook secrets.
+
+### Discord webhook diagnostic path confidentiality
+
+On exact `discord.com` and legacy `discordapp.com` hosts, the shared redactor
+masks the suffix after `/webhooks/`, including the webhook ID and token.
+Versioned API prefixes remain visible; encoded paths, host casing and ports
+cannot bypass masking. Unrelated paths and lookalike hosts are unchanged.
+Configured destinations and transport error causes are not modified.
+
+[Discord's webhook reference](https://docs.discord.com/developers/resources/webhook)
+identifies the secure webhook token and token-authorised operations. Focused
+synthetic regressions cover helper output, transport diagnostics and actual
+rate-limit logs. This is not evidence of customer exposure, recipient receipt,
+release qualification, or protection of arbitrary custom-host credentials.
+
+### Telegram diagnostic path parsing
+
+Telegram bot-path masking operates on the parsed, decoded URL path and clears
+RawPath after replacement. This covers percent-encoded bot prefixes without
+mistaking a hostname or a URL inside a query for a bot path. Method suffixes,
+query diagnostics and fragments remain intact; configured destinations and
+transport-error causes are unchanged. Host-independent masking is retained for
+local API servers, which are supported by the
+[Telegram API documentation](https://core.telegram.org/bots/api#making-requests).
+
+Focused regression tests cover escaped prefixes/tokens, local servers, missing
+method suffixes, query URLs, fragments, transport errors and rate-limit logs.
+This is diagnostic containment, not evidence of customer exposure or recipient
+delivery. Arbitrary path secrets and unrecognised query credentials remain
+outside this bounded change.
+
+### Bounded diagnostic confidentiality: query representations and bypass callers
+
+Recognised query names are exactly token, apikey, api_key, key, secret and
+password after one URL query decode. Every repeated occurrence is masked,
+including mixed literal/escaped names. Unrelated names, ordering and values
+remain intact; invalid name escapes fail closed. This is diagnostic projection,
+not mutation of configured destinations or a claim to recognise arbitrary secrets.
+
+Resolved ntfy must apply the same transport-error projection before both its
+error log and returned error. Common HTTP execution preserves payload bytes,
+event identity and error causes; URLs containing userinfo remain rejected by
+outbound validation even though historical diagnostic userinfo is masked.
+
+The caller matrix and retained Delivery regression tests exercise URL/message
+helpers, actual rate-limit logs, common transport and resolved-ntfy transport
+errors/logs with synthetic secrets. HTTP delivery-log regression verifies encoded
+and repeated query credentials while retaining diagnostic context and entry
+identity. Existing exact-output tables bound Slack/GovSlack/legacy, Discord,
+Telegram/local paths, malformed URLs and non-secret lookalikes. Earlier proof
+missed decoded query representations and a separate ntfy transport caller:
+provider-only helper examples were not sufficient sink coverage. This contract
+does not assert arbitrary response-body/third-party error secrecy, installed
+recipient delivery, candidate qualification or historical customer exposure.

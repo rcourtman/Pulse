@@ -35,52 +35,54 @@ func RedactWebhookURLSecrets(urlString string) string {
 		}
 		parsed.RawPath = ""
 		urlString = parsed.String()
-	}
-
-	// Telegram bot credentials are path components rather than query values.
-	if idx := strings.Index(urlString, "/bot"); idx != -1 {
-		if endIdx := strings.Index(urlString[idx+4:], "/"); endIdx != -1 {
-			urlString = urlString[:idx+4] + "REDACTED" + urlString[idx+4+endIdx:]
-		} else if queryIdx := strings.Index(urlString[idx+4:], "?"); queryIdx != -1 {
-			urlString = urlString[:idx+4] + "REDACTED" + urlString[idx+4+queryIdx:]
-		} else {
-			urlString = urlString[:idx+4] + "REDACTED"
+	case "discord.com", "discordapp.com":
+		// Discord webhook IDs and tokens follow /webhooks/ in both
+		// unversioned and versioned API paths. Mask the entire suffix,
+		// including escaped credentials and compatibility endpoint paths.
+		if idx := strings.Index(parsed.Path, "/webhooks/"); idx != -1 {
+			parsed.Path = parsed.Path[:idx] + "/webhooks/REDACTED"
+			parsed.RawPath = ""
+			urlString = parsed.String()
 		}
 	}
 
-	queryIndex := strings.Index(urlString, "?")
-	if queryIndex == -1 {
-		return urlString
+	// Telegram also supports local API servers, so retain host-independent
+	// masking, but inspect only the decoded path. Searching the whole URL
+	// misses escaped prefixes and can mistake hostnames or query URLs for
+	// bot credentials. Clear RawPath to prevent escaped secrets resurfacing.
+	if idx := strings.Index(parsed.Path, "/bot"); idx != -1 {
+		end := len(parsed.Path)
+		if suffix := strings.Index(parsed.Path[idx+4:], "/"); suffix != -1 {
+			end = idx + 4 + suffix
+		}
+		parsed.Path = parsed.Path[:idx+4] + "REDACTED" + parsed.Path[end:]
+		parsed.RawPath = ""
+		urlString = parsed.String()
 	}
 
-	for _, parameter := range []string{"token", "apikey", "api_key", "key", "secret", "password"} {
-		pattern := parameter + "="
-		searchStart := queryIndex
-		for {
-			parameterIndex := strings.Index(urlString[searchStart:], pattern)
-			if parameterIndex == -1 {
-				break
+	// Decode names exactly once, as net/url does, but retain the original
+	// spelling, order and unrelated values in diagnostic URLs. Inspect every
+	// occurrence rather than Query().Get(), which would miss repeated keys.
+	parts := strings.Split(parsed.RawQuery, "&")
+	changed := false
+	for i, part := range parts {
+		name, _, hasValue := strings.Cut(part, "=")
+		decoded, err := url.QueryUnescape(name)
+		if err != nil {
+			return invalidWebhookURLDiagnostic
+		}
+		switch decoded {
+		case "token", "apikey", "api_key", "key", "secret", "password":
+			if hasValue {
+				parts[i] = name + "=REDACTED"
+				changed = true
 			}
-			parameterIndex += searchStart
-
-			if parameterIndex > 0 {
-				previous := urlString[parameterIndex-1]
-				if previous != '?' && previous != '&' {
-					searchStart = parameterIndex + len(pattern)
-					continue
-				}
-			}
-
-			valueStart := parameterIndex + len(pattern)
-			valueEnd := valueStart
-			for valueEnd < len(urlString) && urlString[valueEnd] != '&' && urlString[valueEnd] != '#' {
-				valueEnd++
-			}
-			urlString = urlString[:valueStart] + "REDACTED" + urlString[valueEnd:]
-			searchStart = valueStart + len("REDACTED")
 		}
 	}
-
+	if changed {
+		parsed.RawQuery = strings.Join(parts, "&")
+		return parsed.String()
+	}
 	return urlString
 }
 

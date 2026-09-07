@@ -310,6 +310,14 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         ):
             self.skipTest("staged governance inputs missing; see test_staged_governance_inputs_are_present")
 
+    def test_release_workflow_supports_reviewed_immutable_snapshots(self) -> None:
+        from release_snapshot import check_workflow
+
+        with tempfile.TemporaryDirectory() as directory:
+            workflow = Path(directory) / "create-release.yml"
+            workflow.write_text(read(".github/workflows/create-release.yml"))
+            check_workflow(workflow)
+
     def test_staged_governance_inputs_are_present(self) -> None:
         if STAGED_GOVERNANCE_INPUT_ERRORS:
             self.fail(
