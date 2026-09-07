@@ -204,11 +204,41 @@ run_backend() {
   fi
 }
 
+# Rootless Docker maps the selected non-root UID to a subordinate host UID.
+# Grant only that identity access to the disposable integration bind mount;
+# never make the checkout world-readable/writable or change container identity.
+prepare_playwright_mount() {
+  local host_uid mapped_uid uid_map integration_dir
+  host_uid="$(id -u)"
+  integration_dir="$REPOSITORY_DIR/tests/integration"
+  uid_map="$(docker run --rm --user "$(id -u):$(id -g)" \
+    "$PLAYWRIGHT_IMAGE" cat /proc/self/uid_map)"
+  mapped_uid="$(printf '%s\n' "$uid_map" | awk -v uid="$host_uid" '
+    NF == 3 && uid >= $1 && uid < $1 + $3 { print $2 + uid - $1; found++ }
+    END { if (found != 1) exit 1 }
+  ')"
+  if [[ ! "$mapped_uid" =~ ^[0-9]+$ ]] || [ "$mapped_uid" = 0 ]; then
+    echo "Error: invalid non-root browser UID mapping." >&2
+    return 3
+  fi
+  [ "$mapped_uid" != "$host_uid" ] || return 0
+  command -v setfacl >/dev/null || {
+    echo "Error: setfacl is required for the rootless browser mount." >&2
+    return 3
+  }
+  # -P avoids following dependency symlinks outside this disposable tree.
+  setfacl -R -P -m "u:${mapped_uid}:rwX" "$integration_dir"
+  # Retain host access to evidence subsequently created by the mapped UID.
+  find "$integration_dir" -type d -exec setfacl -m \
+    "d:u:${host_uid}:rwx,d:u:${mapped_uid}:rwx" {} +
+}
+
 run_integration_prep() {
   phase integration-dependencies npm --prefix tests/integration ci
   PLAYWRIGHT_VERSION="$(node -p "require('./tests/integration/node_modules/@playwright/test/package.json').version")"
   PLAYWRIGHT_IMAGE="mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble"
   phase playwright-image docker pull "$PLAYWRIGHT_IMAGE"
+  phase playwright-mount prepare_playwright_mount
   phase mock-github-image docker build --tag pulse-mock-github:test tests/integration/mock-github-server
 }
 

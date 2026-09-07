@@ -2153,8 +2153,18 @@ artifact-selection behaviour.
    version selection and exit status. The executed-shell fixture in
    `scripts/release_control/internal/release_preflight_test.py` verifies the
    runner path, argument quoting, container identity and failure propagation
-   with mocked Docker; it is not browser qualification or proof that the
-   retained spawn-sh EACCES failure has been repaired.
+   with mocked Docker; it is not browser qualification.
+
+   After npm ci and image selection, the worker reads the selected non-root
+   container's UID map. When that UID maps to a different host identity,
+   POSIX ACLs grant only that mapped UID read/write/search access within the
+   disposable `tests/integration` bind mount, without following symlinks.
+   Default directory ACLs retain the host worker's access to generated evidence.
+   No checkout-wide chmod, world access, root container, or gate bypass is
+   permitted. Missing mapping/ACL support fails preparation closed. Identity
+   mappings need no ACL change. A bounded real-container CLI startup and
+   evidence read/cleanup probe is prerequisite evidence, not a browser pass
+   or exact-candidate admission; the original failed admission remains retained.
 
 ## Forbidden Paths
 
