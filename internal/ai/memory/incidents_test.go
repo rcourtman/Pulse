@@ -1205,6 +1205,47 @@ func TestIncidentStore_CanonicalProjectionOccurrenceBounds(t *testing.T) {
 			if projected.Status != IncidentStatusResolved || projected.ClosedAt == nil || !projected.ClosedAt.Equal(end) || projected.Acknowledged {
 				t.Fatalf("another occurrence changed historical state: %+v", projected)
 			}
+
+			// Checkpoint all retained boundaries, not just an isolated closed
+			// shell. The canonical timeline remains in memory: this exercises
+			// JSON recovery and projection, not a durable event-store restart.
+			before, err := json.Marshal(projected)
+			if err != nil {
+				t.Fatal(err)
+			}
+			store.dataDir = t.TempDir()
+			store.filePath = store.dataDir + "/ai_incidents.json"
+			if err := store.saveToDisk(); err != nil {
+				t.Fatal(err)
+			}
+			reloaded := NewIncidentStore(IncidentStoreConfig{})
+			reloaded.filePath = store.filePath
+			if err := reloaded.loadFromDisk(); err != nil {
+				t.Fatal(err)
+			}
+			reloaded.SetResourceTimelineStore(canonical)
+			for i := 0; i < 10; i++ {
+				reloaded.RecordAlertFired(old)
+			}
+			if len(reloaded.incidents) != len(store.incidents) {
+				t.Fatal("checkpoint replay duplicated a retained occurrence")
+			}
+			after, err := json.Marshal(reloaded.GetTimelineByAlertAt(old.ID, start))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(before) != string(after) {
+				t.Fatalf("checkpoint replay changed projected identity or timeline:\nbefore %s\nafter %s", before, after)
+			}
+			// Keep persistence synchronous so a successful comparison proves
+			// no checkpoint replacement, rather than a scheduling observation.
+			reloaded.dataDir = store.dataDir
+			if err := reloaded.saveToDisk(); err != nil {
+				t.Fatal(err)
+			}
+			if got := reloaded.savesCompleted.Load(); got != 0 {
+				t.Fatalf("unchanged checkpoint replay replaced JSON %d times", got)
+			}
 		})
 	}
 }
