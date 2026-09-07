@@ -21299,6 +21299,7 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 		"AgentErrCodeFindingActionNotAllowed":    agentcapabilities.AgentErrCodeFindingActionNotAllowed,
 		"AgentErrCodePatrolUnavailable":          agentcapabilities.AgentErrCodePatrolUnavailable,
 		"AgentErrCodeInvalidActionRequest":       agentcapabilities.AgentErrCodeInvalidActionRequest,
+		"AgentErrCodeActionRequestConflict":      agentcapabilities.AgentErrCodeActionRequestConflict,
 		"AgentErrCodeCapabilityNotFound":         agentcapabilities.AgentErrCodeCapabilityNotFound,
 		"AgentErrCodeActionExecutionUnavailable": agentcapabilities.AgentErrCodeActionExecutionUnavailable,
 		"AgentErrCodeActionActorUnavailable":     agentcapabilities.AgentErrCodeActionActorUnavailable,
@@ -22348,7 +22349,7 @@ func TestContract_PatrolActionBrokerKeepsPolicyExecutionCoreOwned(t *testing.T) 
 		"PlanWithOptions(ctx, b.orgID",
 		`patrolActionBrokerActor = "pulse_patrol"`,
 		`patrolActionOriginSurface = "patrol"`,
-		"rejectSensitiveParams",
+		"RequireOperatorSensitiveParams",
 		// Correlation identity is mandatory before persistence so a
 		// planned action can always be reconciled onto its finding.
 		"action proposal requires a finding id",

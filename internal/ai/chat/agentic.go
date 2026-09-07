@@ -766,6 +766,7 @@ func (a *AgenticLoop) ExecuteWithTools(ctx context.Context, sessionID string, me
 // records cost from the loop's GetTotal{Input,Output}Tokens after this
 // returns. See ExecuteWithTools above.
 func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, messages []Message, tools []providers.Tool, callback StreamCallback) ([]Message, error) {
+	ctx = withRunInvocationIdentity(ctx, sessionID, messages)
 	// Snapshot maxTurns under the lock — callers may override via SetMaxTurns
 	// before calling ExecuteWithTools, and this avoids races with concurrent sessions.
 	a.mu.Lock()
@@ -797,7 +798,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	patrolOutputLimitRecoveryAttempted := false
 	investigationOutputLimitRecoveryPending := false // A truncated investigation conclusion needs one evidence-only retry
 	investigationOutputLimitRecoveryAttempted := false
-	investigationProposalCompleted := false
 	// Patrol core normally establishes the exact-scope active-finding snapshot
 	// before the provider is invoked. Legacy/narrow adapters can still expose a
 	// one-shot model read, but the normal detection path must not make the model
@@ -955,15 +955,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				Msg("[AgenticLoop] Objective handoff completed — omitting tools for final response")
 		}
 		if isPatrolInvestigationExecution(a.currentExecutionProfile()) && !investigationOutputLimitRecoveryTurn {
-			if a.maxEvidenceCalls > 0 && !investigationProposalCompleted {
+			if a.maxEvidenceCalls > 0 {
 				req.System += fmt.Sprintf("\nEvidence-tool calls remaining within this run's configured limit: %d.", max(0, a.maxEvidenceCalls-a.totalEvidenceCalls))
 			}
-			switch {
-			case investigationProposalCompleted:
-				req.Tools = nil
-				textOnlySafetyBrake = true
-				req.System += investigationProposalCompletionSystemPrompt
-			case a.maxEvidenceCalls > 0 && a.totalEvidenceCalls >= a.maxEvidenceCalls:
+			if a.maxEvidenceCalls > 0 && a.totalEvidenceCalls >= a.maxEvidenceCalls {
 				req.Tools = investigationTerminalTools(tools)
 				textOnlySafetyBrake = len(req.Tools) == 0
 			}
@@ -1910,9 +1905,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					// objective mission may make. The next turn is prose-only so a
 					// provider cannot spend or duplicate its bounded handoff.
 					objectiveHandoffCompleted = true
-				}
-				if isPatrolInvestigationExecution(a.currentExecutionProfile()) && tc.Name == agentcapabilities.PatrolProposeActionToolName {
-					investigationProposalCompleted = true
 				}
 			}
 

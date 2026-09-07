@@ -14,10 +14,7 @@ import { Button, ButtonLink } from '@/components/shared/Button';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { buildActionReviewPath } from '@/features/actions/actionRouting';
-import {
-  buildPatrolAssistantFindingHandoff,
-  buildPatrolAssistantProposedFixBriefingInput,
-} from '@/features/patrol/patrolInvestigationContextModel';
+import { buildPatrolAssistantFindingHandoff } from '@/features/patrol/patrolInvestigationContextModel';
 import { aiChatStore } from '@/stores/aiChat';
 import type { ActionAuditState, PatrolActionReference } from '@/types/actionAudit';
 
@@ -155,16 +152,6 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
             actionRequestedBy: 'pulse_patrol',
           }
         : null,
-      proposedFix: buildPatrolAssistantProposedFixBriefingInput(
-        current
-          ? {
-              description: current.plan.message || capabilityLabel(current.capability_name),
-              targetHost: props.resourceName || current.resource_id,
-              commandCount: 0,
-              destructive: false,
-            }
-          : null,
-      ),
     });
     aiChatStore.open(handoff.context);
   };

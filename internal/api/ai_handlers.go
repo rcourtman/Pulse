@@ -1987,6 +1987,7 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 	chatAdapter := &orchestratorChatAdapter{
 		svc:     chatService,
 		catalog: h.proposalCatalogFor(orgID),
+		planner: investigationPlannerFor(h.actionBrokerFor(orgID)),
 	}
 
 	// Create findings store adapter
@@ -2073,6 +2074,7 @@ type orchestratorChatAdapter struct {
 	// catalog resolves advertised resource capabilities for proposal
 	// validation, from the tenant-bound action lifecycle service.
 	catalog tools.ProposalCatalog
+	planner tools.ProposalPlanner
 }
 
 func (a *orchestratorChatAdapter) CreateSession(ctx context.Context) (*aicontracts.OrchestratorChatSession, error) {
@@ -2105,6 +2107,7 @@ func (a *orchestratorChatAdapter) ExecuteInvestigationStream(ctx context.Context
 			EvidenceIDs:     req.EvidenceIDs,
 		},
 		Catalog: a.catalog,
+		Planner: a.planner,
 	}, func(event chat.StreamEvent) {
 		callback(aicontracts.OrchestratorStreamEvent{
 			Type: event.Type,
@@ -2112,19 +2115,22 @@ func (a *orchestratorChatAdapter) ExecuteInvestigationStream(ctx context.Context
 		})
 	})
 	if runResult == nil {
-		return nil, mapInvestigationProposalError(err)
+		return nil, err
 	}
 	result := &aicontracts.OrchestratorInvestigationResult{
-		Content:                runResult.Content,
-		FailedProposalAttempts: runResult.FailedProposalAttempts,
-		InputTokens:            runResult.InputTokens,
-		OutputTokens:           runResult.OutputTokens,
-		ModelTurns:             runResult.ModelTurns,
-		EvidenceCalls:          runResult.EvidenceCalls,
-		ToolCalls:              runResult.ToolCalls,
+		Content:       runResult.Content,
+		InputTokens:   runResult.InputTokens,
+		OutputTokens:  runResult.OutputTokens,
+		ModelTurns:    runResult.ModelTurns,
+		EvidenceCalls: runResult.EvidenceCalls,
+		ToolCalls:     runResult.ToolCalls,
 	}
 	if runResult.Proposal != nil {
 		captured := runResult.Proposal
+		if captured.Action != nil {
+			disposition := dispositionFromRecord(*captured.Action)
+			result.Action = &aicontracts.ActionReference{CausalResourceID: captured.CausalResourceID, ActionID: disposition.ActionID, ProposalID: captured.Identity.ProposalID, ResourceID: captured.ResourceID, CapabilityName: captured.CapabilityName, State: disposition.State, Plan: disposition.Plan, ActionResultV2: disposition.ActionResultV2, VerificationStatus: disposition.VerificationStatus}
+		}
 		result.Proposal = &aicontracts.ActionProposal{
 			ProposalID:      captured.Identity.ProposalID,
 			FindingID:       captured.Identity.FindingID,
@@ -2136,36 +2142,7 @@ func (a *orchestratorChatAdapter) ExecuteInvestigationStream(ctx context.Context
 			EvidenceIDs:     captured.Identity.EvidenceIDs,
 		}
 	}
-	return result, mapInvestigationProposalError(err)
-}
-
-// mapInvestigationProposalError projects the core proposal-channel errors
-// onto the public contract sentinels so enterprise outcome mapping can
-// key on errors.Is without importing internal packages.
-func mapInvestigationProposalError(err error) error {
-	var runErr *chat.InvestigationRunError
-	if errors.As(err, &runErr) {
-		return aicontracts.NewOrchestratorInvestigationError(
-			runErr.RunFailure(),
-			mapInvestigationProposalSentinel(runErr.ProposalFailure()),
-		)
-	}
-	return mapInvestigationProposalSentinel(err)
-}
-
-func mapInvestigationProposalSentinel(err error) error {
-	switch {
-	case err == nil:
-		return nil
-	case errors.Is(err, tools.ErrProposalAmbiguous):
-		return aicontracts.ErrInvestigationProposalAmbiguous
-	case errors.Is(err, tools.ErrProposalIntegrity):
-		return aicontracts.ErrInvestigationProposalIntegrity
-	case errors.Is(err, tools.ErrProposalAttemptsFailed):
-		return aicontracts.ErrInvestigationProposalAttemptsFailed
-	default:
-		return err
-	}
+	return result, err
 }
 
 //nolint:dupl // mirrors chatServiceAdapter.GetMessages: same source messages mapped onto a deliberately separate output contract that may diverge

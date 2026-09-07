@@ -41,18 +41,21 @@ type ApprovalInfo struct {
 }
 
 type ActionPlanInfo struct {
-	ActionID             string    `json:"actionId,omitempty"`
-	RequestID            string    `json:"requestId,omitempty"`
-	Allowed              bool      `json:"allowed"`
-	RequiresApproval     bool      `json:"requiresApproval"`
-	ApprovalPolicy       string    `json:"approvalPolicy,omitempty"`
-	PredictedBlastRadius []string  `json:"predictedBlastRadius,omitempty"`
-	RollbackAvailable    bool      `json:"rollbackAvailable"`
-	Message              string    `json:"message,omitempty"`
-	PlannedAt            time.Time `json:"plannedAt,omitempty"`
-	ExpiresAt            time.Time `json:"expiresAt,omitempty"`
-	ResourceVersion      string    `json:"resourceVersion,omitempty"`
-	PolicyVersion        string    `json:"policyVersion,omitempty"`
+	// ApprovalRequirement preserves the canonical outer requirement even when
+	// historical policy provenance is unavailable. It defines no parallel enum.
+	ApprovalRequirement  json.RawMessage `json:"approvalRequirement,omitempty"`
+	ActionID             string          `json:"actionId,omitempty"`
+	RequestID            string          `json:"requestId,omitempty"`
+	Allowed              bool            `json:"allowed"`
+	RequiresApproval     bool            `json:"requiresApproval"`
+	ApprovalPolicy       string          `json:"approvalPolicy,omitempty"`
+	PredictedBlastRadius []string        `json:"predictedBlastRadius,omitempty"`
+	RollbackAvailable    bool            `json:"rollbackAvailable"`
+	Message              string          `json:"message,omitempty"`
+	PlannedAt            time.Time       `json:"plannedAt,omitempty"`
+	ExpiresAt            time.Time       `json:"expiresAt,omitempty"`
+	ResourceVersion      string          `json:"resourceVersion,omitempty"`
+	PolicyVersion        string          `json:"policyVersion,omitempty"`
 	// PolicyDecision carries the canonical internal/unifiedresources object
 	// without defining a second cross-boundary policy enum vocabulary.
 	PolicyDecision json.RawMessage      `json:"policyDecision,omitempty"`

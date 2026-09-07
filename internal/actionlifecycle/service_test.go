@@ -20,6 +20,12 @@ type delayedCreateStore struct {
 	releaseSecond chan struct{}
 }
 
+// Force a cold lookup to exercise the atomic creation boundary even when a
+// competing request has persisted between the lookup and insert.
+func (s *delayedCreateStore) GetActionAuditByRequest(unified.ActionRequest, *unified.ActionOrigin) (unified.ActionAuditRecord, bool, error) {
+	return unified.ActionAuditRecord{}, false, nil
+}
+
 func (s *delayedCreateStore) CreateActionAudit(record unified.ActionAuditRecord, events []unified.ActionLifecycleEvent) (unified.ActionAuditRecord, bool, error) {
 	if s.calls.Add(1) == 2 {
 		close(s.secondArrived)
@@ -1113,8 +1119,14 @@ func TestPlanFollowsAdvertisedLifecycleSynonym(t *testing.T) {
 		t.Fatalf("persisted capability = %q, want the advertised verb %q", record.Request.CapabilityName, "restart")
 	}
 
+	replay, err := env.service.Plan(context.Background(), "default", req, testActionActor("requester", "default"))
+	if err != nil || replay.ActionID != plan.ActionID {
+		t.Fatalf("synonym replay changed plan: %#v %v", replay, err)
+	}
+
 	// Verbs without an advertised synonym still fail closed.
 	unknown := restartRequest()
+	unknown.RequestID = "independent-unknown-capability"
 	unknown.CapabilityName = "shutdown"
 	var capErr *CapabilityNotFoundError
 	if _, err := env.service.Plan(context.Background(), "default", unknown, testActionActor("requester", "default")); !errors.As(err, &capErr) {

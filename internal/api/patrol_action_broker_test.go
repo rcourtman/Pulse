@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
@@ -776,5 +777,47 @@ func TestPatrolTypedActionJourneyDetectPlanApproveExecuteVerifyAndReconcile(t *t
 		}
 	default:
 		t.Fatal("agent-attested lifecycle did not publish an honest terminal mobile notification")
+	}
+}
+
+func TestPatrolActionBrokerPlanDoesNotProgressAutomaticPolicy(t *testing.T) {
+	h, executor := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
+	configurePatrolAutoAuthorization(t, h)
+	broker := NewPatrolActionBroker("default", h, func(context.Context, string) (PatrolActionPolicySnapshot, error) {
+		return PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "assisted"}, nil
+	}).(*patrolActionBroker)
+	disposition, err := broker.Plan(context.Background(), patrolTestProposal())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if disposition.State != string(unified.ActionStatePending) || executor.calls != 0 {
+		t.Fatalf("plan progressed action: state=%s calls=%d", disposition.State, executor.calls)
+	}
+	record, found, err := broker.lifecycle().Get("default", disposition.ActionID)
+	if err != nil || !found || len(record.Approvals) != 0 || record.Result != nil {
+		t.Fatalf("plan carried execution authority: found=%v err=%v record=%#v", found, err, record)
+	}
+	accepted, err := broker.Submit(context.Background(), patrolTestProposal())
+	if err != nil || accepted.ActionID != disposition.ActionID || executor.calls != 1 {
+		t.Fatalf("core policy continuation: disposition=%#v calls=%d err=%v", accepted, executor.calls, err)
+	}
+}
+
+func TestPatrolActionBrokerPlanningReplaySurvivesLostRegistry(t *testing.T) {
+	h, executor := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
+	broker := NewPatrolActionBroker("default", h).(*patrolActionBroker)
+	lifecycle := broker.lifecycle()
+	broker.lifecycle = func() *actionlifecycle.Service { return lifecycle }
+	first, err := broker.Plan(context.Background(), patrolTestProposal())
+	if err != nil {
+		t.Fatal(err)
+	}
+	lifecycle.Registry = func(string) (*unified.ResourceRegistry, error) { return nil, errors.New("registry unavailable") }
+	again, err := broker.Plan(context.Background(), patrolTestProposal())
+	if err != nil || again.ActionID != first.ActionID || again.Plan.PlanHash != first.Plan.PlanHash {
+		t.Fatalf("replay lost existing plan: %+v %v", again, err)
+	}
+	if executor.calls != 0 {
+		t.Fatal("planning replay executed infrastructure")
 	}
 }

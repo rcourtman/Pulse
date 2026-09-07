@@ -644,6 +644,7 @@ var (
 	}
 	agentCapabilityPlanActionErrorCodes = []string{
 		AgentErrCodeInvalidActionRequest,
+		AgentErrCodeActionRequestConflict,
 		AgentErrCodeMockModeEnabled,
 		AgentErrCodeActionActorUnavailable,
 		AgentErrCodeResourceNotFound,

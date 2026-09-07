@@ -68,6 +68,7 @@ vi.mock('../MessageItem', () => ({
 beforeEach(() => {
   capturedMessageItemProps = [];
   Element.prototype.scrollIntoView = vi.fn();
+  Element.prototype.scrollTo = vi.fn();
 });
 
 afterEach(cleanup);
@@ -651,11 +652,12 @@ describe('ChatMessages', () => {
   });
 
   describe('auto-scroll behavior', () => {
-    it('calls scrollIntoView when messages are present', () => {
+    it('scrolls the conversation without scrolling outer page ancestors', () => {
       render(() => <ChatMessages messages={[makeMessage({ id: 'msg-1' })]} {...makeHandlers()} />);
 
-      // scrollIntoView should have been called by the createEffect
-      expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+      // The owned conversation scrolls, never its ancestors.
+      expect(Element.prototype.scrollTo).toHaveBeenCalled();
+      expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
     });
 
     it('reacts to in-place pending tool progress without a new stream event', async () => {
@@ -695,8 +697,8 @@ describe('ChatMessages', () => {
       ]);
       render(() => <ChatMessages messages={messages()} {...makeHandlers()} />);
 
-      const scrollIntoView = Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>;
-      scrollIntoView.mockClear();
+      const scrollTo = Element.prototype.scrollTo as ReturnType<typeof vi.fn>;
+      scrollTo.mockClear();
 
       setMessages([
         makeMessage({
@@ -734,7 +736,7 @@ describe('ChatMessages', () => {
       ]);
       await Promise.resolve();
 
-      expect(scrollIntoView).toHaveBeenCalled();
+      expect(scrollTo).toHaveBeenCalled();
     });
 
     it('keeps following live output when a large streaming update grows from the bottom', async () => {
@@ -748,7 +750,7 @@ describe('ChatMessages', () => {
       ]);
       render(() => <ChatMessages messages={messages()} {...makeHandlers()} />);
       const scrollContainer = screen.getByTestId('assistant-message-list');
-      const scrollIntoView = Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>;
+      const scrollTo = Element.prototype.scrollTo as ReturnType<typeof vi.fn>;
 
       setScrollMetrics(scrollContainer, {
         scrollTop: 800,
@@ -756,7 +758,7 @@ describe('ChatMessages', () => {
         clientHeight: 200,
       });
       fireEvent.scroll(scrollContainer);
-      scrollIntoView.mockClear();
+      scrollTo.mockClear();
 
       setScrollMetrics(scrollContainer, {
         scrollTop: 800,
@@ -773,7 +775,7 @@ describe('ChatMessages', () => {
       ]);
       await Promise.resolve();
 
-      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'instant' });
+      expect(scrollTo).toHaveBeenCalledWith({ top: 1400, behavior: 'instant' });
     });
 
     it('does not pull the transcript back down after the user scrolls away from live output', async () => {
@@ -787,7 +789,7 @@ describe('ChatMessages', () => {
       ]);
       render(() => <ChatMessages messages={messages()} {...makeHandlers()} />);
       const scrollContainer = screen.getByTestId('assistant-message-list');
-      const scrollIntoView = Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>;
+      const scrollTo = Element.prototype.scrollTo as ReturnType<typeof vi.fn>;
 
       setScrollMetrics(scrollContainer, {
         scrollTop: 100,
@@ -795,7 +797,7 @@ describe('ChatMessages', () => {
         clientHeight: 200,
       });
       fireEvent.scroll(scrollContainer);
-      scrollIntoView.mockClear();
+      scrollTo.mockClear();
 
       setMessages([
         makeMessage({
@@ -807,7 +809,7 @@ describe('ChatMessages', () => {
       ]);
       await Promise.resolve();
 
-      expect(scrollIntoView).not.toHaveBeenCalled();
+      expect(scrollTo).not.toHaveBeenCalled();
     });
 
     it('shows a jump to latest control when the user scrolls away from messages', () => {
@@ -833,7 +835,7 @@ describe('ChatMessages', () => {
     it('jumps back to live output and hides the control when selected', () => {
       render(() => <ChatMessages messages={[makeMessage({ id: 'msg-1' })]} {...makeHandlers()} />);
       const scrollContainer = screen.getByTestId('assistant-message-list');
-      const scrollIntoView = Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>;
+      const scrollTo = Element.prototype.scrollTo as ReturnType<typeof vi.fn>;
 
       setScrollMetrics(scrollContainer, {
         scrollTop: 100,
@@ -841,11 +843,11 @@ describe('ChatMessages', () => {
         clientHeight: 200,
       });
       fireEvent.scroll(scrollContainer);
-      scrollIntoView.mockClear();
+      scrollTo.mockClear();
 
       fireEvent.click(screen.getByRole('button', { name: 'Jump to latest Assistant message' }));
 
-      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth' });
+      expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'smooth' });
       expect(
         screen.queryByRole('button', { name: 'Jump to latest Assistant message' }),
       ).not.toBeInTheDocument();
@@ -861,7 +863,7 @@ describe('ChatMessages', () => {
 
     it('does not call scrollIntoView when messages list is empty', () => {
       // Reset the mock to clear any prior calls
-      (Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>).mockClear();
+      (Element.prototype.scrollTo as ReturnType<typeof vi.fn>).mockClear();
 
       render(() => <ChatMessages messages={[]} {...makeHandlers()} />);
 

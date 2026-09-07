@@ -23,6 +23,19 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Canonical Patrol and Assistant continuation, 2026-09-07
+
+Persisted action request identity is scoped to the trusted actor and exact
+normalized intent. Store insertion enforces it atomically, with duplicate or
+unprovable historical identities rejected rather than guessed equal. Replays
+retain the original plan and expiry even if the live resource or registry changes.
+
+Unavailable or inconsistent disk observations remain absent across node, host,
+Docker host and guest metric projections. They cannot become -100 percent or a
+fabricated measured zero. Shared resource-policy text redaction preserves content
+whitespace, including standalone stream separators. Qualification and population
+limits are in `docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`.
+
 Action evidence preserves observer and receiver timestamps as separate clock
 facts, normalized to UTC and bound into the canonical digest. The shared
 normalizer requires both timestamps but cannot infer their ordering across

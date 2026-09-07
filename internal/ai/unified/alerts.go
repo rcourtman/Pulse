@@ -1075,8 +1075,12 @@ func (s *UnifiedStore) Resolve(findingID string) bool {
 		return false
 	}
 
-	now := time.Now()
-	f.ResolvedAt = &now
+	// A replayed Patrol resolution already carries its canonical timestamp.
+	// Do not turn synchronization into another recovery event.
+	if f.ResolvedAt == nil {
+		now := time.Now()
+		f.ResolvedAt = &now
+	}
 	f.SnoozedUntil = nil
 
 	s.mu.Unlock()

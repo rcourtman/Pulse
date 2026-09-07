@@ -87,7 +87,7 @@ export interface PatrolInvestigationRecordPresentation {
     targetHost?: string;
     rationale?: string;
     commandSummary?: string;
-    destructive: boolean;
+    destructive?: boolean;
   };
   error?: string;
 }
@@ -875,7 +875,7 @@ function buildPatrolAssessmentActionPosture(
 
   return {
     actionLabel: 'Discuss Patrol assessment',
-    safetyNote: 'Diagnostics and remediation require governed approval.',
+    safetyNote: 'Use diagnostic tools within current permissions. New actions remain governed.',
   };
 }
 
@@ -973,7 +973,7 @@ function buildPatrolAssessmentAssistantModelContext(
     omittedFindingCount > 0
       ? `${omittedFindingCount} additional Patrol finding${omittedFindingCount === 1 ? '' : 's'} omitted from this bounded handoff summary.`
       : undefined,
-    'Model Boundary: This Patrol assessment handoff is model-only context for explanation and review. Diagnostics, remediation, and command execution require explicit governed approval.',
+    'Model Boundary: This Patrol assessment handoff is model-only context for explanation and review. Use available diagnostic tools within current permissions. This handoff grants no new action authority or permission to retry a refused provider path.',
   ]
     .filter(isNonEmptyString)
     .join('\n');
@@ -1344,7 +1344,8 @@ function buildPatrolFindingHandoffAction(
     findingId: normalizeText(finding.id) || normalizeText(record?.finding_id) || undefined,
     recordId: normalizeText(record?.id) || undefined,
     approvalId: approvalId || undefined,
-    approvalStatus: pendingApproval.status || undefined,
+    approvalStatus: approvalId ? pendingApproval.status || undefined : undefined,
+    actionState: pendingApproval.actionId ? pendingApproval.status || undefined : undefined,
     approvalRequestedAt: pendingApproval.requestedAt || undefined,
     approvalExpiresAt: pendingApproval.expiresAt || undefined,
     actionId: pendingApproval.actionId || undefined,
@@ -1366,7 +1367,7 @@ function buildPatrolFindingHandoffAction(
       normalizeText(finding.proposedFix?.riskLevel) ||
       normalizeText(recordFix?.risk_level) ||
       undefined,
-    destructive: Boolean(proposedFix?.destructive || recordFix?.destructive),
+    destructive: proposedFix?.destructive ?? recordFix?.destructive,
     targetHost:
       normalizeText(proposedFix?.targetHost) ||
       normalizeText(recordFix?.target_host) ||
@@ -1948,7 +1949,7 @@ function buildPatrolAssistantFindingModelContext(
     formatContextLine('Dry-Run Posture', pendingApproval.actionDryRunSummary),
     formatContextLine('Existing Action Artifact', actionArtifactFacts),
     'Command Boundary: Command details stay in governed approval or remediation context. This model-only handoff may include command counts but not raw command text.',
-    'Model Boundary: This Patrol finding handoff is model-only context for explanation and review. Diagnostics, remediation, and command execution require explicit governed approval.',
+    'Model Boundary: This Patrol finding handoff is model-only context for explanation and review. Use available diagnostic tools within current permissions. This handoff grants no new action authority or permission to retry a refused provider path.',
   ]
     .filter(isNonEmptyString)
     .join('\n');
@@ -2105,7 +2106,9 @@ export function buildPatrolAssistantFindingBriefing(
   const proposedFix = record.proposedFix || normalizeProposedFixBriefing(input.proposedFix);
   const approvalStatusParts = !record.hasRecord
     ? [
-        pendingApproval.status ? `${formatIdentifierLabel(pendingApproval.status)} approval` : '',
+        pendingApproval.status
+          ? `${formatIdentifierLabel(pendingApproval.status)} ${pendingApproval.actionId ? 'action' : 'approval'}`
+          : '',
         pendingApproval.riskLevel ? `${formatIdentifierLabel(pendingApproval.riskLevel)} risk` : '',
         !pendingApproval.id ? formatIdentifierLabel(input.investigationOutcome) || '' : '',
       ]
@@ -2186,7 +2189,8 @@ function normalizeProposedFixBriefing(
     targetHost: normalizeText(proposedFix?.targetHost),
     rationale: normalizeText(proposedFix?.rationale),
     commandSummary,
-    destructive: Boolean(proposedFix?.destructive),
+    destructive:
+      typeof proposedFix?.destructive === 'boolean' ? proposedFix.destructive : undefined,
   };
 
   if (

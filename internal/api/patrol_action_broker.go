@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
@@ -107,9 +108,8 @@ func NewActionRefreshPlanner(resources *ResourceHandlers, policy PatrolActionPol
 			EvidenceIDs:     append([]string(nil), previous.Origin.EvidenceIDs...),
 		}
 		broker := &patrolActionBroker{orgID: orgID, lifecycle: resources.ActionLifecycle, policy: policy}
-		if err := broker.rejectSensitiveParams(ctx, proposal); err != nil {
-			return unified.ActionRequest{}, actionlifecycle.PlanOptions{}, err
-		}
+
+		opts.RequireOperatorSensitiveParams = true
 		factors, _ := broker.planPolicyFactors(ctx, proposal, broker.currentTime())
 		req.RequestedBy = patrolActionBrokerActor
 		opts.Actor = unified.ActionActor{
@@ -158,8 +158,22 @@ func (b *patrolActionBroker) Capabilities(ctx context.Context, resourceID string
 	return catalog, nil
 }
 
+// Plan persists the canonical plan without requesting approval or execution.
+// It lets an investigation observe real planning acceptance or refusal during
+// its model turn. Only the core caller may separately request policy progression.
+func (b *patrolActionBroker) Plan(ctx context.Context, proposal aicontracts.ActionProposal) (aicontracts.ActionDisposition, error) {
+	return b.submit(ctx, proposal, false)
+}
+
 func (b *patrolActionBroker) Submit(ctx context.Context, proposal aicontracts.ActionProposal) (aicontracts.ActionDisposition, error) {
+	return b.submit(ctx, proposal, true)
+}
+
+func (b *patrolActionBroker) submit(ctx context.Context, proposal aicontracts.ActionProposal, progressPolicy bool) (aicontracts.ActionDisposition, error) {
 	proposal.ProposalID = strings.TrimSpace(proposal.ProposalID)
+	if proposal.ProposalID == "" {
+		return aicontracts.ActionDisposition{}, fmt.Errorf("action proposal requires a request identity")
+	}
 	proposal.FindingID = strings.TrimSpace(proposal.FindingID)
 	proposal.InvestigationID = strings.TrimSpace(proposal.InvestigationID)
 	proposal.ResourceID = unified.CanonicalResourceID(proposal.ResourceID)
@@ -185,9 +199,6 @@ func (b *patrolActionBroker) Submit(ctx context.Context, proposal aicontracts.Ac
 		return aicontracts.ActionDisposition{}, fmt.Errorf("action proposal requires an investigation id")
 	}
 
-	if err := b.rejectSensitiveParams(ctx, proposal); err != nil {
-		return aicontracts.ActionDisposition{}, err
-	}
 	policyFactors, planningAutoAuthorized := b.planPolicyFactors(ctx, proposal, b.currentTime())
 
 	plan, err := b.lifecycle().PlanWithOptions(ctx, b.orgID, unified.ActionRequest{
@@ -198,6 +209,7 @@ func (b *patrolActionBroker) Submit(ctx context.Context, proposal aicontracts.Ac
 		Reason:         proposal.Reason,
 		RequestedBy:    patrolActionBrokerActor,
 	}, actionlifecycle.PlanOptions{
+		RequireOperatorSensitiveParams: true,
 		Actor: unified.ActionActor{
 			SubjectID:    patrolActionBrokerActor,
 			Kind:         unified.ActionActorService,
@@ -218,17 +230,16 @@ func (b *patrolActionBroker) Submit(ctx context.Context, proposal aicontracts.Ac
 	}
 
 	record, found, err := b.lifecycle().Get(b.orgID, plan.ActionID)
-	if err != nil {
-		return aicontracts.ActionDisposition{}, err
-	}
-	if !found {
-		return aicontracts.ActionDisposition{}, fmt.Errorf("planned action %q was not persisted", plan.ActionID)
+	if err != nil || !found {
+		// Planning already returned a durable identity. Do not turn a later read
+		// failure into the false claim that no action exists.
+		return aicontracts.ActionDisposition{ActionID: plan.ActionID}, fmt.Errorf("planned action %q could not be read", plan.ActionID)
 	}
 	if record.State == unified.ActionStateCompleted || record.State == unified.ActionStateFailed || record.State == unified.ActionStateRejected {
 		return dispositionFromRecord(record), nil
 	}
 
-	if planningAutoAuthorized {
+	if progressPolicy && planningAutoAuthorized {
 		record, err = b.lifecycle().ExecuteUnderPolicy(ctx, b.orgID, plan.ActionID, patrolActionPolicyActor, func(ctx context.Context, current unified.ActionAuditRecord, now time.Time) (unified.ActionPolicyAuthorizationLease, string, error) {
 			return b.policyAuthorizationLease(ctx, proposal, current, now)
 		})
@@ -456,33 +467,23 @@ func (b *patrolActionBroker) currentTime() time.Time {
 	return time.Now().UTC()
 }
 
-// rejectSensitiveParams fails a proposal that populates any parameter the
-// capability declares sensitive. Secrets must come from an operator on the
-// canonical surfaces, never from model output that would persist in
-// investigation stores and action audit records.
-func (b *patrolActionBroker) rejectSensitiveParams(ctx context.Context, proposal aicontracts.ActionProposal) error {
-	if len(proposal.Params) == 0 {
+// investigationPlannerFor exposes only plan persistence to the model tool.
+// The concrete core broker remains tenant-bound and owns all policy inputs.
+func investigationPlannerFor(broker aicontracts.OrchestratorActionBroker) tools.ProposalPlanner {
+	b, ok := broker.(*patrolActionBroker)
+	if !ok {
 		return nil
 	}
-	capabilities, err := b.lifecycle().Capabilities(ctx, b.orgID, proposal.ResourceID)
-	if err != nil {
-		return err
-	}
-	for _, capability := range capabilities {
-		if !strings.EqualFold(strings.TrimSpace(capability.Name), proposal.CapabilityName) {
-			continue
+	return func(ctx context.Context, captured tools.CapturedProposal) (unified.ActionAuditRecord, error) {
+		disposition, err := b.Plan(ctx, aicontracts.ActionProposal{ProposalID: captured.Identity.ProposalID, FindingID: captured.Identity.FindingID, InvestigationID: captured.Identity.InvestigationID, ResourceID: captured.ResourceID, CapabilityName: captured.CapabilityName, Params: captured.Params, Reason: captured.Reason, EvidenceIDs: captured.Identity.EvidenceIDs})
+		if disposition.ActionID == "" {
+			return unified.ActionAuditRecord{}, err
 		}
-		for _, param := range capability.Params {
-			if !param.IsSensitive {
-				continue
-			}
-			if value, ok := proposal.Params[param.Name]; ok && value != nil {
-				return fmt.Errorf("%w: parameter %q on capability %q", aicontracts.ErrSensitiveParamsRequireOperator, param.Name, proposal.CapabilityName)
-			}
+		record, found, readErr := b.lifecycle().Get(b.orgID, disposition.ActionID)
+		if readErr != nil || !found {
+			// Preserve the known identity even if the follow-up read fails.
+			return unified.ActionAuditRecord{ID: disposition.ActionID}, fmt.Errorf("action %s persisted but its audit is unavailable", disposition.ActionID)
 		}
-		return nil
+		return record, err
 	}
-	// Unknown capability names fall through to the planner, which owns
-	// the canonical capability-not-found refusal.
-	return nil
 }

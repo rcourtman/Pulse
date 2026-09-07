@@ -129,6 +129,23 @@ describe('ApprovalSection typed action handoff', () => {
     );
   });
 
+  it('preserves unknown risk and canonical state without synthesizing a legacy fix', async () => {
+    getInvestigationMock.mockResolvedValue(investigation(actionReference('completed')));
+    renderSection('fix_verified', 'resolved');
+    await screen.findByRole('link', { name: /view outcome in actions/i });
+    fireEvent.click(screen.getByRole('button', { name: /discuss with assistant/i }));
+    const context = openMock.mock.calls[0][0];
+    expect(context.handoffActions).toHaveLength(1);
+    expect(context.handoffActions[0]).toMatchObject({
+      actionId: 'act-1',
+      actionState: 'completed',
+    });
+    expect(context.handoffActions[0].destructive).toBeUndefined();
+    expect(context.handoffActions[0].fixId).toBeUndefined();
+    expect(context.handoffActions[0].approvalStatus).toBeUndefined();
+    expect(context.briefing.statusLabel).toContain('Completed action');
+  });
+
   it('keeps missing plan identity visible while leaving replan guidance to Actions', async () => {
     const action = actionReference('pending_approval');
     delete action.plan.planHash;

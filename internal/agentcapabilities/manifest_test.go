@@ -495,6 +495,7 @@ func TestCanonicalManifestPinsPulseMCPResolvedOperationsLoopCapabilities(t *test
 			approval: ApprovalPolicyActionPlan,
 			errorCodes: []string{
 				AgentErrCodeInvalidActionRequest,
+				AgentErrCodeActionRequestConflict,
 				AgentErrCodeMockModeEnabled,
 				AgentErrCodeActionActorUnavailable,
 				AgentErrCodeResourceNotFound,
