@@ -699,3 +699,19 @@ non-authority at signs, combined path/query redaction, error unwrapping and
 actual rate-limit log output. These queue-free tests establish local diagnostic
 redaction, not destination receipt, installed recovery or release qualification.
 No claim is made that arbitrary custom path/query secrets are recognised.
+
+### Slack webhook diagnostic path confidentiality
+
+The same helper masks paths on the exact `hooks.slack.com` and
+`hooks.slack-gov.com` hosts. `/services/` remains as a diagnostic marker; legacy
+paths become `/REDACTED`. Matching uses the parsed, case-insensitive hostname
+and clears the encoded path representation, so ports and escaped path segments
+do not bypass masking. Other hosts retain their diagnostic paths. Userinfo and
+known query credentials remain redacted; configured destinations are unchanged.
+
+[Slack's incoming-webhook documentation](https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/)
+identifies the webhook URL as secret and documents GovSlack's separate domain.
+Queue-free regression tests cover both hosts, encoded and legacy paths,
+lookalike/unrelated hosts, transport errors and actual rate-limit log output.
+This does not establish customer exposure, recipient receipt or recognition of
+arbitrary custom webhook secrets.
