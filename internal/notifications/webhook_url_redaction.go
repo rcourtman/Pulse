@@ -9,6 +9,18 @@ import (
 // RedactWebhookURLSecrets masks credentials commonly embedded in webhook URLs
 // while preserving the URL shape needed for operator diagnostics.
 func RedactWebhookURLSecrets(urlString string) string {
+	// Userinfo can contain a password or a credential used as the username.
+	// Do not use URL.Redacted: it preserves usernames. Fail closed on invalid
+	// URLs rather than returning unparsed credentials to diagnostic callers.
+	parsed, err := url.Parse(urlString)
+	if err != nil {
+		return "[invalid webhook URL]"
+	}
+	if parsed.User != nil {
+		parsed.User = url.User("REDACTED")
+		urlString = parsed.String()
+	}
+
 	// Telegram bot credentials are path components rather than query values.
 	if idx := strings.Index(urlString, "/bot"); idx != -1 {
 		if endIdx := strings.Index(urlString[idx+4:], "/"); endIdx != -1 {

@@ -570,3 +570,20 @@ email, webhook and Apprise, firing and recovery, and global versus destination
 disablement. This corrects false successful queue/audit records; it does not
 establish maintenance-window expiry, stop an already-started provider request,
 or repair historical false-success records.
+
+### Webhook diagnostic userinfo confidentiality
+
+`RedactWebhookURLSecrets` masks the entire URL userinfo (including username-only
+credentials), before its existing Telegram-path and query-secret redaction.
+Unparseable URLs produce `[invalid webhook URL]`, not a raw credential-bearing
+fallback. Valid destination host/path and non-secret query fields remain useful
+for diagnosis. Transport-error redaction copies the URL error and retains its
+underlying cause without changing the original error or the configured URL.
+This follows the credential-exclusion principle in the
+[OWASP Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html#data-to-exclude).
+
+Regression tests cover plain/encoded/user-only credentials, malformed URLs,
+non-authority at signs, combined path/query redaction, error unwrapping and
+actual rate-limit log output. These queue-free tests establish local diagnostic
+redaction, not destination receipt, installed recovery or release qualification.
+No claim is made that arbitrary custom path/query secrets are recognised.
