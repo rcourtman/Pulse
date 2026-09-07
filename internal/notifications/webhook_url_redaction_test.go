@@ -16,6 +16,8 @@ func TestRedactWebhookURLSecrets(t *testing.T) {
 		input string
 		want  string
 	}{
+		"malformed query name":             {input: "https://example.test/hook?%zz=secret", want: invalidWebhookURLDiagnostic},
+		"encoded lookalike":                {input: "https://example.test/hook?extra_%74oken=visible&channel=ops#fragment", want: "https://example.test/hook?extra_%74oken=visible&channel=ops#fragment"},
 		"discord":                          {input: "https://discord.com/api/webhooks/123/discord-secret", want: "https://discord.com/api/webhooks/REDACTED"},
 		"discord versioned":                {input: "https://discord.com/api/v10/webhooks/123/discord-secret", want: "https://discord.com/api/v10/webhooks/REDACTED"},
 		"discord legacy":                   {input: "https://discordapp.com/api/webhooks/123/discord-secret", want: "https://discordapp.com/api/webhooks/REDACTED"},

@@ -60,39 +60,29 @@ func RedactWebhookURLSecrets(urlString string) string {
 		urlString = parsed.String()
 	}
 
-	queryIndex := strings.Index(urlString, "?")
-	if queryIndex == -1 {
-		return urlString
-	}
-
-	for _, parameter := range []string{"token", "apikey", "api_key", "key", "secret", "password"} {
-		pattern := parameter + "="
-		searchStart := queryIndex
-		for {
-			parameterIndex := strings.Index(urlString[searchStart:], pattern)
-			if parameterIndex == -1 {
-				break
+	// Decode names exactly once, as net/url does, but retain the original
+	// spelling, order and unrelated values in diagnostic URLs. Inspect every
+	// occurrence rather than Query().Get(), which would miss repeated keys.
+	parts := strings.Split(parsed.RawQuery, "&")
+	changed := false
+	for i, part := range parts {
+		name, _, hasValue := strings.Cut(part, "=")
+		decoded, err := url.QueryUnescape(name)
+		if err != nil {
+			return invalidWebhookURLDiagnostic
+		}
+		switch decoded {
+		case "token", "apikey", "api_key", "key", "secret", "password":
+			if hasValue {
+				parts[i] = name + "=REDACTED"
+				changed = true
 			}
-			parameterIndex += searchStart
-
-			if parameterIndex > 0 {
-				previous := urlString[parameterIndex-1]
-				if previous != '?' && previous != '&' {
-					searchStart = parameterIndex + len(pattern)
-					continue
-				}
-			}
-
-			valueStart := parameterIndex + len(pattern)
-			valueEnd := valueStart
-			for valueEnd < len(urlString) && urlString[valueEnd] != '&' && urlString[valueEnd] != '#' {
-				valueEnd++
-			}
-			urlString = urlString[:valueStart] + "REDACTED" + urlString[valueEnd:]
-			searchStart = valueStart + len("REDACTED")
 		}
 	}
-
+	if changed {
+		parsed.RawQuery = strings.Join(parts, "&")
+		return parsed.String()
+	}
 	return urlString
 }
 
