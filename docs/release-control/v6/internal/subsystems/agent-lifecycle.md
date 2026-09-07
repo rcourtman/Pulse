@@ -15,6 +15,8 @@
 
 ## Purpose
 
+Delivery-log diagnostic text is a notification-attempt projection, not an agent admission or liveness verdict. Masking embedded destination credentials preserves failure context without changing agent identities, credentials, session replacement or removal policy. Consumers must use the retained failureClass and outcome as delivery evidence only; a transport error does not establish that the monitored agent is offline.
+
 Optional container filesystem observations add no command or lifecycle
 authority. The collector's existing disk-metrics option controls them. Native
 reads require the exact local container process identity and current namespace
