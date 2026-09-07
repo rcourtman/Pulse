@@ -1,25 +1,25 @@
 {
   "version": 1,
-  "base_sha": "560dbf314c4fc3744f52aa4e5a6a204cafe3aa7d",
-  "verified_at": "2026-09-07T08:40:47Z",
+  "base_sha": "e949c15c3d0e751e6cd7b1d8d46a1147840ae3c8",
+  "verified_at": "2026-09-07T10:44:07Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/AI/Chat/index.tsx",
-    "frontend-modern/src/components/AI/FindingsPanel.tsx",
-    "frontend-modern/src/components/patrol/ApprovalSection.tsx",
-    "frontend-modern/src/types/resource.ts"
+    "frontend-modern/src/features/alerts/AlertQueueActionFeedback.tsx",
+    "frontend-modern/src/features/alerts/OverviewTab.tsx",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
+    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/AI/Chat/index.tsx": "a31459ed9eeda0e96a192c0b6b471746c1a6da70cd8c68ab75b833ca763071f8",
-    "frontend-modern/src/components/AI/FindingsPanel.tsx": "92f1fd73740cb71c868c2d7054323d43f93ebc53dbb5cacdc1f828c5c2f2a868",
-    "frontend-modern/src/components/patrol/ApprovalSection.tsx": "b04e131f5a82d538f37aa9cb3aadaf0f7303266cfc318ff04a42a8f7f6a4f6ba",
-    "frontend-modern/src/types/resource.ts": "54217a487ce295d433a9e016bf655ab8572a903383ae0516fdd52e5004524ea7"
+    "frontend-modern/src/features/alerts/AlertQueueActionFeedback.tsx": "4fd4e2757b11bc4adb52bad293eb5a7a8d55301e12e5f4c3816fdbe0682bc578",
+    "frontend-modern/src/features/alerts/OverviewTab.tsx": "6700ce02ad19b4133860a7b680ed145e21ce27fa7fd4053937ce9cd3fc0c02e1",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "968d6d3f82d59235a13bfcd89b8405558d0286c89a22efc12bbc7e2ff5ad1600",
+    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts": "25d47c0ce64f433ce0fd8ca851434d3c09441970d1e929de8c7787f209ab1ddb",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts": "863e1b167bc27df5d46976b704a883ba6df9066bb6e42133935dbaa2c02f0b03"
   },
   "routes": [
-    "/patrol",
-    "/actions?action=act_185eebf5dfc24652e6332881dbe94f6c",
-    "/actions?action=act_7687850d214e9c5f7038a436c6cc2ff7",
-    "/actions?action=act_e5e1f06da3dc42215a97360731d7e36b"
+    "/qualification/overview",
+    "/qualification/destinations"
   ],
   "viewports": [
     {
@@ -36,26 +36,20 @@
     }
   ],
   "states": [
-    "Activity with All findings including resolved records",
-    "Expired action with needs-attention investigation and retained linked action",
-    "Completed action with independent verification",
-    "Rejected action without execution controls",
-    "Expanded investigation thread with raw filesystem evidence and nested output scroll",
-    "Assistant empty conversation with attached finding",
-    "New Assistant conversation with context cleared and ordinary starters restored",
-    "Existing Assistant conversation loaded from recent sessions",
-    "Reloaded exact action review"
+    "Rejected Retry and Dismiss with untimed feedback after real toast timers expire using the Playwright clock",
+    "Cancelled action retains prior feedback without another API mutation",
+    "Accepted mutation with failed health read preserves unavailable warning and does not report mutation failure",
+    "Newer confirmed action supersedes prior feedback",
+    "Destination healthy refresh removes health warning but retains failed-action information",
+    "Deliberate clear removes feedback and retains focus in its labelled region",
+    "Light and dark themes at desktop, intermediate and narrow widths"
   ],
   "interactions": [
-    "Keyboard focus and Enter open the finding review and investigation thread",
-    "Expand tool results and scroll inside the native filesystem observation output",
-    "Discuss with Assistant retains the finding and expired action context without unrelated starters",
-    "Start new Assistant session clears context and restores welcome and recent sessions",
-    "Load existing session and inspect its transcript",
-    "Follow exact Actions links, inspect planned state and recorded independent verification",
-    "Expand policy evidence, evidence details and delivery identifiers with keyboard",
-    "Reload exact action URLs, close with Escape and the explicit close button",
-    "Inspect desktop, intermediate and narrow placement, nested scrolling, footer reachability and document overflow"
+    "Focus Retry and Dismiss and activate with Enter; accept or cancel native confirmation",
+    "Advance browser clock beyond ten-second error duration and complete toast exit timer",
+    "Refresh unavailable health; reconcile destination health to healthy",
+    "Focus and activate Clear recovery message using Enter",
+    "Assert feedback text and controls fit viewport; inspect representative screenshots"
   ],
-  "notes": "Real bundled development runtime SHA256 1f1f71d2fd77b89f43a980d1e990a4010d2ec467502551555d5ab702f1aa71e6. Playwright scripts and screenshots are in workspace tmp/patrol-filesystem-evidence/{storage-browser,action-browser}. Final pixels were reviewed after transitions settled. Browser proof covers the named changes, not full product readiness. Independent qualification still fails missing-access continuity and VM execution. An existing Assistant verification-policy message leaking into historical transcript is retained as a separate canonical orchestration gap. Mock mode is off. Browser scripts allow only login and selected-provider readiness POSTs. Repeated after the shared incremental alert-history change. Eighteen bounded concurrent attention-summary requests completed and the final goroutine check found no history walkers. This functional check is not a workstation performance benchmark."
+  "notes": "Real source OverviewTab and DestinationsTab with shared Card, Button and ToastContainer in isolated Vite/Chromium fixture; scripted APIs, not full app-shell routing, installed backend delivery or intended-recipient receipt. Callback throw/rejection and stale completion ownership are unit-tested, not browser-injected. No screen-reader reproduction or WCAG conformance claim. Evidence and five unsuccessful harness attempts documented in docs/qualification/recovery-feedback/README.md. Final run: 12 cases, zero page errors. Runtime source was unchanged throughout harness repairs."
 }

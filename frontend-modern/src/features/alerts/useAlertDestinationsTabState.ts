@@ -36,6 +36,8 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
   const [testingEmail, setTestingEmail] = createSignal(false);
   const [testingApprise, setTestingApprise] = createSignal(false);
   const {
+    queueActionFeedback,
+    clearQueueActionFeedback,
     deliveryHealth,
     deliveryHealthUnavailable,
     refreshingDeliveryHealth,
@@ -163,6 +165,8 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
 
   return {
     appriseState,
+    queueActionFeedback,
+    clearQueueActionFeedback,
     deliveryHealth,
     deliveryHealthUnavailable,
     deliveryLog,
