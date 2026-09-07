@@ -1041,6 +1041,14 @@ artifact-selection behaviour.
    status on that port, and hand Playwright the same base URL, because a
    worker may also host long-running Pulse instances on `7655` and `17655`
    and a port collision fails the smoke only after every other stage passed.
+   Browser smoke must preserve private workspace ownership across the Docker
+   user-namespace boundary. On rootless Docker, container `0:0` maps to the
+   daemon owner; on rootful Docker, the browser uses the worker's host UID/GID.
+   The worker must read the daemon's security options, reject unreadable or
+   malformed identity information, and probe the mounted, lockfile-installed
+   Playwright CLI before the expensive suites and image build. It must not
+   download a replacement CLI or broaden checkout permissions to hide a mount
+   identity failure.
    Race-instrumented Go builds must place `GOTMPDIR` under the worker's
    persistent run directory and remove that bounded scratch directory on exit;
    a small WSL `/tmp` tmpfs must not turn release qualification into a false
@@ -2144,27 +2152,6 @@ artifact-selection behaviour.
     fetch onboarding payloads without logging bearer tokens or mobile deep-link
     secrets, and seed hosted approvals through a single explicit tenant runtime
     restart when a release proof needs transactionally visible approval state.
-
-   Browser execution must invoke the npm-ci-installed
-   `/work/node_modules/@playwright/test/cli.js` directly with Node inside the
-   selected Playwright image. Missing or inaccessible mounted dependencies
-   must fail admission rather than trigger an npx registry download of a
-   substitute runner. Preserve the existing container UID/GID, mount, image
-   version selection and exit status. The executed-shell fixture in
-   `scripts/release_control/internal/release_preflight_test.py` verifies the
-   runner path, argument quoting, container identity and failure propagation
-   with mocked Docker; it is not browser qualification.
-
-   After npm ci and image selection, the worker reads the selected non-root
-   container's UID map. When that UID maps to a different host identity,
-   POSIX ACLs grant only that mapped UID read/write/search access within the
-   disposable `tests/integration` bind mount, without following symlinks.
-   Default directory ACLs retain the host worker's access to generated evidence.
-   No checkout-wide chmod, world access, root container, or gate bypass is
-   permitted. Missing mapping/ACL support fails preparation closed. Identity
-   mappings need no ACL change. A bounded real-container CLI startup and
-   evidence read/cleanup probe is prerequisite evidence, not a browser pass
-   or exact-candidate admission; the original failed admission remains retained.
 
 ## Forbidden Paths
 

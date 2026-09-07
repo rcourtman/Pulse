@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import json
 import pathlib
 import re
 import subprocess
@@ -264,94 +265,6 @@ class ReleasePreflightTest(unittest.TestCase):
         self.assertIn('--env "PLAYWRIGHT_BASE_URL=${PULSE_E2E_BASE_URL}"', worker)
         self.assertNotIn("localhost:7655", worker)
 
-    def test_browser_uses_installed_runner_and_preserves_failure(self) -> None:
-        worker = (ROOT / "scripts/release-preflight-worker.sh").read_text()
-        function = re.search(
-            r"run_playwright\(\) \{.*?\n\}", worker, flags=re.DOTALL
-        ).group(0)
-        # Exercise the real shell function without starting Docker or a browser.
-        # A failed container must propagate, not become a successful admission.
-        for status in (0, 13):
-            with self.subTest(status=status):
-                result = subprocess.run(
-                    ["bash", "-c", """
-docker() { printf '%s\n' "$@"; return """ + str(status) + """; }
-REPOSITORY_DIR='/tmp/worker with spaces/repo'
-PLAYWRIGHT_IMAGE='mcr.microsoft.com/playwright:v1.61.1-noble'
-PULSE_E2E_BASE_URL='http://localhost:27655'
-""" + function + """
-run_playwright 'tests/a test.spec.ts' --project=chromium
-"""],
-                    text=True, capture_output=True, check=False,
-                )
-                self.assertEqual(result.returncode, status, result.stderr)
-                args = result.stdout.splitlines()
-                self.assertEqual(args[-5:], [
-                    "node", "/work/node_modules/@playwright/test/cli.js",
-                    "test", "tests/a test.spec.ts", "--project=chromium",
-                ])
-                self.assertNotIn("npx", args)
-                self.assertEqual(args[args.index("--volume") + 1],
-                                 "/tmp/worker with spaces/repo/tests/integration:/work")
-                self.assertEqual(args[args.index("--user") + 1],
-                                 f"{os.getuid()}:{os.getgid()}")
-                self.assertIn("mcr.microsoft.com/playwright:v1.61.1-noble", args)
-
-    def test_browser_mount_mapping_and_fail_closed(self) -> None:
-        worker = (ROOT / "scripts/release-preflight-worker.sh").read_text()
-        function = re.search(
-            r"prepare_playwright_mount\(\) \{.*?\n\}", worker, flags=re.DOTALL
-        ).group(0)
-        for mapping, status, acl in (
-            ("0 1001 1\n1 165536 65536", 0, "u:166536:rwX"),
-            ("0 0 4294967295", 0, None),
-            ("0 1001 1", 1, None),
-            ("garbage", 1, None),
-        ):
-            with self.subTest(mapping=mapping):
-                result = subprocess.run(["bash", "-c", r'''
-set -euo pipefail
-id() { echo 1001; }
-docker() { printf '%s\n' "$MAPPING"; }
-setfacl() { printf 'ACL %s\n' "$*"; }
-find() { printf 'FIND %s\n' "$*"; }
-REPOSITORY_DIR='/tmp/worker with spaces/repo'
-PLAYWRIGHT_IMAGE='selected-image'
-''' + function + "\nprepare_playwright_mount"],
-                    env={**os.environ, "MAPPING": mapping},
-                    text=True, capture_output=True, check=False)
-                self.assertEqual(result.returncode, status, result.stderr)
-                if acl:
-                    self.assertIn(acl, result.stdout)
-                    self.assertIn("-R -P", result.stdout)
-                    self.assertIn("d:u:1001:rwx,d:u:166536:rwx", result.stdout)
-                    self.assertIn("/tmp/worker with spaces/repo/tests/integration", result.stdout)
-                else:
-                    self.assertNotIn("ACL", result.stdout)
-        prep = re.search(r"run_integration_prep\(\) \{.*?\n\}", worker,
-                         flags=re.DOTALL).group(0)
-        self.assertLess(prep.index("integration-dependencies"), prep.index("playwright-mount"))
-        self.assertLess(prep.index("playwright-image"), prep.index("playwright-mount"))
-
-    def test_browser_mount_acl_errors_propagate(self) -> None:
-        worker = (ROOT / "scripts/release-preflight-worker.sh").read_text()
-        function = re.search(r"prepare_playwright_mount\(\) \{.*?\n\}", worker,
-                             flags=re.DOTALL).group(0)
-        for failing in ("docker", "setfacl", "find"):
-            with self.subTest(failing=failing):
-                script = r'''
-set -euo pipefail
-id() { echo 1001; }
-docker() { printf '0 1001 1\n1 165536 65536\n'; }
-setfacl() { :; }
-find() { :; }
-REPOSITORY_DIR=/unused
-PLAYWRIGHT_IMAGE=selected-image
-''' + f"\n{failing}() {{ return 19; }}\n" + function + "\nprepare_playwright_mount"
-                result = subprocess.run(["bash", "-c", script],
-                                        text=True, capture_output=True, check=False)
-                self.assertEqual(result.returncode, 19, result.stderr)
-
     def test_worker_serializes_resource_intensive_test_suites(self) -> None:
         worker = (ROOT / "scripts/release-preflight-worker.sh").read_text()
         scheduling_block = re.search(
@@ -368,6 +281,66 @@ PLAYWRIGHT_IMAGE=selected-image
         self.assertNotIn("run_backend &", block)
         self.assertLess(block.index("done\n"), block.index("run_frontend_tests\n"))
         self.assertLess(block.index("run_frontend_tests\n"), block.index("run_backend\n"))
+
+    def test_browser_mount_identity_and_locked_cli_follow_the_docker_daemon(self) -> None:
+        worker = (ROOT / "scripts/release-preflight-worker.sh").read_text()
+        functions = []
+        for name in ("playwright_container_user", "run_playwright"):
+            match = re.search(rf"^{name}\(\) \{{\n.*?^\}}", worker, re.MULTILINE | re.DOTALL)
+            self.assertIsNotNone(match, name)
+            functions.append(match.group(0))
+        for options, info_rc, valid, expected_user in (
+            (["name=seccomp,profile=builtin", "name=rootless"], 0, True, "0:0"),
+            (["name=seccomp,profile=builtin"], 0, True, f"{os.getuid()}:{os.getgid()}"),
+            ([], 42, False, None),
+            ({"rootless": True}, 0, False, None),
+            (None, 0, False, None),
+        ):
+            with self.subTest(options=options, info_rc=info_rc), tempfile.TemporaryDirectory() as raw:
+                temp = pathlib.Path(raw)
+                docker = temp / "docker"
+                docker.write_text(
+                    f"#!{sys.executable}\n"
+                    "import json,os,pathlib,sys\n"
+                    "if sys.argv[1] == 'info':\n"
+                    "    print(os.environ['TEST_SECURITY_OPTIONS'])\n"
+                    "    raise SystemExit(int(os.environ['TEST_INFO_RC']))\n"
+                    "pathlib.Path(os.environ['TEST_CONTAINER_STARTED']).touch()\n"
+                    "print(json.dumps(sys.argv[1:]))\n"
+                )
+                docker.chmod(0o755)
+                started = temp / "started"
+                script = "set -euo pipefail\n" + "\n".join(functions) + "\n"
+                script += 'PLAYWRIGHT_CONTAINER_USER="$(playwright_container_user)"\n'
+                script += "run_playwright --version\n"
+                script += "run_playwright test tests/00-diagnostic.spec.ts --project=chromium\n"
+                result = subprocess.run(
+                    ["bash", "-c", script], capture_output=True, text=True, check=False,
+                    env={**os.environ, "PATH": f"{temp}:{os.environ['PATH']}",
+                         "TEST_SECURITY_OPTIONS": json.dumps(options), "TEST_INFO_RC": str(info_rc),
+                         "TEST_CONTAINER_STARTED": str(started),
+                         "REPOSITORY_DIR": str(temp / "private workspace"),
+                         "PLAYWRIGHT_IMAGE": "locked-playwright-image",
+                         "PULSE_E2E_BASE_URL": "http://127.0.0.1:27655"},
+                )
+                self.assertEqual(valid, result.returncode == 0, result.stderr)
+                self.assertEqual(valid, started.exists())
+                if not valid:
+                    continue
+                calls = [json.loads(line) for line in result.stdout.splitlines()]
+                self.assertEqual(2, len(calls))
+                for args in calls:
+                    self.assertEqual(expected_user, args[args.index("--user") + 1])
+                    self.assertEqual(f"{temp}/private workspace/tests/integration:/work",
+                                     args[args.index("--volume") + 1])
+                    self.assertIn("node", args)
+                    self.assertIn("/work/node_modules/@playwright/test/cli.js", args)
+                    self.assertNotIn("npx", args)
+                self.assertEqual("--version", calls[0][-1])
+                self.assertEqual(["test", "tests/00-diagnostic.spec.ts", "--project=chromium"], calls[1][-3:])
+        prep = worker[worker.index("run_integration_prep() {"):worker.index("# Static frontend checks")]
+        self.assertLess(prep.index("phase playwright-image"), prep.index("phase playwright-runtime"))
+        self.assertIn("phase playwright-runtime run_playwright --version", prep)
 
     def test_api_shard_plan_is_deterministic_complete_and_disjoint(self) -> None:
         test_names = [

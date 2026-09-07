@@ -96,6 +96,23 @@ if [ "$(node -p "process.versions.node.split('.')[0]")" != "24" ]; then
   exit 3
 fi
 
+playwright_container_user() {
+  local security_options
+  security_options="$(docker info --format '{{json .SecurityOptions}}')" || return
+  python3 - "$security_options" "$(id -u):$(id -g)" <<'PY'
+import json
+import sys
+
+options = json.loads(sys.argv[1])
+if not isinstance(options, list) or not all(isinstance(value, str) for value in options):
+    raise SystemExit("Docker security options must be a JSON list of strings.")
+# Container root maps to the daemon owner on rootless Docker. Reusing that
+# owner's host UID instead selects an unrelated subordinate host identity.
+print("0:0" if "name=rootless" in options else sys.argv[2])
+PY
+}
+PLAYWRIGHT_CONTAINER_USER="$(playwright_container_user)"
+
 mkdir -p \
   "$CACHE_DIR/go-build" \
   "$CACHE_DIR/go-mod" \
@@ -204,33 +221,19 @@ run_backend() {
   fi
 }
 
-# Rootless Docker maps the selected non-root UID to a subordinate host UID.
-# Grant only that identity access to the disposable integration bind mount;
-# never make the checkout world-readable/writable or change container identity.
-prepare_playwright_mount() {
-  local host_uid mapped_uid uid_map integration_dir
-  host_uid="$(id -u)"
-  integration_dir="$REPOSITORY_DIR/tests/integration"
-  uid_map="$(docker run --rm --user "$(id -u):$(id -g)" \
-    "$PLAYWRIGHT_IMAGE" cat /proc/self/uid_map)"
-  mapped_uid="$(printf '%s\n' "$uid_map" | awk -v uid="$host_uid" '
-    NF == 3 && uid >= $1 && uid < $1 + $3 { print $2 + uid - $1; found++ }
-    END { if (found != 1) exit 1 }
-  ')"
-  if [[ ! "$mapped_uid" =~ ^[0-9]+$ ]] || [ "$mapped_uid" = 0 ]; then
-    echo "Error: invalid non-root browser UID mapping." >&2
-    return 3
-  fi
-  [ "$mapped_uid" != "$host_uid" ] || return 0
-  command -v setfacl >/dev/null || {
-    echo "Error: setfacl is required for the rootless browser mount." >&2
-    return 3
-  }
-  # -P avoids following dependency symlinks outside this disposable tree.
-  setfacl -R -P -m "u:${mapped_uid}:rwX" "$integration_dir"
-  # Retain host access to evidence subsequently created by the mapped UID.
-  find "$integration_dir" -type d -exec setfacl -m \
-    "d:u:${host_uid}:rwx,d:u:${mapped_uid}:rwx" {} +
+run_playwright() {
+  docker run --rm \
+    --network host \
+    --ipc host \
+    --user "$PLAYWRIGHT_CONTAINER_USER" \
+    --env CI=true \
+    --env HOME=/tmp \
+    --env "PULSE_E2E_DIAGNOSTIC=${PULSE_E2E_DIAGNOSTIC:-}" \
+    --env "PLAYWRIGHT_BASE_URL=${PULSE_E2E_BASE_URL}" \
+    --volume "$REPOSITORY_DIR/tests/integration:/work" \
+    --workdir /work \
+    "$PLAYWRIGHT_IMAGE" \
+    node /work/node_modules/@playwright/test/cli.js "$@"
 }
 
 run_integration_prep() {
@@ -238,7 +241,9 @@ run_integration_prep() {
   PLAYWRIGHT_VERSION="$(node -p "require('./tests/integration/node_modules/@playwright/test/package.json').version")"
   PLAYWRIGHT_IMAGE="mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble"
   phase playwright-image docker pull "$PLAYWRIGHT_IMAGE"
-  phase playwright-mount prepare_playwright_mount
+  # Check the real mount and locked CLI before the expensive test suites and
+  # image build. Never let npx download a different browser test version.
+  phase playwright-runtime run_playwright --version
   phase mock-github-image docker build --tag pulse-mock-github:test tests/integration/mock-github-server
 }
 
@@ -287,24 +292,6 @@ else
     --tag pulse:test \
     .
 fi
-# Use only the npm-ci-installed runner. npx may fetch a different version when
-# the mounted dependency tree is missing or inaccessible, masking the actual
-# admission failure and breaking parity with the selected browser image.
-run_playwright() {
-  docker run --rm \
-    --network host \
-    --ipc host \
-    --user "$(id -u):$(id -g)" \
-    --env CI=true \
-    --env HOME=/tmp \
-    --env "PULSE_E2E_DIAGNOSTIC=${PULSE_E2E_DIAGNOSTIC:-}" \
-    --env "PLAYWRIGHT_BASE_URL=${PULSE_E2E_BASE_URL}" \
-    --volume "$REPOSITORY_DIR/tests/integration:/work" \
-    --workdir /work \
-    "$PLAYWRIGHT_IMAGE" \
-    node /work/node_modules/@playwright/test/cli.js test "$@"
-}
-
 run_rehearsal_smoke() {
   cd tests/integration
   export MOCK_CHECKSUM_ERROR=false
@@ -314,7 +301,7 @@ run_rehearsal_smoke() {
   export PULSE_E2E_DIAGNOSTIC=1
   docker compose -f docker-compose.test.yml up -d --wait
   timeout 60 sh -c 'until curl -fsS ${PULSE_E2E_BASE_URL}/api/health >/dev/null; do sleep 2; done'
-  run_playwright tests/00-diagnostic.spec.ts --project=chromium --reporter=list
+  run_playwright test tests/00-diagnostic.spec.ts --project=chromium --reporter=list
   local status
   status="$(curl -s -o "$RUN_DIR/update-status.json" -w '%{http_code}' ${PULSE_E2E_BASE_URL}/api/updates/status || true)"
   case "$status" in
@@ -339,7 +326,7 @@ run_release_smoke() {
   timeout 60 sh -c 'until docker inspect --format="{{json .State.Health.Status}}" pulse-mock-github | grep -q healthy; do sleep 2; done'
   timeout 60 sh -c 'until docker inspect --format="{{json .State.Health.Status}}" pulse-test-server | grep -q healthy; do sleep 2; done'
   timeout 60 sh -c 'until curl -fsS ${PULSE_E2E_BASE_URL}/api/health >/dev/null; do sleep 2; done'
-  run_playwright tests/95-release-smoke.spec.ts --project=chromium --reporter=list
+  run_playwright test tests/95-release-smoke.spec.ts --project=chromium --reporter=list
   docker compose -f docker-compose.test.yml down -v
 }
 
