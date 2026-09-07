@@ -190,7 +190,7 @@ jobs:
           python3 scripts/write_github_output.py tag "${TAG}"
           python3 scripts/write_github_output.py version "${VERSION}"
           echo "is_prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
-          echo "source_branch=${SOURCE_BRANCH}" >> $GITHUB_OUTPUT
+          python3 scripts/write_github_output.py source_branch "${SOURCE_BRANCH}"
           python3 scripts/write_github_output.py historical_asset_backfill_only "${HISTORICAL_ASSET_BACKFILL_ONLY}"
           echo "Version: ${VERSION}, Tag: ${TAG}, Prerelease: ${IS_PRERELEASE}, Branch: ${SOURCE_BRANCH}, HistoricalBackfillOnly: ${HISTORICAL_ASSET_BACKFILL_ONLY}"
 
