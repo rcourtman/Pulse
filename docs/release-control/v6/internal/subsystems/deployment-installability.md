@@ -38,6 +38,25 @@ profiles. Collector hierarchy and confidentiality fixtures remain in
 `scripts/release_control/internal/release_resource_snapshot_test.py`. Neither
 fixture constitutes full-suite or installed-release qualification.
 
+### Immutable release source
+
+Continuous development must not change an admitted release's source. The
+preparation PR's qualified head stays fixed on `release-candidate/<packet>`
+while its governed source branch continues receiving work. Dispatch verifies
+that the canonical PR merged into the version's governed source line, that its
+head and ref match the admitted snapshot, and that its merge remains in that
+line's published history. Qualification, workflow execution, compiler dispatch
+and published artifacts bind to that head, not a later merge or branch tip.
+The source workflow must implement the snapshot input and provenance contract
+before the maintainer spends an exact qualification run on it. Later changes
+belong to the next candidate unless the maintainer explicitly rejects the
+selected source for a concrete defect. Existing maturity, soak, failed-check
+and publication-authority boundaries still apply.
+`scripts/release_control/release_snapshot.py` owns snapshot identity validation.
+Its executable identity cases are in `release_snapshot_test.py`, and the staged
+workflow contract is verified in `release_promotion_policy_test.py`.
+
+
 ### Benchmark qualification evidence
 
 The Build and Test benchmark job retains `bench-metadata.txt` together with
