@@ -9,6 +9,7 @@ const root = resolve("frontend-modern");
 process.chdir(root);
 const fixture = `
 import { render } from 'solid-js/web';
+import { createSignal } from 'solid-js';
 import { Router, Route } from '@solidjs/router';
 import { AlertsAPI } from '/src/api/alerts';
 import { NotificationsAPI } from '/src/api/notifications';
@@ -35,11 +36,15 @@ const noop = () => {};
 function Overview() {return <OverviewTab overrides={[]} activeAlerts={{}} updateAlert={noop}
 showQuickTip={()=>false} dismissQuickTip={noop} showAcknowledged={()=>true}
 setShowAcknowledged={noop} alertsDisabled={()=>false}/>;}
-function Destinations() {return <DestinationsTab
+function Destinations() {
+const [pingUrl, setPingUrl] = createSignal('');
+window.unsaved = false;
+window.editedPingUrl = pingUrl;
+return <DestinationsTab
 emailConfig={()=>({enabled:false,provider:'smtp',from:'',server:'',username:'',password:'',port:587,to:[],tls:true,startTLS:true,replyTo:'',maxRetries:3,retryDelay:5,rateLimit:60})} setEmailConfig={noop}
 appriseConfig={()=>({enabled:false,mode:'cli',targetsText:'',configKey:'',serverUrl:'',timeoutSeconds:30,apiKey:'',apiKeyHeader:'X-API-KEY',hasApiKey:false,skipTlsVerify:false,cliPath:'apprise'})} setAppriseConfig={noop}
 configLoadError={()=>null} isRetrying={()=>false} isLoadingDestinations={()=>false} onRetryLoad={noop}
-webhooks={()=>[]} setHasUnsavedChanges={noop} deadManPingUrl={()=>''} setDeadManPingUrl={noop}
+webhooks={()=>[]} setHasUnsavedChanges={(value)=>{window.unsaved=value;}} deadManPingUrl={pingUrl} setDeadManPingUrl={setPingUrl}
 pushMinimumSeverity={()=>'all'} setPushMinimumSeverity={noop}/>;}
 function Fixture() {return <main class="p-4"><ToastContainer/>{location.pathname.endsWith('destinations')?<Destinations/>:<Overview/>}</main>;}
 render(()=><Router><Route path="/qualification/*" component={Fixture}/></Router>,document.getElementById('root'));
@@ -86,6 +91,7 @@ try {
   browser = await chromium.launch({ headless: true });
   mkdirSync(output, { recursive: true });
   let cases = 0;
+  let unsavedEditCases = 0;
   for (const width of [1440, 900, 390])
     for (const surface of ["overview", "destinations"])
       for (const theme of ["light", "dark"]) {
@@ -135,6 +141,22 @@ try {
           });
           throw error;
         });
+        // A synthetic unsaved value, never submitted to a backend.
+        const editedUrl = "https://example.invalid/unsaved-recovery-check";
+        const pingInput = page.getByLabel(
+          "Healthchecks-compatible success ping URL",
+          { exact: true },
+        );
+        const assertEditRetained = async () => {
+          if (surface !== "destinations") return;
+          assert.equal(await pingInput.inputValue(), editedUrl);
+          assert.equal(await page.evaluate(() => window.editedPingUrl()), editedUrl);
+          assert.equal(await page.evaluate(() => window.unsaved), true);
+        };
+        if (surface === "destinations") {
+          await pingInput.fill(editedUrl);
+          await assertEditRetained();
+        }
         await page.clock.install();
         // Keyboard confirmation, genuine toast expiry, durable equivalent.
         await retry.focus();
@@ -155,12 +177,14 @@ try {
             .count(),
           1,
         );
+        await assertEditRetained();
         // Cancellation leaves the previous message and does not submit.
         const before = await page.evaluate(() => window.mutations);
         accept = false;
         await dismiss.click();
         assert.equal(await page.evaluate(() => window.mutations), before);
         assert.match(await feedback.innerText(), /Unable to retry/);
+        await assertEditRetained();
         accept = true;
         await dismiss.focus();
         await page.keyboard.press("Enter");
@@ -186,6 +210,7 @@ try {
             .count(),
           0,
         );
+        await assertEditRetained();
         // Recover the unavailable snapshot; an accepted mutation did not clear it.
         await page.evaluate(() => {
           window.health = "degraded";
@@ -242,14 +267,17 @@ try {
           await feedback.evaluate((el) => document.activeElement === el),
           true,
         );
+        await assertEditRetained();
         assert.deepEqual(errors, []);
         await page.close();
         cases++;
+        if (surface === "destinations") unsavedEditCases++;
       }
   console.log(
     JSON.stringify({
       result: "passed",
       cases,
+      unsavedEditCases,
       viewports: [1440, 900, 390],
       scope:
         "Real OverviewTab and DestinationsTab, shared toast and feedback in Chromium; scripted API only, not installed delivery or recipient receipt.",
