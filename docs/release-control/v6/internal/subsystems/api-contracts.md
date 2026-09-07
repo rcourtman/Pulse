@@ -20,6 +20,8 @@
 
 ## Purpose
 
+The delivery-log response redacts embedded webhook URLs in errorMessage rather than treating the entire diagnostic as a URL. Non-secret operation and failure context survive alongside notificationId, destinationId, outcome, failureClass and attempts; malformed URL diagnostics fail closed. The HTTP payload proof is TestContract_DeliveryDiagnosticPayload; notification handler tests pin plain, credential-bearing and malformed errors. No response keys or route permissions change.
+
 Action reconciliation refreshes the durable product investigation record from
 the authoritative session/action even when the finding outcome already matches.
 The same builder owns initial completion and later refresh. Original prose,

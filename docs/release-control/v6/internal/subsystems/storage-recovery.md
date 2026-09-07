@@ -21,6 +21,8 @@
 
 ## Purpose
 
+Delivery-log URL masking occurs in the HTTP diagnostic projection and does not rewrite retained attempt history or destination configuration. Preserved failure context and attempt identifiers describe notification delivery only, not a restore result or storage freshness. Malformed URL diagnostics fail closed in the response; this does not delete the retained failure, change retention windows, or grant retry, storage or recovery authority.
+
 Container filesystem evidence is a read-only observation at a named resource
 mountpoint. It grants no storage mutation, recovery or host-capacity authority.
 A full container tmpfs does not establish host-array exhaustion. Unknown byte
