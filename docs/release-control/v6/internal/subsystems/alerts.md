@@ -15,6 +15,34 @@
 
 ## Purpose
 
+### Retained-queue recovery feedback has no reading deadline
+
+Retry and Dismiss failures have a view-local untimed equivalent beside the
+delivery-health card on Overview and Notifications. A health refresh, including
+a verified healthy result that removes the warning, does not erase a rejected
+action's message. Cancellation preserves it. Deliberate clear or the next
+confirmed action supersedes it; reloading or leaving the view resets it.
+The existing error toast remains transient.
+
+An accepted queue mutation still emits success if the health read fails.
+That read owns the existing unavailable warning. A synchronous throw or rejected
+promise from the optional activity-refresh callback must not claim the mutation
+failed: retained feedback explicitly distinguishes accepted action from failed
+activity refresh. Older action/callback completions cannot restore feedback
+after a clear or overwrite a newer action's message. Neither acceptance nor a
+healthy queue proves intended-recipient receipt; no retry policy changes.
+
+Proof: useNotificationDeliveryHealth.test.tsx pins expiry-independent state,
+health reconciliation, cancellation, callback failure and ownership;
+AlertDeliveryHealthCard.test.tsx pins mounted live-region composition and clear
+focus. scripts/check-recovery-feedback.mjs exercises the real Overview and
+destination views with scripted API responses, real toast expiry, keyboard
+actions/clear, unavailable-to-healthy reconciliation and three viewport widths.
+This is the main-only named bet “Recovery feedback without a reading deadline”
+from the current demand ledger, not a backend failure diagnosis or backport.
+
+
+
 Overview delivery diagnoses use latest-started refresh ownership. Older bulk
 responses cannot overwrite newer card notification status, and an empty active
 alert set invalidates outstanding reads. Disposal also prevents updates. Failed

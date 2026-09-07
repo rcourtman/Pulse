@@ -2,6 +2,7 @@ import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NotificationsAPI } from '@/api/notifications';
+import { notificationStore } from '@/stores/notifications';
 
 import { useNotificationDeliveryHealth } from '../useNotificationDeliveryHealth';
 
@@ -13,10 +14,16 @@ vi.mock('@/api/notifications', () => ({
   },
 }));
 
+vi.mock('@/stores/notifications', () => ({
+  notificationStore: { success: vi.fn(), error: vi.fn() },
+}));
+
 const healthWith = (status: string) => ({ queue: { status, failed: 3, deadLetter: 1 } }) as never;
 
 describe('useNotificationDeliveryHealth', () => {
   beforeEach(() => {
+    vi.mocked(notificationStore.success).mockReset();
+    vi.mocked(notificationStore.error).mockReset();
     vi.mocked(NotificationsAPI.getHealth).mockReset();
     vi.mocked(NotificationsAPI.dismissTerminalFailures).mockReset();
     vi.mocked(NotificationsAPI.retryTerminalFailures).mockReset();
@@ -200,6 +207,13 @@ describe('useNotificationDeliveryHealth', () => {
           expect(NotificationsAPI[action]).toHaveBeenCalledOnce();
           expect(NotificationsAPI.getHealth).toHaveBeenCalledTimes(3);
           expect(onAfterQueueAction).toHaveBeenCalledOnce();
+          // A failed health read must not reclassify an accepted queue mutation.
+          expect(notificationStore.success).toHaveBeenCalledWith(
+            action === 'retryTerminalFailures'
+              ? '2 retained deliveries queued for retry.'
+              : '2 retained failures dismissed.',
+          );
+          expect(notificationStore.error).not.toHaveBeenCalled();
           expect(state.deliveryHealth()).toBeNull();
           expect(state.deliveryHealthUnavailable()).toBe(true);
           expect(state.deliveryNeedsAttention()).toBe(true);
@@ -242,6 +256,15 @@ describe('useNotificationDeliveryHealth', () => {
             expect(NotificationsAPI[action]).toHaveBeenCalledTimes(outcome === 'rejected' ? 1 : 0);
             expect(NotificationsAPI.getHealth).toHaveBeenCalledTimes(1);
             expect(onAfterQueueAction).not.toHaveBeenCalled();
+            expect(notificationStore.success).not.toHaveBeenCalled();
+            expect(notificationStore.error).toHaveBeenCalledTimes(outcome === 'rejected' ? 1 : 0);
+            if (outcome === 'rejected') {
+              expect(notificationStore.error).toHaveBeenCalledWith(
+                action === 'retryTerminalFailures'
+                  ? 'Unable to retry retained notification deliveries.'
+                  : 'Unable to dismiss retained notification failures.',
+              );
+            }
             expect(state.deliveryHealth()).toBe(health);
             expect(state.deliveryNeedsAttention()).toBe(true);
             expect(state.deliveryHealthUnavailable()).toBe(false);
@@ -253,4 +276,148 @@ describe('useNotificationDeliveryHealth', () => {
         }),
     );
   });
+  describe.each(['dismissTerminalFailures', 'retryTerminalFailures'] as const)(
+    '%s feedback',
+    (action) => {
+      it('retains failed action information across time, healthy reads and cancellation until cleared or superseded', () =>
+        createRoot(async (dispose) => {
+          vi.useFakeTimers();
+          const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+          try {
+            vi.mocked(NotificationsAPI.getHealth).mockResolvedValue({
+              queue: { status: 'degraded', attentionRequired: 2 },
+            } as never);
+            vi.mocked(NotificationsAPI[action]).mockRejectedValueOnce(new Error('failed'));
+            const state = useNotificationDeliveryHealth();
+            await state.loadDeliveryHealth();
+            await state[action]();
+            const failure = state.queueActionFeedback();
+            expect(failure).toMatch(/^Unable to/);
+            await vi.advanceTimersByTimeAsync(11000);
+            vi.mocked(NotificationsAPI.getHealth).mockResolvedValueOnce(healthWith('healthy'));
+            await state.loadDeliveryHealth();
+            expect(state.deliveryNeedsAttention()).toBe(false);
+            expect(state.queueActionFeedback()).toBe(failure);
+            await state.loadDeliveryHealth();
+            confirmSpy.mockReturnValueOnce(false);
+            await state[action]();
+            expect(state.queueActionFeedback()).toBe(failure);
+            state.clearQueueActionFeedback();
+            expect(state.queueActionFeedback()).toBeNull();
+            vi.mocked(NotificationsAPI[action]).mockRejectedValueOnce(new Error('again'));
+            await state[action]();
+            expect(state.queueActionFeedback()).toBe(failure);
+            vi.mocked(NotificationsAPI[action]).mockResolvedValueOnce({ affected: 2 } as never);
+            await state[action]();
+            expect(state.queueActionFeedback()).toBeNull();
+          } finally {
+            vi.useRealTimers();
+            confirmSpy.mockRestore();
+            dispose();
+          }
+        }));
+
+      it.each(['throw', 'reject'] as const)(
+        'does not misreport an accepted mutation when the activity callback fails: %s',
+        (failure) =>
+          createRoot(async (dispose) => {
+            const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+            try {
+              vi.mocked(NotificationsAPI.getHealth).mockResolvedValue({
+                queue: { status: 'degraded', attentionRequired: 2 },
+              } as never);
+              vi.mocked(NotificationsAPI[action]).mockResolvedValue({ affected: 2 } as never);
+              const onAfterQueueAction = () => {
+                if (failure === 'throw') throw new Error('activity failed');
+                return Promise.reject(new Error('activity failed'));
+              };
+              const state = useNotificationDeliveryHealth({ onAfterQueueAction });
+              await state.loadDeliveryHealth();
+              await state[action]();
+              expect(notificationStore.success).toHaveBeenCalledOnce();
+              expect(notificationStore.error).not.toHaveBeenCalled();
+              expect(state.queueActionFeedback()).toMatch(
+                /^The queue action succeeded, but notification activity/,
+              );
+              expect(state.retryingTerminalFailures()).toBe(false);
+              expect(state.dismissingTerminalFailures()).toBe(false);
+            } finally {
+              confirmSpy.mockRestore();
+              dispose();
+            }
+          }),
+      );
+
+      it.each(['clear', 'newer'] as const)(
+        'does not restore stale callback feedback after %s',
+        (next) =>
+          createRoot(async (dispose) => {
+            const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+            try {
+              vi.mocked(NotificationsAPI.getHealth).mockResolvedValue({
+                queue: { status: 'degraded', attentionRequired: 2 },
+              } as never);
+              vi.mocked(NotificationsAPI[action]).mockResolvedValue({ affected: 2 } as never);
+              let rejectOld!: (error: Error) => void;
+              const onAfterQueueAction = vi.fn().mockImplementationOnce(
+                () =>
+                  new Promise((_, reject) => {
+                    rejectOld = reject;
+                  }),
+              );
+              const state = useNotificationDeliveryHealth({ onAfterQueueAction });
+              await state.loadDeliveryHealth();
+              const pending = state[action]();
+              await Promise.resolve();
+              await Promise.resolve();
+              if (next === 'clear') state.clearQueueActionFeedback();
+              else {
+                vi.mocked(NotificationsAPI[action]).mockRejectedValueOnce(
+                  new Error('new action failed'),
+                );
+                await state[action]();
+              }
+              const current = state.queueActionFeedback();
+              rejectOld(new Error('old activity failed'));
+              await pending;
+              expect(state.queueActionFeedback()).toBe(current);
+              if (next === 'newer') expect(current).toMatch(/^Unable to/);
+            } finally {
+              confirmSpy.mockRestore();
+              dispose();
+            }
+          }),
+      );
+    },
+  );
+  it('does not let an older rejected mutation overwrite the newer action failure', () =>
+    createRoot(async (dispose) => {
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      try {
+        vi.mocked(NotificationsAPI.getHealth).mockResolvedValue({
+          queue: { status: 'degraded', attentionRequired: 2 },
+        } as never);
+        let rejectOld!: (error: Error) => void;
+        vi.mocked(NotificationsAPI.retryTerminalFailures).mockReturnValueOnce(
+          new Promise((_, reject) => {
+            rejectOld = reject;
+          }),
+        );
+        vi.mocked(NotificationsAPI.dismissTerminalFailures).mockRejectedValueOnce(
+          new Error('new failure'),
+        );
+        const state = useNotificationDeliveryHealth();
+        await state.loadDeliveryHealth();
+        const old = state.retryTerminalFailures();
+        await state.dismissTerminalFailures();
+        rejectOld(new Error('old failure'));
+        await old;
+        expect(state.queueActionFeedback()).toBe(
+          'Unable to dismiss retained notification failures.',
+        );
+      } finally {
+        confirmSpy.mockRestore();
+        dispose();
+      }
+    }));
 });

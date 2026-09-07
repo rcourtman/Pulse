@@ -1,3 +1,4 @@
+import { AlertQueueActionFeedback } from './AlertQueueActionFeedback';
 import { createSignal, onCleanup, createEffect, onMount, Show } from 'solid-js';
 import { useLocation } from '@solidjs/router';
 
@@ -78,6 +79,10 @@ export function OverviewTab(props: {
 
   return (
     <div class="space-y-4 sm:space-y-6">
+      <AlertQueueActionFeedback
+        message={deliveryHealthState.queueActionFeedback()}
+        onClear={deliveryHealthState.clearQueueActionFeedback}
+      />
       <Show when={deliveryHealthState.deliveryNeedsAttention()}>
         <AlertDeliveryHealthCard
           health={deliveryHealthState.deliveryHealth()?.queue ?? null}

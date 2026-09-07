@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { NotificationQueueHealth } from '@/api/notifications';
 
+import { AlertQueueActionFeedback } from './AlertQueueActionFeedback';
 import { AlertDeliveryHealthCard } from './AlertDeliveryHealthCard';
 
 const degradedHealth: NotificationQueueHealth = {
@@ -213,5 +214,21 @@ describe('AlertDeliveryHealthCard', () => {
       'href',
       '/alerts/notifications#notification-delivery-activity',
     );
+  });
+});
+
+describe('recovery feedback beside delivery health', () => {
+  afterEach(() => cleanup());
+  it('keeps a mounted live region and returns focus to it when deliberately cleared', () => {
+    const [message, setMessage] = createSignal<string | null>(null);
+    render(() => <AlertQueueActionFeedback message={message()} onClear={() => setMessage(null)} />);
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    setMessage('Unable to retry retained notification deliveries.');
+    expect(screen.getByRole('status')).toHaveTextContent('Unable to retry');
+    const clear = screen.getByRole('button', { name: 'Clear recovery message' });
+    clear.focus();
+    fireEvent.click(clear);
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(screen.getByRole('region', { name: 'Notification recovery feedback' })).toHaveFocus();
   });
 });

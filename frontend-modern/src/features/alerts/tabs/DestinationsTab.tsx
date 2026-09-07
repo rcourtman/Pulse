@@ -1,3 +1,4 @@
+import { AlertQueueActionFeedback } from '../AlertQueueActionFeedback';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { hasFeature } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
@@ -79,6 +80,10 @@ export function DestinationsTab(props: DestinationsTabProps) {
           )}
         </Show>
 
+        <AlertQueueActionFeedback
+          message={state.queueActionFeedback()}
+          onClear={state.clearQueueActionFeedback}
+        />
         <Show when={state.deliveryNeedsAttention()}>
           <AlertDeliveryHealthCard
             health={state.deliveryHealth()?.queue ?? null}

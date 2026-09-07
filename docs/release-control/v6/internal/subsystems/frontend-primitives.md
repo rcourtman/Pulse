@@ -20,6 +20,24 @@
 
 ## Purpose
 
+### Recovery feedback composes shared controls without a timer
+
+The alerts-owned AlertQueueActionFeedback composes Card and Button rather than
+altering global toast lifetimes. Its polite atomic status region is mounted
+before failure text arrives; the warning card uses semantic foreground and wraps
+text and the explicit “Clear recovery message” control at narrow widths.
+The enclosing labelled region remains mounted and receives focus before clear
+removes the button, avoiding focus loss to the document body. Updating feedback
+does not steal focus. This is view-local feedback, not durable delivery history.
+
+The live region stays independent of delivery-health conditional rendering:
+a later healthy observation can remove the health warning without removing
+failed-action information. AlertDeliveryHealthCard.test.tsx verifies status
+and focus composition. scripts/check-recovery-feedback.mjs verifies both real
+feature views, keyboard activation/clear and text/control containment at 1440,
+900 and 390px, with scripted responses and genuine toast expiry. It does not
+establish screen-reader announcement quality or installed notification delivery.
+
 The shared action evidence disclosure preserves the named observer independently
 of the executor. Its observation timestamp uses the neutral label `Observed`,
 followed by the separate Pulse receipt time. Independent Proxmox API evidence
