@@ -17,6 +17,23 @@
 
 ## Purpose
 
+**Availability backfill preserves concurrent discovery changes (7 September 2026)**
+
+The backfill List snapshot is a work list, not an authoritative record to save.
+Read the current discovery, derive a missing suggestion from its current identity,
+and persist under one store write lock. State-provider reads stay outside that
+lock. Preserve newer identity, URL, engine version, user notes and existing
+(including dismissed) proposals; never resurrect a discovery deleted after List.
+A failed persistence attempt remains an error without installing the proposed
+change in cache. `TestService_BackfillPreservesConcurrentManualRepair` in `service_test.go`
+deterministically pauses SetReadState
+backfill after List, completes manual ESPHome repair, then resumes backfill and
+checks both cache and encrypted restart.
+`TestStore_BackfillAvailabilitySuggestionUsesCurrentRecord` in `store_test.go`
+covers current-identity
+inference, dismissal, deletion, unsupported identity and persistence failure.
+This is discovery state-integrity proof, not incident or notification acceptance.
+
 **Correlated VM memory fallback — issue #1962 (7 September 2026)**
 
 The next Proxmox guest poll indexes live agent memory embedded in VM read views,
