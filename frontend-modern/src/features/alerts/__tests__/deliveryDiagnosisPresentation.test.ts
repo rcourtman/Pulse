@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import type { AlertDeliveryDiagnosis } from '@/types/api';
 
-import { describeAlertDeliveryStatus } from '../deliveryDiagnosisPresentation';
+import {
+  describeAlertDeliveryStatus,
+  describeAlertEventReason,
+} from '../deliveryDiagnosisPresentation';
 
 const baseDiagnosis = (overrides: Partial<AlertDeliveryDiagnosis>): AlertDeliveryDiagnosis => ({
   alertIdentifier: 'a1',
@@ -126,5 +129,83 @@ describe('describeAlertDeliveryStatus', () => {
   it('stays silent on unknown reasons', () => {
     const diagnosis = baseDiagnosis({ status: 'suppressed', reason: 'future_reason' });
     expect(describeAlertDeliveryStatus(diagnosis, false)).toBeNull();
+  });
+});
+
+// A historic dispatch must not hide the reason a notification is held now.
+describe('current holds take precedence over historic dispatch', () => {
+  it.each([
+    ['monitor_only', 'Monitor-only — no notifications', 'muted'],
+    ['notifications_disabled', 'Notifications are turned off', 'attention'],
+    ['notifications_inactive', 'Notification delivery not turned on', 'attention'],
+    ['rate_limited', 'Hourly notification limit reached', 'attention'],
+    ['flapping', 'Flapping — notifications paused', 'attention'],
+    ['suppression_window', 'Notifications paused', 'attention'],
+  ] as const)('preserves %s with a previous dispatch', (reason, label, tone) => {
+    expect(
+      describeAlertDeliveryStatus(
+        baseDiagnosis({
+          status: 'suppressed',
+          reason,
+          lastNotified: '2026-09-07T06:00:00Z',
+        }),
+        false,
+      ),
+    ).toEqual({ label, tone });
+  });
+
+  it.each([undefined, '', 'invalid'])(
+    'keeps quiet hours visible without a valid replay time (%s)',
+    (quietHoursReplayAt) => {
+      expect(
+        describeAlertDeliveryStatus(
+          baseDiagnosis({
+            status: 'deferred',
+            reason: 'quiet_hours:performance',
+            lastNotified: '2026-09-07T06:00:00Z',
+            quietHoursReplayAt,
+          }),
+          false,
+        ),
+      ).toEqual({ label: 'Quiet hours — notifies later', tone: 'muted' });
+    },
+  );
+
+  it('respects backend acknowledgement even before the card badge updates', () => {
+    expect(
+      describeAlertDeliveryStatus(
+        baseDiagnosis({
+          status: 'suppressed',
+          reason: 'acknowledged',
+          lastNotified: '2026-09-07T06:00:00Z',
+        }),
+        false,
+      ),
+    ).toBeNull();
+  });
+});
+
+describe('describeAlertEventReason', () => {
+  it.each([
+    ['acknowledged', 'Acknowledged'],
+    ['flapping', 'Flapping'],
+    ['notifications_inactive', 'Delivery not turned on'],
+    ['notifications_disabled', 'Notifications off'],
+    ['monitor_only', 'Monitor-only'],
+    ['quiet_hours', 'Quiet hours'],
+    ['rate_limited', 'Hourly limit'],
+    ['suppression_window', 'Paused'],
+    ['cooldown', 'Cooldown'],
+  ])('names %s without classifying it as a delivery failure', (reason, label) => {
+    expect(describeAlertEventReason(reason)).toBe(label);
+    expect(describeAlertEventReason(`${reason}:performance`)).toBe(label);
+  });
+
+  it('retains an unknown reason including its detail', () => {
+    expect(describeAlertEventReason('future_hold:detail')).toBe('future_hold:detail');
+  });
+
+  it.each([undefined, ''])('uses a neutral fallback for missing reason %s', (reason) => {
+    expect(describeAlertEventReason(reason)).toBe('Held');
   });
 });
