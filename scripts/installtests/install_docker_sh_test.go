@@ -186,15 +186,44 @@ func TestPreviousStableForPrereleaseVersionCrossesMinorBoundaries(t *testing.T) 
 }
 
 func previousPrereleaseVersion(version string) (string, bool) {
-	base, suffix, ok := strings.Cut(version, "-rc.")
-	if !ok {
+	dash := strings.LastIndex(version, "-")
+	if dash < 0 {
+		return "", false
+	}
+	base := version[:dash]
+	stageAndNumber := version[dash+1:]
+	stage, suffix, ok := strings.Cut(stageAndNumber, ".")
+	if !ok || (stage != "alpha" && stage != "beta" && stage != "rc") {
 		return "", false
 	}
 	rc, err := strconv.Atoi(suffix)
 	if err != nil || rc <= 1 {
 		return "", false
 	}
-	return fmt.Sprintf("%s-rc.%d", base, rc-1), true
+	return fmt.Sprintf("%s-%s.%d", base, stage, rc-1), true
+}
+
+func TestPreviousPrereleaseVersionSupportsEveryPublishedMaturity(t *testing.T) {
+	for _, test := range []struct {
+		version string
+		want    string
+	}{
+		{version: "6.4.4-alpha.2", want: "6.4.4-alpha.1"},
+		{version: "6.4.4-beta.2", want: "6.4.4-beta.1"},
+		{version: "6.4.4-rc.2", want: "6.4.4-rc.1"},
+	} {
+		t.Run(test.version, func(t *testing.T) {
+			got, ok := previousPrereleaseVersion(test.version)
+			if !ok || got != test.want {
+				t.Fatalf("previousPrereleaseVersion(%q) = %q, %v; want %q, true", test.version, got, ok, test.want)
+			}
+		})
+	}
+	for _, version := range []string{"6.4.4-alpha.1", "6.4.4-beta.1", "6.4.4-rc.1", "6.4.4"} {
+		if got, ok := previousPrereleaseVersion(version); ok {
+			t.Fatalf("previousPrereleaseVersion(%q) = %q, true; want no same-stage predecessor", version, got)
+		}
+	}
 }
 
 func TestInstallDockerScriptUsesConfiguredImageRepoDefault(t *testing.T) {
