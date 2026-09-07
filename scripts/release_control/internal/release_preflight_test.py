@@ -297,6 +297,61 @@ run_playwright 'tests/a test.spec.ts' --project=chromium
                                  f"{os.getuid()}:{os.getgid()}")
                 self.assertIn("mcr.microsoft.com/playwright:v1.61.1-noble", args)
 
+    def test_browser_mount_mapping_and_fail_closed(self) -> None:
+        worker = (ROOT / "scripts/release-preflight-worker.sh").read_text()
+        function = re.search(
+            r"prepare_playwright_mount\(\) \{.*?\n\}", worker, flags=re.DOTALL
+        ).group(0)
+        for mapping, status, acl in (
+            ("0 1001 1\n1 165536 65536", 0, "u:166536:rwX"),
+            ("0 0 4294967295", 0, None),
+            ("0 1001 1", 1, None),
+            ("garbage", 1, None),
+        ):
+            with self.subTest(mapping=mapping):
+                result = subprocess.run(["bash", "-c", r'''
+set -euo pipefail
+id() { echo 1001; }
+docker() { printf '%s\n' "$MAPPING"; }
+setfacl() { printf 'ACL %s\n' "$*"; }
+find() { printf 'FIND %s\n' "$*"; }
+REPOSITORY_DIR='/tmp/worker with spaces/repo'
+PLAYWRIGHT_IMAGE='selected-image'
+''' + function + "\nprepare_playwright_mount"],
+                    env={**os.environ, "MAPPING": mapping},
+                    text=True, capture_output=True, check=False)
+                self.assertEqual(result.returncode, status, result.stderr)
+                if acl:
+                    self.assertIn(acl, result.stdout)
+                    self.assertIn("-R -P", result.stdout)
+                    self.assertIn("d:u:1001:rwx,d:u:166536:rwx", result.stdout)
+                    self.assertIn("/tmp/worker with spaces/repo/tests/integration", result.stdout)
+                else:
+                    self.assertNotIn("ACL", result.stdout)
+        prep = re.search(r"run_integration_prep\(\) \{.*?\n\}", worker,
+                         flags=re.DOTALL).group(0)
+        self.assertLess(prep.index("integration-dependencies"), prep.index("playwright-mount"))
+        self.assertLess(prep.index("playwright-image"), prep.index("playwright-mount"))
+
+    def test_browser_mount_acl_errors_propagate(self) -> None:
+        worker = (ROOT / "scripts/release-preflight-worker.sh").read_text()
+        function = re.search(r"prepare_playwright_mount\(\) \{.*?\n\}", worker,
+                             flags=re.DOTALL).group(0)
+        for failing in ("docker", "setfacl", "find"):
+            with self.subTest(failing=failing):
+                script = r'''
+set -euo pipefail
+id() { echo 1001; }
+docker() { printf '0 1001 1\n1 165536 65536\n'; }
+setfacl() { :; }
+find() { :; }
+REPOSITORY_DIR=/unused
+PLAYWRIGHT_IMAGE=selected-image
+''' + f"\n{failing}() {{ return 19; }}\n" + function + "\nprepare_playwright_mount"
+                result = subprocess.run(["bash", "-c", script],
+                                        text=True, capture_output=True, check=False)
+                self.assertEqual(result.returncode, 19, result.stderr)
+
     def test_worker_serializes_resource_intensive_test_suites(self) -> None:
         worker = (ROOT / "scripts/release-preflight-worker.sh").read_text()
         scheduling_block = re.search(
