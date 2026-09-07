@@ -219,6 +219,29 @@ describe('AlertDeliveryHealthCard', () => {
 
 describe('recovery feedback beside delivery health', () => {
   afterEach(() => cleanup());
+  it('preserves editing focus and live-region identity when failure feedback changes', () => {
+    const [message, setMessage] = createSignal<string | null>(null);
+    render(() => <>
+      <input aria-label="Destination name" />
+      <AlertQueueActionFeedback message={message()} onClear={() => setMessage(null)} />
+    </>);
+    const input = screen.getByRole('textbox', { name: 'Destination name' });
+    const status = screen.getByRole('status');
+    expect(status).toHaveAttribute('aria-live', 'polite');
+    expect(status).toHaveAttribute('aria-atomic', 'true');
+    input.focus();
+    fireEvent.input(input, { target: { value: 'Unfinished edit' } });
+    for (const failure of [
+      'Unable to retry retained notification deliveries.',
+      'Unable to dismiss retained notification failures.',
+    ]) {
+      setMessage(failure);
+      expect(screen.getByRole('status')).toBe(status);
+      expect(status).toHaveTextContent(failure);
+      expect(input).toHaveFocus();
+      expect(input).toHaveValue('Unfinished edit');
+    }
+  });
   it('keeps a mounted live region and returns focus to it when deliberately cleared', () => {
     const [message, setMessage] = createSignal<string | null>(null);
     render(() => <AlertQueueActionFeedback message={message()} onClear={() => setMessage(null)} />);
