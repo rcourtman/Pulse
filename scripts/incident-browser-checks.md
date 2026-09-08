@@ -81,3 +81,27 @@ Chromium or Playwright changes. Ordinary runs use the unmodified base fixtures.
 For the ordinary-journey control, repeat the command above with
 `PULSE_E2E_INCIDENT_FOREGROUND` unset. Retain both exact-revision results;
 a prior success is not evidence for a later untested revision.
+
+## Saved alert intent (unmocked local backend)
+
+```sh
+pulse-heavy-run -- env PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_MOCK_MODE=false \
+  PULSE_E2E_ALERT_CONFIG_PERSISTENCE=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 \
+  npm --prefix tests/integration test -- tests/97-alert-config-persistence.spec.ts \
+  --project=chromium --workers=1 --retries=0
+```
+
+This opt-in test requires the managed, disposable backend. It activates that
+instance through the real configuration API, changes Recovery notifications
+through the production Schedule UI, verifies the staged value has not reached
+the server, and clicks Save Changes. It checks the real PUT result, subsequent
+GETs and rendered control after both page reload and managed backend restart
+with preserved data. It does not intercept HTTP or WebSocket responses and
+must not be run against a shared installation. The attachment contains only
+expected non-secret settings and evidence boundaries, not full configuration.
+
+This proves saved recovery intent only when the test passes. API activation
+setup is not UI activation coverage, and no resource or destination is seeded.
+It does not establish alert-engine firing, retry exhaustion, delivered recovery,
+recurrence or off-LAN receipt. Those require separate evidence; notification
+package loopback tests are not a substitute for installed exact-pair acceptance.
