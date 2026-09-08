@@ -1,67 +1,24 @@
 {
   "version": 1,
-  "base_sha": "701362ac25ef28dfa253f952820eed7c5a90db12",
-  "verified_at": "2026-09-08T02:20:17Z",
+  "base_sha": "550b2d80a175cc66ab4e7ac269b7ec350e101611",
+  "verified_at": "2026-09-08T11:54:21Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/AI/Chat/index.tsx",
-    "frontend-modern/src/components/Alerts/IncidentAssistantHandoffButton.tsx",
-    "frontend-modern/src/components/Alerts/IncidentTimelineEventCard.tsx",
-    "frontend-modern/src/components/Alerts/IncidentTimelinePanel.tsx",
-    "frontend-modern/src/components/Alerts/incidentAssistantHandoffModel.ts",
-    "frontend-modern/src/features/alerts/AlertHistoryItemActions.tsx",
-    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx",
-    "frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx",
-    "frontend-modern/src/features/alerts/MobileAlertHistoryInvestigationDialog.tsx",
-    "frontend-modern/src/features/alerts/useAlertHistoryState.ts",
-    "frontend-modern/src/features/alerts/useAlertResourceIncidentsState.ts",
-    "frontend-modern/src/hooks/useTypeToSearch.ts",
-    "frontend-modern/src/types/api.ts",
-    "frontend-modern/src/utils/alertIncidentPresentation.ts"
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/AI/Chat/index.tsx": "ca9e630294db426df591c3386d4fec161f34ade0bb6a8c4ea769130545a12341",
-    "frontend-modern/src/components/Alerts/IncidentAssistantHandoffButton.tsx": "b7a6ea6676ed9834d8254bb4ddab1301ec3b0d2368a96fa3e91e9ab5d2cefb4f",
-    "frontend-modern/src/components/Alerts/IncidentTimelineEventCard.tsx": "21e90602de00aa4765b1c40b5295a618a237501389d50ca9dbe36454abd11f32",
-    "frontend-modern/src/components/Alerts/IncidentTimelinePanel.tsx": "7298d4184c243325dbd671777257c7efd66c86091eb4b83663315e2bdc131fcb",
-    "frontend-modern/src/components/Alerts/incidentAssistantHandoffModel.ts": "9e777eee1be46f33ac146770fac6193cf6cd1c8b33ab0d0cd72fe57b98907a37",
-    "frontend-modern/src/features/alerts/AlertHistoryItemActions.tsx": "06e75d16ccad383b7c89d109baaee71852482f49b41ef3d0f5cc99768dd35101",
-    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx": "851a2c1dc11ccbc827a6a50dfe06088b13a7307ce489b0767804daf6f33d023c",
-    "frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx": "c6f89c4991c9cfc2b1c8c82f7fed35af93b3b0b29b16b2c4bdc61a51005bec4c",
-    "frontend-modern/src/features/alerts/MobileAlertHistoryInvestigationDialog.tsx": "55af36a7194c2dbe9d944ca08f52e794f2b5e2ccbe79427bc55abe66aaa8a522",
-    "frontend-modern/src/features/alerts/useAlertHistoryState.ts": "652a09b02321ad1cfd087aacc7937a6afb5cfb7da0e0d6ca997b30d5c9ac53bd",
-    "frontend-modern/src/features/alerts/useAlertResourceIncidentsState.ts": "7a4de5d23f84bffed0665edbc4c9bd7cf33120d81fc82f7e9f5d3df56cffeb45",
-    "frontend-modern/src/hooks/useTypeToSearch.ts": "b3f5244fd951baedc33fc8efee32c28077d94c07e5fce958eb6611bf50992a20",
-    "frontend-modern/src/types/api.ts": "82177cc67fc449a28d2d3cc226605ae091bd1f83fbdb001d15b3b430e5cd4100",
-    "frontend-modern/src/utils/alertIncidentPresentation.ts": "2e098b24b04c047a1b024a93608c5133720660cafc54c40408972413786a0a07"
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "67f6f9a1c98345949e162bf06a38760e61457aa1e8a2130913646647a4f29e88"
   },
   "routes": [
-    "/alerts (retained upstream exact-content Chromium receipt for 13 unchanged runtime files)",
-    "/qualification (fresh combined hook and AlertResourceIncidentsPanel with scripted API)"
+    "/qualification (real health and delivery-log cards, scripted props)"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 1000
+      "height": 900
     },
     {
       "width": 900,
-      "height": 1000
-    },
-    {
-      "width": 768,
-      "height": 1000
-    },
-    {
-      "width": 767,
-      "height": 1000
-    },
-    {
-      "width": 390,
-      "height": 1000
-    },
-    {
-      "width": 1440,
       "height": 900
     },
     {
@@ -70,27 +27,11 @@
     }
   ],
   "states": [
-    "Canonical merged occurrence and source evidence, resolved alert with independently unknown current health.",
-    "Loading and disabled Refresh, initial/cached read failures, Retry/Refresh, successful empty, partial history and unknown times.",
-    "Saved operator note and unsaved draft across desktop/phone layout changes, long-note wrapping and persisted reload.",
-    "Timeline/resource handoff into Assistant, reopened composer focus, saved funded history-and-note response across widths.",
-    "Request reset, reverse completion, superseded success/failure, current failure, and success/failure after disposal.",
-    "Latest per-resource owner controls incident content, failed-read state, notifications, and loading completion.",
-    "Retry clears the current failed-read state while retaining cached history until the owning response succeeds.",
-    "Obsolete and disposed failures do not set the resource error accessor."
+    "Retained terminal server_error health diagnosis and failed delivery log entry"
   ],
   "interactions": [
-    "Expand/collapse native Evidence details by keyboard, All/None event filters and note draft enable/clear.",
-    "Expand resource Events, inject read errors, retry and reload.",
-    "Resize source and open Assistant destination across 390/900/767/768/1440 widths.",
-    "Type in a modal without clearing background search, Escape and return focus to the selected card.",
-    "Resume the exact saved upstream session, scroll through its note explanation and inspect actual pixels.",
-    "Open a resource row, overlap refresh, reset or unmount, and resolve or reject deferred reads in controlled order."
+    "Load both cards at desktop, tablet and phone widths; assert label, guidance, no page errors or horizontal overflow."
   ],
-  "notes": "The protected upstream receipt remains exact for 13 unchanged runtime files. The sole combined-content change, useAlertResourceIncidentsState.ts, was freshly exercised with its real panel in 16 Chromium cases at desktop and phone widths after adding ownership to the upstream failed-read signal. Screenshots are retained under /tmp/pulse-incident-ownership. This is component lifecycle evidence, not an installed Alerts route, provider delivery, touch-device, production rollout, backup/restore, or population-reliability receipt.",
-  "command": "pulse-heavy-run -- node scripts/check-incident-request-ownership.mjs",
-  "limitations": [
-    "The 16-case qualification route uses fixture lifecycle controls and a scripted API; the supplied panel does not expose the error accessor directly, so that state is asserted through the fixture snapshot.",
-    "This is not installed acceptance, provider delivery, touch-device, production rollout, backup/restore, or population-reliability proof."
-  ]
+  "notes": "Phone screenshot visually inspected; screenshots retained at /tmp/pulse-server-error-copy. Initial fixture omitted alertIds and timed out; corrected fixture passed all three widths. No installed delivery or receipt claim.",
+  "command": "pulse-heavy-run -- node scripts/check-delivery-server-error-copy.mjs"
 }
