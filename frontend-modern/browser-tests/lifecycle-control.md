@@ -97,3 +97,43 @@ observations. Repeating this activation unchanged, synthetically dispatching a
 visibility event, or enabling forced focus would not resolve the evidence gap.
 This diagnostic is not a release gate and proves nothing about installed
 incident state or destination receipt.
+
+## Headed window control — 8 September 2026
+
+The opt-in headed diagnostic uses an owned display (never a user's desktop):
+
+```sh
+pulse-heavy-run -- xvfb-run -a -s '-screen 0 1280x800x24 -nolisten tcp' node scripts/check-browser-single-session-control.mjs --headed-window
+```
+
+[Playwright's headed Linux guidance](https://playwright.dev/docs/ci#running-headed)
+identifies Xvfb as the display prerequisite. This is not proof of window-manager
+activation. This mode launches real headed Chromium with one raw page session,
+without enabling focus emulation. It requests minimisation of the target's owned
+window before freeze, restoration after resume, then tab activation. It records
+all intervention commands and samples every 250ms for a preselected ten-second
+foreground bound. Freeze/resume must be ordered with identical timer counts;
+subsequent timer progress is required at foreground, rather than after the old
+250ms hidden-page delay. A visible event after resume and visible/focused final
+state are independently required. Default/headless checks retain their old bound.
+
+One run on Chrome 141.0.7390.37 (revision as above), Playwright 1.56.1,
+Node v24.20.0, linux x64, Xvfb/xserver-common `2:21.1.12-1ubuntu1.6`, display
+`:99`, exited 1 at `Must observe visible transition after resume`:
+
+- Baseline visible/focused at tick 5.
+- Acknowledged minimise request: still visible/focused at tick 10, no event.
+- Freeze/resume ordered at tick 10; post-resume hidden/unfocused at tick 10.
+- Acknowledged restore and tab activation: hidden/focused throughout the bounded
+  observation; timers eventually reached tick 20, no visible event.
+
+Thus the short timer bound is no longer the immediate failed assertion, but
+headed launch alone did not establish visibility restoration. No window manager
+was started; openbox and xdotool were unavailable. The unchanged minimise sample
+is adverse evidence against this window mechanism, not proof that the browser
+actually minimised. Do not repeat this bare-Xvfb arrangement for favourable samples.
+A subsequent experiment needs verified native window/tab state transitions,
+not merely a larger timeout or successful CDP acknowledgements. No Pulse fixture,
+installed convergence, destination receipt or release qualification was exercised.
+Complete output is retained in maintainer run `20260908T065015Z-web-product`,
+`headed-window-control.log`. Earlier failed controls remain relevant.
