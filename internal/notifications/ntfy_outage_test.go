@@ -15,6 +15,22 @@ import (
 // Provider rejection must preserve the firing receipt needed for recovery,
 // including when an operator retries the recovery after reopening SQLite.
 func TestQueuedNtfyRecoveryAfterProviderOutageAndRestart(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status int
+		class  NotificationFailureClass
+	}{
+		{"unavailable", http.StatusServiceUnavailable, NotificationFailureServerError},
+		{"authentication", http.StatusUnauthorized, NotificationFailureAuthentication},
+		{"rate_limited", http.StatusTooManyRequests, NotificationFailureRateLimited},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			testQueuedNtfyRecoveryAfterProviderRejection(t, tc.status, tc.class)
+		})
+	}
+}
+
+func testQueuedNtfyRecoveryAfterProviderRejection(t *testing.T, status int, class NotificationFailureClass) {
 	var unavailable atomic.Bool
 	var accepted atomic.Int32
 	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -23,7 +39,7 @@ func TestQueuedNtfyRecoveryAfterProviderOutageAndRestart(t *testing.T) {
 			t.Errorf("read body: %v", err)
 		}
 		if unavailable.Load() {
-			w.WriteHeader(http.StatusServiceUnavailable)
+			w.WriteHeader(status)
 			return
 		}
 		if accepted.Add(1) == 2 {
@@ -95,6 +111,17 @@ func TestQueuedNtfyRecoveryAfterProviderOutageAndRestart(t *testing.T) {
 	}
 	m.Stop()
 	m = open()
+	assertFailureClass := func() {
+		t.Helper()
+		var got string
+		if err := m.queue.db.QueryRow("SELECT failure_class FROM notification_audit WHERE notification_id = 'recovery' AND success = 0").Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		if got != string(class) {
+			t.Fatalf("retained failure class = %q, want %q", got, class)
+		}
+	}
+	assertFailureClass()
 	if got := m.filterResolvedJobsByDeliveryReceipt([]notificationDeliveryJob{resolved}); len(got) != 1 {
 		t.Fatal("restart lost the firing receipt")
 	}
@@ -119,4 +146,5 @@ func TestQueuedNtfyRecoveryAfterProviderOutageAndRestart(t *testing.T) {
 	if failures != 1 || successes != 1 {
 		t.Fatalf("recovery audit failures=%d successes=%d, want 1 each", failures, successes)
 	}
+	assertFailureClass()
 }
