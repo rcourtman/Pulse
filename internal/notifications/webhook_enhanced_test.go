@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -288,6 +289,49 @@ func TestParseRetryAfterBackoff(t *testing.T) {
 			got, ok := parseRetryAfterBackoff(tt.retryAfter, now)
 			assert.Equal(t, tt.ok, ok)
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// Even repeated valid zero-delay hints must not reset the transport retry budget.
+func TestSendWebhookWithRetry_RateLimitExhaustion(t *testing.T) {
+	for _, retries := range []int{1, 2, 0, -1} {
+		t.Run(fmt.Sprint(retries), func(t *testing.T) {
+			nm := NewNotificationManager("http://pulse.local")
+			t.Cleanup(nm.Stop)
+			require.NoError(t, nm.UpdateAllowedPrivateCIDRs("127.0.0.1"))
+			var attempts atomic.Int32
+			payload := []byte(`{"test":true}`)
+			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				attempts.Add(1)
+				assert.Equal(t, "limited:alert", r.Header.Get("X-Pulse-Event-ID"))
+				body, err := io.ReadAll(r.Body)
+				assert.NoError(t, err)
+				assert.Equal(t, payload, body)
+				w.Header().Set("Retry-After", "0")
+				w.WriteHeader(http.StatusTooManyRequests)
+			}))
+			defer server.Close()
+			webhook := EnhancedWebhookConfig{
+				WebhookConfig: WebhookConfig{Name: "Limited webhook", URL: server.URL},
+				RetryEnabled:  true,
+				RetryCount:    retries,
+			}
+			wantRetries := retries
+			if wantRetries <= 0 {
+				wantRetries = WebhookDefaultRetries
+			}
+			err := nm.sendWebhookWithRetry(webhook, payload, "limited:alert")
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), fmt.Sprintf("after %d attempts", wantRetries+1))
+			assert.Equal(t, int32(wantRetries+1), attempts.Load())
+			history := nm.GetWebhookHistory()
+			require.Len(t, history, 1, "one failed delivery, not one history entry per HTTP attempt")
+			assert.False(t, history[0].Success)
+			assert.Equal(t, http.StatusTooManyRequests, history[0].StatusCode)
+			assert.Equal(t, wantRetries, history[0].RetryAttempts)
+			assert.Equal(t, len(payload), history[0].PayloadSize)
+			assert.Contains(t, history[0].ErrorMessage, "HTTP 429")
 		})
 	}
 }

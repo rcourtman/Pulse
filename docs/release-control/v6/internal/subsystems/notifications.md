@@ -154,6 +154,26 @@ verifies three requests and the two-second exponential wait before the final
 request. This is transport timing proof, not durable queue retry, installed
 provider acceptance or recipient receipt.
 
+### Webhook transport retry exhaustion
+
+The enhanced retry sender makes one initial HTTP attempt plus `RetryCount`
+retries; non-positive counts select `WebhookDefaultRetries`. Repeated valid
+zero-delay 429 hints do not reset that budget. When all attempts fail, the
+sender returns the total attempt count and records one failed webhook history
+entry with the final status and the number of retries, not one entry per HTTP
+attempt. Every attempt retains the event ID and payload. A queue delivery that
+uses this sender has a transport ceiling of effective retry count plus one;
+layering up to `MaxAttempts` queue deliveries multiplies that ceiling, but does
+not guarantee destination receipt. Permanent errors may stop retries earlier.
+
+`TestSendWebhookWithRetry_RateLimitExhaustion` in
+`internal/notifications/webhook_enhanced_test.go` verifies configured counts
+1 and 2 and default selection for 0 and -1 against an owned HTTP fixture that
+always returns 429 with `Retry-After: 0`. It checks request identity and body,
+attempt exhaustion, and the single failed history record's status, retry
+count, payload size and error text. This is transport-budget and local history
+proof only, not queue persistence, provider receipt or installed qualification.
+
 Notification-management HTTP production and its unit/contract proof now live
 together under `internal/api/alerting/`. Router-level scope and integration
 tests remain in `internal/api`, while the compatibility aliases there keep the
