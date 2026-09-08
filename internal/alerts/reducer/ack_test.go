@@ -99,3 +99,51 @@ func TestAckAppliesToMetricFamilyToo(t *testing.T) {
 		t.Fatal("metric re-fire within retention should restore the ack")
 	}
 }
+
+// A short reactivation retains acknowledgement by design; expiry is measured
+// from resolution, not acknowledgement or the previous occurrence's start.
+func TestMetricAcknowledgementRetentionBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		afterResolve time.Duration
+		wantAck      bool
+	}{
+		{"just before expiry", AckRetention - time.Nanosecond, true},
+		{"at expiry", AckRetention, false},
+		{"next day", 24 * time.Hour, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			state := NewState()
+			rule := MetricRule{Trigger: 80, Clear: 75}
+			observe := func(value float64, at time.Time) {
+				state.ApplyMetric(MetricSignal{ResourceID: "vm-1", Metric: "cpu", Value: value, ObservedAt: at}, rule)
+			}
+			observe(95, t0)
+			ackedAt := t0.Add(time.Minute)
+			if !state.Acknowledge("vm-1", "cpu", "previous-operator", ackedAt) {
+				t.Fatal("expected acknowledgement of firing metric")
+			}
+			resolvedAt := t0.Add(2 * time.Hour)
+			observe(10, resolvedAt)
+			refiredAt := resolvedAt.Add(tc.afterResolve)
+			observe(95, refiredAt)
+			incident, ok := state.Incident("vm-1", "cpu")
+			if !ok || incident.State != StateFiring {
+				t.Fatal("expected a firing metric recurrence")
+			}
+			if !incident.StartedAt.Equal(refiredAt) {
+				t.Fatalf("start = %v, want new occurrence at %v", incident.StartedAt, refiredAt)
+			}
+			if incident.Acknowledged != tc.wantAck {
+				t.Fatalf("acknowledged = %v, want %v", incident.Acknowledged, tc.wantAck)
+			}
+			if tc.wantAck {
+				if incident.AckUser != "previous-operator" || !incident.AckAt.Equal(ackedAt) {
+					t.Fatal("retained acknowledgement lost its original attribution")
+				}
+			} else if incident.AckUser != "" || !incident.AckAt.IsZero() {
+				t.Fatal("expired acknowledgement left stale attribution")
+			}
+		})
+	}
+}
