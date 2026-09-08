@@ -4,8 +4,7 @@
 before and after the backend phase, plus `RELEASE_BACKEND_TOOLCHAIN` and
 `RELEASE_BACKEND_EXIT`. The exact-preflight launcher's retained log preserves
 these lines even when it removes its disposable worker directory. No success
-receipt is produced by this evidence collector. Backend commands, exit status,
-parallelism and assertion thresholds are unchanged.
+receipt is produced by this evidence collector. Backend exit status, parallelism and assertion thresholds are unchanged.
 
 The collector reads only allowlisted kernel resource counters and numeric Go
 runtime settings. It does not dump the environment, process command lines,
@@ -41,4 +40,30 @@ Focused checks:
 python3 -m unittest discover -s scripts/release_control/internal -p 'release_resource_snapshot_test.py' -v
 python3 -m unittest discover -s scripts/release_control/internal -p 'release_preflight_test.py' -v
 bash -n scripts/release-preflight-worker.sh
+```
+
+## Stress-test event window
+
+Rehearsal backend Go output is streamed with `-json` and decoded by
+`release-go-test-events.py`. Every Output string is retained verbatim (including
+verbose test logs, skips and package summaries); stderr remains on stderr.
+Shell pipefail retains a failing Go exit. Invalid event input is drained,
+retained and fails the reader rather than quietly losing diagnostics.
+
+Only the exact API `TestMultiTenant_ConcurrentAPIStress` lifecycle receives
+`RELEASE_GO_TEST_EVENT` records with Go's event Time, a separately labelled
+receipt timestamp and the same allowlisted resource snapshot. Resource time is
+collection time, not the Go event time. Sampling and verbose streaming add
+measurement overhead; they do not reproduce uninstrumented execution. Cached
+results can replay events and are not fresh execution timing: check the package
+summary for `(cached)`. No cache, scheduling, threshold or test-selection policy
+is changed. Release-profile sharded tests are unchanged.
+
+This closes a prospective observability gap, not the historical qualification
+failure. Use only with an independently justified future run; no qualification
+retry is warranted merely to collect these records. Abrupt termination can omit
+terminal events. Cgroup ancestry remains shared context, not per-test CPU usage.
+
+```sh
+python3 -m unittest discover -s scripts/release_control/internal -p 'release_go_test_events_test.py' -v
 ```
