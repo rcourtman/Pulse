@@ -289,6 +289,14 @@ invisible to operators reviewing exactly what Pulse sends.
 
 ## Shared Boundaries
 
+### Notification recovery reload ownership
+
+Refreshing the notification queue handler on reload changes only its default
+monitor reference, under a handler-local lock. It does not remove route
+administrator or settings-scope checks, expose queue contents to new callers, or
+change tenant selection. Missing owners fail with 503 rather than dereferencing
+nil.
+
 The authenticated security-status currentUsername is the validated caller principal, not an administrator configuration disclosure. Public responses omit it. An organisation-scoped local session may receive its own identity while authUsername and instance-settings capabilities remain withheld; clients must not interpret identity availability as privilege.
 
 API token scope copy must match runtime authority. `ai:chat` covers Assistant

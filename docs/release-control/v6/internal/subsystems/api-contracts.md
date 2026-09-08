@@ -509,6 +509,15 @@ enums locally.
 
 ## Shared Boundaries
 
+### Notification recovery reload ownership
+
+Queue recovery routes retain stable handler objects across router reloads, but
+both router monitor replacement entry points refresh their queue owner. Missing
+monitor or notifier returns 503; successful post-reload stats, Retry and Dismiss
+use the replacement notifier. Existing method, administrator and token-scope
+gates are unchanged. `TestRouterSetMonitorRefreshesNotificationQueue` records
+the stopped-owner 503 regression and replacement-owner success.
+
 Canonical Patrol action hydration maps an expired action to `needs_attention`
 and preserves its exact action reference, original investigation prose and
 retained finding evidence. An expired proposal creates no execution or
