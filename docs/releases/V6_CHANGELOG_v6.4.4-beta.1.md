@@ -12,6 +12,8 @@ regression repairs below.
   disabled before dispatch are recorded as cancelled rather than delivered.
 - Delivery diagnosis preserves the newest failure, dismissal, or unavailable
   state when timer, retry, and manual refresh work overlap.
+- Webhook, Slack, Discord, Telegram, encoded-query, and ntfy diagnostics mask
+  recognised credentials without discarding useful failure context.
 - Storage and PBS alert identity persists through missing observations,
   configuration reload, restart, measured recovery, and recurrence.
 - TrueNAS replication completion and NOTICE severity, PBS capacity/task
@@ -26,6 +28,9 @@ regression repairs below.
 - Same-name systems stay separate across provider scope; delayed startup,
   reconnect, settings navigation, skip-link order, badges, landmarks, and
   compact controls retain the reviewed recovery and accessibility behavior.
+- Availability-suggestion backfill derives from the current discovery under
+  lock, so a concurrent manual repair remains intact and deleted records are
+  not resurrected.
 - Current OpenAI model requests use the supported completion-token parameter
   and may learn that requirement from bounded API responses.
 
@@ -51,6 +56,13 @@ regression repairs below.
   integrated queue-finality and warning-reconciliation changes have not been
   tested on that reporter's installation, so the beta does not claim to fix this
   failure. Non-destructive Retry and Dismiss behavior remains an explicit test.
+- Issue #1812 shows that recovery controls and delivery-attempt details were not
+  discoverable from a `v6.4.1` incident timeline. The beta includes the Overview
+  controls and Notifications activity view, but installed discoverability is
+  unverified; broader task orchestration is outside this checkpoint.
+- Issue #1966 reports 50-66 GB/day of process writes and duplicate incident IDs
+  on one idle `v6.4.1` LXC. This beta does not establish reduced aggregate
+  writes, migrate old duplicates, or resolve that installed report.
 - A paired advisory benchmark measured UUID route-segment normalization at
   62.50 ns/op versus 51.64 ns/op (+21.04%, zero allocations). Candidate-only
   CI passed its budget, but the paired result remains adverse evidence for

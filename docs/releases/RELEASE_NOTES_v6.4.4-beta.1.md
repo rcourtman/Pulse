@@ -4,8 +4,9 @@ This beta is a bounded alert-reliability checkpoint for Preview-channel
 testers. It supersedes `v6.4.3-rc.1`, carries every change from the `v6.4.2`
 packet that was tagged but never published, and adds integrated fixes for
 notification finality, delivery-warning ordering, restart-safe alert state,
-provider edge cases, host telemetry, update reporting, reconnect behavior, and
-accessibility. It is not an RC or stable release.
+provider edge cases, notification-log confidentiality, discovery refreshes,
+host telemetry, update reporting, reconnect behavior, and accessibility. It is
+not an RC or stable release.
 
 ## What's improved
 
@@ -18,6 +19,10 @@ accessibility. It is not an RC or stable release.
 - **Delivery diagnosis is more actionable** - Failure status and reason
   ordering remain current after retries and refreshes, unavailable queue health
   is visible, and operators are directed to the affected notification settings.
+- **Notification diagnostics keep credentials private** - Webhook userinfo,
+  Slack and Discord paths, Telegram bot tokens, encoded query credentials, and
+  ntfy transport URLs are masked while useful status and destination context is
+  retained.
 - **Recovery requires real observations** - Storage and PBS incidents do not
   clear merely because a metric or provider sample is absent. Incident identity
   and history survive configuration reloads and restarts until measured recovery.
@@ -37,6 +42,9 @@ accessibility. It is not an RC or stable release.
 - **Identity and reconnect behavior is safer** - Same-name systems stay
   separate across Proxmox providers, delayed browser startup offers a truthful
   retry path, and infrastructure edits stay mounted during background polling.
+- **Discovery repairs stay repaired** - Availability-suggestion backfill no
+  longer writes an old discovery snapshot over a concurrent manual refresh,
+  drops the repaired URL or engine version, or resurrects a deleted record.
 - **Navigation and settings are more accessible** - The skip link is first in
   keyboard order, badges remain readable, landmarks are distinct, and settings,
   Patrol, mobile navigation, and compact controls have stronger focus and
@@ -62,6 +70,10 @@ accessibility. It is not an RC or stable release.
   If either action fails, report the HTTP status and sanitized logs.
 - Retest PBS capacity and task transitions, TrueNAS replication and NOTICE
   events, host plus Docker CPU readings, and pool-only Unraid arrays.
+- Run a manual service-discovery refresh while availability suggestions are
+  being backfilled. Confirm a repaired service keeps its type, name, URL, and
+  engine version after restart, and inspect sanitized notification failures to
+  confirm secrets are absent while the error remains actionable.
 - Upgrade a backed-up `v6.4.1` installation, including Docker behind a reverse
   proxy, and verify direct GUI access, proxied access, WebSocket reconnect, and
   `/api/version`.
@@ -77,6 +89,18 @@ accessibility. It is not an RC or stable release.
   not been tested on that reporter's installation and is not claimed to fix the
   503. Do not delete `notification_queue.db` or alert files as a workaround; keep
   the stable rollback pin and report sanitized action results.
+- A 7 September comment on [#1812](https://github.com/rcourtman/Pulse/issues/1812)
+  shows that a `v6.4.1` user could see a retained-delivery warning but could not
+  find its recovery controls or delivery-attempt details from the incident
+  timeline. This candidate includes the Overview controls and Notifications
+  activity view, but installed discoverability is not yet verified. The broader
+  task-timeline and orchestration requests are not part of this checkpoint.
+- Open issue [#1966](https://github.com/rcourtman/Pulse/issues/1966) reports
+  50-66 GB/day of Pulse process writes on one idle `v6.4.1` LXC, plus repeated
+  incident IDs sharing one occurrence start. This beta contains alert-lifecycle
+  repairs but does not claim reduced aggregate write bytes, migration of old
+  duplicates, or resolution on that installation. On flash-constrained test
+  systems, monitor Pulse write volume and keep the stable rollback pin ready.
 - An advisory paired CI comparison measured UUID route-segment normalization at
   62.50 ns/op versus 51.64 ns/op, a 21.04% increase with no allocations. Local
   comparisons measured roughly 9-11%, and no end-user latency or throughput
