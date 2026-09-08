@@ -371,3 +371,46 @@ func TestWebhookRetryRejectsForbiddenTimeoutBody(t *testing.T) {
 		t.Errorf("history lost terminal rejection: status=%d success=%v retries=%d", history[0].StatusCode, history[0].Success, history[0].RetryAttempts)
 	}
 }
+
+// A retry hint from an earlier response must not outlive a terminal rejection.
+func TestWebhookRetryRateLimitThenTerminalRejection(t *testing.T) {
+	var attempts atomic.Int32
+	payload := []byte(`{"test":true}`)
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Pulse-Event-ID") != "synthetic:alert" {
+			t.Error("retry lost event identity")
+		}
+		if attempts.Add(1) == 1 {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprint(w, "authentication timeout: replace credentials")
+	}))
+	defer server.Close()
+	// Transport-only fixture: no persistent queue or background workers.
+	nm := &NotificationManager{}
+	if err := nm.UpdateAllowedPrivateCIDRs("127.0.0.1"); err != nil {
+		t.Fatal(err)
+	}
+	nm.webhookClient = nm.createSecureWebhookClient(WebhookTimeout)
+	defer nm.webhookClient.CloseIdleConnections()
+	err := nm.sendWebhookWithRetry(EnhancedWebhookConfig{
+		WebhookConfig: WebhookConfig{Name: "synthetic rate limit", URL: server.URL},
+		RetryEnabled:  true, RetryCount: 2,
+	}, payload, "synthetic:alert")
+	if err == nil {
+		t.Fatal("expected terminal rejection after rate limit")
+	}
+	if got := attempts.Load(); got != 2 {
+		t.Errorf("HTTP attempts = %d, want 2 despite remaining retry budget", got)
+	}
+	history := nm.GetWebhookHistory()
+	if len(history) != 1 {
+		t.Fatalf("history length = %d, want one final delivery outcome", len(history))
+	}
+	if history[0].StatusCode != http.StatusForbidden || history[0].Success || history[0].RetryAttempts != 1 || history[0].PayloadSize != len(payload) {
+		t.Errorf("history lost final rejection or retry accounting: %+v", history[0])
+	}
+}
