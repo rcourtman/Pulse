@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "base_sha": "d242055f9877a47d31b08133e3e8588cbff65f40",
-  "verified_at": "2026-09-08T20:59:34.058403Z",
+  "base_sha": "6f3547bc5fbb10ddf313a8cd2f184b6359173a59",
+  "verified_at": "2026-09-08T22:29:31.643744Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts"
+    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/utils/proxmoxUpdateEvidence.ts": "b99d8b5411e0e894f294f106d970978c8573915ff7ffe0ed60c451128e22d34a"
+    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts": "14f0dceb069fe52b9a47100c50998ae53a2c5c8a29a524e342f7458546cb4a19"
   },
   "routes": [
-    "/qualification.html (production-built real NodeDrawerOverview with synthetic reactive props)"
+    "/qualification (real WebhookConfigForm and hook; synthetic callbacks)"
   ],
   "viewports": [
     {
@@ -27,15 +27,13 @@
     }
   ],
   "states": [
-    "Unavailable permission denial",
-    "Retained stale count with permission-denial title",
-    "Checked zero",
-    "Checked positive count",
-    "Not-checked permission-denial reason"
+    "Unsaved manually entered Pushover aliases",
+    "Test callback payload",
+    "Save callback payload"
   ],
   "interactions": [
-    "At each width select unavailable, stale, zero, positive, not_checked, then unavailable again; assert text, stale title, no obsolete Sys.Audit prescription, no page errors or horizontal page overflow."
+    "Click Test then Add Webhook at each width; assert both canonical token/user payloads, no page errors or horizontal overflow."
   ],
-  "notes": "Built isolated real component with Vite esnext target, served compiled assets to Chromium. Desktop stale and phone unavailable screenshots visually inspected. Phone uses existing ellipsis for long values; full reason retained in title. No installed backend or reporter credential reproduction. Initial fixture build attempts failed on default target and virtual HTML path; corrected fixture build and all checks passed. Screenshots /tmp/pulse-update-access-copy; log /tmp/web-205503/browser-built.log.",
-  "command": "pulse-heavy-run -- node scripts/check-update-access-copy.mjs"
+  "notes": "Real component with Vite dev transform in Chromium, not production build or installed/provider delivery. Phone screenshot visually inspected; synthetic credentials only. Screenshots /tmp/pulse-webhook-parity.",
+  "command": "pulse-heavy-run -- node scripts/check-webhook-test-save-parity.mjs"
 }
