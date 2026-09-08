@@ -1,3 +1,5 @@
+import { createRoot } from 'solid-js';
+import { useWebhookConfigState } from './useWebhookConfigState';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import webhookConfigSource from '@/components/Alerts/WebhookConfig.tsx?raw';
@@ -1578,5 +1580,31 @@ describe('WebhookConfig', () => {
     // The payload template should have been cleared when we left generic
     const payloadTextareaAfter = document.querySelector('textarea') as HTMLTextAreaElement;
     expect(payloadTextareaAfter.value).toBe('');
+  });
+});
+
+describe('webhook test/save parity', () => {
+  it('normalises manually entered Pushover aliases identically for test and save', () => {
+    createRoot((dispose) => {
+      try {
+        const onTest = vi.fn();
+        const onAdd = vi.fn();
+        const state = useWebhookConfigState({
+          webhooks: [], onTest, onAdd, onUpdate: vi.fn(), onDelete: vi.fn(),
+        });
+        state.openAddForm();
+        state.setFormData((data) => ({ ...data, name: 'Example', url: 'https://example.invalid', service: 'pushover' }));
+        for (const [index, key] of ['app_token', 'user_token'].entries()) {
+          state.addCustomFieldInput();
+          state.updateCustomFieldInput(index, { key, value: `synthetic-${index}` });
+        }
+        state.testWebhookForm();
+        state.saveWebhook();
+        expect(onAdd.mock.calls[0][0].customFields).toEqual({ token: 'synthetic-0', user: 'synthetic-1' });
+        expect(onTest.mock.calls[0][1].customFields).toEqual(onAdd.mock.calls[0][0].customFields);
+      } finally {
+        dispose();
+      }
+    });
   });
 });
