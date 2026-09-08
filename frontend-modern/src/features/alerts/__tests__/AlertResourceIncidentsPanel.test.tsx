@@ -36,7 +36,7 @@ describe('AlertResourceIncidentsPanel', () => {
       render(() => {
         state = useAlertResourceIncidentsState();
         return surface === 'inline' ? (
-          <AlertResourceIncidentsPanel state={state as AlertHistoryState} />
+          <AlertResourceIncidentsPanel state={state as unknown as AlertHistoryState} />
         ) : (
           <MobileAlertHistoryInvestigationDialog
             investigation={{
@@ -46,7 +46,7 @@ describe('AlertResourceIncidentsPanel', () => {
                 typeof MobileAlertHistoryInvestigationDialog
               >[0]['investigation']['alert'],
             }}
-            state={state as AlertHistoryState}
+            state={state as unknown as AlertHistoryState}
             onClose={() => state.setResourceIncidentPanel(null)}
           />
         );
@@ -69,14 +69,17 @@ describe('AlertResourceIncidentsPanel', () => {
       resolve([
         {
           id: 'retained',
+          alertIdentifier: 'resource-1::connectivity',
           alertType: 'connectivity',
           level: 'critical',
+          resourceId: 'resource-1',
+          resourceName: 'Resource',
           status: 'resolved',
           acknowledged: false,
           events: [],
           openedAt: '2026-09-08T00:00:00Z',
           message: 'Retained connection incident',
-        } as Incident,
+        },
       ]);
       await waitFor(() => expect(screen.getByText('Retained connection incident')).toBeVisible());
       expect(read).toHaveBeenLastCalledWith('resource-1', 10);
