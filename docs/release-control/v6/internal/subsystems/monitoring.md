@@ -3947,3 +3947,19 @@ bridge on either side alone must not supply inferred identity: testing only
 symmetric bridges would miss removal of filtering from one inventory.
 This proof does not establish safety for arbitrarily renamed Docker bridges
 or repair persisted links, and is not reporter or installed-release validation.
+
+### Reload handshake cancellation
+
+`ReloadableMonitor.Reload` rejects calls before `Start` and returns the server
+parent context error if shutdown cancels either request submission or the wait
+for completion. The reply remains buffered so completion of an already accepted
+reload does not block a watcher whose caller has left. Ordinary reload success
+and configuration errors still propagate unchanged. This does not cancel an
+in-flight `doReload`, bound its teardown time, or change monitor replacement and
+router refresh ordering. `Stop` alone is not parent-context cancellation.
+
+`internal/monitoring/reload_test.go` exercises cancellation before submission,
+without a request consumer, and after acceptance, plus late completion and
+success/error propagation using channel-only fixtures without starting monitors
+or storage. This is shutdown handshake proof, not installed notification receipt
+or full server reload acceptance.
