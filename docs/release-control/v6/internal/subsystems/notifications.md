@@ -860,3 +860,20 @@ This boundary uses the configuration persistence API to save choices, not the
 HTTP or browser save path. It does not start a new operating-system process,
 drive an alert lifecycle or establish recipient delivery. Those installed
 acceptance obligations remain separate from constructor restoration coverage.
+
+### Interrupted webhook rejection bodies retain the HTTP verdict
+
+When webhook response headers establish a non-2xx status, a subsequent body
+read failure retains that HTTP status in the error and its authoritative
+notification failure class. Terminal rejections must not become connectivity
+retries merely because the diagnostic body is truncated. Response headers,
+including Retry-After, and the underlying read error remain available; partial
+body text is not added to the error. Existing handling of 2xx body read errors
+is unchanged: it remains a read failure, not proof of recipient receipt.
+
+Transport-only `TestWebhookTruncatedResponseClassification` covers 200, 401,
+403, 422, 429 and 503 with interrupted bodies. `TestWebhookRetryTruncatedResponse`
+proves a truncated 403 stops after one attempt with terminal history, while a
+truncated 503 can retry to 204 with its event identity intact. No queue or
+storage workers are started by these tests; this is not installed delivery
+acceptance or a change to retry budgets.
