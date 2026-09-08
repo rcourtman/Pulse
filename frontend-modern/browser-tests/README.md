@@ -73,3 +73,10 @@ its failures are reported but do not fail the Core E2E gate. Inspect the probati
 report as well as the aggregate check. It is not a substitute for these runners'
 Coverage/By date assertions. Promotion remains subject to the existing ten-clean-
 executed-main-runs rule; a local pass is not grounds to bypass it.
+
+## Alert recovery acceptance
+
+The separate [alert recovery checklist](alert-recovery-acceptance.md) covers
+installed ordinary-event receipts, recurrence/restart isolation, and separately
+identified main-build screen-reader feedback. It is a manual procedure, not an
+automated runner or evidence that a candidate passed.
