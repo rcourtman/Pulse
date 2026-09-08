@@ -3,6 +3,10 @@
 Pulse supports one-click server updates for supported deployment types. This
 document describes the Pulse server runtime, not installed Pulse Agents.
 
+See [Releases and update channels](RELEASE_PROCESS.md) for Stable and Preview
+expectations, beta and RC testing stages, and the checks required before a release
+becomes stable.
+
 Eligible v6 agents update asynchronously through their own update client. A
 server update changes their target version but does not prove fleet convergence.
 For v5, PVE, disabled, or failed agent updates, use **Agent Doctor** at
