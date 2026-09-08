@@ -139,6 +139,21 @@ negative overflow cases alongside ordinary seconds, dates, whitespace and
 invalid inputs. This is pure parser proof: it does not establish elapsed HTTP
 retry timing, queue persistence, provider acceptance or recipient receipt.
 
+For HTTP 429 transport retries, a valid `Retry-After` overrides only the wait
+following that response. It must not replace the independent exponential
+backoff schedule. In particular, a zero-delay response cannot cause later
+headerless 429 or 503 failures to exhaust their remaining retries immediately.
+The schedule continues doubling up to `WebhookMaxBackoff`; retry budgets,
+classification, parsing and the existing header-delay cap remain unchanged.
+This does not extend header handling to 503 responses.
+
+`TestSendWebhookWithRetry_ZeroRetryAfterPreservesLaterBackoff` in
+`internal/notifications/webhook_enhanced_test.go` sends a zero-delay 429,
+then a headerless 429 or 503, then success through a local HTTP fixture. It
+verifies three requests and the two-second exponential wait before the final
+request. This is transport timing proof, not durable queue retry, installed
+provider acceptance or recipient receipt.
+
 Notification-management HTTP production and its unit/contract proof now live
 together under `internal/api/alerting/`. Router-level scope and integration
 tests remain in `internal/api`, while the compatibility aliases there keep the

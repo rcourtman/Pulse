@@ -330,7 +330,8 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 							Dur("retryAfter", customBackoff).
 							Msg("using Retry-After header for backoff")
 						time.Sleep(customBackoff)
-						backoff = customBackoff // Use this for next iteration
+						// The header overrides this wait only. Preserve the exponential
+						// schedule so a zero delay cannot erase later failure backoff.
 						usedBackoff = true
 					} else {
 						log.Debug().
