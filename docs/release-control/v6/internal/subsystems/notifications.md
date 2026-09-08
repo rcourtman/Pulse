@@ -832,7 +832,11 @@ recipient delivery, candidate qualification or historical customer exposure.
 monitor constructor twice against the same saved configuration without applying
 notification-manager setters in the fixture. It checks initial routing, both
 resolve choices, enabled/activation gating and encrypted webhook configuration
-restoration. The cases include webhook, Apprise, email and all destinations.
+restoration. Email and HTTP Apprise receiver settings are also saved and
+compared after each construction, including synthetic credentials, recipient
+lists, severity filters, email tag filters and enabled/disabled choices.
+No transport is invoked. The cases include webhook, Apprise, email and all
+destinations.
 
 This boundary uses the configuration persistence API to save choices, not the
 HTTP or browser save path. It does not start a new operating-system process,
