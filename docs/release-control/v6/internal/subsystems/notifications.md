@@ -661,3 +661,20 @@ missed decoded query representations and a separate ntfy transport caller:
 provider-only helper examples were not sufficient sink coverage. This contract
 does not assert arbitrary response-body/third-party error secrecy, installed
 recipient delivery, candidate qualification or historical customer exposure.
+
+### Response-specific webhook retry delays
+
+A valid Retry-After header on a rate-limit response overrides only the next
+transport wait. It must not replace the independent exponential backoff
+schedule. In particular, Retry-After: 0 permits that immediate retry but must
+not make later headerless 429 or 503 failures consume the remaining retry
+budget without the scheduled delay. Retry limits and queue-level retries are
+unchanged.
+
+TestSendWebhookWithRetry_ZeroRetryAfterPreservesLaterBackoff exercises both
+subsequent failure statuses against a synthetic local destination, checks three
+attempts and requires the later wait to retain twice WebhookInitialBackoff.
+Focused race-enabled retry/parser coverage passed on this release-line repair;
+the before/after receipt is in
+docs/qualification/release-v6.4-webhook-backoff/README.md. This establishes
+transport timing, not installed recipient delivery or release qualification.

@@ -832,3 +832,41 @@ func TestIsRetryableWebhookErrorEnhanced(t *testing.T) {
 		})
 	}
 }
+
+// A response-specific zero delay must not erase backoff for later failures.
+func TestSendWebhookWithRetry_ZeroRetryAfterPreservesLaterBackoff(t *testing.T) {
+	for _, status := range []int{http.StatusServiceUnavailable, http.StatusTooManyRequests} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			nm := NewNotificationManager("http://pulse.local")
+			t.Cleanup(nm.Stop)
+			require.NoError(t, nm.UpdateAllowedPrivateCIDRs("127.0.0.1"))
+			attemptTimes := make(chan time.Time, 3)
+			attempts := 0
+			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				attempts++
+				attemptTimes <- time.Now()
+				switch attempts {
+				case 1:
+					w.Header().Set("Retry-After", "0")
+					w.WriteHeader(http.StatusTooManyRequests)
+				case 2:
+					w.WriteHeader(status)
+				default:
+					w.WriteHeader(http.StatusOK)
+				}
+			}))
+			defer server.Close()
+			webhook := EnhancedWebhookConfig{
+				WebhookConfig: WebhookConfig{Name: "Backoff regression", URL: server.URL},
+				RetryEnabled:  true,
+				RetryCount:    2,
+			}
+			require.NoError(t, nm.sendWebhookWithRetry(webhook, []byte("{}"), "backoff:alert"))
+			require.Len(t, attemptTimes, 3)
+			<-attemptTimes
+			second, third := <-attemptTimes, <-attemptTimes
+			assert.GreaterOrEqual(t, third.Sub(second), 2*WebhookInitialBackoff,
+				"later failure must retain exponential backoff after a zero Retry-After")
+		})
+	}
+}
