@@ -50,10 +50,12 @@ incident response, observes native hidden/visible transitions with focus emulati
 disabled, then clicks the enabled production Refresh button. It requires exactly
 two incident reads and changed rendered details. This does not freeze the page.
 
-History, incident and resource HTTP responses are mocked; the history route's
-WebSocket is suppressed. Authentication uses the local backend, but this is not
-an exact release-pair, live WebSocket convergence, real incident-store, or delivered
-notification check. Keep any failed application run as evidence, not a component
+Alert configuration, active alerts, history, incident and resource HTTP responses
+are mocked; the history route's WebSocket is suppressed. In particular, the fixture
+supplies `enabled: true` and `activationState: "active"`; it does not save settings
+or prove that saved intent survives reload or restart. Authentication uses the
+local backend, but this is not an exact release-pair, live WebSocket convergence,
+real incident-store, activation, or delivered notification check. Keep any failed application run as evidence, not a component
 fixture success in its place.
 
 Retained adverse run (8 September 2026, c98c0565a7): the first local run reached the real
