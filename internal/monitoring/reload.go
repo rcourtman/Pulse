@@ -105,9 +105,31 @@ func (rm *ReloadableMonitor) Start(ctx context.Context) {
 
 // Reload triggers a monitor reload
 func (rm *ReloadableMonitor) Reload() error {
+	rm.mu.RLock()
+	ctx := rm.parentCtx
+	rm.mu.RUnlock()
+	if ctx == nil {
+		return fmt.Errorf("reloadable monitor has not been started")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// The watcher exits with the server context. Neither a full request
+	// channel nor an abandoned reply may keep a caller waiting after that.
+	// Keep the reply buffered so an in-flight reload can still finish.
 	done := make(chan error, 1)
-	rm.reloadChan <- done
-	return <-done
+	select {
+	case rm.reloadChan <- done:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // watchReload watches for reload signals

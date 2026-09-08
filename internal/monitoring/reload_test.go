@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -250,4 +251,71 @@ func testTelemetryMonitor(
 	state.UpdateActiveAlerts(alerts)
 
 	return &Monitor{state: state}
+}
+
+// These fixtures exercise only the reload handshake; no monitor or storage is started.
+func TestReloadCancellation(t *testing.T) {
+	for _, phase := range []string{"before-request", "blocked-request", "awaiting-result"} {
+		t.Run(phase, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			rm := &ReloadableMonitor{parentCtx: ctx, reloadChan: make(chan chan error)}
+			if phase == "before-request" {
+				cancel()
+			}
+			result := make(chan error, 1)
+			go func() { result <- rm.Reload() }()
+			var reply chan error
+			if phase == "awaiting-result" {
+				select {
+				case reply = <-rm.reloadChan:
+				case <-time.After(time.Second):
+					t.Fatal("request not submitted")
+				}
+			}
+			cancel()
+			select {
+			case err := <-result:
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("got %v, want context.Canceled", err)
+				}
+			case <-time.After(time.Second):
+				// Release the old implementation's blocked caller before failing.
+				if reply == nil {
+					reply = <-rm.reloadChan
+				}
+				reply <- nil
+				<-result
+				t.Fatal("Reload remained blocked after cancellation")
+			}
+			if reply != nil {
+				// Completion after caller cancellation must not strand the watcher.
+				select {
+				case reply <- nil:
+				default:
+					t.Fatal("late completion would block watcher")
+				}
+			}
+		})
+	}
+}
+
+func TestReloadHandshakeResult(t *testing.T) {
+	for _, expected := range []error{nil, errors.New("reload failed")} {
+		rm := &ReloadableMonitor{parentCtx: context.Background(), reloadChan: make(chan chan error)}
+		go func() { reply := <-rm.reloadChan; reply <- expected }()
+		if err := rm.Reload(); err != expected {
+			t.Fatalf("got %v, want %v", err, expected)
+		}
+	}
+}
+
+func TestReloadBeforeStart(t *testing.T) {
+	rm := &ReloadableMonitor{reloadChan: make(chan chan error, 1)}
+	if err := rm.Reload(); err == nil {
+		t.Fatal("Reload before Start must return an error")
+	}
+	if len(rm.reloadChan) != 0 {
+		t.Fatal("unstarted reload was queued")
+	}
 }
