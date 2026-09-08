@@ -40,15 +40,27 @@ describe('AlertResourceIncidentsPanel', () => {
     expect(screen.queryByText('No incidents recorded for this resource yet.')).toBeNull();
 
     let resolve!: (incidents: Incident[]) => void;
-    read.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+    read.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByRole('button', { name: /Refresh/ })).toBeDisabled();
-    resolve([{
-      id: 'retained', alertType: 'connectivity', level: 'critical',
-      status: 'resolved', acknowledged: false, events: [],
-      openedAt: '2026-09-08T00:00:00Z', message: 'Retained connection incident',
-    } as Incident]);
+    resolve([
+      {
+        id: 'retained',
+        alertType: 'connectivity',
+        level: 'critical',
+        status: 'resolved',
+        acknowledged: false,
+        events: [],
+        openedAt: '2026-09-08T00:00:00Z',
+        message: 'Retained connection incident',
+      } as Incident,
+    ]);
     await waitFor(() => expect(screen.getByText('Retained connection incident')).toBeVisible());
     expect(read).toHaveBeenLastCalledWith('resource-1', 10);
 
@@ -60,7 +72,9 @@ describe('AlertResourceIncidentsPanel', () => {
 
     read.mockResolvedValueOnce([]);
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
-    await waitFor(() => expect(screen.getByText('No incidents recorded for this resource yet.')).toBeVisible());
+    await waitFor(() =>
+      expect(screen.getByText('No incidents recorded for this resource yet.')).toBeVisible(),
+    );
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.queryByText('Retained connection incident')).toBeNull();
   });
