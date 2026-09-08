@@ -8,6 +8,8 @@ test.describe("VMware alert history resource incidents", () => {
   test("opens VMware resource incidents through the shared alert history surface", async ({
     page,
     isMobile,
+    context,
+    browserName,
   }) => {
     // Recent timestamps keep the fixture inside the history view's default
     // period window; fixed dates silently age out of it.
@@ -64,6 +66,8 @@ test.describe("VMware alert history resource incidents", () => {
       });
     });
 
+    let incidentReads = 0;
+    let refreshed = false;
     await page.route("**/api/alerts/incidents**", async (route) => {
       const requestUrl = new URL(route.request().url());
       if (requestUrl.searchParams.get("resource_id") !== "vm:app-01") {
@@ -75,6 +79,7 @@ test.describe("VMware alert history resource incidents", () => {
         return;
       }
 
+      incidentReads++;
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -90,7 +95,7 @@ test.describe("VMware alert history resource incidents", () => {
             resourceType: "vm",
             node: "esxi-01.lab.local",
             instance: "VMware",
-            message: "VM vm-201 has VMware alarm VM replication fault (red)",
+            message: refreshed ? "Replication incident updated after return" : "VM vm-201 has VMware alarm VM replication fault (red)",
             status: "open",
             openedAt: INCIDENT_START,
             acknowledged: false,
@@ -222,6 +227,41 @@ test.describe("VMware alert history resource incidents", () => {
       incidentsPanel.getByText("Resource Health").first(),
     ).toBeVisible();
 
+    // Application route and real history-row control; incident HTTP is routed
+    // above and WebSocket is suppressed. This is not installed acceptance.
+    if (browserName === "chromium" && !isMobile && process.env.PULSE_E2E_INCIDENT_FOREGROUND === "1") {
+      const refresh = incidentsPanel.getByRole("button", { name: "Refresh", exact: true });
+      await expect(refresh).toBeEnabled();
+      expect(incidentReads).toBe(1);
+      console.log(JSON.stringify({ stage: "application-incident-initial-read-settled", incidentReads,
+        tokenAuthenticationPresent: await page.evaluate(() => Boolean(sessionStorage.getItem("pulse_auth"))),
+        liveWebSocket: false, incidentHTTP: "mocked" }));
+      const cdp = await context.newCDPSession(page);
+      await cdp.send("Emulation.setFocusEmulationEnabled", { enabled: false });
+      const other = await context.newPage();
+      try {
+        await other.goto("about:blank");
+        await other.bringToFront();
+        await expect.poll(() => page.evaluate(() => document.visibilityState), {
+          message: "Native background preflight must pass; forced visibility is not foreground evidence",
+        }).toBe("hidden");
+        refreshed = true;
+        await page.bringToFront();
+        await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe("visible");
+        await expect(refresh).toBeEnabled();
+        expect(incidentReads).toBe(1);
+        await refresh.click();
+        await expect(incidentsPanel.getByText("Replication incident updated after return", { exact: true })).toBeVisible();
+        await expect(refresh).toBeEnabled();
+        expect(incidentReads).toBe(2);
+        console.log(JSON.stringify({ scenario: "application-history-foreground-refresh", incidentReads,
+          authentication: "ensureAuthenticated helper", incidentHTTP: "mocked", liveWebSocket: false,
+          visibility: "native hidden then visible", freeze: false }));
+      } finally {
+        await other.close();
+        await cdp.detach();
+      }
+    }
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
   });
 });
