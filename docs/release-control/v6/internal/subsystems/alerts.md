@@ -2828,3 +2828,14 @@ The presentation unit tests cover the label and terminal guidance.
 cards in Chromium at desktop, tablet and phone widths, asserting the copy,
 absence of page errors and horizontal overflow. Scripted props are component
 evidence only, not installed notification delivery.
+
+### Webhook test/save custom-field parity
+
+The webhook form applies the same service-specific custom-field normalisation
+when testing unsaved data as when saving it. In particular, manually entered
+Pushover app_token/user_token aliases become token/user with the existing
+canonical-value precedence. Existing-field editing remains normalised on load.
+This changes neither delivery scheduling nor the meaning of a successful test.
+The registered WebhookConfig regression covers alias test/save payload equality;
+the browser fixture exercises the real form at desktop and phone widths with
+synthetic callbacks, not a hosted Pushover destination or installed delivery.

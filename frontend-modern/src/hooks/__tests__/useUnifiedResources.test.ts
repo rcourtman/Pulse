@@ -1,6 +1,7 @@
 import { batch, createRoot, createSignal } from 'solid-js';
 import { createStore, reconcile, type SetStoreFunction } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildProxmoxPageModel } from '@/features/proxmox/proxmoxPageModel';
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import useUnifiedResourcesSource from '../useUnifiedResources.ts?raw';
@@ -1337,6 +1338,54 @@ describe('useUnifiedResources', () => {
     expect(result!.resources()[0]?.clusterId).toBe('cluster-a');
 
     dispose();
+  });
+
+  it('keeps an agent-plus-docker NAS out of the Proxmox table after API projection', async () => {
+    // #1930's supplied field shape, with entirely synthetic identities and no
+    // addresses or token metadata. This does not reproduce the earlier screenshot.
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            id: 'synthetic-nas',
+            name: 'synthetic-nas',
+            technology: 'linux',
+            sources: ['agent', 'docker'],
+            platformScopes: ['agent', 'docker'],
+            canonicalIdentity: { displayName: 'synthetic-nas', platformId: 'synthetic-nas' },
+            identity: { hostnames: ['synthetic-nas'] },
+            agent: { platform: 'linux', osName: 'Synology DSM' },
+          },
+          {
+            ...v2Resource,
+            id: 'synthetic-pve',
+            sources: ['proxmox'],
+            proxmox: { nodeName: 'synthetic-pve', clusterName: 'synthetic-cluster' },
+          },
+        ],
+      }),
+    });
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({ query: 'type=agent', cacheKey: 'nas-boundary' });
+    });
+    try {
+      await result!.refetch();
+      const resources = result!.resources();
+      const nas = resources.find((resource) => resource.id === 'synthetic-nas');
+      expect(nas).toBeDefined();
+      expect(nas?.clusterId).toBeUndefined();
+      expect(nas?.proxmox).toBeUndefined();
+      expect(buildProxmoxPageModel(resources).pveNodes.map((node) => node.id)).toEqual([
+        'synthetic-pve',
+      ]);
+    } finally {
+      dispose();
+    }
   });
 
   it('projects proxmox clusterId from the shared cluster helper', async () => {

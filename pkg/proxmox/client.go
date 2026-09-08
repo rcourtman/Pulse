@@ -2944,7 +2944,9 @@ type AptPackage struct {
 }
 
 // GetNodePendingUpdates returns the list of pending apt updates for a node
-// Requires Sys.Audit permission on /nodes/{node}
+// Access is evaluated by Proxmox for the configured credential on /nodes/{node}.
+// Do not infer access from general node-audit permission; endpoint requirements
+// can differ from other monitoring reads.
 func (c *Client) GetNodePendingUpdates(ctx context.Context, node string) ([]AptPackage, error) {
 	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/apt/update", node))
 	if err != nil {

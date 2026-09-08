@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "base_sha": "550b2d80a175cc66ab4e7ac269b7ec350e101611",
-  "verified_at": "2026-09-08T11:54:21Z",
+  "base_sha": "6f3547bc5fbb10ddf313a8cd2f184b6359173a59",
+  "verified_at": "2026-09-08T22:29:31.643744Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/utils/alertDestinationsPresentation.ts"
+    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "67f6f9a1c98345949e162bf06a38760e61457aa1e8a2130913646647a4f29e88"
+    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts": "14f0dceb069fe52b9a47100c50998ae53a2c5c8a29a524e342f7458546cb4a19"
   },
   "routes": [
-    "/qualification (real health and delivery-log cards, scripted props)"
+    "/qualification (real WebhookConfigForm and hook; synthetic callbacks)"
   ],
   "viewports": [
     {
@@ -27,11 +27,13 @@
     }
   ],
   "states": [
-    "Retained terminal server_error health diagnosis and failed delivery log entry"
+    "Unsaved manually entered Pushover aliases",
+    "Test callback payload",
+    "Save callback payload"
   ],
   "interactions": [
-    "Load both cards at desktop, tablet and phone widths; assert label, guidance, no page errors or horizontal overflow."
+    "Click Test then Add Webhook at each width; assert both canonical token/user payloads, no page errors or horizontal overflow."
   ],
-  "notes": "Phone screenshot visually inspected; screenshots retained at /tmp/pulse-server-error-copy. Initial fixture omitted alertIds and timed out; corrected fixture passed all three widths. No installed delivery or receipt claim.",
-  "command": "pulse-heavy-run -- node scripts/check-delivery-server-error-copy.mjs"
+  "notes": "Real component with Vite dev transform in Chromium, not production build or installed/provider delivery. Phone screenshot visually inspected; synthetic credentials only. Screenshots /tmp/pulse-webhook-parity.",
+  "command": "pulse-heavy-run -- node scripts/check-webhook-test-save-parity.mjs"
 }

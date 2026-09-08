@@ -284,7 +284,7 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
     const testPayload = {
       ...restFormData,
       headers,
-      customFields,
+      customFields: normalizeAlertWebhookCustomFields(data.service, customFields),
       template: payloadTemplate ?? restFormData.template ?? '',
     };
     const tempId = editingId() || 'temp-new-webhook';

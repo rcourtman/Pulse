@@ -16,7 +16,7 @@ type UpdateEvidenceNode = Pick<
 const reasonLabel = (reason: Node['pendingUpdatesReason']): string => {
   switch (reason) {
     case 'permission_denied':
-      return 'Sys.Audit permission required';
+      return 'Update check access denied';
     case 'source_unavailable':
       return 'Proxmox source unavailable';
     case 'check_failed':
