@@ -1318,8 +1318,8 @@ func TestMemoryStoreResourceChangeFiltersIncludeRelatedResources(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetRecentChangesFiltered include related: %v", err)
 	}
-	if len(timeline) != 2 || timeline[0].ID != "mem-direct" || timeline[1].ID != "mem-related" {
-		t.Fatalf("relationship-aware memory timeline = %#v, want reverse insertion order direct plus related", timeline)
+	if len(timeline) != 2 || timeline[0].ID != "mem-related" || timeline[1].ID != "mem-direct" {
+		t.Fatalf("relationship-aware memory timeline = %#v, want newest observation first, as in the durable store", timeline)
 	}
 
 	count, err := store.CountRecentChangesFiltered("node:1", now.Add(-time.Hour), ResourceChangeFilters{IncludeRelated: true})

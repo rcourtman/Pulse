@@ -4999,11 +4999,15 @@ func (s *Service) lookupIncidentResourceIdentifier(alertIdentifier string) strin
 	if store == nil {
 		return ""
 	}
-	timeline := store.GetTimelineByAlertIdentifier(alertIdentifier)
-	if timeline == nil {
+	page, err := store.QueryIncidents(memory.IncidentQuery{AlertIdentifier: alertIdentifier, Limit: 1})
+	if err != nil {
+		log.Warn().Err(err).Msg("Canonical incident resource lookup unavailable")
 		return ""
 	}
-	return strings.TrimSpace(timeline.ResourceID)
+	if len(page.Incidents) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(page.Incidents[0].ResourceID)
 }
 
 func (s *Service) recordCanonicalResourceChange(change *unifiedresources.ResourceChange) {

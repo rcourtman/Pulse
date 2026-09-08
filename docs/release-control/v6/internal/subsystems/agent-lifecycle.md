@@ -15,6 +15,11 @@
 
 ## Purpose
 
+Historical incident reads preserve canonical event targets and treat resource
+aliases as read selectors. They do not grant command authority to an alias or
+infer present agent liveness from an old alert closure. A failed canonical read
+is exposed as unavailable, rather than replaced with a synthetic healthy state.
+
 Delivery-log diagnostic text is a notification-attempt projection, not an agent admission or liveness verdict. Masking embedded destination credentials preserves failure context without changing agent identities, credentials, session replacement or removal policy. Consumers must use the retained failureClass and outcome as delivery evidence only; a transport error does not establish that the monitored agent is offline.
 
 ### Canonical Patrol and Assistant continuation, 2026-09-07

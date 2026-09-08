@@ -22,6 +22,27 @@ describe('AlertResourceIncidentsPanel', () => {
     vi.restoreAllMocks();
   });
 
+  it('shows persistent read failure without claiming an empty history', () => {
+    const [failed, setFailed] = createSignal(true);
+    render(() => (
+      <AlertResourceIncidentsPanel
+        state={
+          {
+            resourceIncidentPanel: () => ({ resourceId: 'resource-1', resourceName: 'Resource' }),
+            resourceIncidents: () => ({}),
+            resourceIncidentLoading: () => ({}),
+            resourceIncidentError: () => ({ 'resource-1': failed() }),
+            refreshResourceIncidentPanel: vi.fn(),
+          } as any
+        }
+      />
+    ));
+    expect(screen.getByRole('alert').textContent).toContain('Use Refresh');
+    expect(screen.queryByText('No incidents recorded for this resource yet.')).toBeNull();
+    setFailed(false);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('does not surface broad cross-jump links from incident details', () => {
     // Surface link chips into /infrastructure and broad aggregate workspaces
     // were retired with the platform-first migration.
@@ -47,6 +68,7 @@ describe('AlertResourceIncidentsPanel', () => {
                 },
               ],
             }),
+            resourceIncidentError: () => ({}),
             resourceIncidentLoading: () => ({ 'truenas-main': false }),
             expandedResourceIncidentIds: () => new Set<string>(),
             resourceIncidentEventFilters: () => new Set<string>(['opened']),
@@ -130,6 +152,7 @@ describe('AlertResourceIncidentsPanel', () => {
                 },
               ],
             }),
+            resourceIncidentError: () => ({}),
             resourceIncidentLoading: () => ({ 'truenas-main': false }),
             expandedResourceIncidentIds: () => new Set<string>(),
             resourceIncidentEventFilters: () => new Set<string>(['command']),
@@ -213,6 +236,7 @@ describe('AlertResourceIncidentsPanel', () => {
                 },
               ],
             }),
+            resourceIncidentError: () => ({}),
             resourceIncidentLoading: () => ({ 'node-1': false }),
             expandedResourceIncidentIds: expandedIncidentIds,
             resourceIncidentEventFilters: eventFilters,

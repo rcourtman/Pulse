@@ -22,6 +22,7 @@ type IncidentStatus string
 
 const (
 	IncidentStatusOpen     IncidentStatus = "open"
+	IncidentStatusUnknown  IncidentStatus = "unknown"
 	IncidentStatusResolved IncidentStatus = "resolved"
 )
 
@@ -43,34 +44,37 @@ const (
 
 // IncidentEvent represents a single timeline entry for an incident.
 type IncidentEvent struct {
-	ID        string                 `json:"id"`
-	Type      IncidentEventType      `json:"type"`
-	Timestamp time.Time              `json:"timestamp"`
-	Summary   string                 `json:"summary"`
-	Details   map[string]interface{} `json:"details,omitempty"`
+	Source    string                           `json:"source,omitempty"`
+	Evidence  *unifiedresources.ResourceChange `json:"evidence,omitempty"`
+	ID        string                           `json:"id"`
+	Type      IncidentEventType                `json:"type"`
+	Timestamp time.Time                        `json:"timestamp"`
+	Summary   string                           `json:"summary"`
+	Details   map[string]interface{}           `json:"details,omitempty"`
 }
 
 // Incident captures an alert occurrence and its investigation timeline.
 // It is an alert-scoped memory/projection for investigation support rather than
 // the canonical durable resource-change history.
 type Incident struct {
-	ID              string          `json:"id"`
-	AlertIdentifier string          `json:"alertIdentifier"`
-	AlertType       string          `json:"alertType"`
-	Level           string          `json:"level"`
-	ResourceID      string          `json:"resourceId"`
-	ResourceName    string          `json:"resourceName"`
-	ResourceType    string          `json:"resourceType,omitempty"`
-	Node            string          `json:"node,omitempty"`
-	Instance        string          `json:"instance,omitempty"`
-	Message         string          `json:"message,omitempty"`
-	Status          IncidentStatus  `json:"status"`
-	OpenedAt        time.Time       `json:"openedAt"`
-	ClosedAt        *time.Time      `json:"closedAt,omitempty"`
-	Acknowledged    bool            `json:"acknowledged"`
-	AckUser         string          `json:"ackUser,omitempty"`
-	AckTime         *time.Time      `json:"ackTime,omitempty"`
-	Events          []IncidentEvent `json:"events,omitempty"`
+	History         *IncidentHistoryCoverage `json:"history,omitempty"`
+	ID              string                   `json:"id"`
+	AlertIdentifier string                   `json:"alertIdentifier"`
+	AlertType       string                   `json:"alertType"`
+	Level           string                   `json:"level"`
+	ResourceID      string                   `json:"resourceId"`
+	ResourceName    string                   `json:"resourceName"`
+	ResourceType    string                   `json:"resourceType,omitempty"`
+	Node            string                   `json:"node,omitempty"`
+	Instance        string                   `json:"instance,omitempty"`
+	Message         string                   `json:"message,omitempty"`
+	Status          IncidentStatus           `json:"status"`
+	OpenedAt        time.Time                `json:"openedAt"`
+	ClosedAt        *time.Time               `json:"closedAt,omitempty"`
+	Acknowledged    bool                     `json:"acknowledged"`
+	AckUser         string                   `json:"ackUser,omitempty"`
+	AckTime         *time.Time               `json:"ackTime,omitempty"`
+	Events          []IncidentEvent          `json:"events,omitempty"`
 }
 
 type incidentShell struct {
@@ -90,23 +94,24 @@ type incidentShell struct {
 }
 
 type incidentJSON struct {
-	ID              string          `json:"id"`
-	AlertIdentifier string          `json:"alertIdentifier"`
-	AlertType       string          `json:"alertType"`
-	Level           string          `json:"level"`
-	ResourceID      string          `json:"resourceId"`
-	ResourceName    string          `json:"resourceName"`
-	ResourceType    string          `json:"resourceType,omitempty"`
-	Node            string          `json:"node,omitempty"`
-	Instance        string          `json:"instance,omitempty"`
-	Message         string          `json:"message,omitempty"`
-	Status          IncidentStatus  `json:"status"`
-	OpenedAt        time.Time       `json:"openedAt"`
-	ClosedAt        *time.Time      `json:"closedAt,omitempty"`
-	Acknowledged    bool            `json:"acknowledged"`
-	AckUser         string          `json:"ackUser,omitempty"`
-	AckTime         *time.Time      `json:"ackTime,omitempty"`
-	Events          []IncidentEvent `json:"events,omitempty"`
+	History         *IncidentHistoryCoverage `json:"history,omitempty"`
+	ID              string                   `json:"id"`
+	AlertIdentifier string                   `json:"alertIdentifier"`
+	AlertType       string                   `json:"alertType"`
+	Level           string                   `json:"level"`
+	ResourceID      string                   `json:"resourceId"`
+	ResourceName    string                   `json:"resourceName"`
+	ResourceType    string                   `json:"resourceType,omitempty"`
+	Node            string                   `json:"node,omitempty"`
+	Instance        string                   `json:"instance,omitempty"`
+	Message         string                   `json:"message,omitempty"`
+	Status          IncidentStatus           `json:"status"`
+	OpenedAt        time.Time                `json:"openedAt"`
+	ClosedAt        *time.Time               `json:"closedAt,omitempty"`
+	Acknowledged    bool                     `json:"acknowledged"`
+	AckUser         string                   `json:"ackUser,omitempty"`
+	AckTime         *time.Time               `json:"ackTime,omitempty"`
+	Events          []IncidentEvent          `json:"events,omitempty"`
 }
 
 type incidentShellJSON struct {
@@ -133,6 +138,7 @@ type incidentShellJSON struct {
 func (i Incident) MarshalJSON() ([]byte, error) {
 	alertIdentifier := strings.TrimSpace(i.AlertIdentifier)
 	return json.Marshal(incidentJSON{
+		History:         i.History,
 		ID:              i.ID,
 		AlertIdentifier: alertIdentifier,
 		AlertType:       i.AlertType,
@@ -162,6 +168,7 @@ func (i *Incident) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*i = Incident{
+		History:         payload.History,
 		ID:              payload.ID,
 		AlertIdentifier: strings.TrimSpace(payload.AlertIdentifier),
 		AlertType:       payload.AlertType,
@@ -287,18 +294,19 @@ type IncidentStore struct {
 }
 
 const (
-	defaultIncidentMaxIncidents  = 500
-	defaultIncidentMaxEvents     = 120
-	defaultIncidentMaxAgeDays    = 90
-	maxIncidentFileSize          = 20 * 1024 * 1024 // 20MB
-	incidentStartMatchTolerance  = time.Second
-	projectedIncidentChangeLimit = 256
-	incidentSnapshotSource       = "alert_history_snapshot"
+	defaultIncidentMaxIncidents = 500
+	defaultIncidentMaxEvents    = 120
+	defaultIncidentMaxAgeDays   = 90
+	maxIncidentFileSize         = 20 * 1024 * 1024 // 20MB
+	incidentStartMatchTolerance = time.Second
+	incidentSnapshotSource      = "alert_history_snapshot"
 )
 
 // IncidentTimelineStore exposes the canonical resource timeline used to derive
 // incident lifecycle and remediation history.
 type IncidentTimelineStore interface {
+	GetRecentChangesFiltered(string, time.Time, int, unifiedresources.ResourceChangeFilters) ([]unifiedresources.ResourceChange, error)
+	ResourceHistoryIDs(string) ([]string, error)
 	GetRecentChanges(canonicalID string, since time.Time, limit int) ([]unifiedresources.ResourceChange, error)
 }
 
@@ -473,7 +481,7 @@ func (s *IncidentStore) RecordAlertResolved(alert *alerts.Alert, resolvedAt time
 // EnsureAlertOccurrence materializes the minimum honest timeline carried by
 // an alert snapshot. It is the read-repair boundary for active alerts and
 // legacy history entries that predate the canonical resource timeline. When
-// canonical events exist, projectIncident replaces these snapshot-derived
+// canonical events exist, QueryIncidents replaces these snapshot-derived
 // lifecycle breadcrumbs with the durable projection.
 func (s *IncidentStore) EnsureAlertOccurrence(alert *alerts.Alert, resolvedAt *time.Time) *Incident {
 	if s == nil || alert == nil || strings.TrimSpace(alert.ID) == "" {
@@ -651,6 +659,15 @@ func (s *IncidentStore) RecordNote(alertIdentifier, incidentID, note, user strin
 		return false
 	}
 
+	var projected *Incident
+	if strings.HasPrefix(incidentID, "projected-") {
+		page, err := s.QueryIncidents(IncidentQuery{AlertIdentifier: alertIdentifier, IncidentID: incidentID, Limit: 1})
+		if err != nil || len(page.Incidents) != 1 {
+			return false
+		}
+		projected = page.Incidents[0]
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -659,6 +676,14 @@ func (s *IncidentStore) RecordNote(alertIdentifier, incidentID, note, user strin
 		shell = s.findIncidentByIDLocked(incidentID)
 	} else if alertIdentifier != "" {
 		shell = s.findLatestIncidentByAlertIdentifierLocked(alertIdentifier)
+	}
+	if shell == nil && projected != nil {
+		shell = &incidentShell{ID: projected.ID, AlertIdentifier: projected.AlertIdentifier, AlertType: projected.AlertType, Level: projected.Level, ResourceID: projected.ResourceID, ResourceName: projected.ResourceName, ResourceType: projected.ResourceType, Node: projected.Node, Instance: projected.Instance, Message: projected.Message, OpenedAt: projected.OpenedAt}
+		if projected.ClosedAt != nil {
+			closed := *projected.ClosedAt
+			shell.OccurrenceClosedAt = &closed
+		}
+		s.incidents = append(s.incidents, shell)
 	}
 	if shell == nil {
 		return false
@@ -681,42 +706,24 @@ func (s *IncidentStore) RecordNote(alertIdentifier, incidentID, note, user strin
 
 // GetTimelineByAlertIdentifier returns the most recent incident for the alert.
 func (s *IncidentStore) GetTimelineByAlertIdentifier(alertIdentifier string) *Incident {
-	if alertIdentifier == "" {
-		return nil
-	}
-
-	s.mu.RLock()
-	shell := cloneIncidentShell(s.findLatestIncidentByAlertIdentifierLocked(alertIdentifier))
-	timelineStore := s.resourceTimelineStore
-	maxAge := s.maxAge
-	s.mu.RUnlock()
-
-	if shell == nil {
-		return s.projectIncidentFromCanonical(alertIdentifier, time.Time{}, timelineStore, maxAge)
-	}
-	return s.projectIncident(incidentFromShell(shell), timelineStore)
+	return s.GetTimelineByAlertAt(alertIdentifier, time.Time{})
 }
 
-// GetTimelineByAlertAt returns the incident closest to the provided start time for an alert.
+// GetTimelineByAlertAt is retained for local writer callers. Runtime readers
+// use QueryIncidents to distinguish an unavailable store from absent history.
 func (s *IncidentStore) GetTimelineByAlertAt(alertIdentifier string, startedAt time.Time) *Incident {
-	if alertIdentifier == "" {
+	if strings.TrimSpace(alertIdentifier) == "" {
 		return nil
 	}
-	if startedAt.IsZero() {
-		return s.GetTimelineByAlertIdentifier(alertIdentifier)
+	page, err := s.QueryIncidents(IncidentQuery{AlertIdentifier: alertIdentifier, StartedAt: startedAt, Limit: 1})
+	if err != nil {
+		log.Warn().Err(err).Msg("incident history unavailable")
+		return nil
 	}
-
-	s.mu.RLock()
-	best, bestDelta := s.findClosestIncidentByAlertAtLocked(alertIdentifier, startedAt)
-	best = cloneIncidentShell(best)
-	timelineStore := s.resourceTimelineStore
-	maxAge := s.maxAge
-	s.mu.RUnlock()
-
-	if best == nil || bestDelta > incidentStartMatchTolerance {
-		return s.projectIncidentFromCanonical(alertIdentifier, startedAt, timelineStore, maxAge)
+	if len(page.Incidents) == 0 {
+		return nil
 	}
-	return s.projectIncident(incidentFromShell(best), timelineStore)
+	return page.Incidents[0]
 }
 
 func (s *IncidentStore) findIncidentByAlertAtLocked(alertIdentifier string, startedAt time.Time) *incidentShell {
@@ -751,56 +758,58 @@ func (s *IncidentStore) findClosestIncidentByAlertAtLocked(alertIdentifier strin
 
 // ListIncidentsByResource returns recent incidents for a resource.
 func (s *IncidentStore) ListIncidentsByResource(resourceID string, limit int) []*Incident {
-	if resourceID == "" {
+	if strings.TrimSpace(resourceID) == "" {
 		return nil
 	}
-
-	s.mu.RLock()
-	var matches []*Incident
-	for i := len(s.incidents) - 1; i >= 0; i-- {
-		shell := s.incidents[i]
-		if shell != nil && shell.ResourceID == resourceID {
-			matches = append(matches, incidentFromShell(cloneIncidentShell(shell)))
-			if limit > 0 && len(matches) >= limit {
-				break
-			}
-		}
+	page, err := s.QueryIncidents(IncidentQuery{ResourceID: resourceID, Limit: limit})
+	if err != nil {
+		log.Warn().Err(err).Msg("incident history unavailable")
+		return nil
 	}
-	timelineStore := s.resourceTimelineStore
-	s.mu.RUnlock()
-
-	if timelineStore == nil {
-		return matches
-	}
-	projected := make([]*Incident, 0, len(matches))
-	for _, incident := range matches {
-		projected = append(projected, s.projectIncident(incident, timelineStore))
-	}
-	return projected
+	return page.Incidents
 }
 
 // FormatForAlert returns a condensed incident timeline for prompt injection.
 func (s *IncidentStore) FormatForAlert(alertIdentifier string, maxEvents int) string {
-	incident := s.GetTimelineByAlertIdentifier(alertIdentifier)
-	if incident == nil {
-		return ""
+	page, err := s.QueryIncidents(IncidentQuery{AlertIdentifier: alertIdentifier, Limit: 1})
+	if err != nil {
+		return "\n\nIncident history unavailable: canonical evidence could not be read.\n"
 	}
+	if len(page.Incidents) == 0 {
+		return formatIncidentCoverage(page)
+	}
+	incident := page.Incidents[0]
 
 	var b strings.Builder
 	b.WriteString("\n\n## Incident Memory\n")
+	b.WriteString(formatIncidentCoverage(page))
 	b.WriteString(fmt.Sprintf("Alert incident for %s (%s, %s)\n",
 		incident.ResourceName, incident.AlertType, incident.Level))
 	b.WriteString(fmt.Sprintf("Status: %s\n", incident.Status))
+	if incident.History != nil {
+		b.WriteString("Occurrence evidence source: " + incident.History.Source + "\n")
+	}
 
 	events := incident.Events
 	if maxEvents > 0 && len(events) > maxEvents {
 		events = events[len(events)-maxEvents:]
+		b.WriteString(fmt.Sprintf("Showing latest %d of %d recorded events.\n", len(events), len(incident.Events)))
 	}
 	for _, evt := range events {
 		b.WriteString("- ")
-		b.WriteString(evt.Timestamp.Format(time.RFC3339))
+		b.WriteString(formatIncidentTime(evt.Timestamp))
 		b.WriteString(": ")
 		b.WriteString(evt.Summary)
+		if evt.Type == IncidentEventNote {
+			if note, ok := stringMetadata(evt.Details, "note"); ok {
+				b.WriteString(": " + note)
+			}
+		}
+		if evt.Evidence != nil {
+			b.WriteString(fmt.Sprintf(" [record=%s observed=%s occurred=%s source=%s actor=%s]", evt.Evidence.ID, formatIncidentTime(evt.Evidence.ObservedAt), formatIncidentOccurredTime(evt.Evidence.OccurredAt), evt.Evidence.SourceAdapter, evt.Evidence.Actor))
+		} else if evt.Source != "" {
+			b.WriteString(" [source=" + evt.Source + "]")
+		}
 		b.WriteString("\n")
 	}
 	return b.String()
@@ -808,21 +817,32 @@ func (s *IncidentStore) FormatForAlert(alertIdentifier string, maxEvents int) st
 
 // FormatForResource returns a condensed incident summary for a resource.
 func (s *IncidentStore) FormatForResource(resourceID string, limit int) string {
-	incidents := s.ListIncidentsByResource(resourceID, limit)
+	page, err := s.QueryIncidents(IncidentQuery{ResourceID: resourceID, Limit: limit})
+	if err != nil {
+		return "\n\nIncident history unavailable: canonical evidence could not be read.\n"
+	}
+	return FormatIncidentPageForResource(page)
+}
+
+// FormatIncidentPageForResource formats the same snapshot returned to an API
+// caller, so a second read cannot silently describe a different history.
+func FormatIncidentPageForResource(page IncidentPage) string {
+	incidents := page.Incidents
 	if len(incidents) == 0 {
-		return ""
+		return formatIncidentCoverage(page)
 	}
 
 	var b strings.Builder
 	b.WriteString("\n\n## Incident Memory\n")
-	b.WriteString("Recent incidents for this resource:\n")
+	b.WriteString(formatIncidentCoverage(page))
+	b.WriteString("Recent incidents:\n")
 	for _, incident := range incidents {
 		status := string(incident.Status)
 		if incident.Acknowledged && incident.Status == IncidentStatusOpen {
 			status = "acknowledged"
 		}
 		b.WriteString("- ")
-		b.WriteString(incident.OpenedAt.Format(time.RFC3339))
+		b.WriteString(formatIncidentTime(incident.OpenedAt))
 		b.WriteString(": ")
 		b.WriteString(incident.AlertType)
 		if incident.Level != "" {
@@ -832,6 +852,9 @@ func (s *IncidentStore) FormatForResource(resourceID string, limit int) string {
 		}
 		b.WriteString(" - ")
 		b.WriteString(status)
+		if incident.History != nil {
+			b.WriteString(" [source=" + incident.History.Source + "]")
+		}
 		b.WriteString("\n")
 	}
 	return b.String()
@@ -843,28 +866,18 @@ func (s *IncidentStore) FormatForPatrol(limit int) string {
 		limit = 8
 	}
 
-	s.mu.RLock()
-	snapshot := make([]*Incident, 0, len(s.incidents))
-	for i := len(s.incidents) - 1; i >= 0 && len(snapshot) < limit; i-- {
-		if shell := s.incidents[i]; shell != nil {
-			snapshot = append(snapshot, incidentFromShell(cloneIncidentShell(shell)))
-		}
+	page, err := s.QueryIncidents(IncidentQuery{Limit: limit})
+	if err != nil {
+		return "\n\nIncident history unavailable: canonical evidence could not be read.\n"
 	}
-	timelineStore := s.resourceTimelineStore
-	s.mu.RUnlock()
-
+	snapshot := page.Incidents
 	if len(snapshot) == 0 {
-		return ""
-	}
-
-	if timelineStore != nil {
-		for i := range snapshot {
-			snapshot[i] = s.projectIncident(snapshot[i], timelineStore)
-		}
+		return formatIncidentCoverage(page)
 	}
 
 	var b strings.Builder
 	b.WriteString("\n\n## Incident Memory\n")
+	b.WriteString(formatIncidentCoverage(page))
 	b.WriteString("Recent incidents across infrastructure:\n")
 
 	for _, incident := range snapshot {
@@ -879,7 +892,7 @@ func (s *IncidentStore) FormatForPatrol(limit int) string {
 		}
 
 		b.WriteString("- ")
-		b.WriteString(incident.OpenedAt.Format(time.RFC3339))
+		b.WriteString(formatIncidentTime(incident.OpenedAt))
 		b.WriteString(": ")
 		if incident.ResourceName != "" {
 			b.WriteString(incident.ResourceName)
@@ -895,6 +908,9 @@ func (s *IncidentStore) FormatForPatrol(limit int) string {
 		}
 		b.WriteString(" - ")
 		b.WriteString(status)
+		if incident.History != nil {
+			b.WriteString(" [source=" + incident.History.Source + "]")
+		}
 		if lastSummary != "" {
 			b.WriteString(" - last: ")
 			b.WriteString(truncateOutput(lastSummary, 80))
@@ -912,161 +928,33 @@ func (s *IncidentStore) projectsFromCanonicalLocked() bool {
 	return s.resourceTimelineStore != nil
 }
 
-func (s *IncidentStore) projectIncident(incident *Incident, timelineStore IncidentTimelineStore) *Incident {
-	if incident == nil || timelineStore == nil {
-		return incident
-	}
-
-	projectedEvents := s.loadProjectedIncidentEvents(incident, timelineStore)
-	if len(projectedEvents) == 0 {
-		return incident
-	}
-
-	projected := cloneIncident(incident)
-	resetDerivedIncidentState(projected)
-	filtered := make([]IncidentEvent, 0, len(projected.Events)+len(projectedEvents))
-	for _, event := range projected.Events {
-		if isCanonicalProjectedIncidentEventType(event.Type) {
-			if !isSnapshotProjectionEvent(event) || hasIncidentEventType(projectedEvents, event.Type) {
-				continue
-			}
-		}
-		filtered = append(filtered, cloneIncidentEvent(event))
-	}
-	filtered = append(filtered, projectedEvents...)
-	sortIncidentEvents(filtered)
-	projected.Events = filtered
-	applyProjectedIncidentState(projected, filtered)
-	return projected
-}
-
-func (s *IncidentStore) projectIncidentFromCanonical(alertIdentifier string, startedAt time.Time, timelineStore IncidentTimelineStore, maxAge time.Duration) *Incident {
-	if timelineStore == nil || strings.TrimSpace(alertIdentifier) == "" {
-		return nil
-	}
-
-	since := time.Now().Add(-defaultIncidentMaxAgeDays * 24 * time.Hour)
-	if maxAge > 0 {
-		since = time.Now().Add(-maxAge)
-	}
-
-	changes, err := timelineStore.GetRecentChanges("", since, projectedIncidentChangeLimit)
-	if err != nil || len(changes) == 0 {
-		return nil
-	}
-
-	events := make([]IncidentEvent, 0, len(changes))
-	projected := &Incident{
-		ID:              "projected-" + strings.TrimSpace(alertIdentifier),
-		AlertIdentifier: strings.TrimSpace(alertIdentifier),
-		Status:          IncidentStatusOpen,
-	}
-	for _, change := range changes {
-		if projectedAlertIdentifier(change) != projected.AlertIdentifier {
-			continue
-		}
-		event, ok := incidentEventFromResourceChange(change)
-		if !ok {
-			continue
-		}
-		events = append(events, event)
-		hydrateIncidentFromCanonicalChange(projected, change)
-	}
-	if len(events) == 0 {
-		return nil
-	}
-
-	sortIncidentEvents(events)
-	projected.Events = events
-	if !startedAt.IsZero() {
-		openAt := projected.OpenedAt
-		if openAt.IsZero() {
-			openAt = events[0].Timestamp
-		}
-		delta := openAt.Sub(startedAt)
-		if delta < 0 {
-			delta = -delta
-		}
-		if delta > incidentStartMatchTolerance {
-			return nil
-		}
-	}
-	applyProjectedIncidentState(projected, events)
-	return projected
-}
-
-func (s *IncidentStore) loadProjectedIncidentEvents(incident *Incident, timelineStore IncidentTimelineStore) []IncidentEvent {
-	if incident == nil || timelineStore == nil {
-		return nil
-	}
-
-	resourceID := strings.TrimSpace(incident.ResourceID)
-	alertIdentifier := strings.TrimSpace(incident.AlertIdentifier)
-	if resourceID == "" || alertIdentifier == "" {
-		return nil
-	}
-
-	since := incident.OpenedAt
-	if since.IsZero() {
-		since = time.Now().Add(-defaultIncidentMaxAgeDays * 24 * time.Hour)
-	} else {
-		since = since.Add(-incidentStartMatchTolerance)
-	}
-
-	// Retained shells identify exact occurrences. Canonical history is keyed by
-	// alert identifier, so without an upper bound an old incident absorbs every
-	// later recurrence and can appear open again. Do not use the legacy read
-	// tolerance to include events from a preceding subsecond occurrence either.
-	var nextStart time.Time
-	s.mu.RLock()
-	for _, shell := range s.incidents {
-		if shell != nil && shell.AlertIdentifier == alertIdentifier && shell.ResourceID == resourceID &&
-			shell.OpenedAt.After(incident.OpenedAt) && (nextStart.IsZero() || shell.OpenedAt.Before(nextStart)) {
-			nextStart = shell.OpenedAt
-		}
-	}
-	s.mu.RUnlock()
-
-	changes, err := timelineStore.GetRecentChanges(resourceID, since, projectedIncidentChangeLimit)
-	if err != nil || len(changes) == 0 {
-		return nil
-	}
-
-	events := make([]IncidentEvent, 0, len(changes))
-	for _, change := range changes {
-		if projectedAlertIdentifier(change) != alertIdentifier {
-			continue
-		}
-		event, ok := incidentEventFromResourceChange(change)
-		if !ok {
-			continue
-		}
-		if (!incident.OpenedAt.IsZero() && event.Timestamp.Before(incident.OpenedAt)) ||
-			(!nextStart.IsZero() && !event.Timestamp.Before(nextStart)) {
-			continue
-		}
-		events = append(events, event)
-		hydrateIncidentFromCanonicalChange(incident, change)
-	}
-	sortIncidentEvents(events)
-	return events
-}
-
 func hydrateIncidentFromCanonicalChange(incident *Incident, change unifiedresources.ResourceChange) {
 	if incident == nil {
 		return
 	}
-	if resourceID := strings.TrimSpace(change.ResourceID); resourceID != "" && incident.ResourceID == "" {
+	// Alert evidence owns its target and risk context. A command may execute on
+	// a related host, so its target must not rename the alert's resource.
+	alertEvidence := false
+	switch change.Kind {
+	case unifiedresources.ChangeAlertFired, unifiedresources.ChangeAlertResolved,
+		unifiedresources.ChangeAlertAcknowledged, unifiedresources.ChangeAlertUnacknowledged,
+		unifiedresources.ChangeAlertSnoozed, unifiedresources.ChangeAlertUnsnoozed:
+		alertEvidence = true
+	}
+	if resourceID := strings.TrimSpace(change.ResourceID); resourceID != "" && (incident.ResourceID == "" || alertEvidence) {
 		incident.ResourceID = resourceID
 	}
-	if alertType, ok := stringMetadata(change.Metadata, unifiedresources.MetadataAlertType); ok && incident.AlertType == "" {
+	if alertType, ok := stringMetadata(change.Metadata, unifiedresources.MetadataAlertType); ok && (incident.AlertType == "" || alertEvidence) {
 		incident.AlertType = alertType
 	}
-	if level, ok := stringMetadata(change.Metadata, unifiedresources.MetadataAlertLevel); ok && incident.Level == "" {
+	if level, ok := stringMetadata(change.Metadata, unifiedresources.MetadataAlertLevel); ok && (incident.Level == "" || alertEvidence) {
 		incident.Level = level
 	}
-	if message, ok := stringMetadata(change.Metadata, unifiedresources.MetadataAlertMessage); ok && incident.Message == "" {
+	if message, ok := stringMetadata(change.Metadata, unifiedresources.MetadataAlertMessage); ok && (incident.Message == "" || alertEvidence) {
 		incident.Message = message
+	}
+	if resourceType, ok := stringMetadata(change.Metadata, "resourceType"); ok && (incident.ResourceType == "" || alertEvidence) {
+		incident.ResourceType = resourceType
 	}
 	if incident.OpenedAt.IsZero() {
 		incident.OpenedAt = incidentEventTimestamp(change)
@@ -1119,7 +1007,16 @@ func incidentEventFromResourceChange(change unifiedresources.ResourceChange) (In
 		}
 	}
 
+	evidence := change
+	evidence.Metadata = cloneIncidentEventDetails(change.Metadata)
+	evidence.RelatedResources = append([]string(nil), change.RelatedResources...)
+	if change.OccurredAt != nil {
+		occurred := *change.OccurredAt
+		evidence.OccurredAt = &occurred
+	}
 	return IncidentEvent{
+		Source:    "canonical_resource_history",
+		Evidence:  &evidence,
 		ID:        strings.TrimSpace(change.ID),
 		Type:      eventType,
 		Timestamp: incidentEventTimestamp(change),
@@ -1154,17 +1051,19 @@ func incidentEventTypeFromChangeKind(kind unifiedresources.ChangeKind) (Incident
 func incidentEventSummaryFromChange(change unifiedresources.ResourceChange, eventType IncidentEventType) string {
 	switch eventType {
 	case IncidentEventAlertFired:
+		// The source owns the alert condition and comparison direction. Numeric
+		// placeholders cannot establish either, including for legacy records.
+		if message, ok := stringMetadata(change.Metadata, unifiedresources.MetadataAlertMessage); ok {
+			return message
+		}
+		if reason := strings.TrimSpace(change.Reason); reason != "" {
+			return reason
+		}
 		if alertType, ok := stringMetadata(change.Metadata, unifiedresources.MetadataAlertType); ok {
-			level, _ := stringMetadata(change.Metadata, unifiedresources.MetadataAlertLevel)
-			value, hasValue := floatMetadata(change.Metadata, unifiedresources.MetadataAlertValue)
-			threshold, hasThreshold := floatMetadata(change.Metadata, unifiedresources.MetadataAlertThreshold)
-			// Resource incidents carry numeric zero placeholders, not threshold evidence.
-			if alertType != "resource-incident" && (hasValue || hasThreshold) {
-				return fmt.Sprintf("Alert triggered: %s (%s %.1f >= %.1f)", alertType, level, value, threshold)
-			}
-			if level != "" {
+			if level, ok := stringMetadata(change.Metadata, unifiedresources.MetadataAlertLevel); ok {
 				return fmt.Sprintf("Alert triggered: %s (%s)", alertType, level)
 			}
+			return "Alert triggered: " + alertType
 		}
 		return "Alert triggered"
 	case IncidentEventAlertAcknowledged:
@@ -1192,7 +1091,7 @@ func incidentEventTimestamp(change unifiedresources.ResourceChange) time.Time {
 	if !change.ObservedAt.IsZero() {
 		return change.ObservedAt.UTC()
 	}
-	return time.Now().UTC()
+	return time.Time{}
 }
 
 func projectedAlertIdentifier(change unifiedresources.ResourceChange) string {
@@ -1217,28 +1116,6 @@ func stringMetadata(metadata map[string]any, key string) (string, bool) {
 		return "", false
 	}
 	return str, true
-}
-
-func floatMetadata(metadata map[string]any, key string) (float64, bool) {
-	if len(metadata) == 0 {
-		return 0, false
-	}
-	value, ok := metadata[key]
-	if !ok {
-		return 0, false
-	}
-	switch typed := value.(type) {
-	case float64:
-		return typed, true
-	case float32:
-		return float64(typed), true
-	case int:
-		return float64(typed), true
-	case int64:
-		return float64(typed), true
-	default:
-		return 0, false
-	}
 }
 
 func eventActor(event IncidentEvent) string {
@@ -1304,6 +1181,16 @@ func incidentEventTimestampRank(eventType IncidentEventType) int {
 func cloneIncidentEvent(event IncidentEvent) IncidentEvent {
 	cloned := event
 	cloned.Details = cloneIncidentEventDetails(event.Details)
+	if event.Evidence != nil {
+		evidence := *event.Evidence
+		evidence.Metadata = cloneIncidentEventDetails(evidence.Metadata)
+		evidence.RelatedResources = append([]string(nil), evidence.RelatedResources...)
+		if evidence.OccurredAt != nil {
+			occurred := *evidence.OccurredAt
+			evidence.OccurredAt = &occurred
+		}
+		cloned.Evidence = &evidence
+	}
 	return cloned
 }
 
@@ -1313,9 +1200,26 @@ func cloneIncidentEventDetails(details map[string]any) map[string]interface{} {
 	}
 	cloned := make(map[string]interface{}, len(details))
 	for key, value := range details {
-		cloned[key] = value
+		cloned[key] = cloneIncidentDetailValue(value)
 	}
 	return cloned
+}
+
+func cloneIncidentDetailValue(value any) any {
+	switch v := value.(type) {
+	case map[string]any:
+		return cloneIncidentEventDetails(v)
+	case []any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			out[i] = cloneIncidentDetailValue(item)
+		}
+		return out
+	case []string:
+		return append([]string(nil), v...)
+	default:
+		return value
+	}
 }
 
 func newIncidentShellFromAlert(alert *alerts.Alert) *incidentShell {
@@ -1415,6 +1319,13 @@ func (s *IncidentStore) addEventAtLocked(shell *incidentShell, eventType Inciden
 		Summary:   summary,
 		Details:   details,
 	}
+	if eventType == IncidentEventNote {
+		event.Source = "operator_note"
+	}
+	if isSnapshotProjectionEvent(event) {
+		event.Source = incidentSnapshotSource
+	}
+
 	shell.Events = append(shell.Events, event)
 	if s.maxEvents > 0 && len(shell.Events) > s.maxEvents {
 		shell.Events = shell.Events[len(shell.Events)-s.maxEvents:]
@@ -1660,7 +1571,16 @@ func incidentFromShell(shell *incidentShell) *Incident {
 		OpenedAt:        shell.OpenedAt,
 		Events:          cloneIncidentEvents(shell.Events),
 	}
+	if shell.OpenedAt.IsZero() {
+		incident.Status = IncidentStatusUnknown
+	}
+	if shell.OccurrenceClosedAt != nil {
+		closed := *shell.OccurrenceClosedAt
+		incident.ClosedAt = &closed
+		incident.Status = IncidentStatusResolved
+	}
 	applyProjectedIncidentState(incident, incident.Events)
+	incident.OpenedAt = shell.OpenedAt
 	return incident
 }
 
@@ -1677,20 +1597,12 @@ func cloneIncident(src *Incident) *Incident {
 		t := *src.ClosedAt
 		clone.ClosedAt = &t
 	}
-	if len(src.Events) > 0 {
-		clone.Events = make([]IncidentEvent, len(src.Events))
-		for i, event := range src.Events {
-			cloneEvent := event
-			if event.Details != nil {
-				detailsCopy := make(map[string]interface{}, len(event.Details))
-				for key, value := range event.Details {
-					detailsCopy[key] = value
-				}
-				cloneEvent.Details = detailsCopy
-			}
-			clone.Events[i] = cloneEvent
-		}
+	clone.Events = cloneIncidentEvents(src.Events)
+	if src.History != nil {
+		history := *src.History
+		clone.History = &history
 	}
+
 	return &clone
 }
 

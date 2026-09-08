@@ -9,6 +9,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
@@ -1464,31 +1465,21 @@ func (h *AISettingsHandler) HandleGetRecentIncidents(w http.ResponseWriter, r *h
 	// Get the resource ID filter if provided
 	resourceID := r.URL.Query().Get("resource_id")
 
-	var incidents interface{}
-	if resourceID != "" {
-		incidents = incidentStore.ListIncidentsByResource(resourceID, limit)
-	} else {
-		// No direct method to list all incidents, use FormatForPatrol for now
-		// This is a limitation - we may want to add ListRecentIncidents to the store
-		incidentSummary := incidentStore.FormatForPatrol(limit)
-		if err := utils.WriteJSONResponse(w, map[string]interface{}{
-			"incidents":           []interface{}{},
-			"incident_summary":    incidentSummary,
-			"active_count":        nil,
-			"active_count_status": "not_measured",
-		}); err != nil {
-			log.Error().Err(err).Msg("Failed to write incidents response")
-		}
+	page, err := incidentStore.QueryIncidents(memory.IncidentQuery{ResourceID: resourceID, Limit: limit})
+	if err != nil {
+		http.Error(w, "Incident history unavailable", http.StatusServiceUnavailable)
 		return
 	}
-
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{
-		"incidents":           incidents,
+		"incidents":           page.Incidents,
+		"history":             page.History,
+		"incident_summary":    memory.FormatIncidentPageForResource(page),
 		"active_count":        nil,
 		"active_count_status": "not_measured",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write incidents response")
 	}
+
 }
 
 // HandleGetIncidentData returns incident data for a specific resource (GET /api/ai/incidents/{resourceID})
@@ -1544,15 +1535,19 @@ func (h *AISettingsHandler) HandleGetIncidentData(w http.ResponseWriter, r *http
 		return
 	}
 
-	incidents := incidentStore.ListIncidentsByResource(resourceID, limit)
-
-	// Also get formatted context for AI
-	formattedContext := incidentStore.FormatForResource(resourceID, limit)
+	page, err := incidentStore.QueryIncidents(memory.IncidentQuery{ResourceID: resourceID, Limit: limit})
+	if err != nil {
+		http.Error(w, "Incident history unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	incidents := page.Incidents
+	formattedContext := memory.FormatIncidentPageForResource(page)
 
 	if err := utils.WriteJSONResponse(w, map[string]interface{}{
 		"resource_id":       resourceID,
 		"incidents":         incidents,
 		"formatted_context": formattedContext,
+		"history":           page.History,
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write incident data response")
 	}

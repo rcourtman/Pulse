@@ -219,7 +219,7 @@ func (e *PulseToolExecutor) executeGetIncidentWindow(_ context.Context, args map
 		"limit":          limit,
 		"has_more":       hasMore,
 		"coverage":       "retained_records_only",
-		"evidence_limit": "These are retained observations, not continuous coverage. Empty history does not establish health or absence of incidents. ObservedAt is when Pulse observed a change, while OccurredAt is present only when its occurrence time is known. An alert resolving establishes that alert's recovery, not its cause or a verified action outcome.",
+		"evidence_limit": "These are retained observations, not continuous coverage. Empty history does not establish health or absence of incidents. ObservedAt is when Pulse observed a change, while OccurredAt is present only when its occurrence time is known. A resolution records alert closure, not its cause, workload recovery or a verified action outcome. RelatedResources identifies relationships, not additional targets of this event. This read does not query action records.",
 	}), nil
 }
 

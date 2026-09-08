@@ -7,6 +7,8 @@ import { Card } from '@/components/shared/Card';
 import type { Resource } from '@/types/resource';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import {
+  formatIncidentEvidenceTime,
+  INCIDENT_HISTORY_PARTIAL,
   getAlertIncidentLevelBadgeClass,
   getAlertIncidentStatusPresentation,
   getAlertIncidentTimelineHeadingClass,
@@ -20,6 +22,7 @@ import {
   getAlertResourceIncidentEmptyState,
   getAlertResourceIncidentFilteredEventsEmptyState,
   getAlertResourceIncidentLoadingState,
+  getAlertResourceIncidentLoadFailure,
   getAlertResourceIncidentPanelTitle,
   getAlertResourceIncidentRefreshLabel,
   getAlertResourceIncidentSummaryRowClass,
@@ -35,6 +38,7 @@ interface AlertResourceIncidentsPanelProps {
   state: AlertHistoryState;
   getResource?: (resourceId: string) => Resource | undefined;
   onClose?: () => void;
+  onAssistantHandoff?: () => void;
   showCloseAction?: boolean;
   showTitle?: boolean;
 }
@@ -46,6 +50,7 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
         const resourceId = selection().resourceId;
         const incidents = () => props.state.resourceIncidents()[resourceId] || [];
         const isLoading = () => props.state.resourceIncidentLoading()[resourceId];
+        const hasError = () => props.state.resourceIncidentError()[resourceId];
         const lookupResource = () => props.getResource ?? props.state.getResource;
         const resource = () => lookupResource()?.(resourceId);
         const resourceDisplayName = () => {
@@ -99,6 +104,11 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
             <Show when={isLoading()}>
               <p class="mt-2 text-xs text-muted">{getAlertResourceIncidentLoadingState().text}</p>
             </Show>
+            <Show when={!isLoading() && hasError()}>
+              <p class="mt-2 text-xs text-error" role="alert">
+                {getAlertResourceIncidentLoadFailure()}. Use Refresh to try again.
+              </p>
+            </Show>
             <Show when={!isLoading()}>
               <Show when={incidents().length > 0}>
                 <div class="mt-2">
@@ -113,7 +123,11 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
               <Show
                 when={incidents().length > 0}
                 fallback={
-                  <p class="mt-2 text-xs text-muted">{getAlertResourceIncidentEmptyState().text}</p>
+                  <Show when={!hasError()}>
+                    <p class="mt-2 text-xs text-muted">
+                      {getAlertResourceIncidentEmptyState().text}
+                    </p>
+                  </Show>
                 }
               >
                 <div class="mt-3 space-y-3">
@@ -159,15 +173,25 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
                               <span class={statusPresentation.className}>
                                 {statusPresentation.label}
                               </span>
-                              <span>opened {new Date(incident.openedAt).toLocaleString()}</span>
+                              <Show when={formatIncidentEvidenceTime(incident.openedAt)}>
+                                <span>opened {formatIncidentEvidenceTime(incident.openedAt)}</span>
+                              </Show>
                               <Show when={incident.closedAt}>
                                 <span>
                                   closed {new Date(incident.closedAt as string).toLocaleString()}
                                 </span>
                               </Show>
                             </div>
-                            <IncidentAssistantHandoffButton incident={incident} />
+                            <IncidentAssistantHandoffButton
+                              incident={incident}
+                              onAssistantHandoff={props.onAssistantHandoff}
+                            />
                           </div>
+                          <Show when={incident.history?.hasMoreChanges}>
+                            <p class="text-xs text-muted" role="status">
+                              {INCIDENT_HISTORY_PARTIAL}
+                            </p>
+                          </Show>
                           <Show when={incident.message}>
                             <p class={getAlertIncidentTimelineOutputClass()}>{incident.message}</p>
                           </Show>

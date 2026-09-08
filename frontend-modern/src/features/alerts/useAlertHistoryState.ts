@@ -336,6 +336,7 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     setResourceIncidentPanel: resourceIncidentsState.setResourceIncidentPanel,
     resourceIncidents: resourceIncidentsState.resourceIncidents,
     resourceIncidentLoading: resourceIncidentsState.resourceIncidentLoading,
+    resourceIncidentError: resourceIncidentsState.resourceIncidentError,
     expandedResourceIncidentIds: resourceIncidentsState.expandedResourceIncidentIds,
     resourceIncidentEventFilters: resourceIncidentsState.resourceIncidentEventFilters,
     setResourceIncidentEventFilters: resourceIncidentsState.setResourceIncidentEventFilters,

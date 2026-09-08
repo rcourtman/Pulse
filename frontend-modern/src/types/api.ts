@@ -1,6 +1,6 @@
 // Properly typed TypeScript interfaces for Pulse API
 
-import type { Resource, ResourceCapability, ResourcePolicy } from './resource';
+import type { Resource, ResourceCapability, ResourcePolicy, ResourceChange } from './resource';
 import type { EvidenceEnvelope, LifecycleTransition, OperationalRecord } from './operationalTrust';
 
 export interface ResourceListFacetsPayload {
@@ -1423,6 +1423,8 @@ export interface AlertDeliveryDiagnosis {
 }
 
 export interface IncidentEvent {
+  source?: string;
+  evidence?: ResourceChange;
   id: string;
   type: string;
   timestamp: string;
@@ -1430,7 +1432,17 @@ export interface IncidentEvent {
   details?: Record<string, unknown>;
 }
 
+export interface IncidentHistoryCoverage {
+  source: string;
+  observedSince: string;
+  observedBefore: string;
+  changeLimit: number;
+  hasMoreChanges: boolean;
+  hasMoreIncidents: boolean;
+}
+
 export interface Incident {
+  history?: IncidentHistoryCoverage;
   id: string;
   alertIdentifier: string;
   alertType: string;

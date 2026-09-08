@@ -22,6 +22,18 @@
 
 The delivery-log response redacts embedded webhook URLs in errorMessage rather than treating the entire diagnostic as a URL. Non-secret operation and failure context survive alongside notificationId, destinationId, outcome, failureClass and attempts; malformed URL diagnostics fail closed. The HTTP payload proof is TestContract_DeliveryDiagnosticPayload; notification handler tests pin plain, credential-bearing and malformed errors. No response keys or route permissions change.
 
+### Canonical incident-history query contract
+
+Incident APIs discover canonical-only occurrences and retain exact-start
+selection. `/api/ai/incidents` returns structured incidents even without a
+resource filter, plus history coverage and the existing unmeasured active-count
+contract. Resource-detail summaries describe the same page, not a second read.
+Canonical read failures return HTTP 503 before snapshot fallback. Timeline
+exports preserve source event identity, observed/occurred timestamps, actor,
+source, confidence, metadata and related identities. Notes can attach to a
+canonical-only occurrence without storing a second canonical lifecycle.
+
+
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
 Canonical planning owns persisted actor/request idempotency. The same trusted
@@ -10754,8 +10766,9 @@ anomalies and marks historical recording status as historical.
 `active_count_status=not_measured` in every response. Incident memory, an empty
 result and unavailable services cannot establish a current count. The old
 coordinator never received production alert callbacks, so its zero was not a
-measurement. The legacy listing's broader canonical query and read-error
-modernization remains open under the customer-outcome qualification gap.
+measurement. The shared QueryIncidents path now owns structured listing and
+read-error propagation. Its qualification and delivery receipts remain in the
+customer-outcome qualification record, separate from wider readiness.
 
 ### Explicit credentials during development qualification
 

@@ -20,6 +20,28 @@
 
 ## Purpose
 
+Assistant owns composer registration and focus on every open, rather than only
+on component mount. Closing clears the registered input so later keyboard
+commands cannot target a detached composer. A handoff must leave Escape and
+keyboard input in Assistant, not the underlying alert search.
+
+Mobile incident drawers transfer their exact context to Assistant and close
+through the shared explicit handoff callback. Keeping the source drawer above
+Assistant, or dropping its occurrence identity to make navigation work, fails
+the linked investigation journey. Both timeline and resource handoffs require
+mounted regression and final-build narrow browser proof.
+
+### Shared incident evidence disclosure
+
+Alerts timeline and resource-history events share IncidentTimelineEventCard.
+Its native details/summary disclosure preserves keyboard activation and keeps
+forensic provenance out of the default event summary. The same timestamp
+formatter rejects missing or invalid evidence times. Timeline and resource
+history compose persistent failure copy with their existing retry controls,
+independently of transient notification toasts. The affected interaction and
+viewport qualification is recorded in
+`docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`.
+
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
 Patrol's Assistant context preserves unknown destructive risk and distinguishes
@@ -7222,3 +7244,19 @@ widths despite the longer labels. The presentation and Overview delivery-status
 tests cover the evidence boundary; `scripts/check-alert-dispatch-copy.mjs`
 qualifies the real Overview with scripted API data in Chromium, not installed
 notification delivery.
+
+The incident-history continuation also projects retained desktop expansion into
+the mobile drawer at the shared CSS breakpoint and keeps expansion state on
+return to desktop. The mobile action label describes the visible drawer.
+Operator note text and attribution survive the Assistant handoff while raw
+command output remains excluded. Shared event cards override inherited table
+no-wrap styling, and notes preserve line breaks. Long notes must remain readable
+in both inline desktop history and the mobile drawer. Final source-bound
+browser/model qualification is recorded in the customer-journey document.
+
+The shared type-to-search registry excludes inputs in inert modal backgrounds,
+including prepared shortcut targets. Escape belongs to the active dialog and
+must not clear a background history filter or invalidate its return-focus target.
+Ordinary search shortcuts resume when the background becomes interactive again.
+When Assistant is already open, a desktop-to-phone transition must retain that
+destination rather than reopening the underlying history drawer above it.

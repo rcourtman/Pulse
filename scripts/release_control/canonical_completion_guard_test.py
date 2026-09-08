@@ -311,6 +311,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/monitoring/issue1638_dns_cache_test.go",
                         "internal/monitoring/metric_window_provider_test.go",
                         "internal/monitoring/monitor_additional_test.go",
+                        "internal/monitoring/monitor_alert_handling_test.go",
                         "internal/monitoring/monitor_alert_intent_test.go",
                         "internal/monitoring/monitor_alert_override_migration_test.go",
                         "internal/monitoring/monitor_backups_readstate_test.go",

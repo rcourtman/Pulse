@@ -31,6 +31,7 @@ type ResourceStore interface {
 	UpsertResourceIdentityPins(pins []ResourceIdentityPin) error
 	ListResourceIdentityPins() ([]ResourceIdentityPin, error)
 	RecordChange(change ResourceChange) error
+	ResourceHistoryIDs(resourceID string) ([]string, error)
 	GetRecentChanges(canonicalID string, since time.Time, limit int) ([]ResourceChange, error)
 	GetRecentChangesFiltered(canonicalID string, since time.Time, limit int, filters ResourceChangeFilters) ([]ResourceChange, error)
 	CountRecentChanges(canonicalID string, since time.Time) (int, error)
@@ -1033,6 +1034,7 @@ func (s *SQLiteResourceStore) migrateResourceChangesSchema() error {
 
 func (s *SQLiteResourceStore) ensureResourceChangesIndexes() error {
 	indexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_resource_changes_alert_time ON resource_changes(` + resourceChangesAlertIdentifierExpr() + `, observed_at DESC, id DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_resource_changes_time ON resource_changes(observed_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_resource_changes_canonical_time ON resource_changes(canonical_id, observed_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_resource_changes_kind_time ON resource_changes(kind, observed_at DESC)`,
@@ -1163,6 +1165,12 @@ func resourceChangesActorExpr() string {
 
 func resourceChangesRelatedResourcesExpr() string {
 	return "COALESCE(NULLIF(TRIM(related_resources), ''), '[]')"
+}
+
+// The same guarded expression owns both the alert selector and its index.
+// Invalid legacy metadata cannot establish an alert identity.
+func resourceChangesAlertIdentifierExpr() string {
+	return "json_extract(CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{}' END, '$.alert_identifier')"
 }
 
 func resourceChangesMetadataJSONExpr() string {
@@ -1754,6 +1762,24 @@ func recordChangeSQL(execer sqlExecutor, change ResourceChange, includeTimestamp
 	return nil
 }
 
+// ResourceHistoryIDs expands read-only history identities. These aliases do
+// not authorize actions or change the resource identity recorded on evidence.
+func (s *SQLiteResourceStore) ResourceHistoryIDs(resourceID string) ([]string, error) {
+	return s.resourceChangeIDSet(resourceID)
+}
+
+func (m *MemoryStore) ResourceHistoryIDs(resourceID string) ([]string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	ids := m.resourceChangeIDSetLocked(CanonicalResourceID(resourceID))
+	result := make([]string, 0, len(ids))
+	for _, id := range ids {
+		result = append(result, id)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
 func (s *SQLiteResourceStore) GetRecentChanges(canonicalID string, since time.Time, limit int) ([]ResourceChange, error) {
 	return s.GetRecentChangesFiltered(canonicalID, since, limit, ResourceChangeFilters{})
 }
@@ -1783,35 +1809,12 @@ func (s *SQLiteResourceStore) GetRecentChangesFiltered(canonicalID string, since
 		conditions = append(conditions, observedAtExpr+" >= ?")
 		args = append(args, since)
 	}
-	if len(filters.Kinds) > 0 {
-		placeholders := make([]string, 0, len(filters.Kinds))
-		for _, kind := range filters.Kinds {
-			placeholders = append(placeholders, "?")
-			args = append(args, string(kind))
-		}
-		conditions = append(conditions, "kind IN ("+strings.Join(placeholders, ", ")+")")
-	}
-	if len(filters.SourceTypes) > 0 {
-		placeholders := make([]string, 0, len(filters.SourceTypes))
-		for _, sourceType := range filters.SourceTypes {
-			placeholders = append(placeholders, "?")
-			args = append(args, string(sourceType))
-		}
-		conditions = append(conditions, sourceTypeExpr+" IN ("+strings.Join(placeholders, ", ")+")")
-	}
-	if len(filters.SourceAdapters) > 0 {
-		placeholders := make([]string, 0, len(filters.SourceAdapters))
-		for _, sourceAdapter := range filters.SourceAdapters {
-			placeholders = append(placeholders, "?")
-			args = append(args, string(sourceAdapter))
-		}
-		conditions = append(conditions, sourceAdapterExpr+" IN ("+strings.Join(placeholders, ", ")+")")
-	}
+	conditions, args = appendRecentChangeFilterConditions(conditions, args, filters, observedAtExpr, sourceTypeExpr, sourceAdapterExpr)
 	if len(conditions) > 0 {
 		query += "\n\t\tWHERE " + strings.Join(conditions, " AND ")
 	}
 	query += `
-		ORDER BY ` + observedAtExpr + ` DESC`
+		ORDER BY ` + observedAtExpr + ` DESC, id DESC`
 	if limit > 0 {
 		query += ` LIMIT ?`
 		args = append(args, limit)
@@ -3552,9 +3555,18 @@ func (m *MemoryStore) GetRecentChangesFiltered(canonicalID string, since time.Ti
 			continue
 		}
 		out = append(out, change)
-		if limit > 0 && len(out) >= limit {
-			break
+
+	}
+	// Late-arriving events need not be inserted in observation order.
+	// Apply the same stable order as SQLite before selecting the bounded page.
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].ObservedAt.Equal(out[j].ObservedAt) {
+			return out[i].ID > out[j].ID
 		}
+		return out[i].ObservedAt.After(out[j].ObservedAt)
+	})
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
 	}
 	return out, nil
 }
@@ -3676,6 +3688,29 @@ func buildRecentChangeCountQuery(canonicalIDs []string, since time.Time, filters
 	if len(canonicalIDs) > 0 {
 		conditions, args = appendRecentChangeResourceCondition(conditions, args, canonicalIDs, filters.IncludeRelated)
 	}
+	conditions, args = appendRecentChangeFilterConditions(conditions, args, filters, observedAtExpr, sourceTypeExpr, sourceAdapterExpr)
+	query += ` WHERE ` + strings.Join(conditions, " AND ")
+	return query, args
+}
+
+// appendRecentChangeFilterConditions keeps bounded reads and all aggregate
+// counts on the same predicate. Metadata values are bound parameters, not SQL.
+func appendRecentChangeFilterConditions(conditions []string, args []any, filters ResourceChangeFilters, observedAtExpr, sourceTypeExpr, sourceAdapterExpr string) ([]string, []any) {
+	if filters.ObservedBefore != nil {
+		conditions = append(conditions, observedAtExpr+" < ?")
+		args = append(args, *filters.ObservedBefore)
+	}
+	if len(filters.AlertIdentifiers) > 0 {
+		placeholders := make([]string, 0, len(filters.AlertIdentifiers))
+		for _, identifier := range filters.AlertIdentifiers {
+			placeholders = append(placeholders, "?")
+			args = append(args, identifier)
+		}
+		// Invalid legacy JSON cannot establish a matching alert identity. Reject
+		// non-string JSON values rather than coercing them into an identifier.
+		metadata := "CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{}' END"
+		conditions = append(conditions, "(json_type("+metadata+", '$.alert_identifier') = 'text' AND "+resourceChangesAlertIdentifierExpr()+" IN ("+strings.Join(placeholders, ", ")+"))")
+	}
 	if len(filters.Kinds) > 0 {
 		placeholders := make([]string, 0, len(filters.Kinds))
 		for _, kind := range filters.Kinds {
@@ -3700,8 +3735,7 @@ func buildRecentChangeCountQuery(canonicalIDs []string, since time.Time, filters
 		}
 		conditions = append(conditions, sourceAdapterExpr+" IN ("+strings.Join(placeholders, ", ")+")")
 	}
-	query += ` WHERE ` + strings.Join(conditions, " AND ")
-	return query, args
+	return conditions, args
 }
 
 func appendRecentChangeResourceCondition(conditions []string, args []any, canonicalIDs []string, includeRelated bool) ([]string, []any) {

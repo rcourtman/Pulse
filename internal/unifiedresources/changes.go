@@ -59,6 +59,12 @@ const (
 // ResourceChangeFilters narrows the resource timeline to specific change kinds
 // and source origins while preserving the canonical change record shape.
 type ResourceChangeFilters struct {
+	// AlertIdentifiers matches exact canonical alert metadata before any limit.
+	// It is a history selector, never an action or resource authority binding.
+	AlertIdentifiers []string `json:"alertIdentifiers,omitempty"`
+	// ObservedBefore is an exclusive upper observation bound. Together with
+	// since it selects [since, before), without changing occurrence timestamps.
+	ObservedBefore *time.Time            `json:"observedBefore,omitempty"`
 	Kinds          []ChangeKind          `json:"kinds,omitempty"`
 	SourceTypes    []ChangeSourceType    `json:"sourceTypes,omitempty"`
 	SourceAdapters []ChangeSourceAdapter `json:"sourceAdapters,omitempty"`
@@ -66,6 +72,25 @@ type ResourceChangeFilters struct {
 }
 
 func (filters ResourceChangeFilters) matches(change ResourceChange) bool {
+	if filters.ObservedBefore != nil && !change.ObservedAt.Before(*filters.ObservedBefore) {
+		return false
+	}
+	if len(filters.AlertIdentifiers) > 0 {
+		identifier, ok := change.Metadata[MetadataAlertIdentifier].(string)
+		if !ok {
+			return false
+		}
+		found := false
+		for _, wanted := range filters.AlertIdentifiers {
+			if identifier == wanted {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
 	if len(filters.Kinds) > 0 {
 		match := false
 		for _, kind := range filters.Kinds {

@@ -214,10 +214,11 @@ func TestMonitor_HandleAlertLifecycle_WritesCanonicalChanges(t *testing.T) {
 	if len(changes) != 5 {
 		t.Fatalf("expected 5 canonical changes, got %d", len(changes))
 	}
+	// Arrival order can differ from observation order during lifecycle replay.
 	wantKinds := []unifiedresources.ChangeKind{
-		unifiedresources.ChangeAlertUnacknowledged,
 		unifiedresources.ChangeAlertUnsnoozed,
 		unifiedresources.ChangeAlertSnoozed,
+		unifiedresources.ChangeAlertUnacknowledged,
 		unifiedresources.ChangeAlertAcknowledged,
 		unifiedresources.ChangeAlertFired,
 	}
