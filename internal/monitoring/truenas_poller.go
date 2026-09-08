@@ -517,7 +517,7 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 
 		snapshot := entry.provider.Snapshot()
 		p.mu.Lock()
-		p.recordConnectionSuccessLocked(entry.orgID, entry.id, entry.config, end, snapshot)
+		p.recordConnectionSuccessLocked(entry.orgID, entry.id, entry.config, start, end, snapshot)
 		p.mu.Unlock()
 		refreshedOrgs[entry.orgID] = struct{}{}
 		p.ingestRecoveryPoints(ctx, entry.orgID, entry.id, entry.provider)
@@ -811,6 +811,7 @@ func (p *TrueNASPoller) recordConnectionSuccessLocked(
 	orgID string,
 	connID string,
 	instance config.TrueNASInstance,
+	startedAt time.Time,
 	at time.Time,
 	snapshot *truenas.FixtureSnapshot,
 ) {
@@ -819,7 +820,16 @@ func (p *TrueNASPoller) recordConnectionSuccessLocked(
 	status.lastSuccessAt = at
 	status.lastError = nil
 	status.consecutiveFailures = 0
-	status.nextPollAt = at.Add(p.effectiveRuntimePollInterval(instance))
+	// Successful cycles target start-to-start cadence, but never immediately
+	// hammer a slow appliance with another refresh. Keep at least five seconds
+	// idle (or the entire interval for short-interval configurations). Failures
+	// continue to use a full completion-based retry interval below.
+	interval := p.effectiveRuntimePollInterval(instance)
+	idleGap := min(5*time.Second, interval)
+	status.nextPollAt = startedAt.Add(interval)
+	if earliest := at.Add(idleGap); status.nextPollAt.Before(earliest) {
+		status.nextPollAt = earliest
+	}
 	if snapshot != nil {
 		status.observed = buildTrueNASObservedSummary(snapshot)
 	}
@@ -869,7 +879,7 @@ func (p *TrueNASPoller) RecordConnectionTestSuccess(
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.recordConnectionSuccessLocked(orgID, connID, instance, at, nil)
+	p.recordConnectionSuccessLocked(orgID, connID, instance, at, at, nil)
 }
 
 // RecordConnectionTestFailure updates one saved TrueNAS connection summary after

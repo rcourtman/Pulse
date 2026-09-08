@@ -17,6 +17,33 @@
 
 ## Purpose
 
+### TrueNAS persistent-session liveness and successful poll cadence
+
+Authenticated JSON-RPC WebSocket sessions send transport-only PING controls
+every 25 seconds with a five-second write deadline. The sender belongs to the
+session, not its opening request context, and disposal stops and joins it.
+A failed control write closes the socket so existing transport handling owns
+retry; actions retain their no-replay boundary. Existing serialized RPC and
+stream readers consume pongs. Neither ping nor pong updates inventory freshness
+or appliance health, and sending keepalives is not proactive pong-timeout detection.
+
+Successful TrueNAS refreshes target start-to-start cadence, bounded below by
+completion plus min(five seconds, configured interval), preventing back-to-back
+load on slow appliances. Failed refreshes retain a full completion-based retry
+interval. Manual connection tests retain completion-based scheduling. Observed
+last-attempt and last-success timestamps remain completion timestamps; resource
+freshness thresholds must not be extended to hide genuinely stale devices.
+
+`TestAuthenticatedRPCSurvivesIdleTransportTimeout` and
+`TestRPCSessionKeepaliveConcurrentCallsAndShutdown` in
+`internal/truenas/transport_test.go` verify an authenticated synthetic idle-timeout
+server, opening-context cancellation, concurrent controls/RPCs and sender disposal.
+`TestTrueNASSuccessfulPollCadenceIncludesBoundedIdleGap` in
+`internal/monitoring/truenas_poller_test.go` verifies due boundaries, short/slow
+cycles, completion timestamps and unchanged failure backoff. These are synthetic
+runtime proofs, not native firmware timeout or reporter-resolution evidence.
+
+
 **Availability backfill preserves concurrent discovery changes (7 September 2026)**
 
 The backfill List snapshot is a work list, not an authoritative record to save.

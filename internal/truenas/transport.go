@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 var errRPCStreamSessionConsumed = errors.New("truenas rpc stream session cannot be reused")
@@ -276,6 +278,7 @@ func (c *Client) openAuthenticatedRPC(ctx context.Context) (*trueNASRPCClient, s
 		_ = conn.Close()
 		return nil, "", err
 	}
+	rpc.startKeepalive(25 * time.Second)
 	return rpc, authMechanism, nil
 }
 
@@ -444,12 +447,51 @@ func (c *Client) waitReconnectBackoff(ctx context.Context) error {
 
 func (c *Client) closeRPCLocked() {
 	if c.rpc != nil && c.rpc.conn != nil {
-		_ = c.rpc.conn.Close()
+		c.rpc.close()
 	}
 	c.rpc = nil
 	c.updateTransportStatus(func(status *TransportStatus) {
 		status.Connected = false
 	})
+}
+
+// startKeepalive belongs to the authenticated session, not the context of the
+// call which opened it. WriteControl is safe alongside the serialized RPC
+// reader/writer; it must not change their deadlines or acquire rpcMu.
+// Pongs are consumed by the existing RPC/stream readers. A ping is only idle
+// transport maintenance, never evidence of fresh inventory or appliance health.
+func (c *trueNASRPCClient) startKeepalive(interval time.Duration) {
+	c.keepaliveStop = make(chan struct{})
+	c.keepaliveDone = make(chan struct{})
+	go func() {
+		defer close(c.keepaliveDone)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-c.keepaliveStop:
+				return
+			case <-ticker.C:
+				if err := c.conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second)); err != nil {
+					// Unblock any in-flight reader; ordinary transport handling owns retry
+					// and status, including the no-replay rule for actions.
+					_ = c.conn.Close()
+					return
+				}
+			}
+		}
+	}()
+}
+
+// The owning Client serializes session disposal with rpcMu.
+func (c *trueNASRPCClient) close() {
+	if c.keepaliveStop != nil {
+		close(c.keepaliveStop)
+	}
+	_ = c.conn.Close()
+	if c.keepaliveDone != nil {
+		<-c.keepaliveDone
+	}
 }
 
 func (c *Client) recordTransportError(err error) {
