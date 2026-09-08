@@ -163,7 +163,7 @@ assets, or delete/recreate a published release to obtain a passing result.
 
 Recovery belongs to the governed release path: qualify a replacement candidate,
 retain its exact source and artifact identities, complete the required clean
-soak, and obtain approval of the exact stable packet under the
+soak, and obtain release-steward admission of the exact stable packet under the
 [Release Train policy](../../docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md#release-train).
 An immutable prerelease alone does not satisfy those gates. After authorised
 stable activation, require the continuity read-back for the newly advertised
@@ -196,7 +196,11 @@ Use this decision sequence within the existing release authority:
 3. Keep patch scope to named regression/security fixes. A changed patch RC
    restarts 72 hours of clean soak; an older immutable RC or green main cannot
    lend its qualification to changed bytes. Retain the exact candidate packet
-   for founder approval before stable publication.
+   for release-steward judgment and exact-source admission before stable
+   publication. Under standing authority granted on 8 September 2026, the
+   publisher needs no per-release founder approval or three-clean-trains
+   prerequisite; an explicit operator revocation still applies. This does not
+   waive qualification, soak, independent review or delivery verification.
 4. After authorised publication and convergence, require all release, frontier,
    activation and provenance checks for the newly advertised identity. A
    passing frontier alone can coexist with a mutable release and is not
