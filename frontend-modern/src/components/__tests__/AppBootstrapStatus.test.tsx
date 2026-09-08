@@ -34,4 +34,24 @@ describe('AppBootstrapStatus', () => {
     fireEvent.click(retry);
     expect(onRetry).toHaveBeenCalledOnce();
   });
+
+  it('cancels a completed bootstrap timer and gives a fresh attempt its full waiting period', async () => {
+    vi.useFakeTimers();
+    const first = render(() => <AppBootstrapStatus />);
+    await vi.advanceTimersByTimeAsync(APP_BOOTSTRAP_SLOW_DELAY_MS - 1);
+    expect(screen.queryByRole('button', { name: 'Retry connection' })).toBeNull();
+
+    first.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+
+    render(() => <AppBootstrapStatus />);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Checking your session and preparing the workspace.',
+    );
+    expect(screen.queryByRole('button', { name: 'Retry connection' })).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(APP_BOOTSTRAP_SLOW_DELAY_MS - 1);
+    expect(screen.getByRole('button', { name: 'Retry connection' })).toBeVisible();
+  });
 });
