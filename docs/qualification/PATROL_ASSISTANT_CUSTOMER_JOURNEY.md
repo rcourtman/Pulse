@@ -3666,9 +3666,11 @@ on integrated main `977afdd9559c0e9d5859f4c79bcc48e889381bba` plus the scoped
 changes. Affected regressions and final browser interaction/pixel checks pass.
 Three funded Astra explanations passed, with both earlier Gemini failures
 retained. The actual note survives reload and its text reaches Assistant.
-Repository commit checks and scoped landing remain pending. Both the old
-candidate and matching unchanged base timed out in the full API race suite,
-so no passing whole-suite receipt is claimed. The subscription-provider refusal
+Worker commit and push hooks passed. Implementation commit
+`e2b6fe3b1658de784ee8f579831b7777dc211d00` landed through PR1973 as
+`783571bb35c42c4813415d4981673f65c069ee0f`, after all 28 reported checks passed. The final CI API suite passed. The earlier old
+candidate and matching unchanged base timed out in their full API race runs,
+which remain failed historical receipts. The subscription-provider refusal
 is preserved without retry or bypass, and wider readiness remains open.
 
 ### Incident-history candidate r1: implementation and proof in progress
@@ -4192,12 +4194,11 @@ remain recorded above. The final helpers are executable at
 Their receipt directories are `browser`, `browser-states`, `browser-resize` and
 `browser-saved-explanation` under that task directory.
 
-Repository commit checks and scoped landing are the remaining local delivery
-steps. The broader customer-outcome gap stays open. These receipts do not
+Worker commit and push hooks passed. PR1973 landed the scoped continuation
+after all 28 reported checks passed. The broader customer-outcome gap stays open. These receipts do not
 qualify independent customer environments, unattended autonomy, backup restore,
-population false-alarm/miss rates or latency SLOs. The failed broad API race
-runs remain an explicit test limit, despite passing affected package and handler
-proof. The final history explanation qualifies the funded Astra route and does
+population false-alarm/miss rates or latency SLOs. The earlier failed broad API race
+runs remain recorded alongside the passing final CI API suite. The final history explanation qualifies the funded Astra route and does
 not erase the two Gemini failures or transfer the earlier named lab matrix to
 another model.
 
@@ -4236,3 +4237,89 @@ Its audit and contract audit pass. The full hook then caught one expected-file
 fixture missing the newly registered monitoring regression. Updating that fixture
 to include the actual proof file preserves the guard's exact mapping assertion.
 All 130 completion-helper tests passed in 2.645 s. This is test-only scope.
+
+### Incident-history delivery evidence
+
+Implementation commit `e2b6fe3b1658de784ee8f579831b7777dc211d00` is in
+[PR1973](https://github.com/rcourtman/Pulse/pull/1973). All 28 final reported checks passed after the controlled benchmark rerun.
+It merged at 02:11:45 UTC on 2026-09-08 as
+`783571bb35c42c4813415d4981673f65c069ee0f`. No release has been published.
+
+The complete configured pre-commit and pre-push hooks passed on the worker,
+as rcourtman through its normal allocator, with Go 1.26.8 and GOMAXPROCS=4.
+The staged tree remained `e31e2e077100922d229a25bc041e63a9311e6dfd` before and
+after the hooks. The raw hook log SHA256 is
+`e9d31b0347eb8464f87a4db5cbeb67b61f0cbc398d8748033003f38fc00557ea`.
+This includes governance audits, 130 completion-helper tests, 163 lookup tests,
+frontend lint/audits and TypeScript checking. The repoctl tests passed in
+1.053 s. The worker did not have golangci-lint, whose optional hook block was
+not run. CI remains responsible for its configured Go checks.
+
+Local commit and push used task-local hooks that checked the exact tree against
+the successful worker receipt. The commit-message hook and no-attribution check
+still ran locally. Heavy checks were relocated, with no runtime source changes
+between worker acceptance and the commit. The final complete memory race suite
+passed in 2.344 s, and focused adapter query race tests passed in 2.071 s.
+
+Raw logs remain under `/opt/pulse-release-worker/patrol-incident-history/`,
+including `hook-final.log` and `final-memory-race.log`. Failed environment and
+fixture attempts are retained separately. Final browser source, routes, widths,
+interactions, funded outcomes and limits remain as recorded above. These local
+results do not close the independent-environment rollout gate.
+
+Model acceptance remains route-specific. The restored Gemini default has not
+received a passing replacement receipt for its two unsupported action-absence
+claims. Passing Astra history explanations do not repair or qualify Gemini's
+judgment. No default-model change or production model-readiness claim is made.
+Further default-route reliability work remains explicit alongside the separate
+independent-environment rollout gate.
+
+The first CI benchmark job 101904533464 failed only `NormalizeRoute/root`,
+2.184 ns versus 2.497 ns, +14.31% (p=0.000, n=10), on AMD EPYC 7763.
+Auto-merge was disabled on the failure. The exact tested synthetic merge was
+`059179018ff6e650b489cdc6eeb6b619d70e8fbc`, against base
+`9b57f7cacdb77c2d532a009295a3b34220281111`. Neither the normalizer nor its
+benchmark source changed. In the worker-built test binaries, the benchmark loop
+is identical and the normalizer instruction sequence differs only in relocated
+addresses, which does
+not establish equal microarchitectural timing.
+
+A targeted worker comparison used those exact revisions, Go 1.26.8,
+GOMAXPROCS=4 and ten alternating pairs at each of 100 ms and 1 s on an Intel
+i5-10600. Results were 1.689 ns versus 1.714 ns (p=0.971) and 1.666 ns versus
+1.714 ns (p=0.190), with zero allocations in both trees. The CI failure did not
+reproduce in this sample. Load rose from 3.10/2.84/1.65 to 6.46/4.36/2.35 on the
+eight-vCPU worker. A separate release test workload was observed afterward, so
+this is not an idle-host receipt and does not establish the cause of the CI
+failure. No further worker benchmark was started while that workload ran.
+The unchanged source/loop and this comparison justify one controlled rerun of
+the failed CI job with the same threshold and ten-sample policy. No parser
+padding, unrelated optimization or threshold exception was introduced.
+The executable worker recipe is
+`/opt/pulse-release-worker/patrol-incident-history/benchmark1973.sh`, with raw
+pairs and disassembly in its `benchmark1973/` directory. The original CI artifact
+is retained in workspace `tmp/patrol-incident-history/bench-results-1973/`.
+
+The complete final CI API job 101904533527 passed, from 01:20:38 to 01:51:05
+UTC on 2026-09-08. The API package itself passed in 1721.252 s, recorded in
+workspace `tmp/patrol-incident-history/ci-api1973.log`. All eight hosted Playwright shards and both remaining backend
+shards also passed. This current receipt qualifies the tested merge candidate
+and does not rewrite the earlier worker API timeouts as passes.
+
+The one controlled CI benchmark repeat, job 101911401066, passed on AMD EPYC
+9V74. Its exact base and candidate merge SHAs were unchanged. NormalizeRoute/root
+measured 2.419 ns versus 2.466 ns, +1.94% (p=0.001, n=10), below the unchanged
+>10% gate. Allocations remained zero. This is a measured increase, not identical
+timing, and the different runner does not establish why the first measurement
+failed. No further retry was requested. Raw log:
+workspace `tmp/patrol-incident-history/ci-bench1973-retry.log`.
+
+The final [Build and Test run](https://github.com/rcourtman/Pulse/actions/runs/34175674423)
+and [Core E2E run](https://github.com/rcourtman/Pulse/actions/runs/34175674586)
+passed. The final 28-check snapshot is retained in workspace
+`tmp/patrol-incident-history/pr1973-final-checks.json`. Local main was fast-forwarded
+to the merge. Its only additional source difference from the implementation
+commit is the upstream deadman test. No runtime or accepted frontend content
+changed during landing. This is scoped implementation delivery, with no release
+publication or wider readiness assertion. The customer-outcome gap and proposed
+candidate stay open for route reliability and independent-environment evidence.
