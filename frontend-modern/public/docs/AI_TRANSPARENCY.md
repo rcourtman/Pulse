@@ -13,8 +13,9 @@ investigated, implemented, tested, and merged to `main` without line-by-line
 human review. The continuously running maintainer does this within boundaries
 I define.
 
-I set the product direction, control releases, and remain responsible for
-everything that ships. I do not claim to have personally written every line.
+I set the product direction and remain responsible for everything that ships.
+The automated maintainer owns day-to-day maintenance, public issue replies,
+and qualified releases. I do not claim to have personally written every line.
 Automated changes must pass the applicable project tests and audit gates, and
 released builds still go through Pulse's release qualification process.
 
@@ -24,9 +25,10 @@ released builds still go through Pulse's release qualification process.
   architectural, issue, and operational requirements.
 - **Maintenance.** Automation monitors project signals, investigates defects,
   prepares fixes, and performs bounded routine repository work continuously.
-- **Documentation and releases.** Automation may draft documentation,
-  changelogs, and release material, which must stay consistent with the code
-  and the evidence used to qualify a release.
+- **Documentation and releases.** The maintainer prepares documentation,
+  changelogs, and release material, then qualifies and publishes prereleases
+  and stable releases under standing authority. Release claims must stay
+  consistent with the code and qualification evidence.
 - **Issue triage and support.** Automated issue and discussion replies post
   under the dedicated `pulse-triage` bot identity and link back to this page.
   Automated issue state changes use that identity as well. Mixed reports follow
@@ -59,15 +61,21 @@ opt-in preview channel, takes only backports of regression and security
 fixes while it soaks, and is promoted to stable as the exact candidate
 content. The promotion resolver in the release pipeline enforces the soak
 and the exact-content rule for every dispatcher. The full rules are in
-[RELEASE_PROMOTION_POLICY.md](release-control/v6/internal/RELEASE_PROMOTION_POLICY.md),
+[RELEASE_PROMOTION_POLICY.md](https://github.com/rcourtman/Pulse/blob/b64709e7b7ad174e9c94ad2a0d3d841678690935/docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md),
 under "Release Train".
 
 ## Authority and responsibility
 
-The automation can operate continuously, but it is not the project owner and
-does not have unrestricted authority. Product direction, architecture,
-acceptable risk, capability boundaries, and release decisions remain mine.
-Release publication and other high-impact actions require explicit approval.
+On 8 September 2026 I confirmed standing authority for the automated maintainer
+to own public Pulse issue replies and release publication, including stable
+releases. These actions do not require my approval for each comment or release.
+The maintainer chooses release scope, maturity and timing from current evidence.
+
+Standing authority does not waive independent review, release qualification,
+exact-candidate promotion, required soak, or verification after publication.
+Public replies must follow the conversation and verified implementation and
+release evidence. The maintainer must avoid repetitive unsolicited follow-ups.
+I retain project ownership, product direction and the ability to revoke authority.
 
 My role is to direct the project, design and maintain those boundaries,
 monitor outcomes, and answer for the result. If an automated change is wrong,
