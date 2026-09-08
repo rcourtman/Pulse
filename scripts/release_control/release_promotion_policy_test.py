@@ -311,6 +311,41 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         ):
             self.skipTest("staged governance inputs missing; see test_staged_governance_inputs_are_present")
 
+    def test_scheduled_rehearsal_preserves_source_identity_boundary(self) -> None:
+        workflow = read(".github/workflows/release-dry-run.yml")
+        jobs = yaml.safe_load(workflow)["jobs"]
+        dry_run = jobs["dry-run"]
+        steps = dry_run["steps"]
+        names = [step["name"] for step in steps]
+        self.assertLess(names.index("Resolve required release branch"),
+                        names.index("Select exact rehearsal source"))
+        self.assertLess(names.index("Select exact rehearsal source"),
+                        names.index("Resolve rehearsal metadata"))
+        source = next(step for step in steps if step.get("id") == "source")
+        self.assertEqual(source["env"]["REQUIRED_BRANCH"],
+                         "${{ steps.branch_policy.outputs.required_branch }}")
+        self.assertIn('git checkout --detach "${TESTED_SHA}"', source["run"])
+        self.assertIn('"${TESTED_SHA}" != "${GITHUB_SHA}"', source["run"])
+        metadata = next(step for step in steps if step.get("id") == "rehearsal")
+        self.assertEqual(metadata["env"]["TESTED_BRANCH"],
+                         "${{ steps.source.outputs.tested_branch }}")
+        self.assertIn('if [ "${TESTED_BRANCH}" != "$REQUIRED_BRANCH" ]; then',
+                      metadata["run"])
+        self.assertIn('if [ "$FILE_VERSION" != "$VERSION" ]; then', metadata["run"])
+        self.assertIn(
+            'if [ "${EVENT_NAME}" = "schedule" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then',
+            metadata["run"],
+        )
+        for key in ("tested_sha", "tested_branch"):
+            self.assertEqual(dry_run["outputs"][key],
+                             "${{ steps.source.outputs." + key + " }}")
+        verdict = jobs["release_dry_run_verdict"]["steps"][0]
+        self.assertEqual(verdict["env"]["TESTED_SHA"],
+                         "${{ needs.dry-run.outputs.tested_sha }}")
+        self.assertIn("Workflow event SHA:", verdict["run"])
+        self.assertIn("Tested source:", verdict["run"])
+        self.assertNotIn('echo "- Source SHA:', verdict["run"])
+
     def test_release_workflow_supports_reviewed_immutable_snapshots(self) -> None:
         from release_snapshot import check_workflow
 
