@@ -512,6 +512,15 @@ passphrase-encrypted configuration bundle, and represented to API clients by a
 redacted sentinel. URLs are bounded to HTTP(S), exclude userinfo, fragments,
 localhost, loopback, unspecified, and link-local targets, and must name the
 base success endpoint rather than `/start`, `/fail`, or `/log`.
+Endpoint suffix validation inspects the once-decoded URL path, including
+encoded separators and an encoded trailing slash, so percent-encoded event
+names cannot bypass this success-only guard. Encoded base tokens and suffix
+words in query values remain valid; the configured URL is not rewritten.
+`TestValidateDeadManPingURL` covers these rejected and accepted forms.
+`TestDeadManRunCycleRejectsEncodedNonSuccessEndpoint` proves rejection before
+transport, a misconfigured state without a success timestamp, and no token in
+the diagnostic. These are local validation/runtime proofs, not installed
+watchdog acceptance or recipient delivery evidence.
 Literal addresses are also compared against every Pulse host interface, while
 the monitoring dialer repeats that comparison after DNS resolution. Failure to
 enumerate local interfaces fails closed. A private LAN watchdog remains valid
