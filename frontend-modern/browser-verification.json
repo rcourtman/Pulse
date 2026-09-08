@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "base_sha": "bbec8d0e9f282272080d8781d763248b3e8ea467",
-  "verified_at": "2026-09-08T01:55:51.776040Z",
+  "base_sha": "701362ac25ef28dfa253f952820eed7c5a90db12",
+  "verified_at": "2026-09-08T02:19:57.322199Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/features/alerts/useAlertResourceIncidentsState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/useAlertResourceIncidentsState.ts": "547f128db61200fdf736327a248e9c97b41dd77eeb0a660dd20c4b78031a75b9"
+    "frontend-modern/src/features/alerts/useAlertResourceIncidentsState.ts": "7a4de5d23f84bffed0665edbc4c9bd7cf33120d81fc82f7e9f5d3df56cffeb45"
   },
   "routes": [
     "/qualification (isolated real hook and AlertResourceIncidentsPanel, scripted API)"
@@ -27,7 +27,10 @@
     "latest result survives older success/failure",
     "reset stays empty",
     "disposed state unchanged by success/failure",
-    "current failure reported"
+    "current failure reported",
+    "current error accessor is true on failure",
+    "retry clears current error and renders latest incident",
+    "obsolete and disposed failures do not set error accessor"
   ],
   "interactions": [
     "Open row",
@@ -37,7 +40,7 @@
     "Resolve and reject deferred API reads in controlled order"
   ],
   "limitations": [
-    "Fixture lifecycle controls; not full Alerts route, installed acceptance, or notification delivery. PR1973 error accessor absent."
+    "Fixture lifecycle controls and scripted API; not full merged Alerts route, installed acceptance, or notification delivery. Supplied panel does not render PR1973 error accessor; accessor verified through fixture snapshot."
   ],
   "command": "pulse-heavy-run -- node scripts/check-incident-request-ownership.mjs"
 }

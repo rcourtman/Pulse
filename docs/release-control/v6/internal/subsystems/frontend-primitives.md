@@ -20,6 +20,21 @@
 
 ## Purpose
 
+### Incident resource error-state ownership
+
+Resource incident errors follow the same per-resource latest-request ownership
+as history and loading. Superseded or disposed reads cannot set an error;
+reset clears errors and invalidates pending reads. A retry clears the current
+error while retaining cached history until the current request succeeds.
+A stale success cannot clear a newer failure. This reconciles the merged error
+accessor with lifecycle protection, without changing notification delivery.
+
+Verification: resource hook lifecycle assertions cover ordering and retry;
+`scripts/check-incident-request-ownership.mjs` checks the real hook and panel
+in Chromium at desktop and narrow widths, including error state and retry.
+Its scripted fixture is not full merged-UI or installed delivery acceptance.
+
+
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
 Patrol's Assistant context preserves unknown destructive risk and distinguishes
