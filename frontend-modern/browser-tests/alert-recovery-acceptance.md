@@ -13,11 +13,14 @@ and installation mode. Record the actual installed identity, not just a workflow
 SHA. Keep before/after upgrade identities. Mark unavailable checks **not run**.
 A main-build result does not qualify a release-line candidate.
 
-The 8 September 2026 beta.2 preparation selects public
-`a3d5a65031a1206dd6cc4249e886950a7d312dbc`; this is a source target, not evidence
-of publication, installation, or private-pair compatibility. Reconcile any later
-candidate change before executing. Main-only recovery-feedback changes require
-separate identity and results.
+Before executing, obtain the exact selected public SHA from the current release
+steward assessment and reconcile it with any active publication packet. Record
+that assessment or packet identity with the receipt; do not select a candidate
+from this checklist or substitute the latest branch head. A selected source is
+not evidence of publication, installation, or private-pair compatibility. Keep
+results for superseded candidates separately rather than relabelling them for a
+new selection. Main-only recovery-feedback changes require separate identity
+and results.
 
 ## Installed ordinary event and recurrence
 
