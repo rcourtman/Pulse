@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { chromium } from '@playwright/test';
+const checkForeground = process.argv.includes('--foreground');
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const profile = await mkdtemp(join(tmpdir(), 'pulse-lifecycle-'));
 const child = spawn(chromium.executablePath(), ['--headless', '--no-sandbox',
@@ -83,13 +84,26 @@ try {
       const resume = after.events.find(e => e.type === 'resume');
       const suspended = Boolean(freeze && resume && freeze.ticks === resume.ticks &&
         after.events.indexOf(freeze) < after.events.indexOf(resume) && after.ticks > resume.ticks);
-      const result = { focusEnabled, before, after, commands, suspended };
+      // Resume is not foreground activation. Observe the two transitions separately.
+      let foreground;
+      if (checkForeground) {
+        await command('Page.bringToFront', {});
+        await wait(250);
+        foreground = await evaluate(snapshot);
+      }
+      const result = { focusEnabled, before, after, foreground, commands, suspended };
       results.push(result); console.log(JSON.stringify(result));
     } finally { await send('Target.closeTarget', { targetId }); }
   }
   assert.ok(!results[0].suspended && results[0].after.ticks - results[0].before.ticks >= 20,
     'Negative control must continue ticking');
   assert.ok(results[1].suspended, 'Positive control must suspend and resume timers');
+  if (checkForeground) {
+    assert.ok(results[1].foreground.visibility === 'visible' && results[1].foreground.focus,
+      'Positive control must return to visible and focused after tab activation');
+    assert.ok(results[1].foreground.ticks > results[1].after.ticks,
+      'Foreground timer must continue advancing');
+  }
 } finally {
   socket?.close();
   const exited = new Promise(resolve => child.once('exit', resolve));

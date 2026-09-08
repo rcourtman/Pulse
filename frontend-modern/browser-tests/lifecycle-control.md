@@ -60,3 +60,40 @@ a Playwright page attachment may reintroduce the confounder. Before testing
 foreground convergence, separately observe return to visible. Installed acceptance
 still requires the authorised synthetic installation and exact byte identities
 listed in `alert-recovery-acceptance.md`; neither is supplied by this control.
+
+## Foreground activation control — 8 September 2026
+
+`pulse-heavy-run -- node scripts/check-browser-single-session-control.mjs --foreground`
+adds `Page.bringToFront` after the separate post-resume snapshot, then takes a
+foreground snapshot after 250ms. Default invocation retains the original
+freeze/resume-only behaviour. The optional mode requires visible **and** focused
+state plus timer progress; it does not force focus emulation back on to obtain a
+passing result. No Playwright page is attached.
+
+Fresh [CDP documentation](https://chromedevtools.github.io/devtools-protocol/tot/Page/#method-bringToFront)
+describes tab activation separately from lifecycle state. The command's success
+is not evidence of visibility restoration. On the same Chrome revision and
+runtime listed above, both the initial implementation and the final optional-mode
+run exited 1:
+
+- Forced-focus negative: ticks 5 → 52 → 57; visible/focused throughout, no events.
+- Unforced positive: freeze and resume at tick 5, hidden/unfocused after resume;
+  after activation, **hidden/focused**, without a visible visibilitychange event.
+- The first run stayed at tick 5 through the foreground sample; the optional-mode
+  run reached tick 6 only at that final sample. Both failed the earlier
+  post-resume timer-progress assertion before reaching the foreground assertion.
+
+The 250ms post-resume sample is therefore not a dependable timer-progress bound
+for this hidden target. Do not interpret that failed assertion as missing resume:
+ordered freeze/resume events were recorded. Independently, visibility restoration
+failed in both observed foreground samples. Neither threshold was relaxed and
+neither failure is cleared by the earlier successful freeze-only control.
+
+No Pulse fixture was exercised: the prerequisite foreground control is still
+unestablished. Before applying this arrangement to application convergence,
+choose and verify an actual visibility transition (potentially a headed browser
+with owned window activation), retaining the suspension probe and all failed
+observations. Repeating this activation unchanged, synthetically dispatching a
+visibility event, or enabling forced focus would not resolve the evidence gap.
+This diagnostic is not a release gate and proves nothing about installed
+incident state or destination receipt.
