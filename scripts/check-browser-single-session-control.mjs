@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { chromium } from '@playwright/test';
-const headedWindow = process.argv.includes('--headed-window');
+const headedTab = process.argv.includes('--headed-tab');
+const headedWindow = headedTab || process.argv.includes('--headed-window');
 const checkForeground = headedWindow || process.argv.includes('--foreground');
 if (headedWindow && !process.env.DISPLAY) throw new Error('--headed-window requires an owned X display');
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -50,7 +51,7 @@ try {
   console.log(JSON.stringify({ browser: await send('Browser.getVersion'),
     playwright: require('@playwright/test/package.json').version, node: process.version,
     platform: process.platform, arch: process.arch, executable: chromium.executablePath(),
-    headedWindow, display: process.env.DISPLAY, observationBoundMs: headedWindow ? 10000 : 250 }));
+    headedWindow, headedTab, display: process.env.DISPLAY, observationBoundMs: headedWindow ? 10000 : 250 }));
   const results = [];
   // Preselected negative (focus forced) and positive (no forced focus), fresh targets.
   for (const focusEnabled of (headedWindow ? [false] : [true, false])) {
@@ -85,7 +86,28 @@ try {
       const snapshot = `({...window.probe, visibility: document.visibilityState, focus: document.hasFocus()})`;
       await wait(250);
       const before = await evaluate(snapshot);
-      if (headedWindow) {
+      let otherTarget;
+      const observe = async (stage, visibility) => {
+        const deadline = Date.now() + 10000;
+        let sample;
+        do {
+          await wait(250);
+          sample = await evaluate(snapshot);
+          console.log(JSON.stringify({ stage, snapshot: sample }));
+          if (sample.visibility === visibility && (visibility !== 'visible' || sample.focus)) return sample;
+        } while (Date.now() < deadline);
+        throw new Error(stage + ': native visibility transition not observed');
+      };
+      if (headedTab) {
+        assert.ok(before.visibility === 'visible' && before.focus, 'Tab baseline must be active');
+        otherTarget = (await windowCommand('Target.createTarget', { url: 'about:blank' })).targetId;
+        await windowCommand('Target.activateTarget', { targetId: otherTarget });
+        await observe('tab-background-preflight', 'hidden');
+        await windowCommand('Target.activateTarget', { targetId });
+        await observe('tab-foreground-preflight', 'visible');
+        await windowCommand('Target.activateTarget', { targetId: otherTarget });
+        await observe('tab-background-before-freeze', 'hidden');
+      } else if (headedWindow) {
         assert.ok(before.visibility === 'visible' && before.focus, 'Headed baseline must be visible and focused');
         await windowCommand('Browser.setWindowBounds', { windowId: windowInfo.windowId, bounds: { windowState: 'minimized' } });
         await wait(250);
@@ -103,7 +125,9 @@ try {
       // Resume is not foreground activation. Observe the two transitions separately.
       let foreground;
       if (checkForeground) {
-        if (headedWindow) {
+        if (headedTab) {
+          await windowCommand('Target.activateTarget', { targetId });
+        } else if (headedWindow) {
           await windowCommand('Browser.setWindowBounds', { windowId: windowInfo.windowId, bounds: { windowState: 'normal' } });
         }
         await command('Page.bringToFront', {});
@@ -117,6 +141,7 @@ try {
       }
       const result = { focusEnabled, before, after, foreground, commands, suspended };
       results.push(result); console.log(JSON.stringify(result));
+      if (otherTarget) await send('Target.closeTarget', { targetId: otherTarget });
     } finally { await send('Target.closeTarget', { targetId }); }
   }
   if (!headedWindow) assert.ok(!results[0].suspended && results[0].after.ticks - results[0].before.ticks >= 20,

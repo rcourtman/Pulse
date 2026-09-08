@@ -137,3 +137,30 @@ not merely a larger timeout or successful CDP acknowledgements. No Pulse fixture
 installed convergence, destination receipt or release qualification was exercised.
 Complete output is retained in maintainer run `20260908T065015Z-web-product`,
 `headed-window-control.log`. Earlier failed controls remain relevant.
+
+## Native tab-switch control — 8 September 2026
+
+Run the same owned Xvfb command with `--headed-tab` instead of
+`--headed-window`. This does not request minimisation or require a window
+manager: it creates a second owned blank tab and activates it. Before freezing,
+it requires observed hidden → visible/focused → hidden states, each bounded to
+ten seconds with 250ms samples. It then uses the existing 2100ms host-side frozen
+wait, resumes while backgrounded, and activates the original tab. Ordered
+freeze/resume with unchanged ticks, a subsequent visible event, final focus and
+timer progress remain required. No synthetic visibility events or forced focus
+are used; no Playwright page session is attached.
+
+One run exited 0 on the same Chrome revision, Playwright and Node versions above,
+owned display :99. Preflight recorded hidden at tick 5, visible/focused at tick
+11, then hidden at tick 12. Freeze and resume both recorded tick 12.
+Post-resume remained hidden/unfocused at tick 12; tab activation produced a
+visible event and visible/focused state at tick 18. Complete runtime identities,
+intervention commands/responses and samples are retained in maintainer run
+`20260908T070012Z-web-product/headed-tab-control.log`.
+
+This establishes the positive control for the **tab-switch** mechanism, not
+window minimisation. Earlier adverse results and the default mode's unreliable
+250ms hidden-timer sample remain unchanged. No Pulse fixture or installed-pair
+acceptance ran. The next source-level convergence fixture must retain raw
+single-session ownership, the genuine background preflight, and the suspension
+probe rather than attach a Playwright page and assume equivalent behaviour.
