@@ -228,6 +228,9 @@ func TestIncidentAlertContextRetainsOperatorNote(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, page.Incidents, 1)
 	require.True(t, store.RecordNote("noted-alert", page.Incidents[0].ID, "Keep the old pool until its replacement is verified", "operator"))
+	// RecordNote persists asynchronously. Keep the temporary data directory
+	// alive until that write finishes so cleanup cannot race the save goroutine.
+	waitForCompletedSaves(t, store, 1)
 	context := store.FormatForAlert("noted-alert", 10)
 	require.Contains(t, context, "Note added by operator: Keep the old pool until its replacement is verified")
 	require.Contains(t, context, "source=operator_note")
