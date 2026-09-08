@@ -45,7 +45,7 @@ Unmapped hierarchies, missing counters and collection failures are unavailable
 evidence, not zero pressure. Collection failure must neither replace a backend
 failure nor prevent its ordinary after-boundary observation.
 
-The backend retains errexit semantics, original exit status, test commands,
+The backend retains errexit semantics, original exit status, test selection,
 concurrency and qualification thresholds. Phase-boundary evidence cannot
 localise contention to a test, establish causation or clear historical adverse
 qualification; abrupt termination may omit the after record. The executed
@@ -5115,3 +5115,15 @@ the first release train so the workflow refuses a v6.5 dispatch from any other
 branch. `scripts/release_control/resolve_release_promotion_test.py` pins the
 allowlist, the drift refusal, the hotfix path, and the minor soak;
 `release_promotion_policy_test.py` pins the policy's Release Train section.
+
+### Rehearsal event timing
+
+`scripts/release-go-test-events.py` renders streamed Go JSON Output verbatim and
+adds bounded lifecycle/resource records for the API concurrent stress test.
+The worker uses pipefail; source failures remain failures and malformed event
+input fails closed after draining. Event, receipt and resource collection times
+are distinct. Cached events and collection overhead limit timing inference.
+`scripts/release_control/internal/release_go_test_events_test.py` covers real
+synthetic Go pass/skip/fail output, producer exit retention, malformed input,
+allowlisted targeting and unavailable resource evidence. This is not product
+qualification; see `docs/RELEASE_RESOURCE_EVIDENCE.md`.
