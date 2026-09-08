@@ -1,35 +1,43 @@
 {
   "version": 1,
-  "base_sha": "c857802df6b00e61e2229eea411d6675deff2d8a",
-  "verified_at": "2026-09-07T22:03:54.189527Z",
+  "base_sha": "bbec8d0e9f282272080d8781d763248b3e8ea467",
+  "verified_at": "2026-09-08T01:55:51.776040Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/utils/resourceStateAdapters.ts"
+    "frontend-modern/src/features/alerts/useAlertResourceIncidentsState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/utils/resourceStateAdapters.ts": "ce1f8f2aef4b04b64dd2533c09458349811ba7cec9ec2e4bd8634b8e9c3c848f"
+    "frontend-modern/src/features/alerts/useAlertResourceIncidentsState.ts": "547f128db61200fdf736327a248e9c97b41dd77eeb0a660dd20c4b78031a75b9"
   },
   "routes": [
-    "/proxmox"
+    "/qualification (isolated real hook and AlertResourceIncidentsPanel, scripted API)"
   ],
   "viewports": [
     {
-      "width": 1280,
+      "width": 1440,
       "height": 900
     },
     {
       "width": 390,
-      "height": 844
+      "height": 900
     }
   ],
   "states": [
-    "Canonical 100% to 35%; stale/offline/unavailable agent evidence retains trusted 100%.",
-    "Explicit Proxmox withdrawal with omitted canonical memory: table N/A, Memory section absent.",
-    "Measured-zero recovery: table 0%, Memory Total and Free both 100 MB; second cluster stays 80%."
+    "loading",
+    "latest result survives older success/failure",
+    "reset stays empty",
+    "disposed state unchanged by success/failure",
+    "current failure reported"
   ],
   "interactions": [
-    "Open guest drawer; deliver synthetic canonical socket snapshots while open.",
-    "Resize to desktop and narrow Chromium; scroll recovered Memory into view above fixed navigation; inspect all five final screenshots."
+    "Open row",
+    "Overlap refresh while initial request remains pending",
+    "Reset before response",
+    "Unmount before response",
+    "Resolve and reject deferred API reads in controlled order"
   ],
-  "notes": "Synthetic Desktop Chrome acceptance only, not touch/mobile-device, installed poller, FreeBSD reporter or alert-delivery proof. Base reproduced stale 100% after withdrawal; adapter repair passed final Chromium test without retries and pageerror assertion. Earlier fixture wrongly expected raw-facet total after withdrawal; useWorkloads maps canonical metrics only. Two selector/absent-section failures and first passing but bottom-nav-obscured screenshot run are retained, not counted as final visual acceptance. Final four transition screenshots show withdrawn section absent and recovered Total/Free in frame at both widths; initial 35% screenshot is table-only. Evidence: /var/lib/pulse-maintainer/queue/staging/20260907T215015Z-web-product/ (moves to completed): browser-base.log, browser-repair.log, browser-repair-selector.log, browser-canonical.log, browser-final.log, final-report/data/*.png. Browser command: pulse-heavy-run -- bash wrapper starting Vite 127.0.0.1:5187 then PLAYWRIGHT_BASE_URL=http://127.0.0.1:5187 playwright test tests/86-hybrid-memory-browser.spec.ts --project=chromium --retries=0; Vite stopped by wrapper trap."
+  "limitations": [
+    "Fixture lifecycle controls; not full Alerts route, installed acceptance, or notification delivery. PR1973 error accessor absent."
+  ],
+  "command": "pulse-heavy-run -- node scripts/check-incident-request-ownership.mjs"
 }

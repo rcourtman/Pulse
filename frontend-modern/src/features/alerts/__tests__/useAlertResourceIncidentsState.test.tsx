@@ -20,15 +20,11 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-// Known lifecycle defects, reproduced against the supplied main source.
-// it.fails is intentional: these are unresolved bugs, NOT passing acceptance.
-// Convert each to ordinary it when repairing request ownership; a fixed behaviour
-// makes an expected-failure test fail until its marker is removed. PR1973 also
-// needs a stale resourceIncidentError regression when that accessor lands.
+// Request ownership covers success, failure and loading writes independently.
 describe('resource incident request ownership', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it.fails('does not repopulate cleared history after reset', async () => {
+  it('does not repopulate cleared history after reset', async () => {
     const pending = deferred();
     vi.mocked(AlertsAPI.getIncidentsForResource).mockReturnValueOnce(pending.promise);
     const { result } = renderHook(useAlertResourceIncidentsState);
@@ -41,7 +37,7 @@ describe('resource incident request ownership', () => {
     expect(result.resourceIncidentPanel()).toBeNull();
   });
 
-  it.fails('keeps the newer same-resource result when requests finish backwards', async () => {
+  it('keeps the newer same-resource result when requests finish backwards', async () => {
     const old = deferred();
     const latest = [{ id: 'latest' }] as Incidents;
     vi.mocked(AlertsAPI.getIncidentsForResource)
@@ -55,7 +51,7 @@ describe('resource incident request ownership', () => {
     expect(result.resourceIncidents().host).toEqual(latest);
   });
 
-  it.fails('does not clear newer loading state or report a superseded failure', async () => {
+  it('does not clear newer loading state or report a superseded failure', async () => {
     const old = deferred();
     const current = deferred();
     vi.mocked(AlertsAPI.getIncidentsForResource)
@@ -75,7 +71,7 @@ describe('resource incident request ownership', () => {
     expect(result.resourceIncidentLoading().host).toBe(false);
   });
 
-  it.fails('ignores failed reads after disposal', async () => {
+  it('ignores failed reads after disposal', async () => {
     const pending = deferred();
     vi.mocked(AlertsAPI.getIncidentsForResource).mockReturnValueOnce(pending.promise);
     const { result, cleanup } = renderHook(useAlertResourceIncidentsState);
@@ -84,6 +80,56 @@ describe('resource incident request ownership', () => {
     pending.reject(new Error('disposed read'));
     await load;
     expect(notificationStore.error).not.toHaveBeenCalled();
+  });
+
+  it('keeps a reopened request owned after an older reset-era failure', async () => {
+    const old = deferred();
+    const current = deferred();
+    vi.mocked(AlertsAPI.getIncidentsForResource)
+      .mockReturnValueOnce(old.promise)
+      .mockReturnValueOnce(current.promise);
+    const { result } = renderHook(useAlertResourceIncidentsState);
+    const load = result.openResourceIncidentPanel('host', 'Host', 'row');
+    result.resetResourceIncidentsState();
+    const reopened = result.openResourceIncidentPanel('host', 'Host', 'row');
+    old.reject(new Error('reset-era failure'));
+    await load;
+    expect(result.resourceIncidentLoading().host).toBe(true);
+    expect(notificationStore.error).not.toHaveBeenCalled();
+    current.resolve([]);
+    await reopened;
+    expect(result.resourceIncidents().host).toEqual([]);
+    expect(result.resourceIncidentLoading().host).toBe(false);
+  });
+
+  it('ignores an obsolete failure after the newer request succeeded', async () => {
+    const old = deferred();
+    vi.mocked(AlertsAPI.getIncidentsForResource)
+      .mockReturnValueOnce(old.promise)
+      .mockResolvedValueOnce([]);
+    const { result } = renderHook(useAlertResourceIncidentsState);
+    const load = result.openResourceIncidentPanel('host', 'Host', 'row');
+    await result.refreshResourceIncidentPanel();
+    old.reject(new Error('obsolete failure'));
+    await load;
+    expect(notificationStore.error).not.toHaveBeenCalled();
+    expect(result.resourceIncidents().host).toEqual([]);
+    expect(result.resourceIncidentLoading().host).toBe(false);
+  });
+
+  it('ignores successful reads and new loads after disposal', async () => {
+    const pending = deferred();
+    vi.mocked(AlertsAPI.getIncidentsForResource).mockReturnValueOnce(pending.promise);
+    const { result, cleanup } = renderHook(useAlertResourceIncidentsState);
+    const load = result.openResourceIncidentPanel('host', 'Host', 'row');
+    cleanup();
+    pending.resolve([]);
+    await load;
+    await result.refreshResourceIncidentPanel();
+    await result.openResourceIncidentPanel('other', 'Other', 'other-row');
+    expect(result.resourceIncidents()).toEqual({});
+    expect(result.resourceIncidentLoading()).toEqual({ host: true });
+    expect(AlertsAPI.getIncidentsForResource).toHaveBeenCalledTimes(1);
   });
 
   it('retains independent resource results and reports current failures', async () => {

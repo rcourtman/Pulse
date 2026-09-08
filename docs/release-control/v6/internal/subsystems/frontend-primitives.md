@@ -7222,3 +7222,24 @@ widths despite the longer labels. The presentation and Overview delivery-status
 tests cover the evidence boundary; `scripts/check-alert-dispatch-copy.mjs`
 qualifies the real Overview with scripted API data in Chromium, not installed
 notification delivery.
+
+
+### Resource incident reads retain lifecycle ownership
+
+The resource incident hook gives each started read a unique per-resource owner.
+Only that owner may publish history, report a failure or clear loading. Reset
+invalidates all pending owners before clearing state; disposal invalidates them
+and prevents new loads. Overlapping reads for different resources remain
+independent. Closing a row still permits its in-flight result to populate the
+existing cache; reopening cached history and explicit refresh are unchanged.
+Requests are not transport-cancelled. No API, retention or notification-delivery
+policy changes.
+
+The hook's ten ordinary regression/control cases cover success, catch and
+finally writes, reset/reopen and disposal. The existing panel tests cover its
+presentation. `scripts/check-incident-request-ownership.mjs` exercises the real
+hook and panel in Chromium at desktop and phone widths with scripted responses
+and fixture reset, overlap and unmount controls. It is component lifecycle
+acceptance, not an installed full-page or notification-delivery receipt.
+PR1973's proposed resourceIncidentError accessor is absent here; if introduced,
+its writes must obey the same owner check and gain a stale-error regression.
