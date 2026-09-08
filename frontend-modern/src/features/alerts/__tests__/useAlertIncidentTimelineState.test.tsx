@@ -43,7 +43,12 @@ describe('useAlertIncidentTimelineState', () => {
     const newIncident = { id: 'incident-new', events: [] } as unknown as Timeline;
     let finishOld!: (timeline: Timeline) => void;
     vi.mocked(AlertsAPI.getIncidentTimeline)
-      .mockImplementationOnce(() => new Promise<Timeline>((resolve) => { finishOld = resolve; }))
+      .mockImplementationOnce(
+        () =>
+          new Promise<Timeline>((resolve) => {
+            finishOld = resolve;
+          }),
+      )
       .mockResolvedValueOnce(newIncident)
       .mockResolvedValueOnce(oldIncident);
     vi.mocked(AlertsAPI.addIncidentNote).mockResolvedValue(undefined as any);
@@ -65,7 +70,9 @@ describe('useAlertIncidentTimelineState', () => {
     await result.saveIncidentNote('old-row', 'alert-1', oldStart);
 
     expect(AlertsAPI.addIncidentNote).toHaveBeenCalledExactlyOnceWith({
-      alertIdentifier: 'alert-1', incidentId: 'incident-old', note: 'historical note',
+      alertIdentifier: 'alert-1',
+      incidentId: 'incident-old',
+      note: 'historical note',
     });
     expect(AlertsAPI.getIncidentTimeline).toHaveBeenNthCalledWith(3, 'alert-1', oldStart);
     expect(result.incidentNoteDrafts()['old-row']).toBe('');
