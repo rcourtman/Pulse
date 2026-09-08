@@ -135,6 +135,9 @@ func (r *Router) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
 	if mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {
 			r.monitor = m
+			if r.notificationQueueHandlers != nil {
+				r.notificationQueueHandlers.SetMonitor(m)
+			}
 			r.bindDefaultMetadataStores(m)
 		}
 		mtm.SetMonitorInitializer(r.configureMonitorDependencies)

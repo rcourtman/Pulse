@@ -253,6 +253,15 @@ command-capable profile.
 34. `frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts`
 
 ## Shared Boundaries
+
+### Notification recovery reload ownership
+
+Queue recovery API handlers follow router monitor replacement instead of
+retaining a stopped notifier. Retry and Dismiss retain their existing
+persistence operations and history semantics; this repair does not delete or
+rewrite recovery stores, change database internals, or establish crash-recovery
+qualification.
+
 ### Shared Docker-update verification boundary
 
 The shared API result converter classifies independent Docker update readback

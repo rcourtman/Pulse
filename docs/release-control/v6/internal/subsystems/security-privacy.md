@@ -278,6 +278,15 @@ invisible to operators reviewing exactly what Pulse sends.
 
 ## Shared Boundaries
 
+### Notification recovery reload ownership
+
+Refreshing the notification queue handler on reload changes only its default
+monitor reference, under a handler-local lock. It does not remove route
+administrator or settings-scope checks, expose queue contents to new callers, or
+change tenant selection. Missing owners fail with 503 rather than dereferencing
+nil.
+
+
 API token scope copy must match runtime authority. `ai:chat` covers Assistant
 conversation, model selection, sessions, and knowledge reads only. Knowledge
 save/delete/import/clear and explicit governed action approval/execution

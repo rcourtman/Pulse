@@ -34,6 +34,8 @@ func TestNotificationReadEndpointsRequireSettingsReadScope(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	endpoints := []string{
+		"/api/notifications/dlq",
+		"/api/notifications/queue/stats",
 		"/api/notifications/email",
 		"/api/notifications/apprise",
 		"/api/notifications/webhooks",
@@ -64,6 +66,10 @@ func TestNotificationWriteEndpointsRequireSettingsWriteScope(t *testing.T) {
 		method string
 		path   string
 	}{
+		{http.MethodPost, "/api/notifications/dlq/retry"},
+		{http.MethodPost, "/api/notifications/dlq/delete"},
+		{http.MethodPost, "/api/notifications/terminal-failures/retry"},
+		{http.MethodPost, "/api/notifications/terminal-failures/dismiss"},
 		{http.MethodPut, "/api/notifications/email"},
 		{http.MethodPut, "/api/notifications/apprise"},
 		{http.MethodPost, "/api/notifications/webhooks"},

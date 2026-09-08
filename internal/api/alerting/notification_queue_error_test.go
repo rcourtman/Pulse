@@ -133,3 +133,24 @@ func TestNotificationQueueHandlers_GetDLQ_InvalidLimit(t *testing.T) {
 		t.Fatalf("decode dlq: %v", err)
 	}
 }
+
+func TestNotificationQueueHandlers_MonitorReplacementConcurrent(t *testing.T) {
+	h := NewNotificationQueueHandlers(nil)
+	m := &monitoring.Monitor{}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 100; i++ {
+			h.SetMonitor(m)
+			h.SetMonitor(nil)
+		}
+	}()
+	for i := 0; i < 100; i++ {
+		rec := httptest.NewRecorder()
+		h.GetQueueStats(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Errorf("unavailable monitor: got %d", rec.Code)
+		}
+	}
+	<-done
+}

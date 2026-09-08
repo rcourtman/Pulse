@@ -1564,6 +1564,9 @@ func (r *Router) startLifecycleWorker(worker func()) {
 
 // SetMonitor updates the router and associated handlers with a new monitor instance.
 func (r *Router) SetMonitor(m *monitoring.Monitor) {
+	if r.notificationQueueHandlers != nil {
+		r.notificationQueueHandlers.SetMonitor(m)
+	}
 	r.monitor = m
 	r.bindDefaultMetadataStores(m)
 	r.configureMetadataProviderFactory()
