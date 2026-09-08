@@ -94,7 +94,8 @@ pulse-heavy-run -- env PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_MOCK_MODE=false \
 This opt-in test requires the managed, disposable backend. It activates that
 instance through the real configuration API, changes Recovery notifications
 through the production Schedule UI, verifies the staged value has not reached
-the server, and clicks Save Changes. It checks the real PUT result, subsequent
+the server, reloads to prove the unsaved edit is discarded, then edits again
+and clicks Save Changes. It checks the real PUT result, subsequent
 GETs and rendered control after both page reload and managed backend restart
 with preserved data. It does not intercept HTTP or WebSocket responses and
 must not be run against a shared installation. The attachment contains only
