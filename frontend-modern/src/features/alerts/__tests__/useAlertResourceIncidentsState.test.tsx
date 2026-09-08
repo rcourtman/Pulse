@@ -82,8 +82,8 @@ describe('resource incident request ownership', () => {
     cleanup();
     pending.reject(new Error('disposed read'));
     await load;
-    expect(notificationStore.error).not.toHaveBeenCalled();
     expect(result.resourceIncidentError().host).toBe(false);
+    expect(notificationStore.error).not.toHaveBeenCalled();
   });
 
   it('keeps a reopened request owned after an older reset-era failure', async () => {
@@ -99,6 +99,7 @@ describe('resource incident request ownership', () => {
     old.reject(new Error('reset-era failure'));
     await load;
     expect(result.resourceIncidentLoading().host).toBe(true);
+    expect(result.resourceIncidentError().host).toBe(false);
     expect(notificationStore.error).not.toHaveBeenCalled();
     current.resolve([]);
     await reopened;
@@ -116,10 +117,10 @@ describe('resource incident request ownership', () => {
     await result.refreshResourceIncidentPanel();
     old.reject(new Error('obsolete failure'));
     await load;
+    expect(result.resourceIncidentError().host).toBe(false);
     expect(notificationStore.error).not.toHaveBeenCalled();
     expect(result.resourceIncidents().host).toEqual([]);
     expect(result.resourceIncidentLoading().host).toBe(false);
-    expect(result.resourceIncidentError().host).toBe(false);
   });
 
   it('ignores successful reads and new loads after disposal', async () => {
@@ -152,7 +153,46 @@ describe('resource incident request ownership', () => {
     await load;
     expect(result.resourceIncidents().first).toEqual([]);
     expect(result.resourceIncidentLoading()).toEqual({ first: false, second: false });
+    expect(result.resourceIncidentError()).toEqual({ first: false, second: true });
   });
+  it('preserves the current error when a superseded success arrives', async () => {
+    const old = deferred();
+    vi.mocked(AlertsAPI.getIncidentsForResource)
+      .mockReturnValueOnce(old.promise)
+      .mockRejectedValueOnce(new Error('current failure'));
+    const { result } = renderHook(useAlertResourceIncidentsState);
+    const load = result.openResourceIncidentPanel('host', 'Host', 'row');
+    await result.refreshResourceIncidentPanel();
+    old.resolve([]);
+    await load;
+    expect(result.resourceIncidentError().host).toBe(true);
+    expect(result.resourceIncidents()).toEqual({});
+    expect(notificationStore.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears a current error on retry without discarding cached history', async () => {
+    const cached = [{ id: 'retained' }] as Incidents;
+    const retry = deferred();
+    vi.mocked(AlertsAPI.getIncidentsForResource)
+      .mockResolvedValueOnce(cached)
+      .mockRejectedValueOnce(new Error('refresh failed'))
+      .mockReturnValueOnce(retry.promise);
+    const { result } = renderHook(useAlertResourceIncidentsState);
+    await result.openResourceIncidentPanel('host', 'Host', 'row');
+    await result.refreshResourceIncidentPanel();
+    expect(result.resourceIncidentError().host).toBe(true);
+    expect(result.resourceIncidents().host).toEqual(cached);
+    const refresh = result.refreshResourceIncidentPanel();
+    expect(result.resourceIncidentError().host).toBe(false);
+    expect(result.resourceIncidentLoading().host).toBe(true);
+    retry.resolve([]);
+    await refresh;
+    expect(result.resourceIncidentError().host).toBe(false);
+    expect(result.resourceIncidents().host).toEqual([]);
+    result.resetResourceIncidentsState();
+    expect(result.resourceIncidentError()).toEqual({});
+  });
+
   it('toggles the opening row and reuses loaded history for another row', async () => {
     vi.mocked(AlertsAPI.getIncidentsForResource).mockResolvedValue([]);
     const { result } = renderHook(useAlertResourceIncidentsState);
