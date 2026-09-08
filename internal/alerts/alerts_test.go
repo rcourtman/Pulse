@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -21116,5 +21117,114 @@ func TestStorageNormalizedOfflineSkipsCapacityEvaluation(t *testing.T) {
 				t.Fatal("offline storage produced a capacity alert")
 			}
 		})
+	}
+}
+
+// Exercise only the JSON recovery writer: no database or background workers.
+func TestActiveMirrorUnchangedCheckpoint(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unchanged fast path requires POSIX 0600 mode; Windows retains write-through replacement")
+	}
+	dir := t.TempDir()
+	m := &Manager{alertsDir: dir}
+	a := &Alert{ID: "a", ResourceID: "host-a", Message: "offline", StartTime: time.Now().UTC()}
+	b := &Alert{ID: "b", ResourceID: "host-b", Message: "offline", StartTime: a.StartTime}
+	path := filepath.Join(dir, "active-alerts.json")
+	save := func(alerts []*Alert) os.FileInfo {
+		t.Helper()
+		if err := m.writeActiveAlertsRecoveryMirror(alerts); err != nil {
+			t.Fatal(err)
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return info
+	}
+	first := save([]*Alert{a, b})
+	for i := 0; i < 20; i++ {
+		after := save([]*Alert{b, a})
+		if !os.SameFile(first, after) {
+			t.Fatal("unchanged snapshot replaced JSON recovery file")
+		}
+	}
+	// A fresh manager must also recognise the existing checkpoint.
+	m = &Manager{alertsDir: dir}
+	if !os.SameFile(first, save([]*Alert{a, b})) {
+		t.Fatal("fresh manager rewrote unchanged mirror")
+	}
+	a.Acknowledged, a.AckUser = true, "operator"
+	save([]*Alert{a, b})
+	check := func(want int, ack bool) {
+		t.Helper()
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []*Alert
+		if err := json.Unmarshal(data, &got); err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != want {
+			t.Fatalf("alerts = %d, want %d", len(got), want)
+		}
+		for _, alert := range got {
+			if alert.ID == "a" && (alert.Acknowledged != ack || (ack && alert.AckUser != "operator")) {
+				t.Fatal("acknowledgement not persisted")
+			}
+		}
+	}
+	check(2, true)
+	save([]*Alert{a})
+	check(1, true)
+	// File loss and corruption cannot be hidden by an in-memory cache.
+	if err := os.Rename(path, path+".previous"); err != nil {
+		t.Fatal(err)
+	}
+	save([]*Alert{a})
+	check(1, true)
+	if err := os.WriteFile(path, []byte("corrupt"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	save([]*Alert{a})
+	check(1, true)
+	empty := save([]*Alert{})
+	check(0, false)
+	if !os.SameFile(empty, save([]*Alert{})) {
+		t.Fatal("empty checkpoint rewritten")
+	}
+}
+
+func TestActiveMirrorFailedWriteRetries(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "active-alerts.json")
+	if err := os.Mkdir(path, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(path, "sentinel"), []byte("preserve"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	m := &Manager{alertsDir: dir}
+	alerts := []*Alert{{ID: "a"}}
+	if err := m.writeActiveAlertsRecoveryMirror(alerts); err == nil {
+		t.Fatal("expected obstructed rename failure")
+	}
+	if err := os.Rename(path, path+".obstruction"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.writeActiveAlertsRecoveryMirror(alerts); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []*Alert
+	if err := json.Unmarshal(data, &got); err != nil || len(got) != 1 || got[0].ID != "a" {
+		t.Fatalf("retry lost state: %s, %v", data, err)
+	}
+	temps, err := filepath.Glob(filepath.Join(dir, "active-alerts-*.json.tmp"))
+	if err != nil || len(temps) != 0 {
+		t.Fatalf("temporary files: %v, %v", temps, err)
 	}
 }

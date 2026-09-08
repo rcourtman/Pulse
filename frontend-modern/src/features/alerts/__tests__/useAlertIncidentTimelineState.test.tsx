@@ -35,6 +35,57 @@ describe('useAlertIncidentTimelineState', () => {
     vi.mocked(notificationStore.error).mockReset();
   });
 
+  it('keeps recurring alert timelines and note targets isolated when loads finish out of order', async () => {
+    const oldStart = '2026-03-01T00:00:00Z';
+    const newStart = '2026-03-02T00:00:00Z';
+    type Timeline = Awaited<ReturnType<typeof AlertsAPI.getIncidentTimeline>>;
+    const oldIncident = { id: 'incident-old', events: [] } as unknown as Timeline;
+    const newIncident = { id: 'incident-new', events: [] } as unknown as Timeline;
+    let finishOld!: (timeline: Timeline) => void;
+    vi.mocked(AlertsAPI.getIncidentTimeline)
+      .mockImplementationOnce(
+        () =>
+          new Promise<Timeline>((resolve) => {
+            finishOld = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(newIncident)
+      .mockResolvedValueOnce(oldIncident);
+    vi.mocked(AlertsAPI.addIncidentNote).mockResolvedValue(undefined as any);
+
+    const { result } = renderHook(() => useAlertIncidentTimelineState());
+    const oldLoad = result.toggleIncidentTimeline('old-row', 'alert-1', oldStart);
+    await result.toggleIncidentTimeline('new-row', 'alert-1', newStart);
+    expect(result.incidentLoading()['old-row']).toBe(true);
+    expect(result.incidentLoading()['new-row']).toBe(false);
+    finishOld(oldIncident);
+    await oldLoad;
+
+    expect(AlertsAPI.getIncidentTimeline).toHaveBeenNthCalledWith(1, 'alert-1', oldStart);
+    expect(AlertsAPI.getIncidentTimeline).toHaveBeenNthCalledWith(2, 'alert-1', newStart);
+    expect(result.incidentTimelines()['old-row']).toEqual(oldIncident);
+    expect(result.incidentTimelines()['new-row']).toEqual(newIncident);
+    result.setIncidentNoteDraft('old-row', '  historical note  ');
+    result.setIncidentNoteDraft('new-row', 'current draft');
+    await result.saveIncidentNote('old-row', 'alert-1', oldStart);
+
+    expect(AlertsAPI.addIncidentNote).toHaveBeenCalledExactlyOnceWith({
+      alertIdentifier: 'alert-1',
+      incidentId: 'incident-old',
+      note: 'historical note',
+    });
+    expect(AlertsAPI.getIncidentTimeline).toHaveBeenNthCalledWith(3, 'alert-1', oldStart);
+    expect(result.incidentNoteDrafts()['old-row']).toBe('');
+    expect(result.incidentNoteDrafts()['new-row']).toBe('current draft');
+    expect(result.incidentTimelines()['new-row']).toEqual(newIncident);
+    expect(result.incidentNoteSaving().size).toBe(0);
+
+    await result.toggleIncidentTimeline('old-row', 'alert-1', oldStart);
+    expect(result.expandedIncidents().has('new-row')).toBe(true);
+    await result.toggleIncidentTimeline('old-row', 'alert-1', oldStart);
+    expect(AlertsAPI.getIncidentTimeline).toHaveBeenCalledTimes(3);
+  });
+
   it('owns shared incident timeline load, note-save, and reset behavior for alert surfaces', async () => {
     vi.mocked(AlertsAPI.getIncidentTimeline).mockResolvedValue({
       id: 'incident-1',

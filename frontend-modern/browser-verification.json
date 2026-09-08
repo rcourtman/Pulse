@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "base_sha": "977afdd9559c0e9d5859f4c79bcc48e889381bba",
-  "verified_at": "2026-09-08T00:40:37.659048Z",
+  "base_sha": "701362ac25ef28dfa253f952820eed7c5a90db12",
+  "verified_at": "2026-09-08T02:20:17Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/components/AI/Chat/index.tsx",
@@ -30,13 +30,14 @@
     "frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx": "c6f89c4991c9cfc2b1c8c82f7fed35af93b3b0b29b16b2c4bdc61a51005bec4c",
     "frontend-modern/src/features/alerts/MobileAlertHistoryInvestigationDialog.tsx": "55af36a7194c2dbe9d944ca08f52e794f2b5e2ccbe79427bc55abe66aaa8a522",
     "frontend-modern/src/features/alerts/useAlertHistoryState.ts": "652a09b02321ad1cfd087aacc7937a6afb5cfb7da0e0d6ca997b30d5c9ac53bd",
-    "frontend-modern/src/features/alerts/useAlertResourceIncidentsState.ts": "f9d44d5bd2199afb274b329877e19e891942106a63cecbeb26796fa4c7b3b507",
+    "frontend-modern/src/features/alerts/useAlertResourceIncidentsState.ts": "7a4de5d23f84bffed0665edbc4c9bd7cf33120d81fc82f7e9f5d3df56cffeb45",
     "frontend-modern/src/hooks/useTypeToSearch.ts": "b3f5244fd951baedc33fc8efee32c28077d94c07e5fce958eb6611bf50992a20",
     "frontend-modern/src/types/api.ts": "82177cc67fc449a28d2d3cc226605ae091bd1f83fbdb001d15b3b430e5cd4100",
     "frontend-modern/src/utils/alertIncidentPresentation.ts": "2e098b24b04c047a1b024a93608c5133720660cafc54c40408972413786a0a07"
   },
   "routes": [
-    "/alerts"
+    "/alerts (retained upstream exact-content Chromium receipt for 13 unchanged runtime files)",
+    "/qualification (fresh combined hook and AlertResourceIncidentsPanel with scripted API)"
   ],
   "viewports": [
     {
@@ -58,20 +59,32 @@
     {
       "width": 390,
       "height": 1000
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
     }
   ],
   "states": [
     "Canonical merged occurrence and source evidence, resolved alert with independently unknown current health.",
     "Loading and disabled Refresh, initial/cached read failures, Retry/Refresh, successful empty, partial history and unknown times.",
     "Saved operator note and unsaved draft across desktop/phone layout changes, long-note wrapping and persisted reload.",
-    "Timeline/resource handoff into Assistant, reopened composer focus, saved funded history-and-note response across widths."
+    "Timeline/resource handoff into Assistant, reopened composer focus, saved funded history-and-note response across widths.",
+    "Request reset, reverse completion, superseded success/failure, current failure, and success/failure after disposal.",
+    "Latest per-resource owner controls incident content, failed-read state, notifications, and loading completion."
   ],
   "interactions": [
     "Expand/collapse native Evidence details by keyboard, All/None event filters and note draft enable/clear.",
     "Expand resource Events, inject read errors, retry and reload.",
     "Resize source and open Assistant destination across 390/900/767/768/1440 widths.",
     "Type in a modal without clearing background search, Escape and return focus to the selected card.",
-    "Resume exact saved session 81c92125-cdc3-4611-931a-687e6548bf65, scroll through its note explanation and inspect actual pixels."
+    "Resume the exact saved upstream session, scroll through its note explanation and inspect actual pixels.",
+    "Open a resource row, overlap refresh, reset or unmount, and resolve or reject deferred reads in controlled order."
   ],
-  "notes": "Final local Chromium functional and visual acceptance of runtime 0.0.0-dev-pro+incident-history-r10, binary SHA256 2e1958d0856c812d22870144cf228509f2a4a3696258a533d34802442f500edb. Commands and retained failed attempts are in docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md. Receipt directories: /Volumes/Development/pulse/tmp/patrol-incident-history/browser, browser-states, browser-resize and browser-saved-explanation. No new model calls in final browser repetition. Funded changed-context r9 response remains applicable because r10 changes only responsive destination ownership. Controlled HTTP variants are not a database outage. Not touch-device, production rollout, backup/restore or population reliability proof. Upstream 977afdd adds tests and contract documentation only. All 14 accepted frontend content hashes remain identical."
+  "notes": "The protected upstream receipt remains exact for 13 unchanged runtime files. The sole combined-content change, useAlertResourceIncidentsState.ts, was freshly exercised with its real panel in 14 Chromium cases at desktop and phone widths after adding ownership to the upstream failed-read signal. Screenshots are retained under /tmp/pulse-incident-ownership. This is component lifecycle evidence, not an installed Alerts route, provider delivery, touch-device, production rollout, backup/restore, or population-reliability receipt.",
+  "command": "pulse-heavy-run -- node scripts/check-incident-request-ownership.mjs"
 }

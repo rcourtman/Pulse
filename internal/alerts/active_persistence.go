@@ -1,9 +1,11 @@
 package alerts
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -162,9 +164,39 @@ func (m *Manager) writeActiveAlertsRecoveryMirrorLocked(alerts []*Alert) error {
 		return fmt.Errorf("failed to set alerts directory permissions: %w", err)
 	}
 
-	data, err := json.Marshal(alerts)
+	// Snapshots originate from maps. Canonicalise the complete records rather
+	// than relying on iteration order or assuming legacy IDs are unique.
+	var records []json.RawMessage
+	if alerts != nil {
+		records = make([]json.RawMessage, 0, len(alerts))
+	}
+	for _, alert := range alerts {
+		record, err := json.Marshal(alert)
+		if err != nil {
+			return fmt.Errorf("failed to marshal active alerts: %w", err)
+		}
+		records = append(records, record)
+	}
+	sort.Slice(records, func(i, j int) bool { return bytes.Compare(records[i], records[j]) < 0 })
+	data, err := json.Marshal(records)
 	if err != nil {
 		return fmt.Errorf("failed to marshal active alerts: %w", err)
+	}
+
+	finalFile := filepath.Join(alertsDir, "active-alerts.json")
+	// Compare the actual file, not a cached hash: missing/corrupt files and
+	// failed writes must be retried. Never accept a symlink or insecure mode
+	// as a completed checkpoint. Bound reads by the expected snapshot size.
+	if info, err := os.Lstat(finalFile); err == nil && info.Mode().IsRegular() &&
+		info.Mode().Perm() == alertsFilePerm && info.Size() == int64(len(data)) {
+		if file, err := os.Open(finalFile); err == nil {
+			existing, readErr := io.ReadAll(io.LimitReader(file, int64(len(data))+1))
+			closeErr := file.Close()
+			if readErr == nil && closeErr == nil && bytes.Equal(existing, data) {
+				// Also retry a directory sync that failed after an earlier rename.
+				return syncActiveAlertsDirectory(alertsDir)
+			}
+		}
 	}
 
 	// Write to temporary file first, then rename. Use a unique temp file so
@@ -209,7 +241,6 @@ func (m *Manager) writeActiveAlertsRecoveryMirrorLocked(alerts []*Alert) error {
 		return fmt.Errorf("failed to close active alerts temp file %s: %w", tmpName, err)
 	}
 
-	finalFile := filepath.Join(alertsDir, "active-alerts.json")
 	if err := replaceActiveAlertsFile(tmpName, finalFile); err != nil {
 		return fmt.Errorf("failed to rename active alerts file from %s to %s: %w", tmpName, finalFile, err)
 	}

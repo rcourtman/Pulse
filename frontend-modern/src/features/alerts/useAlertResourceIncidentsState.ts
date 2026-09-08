@@ -1,4 +1,4 @@
-import { createSignal } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 
 import { AlertsAPI } from '@/api/alerts';
 import { notificationStore } from '@/stores/notifications';
@@ -31,20 +31,37 @@ export function useAlertResourceIncidentsState() {
     new Set(INCIDENT_EVENT_TYPES),
   );
 
-  const loadResourceIncidents = async (resourceId: string, limit = 10) => {
-    if (!resourceId) return;
+  // Only the latest request for each resource owns its completion writes.
+  // Clearing the map invalidates pending reads without cancelling other resources.
+  const requests = new Map<string, symbol>();
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+    requests.clear();
+  });
 
+  const loadResourceIncidents = async (resourceId: string, limit = 10) => {
+    if (!resourceId || disposed) return;
+
+    const request = Symbol(resourceId);
+    requests.set(resourceId, request);
+    const ownsRequest = () => !disposed && requests.get(resourceId) === request;
     setResourceIncidentLoading((prev) => ({ ...prev, [resourceId]: true }));
     setResourceIncidentError((prev) => ({ ...prev, [resourceId]: false }));
     try {
       const incidents = await AlertsAPI.getIncidentsForResource(resourceId, limit);
+      if (!ownsRequest()) return;
       setResourceIncidents((prev) => ({ ...prev, [resourceId]: incidents }));
     } catch (error) {
+      if (!ownsRequest()) return;
       setResourceIncidentError((prev) => ({ ...prev, [resourceId]: true }));
       logger.error(getAlertResourceIncidentLoadFailure(), error);
       notificationStore.error(getAlertResourceIncidentLoadFailure());
     } finally {
-      setResourceIncidentLoading((prev) => ({ ...prev, [resourceId]: false }));
+      if (ownsRequest()) {
+        requests.delete(resourceId);
+        setResourceIncidentLoading((prev) => ({ ...prev, [resourceId]: false }));
+      }
     }
   };
 
@@ -53,7 +70,7 @@ export function useAlertResourceIncidentsState() {
     resourceName: string,
     rowKey: string,
   ) => {
-    if (!resourceId) return;
+    if (!resourceId || disposed) return;
 
     // Clicking the same row's button again closes the panel, matching how the
     // neighbouring Timeline button toggles its own expansion.
@@ -89,6 +106,7 @@ export function useAlertResourceIncidentsState() {
   };
 
   const resetResourceIncidentsState = () => {
+    requests.clear();
     setResourceIncidentPanel(null);
     setResourceIncidents({});
     setResourceIncidentLoading({});

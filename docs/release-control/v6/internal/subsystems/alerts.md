@@ -2743,3 +2743,42 @@ widths despite the longer labels. The presentation and Overview delivery-status
 tests cover the evidence boundary; `scripts/check-alert-dispatch-copy.mjs`
 qualifies the real Overview with scripted API data in Chromium, not installed
 notification delivery.
+
+### Unchanged active-alert JSON recovery checkpoints
+
+The recovery-mirror writer canonicalises complete records before comparing
+bounded existing bytes. An identical regular file with mode 0600 is not
+replaced; acknowledgement, metadata and resolved/empty state changes still use
+the atomic synced replacement path. Missing, corrupt, insecure or symlink
+destinations are not accepted as unchanged. Failed writes remain retryable and
+the unchanged path retains directory sync so a prior post-rename sync failure
+is not silently accepted. Windows retains replacement when its reported mode
+does not match POSIX 0600.
+
+`TestActiveMirror*` isolates this JSON path without database workers and covers
+ordering, fresh-manager checkpoints, state changes, file loss/corruption, failed
+rename retry and Unix destination hardening. This addresses one write source
+in #1966, not total installed write amplification: directory metadata handling,
+intent snapshots, changing alert histories and database writes remain separate.
+It changes neither alert latency nor the selected release candidate.
+
+
+### Resource incident reads retain lifecycle ownership
+
+The resource incident hook gives each started read a unique per-resource owner.
+Only that owner may publish history, report a failure or clear loading. Reset
+invalidates all pending owners before clearing state; disposal invalidates them
+and prevents new loads. Overlapping reads for different resources remain
+independent. Closing a row still permits its in-flight result to populate the
+existing cache; reopening cached history and explicit refresh are unchanged.
+Requests are not transport-cancelled. No API, retention or notification-delivery
+policy changes.
+
+The hook's ten ordinary regression/control cases cover success, catch and
+finally writes, reset/reopen and disposal. The existing panel tests cover its
+presentation. `scripts/check-incident-request-ownership.mjs` exercises the real
+hook and panel in Chromium at desktop and phone widths with scripted responses
+and fixture reset, overlap and unmount controls. It is component lifecycle
+acceptance, not an installed full-page or notification-delivery receipt.
+PR1973's proposed resourceIncidentError accessor is absent here; if introduced,
+its writes must obey the same owner check and gain a stale-error regression.

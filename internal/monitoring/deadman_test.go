@@ -353,3 +353,65 @@ func TestDeadManDialRejectsPulseInterfaceAddress(t *testing.T) {
 	}
 	t.Skip("no non-loopback interface address available")
 }
+
+func TestDeadManDeliveryRecoveryDoesNotClearMonitoringStall(t *testing.T) {
+	now := time.Date(2026, 9, 8, 1, 0, 0, 0, time.UTC)
+	responseStatus := http.StatusServiceUnavailable
+	attempts := 0
+	runtime := newDeadManTestRuntime(t, now, deadManRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+		attempts++
+		return deadManResponse(responseStatus, "OK"), nil
+	}))
+	runtime.retryDelays = []time.Duration{0, 0}
+	manager := alerts.NewManagerWithDataDir(t.TempDir(), alerts.WithoutPersistedAlertRestore())
+	t.Cleanup(manager.Stop)
+	progress := now.Add(-2 * time.Minute)
+	cycle := func() {
+		runtime.runCycle(context.Background(), func() string {
+			return "https://watchdog.example.com/ping/test-token"
+		}, func() time.Time { return progress }, manager)
+	}
+	assertActive := func(alertType string, want bool) {
+		t.Helper()
+		found := false
+		for _, alert := range manager.GetActiveAlerts() {
+			if alert.ID == alerts.SystemAlertID(alertType) {
+				found = true
+			}
+		}
+		if found != want {
+			t.Fatalf("active %s = %t; want %t", alertType, found, want)
+		}
+	}
+	for failedCycles := 1; failedCycles <= 3; failedCycles++ {
+		cycle()
+		status := runtime.statusSnapshot()
+		if status.ConsecutiveFailures != failedCycles || status.State != "monitor_stalled" || status.LastSuccessAt != nil {
+			t.Fatalf("after %d failed cycles: %+v", failedCycles, status)
+		}
+		if attempts != failedCycles*3 {
+			t.Fatalf("attempts = %d; want %d", attempts, failedCycles*3)
+		}
+		assertActive(alerts.DeadManDeliveryAlertType, failedCycles == 3)
+		assertActive(alerts.DeadManMonitoringStalledAlertType, true)
+	}
+
+	// Accepting a failure signal repairs delivery, not the stalled monitor.
+	responseStatus = http.StatusOK
+	cycle()
+	status := runtime.statusSnapshot()
+	if status.ConsecutiveFailures != 0 || status.State != "monitor_stalled" || status.LastSuccessAt != nil {
+		t.Fatalf("after delivery recovery: %+v", status)
+	}
+	assertActive(alerts.DeadManDeliveryAlertType, false)
+	assertActive(alerts.DeadManMonitoringStalledAlertType, true)
+
+	progress = now
+	cycle()
+	status = runtime.statusSnapshot()
+	if status.State != "healthy" || status.LastSuccessAt == nil || status.ConsecutiveFailures != 0 {
+		t.Fatalf("after monitor recovery: %+v", status)
+	}
+	assertActive(alerts.DeadManDeliveryAlertType, false)
+	assertActive(alerts.DeadManMonitoringStalledAlertType, false)
+}

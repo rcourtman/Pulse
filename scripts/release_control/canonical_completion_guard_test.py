@@ -2465,6 +2465,7 @@ None yet.
                         "frontend-modern/src/pages/__tests__/Alerts.readOnly.test.tsx",
                         "frontend-modern/src/utils/__tests__/alertOverviewPresentation.test.ts",
                         "frontend-modern/src/utils/__tests__/alertTargetTypes.test.ts",
+                        "scripts/check-incident-request-ownership.mjs",
                     ],
                 }
             ],
