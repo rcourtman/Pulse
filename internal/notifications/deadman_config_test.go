@@ -34,6 +34,14 @@ func TestValidateDeadManPingURL(t *testing.T) {
 		{name: "failure suffix slash", value: "https://watchdog.example.com/ping/token/fail/", wantErr: true},
 		{name: "start suffix", value: "https://watchdog.example.com/ping/token/start", wantErr: true},
 		{name: "log suffix", value: "https://watchdog.example.com/ping/token/log", wantErr: true},
+		{name: "encoded failure suffix", value: "https://watchdog.example.com/ping/token/%66ail", wantErr: true},
+		{name: "encoded start suffix", value: "https://watchdog.example.com/ping/token/st%61rt", wantErr: true},
+		{name: "encoded log suffix", value: "https://watchdog.example.com/ping/token/lo%67", wantErr: true},
+		{name: "encoded suffix separator", value: "https://watchdog.example.com/ping/token%2Ffail", wantErr: true},
+		{name: "encoded trailing slash", value: "https://watchdog.example.com/ping/token/fail%2f", wantErr: true},
+		{name: "encoded base token", value: "https://watchdog.example.com/ping/secret%2Dtoken"},
+		{name: "suffix word in token", value: "https://watchdog.example.com/ping/token%2Dfail"},
+		{name: "suffix word in query", value: "https://watchdog.example.com/ping/token?value=/fail"},
 		{name: "oversized", value: "https://watchdog.example.com/ping/" + strings.Repeat("x", MaxDeadManPingURLLength), wantErr: true},
 	}
 
