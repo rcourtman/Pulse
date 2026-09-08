@@ -166,6 +166,14 @@ the existing bounded HTTP client and artifact-size checks.
 
 ## Shared Boundaries
 
+### Recovery queue owner replacement
+
+Recovery queue requests take a handler-local read lock only to snapshot the
+monitor pointer; queue operations execute after releasing that lock. Router
+replacement takes the matching write lock without recreating registered
+handlers. The focused race proof covers owner replacement, not throughput or
+release latency qualification; existing adverse benchmark evidence is unchanged.
+
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `unified-resources`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `unified-resources`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 3. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx` shared with `unified-resources`: the unified resource host table card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.

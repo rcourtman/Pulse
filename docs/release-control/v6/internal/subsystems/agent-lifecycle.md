@@ -639,6 +639,15 @@ installer download and the agent's subsequent Pulse TLS connection.
 64. `pkg/securityutil/httpurl.go`
 
 ## Shared Boundaries
+
+### Notification recovery reload ownership
+
+Notification recovery handler ownership is refreshed alongside agent and
+ordinary notification handlers when the router monitor is replaced. This does
+not alter agent admission, reporting or removal; stopping an old notifier must
+not strand queue controls on its cleared queue. Requests overlapping shutdown
+may fail transiently.
+
 ### Container update receipt and independent observation
 
 The server's independent Docker-update verification must compare the daemon
