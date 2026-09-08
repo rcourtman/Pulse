@@ -219,7 +219,8 @@ func NormalizeSnapshotDefaults(config *AlertConfig) {
 // guests (#1126). Zero-valued fields inherit the global default at evaluation
 // time, so the rewrite is behavior-preserving at the moment it runs and lets
 // the override track future global changes. Overrides whose thresholds differ
-// from the current globals are deliberate per-guest values and are left alone.
+// from the current globals are left alone: persisted values cannot distinguish
+// an intentional override from a legacy copy made before the globals changed.
 func NormalizeRecoveryOverrides(config *AlertConfig) {
 	for id, override := range config.Overrides {
 		changed := false

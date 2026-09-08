@@ -21228,3 +21228,55 @@ func TestActiveMirrorFailedWriteRetries(t *testing.T) {
 		t.Fatalf("temporary files: %v, %v", temps, err)
 	}
 }
+
+// #1126: a globals screenshot alone cannot establish effective guest thresholds.
+// A legacy copy already divergent on load is indistinguishable from an explicit
+// override. Do not erase intentional settings to guess at their provenance.
+func TestBackupDivergentDefaultsOnLoad(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		override  *BackupAlertConfig
+		wantAlert bool
+	}{
+		{name: "no override"},
+		{name: "sparse toggle", override: &BackupAlertConfig{Enabled: true}},
+		{name: "preexisting seven day values", override: &BackupAlertConfig{
+			Enabled: true, WarningDays: 7, CriticalDays: 14, FreshHours: 24, StaleHours: 72,
+		}, wantAlert: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newTestManager(t)
+			m.ClearActiveAlerts()
+			cfg := m.GetConfig()
+			cfg.Enabled = true
+			cfg.BackupDefaults = BackupAlertConfig{
+				Enabled: true, WarningDays: 33, CriticalDays: 34, FreshHours: 745, StaleHours: 746,
+			}
+			cfg.CustomRules = nil
+			cfg.Overrides = map[string]ThresholdConfig{}
+			if tc.override != nil {
+				cfg.Overrides["inst:node:100"] = ThresholdConfig{Backup: tc.override}
+			}
+			data, err := json.Marshal(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var loaded AlertConfig
+			if err := json.Unmarshal(data, &loaded); err != nil {
+				t.Fatal(err)
+			}
+			m.UpdateConfig(loaded)
+			rollups, byKey, byVMID, key := backupTestFixtures(time.Now(), 8)
+			m.CheckBackups(rollups, byKey, byVMID)
+			m.mu.RLock()
+			alert, exists := testLookupActiveAlert(t, m, "backup-age-"+sanitizeAlertKey(key))
+			m.mu.RUnlock()
+			if exists != tc.wantAlert {
+				t.Fatalf("alert present = %v, want %v", exists, tc.wantAlert)
+			}
+			if exists && (alert.Level != AlertLevelWarning || alert.Threshold != 7) {
+				t.Fatalf("expected seven-day warning, got level=%s threshold=%v", alert.Level, alert.Threshold)
+			}
+		})
+	}
+}
