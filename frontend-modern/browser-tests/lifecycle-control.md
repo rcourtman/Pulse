@@ -164,3 +164,42 @@ window minimisation. Earlier adverse results and the default mode's unreliable
 acceptance ran. The next source-level convergence fixture must retain raw
 single-session ownership, the genuine background preflight, and the suspension
 probe rather than attach a Playwright page and assume equivalent behaviour.
+
+## Suspended incident component convergence — 8 September 2026
+
+```sh
+pulse-heavy-run -- xvfb-run -a -s '-screen 0 1280x800x24 -nolisten tcp' node scripts/check-browser-single-session-control.mjs --incident-convergence
+```
+
+This opt-in mode retains the raw single-session headed-tab preflight and probe,
+then mounts the production incident hook and panel through a loopback Vite
+fixture. No Playwright page is attached. It initiates two synthetic HTTP reads
+before freezing, sends the newer response followed by the obsolete response from
+the host while frozen, waits 2100ms, resumes and activates the original tab.
+Both native foreground recovery and ordered suspension must pass before checking
+convergence (ten-second bound): latest incident retained, obsolete incident
+absent, loading/error cleared and no notification error. Fixture button clicks
+are scripted setup, not a claim of native pointer/keyboard interaction.
+
+The first run used identical pending GET URLs and exited 1 waiting for the
+second request, before freeze. Only one request reached the fixture. Same-URL
+request handling was a possible confounder, not an established browser diagnosis
+or product failure. The revised fixture gives reads distinct query identifiers
+and disables fetch caching. One revised run exited 0: hidden → visible/focused →
+hidden preflight; freeze/resume both at tick 11; visible/focused at tick 17;
+latest incident rendered, obsolete absent, loading/error false, notifications 0.
+
+Both outputs are retained under maintainer run `20260908T072007Z-web-product`:
+`incident-convergence.log` (adverse) and
+`incident-convergence-distinct-reads.log` (passing). Runtime was Chrome
+141.0.7390.37, revision `9f043f63b0e5b728c8d09f3e3ddfc1681a4bd58e`,
+Playwright 1.56.1, Node v24.20.0 linux x64, owned Xvfb display :99.
+The existing ownership runner now imports the unchanged shared fixture string.
+
+This is **component-source evidence**, not full application convergence:
+authentication, application WebSocket refresh, installed restart, selected public/
+private release pair, native mobile lifecycle, and destination receipt are not
+exercised. The fixture replaces AlertsAPI's incident read with synthetic HTTP;
+it does not establish that the application initiates a refresh on foreground,
+nor guarantee network callback execution order from host response order. Earlier
+failed controls remain adverse evidence about their respective mechanisms.
