@@ -3,10 +3,95 @@ package notifications
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"testing"
 )
+
+// A body interrupted after the response headers must not erase the server's
+// rejection. These fixtures use only the HTTP transport, without queue workers.
+func TestWebhookTruncatedResponseClassification(t *testing.T) {
+	for _, code := range []int{200, 401, 403, 421, 422, 423, 425, 429, 503} {
+		t.Run(fmt.Sprint(code), func(t *testing.T) {
+			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Length", "100")
+				w.Header().Set("Retry-After", "0")
+				w.WriteHeader(code)
+				fmt.Fprint(w, "short")
+			}))
+			defer server.Close()
+			nm := createTestNotificationManager(t)
+			nm.webhookClient = nm.createSecureWebhookClient(WebhookTimeout)
+			defer nm.webhookClient.CloseIdleConnections()
+			resp, err := nm.executeEnhancedWebhookRequest(EnhancedWebhookConfig{
+				WebhookConfig: WebhookConfig{URL: server.URL},
+			}, []byte(`{}`), WebhookTimeout, "test", "synthetic:alert")
+			if !errors.Is(err, io.ErrUnexpectedEOF) {
+				t.Fatalf("read error not retained: %v", err)
+			}
+			if resp == nil || resp.statusCode != code || resp.headers.Get("Retry-After") != "0" {
+				t.Fatalf("response metadata lost: %+v", resp)
+			}
+			if code != 200 {
+				if got := ClassifyNotificationFailureError(err); got != ClassFromHTTPStatus(code) {
+					t.Errorf("class = %s, want %s", got, ClassFromHTTPStatus(code))
+				}
+			}
+			wantRetry := code == 200 || code == 421 || code == 423 || code == 425 || code == 429 || code == 503
+			if got := isRetryableWebhookError(err); got != wantRetry {
+				t.Errorf("retryable = %v, want %v: %v", got, wantRetry, err)
+			}
+			if got := ClassifyNotificationFailureError(err).Retryable(); got != wantRetry {
+				t.Errorf("queue classification retryable = %v, want %v", got, wantRetry)
+			}
+		})
+	}
+}
+
+func TestWebhookRetryTruncatedResponse(t *testing.T) {
+	for _, code := range []int{403, 421, 423, 425, 503} {
+		t.Run(fmt.Sprint(code), func(t *testing.T) {
+			var attempts atomic.Int32
+			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Header.Get("X-Pulse-Event-ID") != "synthetic:alert" {
+					t.Error("lost event identity")
+				}
+				if attempts.Add(1) > 1 && code != 403 {
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
+				w.Header().Set("Content-Length", "100")
+				w.Header().Set("Retry-After", "0")
+				w.WriteHeader(code)
+				fmt.Fprint(w, "short")
+			}))
+			defer server.Close()
+			nm := createTestNotificationManager(t)
+			nm.webhookClient = nm.createSecureWebhookClient(WebhookTimeout)
+			defer nm.webhookClient.CloseIdleConnections()
+			err := nm.sendWebhookWithRetry(EnhancedWebhookConfig{
+				WebhookConfig: WebhookConfig{URL: server.URL}, RetryCount: 1,
+			}, []byte(`{}`), "synthetic:alert")
+			wantAttempts, wantStatus := int32(1), code
+			wantSuccess := code != 403
+			if wantSuccess {
+				wantAttempts, wantStatus = 2, http.StatusNoContent
+			}
+			if (err == nil) != wantSuccess || attempts.Load() != wantAttempts {
+				t.Errorf("attempts=%d error=%v, want attempts=%d success=%v", attempts.Load(), err, wantAttempts, wantSuccess)
+			}
+			history := nm.GetWebhookHistory()
+			if len(history) != 1 {
+				t.Fatalf("history length = %d, want 1", len(history))
+			}
+			if h := history[0]; h.StatusCode != wantStatus || h.Success != wantSuccess || h.RetryAttempts != int(wantAttempts-1) {
+				t.Errorf("history status=%d success=%v retries=%d", h.StatusCode, h.Success, h.RetryAttempts)
+			}
+		})
+	}
+}
 
 func TestIsRetryableWebhookError(t *testing.T) {
 	tests := []struct {
@@ -412,5 +497,36 @@ func TestWebhookRetryRateLimitThenTerminalRejection(t *testing.T) {
 	}
 	if history[0].StatusCode != http.StatusForbidden || history[0].Success || history[0].RetryAttempts != 1 || history[0].PayloadSize != len(payload) {
 		t.Errorf("history lost final rejection or retry accounting: %+v", history[0])
+	}
+}
+
+// Queue retry policy consumes the classified, wrapped transport error, not the
+// HTTP response. Keep both retry layers consistent for every rejection status.
+func TestWebhookHTTPRetryPolicyMatchesQueueClassification(t *testing.T) {
+	for code := 400; code <= 599; code++ {
+		t.Run(fmt.Sprint(code), func(t *testing.T) {
+			nm := &NotificationManager{webhookClient: &http.Client{
+				Transport: confidentialityTransport(func(*http.Request) (*http.Response, error) {
+					return &http.Response{
+						StatusCode: code, Header: make(http.Header),
+						Body: io.NopCloser(strings.NewReader("unauthorized timeout rate limit")),
+					}, nil
+				}),
+			}}
+			_, err := nm.executeWebhookRequest(WebhookConfig{URL: "https://example.test/hook"},
+				[]byte("{}"), webhookRequestOptions{})
+			if err == nil {
+				t.Fatal("expected HTTP rejection")
+			}
+			err = fmt.Errorf("webhook delivery exhausted: %w", err)
+			wantRetry := code >= 500 || code == 408 || code == 421 || code == 423 || code == 425 || code == 429
+			if got := isRetryableWebhookError(err); got != wantRetry {
+				t.Errorf("transport retryable = %v, want %v", got, wantRetry)
+			}
+			class := ClassifyNotificationFailureError(err)
+			if got := class.Retryable(); got != wantRetry {
+				t.Errorf("queue class %s retryable = %v, want %v", class, got, wantRetry)
+			}
+		})
 	}
 }

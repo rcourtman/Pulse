@@ -2957,7 +2957,14 @@ func (n *NotificationManager) executeWebhookRequest(webhook WebhookConfig, paylo
 	var respBody bytes.Buffer
 	bytesRead, err := respBody.ReadFrom(limitedReader)
 	if err != nil {
-		return &webhookHTTPResult{statusCode: resp.StatusCode, headers: resp.Header.Clone()}, fmt.Errorf("failed to read webhook response: %w", err)
+		result := &webhookHTTPResult{statusCode: resp.StatusCode, headers: resp.Header.Clone()}
+		// Headers already establish a rejection even when its diagnostic body
+		// is interrupted. Preserve that verdict for transport and queue retries,
+		// rather than turning a terminal HTTP failure into a connectivity retry.
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return result, FailfWithClass(ClassFromHTTPStatus(resp.StatusCode), "webhook returned HTTP %d: failed to read webhook response: %w", resp.StatusCode, err)
+		}
+		return result, fmt.Errorf("failed to read webhook response: %w", err)
 	}
 	if bytesRead >= WebhookMaxResponseSize {
 		log.Warn().
