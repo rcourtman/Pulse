@@ -2813,3 +2813,18 @@ and fixture reset, overlap and unmount controls. It is component lifecycle
 acceptance, not an installed full-page or notification-delivery receipt.
 PR1973's proposed resourceIncidentError accessor is absent here; if introduced,
 its writes must obey the same owner check and gain a stale-error regression.
+
+### Destination server-error presentation
+
+Delivery activity preserves the queue's `server_error` classification as
+“Destination server error”, rather than treating it as unclassified. When that
+class dominates retained terminal failures, the full health description directs
+operators to destination service status and server logs, then to retry retained
+deliveries once the service is available. Unknown classes still use the generic
+fallback; this presentation does not change retry scheduling or imply receipt.
+
+The presentation unit tests cover the label and terminal guidance.
+`scripts/check-delivery-server-error-copy.mjs` renders the real health and log
+cards in Chromium at desktop, tablet and phone widths, asserting the copy,
+absence of page errors and horizontal overflow. Scripted props are component
+evidence only, not installed notification delivery.

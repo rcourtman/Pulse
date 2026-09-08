@@ -236,7 +236,26 @@ describe('alert destinations delivery log copy', () => {
   it('labels failure classes and falls back to unclassified for unknown values', () => {
     expect(getAlertDeliveryLogFailureClassLabel('authentication')).toBe('Authentication failure');
     expect(getAlertDeliveryLogFailureClassLabel('rate_limited')).toBe('Rate limited');
+    expect(getAlertDeliveryLogFailureClassLabel('server_error')).toBe('Destination server error');
     expect(getAlertDeliveryLogFailureClassLabel('made-up-class')).toBe('Unclassified failure');
+  });
+
+  it('gives destination availability guidance for terminal server errors', () => {
+    const description = getAlertDestinationsDeliveryHealthDescription({
+      status: 'degraded',
+      failed: 1,
+      deadLetter: 0,
+      completedRetentionDays: 7,
+      deadLetterRetentionDays: 30,
+      failureClasses7d: { server_error: 1 },
+      failureClassesAvailable: true,
+    });
+    expect(description).toContain('classified as server error (1)');
+    expect(description).toContain(
+      'Check the destination service status and server logs. Retry retained deliveries once the service is available.',
+    );
+    expect(description).not.toContain('Review the local notification audit details');
+    expect(description).toContain('Recoverable retry attempts do not trigger this warning');
   });
 
   it('names the retention window and the test-send caveat so absence is not read as failure', () => {
