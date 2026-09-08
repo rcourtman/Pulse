@@ -6,10 +6,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { chromium } from '@playwright/test';
-const checkForeground = process.argv.includes('--foreground');
+const headedWindow = process.argv.includes('--headed-window');
+const checkForeground = headedWindow || process.argv.includes('--foreground');
+if (headedWindow && !process.env.DISPLAY) throw new Error('--headed-window requires an owned X display');
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const profile = await mkdtemp(join(tmpdir(), 'pulse-lifecycle-'));
-const child = spawn(chromium.executablePath(), ['--headless', '--no-sandbox',
+const child = spawn(chromium.executablePath(), [...(headedWindow ? [] : ['--headless']), '--no-sandbox',
   '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank']);
 let socket;
 try {
@@ -47,14 +49,22 @@ try {
   const require = createRequire(import.meta.url);
   console.log(JSON.stringify({ browser: await send('Browser.getVersion'),
     playwright: require('@playwright/test/package.json').version, node: process.version,
-    platform: process.platform, arch: process.arch, executable: chromium.executablePath() }));
+    platform: process.platform, arch: process.arch, executable: chromium.executablePath(),
+    headedWindow, display: process.env.DISPLAY, observationBoundMs: headedWindow ? 10000 : 250 }));
   const results = [];
   // Preselected negative (focus forced) and positive (no forced focus), fresh targets.
-  for (const focusEnabled of [true, false]) {
+  for (const focusEnabled of (headedWindow ? [false] : [true, false])) {
     const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
     try {
       const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
       const commands = [];
+      const windowCommand = async (method, params) => {
+        const response = await send(method, params);
+        commands.push({ method, params, response });
+        return response;
+      };
+      const windowInfo = headedWindow
+        ? await windowCommand('Browser.getWindowForTarget', { targetId }) : null;
       const command = async (method, params) => {
         const result = await send(method, params, sessionId);
         commands.push({ method, params, response: result });
@@ -75,6 +85,12 @@ try {
       const snapshot = `({...window.probe, visibility: document.visibilityState, focus: document.hasFocus()})`;
       await wait(250);
       const before = await evaluate(snapshot);
+      if (headedWindow) {
+        assert.ok(before.visibility === 'visible' && before.focus, 'Headed baseline must be visible and focused');
+        await windowCommand('Browser.setWindowBounds', { windowId: windowInfo.windowId, bounds: { windowState: 'minimized' } });
+        await wait(250);
+        console.log(JSON.stringify({ stage: 'minimized', snapshot: await evaluate(snapshot) }));
+      }
       await command('Page.setWebLifecycleState', { state: 'frozen' });
       await wait(2100); // Host wait: never evaluate while frozen.
       await command('Page.setWebLifecycleState', { state: 'active' });
@@ -83,25 +99,40 @@ try {
       const freeze = after.events.find(e => e.type === 'freeze');
       const resume = after.events.find(e => e.type === 'resume');
       const suspended = Boolean(freeze && resume && freeze.ticks === resume.ticks &&
-        after.events.indexOf(freeze) < after.events.indexOf(resume) && after.ticks > resume.ticks);
+        after.events.indexOf(freeze) < after.events.indexOf(resume) && (headedWindow || after.ticks > resume.ticks));
       // Resume is not foreground activation. Observe the two transitions separately.
       let foreground;
       if (checkForeground) {
+        if (headedWindow) {
+          await windowCommand('Browser.setWindowBounds', { windowId: windowInfo.windowId, bounds: { windowState: 'normal' } });
+        }
         await command('Page.bringToFront', {});
-        await wait(250);
-        foreground = await evaluate(snapshot);
+        const deadline = Date.now() + (headedWindow ? 10000 : 250);
+        do {
+          await wait(250);
+          foreground = await evaluate(snapshot);
+          if (headedWindow) console.log(JSON.stringify({ stage: 'foreground-observation', snapshot: foreground }));
+          if (foreground.visibility === 'visible' && foreground.focus && foreground.ticks > after.ticks) break;
+        } while (Date.now() < deadline);
       }
       const result = { focusEnabled, before, after, foreground, commands, suspended };
       results.push(result); console.log(JSON.stringify(result));
     } finally { await send('Target.closeTarget', { targetId }); }
   }
-  assert.ok(!results[0].suspended && results[0].after.ticks - results[0].before.ticks >= 20,
+  if (!headedWindow) assert.ok(!results[0].suspended && results[0].after.ticks - results[0].before.ticks >= 20,
     'Negative control must continue ticking');
-  assert.ok(results[1].suspended, 'Positive control must suspend and resume timers');
+  const positive = results.at(-1);
+  assert.ok(positive.suspended, 'Positive control must suspend and resume timers');
+  if (headedWindow) {
+    const events = positive.foreground.events;
+    const resumeIndex = events.findIndex(e => e.type === 'resume');
+    assert.ok(events.some((e, i) => i > resumeIndex && e.type === 'visibilitychange' && e.visibility === 'visible'),
+      'Must observe visible transition after resume');
+  }
   if (checkForeground) {
-    assert.ok(results[1].foreground.visibility === 'visible' && results[1].foreground.focus,
+    assert.ok(positive.foreground.visibility === 'visible' && positive.foreground.focus,
       'Positive control must return to visible and focused after tab activation');
-    assert.ok(results[1].foreground.ticks > results[1].after.ticks,
+    assert.ok(positive.foreground.ticks > positive.after.ticks,
       'Foreground timer must continue advancing');
   }
 } finally {
