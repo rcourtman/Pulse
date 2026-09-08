@@ -14,6 +14,7 @@ func TestAgentProfilesRequireSettingsWriteScope(t *testing.T) {
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	cleanupTestRouter(t, router)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/profiles/", nil)
 	req.Header.Set("X-API-Token", rawToken)

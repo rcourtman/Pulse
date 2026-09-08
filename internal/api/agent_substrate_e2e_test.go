@@ -45,6 +45,7 @@ func TestAgentSubstrate_DiscoveryToTriageToDepthFlowsThroughHTTPBoundary(t *test
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	cleanupTestRouter(t, router)
 
 	// --- 1. Discovery: fetch the capabilities manifest. ---
 	// Intentionally unauthenticated — the manifest itself is public
@@ -265,8 +266,9 @@ func TestAgentSubstrate_NodeProvisioningCapabilitiesRouteThroughHTTPBoundary(t *
 	if err != nil {
 		t.Fatalf("new monitor: %v", err)
 	}
-	defer monitor.Stop()
+	t.Cleanup(monitor.Stop)
 	router := NewRouter(cfg, monitor, nil, nil, func() error { return nil }, "1.0.0")
+	cleanupTestRouter(t, router)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/agent/capabilities", nil)
 	rec := httptest.NewRecorder()
@@ -388,6 +390,7 @@ func TestAgentSubstrate_OperatorStateWriteRoundTripsThroughHTTPBoundary(t *testi
 		[]string{config.ScopeMonitoringRead, config.ScopeMonitoringWrite}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	cleanupTestRouter(t, router)
 
 	// Pull the manifest first to confirm what we're about to
 	// exercise matches what the discovery contract declares. This
@@ -607,6 +610,7 @@ func TestAgentSubstrate_ActionEndpointsEmitAgentStableEnvelope(t *testing.T) {
 		[]string{config.ScopeMonitoringRead, config.ScopeAIExecute}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	cleanupTestRouter(t, router)
 
 	// First verify the manifest declares the three action
 	// capabilities, since the substrate's promise is that the
