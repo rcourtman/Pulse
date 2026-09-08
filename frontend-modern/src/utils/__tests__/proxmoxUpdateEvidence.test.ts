@@ -51,7 +51,7 @@ describe('Proxmox update evidence presentation', () => {
         pendingUpdatesReason: 'permission_denied',
       }),
     ).toMatchObject({
-      value: 'Unavailable · Sys.Audit permission required',
+      value: 'Unavailable · Update check access denied',
       current: false,
     });
   });
