@@ -336,6 +336,47 @@ func TestSendWebhookWithRetry_RateLimitExhaustion(t *testing.T) {
 	}
 }
 
+// A 503 may advertise a recovery delay longer than our initial backoff.
+// Observe request spacing, not merely eventual success, to detect ignored hints.
+func TestSendWebhookWithRetry_ServiceUnavailableRetryAfter(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		header  string
+		minimum time.Duration
+	}{
+		{"valid", "2", 2 * time.Second},
+		{"invalid", "not-a-number", WebhookInitialBackoff},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			nm := NewNotificationManager("http://pulse.local")
+			t.Cleanup(nm.Stop)
+			require.NoError(t, nm.UpdateAllowedPrivateCIDRs("127.0.0.1"))
+			attemptTimes := make(chan time.Time, 2)
+			attempts := 0
+			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				attempts++
+				attemptTimes <- time.Now()
+				if attempts == 1 {
+					w.Header().Set("Retry-After", tc.header)
+					w.WriteHeader(http.StatusServiceUnavailable)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+			webhook := EnhancedWebhookConfig{
+				WebhookConfig: WebhookConfig{Name: "Service recovery", URL: server.URL},
+				RetryEnabled:  true,
+				RetryCount:    1,
+			}
+			require.NoError(t, nm.sendWebhookWithRetry(webhook, []byte("{}"), "service:alert"))
+			require.Len(t, attemptTimes, 2)
+			first, second := <-attemptTimes, <-attemptTimes
+			assert.GreaterOrEqual(t, second.Sub(first), tc.minimum)
+		})
+	}
+}
+
 func TestSendWebhookWithRetry_429RetryAfter(t *testing.T) {
 	nm := NewNotificationManager("http://pulse.local")
 	_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
@@ -891,38 +932,40 @@ func TestIsRetryableWebhookErrorEnhanced(t *testing.T) {
 
 // A response-specific zero delay must not erase backoff for later failures.
 func TestSendWebhookWithRetry_ZeroRetryAfterPreservesLaterBackoff(t *testing.T) {
-	for _, status := range []int{http.StatusServiceUnavailable, http.StatusTooManyRequests} {
-		t.Run(fmt.Sprint(status), func(t *testing.T) {
-			nm := NewNotificationManager("http://pulse.local")
-			t.Cleanup(nm.Stop)
-			require.NoError(t, nm.UpdateAllowedPrivateCIDRs("127.0.0.1"))
-			attemptTimes := make(chan time.Time, 3)
-			attempts := 0
-			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				attempts++
-				attemptTimes <- time.Now()
-				switch attempts {
-				case 1:
-					w.Header().Set("Retry-After", "0")
-					w.WriteHeader(http.StatusTooManyRequests)
-				case 2:
-					w.WriteHeader(status)
-				default:
-					w.WriteHeader(http.StatusOK)
+	for _, firstStatus := range []int{http.StatusTooManyRequests, http.StatusServiceUnavailable} {
+		for _, status := range []int{http.StatusServiceUnavailable, http.StatusTooManyRequests} {
+			t.Run(fmt.Sprintf("%d_then_%d", firstStatus, status), func(t *testing.T) {
+				nm := NewNotificationManager("http://pulse.local")
+				t.Cleanup(nm.Stop)
+				require.NoError(t, nm.UpdateAllowedPrivateCIDRs("127.0.0.1"))
+				attemptTimes := make(chan time.Time, 3)
+				attempts := 0
+				server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					attempts++
+					attemptTimes <- time.Now()
+					switch attempts {
+					case 1:
+						w.Header().Set("Retry-After", "0")
+						w.WriteHeader(firstStatus)
+					case 2:
+						w.WriteHeader(status)
+					default:
+						w.WriteHeader(http.StatusOK)
+					}
+				}))
+				defer server.Close()
+				webhook := EnhancedWebhookConfig{
+					WebhookConfig: WebhookConfig{Name: "Backoff regression", URL: server.URL},
+					RetryEnabled:  true,
+					RetryCount:    2,
 				}
-			}))
-			defer server.Close()
-			webhook := EnhancedWebhookConfig{
-				WebhookConfig: WebhookConfig{Name: "Backoff regression", URL: server.URL},
-				RetryEnabled:  true,
-				RetryCount:    2,
-			}
-			require.NoError(t, nm.sendWebhookWithRetry(webhook, []byte("{}"), "backoff:alert"))
-			require.Len(t, attemptTimes, 3)
-			<-attemptTimes
-			second, third := <-attemptTimes, <-attemptTimes
-			assert.GreaterOrEqual(t, third.Sub(second), 2*WebhookInitialBackoff,
-				"later failure must retain exponential backoff after a zero Retry-After")
-		})
+				require.NoError(t, nm.sendWebhookWithRetry(webhook, []byte("{}"), "backoff:alert"))
+				require.Len(t, attemptTimes, 3)
+				<-attemptTimes
+				second, third := <-attemptTimes, <-attemptTimes
+				assert.GreaterOrEqual(t, third.Sub(second), 2*WebhookInitialBackoff,
+					"later failure must retain exponential backoff after a zero Retry-After")
+			})
+		}
 	}
 }
