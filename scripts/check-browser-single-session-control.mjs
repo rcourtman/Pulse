@@ -1,4 +1,4 @@
-// Owned blank-page diagnostic; no Playwright page session or application loaded.
+// Raw single-session diagnostic; optional synthetic production incident component fixture.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { chromium } from '@playwright/test';
-const headedTab = process.argv.includes('--headed-tab');
+const incidentConvergence = process.argv.includes('--incident-convergence');
+const headedTab = incidentConvergence || process.argv.includes('--headed-tab');
 const headedWindow = headedTab || process.argv.includes('--headed-window');
 const checkForeground = headedWindow || process.argv.includes('--foreground');
 if (headedWindow && !process.env.DISPLAY) throw new Error('--headed-window requires an owned X display');
@@ -15,7 +16,9 @@ const profile = await mkdtemp(join(tmpdir(), 'pulse-lifecycle-'));
 const child = spawn(chromium.executablePath(), [...(headedWindow ? [] : ['--headless']), '--no-sandbox',
   '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank']);
 let socket;
+let fixtureServer;
 try {
+  if (incidentConvergence) fixtureServer = await (await import('./incident-convergence-server.mjs')).startIncidentFixture();
   const endpoint = await new Promise((resolve, reject) => {
     let stderr = '';
     const timer = setTimeout(() => reject(new Error('Browser endpoint timeout')), 10000);
@@ -51,7 +54,7 @@ try {
   console.log(JSON.stringify({ browser: await send('Browser.getVersion'),
     playwright: require('@playwright/test/package.json').version, node: process.version,
     platform: process.platform, arch: process.arch, executable: chromium.executablePath(),
-    headedWindow, headedTab, display: process.env.DISPLAY, observationBoundMs: headedWindow ? 10000 : 250 }));
+    headedWindow, headedTab, incidentConvergence, display: process.env.DISPLAY, observationBoundMs: headedWindow ? 10000 : 250 }));
   const results = [];
   // Preselected negative (focus forced) and positive (no forced focus), fresh targets.
   for (const focusEnabled of (headedWindow ? [false] : [true, false])) {
@@ -78,6 +81,14 @@ try {
       };
       await command('Page.enable', {});
       await command('Emulation.setFocusEmulationEnabled', { enabled: focusEnabled });
+      if (incidentConvergence) {
+        await command('Page.navigate', { url: 'http://127.0.0.1:5198/qualification' });
+        const deadline = Date.now() + 20000;
+        while (!await evaluate(`typeof window.snapshot === 'function'`)) {
+          if (Date.now() > deadline) throw new Error('Fixture load timeout');
+          await wait(100);
+        }
+      }
       await evaluate(`window.probe = { ticks: 0, events: [] };
         setInterval(() => window.probe.ticks++, 50);
         for (const type of ['freeze', 'resume', 'visibilitychange'])
@@ -113,7 +124,23 @@ try {
         await wait(250);
         console.log(JSON.stringify({ stage: 'minimized', snapshot: await evaluate(snapshot) }));
       }
+      if (incidentConvergence) {
+        for (const [index, label] of ['Open row', 'Overlap refresh'].entries()) {
+          await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent === ${JSON.stringify(label)}).click()`);
+          const deadline = Date.now() + 10000;
+          while (fixtureServer.count() !== index + 1) {
+            if (Date.now() > deadline) throw new Error('Incident request timeout');
+            await wait(100);
+          }
+        }
+        console.log(JSON.stringify({ stage: 'incident-before-freeze', state: await evaluate('window.snapshot()') }));
+      }
       await command('Page.setWebLifecycleState', { state: 'frozen' });
+      if (incidentConvergence) {
+        fixtureServer.finish(1, 'Latest incident');
+        await wait(100);
+        fixtureServer.finish(0, 'Obsolete incident');
+      }
       await wait(2100); // Host wait: never evaluate while frozen.
       await command('Page.setWebLifecycleState', { state: 'active' });
       await wait(250);
@@ -139,6 +166,28 @@ try {
           if (foreground.visibility === 'visible' && foreground.focus && foreground.ticks > after.ticks) break;
         } while (Date.now() < deadline);
       }
+      if (incidentConvergence) {
+        assert.ok(suspended, 'Fixture must demonstrably suspend and resume');
+        assert.ok(foreground.visibility === 'visible' && foreground.focus && foreground.ticks > after.ticks,
+          'Fixture must return to native foreground with timer progress');
+        const resumeIndex = foreground.events.findIndex(e => e.type === 'resume');
+        assert.ok(foreground.events.some((e, i) => i > resumeIndex && e.type === 'visibilitychange' && e.visibility === 'visible'));
+        const deadline = Date.now() + 10000;
+        let state;
+        do {
+          state = await evaluate('window.snapshot()');
+          if (state.incidents.host?.[0]?.id === 'Latest incident' && state.loading.host === false) break;
+          await wait(250);
+        } while (Date.now() < deadline);
+        const rendered = await evaluate(`({text: document.querySelector('section').innerText, errors: document.querySelector('[data-testid="errors"]').textContent})`);
+        console.log(JSON.stringify({ stage: 'incident-convergence', state, rendered }));
+        assert.equal(state.incidents.host?.[0]?.id, 'Latest incident');
+        assert.equal(state.loading.host, false);
+        assert.equal(state.error.host, false);
+        assert.ok(rendered.text.includes('Latest incident'));
+        assert.ok(!rendered.text.includes('Obsolete incident'));
+        assert.equal(rendered.errors, '0');
+      }
       const result = { focusEnabled, before, after, foreground, commands, suspended };
       results.push(result); console.log(JSON.stringify(result));
       if (otherTarget) await send('Target.closeTarget', { targetId: otherTarget });
@@ -161,6 +210,7 @@ try {
       'Foreground timer must continue advancing');
   }
 } finally {
+  await fixtureServer?.close();
   socket?.close();
   const exited = new Promise(resolve => child.once('exit', resolve));
   if (child.exitCode === null) { child.kill(); await exited; }
