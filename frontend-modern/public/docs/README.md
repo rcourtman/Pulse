@@ -13,6 +13,8 @@ product identifiers remain untranslated in localized guides.
   verification, plan limits, scale evidence, and a rollout checklist.
 - [Upgrade from Pulse v5](UPGRADE_v6.md) — migration prerequisites, rollback,
   agent continuity, and post-upgrade checks.
+- [Releases and update channels](RELEASE_PROCESS.md): choosing Stable or Preview,
+  beta and RC expectations, and how releases are tested and promoted.
 - [Configure Pulse](CONFIGURATION.md) — authentication, notifications,
   discovery, retention, and system settings.
 - [Deployment models](DEPLOYMENT_MODELS.md) — data locations, lifecycle, and
