@@ -1294,6 +1294,16 @@ synchronous durability for this authority, and the recovery mirror fsyncs its
 temporary file plus a platform-native durable rename barrier (parent-directory
 sync on Unix and write-through replacement on Windows), so the contract covers
 host power loss rather than only orderly process restart.
+An unchanged JSON recovery checkpoint preserves already-correct directory
+permissions without issuing chmod, avoiding redundant Linux directory metadata
+mutation. It still repairs unsafe access permissions and special mode bits;
+permission repair must not replace identical JSON. Directory sync and atomic
+file replacement durability remain unchanged. This is not a guarantee of zero
+aggregate process writes. `TestActiveMirrorUnchangedRepairsDirectoryPermissions`
+in `internal/alerts/alerts_test.go` pins permission repair and inode retention;
+`TestActiveMirrorUnchangedPreservesDirectoryMetadata` in
+`internal/alerts/active_mirror_metadata_linux_test.go` pins stable Linux ctime.
+
 `active-alerts.json` remains an atomic recovery mirror, not a competing healthy
 read authority. A new or recreated database imports the readable mirror. A
 failed SQLite checkpoint writes a durable degraded marker, and the next startup

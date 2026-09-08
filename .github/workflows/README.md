@@ -222,16 +222,11 @@ verify downloaded files offline against the candidate-builder identity.
 
 ## Issue Triage Automation
 
-**Files**:
+**File**: `issue-version-label-sync.yml`
 
-- `issue-version-label-sync.yml`
-- `issue-version-retest-comment.yml`
-
-Issue intake is split deliberately:
-
-- `issue-version-label-sync.yml` is the silent metadata path. It runs on `opened`, `edited`, and `reopened` issue events so version labels, `needs-version-info`, `needs-retest-on-latest`, and the explicit `needs-decomposition` topic-integrity signal stay correct when maintainers tidy issue metadata.
-- `issue-version-retest-comment.yml` is the scheduled public guidance path. It gives maintainers a grace window, then posts reporter-facing retest guidance only when an older-version bug report from a non-maintainer has no existing maintainer response. This prevents generic stable-version advice from contradicting a specific maintainer fix or prerelease boundary.
-- Both workflows load the shared helper at `.github/scripts/issue-version-triage.cjs` so parsing and classification logic lives in one place instead of drifting across duplicated inline scripts.
+- The silent metadata path runs on `opened`, `edited`, and `reopened` issue events. The shared helper at `.github/scripts/issue-version-triage.cjs` maintains version labels, `needs-version-info`, feedback classification and `needs-decomposition`.
+- Version-only retest posting and marked-request timeout closure workflows are retired. An older reported version or silence is not evidence of resolution.
+- Community owns public follow-up and closure after whole-thread review, relevant-fix verification and confirmed released-source inclusion. The synchronizer neither adds nor removes the community-owned `needs-retest-on-latest` label. Classification uses individual label additions/removals rather than replacing the event snapshot, preserving concurrent Community label decisions. Existing labels and comments are context, not proof that a reporter has or has not replied.
 - `needs-decomposition` is driven only by the structured **Additional actionable topics** form field. The [triage contract](../../docs/ISSUE_TRIAGE.md) requires human or agent judgment to create linked dispositions; the workflow does not infer or auto-create issues from free text.
 
 ## Update Demo Server

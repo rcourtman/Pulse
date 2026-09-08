@@ -21280,3 +21280,45 @@ func TestBackupDivergentDefaultsOnLoad(t *testing.T) {
 		})
 	}
 }
+
+// The unchanged-content fast path must not accept unsafe directory permissions.
+func TestActiveMirrorUnchangedRepairsDirectoryPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX directory permissions")
+	}
+	for _, mode := range []os.FileMode{0755, 0700 | os.ModeSticky, 0700 | os.ModeSetgid} {
+		t.Run(mode.String(), func(t *testing.T) {
+			dir := t.TempDir()
+			m := &Manager{alertsDir: dir}
+			alerts := []*Alert{{ID: "a"}}
+			if err := m.writeActiveAlertsRecoveryMirror(alerts); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(dir, "active-alerts.json")
+			before, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(dir, mode); err != nil {
+				t.Fatal(err)
+			}
+			if err := m.writeActiveAlertsRecoveryMirror(alerts); err != nil {
+				t.Fatal(err)
+			}
+			info, err := os.Stat(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Mode().Perm() != alertsDirPerm || info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 {
+				t.Fatalf("unsafe directory mode survived: %v", info.Mode())
+			}
+			after, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !os.SameFile(before, after) {
+				t.Fatal("directory permission repair replaced unchanged JSON")
+			}
+		})
+	}
+}

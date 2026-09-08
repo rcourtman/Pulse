@@ -160,8 +160,16 @@ func (m *Manager) writeActiveAlertsRecoveryMirrorLocked(alerts []*Alert) error {
 	if err := os.MkdirAll(alertsDir, alertsDirPerm); err != nil {
 		return fmt.Errorf("failed to create alerts directory: %w", err)
 	}
-	if err := os.Chmod(alertsDir, alertsDirPerm); err != nil {
-		return fmt.Errorf("failed to set alerts directory permissions: %w", err)
+	// Even chmod to the existing mode dirties directory metadata on Linux.
+	// Preserve the no-change checkpoint path while still repairing permissions.
+	info, err := os.Stat(alertsDir)
+	if err != nil {
+		return fmt.Errorf("failed to stat alerts directory: %w", err)
+	}
+	if info.Mode().Perm() != alertsDirPerm || info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 {
+		if err := os.Chmod(alertsDir, alertsDirPerm); err != nil {
+			return fmt.Errorf("failed to set alerts directory permissions: %w", err)
+		}
 	}
 
 	// Snapshots originate from maps. Canonicalise the complete records rather

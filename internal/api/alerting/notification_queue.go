@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apihttp"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -15,6 +16,7 @@ import (
 
 // NotificationQueueHandlers handles notification queue API endpoints
 type NotificationQueueHandlers struct {
+	mu      sync.RWMutex
 	monitor *monitoring.Monitor
 }
 
@@ -23,6 +25,24 @@ func NewNotificationQueueHandlers(monitor *monitoring.Monitor) *NotificationQueu
 	return &NotificationQueueHandlers{
 		monitor: monitor,
 	}
+}
+
+// SetMonitor refreshes the queue owner after a configuration reload. Keep the
+// handler itself stable: registered routes retain its method values.
+func (h *NotificationQueueHandlers) SetMonitor(monitor *monitoring.Monitor) {
+	h.mu.Lock()
+	h.monitor = monitor
+	h.mu.Unlock()
+}
+
+func (h *NotificationQueueHandlers) getQueue() *notifications.NotificationQueue {
+	h.mu.RLock()
+	monitor := h.monitor
+	h.mu.RUnlock()
+	if monitor == nil || monitor.GetNotificationManager() == nil {
+		return nil
+	}
+	return monitor.GetNotificationManager().GetQueue()
 }
 
 // GetDLQ returns notifications in the dead letter queue
@@ -38,7 +58,7 @@ func (h *NotificationQueueHandlers) GetDLQ(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	queue := h.monitor.GetNotificationManager().GetQueue()
+	queue := h.getQueue()
 	if queue == nil {
 		http.Error(w, "Notification queue not initialized", http.StatusServiceUnavailable)
 		return
@@ -62,7 +82,7 @@ func (h *NotificationQueueHandlers) GetQueueStats(w http.ResponseWriter, r *http
 		return
 	}
 
-	queue := h.monitor.GetNotificationManager().GetQueue()
+	queue := h.getQueue()
 	if queue == nil {
 		http.Error(w, "Notification queue not initialized", http.StatusServiceUnavailable)
 		return
@@ -103,7 +123,7 @@ func (h *NotificationQueueHandlers) RetryDLQItem(w http.ResponseWriter, r *http.
 		return
 	}
 
-	queue := h.monitor.GetNotificationManager().GetQueue()
+	queue := h.getQueue()
 	if queue == nil {
 		http.Error(w, "Notification queue not initialized", http.StatusServiceUnavailable)
 		return
@@ -150,7 +170,7 @@ func (h *NotificationQueueHandlers) DeleteDLQItem(w http.ResponseWriter, r *http
 		return
 	}
 
-	queue := h.monitor.GetNotificationManager().GetQueue()
+	queue := h.getQueue()
 	if queue == nil {
 		http.Error(w, "Notification queue not initialized", http.StatusServiceUnavailable)
 		return
@@ -180,7 +200,7 @@ func (h *NotificationQueueHandlers) RetryTerminalFailures(w http.ResponseWriter,
 	if !apihttp.EnsureScope(w, r, config.ScopeSettingsWrite) {
 		return
 	}
-	queue := h.monitor.GetNotificationManager().GetQueue()
+	queue := h.getQueue()
 	if queue == nil {
 		http.Error(w, "Notification queue not initialized", http.StatusServiceUnavailable)
 		return
@@ -205,7 +225,7 @@ func (h *NotificationQueueHandlers) DismissTerminalFailures(w http.ResponseWrite
 	if !apihttp.EnsureScope(w, r, config.ScopeSettingsWrite) {
 		return
 	}
-	queue := h.monitor.GetNotificationManager().GetQueue()
+	queue := h.getQueue()
 	if queue == nil {
 		http.Error(w, "Notification queue not initialized", http.StatusServiceUnavailable)
 		return
