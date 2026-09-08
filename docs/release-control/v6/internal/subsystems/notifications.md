@@ -825,3 +825,16 @@ missed decoded query representations and a separate ntfy transport caller:
 provider-only helper examples were not sufficient sink coverage. This contract
 does not assert arbitrary response-body/third-party error secrecy, installed
 recipient delivery, candidate qualification or historical customer exposure.
+
+### Saved notification choices at monitor construction
+
+`internal/monitoring/monitor_notification_startup_test.go` exercises the actual
+monitor constructor twice against the same saved configuration without applying
+notification-manager setters in the fixture. It checks initial routing, both
+resolve choices, enabled/activation gating and encrypted webhook configuration
+restoration. The cases include webhook, Apprise, email and all destinations.
+
+This boundary uses the configuration persistence API to save choices, not the
+HTTP or browser save path. It does not start a new operating-system process,
+drive an alert lifecycle or establish recipient delivery. Those installed
+acceptance obligations remain separate from constructor restoration coverage.
