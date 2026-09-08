@@ -17,8 +17,8 @@ is not an RC or stable release.
   Disabled destinations are cancelled instead of being reported as delivered.
 - **Retained-delivery recovery survives reloads** - Queue statistics,
   dead-letter details, **Retry retained deliveries**, and **Dismiss retained
-  failures** now follow the active notification queue after runtime replacement
-  instead of retaining a stopped queue and returning HTTP 503.
+  failures** now follow the active notification queue instead of keeping a
+  stopped queue that returns HTTP 503.
 - **Webhook retries keep safe pacing** - A response-specific `Retry-After: 0`
   can permit one immediate retry without erasing the exponential delay for later
   unhinted 429 or 503 responses.
@@ -73,13 +73,12 @@ is not an RC or stable release.
 - The recurring-occurrence repair has focused race-enabled and protected-line
   CI evidence, but has not yet been verified on an installed beta through a
   restart and ordinary notification destination.
-- Open issue [#1761](https://github.com/rcourtman/Pulse/issues/1761) has a
-  7 September stable `v6.4.1` report where both retained-failure actions returned
-  HTTP 503 while alert emails continued. This beta includes the source repair
-  for the reproduced stopped-queue ownership path, with focused race-enabled
-  tests and protected-line CI, but it has not been verified on that reporter's
-  installation. Do not delete queue or alert files as a workaround. Keep the
-  rollback pin and report sanitized action results.
+- Open issue [#1761](https://github.com/rcourtman/Pulse/issues/1761) reports
+  HTTP 503 from both retained-failure actions on stable `v6.4.1` while alert
+  emails continued.
+- This beta repairs the reproduced stopped-queue ownership path with focused
+  race-enabled tests and protected-line CI, but the reporter has not tested it.
+  Do not delete queue or alert files as a workaround.
 - A 7 September comment on [#1812](https://github.com/rcourtman/Pulse/issues/1812)
   says a `v6.4.1` user saw a retained-delivery warning but could not find recovery
   controls or delivery-attempt details from the incident timeline.
