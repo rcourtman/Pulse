@@ -25,7 +25,7 @@ import type { ResourceMetadataChangedDetail } from '@/utils/resourceMetadataEven
 const win: Window & typeof globalThis = window;
 
 describe('dispatchResourceMetadataChanged', () => {
-  let listener: ReturnType<typeof vi.fn>;
+  let listener: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
 
   beforeEach(() => {
     listener = vi.fn();

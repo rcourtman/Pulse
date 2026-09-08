@@ -84,6 +84,8 @@ function getTagDotRing(dot: Element) {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  // Vitest 4 restores spies without clearing standalone vi.fn call history.
+  vi.clearAllMocks();
   // Reset dark mode to default (false) for isolation
   darkModeMock.mockReturnValue(false);
 });
