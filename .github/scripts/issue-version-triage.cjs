@@ -232,6 +232,28 @@ function keepOnlyReportedVersionLabel(nextLabels, reportedVersion) {
   }
 }
 
+// Apply only this event's classification delta. Replacing the complete label
+// set would overwrite Community changes made after the event was queued.
+async function applyLabelDelta(github, context, issue, before, after) {
+  const target = {
+    owner: context.repo.owner,
+    repo: context.repo.repo,
+    issue_number: issue.number,
+  };
+  const additions = [...after].filter((name) => !before.has(name)).sort();
+  if (additions.length) {
+    await github.rest.issues.addLabels({ ...target, labels: additions });
+  }
+  for (const name of [...before].filter((name) => !after.has(name)).sort()) {
+    try {
+      await github.rest.issues.removeLabel({ ...target, name });
+    } catch (error) {
+      // Another synchronizer may already have removed this label.
+      if (error.status !== 404) throw error;
+    }
+  }
+}
+
 async function syncLabels({ github, context, core }) {
   const issue = context.payload.issue;
   const latestVersion = await getLatestStableVersion(github, context, core);
@@ -255,17 +277,7 @@ async function syncLabels({ github, context, core }) {
 
   if (!isBugLike) {
     core.info("Issue is not bug-like after classification. Skipping version triage.");
-    const labelsChanged =
-      labelNames.size !== nextLabels.size ||
-      [...labelNames].some((label) => !nextLabels.has(label));
-    if (labelsChanged) {
-      await github.rest.issues.setLabels({
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-        issue_number: issue.number,
-        labels: [...nextLabels].sort(),
-      });
-    }
+    await applyLabelDelta(github, context, issue, labelNames, nextLabels);
     return;
   }
 
@@ -293,12 +305,7 @@ async function syncLabels({ github, context, core }) {
 
   // Retest labels are community-owned: version metadata cannot establish
   // relevant-fix availability or reconcile the live reporter conversation.
-  await github.rest.issues.setLabels({
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    issue_number: issue.number,
-    labels: [...nextLabels].sort(),
-  });
+  await applyLabelDelta(github, context, issue, labelNames, nextLabels);
 }
 
 // Compatibility entry points for callers using the old helper API. Version

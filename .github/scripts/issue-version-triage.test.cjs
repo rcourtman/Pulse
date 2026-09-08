@@ -17,7 +17,8 @@ function createGithub({
     getLabel: [],
     getLatestRelease: [],
     paginate: [],
-    setLabels: [],
+    addLabels: [],
+    removeLabel: [],
   };
 
   const github = {
@@ -37,8 +38,12 @@ function createGithub({
           existingLabels.add(payload.name);
           return { data: payload };
         },
-        async setLabels(payload) {
-          calls.setLabels.push(payload);
+        async addLabels(payload) {
+          calls.addLabels.push(payload);
+          return { data: payload };
+        },
+        async removeLabel(payload) {
+          calls.removeLabel.push(payload);
           return { data: payload };
         },
         async createComment(payload) {
@@ -99,8 +104,8 @@ test("syncLabels classifies older bug reports without requesting a retest", asyn
     core: createCore(),
   });
 
-  assert.equal(calls.setLabels.length, 1);
-  assert.deepEqual(calls.setLabels[0].labels, [
+  assert.equal(calls.addLabels.length, 1);
+  assert.deepEqual(calls.addLabels[0].labels, [
     "affects-6.0.0-rc.1",
     "bug",
   ]);
@@ -121,8 +126,8 @@ test("syncLabels only adds documentation classification for non-bug v6 feedback"
     core: createCore(),
   });
 
-  assert.equal(calls.setLabels.length, 1);
-  assert.deepEqual(calls.setLabels[0].labels, ["documentation"]);
+  assert.equal(calls.addLabels.length, 1);
+  assert.deepEqual(calls.addLabels[0].labels, ["documentation"]);
 });
 
 test("syncLabels marks declared secondary topics for decomposition", async () => {
@@ -149,8 +154,7 @@ test("syncLabels marks declared secondary topics for decomposition", async () =>
   assert.deepEqual(calls.createLabel.map((call) => call.name), [
     "needs-decomposition",
   ]);
-  assert.deepEqual(calls.setLabels[0].labels, [
-    "enhancement",
+  assert.deepEqual(calls.addLabels[0].labels, [
     "needs-decomposition",
   ]);
 });
@@ -171,7 +175,8 @@ test("syncLabels clears decomposition after every declared topic has a dispositi
   });
 
   assert.equal(calls.createLabel.length, 0);
-  assert.deepEqual(calls.setLabels[0].labels, ["enhancement"]);
+  assert.equal(calls.addLabels.length, 0);
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["needs-decomposition"]);
 });
 
 test("additional topic classification is explicit and fail-quiet for legacy forms", () => {
@@ -259,7 +264,8 @@ test("label sync preserves community-owned retest state regardless of version", 
         labels: [{ name: "bug" }, { name: "needs-retest-on-latest" }],
       } }),
     });
-    assert.ok(calls.setLabels[0].labels.includes("needs-retest-on-latest"));
+    assert.ok(!calls.addLabels[0].labels.includes("needs-retest-on-latest"));
+    assert.ok(!calls.removeLabel.some(call => call.name === "needs-retest-on-latest"));
     assert.equal(calls.createComment.length, 0);
   }
 });
@@ -352,9 +358,47 @@ test("ambiguous upgrade version requests information without a retest comment", 
   const args = { github, context: createContext({ issue }), core: createCore() };
   await triage.syncLabels(args);
   await triage.postRetestComment(args);
-  const labels = calls.setLabels.at(-1).labels;
+  const labels = calls.addLabels.at(-1).labels;
   assert.ok(labels.includes("needs-version-info"));
   assert.ok(!labels.includes("affects-5.1.35"));
   assert.ok(!labels.includes("needs-retest-on-latest"));
   assert.equal(calls.createComment.length, 0);
+});
+
+test("queued label sync cannot overwrite newer Community label decisions", async () => {
+  for (const communityAdded of [true, false]) {
+    const { github } = createGithub();
+    const live = new Set(["bug", "affects-6.0.0", "needs-version-info"]);
+    if (communityAdded) live.add("needs-retest-on-latest");
+    live.add("operator-reviewed");
+    github.rest.issues.setLabels = async ({ labels }) => {
+      live.clear();
+      labels.forEach(label => live.add(label));
+    };
+    github.rest.issues.addLabels = async ({ labels }) => labels.forEach(label => live.add(label));
+    github.rest.issues.removeLabel = async ({ name }) => live.delete(name);
+    await triage.syncLabels({ github, core: createCore(), context: createContext({ issue: {
+      number: 1200, title: "Bug", body: "## Pulse version\n6.0.1\n",
+      labels: ["bug", "affects-6.0.0", "needs-version-info",
+        ...(!communityAdded ? ["needs-retest-on-latest"] : [])].map(name => ({ name })),
+    } }) });
+    assert.equal(live.has("needs-retest-on-latest"), communityAdded);
+    assert.ok(live.has("operator-reviewed"));
+    assert.ok(live.has("affects-6.0.1"));
+    assert.ok(!live.has("affects-6.0.0"));
+    assert.ok(!live.has("needs-version-info"));
+  }
+});
+
+test("classification removal tolerates an absent label but propagates access failures", async () => {
+  for (const status of [404, 403]) {
+    const { github } = createGithub();
+    github.rest.issues.removeLabel = async () => { throw Object.assign(new Error("API failure"), { status }); };
+    const run = triage.syncLabels({ github, core: createCore(), context: createContext({ issue: {
+      number: 1200, title: "Feedback", body: "## Additional actionable topics\nNone.\n",
+      labels: [{ name: "enhancement" }, { name: "needs-decomposition" }],
+    } }) });
+    if (status === 404) await assert.doesNotReject(run);
+    else await assert.rejects(run, { status: 403 });
+  }
 });
