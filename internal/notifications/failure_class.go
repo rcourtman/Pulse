@@ -71,8 +71,13 @@ func ClassFromHTTPStatus(status int) NotificationFailureClass {
 		return NotificationFailureAuthentication
 	case 402:
 		return NotificationFailureConfiguration
-	case 408:
+	case 408, 421:
 		return NotificationFailureConnectivity
+	case 423, 425:
+		// The webhook transport already retries locked/too-early responses.
+		// These temporary receiver conditions must retain the queue's retry
+		// budget too, rather than becoming terminal request rejections.
+		return NotificationFailureServerError
 	case 429:
 		return NotificationFailureRateLimited
 	}

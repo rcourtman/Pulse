@@ -877,3 +877,18 @@ proves a truncated 403 stops after one attempt with terminal history, while a
 truncated 503 can retry to 204 with its event identity intact. No queue or
 storage workers are started by these tests; this is not installed delivery
 acceptance or a change to retry budgets.
+
+### HTTP retry classification agrees across delivery layers
+
+HTTP 421 retains a connectivity class; 423 and 425 retain a server-error class
+for temporary receiver conditions. These are already retryable exceptions in
+the webhook transport, and must not become terminal rejections when a wrapped
+transport error reaches the queue. Authentication, configuration and other
+permanent HTTP rejections still stop early; attempt limits remain unchanged.
+
+`TestWebhookHTTPRetryPolicyMatchesQueueClassification` exercises every status
+400–599 through a synthetic HTTP transport with misleading diagnostic text,
+wraps its returned error and checks both transport retry policy and the shared
+class predicate used by the queue. `TestClassFromHTTPStatus` pins the reason
+classes. This proves the classification boundary without starting queue/storage
+workers; it does not establish installed receipt or queue scheduling execution.
