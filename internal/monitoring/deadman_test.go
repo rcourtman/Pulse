@@ -101,6 +101,47 @@ func TestDeadManRunCycleSignalsFailureWhenCanonicalMonitorStalls(t *testing.T) {
 	}
 }
 
+func TestDeadManMonitoringFreshnessBoundaries(t *testing.T) {
+	now := time.Date(2026, 9, 7, 23, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name     string
+		progress time.Time
+		healthy  bool
+	}{
+		{"missing progress", time.Time{}, false},
+		{"current progress", now, true},
+		{"freshness limit", now.Add(-deadManMonitoringFreshness), true},
+		{"expired progress", now.Add(-deadManMonitoringFreshness - time.Nanosecond), false},
+		{"tolerated clock skew", now.Add(5 * time.Second), true},
+		{"excessive clock skew", now.Add(5*time.Second + time.Nanosecond), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var method, path string
+			attempts := 0
+			runtime := newDeadManTestRuntime(t, now, deadManRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+				attempts++
+				method, path = request.Method, request.URL.Path
+				return deadManResponse(http.StatusOK, "OK"), nil
+			}))
+			runtime.runCycle(context.Background(), func() string {
+				return "https://watchdog.example.com/ping/test-token"
+			}, func() time.Time { return tc.progress }, nil)
+
+			wantMethod, wantPath, wantState := http.MethodPost, "/ping/test-token/fail", "monitor_stalled"
+			if tc.healthy {
+				wantMethod, wantPath, wantState = http.MethodGet, "/ping/test-token", "healthy"
+			}
+			if attempts != 1 || method != wantMethod || path != wantPath {
+				t.Fatalf("signal = %d attempts, %s %s; want one %s %s", attempts, method, path, wantMethod, wantPath)
+			}
+			status := runtime.statusSnapshot()
+			if status.State != wantState || (status.LastSuccessAt != nil) != tc.healthy {
+				t.Fatalf("status = %+v; want state %s, healthy success %t", status, wantState, tc.healthy)
+			}
+		})
+	}
+}
+
 func TestDeadManRetriesTransientResponsesButNotPermanentRejections(t *testing.T) {
 	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
 	t.Run("retries server failures", func(t *testing.T) {
