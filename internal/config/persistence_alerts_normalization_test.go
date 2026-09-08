@@ -347,3 +347,56 @@ func TestLoadAlertConfig_Normalization(t *testing.T) {
 		})
 	}
 }
+
+// Exercise the real file boundary, not just JSON reconstruction. A differing
+// legacy copy cannot safely be distinguished from an intentional guest override.
+func TestBackupOverridesSurvivePersistenceReopen(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		backup *alerts.BackupAlertConfig
+	}{
+		{name: "global only"},
+		{name: "toggle only", backup: &alerts.BackupAlertConfig{Enabled: true}},
+		{name: "explicit thresholds", backup: &alerts.BackupAlertConfig{
+			Enabled: true, WarningDays: 7, CriticalDays: 14, FreshHours: 24, StaleHours: 72,
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, key := range []string{"inst:node:100", "inst:100"} {
+				t.Run(key, func(t *testing.T) {
+					dir := t.TempDir()
+					cfg := alerts.AlertConfig{
+						Enabled:        true,
+						BackupDefaults: alerts.BackupAlertConfig{Enabled: true, WarningDays: 33, CriticalDays: 34, FreshHours: 745, StaleHours: 746},
+						Overrides:      map[string]alerts.ThresholdConfig{},
+					}
+					if tc.backup != nil {
+						copy := *tc.backup
+						cfg.Overrides[key] = alerts.ThresholdConfig{Backup: &copy}
+					}
+					for cycle := 0; cycle < 3; cycle++ {
+						wantDefaults := cfg.BackupDefaults
+						// Load supplies the documented default for omitted orphan policy.
+						orphaned := true
+						wantDefaults.AlertOrphaned = &orphaned
+						require.NoError(t, NewConfigPersistence(dir).SaveAlertConfig(cfg))
+						loaded, err := NewConfigPersistence(dir).LoadAlertConfig()
+						require.NoError(t, err)
+						require.Equal(t, wantDefaults, loaded.BackupDefaults)
+						if tc.backup == nil {
+							require.Empty(t, loaded.Overrides)
+						} else {
+							require.Len(t, loaded.Overrides, 1)
+							require.Equal(t, tc.backup, loaded.Overrides[key].Backup)
+						}
+						cfg = *loaded
+						// A subsequent global edit must neither freeze sparse values
+						// nor erase explicit values on the next save and reopen.
+						cfg.BackupDefaults.WarningDays++
+						cfg.BackupDefaults.CriticalDays++
+					}
+				})
+			}
+		})
+	}
+}
