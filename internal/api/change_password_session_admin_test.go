@@ -23,7 +23,9 @@ func newChangePasswordRouter(t *testing.T) (*Router, *config.Config) {
 		t.Fatalf("bcrypt: %v", err)
 	}
 	cfg := &config.Config{DataPath: dir, ConfigPath: dir, AuthUser: "admin", AuthPass: string(hashed)}
-	return NewRouter(cfg, nil, nil, nil, nil, "1.0.0"), cfg
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	cleanupTestRouter(t, router)
+	return router, cfg
 }
 
 func changePasswordRequest(t *testing.T, current string) *http.Request {
@@ -85,5 +87,29 @@ func TestChangePasswordBasicAuthPathUnaffected(t *testing.T) {
 
 	if rec.Code == http.StatusForbidden {
 		t.Fatalf("Basic Auth change-password must not be refused by the session gate, got 403 (body %s)", rec.Body.String())
+	}
+}
+
+func TestChangePasswordFixtureOwnsRouterLifecycle(t *testing.T) {
+	var router *Router
+	workerDone := make(chan struct{})
+	t.Run("fixture", func(t *testing.T) {
+		router, _ = newChangePasswordRouter(t)
+		router.startLifecycleWorker(func() {
+			<-router.lifecycleCtx.Done()
+			close(workerDone)
+		})
+	})
+	// Ensure a failing regression does not itself leave workers running.
+	cleanupTestRouter(t, router)
+	select {
+	case <-router.lifecycleCtx.Done():
+	default:
+		t.Fatal("password-change fixture left router lifecycle active")
+	}
+	select {
+	case <-workerDone:
+	default:
+		t.Fatal("password-change fixture did not join its router worker")
 	}
 }
