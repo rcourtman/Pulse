@@ -13,6 +13,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Any, Iterable
 
 
@@ -214,18 +215,34 @@ class GitHub:
         *,
         output: bool = True,
         token: str = "",
+        retry_read: bool = False,
     ) -> str:
         env = None
         if token:
             env = os.environ.copy()
             env["GH_TOKEN"] = token
-        result = subprocess.run(
-            [self.gh, *arguments],
-            check=False,
-            capture_output=output,
-            text=True,
-            env=env,
-        )
+        # Only api()/pages() opt in: never replay an uncertain mutation,
+        # download, log-reader refusal, or authentication/authorisation failure.
+        for attempt in range(3 if retry_read else 1):
+            result = subprocess.run(
+                [self.gh, *arguments],
+                check=False,
+                capture_output=output,
+                text=True,
+                env=env,
+            )
+            if (
+                result.returncode == 0
+                or not retry_read
+                or attempt == 2
+                or re.search(r"\bHTTP (502|503|504)\b", result.stderr or "") is None
+            ):
+                break
+            print(
+                f"Transient GitHub API read failure; retry {attempt + 1}/2.",
+                file=sys.stderr,
+            )
+            time.sleep(attempt + 1)
         if result.returncode != 0:
             detail = result.stderr.strip().splitlines() if output else []
             suffix = f": {detail[-1]}" if detail else ""
@@ -249,6 +266,7 @@ class GitHub:
                         endpoint,
                     ],
                     token=token,
+                    retry_read=True,
                 )
             )
         except json.JSONDecodeError as exc:
@@ -258,7 +276,7 @@ class GitHub:
         return value
 
     def pages(self, endpoint: str, *, token: str = "") -> list[object]:
-        output = self._run(["api", "--paginate", endpoint], token=token)
+        output = self._run(["api", "--paginate", endpoint], token=token, retry_read=True)
         decoder = json.JSONDecoder()
         value: list[object] = []
         offset = 0

@@ -50,6 +50,61 @@ def run(
     }
 
 
+class TransientReadTests(unittest.TestCase):
+    def result(self, code=0, stdout="{}", stderr=""):
+        return subprocess.CompletedProcess([], code, stdout=stdout, stderr=stderr)
+
+    def test_pages_discards_partial_output_before_retry(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        results = [
+            self.result(1, '[{"id": 1}]', "gh: gateway timeout (HTTP 504)"),
+            self.result(0, '[{"id": 1}]\n[{"id": 2}]'),
+        ]
+        with patch.object(subject.subprocess, "run", side_effect=results) as command, patch("time.sleep") as sleep:
+            self.assertEqual([[{"id": 1}], [{"id": 2}]], github.pages("repos/example/releases"))
+        self.assertEqual(2, command.call_count)
+        sleep.assert_called_once_with(1)
+
+    def test_api_retries_transient_errors_with_bounded_backoff(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        for status in (502, 503, 504):
+            with self.subTest(status=status):
+                failure = self.result(1, stderr=f"gh: unavailable (HTTP {status})")
+                with patch.object(subject.subprocess, "run", side_effect=[failure, failure, self.result()]) as command, patch("time.sleep") as sleep:
+                    self.assertEqual({}, github.api("repos/example"))
+                self.assertEqual(3, command.call_count)
+                self.assertEqual([1, 2], [call.args[0] for call in sleep.call_args_list])
+
+    def test_exhausted_reads_fail_closed(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        with patch.object(subject.subprocess, "run", return_value=self.result(1, stderr="gh: timeout (HTTP 504)")) as command, patch("time.sleep") as sleep:
+            with self.assertRaisesRegex(subject.ReconciliationError, "HTTP 504"):
+                github.pages("repos/example/releases")
+        self.assertEqual(3, command.call_count)
+        self.assertEqual(2, sleep.call_count)
+
+    def test_nontransient_errors_are_not_retried(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        for detail in ("HTTP 401", "HTTP 403", "HTTP 404", "HTTP 429", "terminal escape sequences refused"):
+            with self.subTest(detail=detail):
+                with patch.object(subject.subprocess, "run", return_value=self.result(1, stderr=detail)) as command, patch("time.sleep") as sleep:
+                    error = subject.GitHubNotFound if detail == "HTTP 404" else subject.ReconciliationError
+                    with self.assertRaises(error):
+                        github.api("repos/example")
+                self.assertEqual(1, command.call_count)
+                sleep.assert_not_called()
+
+    def test_mutations_are_not_retried(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        for payload in (None, {"ref": "main"}):
+            with self.subTest(payload=payload):
+                with patch.object(subject.subprocess, "run", return_value=self.result(1, stderr="HTTP 504")) as command, patch("time.sleep") as sleep:
+                    with self.assertRaises(subject.ReconciliationError):
+                        github.post("repos/example/actions/dispatches", payload)
+                self.assertEqual(1, command.call_count)
+                sleep.assert_not_called()
+
+
 class LatestFailedRunsTests(unittest.TestCase):
     def select(self, releases, runs):
         return subject.latest_failed_runs(
