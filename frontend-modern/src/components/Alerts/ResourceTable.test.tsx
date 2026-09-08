@@ -168,17 +168,17 @@ interface DefaultProps {
   title: string;
   resources: Resource[];
   columns: string[];
-  onEdit: ReturnType<typeof vi.fn>;
-  onSaveEdit: ReturnType<typeof vi.fn>;
-  onCancelEdit: ReturnType<typeof vi.fn>;
-  onRemoveOverride: ReturnType<typeof vi.fn>;
+  onEdit: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
+  onSaveEdit: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
+  onCancelEdit: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
+  onRemoveOverride: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
   editingId: () => string | null;
   editingThresholds: () => Record<string, number | undefined>;
-  setEditingThresholds: ReturnType<typeof vi.fn>;
-  formatMetricValue: ReturnType<typeof vi.fn>;
-  hasActiveAlert: ReturnType<typeof vi.fn>;
+  setEditingThresholds: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
+  formatMetricValue: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
+  hasActiveAlert: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
   editingNote: () => string;
-  setEditingNote: ReturnType<typeof vi.fn>;
+  setEditingNote: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
 }
 
 function makeProps(

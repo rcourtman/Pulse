@@ -79,8 +79,8 @@ const mockProviders = [gmailProvider, sendgridProvider, outlookProvider];
 
 // --- Tests ---
 describe('EmailProviderSelect', () => {
-  let onChangeMock: ReturnType<typeof vi.fn>;
-  let onTestMock: ReturnType<typeof vi.fn>;
+  let onChangeMock: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
+  let onTestMock: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
 
   beforeEach(() => {
     onChangeMock = vi.fn();

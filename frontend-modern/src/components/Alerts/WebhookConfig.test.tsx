@@ -102,10 +102,10 @@ const mockTemplates: WebhookTemplate[] = [
 
 // --- Tests ---
 describe('WebhookConfig', () => {
-  let onAddMock: ReturnType<typeof vi.fn>;
-  let onUpdateMock: ReturnType<typeof vi.fn>;
-  let onDeleteMock: ReturnType<typeof vi.fn>;
-  let onTestMock: ReturnType<typeof vi.fn>;
+  let onAddMock: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
+  let onUpdateMock: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
+  let onDeleteMock: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
+  let onTestMock: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
 
   beforeEach(() => {
     onAddMock = vi.fn();
