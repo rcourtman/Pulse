@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
@@ -986,5 +988,78 @@ func TestMonitor_HandleAlertEscalated_BypassesDeliveryCooldown(t *testing.T) {
 	case <-requests:
 	case <-time.After(2 * time.Second):
 		t.Fatal("expected escalated notification delivery despite active cooldown")
+	}
+}
+
+// Exercise the dispatcher used by lifecycle replay with both projections
+// attached. Store-only tests cannot detect cross-occurrence canonical history.
+func TestMonitorLifecycleReplayPreservesOccurrenceTimelines(t *testing.T) {
+	for _, gap := range []time.Duration{2 * time.Minute, 500 * time.Millisecond} {
+		t.Run(gap.String(), func(t *testing.T) {
+			store := unifiedresources.NewMemoryStore()
+			incidents := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+			m := &Monitor{
+				incidentStore: incidents,
+				resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)),
+			}
+			incidents.SetResourceTimelineStore(m.resourceStore.(memory.IncidentTimelineStore))
+			start := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+			old := &alerts.Alert{ID: "pbs-connectivity", ResourceID: "pbs", StartTime: start}
+			end := start.Add(gap / 2)
+			fired := alerts.LifecycleEvent{Type: eventlog.TypeFired, OccurredAt: start, Alert: old}
+			resolved := alerts.LifecycleEvent{Type: eventlog.TypeResolved, OccurredAt: end, Alert: old}
+			m.handleAlertLifecycleEvent(fired)
+			m.handleAlertLifecycleEvent(resolved)
+			first := incidents.GetTimelineByAlertAt(old.ID, start)
+			require.NotNil(t, first)
+			for i := 0; i < 10; i++ {
+				m.handleAlertLifecycleEvent(fired)
+				m.handleAlertLifecycleEvent(resolved)
+			}
+			require.Len(t, incidents.ListIncidentsByResource(old.ResourceID, 0), 1)
+			replayed := incidents.GetTimelineByAlertAt(old.ID, start)
+			require.Equal(t, first.ID, replayed.ID)
+			require.Equal(t, memory.IncidentStatusResolved, replayed.Status)
+			require.Len(t, replayed.Events, 2)
+
+			next := old.Clone()
+			next.StartTime = start.Add(gap)
+			m.handleAlertLifecycleEvent(alerts.LifecycleEvent{Type: eventlog.TypeFired, OccurredAt: next.StartTime, Alert: next})
+			// A historical resolution arriving after recurrence must not close it;
+			// conversely, the recurrence must not reopen the historical timeline.
+			m.handleAlertLifecycleEvent(resolved)
+			require.Len(t, incidents.ListIncidentsByResource(old.ResourceID, 0), 2)
+			historical := incidents.GetTimelineByAlertAt(old.ID, start)
+			current := incidents.GetTimelineByAlertAt(next.ID, next.StartTime)
+			require.NotNil(t, historical)
+			require.NotNil(t, current)
+			require.Equal(t, first.ID, historical.ID)
+			require.NotEqual(t, historical.ID, current.ID)
+			require.Equal(t, memory.IncidentStatusResolved, historical.Status)
+			require.Equal(t, &end, historical.ClosedAt)
+			require.Len(t, historical.Events, 2)
+			require.Equal(t, memory.IncidentStatusOpen, current.Status)
+			require.Nil(t, current.ClosedAt)
+			require.Len(t, current.Events, 1)
+			changes, err := store.GetRecentChanges(old.ResourceID, time.Time{}, 100)
+			require.NoError(t, err)
+			require.Len(t, changes, 3)
+
+			ackAt := start.Add(gap / 4)
+			old.AckTime = &ackAt
+			m.handleAlertLifecycleEvent(alerts.LifecycleEvent{
+				Type: eventlog.TypeAcknowledged, OccurredAt: ackAt, Alert: old,
+				Details: map[string]string{"user": "historical-operator"},
+			})
+			historical = incidents.GetTimelineByAlertAt(old.ID, start)
+			current = incidents.GetTimelineByAlertAt(next.ID, next.StartTime)
+			require.Equal(t, memory.IncidentStatusResolved, historical.Status)
+			require.True(t, historical.Acknowledged)
+			require.Equal(t, "historical-operator", historical.AckUser)
+			require.Len(t, historical.Events, 3)
+			require.False(t, current.Acknowledged)
+			require.Equal(t, memory.IncidentStatusOpen, current.Status)
+			require.Len(t, current.Events, 1)
+		})
 	}
 }
