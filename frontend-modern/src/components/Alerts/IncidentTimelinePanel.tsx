@@ -23,6 +23,9 @@ import {
 } from '@/utils/alertOverviewPresentation';
 import {
   type AlertIncidentEventFilterVariant,
+  formatIncidentEvidenceTime,
+  INCIDENT_HISTORY_PARTIAL,
+  INCIDENT_HISTORY_LEGACY,
   getAlertIncidentAcknowledgedBadgeClass,
   getAlertIncidentNoteSaveButtonClass,
   getAlertIncidentNoteTextareaClass,
@@ -43,6 +46,7 @@ export interface IncidentTimelinePanelProps {
   noteSaving: Accessor<boolean>;
   onSaveNote: () => void;
   onRetry: () => void;
+  onAssistantHandoff?: () => void;
 }
 
 export function IncidentTimelinePanel(props: IncidentTimelinePanelProps) {
@@ -56,6 +60,21 @@ export function IncidentTimelinePanel(props: IncidentTimelinePanelProps) {
         <p class="text-xs text-muted" role="status">
           {getAlertTimelineLoadingState().text}
         </p>
+      </Show>
+      <Show when={!props.loading() && props.error()}>
+        <div class="flex items-center gap-2">
+          <p class="text-xs text-error" role="alert">
+            {getAlertTimelineFailureState().text}
+          </p>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="text-primary hover:underline"
+            onClick={() => props.onRetry()}
+          >
+            {getAlertTimelineFailureState().actionLabel}
+          </Button>
+        </div>
       </Show>
       <Show when={!props.loading() && timeline()}>
         {(loadedTimeline) => (
@@ -71,10 +90,10 @@ export function IncidentTimelinePanel(props: IncidentTimelinePanelProps) {
                     {getAlertTimelineAcknowledgedLabel()}
                   </span>
                 </Show>
-                <Show when={loadedTimeline().openedAt}>
+                <Show when={formatIncidentEvidenceTime(loadedTimeline().openedAt)}>
                   <span>
                     {getAlertTimelineOpenedAtLabel(
-                      new Date(loadedTimeline().openedAt).toLocaleString(),
+                      formatIncidentEvidenceTime(loadedTimeline().openedAt)!,
                     )}
                   </span>
                 </Show>
@@ -86,8 +105,19 @@ export function IncidentTimelinePanel(props: IncidentTimelinePanelProps) {
                   </span>
                 </Show>
               </div>
-              <IncidentAssistantHandoffButton incident={loadedTimeline()} />
+              <IncidentAssistantHandoffButton
+                incident={loadedTimeline()}
+                onAssistantHandoff={props.onAssistantHandoff}
+              />
             </div>
+            <Show when={loadedTimeline().history?.hasMoreChanges}>
+              <p class="text-xs text-muted" role="status">
+                {INCIDENT_HISTORY_PARTIAL}
+              </p>
+            </Show>
+            <Show when={loadedTimeline().history?.source === 'legacy_incident_memory'}>
+              <p class="text-xs text-muted">{INCIDENT_HISTORY_LEGACY}</p>
+            </Show>
             <Show when={events().length > 0}>
               <IncidentEventFilters
                 filters={props.filters}
@@ -141,29 +171,10 @@ export function IncidentTimelinePanel(props: IncidentTimelinePanelProps) {
           </div>
         )}
       </Show>
-      <Show when={!props.loading() && !timeline()}>
-        <Show
-          when={props.error()}
-          fallback={
-            <p class="text-xs text-muted" role="status">
-              {getAlertTimelineUnavailableState().text}
-            </p>
-          }
-        >
-          <div class="flex items-center gap-2">
-            <p class="text-xs text-error" role="alert">
-              {getAlertTimelineFailureState().text}
-            </p>
-            <Button
-              variant="ghost"
-              size="sm"
-              class="text-primary hover:underline"
-              onClick={() => props.onRetry()}
-            >
-              {getAlertTimelineFailureState().actionLabel}
-            </Button>
-          </div>
-        </Show>
+      <Show when={!props.loading() && !timeline() && !props.error()}>
+        <p class="text-xs text-muted" role="status">
+          {getAlertTimelineUnavailableState().text}
+        </p>
       </Show>
     </>
   );

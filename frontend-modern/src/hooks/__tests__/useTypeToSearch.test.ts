@@ -53,4 +53,60 @@ describe('type-to-search keyboard ownership', () => {
     }
     expect(input.value).toBe('a ');
   });
+
+  it.each([false, true])(
+    'leaves modal keys alone when background is inert (prepared=%s)',
+    async (prepared) => {
+      const background = document.createElement('div');
+      background.setAttribute('inert', '');
+      const input = document.createElement('input');
+      input.value = 'selected occurrence';
+      background.append(input);
+      const modalControl = document.createElement('button');
+      document.body.append(background, modalControl);
+      let preparations = 0;
+      createRoot((cleanup) => {
+        dispose = cleanup;
+        useTypeToSearch({
+          getInput: () => input,
+          prepareInput: prepared
+            ? () => {
+                preparations++;
+              }
+            : undefined,
+          clearOnEscape: true,
+          focusOnShortcut: true,
+          captureBackspace: true,
+          getValue: () => input.value,
+          onClear: () => {
+            input.value = '';
+          },
+        });
+      });
+      modalControl.focus();
+      for (const init of [
+        { key: 'Escape' },
+        { key: 'f', ctrlKey: true },
+        { key: 'Backspace' },
+        { key: 'x' },
+      ]) {
+        const event = new KeyboardEvent('keydown', { ...init, bubbles: true, cancelable: true });
+        modalControl.dispatchEvent(event);
+        await Promise.resolve();
+        expect(event.defaultPrevented).toBe(false);
+        expect(input.value).toBe('selected occurrence');
+        expect(document.activeElement).toBe(modalControl);
+      }
+      expect(preparations).toBe(0);
+      background.removeAttribute('inert');
+      const escape = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      });
+      modalControl.dispatchEvent(escape);
+      expect(escape.defaultPrevented).toBe(true);
+      expect(input.value).toBe('');
+    },
+  );
 });

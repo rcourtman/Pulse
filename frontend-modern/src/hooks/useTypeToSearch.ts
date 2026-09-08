@@ -52,6 +52,7 @@ const deleteBackward = (input: HTMLInputElement) => {
 const isVisibleInput = (input: HTMLInputElement | undefined): input is HTMLInputElement => {
   if (!input || !input.isConnected || input.disabled) return false;
   if (input.hidden) return false;
+  if (input.closest('[inert]')) return false;
   if (typeof window !== 'undefined') {
     const style = window.getComputedStyle(input);
     if (style.display === 'none' || style.visibility === 'hidden') {
@@ -110,6 +111,8 @@ const getActiveEntry = (
     const entry = registry[index];
     if (!readEnabled(entry.enabled)) continue;
     const input = entry.getInput();
+    // Modal background ownership also excludes prepared shortcut targets.
+    if (input?.closest('[inert]')) continue;
     const visibleInput = isVisibleInput(input) ? input : undefined;
     if (!visibleInput && !(options?.allowPrepared && entry.prepareInput)) continue;
     if (!predicate(entry, visibleInput)) continue;

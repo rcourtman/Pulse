@@ -22,6 +22,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
@@ -834,12 +835,16 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 			return
 		}
 
-		var incident *memory.Incident
-		if !startedAt.IsZero() {
-			incident = store.GetTimelineByAlertAt(alertID, startedAt)
-		} else {
-			incident = store.GetTimelineByAlertIdentifier(alertID)
+		page, err := store.QueryIncidents(memory.IncidentQuery{AlertIdentifier: alertID, StartedAt: startedAt, Limit: 1})
+		if err != nil {
+			http.Error(w, "Incident history unavailable", http.StatusServiceUnavailable)
+			return
 		}
+		var incident *memory.Incident
+		if len(page.Incidents) > 0 {
+			incident = page.Incidents[0]
+		}
+
 		if !startedAt.IsZero() && (incident == nil || len(incident.Events) == 0) {
 			if alert, resolvedAt := findAlertOccurrenceForTimeline(h.getMonitor(r.Context()).GetAlertManager(), alertID, startedAt); alert != nil {
 				incident = store.EnsureAlertOccurrence(alert, resolvedAt)
@@ -868,8 +873,12 @@ func (h *AlertHandlers) GetAlertIncidentTimeline(w http.ResponseWriter, r *http.
 			http.Error(w, "Incident store unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		incidents := store.ListIncidentsByResource(resourceID, limit)
-		if err := utils.WriteJSONResponse(w, exportIncidents(incidents)); err != nil {
+		page, err := store.QueryIncidents(memory.IncidentQuery{ResourceID: resourceID, Limit: limit})
+		if err != nil {
+			http.Error(w, "Incident history unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if err := utils.WriteJSONResponse(w, exportIncidents(page.Incidents)); err != nil {
 			log.Error().Err(err).Msg("Failed to write incident list response")
 		}
 		return
@@ -987,11 +996,13 @@ func (h *AlertHandlers) SaveAlertIncidentNote(w http.ResponseWriter, r *http.Req
 }
 
 type incidentEventView struct {
-	ID        string                   `json:"id"`
-	Type      memory.IncidentEventType `json:"type"`
-	Timestamp time.Time                `json:"timestamp"`
-	Summary   string                   `json:"summary"`
-	Details   map[string]interface{}   `json:"details"`
+	Source    string                           `json:"source,omitempty"`
+	Evidence  *unifiedresources.ResourceChange `json:"evidence,omitempty"`
+	ID        string                           `json:"id"`
+	Type      memory.IncidentEventType         `json:"type"`
+	Timestamp time.Time                        `json:"timestamp"`
+	Summary   string                           `json:"summary"`
+	Details   map[string]interface{}           `json:"details"`
 }
 
 func (v incidentEventView) NormalizeCollections() incidentEventView {
@@ -1002,23 +1013,24 @@ func (v incidentEventView) NormalizeCollections() incidentEventView {
 }
 
 type incidentView struct {
-	ID              string                `json:"id"`
-	AlertIdentifier string                `json:"alertIdentifier"`
-	AlertType       string                `json:"alertType"`
-	Level           string                `json:"level"`
-	ResourceID      string                `json:"resourceId"`
-	ResourceName    string                `json:"resourceName"`
-	ResourceType    string                `json:"resourceType,omitempty"`
-	Node            string                `json:"node,omitempty"`
-	Instance        string                `json:"instance,omitempty"`
-	Message         string                `json:"message,omitempty"`
-	Status          memory.IncidentStatus `json:"status"`
-	OpenedAt        time.Time             `json:"openedAt"`
-	ClosedAt        *time.Time            `json:"closedAt,omitempty"`
-	Acknowledged    bool                  `json:"acknowledged"`
-	AckUser         string                `json:"ackUser,omitempty"`
-	AckTime         *time.Time            `json:"ackTime,omitempty"`
-	Events          []incidentEventView   `json:"events"`
+	History         *memory.IncidentHistoryCoverage `json:"history,omitempty"`
+	ID              string                          `json:"id"`
+	AlertIdentifier string                          `json:"alertIdentifier"`
+	AlertType       string                          `json:"alertType"`
+	Level           string                          `json:"level"`
+	ResourceID      string                          `json:"resourceId"`
+	ResourceName    string                          `json:"resourceName"`
+	ResourceType    string                          `json:"resourceType,omitempty"`
+	Node            string                          `json:"node,omitempty"`
+	Instance        string                          `json:"instance,omitempty"`
+	Message         string                          `json:"message,omitempty"`
+	Status          memory.IncidentStatus           `json:"status"`
+	OpenedAt        time.Time                       `json:"openedAt"`
+	ClosedAt        *time.Time                      `json:"closedAt,omitempty"`
+	Acknowledged    bool                            `json:"acknowledged"`
+	AckUser         string                          `json:"ackUser,omitempty"`
+	AckTime         *time.Time                      `json:"ackTime,omitempty"`
+	Events          []incidentEventView             `json:"events"`
 }
 
 func emptyIncidentView() incidentView {
@@ -1042,6 +1054,7 @@ func exportIncident(incident *memory.Incident) *incidentView {
 	events := make([]incidentEventView, 0, len(incident.Events))
 	for _, event := range incident.Events {
 		events = append(events, incidentEventView{
+			Source: event.Source, Evidence: event.Evidence,
 			ID:        event.ID,
 			Type:      event.Type,
 			Timestamp: event.Timestamp,
@@ -1052,6 +1065,7 @@ func exportIncident(incident *memory.Incident) *incidentView {
 	alertIdentifier := strings.TrimSpace(incident.AlertIdentifier)
 	view := emptyIncidentView()
 	view.ID = incident.ID
+	view.History = incident.History
 	view.AlertIdentifier = alertIdentifier
 	view.AlertType = incident.AlertType
 	view.Level = incident.Level

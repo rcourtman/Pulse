@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -149,6 +150,30 @@ func (a *MonitorAdapter) GetRecentChanges(canonicalID string, since time.Time, l
 		return nil, nil
 	}
 	return registry.store.GetRecentChanges(canonicalID, since, limit)
+}
+
+// GetRecentChangesFiltered preserves the canonical query predicates used by
+// incident projections, including alert identity before the evidence limit.
+func (a *MonitorAdapter) GetRecentChangesFiltered(resourceID string, since time.Time, limit int, filters ResourceChangeFilters) ([]ResourceChange, error) {
+	registry := a.currentRegistry()
+	if registry == nil || registry.store == nil {
+		return nil, fmt.Errorf("canonical resource history unavailable")
+	}
+	return registry.store.GetRecentChangesFiltered(resourceID, since, limit, filters)
+}
+
+func (a *MonitorAdapter) ResourceHistoryIDs(resourceID string) ([]string, error) {
+	registry := a.currentRegistry()
+	if registry == nil || registry.store == nil {
+		return nil, fmt.Errorf("canonical resource history unavailable")
+	}
+	reader, ok := registry.store.(interface {
+		ResourceHistoryIDs(string) ([]string, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf("canonical history identities unavailable")
+	}
+	return reader.ResourceHistoryIDs(resourceID)
 }
 
 // GetResourceOperatorState exposes the durable operator-intent record through

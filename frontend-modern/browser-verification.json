@@ -1,35 +1,77 @@
 {
   "version": 1,
-  "base_sha": "c857802df6b00e61e2229eea411d6675deff2d8a",
-  "verified_at": "2026-09-07T22:03:54.189527Z",
+  "base_sha": "977afdd9559c0e9d5859f4c79bcc48e889381bba",
+  "verified_at": "2026-09-08T00:40:37.659048Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/utils/resourceStateAdapters.ts"
+    "frontend-modern/src/components/AI/Chat/index.tsx",
+    "frontend-modern/src/components/Alerts/IncidentAssistantHandoffButton.tsx",
+    "frontend-modern/src/components/Alerts/IncidentTimelineEventCard.tsx",
+    "frontend-modern/src/components/Alerts/IncidentTimelinePanel.tsx",
+    "frontend-modern/src/components/Alerts/incidentAssistantHandoffModel.ts",
+    "frontend-modern/src/features/alerts/AlertHistoryItemActions.tsx",
+    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx",
+    "frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx",
+    "frontend-modern/src/features/alerts/MobileAlertHistoryInvestigationDialog.tsx",
+    "frontend-modern/src/features/alerts/useAlertHistoryState.ts",
+    "frontend-modern/src/features/alerts/useAlertResourceIncidentsState.ts",
+    "frontend-modern/src/hooks/useTypeToSearch.ts",
+    "frontend-modern/src/types/api.ts",
+    "frontend-modern/src/utils/alertIncidentPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/utils/resourceStateAdapters.ts": "ce1f8f2aef4b04b64dd2533c09458349811ba7cec9ec2e4bd8634b8e9c3c848f"
+    "frontend-modern/src/components/AI/Chat/index.tsx": "ca9e630294db426df591c3386d4fec161f34ade0bb6a8c4ea769130545a12341",
+    "frontend-modern/src/components/Alerts/IncidentAssistantHandoffButton.tsx": "b7a6ea6676ed9834d8254bb4ddab1301ec3b0d2368a96fa3e91e9ab5d2cefb4f",
+    "frontend-modern/src/components/Alerts/IncidentTimelineEventCard.tsx": "21e90602de00aa4765b1c40b5295a618a237501389d50ca9dbe36454abd11f32",
+    "frontend-modern/src/components/Alerts/IncidentTimelinePanel.tsx": "7298d4184c243325dbd671777257c7efd66c86091eb4b83663315e2bdc131fcb",
+    "frontend-modern/src/components/Alerts/incidentAssistantHandoffModel.ts": "9e777eee1be46f33ac146770fac6193cf6cd1c8b33ab0d0cd72fe57b98907a37",
+    "frontend-modern/src/features/alerts/AlertHistoryItemActions.tsx": "06e75d16ccad383b7c89d109baaee71852482f49b41ef3d0f5cc99768dd35101",
+    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx": "851a2c1dc11ccbc827a6a50dfe06088b13a7307ce489b0767804daf6f33d023c",
+    "frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx": "c6f89c4991c9cfc2b1c8c82f7fed35af93b3b0b29b16b2c4bdc61a51005bec4c",
+    "frontend-modern/src/features/alerts/MobileAlertHistoryInvestigationDialog.tsx": "55af36a7194c2dbe9d944ca08f52e794f2b5e2ccbe79427bc55abe66aaa8a522",
+    "frontend-modern/src/features/alerts/useAlertHistoryState.ts": "652a09b02321ad1cfd087aacc7937a6afb5cfb7da0e0d6ca997b30d5c9ac53bd",
+    "frontend-modern/src/features/alerts/useAlertResourceIncidentsState.ts": "f9d44d5bd2199afb274b329877e19e891942106a63cecbeb26796fa4c7b3b507",
+    "frontend-modern/src/hooks/useTypeToSearch.ts": "b3f5244fd951baedc33fc8efee32c28077d94c07e5fce958eb6611bf50992a20",
+    "frontend-modern/src/types/api.ts": "82177cc67fc449a28d2d3cc226605ae091bd1f83fbdb001d15b3b430e5cd4100",
+    "frontend-modern/src/utils/alertIncidentPresentation.ts": "2e098b24b04c047a1b024a93608c5133720660cafc54c40408972413786a0a07"
   },
   "routes": [
-    "/proxmox"
+    "/alerts"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 900
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 900,
+      "height": 1000
+    },
+    {
+      "width": 768,
+      "height": 1000
+    },
+    {
+      "width": 767,
+      "height": 1000
     },
     {
       "width": 390,
-      "height": 844
+      "height": 1000
     }
   ],
   "states": [
-    "Canonical 100% to 35%; stale/offline/unavailable agent evidence retains trusted 100%.",
-    "Explicit Proxmox withdrawal with omitted canonical memory: table N/A, Memory section absent.",
-    "Measured-zero recovery: table 0%, Memory Total and Free both 100 MB; second cluster stays 80%."
+    "Canonical merged occurrence and source evidence, resolved alert with independently unknown current health.",
+    "Loading and disabled Refresh, initial/cached read failures, Retry/Refresh, successful empty, partial history and unknown times.",
+    "Saved operator note and unsaved draft across desktop/phone layout changes, long-note wrapping and persisted reload.",
+    "Timeline/resource handoff into Assistant, reopened composer focus, saved funded history-and-note response across widths."
   ],
   "interactions": [
-    "Open guest drawer; deliver synthetic canonical socket snapshots while open.",
-    "Resize to desktop and narrow Chromium; scroll recovered Memory into view above fixed navigation; inspect all five final screenshots."
+    "Expand/collapse native Evidence details by keyboard, All/None event filters and note draft enable/clear.",
+    "Expand resource Events, inject read errors, retry and reload.",
+    "Resize source and open Assistant destination across 390/900/767/768/1440 widths.",
+    "Type in a modal without clearing background search, Escape and return focus to the selected card.",
+    "Resume exact saved session 81c92125-cdc3-4611-931a-687e6548bf65, scroll through its note explanation and inspect actual pixels."
   ],
-  "notes": "Synthetic Desktop Chrome acceptance only, not touch/mobile-device, installed poller, FreeBSD reporter or alert-delivery proof. Base reproduced stale 100% after withdrawal; adapter repair passed final Chromium test without retries and pageerror assertion. Earlier fixture wrongly expected raw-facet total after withdrawal; useWorkloads maps canonical metrics only. Two selector/absent-section failures and first passing but bottom-nav-obscured screenshot run are retained, not counted as final visual acceptance. Final four transition screenshots show withdrawn section absent and recovered Total/Free in frame at both widths; initial 35% screenshot is table-only. Evidence: /var/lib/pulse-maintainer/queue/staging/20260907T215015Z-web-product/ (moves to completed): browser-base.log, browser-repair.log, browser-repair-selector.log, browser-canonical.log, browser-final.log, final-report/data/*.png. Browser command: pulse-heavy-run -- bash wrapper starting Vite 127.0.0.1:5187 then PLAYWRIGHT_BASE_URL=http://127.0.0.1:5187 playwright test tests/86-hybrid-memory-browser.spec.ts --project=chromium --retries=0; Vite stopped by wrapper trap."
+  "notes": "Final local Chromium functional and visual acceptance of runtime 0.0.0-dev-pro+incident-history-r10, binary SHA256 2e1958d0856c812d22870144cf228509f2a4a3696258a533d34802442f500edb. Commands and retained failed attempts are in docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md. Receipt directories: /Volumes/Development/pulse/tmp/patrol-incident-history/browser, browser-states, browser-resize and browser-saved-explanation. No new model calls in final browser repetition. Funded changed-context r9 response remains applicable because r10 changes only responsive destination ownership. Controlled HTTP variants are not a database outage. Not touch-device, production rollout, backup/restore or population reliability proof. Upstream 977afdd adds tests and contract documentation only. All 14 accepted frontend content hashes remain identical."
 }

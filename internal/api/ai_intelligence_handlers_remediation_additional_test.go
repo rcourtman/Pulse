@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestHandleGetCircuitBreakerStatus(t *testing.T) {
@@ -192,5 +193,40 @@ func TestHandleGetRecentIncidentsCountIsNotMeasured(t *testing.T) {
 				t.Fatalf("archive/context presence cannot establish live count: %#v", body)
 			}
 		})
+	}
+}
+
+func TestHandleGetRecentIncidentsCanonicalOnlyAndReadFailure(t *testing.T) {
+	handler, incidents := setupIncidentHandler(t)
+	canonical, err := unifiedresources.NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer canonical.Close()
+	incidents.SetResourceTimelineStore(canonical)
+	change := unifiedresources.BuildAlertTimelineChange("canonical-only-resource", unifiedresources.ChangeAlertFired, time.Now().Add(-time.Minute), "", unifiedresources.AlertTimelineChange{AlertIdentifier: "canonical-only-alert", AlertType: "disk"})
+	if err := canonical.RecordChange(*change); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/api/ai/incidents?resource_id=canonical-only-resource", nil)
+	response := httptest.NewRecorder()
+	handler.HandleGetRecentIncidents(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	var page memory.IncidentPage
+	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Incidents) != 1 || page.Incidents[0].AlertIdentifier != "canonical-only-alert" || page.History.Source != "canonical_resource_history" {
+		t.Fatalf("canonical evidence missing: %#v", page)
+	}
+	if err := canonical.Close(); err != nil {
+		t.Fatal(err)
+	}
+	response = httptest.NewRecorder()
+	handler.HandleGetRecentIncidents(response, request)
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatal(response.Code, response.Body.String())
 	}
 }

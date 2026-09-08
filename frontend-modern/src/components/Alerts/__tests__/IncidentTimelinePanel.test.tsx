@@ -191,4 +191,63 @@ describe('IncidentTimelinePanel', () => {
     });
     expect(JSON.stringify(context)).not.toContain('systemctl status pulse');
   });
+  it('discloses a capped history without inventing its opening time', () => {
+    const [filters, setFilters] = createSignal(new Set(['command']));
+    render(() => (
+      <IncidentTimelinePanel
+        timeline={() =>
+          makeTimeline({
+            status: 'unknown',
+            openedAt: '0001-01-01T00:00:00Z',
+            history: {
+              source: 'canonical_resource_history',
+              observedSince: '2026-03-01T00:00:00Z',
+              observedBefore: '2026-03-20T12:00:00Z',
+              changeLimit: 1,
+              hasMoreChanges: true,
+              hasMoreIncidents: false,
+            },
+          })
+        }
+        loading={() => false}
+        error={() => false}
+        filters={filters}
+        setFilters={setFilters}
+        filterVariant="compact"
+        eventCardVariant="surface"
+        noteDraft={() => ''}
+        onNoteDraftChange={() => undefined}
+        noteSaving={() => false}
+        onSaveNote={() => undefined}
+        onRetry={() => undefined}
+      />
+    ));
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Earlier occurrences or events may be missing',
+    );
+    expect(screen.getByText('unknown')).toBeInTheDocument();
+    expect(screen.queryByText(/^opened /)).not.toBeInTheDocument();
+  });
+  it('keeps refresh failure and retry visible alongside saved evidence', () => {
+    const [filters, setFilters] = createSignal(new Set(['command']));
+    render(() => (
+      <IncidentTimelinePanel
+        timeline={() => makeTimeline()}
+        loading={() => false}
+        error={() => true}
+        filters={filters}
+        setFilters={setFilters}
+        filterVariant="compact"
+        eventCardVariant="surface"
+        noteDraft={() => ''}
+        onNoteDraftChange={() => undefined}
+        noteSaving={() => false}
+        onSaveNote={() => undefined}
+        onRetry={() => undefined}
+      />
+    ));
+    expect(screen.getByRole('alert')).toHaveTextContent('Failed to load timeline.');
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(screen.getByText('Command executed')).toBeInTheDocument();
+  });
 });

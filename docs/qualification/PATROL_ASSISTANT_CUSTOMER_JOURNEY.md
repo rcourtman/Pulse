@@ -4,9 +4,12 @@ The customer job is: "Tell me what needs my attention, explain why, and help me
 deal with it without creating more work." Patrol owns the issue and investigation.
 Assistant explains that same issue and uses existing governed action contracts.
 
-The local redesign and named qualification matrix are delivered. See
+The earlier r34 local redesign and named qualification matrix landed. See
 [verified delivery and remaining gate](#verified-local-delivery-and-remaining-release-gate)
-for the exact source and CI results. Production-wide readiness remains open.
+for that source and CI evidence. The subsequent
+[shared incident-history continuation](#continued-shared-incident-history-modernization-2026-09-07)
+is unlanded and its required qualification remains incomplete. Production-wide
+readiness also remains open.
 
 ## Active redesign plan, 2026-09-05
 
@@ -3615,3 +3618,621 @@ operator access and consent. Do not manufacture it from adoption telemetry or
 repeat maintainer-lab runs as a substitute. No production rollout or release was
 performed. The explicit subscription-provider refusal remains preserved without
 retry or bypass.
+
+## Continued shared incident-history modernization, 2026-09-07
+
+The maintainer requested continuation after the named local redesign matrix
+landed. The independent-environment question remains open. This slice addresses
+the recorded incident-memory query residual and does not satisfy the wider
+readiness gate by extending the same homelab evidence.
+
+The reviewed continuation baseline selected legacy memory shells before consulting
+canonical history. This omits canonical-only alert occurrences and aliases whose
+shell identifiers differ from the query. Projection readers also discard store
+errors, scan an infrastructure-wide 256-event window before selecting an alert,
+and can combine events from repeated occurrences of the same alert. The owning
+fix belongs in the shared incident query/projection and canonical history query,
+not in a single HTTP handler or model-written summary.
+
+Executable order and acceptance:
+
+1. Reproduce canonical-only, alias, projection-error, bounded-history and repeated
+   occurrence cases with actual memory/SQLite history stores. Record provenance
+   and observation/occurrence time expectations before changing projection.
+2. Read canonical history first through its shared query contract, apply query
+   filters before limits, retain explicit bounds and unavailable evidence, and
+   preserve legacy notes as attributed history. Keep separate alert occurrences
+   separate. Do not create a diagnosis, recovery or current-health verdict from
+   missing records or a completed query.
+3. Route resource listings, alert timeline reads and model context through that
+   shared result. Propagate read failures to API callers and disclose unavailable
+   context to the model. Preserve canonical event provenance and existing exact
+   alert/resource authority. No new diagnosis orchestration or provider retry
+   policy is authorized by this change.
+4. Run targeted regressions and affected complete race suites on the worker.
+   Inspect the affected live Alerts timeline and Assistant journey with
+   Playwright after the final build at 1440x1000, 900x1000 and 390x1000. Cover
+   loading, empty, failed reads, repeated occurrences, expanded event details,
+   filters, dismissal/focus return, reload and deep scrolling. Inspect pixels as
+   well as DOM state. If model-visible context changes, qualify the affected
+   real-model history explanation through an authorized provider route and
+   preserve any unavailable-provider limit explicitly.
+5. Update the owning contracts and this record with exact source, proofs and
+   remaining limits, then land the verified scope through the repository
+   workflow. Local proof and independent customer qualification stay distinct.
+
+Current state: the incident-history continuation has final r10 source acceptance
+on integrated main `977afdd9559c0e9d5859f4c79bcc48e889381bba` plus the scoped
+changes. Affected regressions and final browser interaction/pixel checks pass.
+Three funded Astra explanations passed, with both earlier Gemini failures
+retained. The actual note survives reload and its text reaches Assistant.
+Repository commit checks and scoped landing remain pending. Both the old
+candidate and matching unchanged base timed out in the full API race suite,
+so no passing whole-suite receipt is claimed. The subscription-provider refusal
+is preserved without retry or bypass, and wider readiness remains open.
+
+### Incident-history candidate r1: implementation and proof in progress
+
+The shared `IncidentStore.QueryIncidents` now reads canonical evidence before
+selecting incident rows. Alert metadata filters and observation bounds are
+applied before limits in SQLite and memory, with matching aggregate counts.
+Both stores order by observation time and event ID. The earlier memory behavior
+used reverse insertion order, which disagreed with SQLite for late observations.
+The relationship-aware store and monitoring replay fixtures now assert the
+canonical observation order while retaining every expected event.
+
+Explicit firing times partition repeated occurrences. The alert identifier and
+firing time determine canonical-only occurrence identity. Repeated observations
+of the same firing do not rename it, and two firings 500 milliseconds apart stay
+separate. Exact-start selection chooses the closest occurrence within the
+existing one-second shell matching tolerance. A capped query does not attach
+ambiguous later events to an earlier saved occurrence. Missing starts stay
+unknown. Source event IDs, observed/occurred times, actor, adapter, confidence,
+metadata and related resource identities remain on the returned evidence.
+
+Canonical-only incidents can retain an operator note without copying canonical
+lifecycle events into a second durable history. Saved notes and snapshots carry
+their own source attribution. History aliases are read selectors only and do not
+change action authority. API reads return service-unavailable on canonical read
+failure, and monitoring skips reconciliation instead of fabricating a fallback
+when that read fails. Assistant's incident summaries disclose unavailable or
+truncated history and do not claim current health from historical lifecycle.
+
+User job: “What happened last time, and is this the same problem?” The live r34
+baseline was opened at `/alerts`, History, then a timeline at 1440 × 1000. This is
+three navigation/control actions. The expanded timeline has twelve event filter
+controls plus the Assistant handoff before its event content. The current slice
+keeps the established timeline interaction and places new forensic provenance
+behind one “Evidence details” disclosure. Missing timestamps are shown as
+unavailable, and a truncated query receives an explicit notice. The inspected
+issue #1782 supports current-evidence grounding and preservation of the governed
+action path. It does not establish customer demand for extra timeline decoration.
+No issue comment was sent.
+
+Current proof receipts under the worker's `patrol-incident-history` directory:
+
+- New filter regression first failed compilation because the filter fields did
+  not exist. It then passed against both real stores. The full store race suite
+  initially exposed the reverse-insertion expectation described above.
+- Focused memory and incident HTTP race tests passed. The full affected suites
+  passed: memory 2.217 s, unified resources 72.877 s, alerting 3.691 s,
+  monitoring 212.854 s and runtime 24.119 s. An earlier monitoring run failed
+  its reverse-insertion expectation, before that expectation was corrected.
+- Frontend type checking passed. Nine tests across the timeline panel and event
+  card passed, followed by the current frontend build. An initial dependency
+  symlink attempt failed Vite module resolution before running tests. A fresh
+  task-local `npm ci` resolved that environment failure.
+- Cross-build verified 5,985 core and 60 enterprise source hashes with no
+  mismatches. Candidate `0.0.0-dev-pro+incident-history-r1` has SHA-256
+  `1cd63e63b767a7a02334a89ead3b8f34941b1371fdd764646ae6f689df7455c0`.
+
+This is a candidate under qualification, not a completed continuation. The full
+API race suite, final-build Playwright matrix, affected real-model explanation,
+final review and repository landing are still pending at this checkpoint. The
+previously authorized Gemini key had a US$5 limit and expiry on 2026-09-07.
+No provider call has been made in this continuation, and the Claude subscription
+refusal remains untouched. Independent customer-environment consent/evidence is
+still unavailable, so the wider rollout gate remains open independently of this
+local implementation work.
+
+### Incident-history r1 live failures and r2 corrections
+
+The r1 live timeline of disposable run `q-20260907-150920-a22e598e` failed
+qualification. The alert-history row was resolved, but its timeline was open.
+The canonical resource timeline contained both records: firing
+`85ddd9f5-0368-5740-a041-eb68d2f131c6` at 15:10:01.025055Z and resolution
+`f3c13163-33dd-5b10-9b37-ef8c8a1bc37b` at 15:10:30.96527Z. Two legacy shells
+had the same alert identifier and explicit firing time. Projection assigned
+firing to one and resolution to the other. The shared query now merges those
+shells before projecting canonical events, retains a stable existing ID and
+all local notes, and accepts either saved ID as a read selector. Regression
+covers both aliases and the combined lifecycle. API snapshot fallback was not
+used to mask this defect.
+
+A separate live backup timeline displayed `warning 0.0 >= 0.0`. The shared event
+summary had invented an inequality from numeric fields without retaining the
+source condition. Source messages now own fired-event descriptions. Where no
+message exists, the fallback names only the alert type and level. Regression
+covers source conditions, including a below-threshold comparison, and neutral
+fallbacks for CPU and backup incidents.
+
+Read-failure inspection also exposed an error-visibility gap. A timeline refresh
+could retain cached evidence while hiding its error, and resource history could
+show an empty-state claim after its error toast disappeared. Both views now
+retain visible read failure and a retry control. Resource-history state preserves
+cached evidence separately from loading and failure, and clears failure only
+when a new read succeeds. Tests exercise failed initial read, successful retry,
+failed cached refresh and successful empty read.
+
+The r1 Playwright script also had a harness error: Escape cleared its search,
+so its single-row expectation saw 138 timeline buttons. Removing that unintended
+search reset repaired the script. This is separate from the reproduced product
+failures above. No final r2 browser or real-model pass is claimed here.
+
+The saved non-secret provider-limit receipt confirms the authorized key expired
+at `2026-09-07T17:23:20.631Z`. This was verified after that timestamp, without
+calling the provider. Its initial US$5 balance is not a current spend balance.
+The affected r2 real-model history explanation requires a valid funded route
+and remains unperformed. The subscription-provider refusal is not an alternative
+route and has not been retried.
+
+Remaining affected model qualification is a read-only Assistant turn from the
+repaired historical lab incident. Ask: “Explain what happened in this occurrence,
+what evidence records its resolution, and what we can and cannot conclude about
+its current health. Do not change anything.” Verify the response against the
+independent canonical firing/resolution records above, its saved note and exact
+occurrence ID. The answer must distinguish observation from occurrence time,
+recorded resolution from present health, and historical evidence from an action
+outcome. No action proposal, execution or provider substitution is needed. A
+second turn with unavailable history must say that the evidence could not be
+read, without converting failure into no incidents or a healthy result. Retain
+session IDs, provider/model, exact runtime hash, latency and actual spend. A
+scripted fixture response does not satisfy this real-model check.
+
+The maintainer supplied a replacement OpenRouter key in this continuation and
+authorized its use. The key metadata endpoint reports a valid paid key with
+zero initial usage and no provider-side limit or expiry. The prior US$5
+qualification ceiling is retained as a task budget, not claimed as a provider
+enforcement boundary. Only the two read-only history turns above are planned.
+Authenticated local settings confirmed Patrol disabled, control level read-only,
+and `openrouter:google/gemini-3.8-flash` selected for chat and Patrol before the
+credential update. The update succeeded through the ordinary settings endpoint.
+An initial helper request omitted its CSRF header and was rejected before the
+update. The corrected request supplied the normal session CSRF token. No
+subscription request or model call was made during configuration.
+
+Narrow exploration reproduced an additional handoff defect at 390 × 1000.
+The incident drawer remained above Assistant after Discuss, hiding the
+continuation. The shared incident handoff now exposes the same explicit callback
+pattern used by finding handoffs. Mobile timeline and resource-history drawers
+close after the incident context has been handed to Assistant. Desktop inline
+panels remain governed by their existing controls. Mounted tests cover both
+mobile source views and preserve the same incident ID, status and read-only
+context. Final browser qualification must repeat the drawer transition and
+inspect the reachable Assistant composer, dismissal and focus.
+
+The first callback attempt still failed because the app's shared blocking-dialog
+guard correctly closed Assistant while the source drawer was mounted. The final
+transition captures the incident context, closes the source drawer, then opens
+Assistant in the next microtask, matching the existing command-palette handoff.
+The mounted regression checks that the dialog stack is no longer blocking when
+Assistant opens. Narrow exploration then passed without a model request. This
+exploration used the r1 backend and does not qualify its known split lifecycle.
+
+### Candidate r2 qualification checkpoint
+
+Final r2 source passed memory and unified-resource race suites in 2.225 s and
+72.169 s, plus focused incident alerting/API/monitoring race checks in 1.203 s,
+2.576 s and 1.770 s. Frontend type checking and 62 tests in eight files passed,
+followed by the frontend build and verification of 5,987 core and 60 enterprise
+source hashes. Binary SHA-256:
+`7c82377ca4cc58f0f3ab3e3d64bd2edac7692309596416ce0f70e836d731726a`.
+The local built runtime confirmed the previously split lab occurrence as
+resolved with both canonical lifecycle records.
+
+The broad r1 API race run failed. It reported
+`TestServerInfoEndpointReportsDevelopment` expecting development mode, then hit
+its one-hour deadline in `TestAuthenticatedEndpointsRequireToken`, which had
+spent 39m6s in the running test. The timeout stack is in mock unified-resource
+fixture expansion during per-resource metric-window evaluation and router
+construction. This is not a passing broad API receipt. The worker source export
+has no Git directory. A fresh exact-base Git checkout passed the same two tests
+in isolation in 62.298 s after its required frontend embed build. The initial
+baseline attempt lacked generated embed assets and failed setup. Candidate
+comparison in that Git checkout remains pending at this checkpoint. Neither
+isolated result can establish that the full suite is free of shared-state or
+performance problems.
+
+R2 browser qualification also found that Assistant's composer registration and
+focus happened only at mount. Reopening from a mobile drawer left focus on the
+underlying alert search, so Escape cleared the search rather than dismissing
+Assistant. Candidate r3 moves registration and focus into Assistant's shared
+open lifecycle and clears the registration on close. A mounted regression
+starts closed and checks two separate composer instances across reopening.
+Final build, complete browser repetition and both funded model explanations
+remain pending. No full-task completion is claimed.
+
+### Candidate r3 browser failure and r4 correction
+
+The isolated candidate API comparison passed the same two tests in 63.937 s.
+The complete Assistant component file passed 211 tests. These receipts do not
+replace the failed broad API race run above.
+
+R3 was built and deployed locally with SHA-256
+`f4ec960416cff6fa5c779119689d04f2842e38aee6494e23a4f1649d4f7e1d01`.
+The repeated live matrix still failed narrow Escape dismissal. Browser inspection
+identified a second focus owner in the mobile alert list. Its normal drawer-close
+callback restores focus twice through animation frames, overriding the shared
+Assistant open lifecycle. R4 gives the source drawer an explicit handoff callback
+that closes the investigation without scheduling return focus. Ordinary drawer
+dismissal retains its existing focus restoration. The regression now mounts the
+parent mobile list and waits through both animation frames before checking the
+destination focus. Its first run exposed an incomplete test fixture, which omitted
+the required alert type. That fixture was corrected before repeating qualification.
+
+Opening Assistant also sends ordinary provider-readiness requests. The browser
+receipt's chat/session submission counter excludes those probes and must not be
+interpreted as a count of all provider traffic. No history explanation has been
+submitted at this checkpoint. The subscription refusal remains unchanged.
+
+R4 passed 218 frontend tests across the full Assistant file and both mobile
+investigation files, type checking and the frontend build. Runtime SHA-256:
+`bad20d2dee980abf826809755689538ae8c1a5ea113656619e7d5d92741af366`.
+The complete live `/alerts` history matrix passed at 1440, 900 and 390 × 1000,
+including both Assistant handoffs, Escape, evidence expansion, cached read
+failure/retry and reload. Controlled-state scripts initially selected notification
+toasts or hidden desktop copies of mobile elements. Those locator failures were
+corrected without changing product source.
+
+The first funded history explanation was a failed qualification, despite correctly
+distinguishing alert closure from current health and verified remediation.
+Session `efdc8896-747c-4516-8b43-d1e697495c00`, Gemini 3.8 Flash through OpenRouter,
+HTTP 200, 15.806 s, 28,070 input and 1,622 output tokens, recorded session cost
+US$0.027135. The model read inventory and canonical history, then asserted no governed action record existed without reading actions. The
+initial network-removal criticism did not account for automatically attached
+related-resource history and is corrected in the r6 review below. R5 corrects the shared history tool's existing
+read-scope description: resolution records closure rather than workload recovery,
+related-resource IDs identify relationships rather than additional event targets,
+and this read does not query action records. These are factual source boundaries,
+not deterministic diagnosis or response-scoring rules. The failed transcript is
+retained locally. A fresh-session rerun is required before the unavailable-history
+turn. The additional turn remains within the existing US$5 task ceiling.
+
+Provider-readiness inspection confirms that this OpenRouter route performs an
+authenticated key-metadata GET, not a model completion
+(`internal/ai/providers/openai.go`, `TestConnection` / `testOpenRouterKey`).
+The first funded session increased the local one-day estimated usage total by
+US$0.02794875, including US$0.00081375 for its automatic session title. These are
+Pulse pricing estimates. Actual provider billing and remaining balance have not
+been independently reconciled after that turn.
+
+### R5 outcome and R6 qualification plan
+
+R5 tool regression passed in 1.640 s and the final source hashes matched.
+Runtime SHA-256:
+`f43652b8c939238b5dcb7848e68c99d72def8ade316234010d6767784e99447f`.
+The live three-viewport history matrix and controlled desktop/mobile loading,
+initial failure, retry, empty, partial and unknown-time cases passed again.
+The controlled cases substitute HTTP responses, not a real database outage.
+
+The second funded Gemini history explanation also failed factual qualification.
+Session `c2f40f27-6d7c-40f6-8e3a-549ac5232071`, HTTP 200, 18.406 s,
+40,235 input and 1,630 output tokens, estimated session cost US$0.03628875.
+Including its automatic title, the local estimated usage increase was
+US$0.037116. It stopped claiming the related network was removed, but still
+asserted no action plan or verified execution existed without reading action
+records. Both failed attempts remain in the denominator. Their total estimated
+increment including titles is US$0.06506475. Neither is a passing history
+explanation or evidence of population-wide effectiveness.
+
+The request inspection exposed a separate shared projection defect: saved shells
+retained a legacy resource ID and stale risk fields despite canonical alert
+evidence. R6 gives explicit canonical alert event kinds ownership of resource
+identity, type, severity and message, while retaining the saved incident ID and
+notes. A related command's execution host cannot retarget the incident. The new
+single regression passed locally in 0.495 s after correcting its fixture's
+collection type. Full memory regression and the rebuilt runtime remain required.
+
+The full candidate API race run in the disposable Git checkout failed at its
+30-minute deadline, with `TestAuthenticatedEndpointsRequireToken` running 6m40s.
+The package elapsed time was 1802.152 s. Its stack traverses mock fixture cloning,
+unified snapshot construction, per-resource metric-window evaluation and router
+construction. Those stack functions are not modified by this incident query
+slice. This is an unresolved broad performance/qualification limit, not a pass
+and not proof that the entire failure is unrelated to all candidate effects.
+No further broad rerun was queued ahead of the release rehearsal.
+
+The next two history checks use the exact funded route
+`openrouter:openai/gpt-6-astra`, in fresh sessions with Patrol disabled and control
+read-only. The provider's public Models API lists function calling and the route's
+prices. [Official model documentation](https://developers.openai.com/api/docs/models/gpt-6-astra)
+identifies it as a model for complex reasoning and end-to-end work. The route was
+selected as a stronger-model qualification, not to erase Gemini's failures or
+claim that its earlier seven-case lab matrix transfers to this model.
+
+The exact OpenRouter price row was reviewed on 2026-09-07: US$10 input / US$50
+output per million tokens below its `min_prompt_tokens=272000` override, and
+US$20 / US$75 at that override. Cache discounts are omitted for conservative
+budget estimation. Unreviewed variants remain unknown. A targeted boundary and
+alias regression passed locally in 0.364 s. These are estimated list-price costs,
+not actual billing. The aggregate qualification ceiling remains US$5. The
+subscription-provider refusal is unchanged. No GPT-6 Astra explanation has been
+submitted at this checkpoint.
+
+The local 30-day estimated budget was temporarily set to US$5 before any Astra
+explanation, with a pre-existing estimated total of US$1.45530525. This is stricter
+than a separate US$5 allowance for this continuation. The existing budget check
+runs between model turns and cannot cap an already in-flight provider charge.
+The prior budget was zero and the prior chat route was Gemini 3.8 Flash. Restore
+those temporary qualification settings after the two checks, retaining the
+user-authorized replacement credential in encrypted runtime configuration.
+
+A matching full API race baseline comparison is queued after the candidate r6
+proof/build, behind the release rehearsal. It uses unchanged base
+`1a822d164b3119724b01615da217618edf7e37e5`, a disposable Git checkout, the same
+Go 1.26.8 toolchain, non-root execution, GOMAXPROCS=4 and 30-minute timeout.
+This is a pending diagnostic comparison, not a passing receipt or a relaxation
+of the candidate failure.
+
+### R6 final source qualification in progress
+
+The release rehearsal released the shared worker at 23:28:46 UTC. The normally
+queued r6 job completed with exit 0. The full memory race suite passed in
+2.189 s and the full cost race suite in 1.148 s. Focused alerting and monitoring
+race checks passed in 1.222 s and 1.496 s. The first filtered memory invocation
+reported no tests, so it is not counted as proof. The subsequent full memory
+invocation is the passing receipt. All 5,987 core and 60 enterprise source
+hashes matched. The built r6 runtime SHA-256 is
+`3c875fcfe1826c4ef50fe6f116d49269c1111dc569b09a0e80175d13f9421f92`.
+It was hash-checked and installed on the local development stack. Final browser,
+funded-model and saved-note qualification remains pending at this checkpoint.
+
+The r6 live matrix passed at 1440, 900 and 390 × 1000 with the canonical resource
+ID and type in the incident and Assistant handoff. Controlled desktop/mobile
+loading, initial error, retry to empty, partial-history and unknown-time cases
+also passed. Pixels confirmed visible evidence and errors, reachable handoffs
+and the mobile composer. This proof preceded the resize defect described below.
+
+Both funded Astra turns passed factual review. History session
+`1b881e3f-57b1-4fcd-be64-ee8e46885394` completed HTTP 200 in 18.507 s,
+with reported 8,054 input and 456 output tokens, estimated session cost
+US$0.10334 and total usage increase US$0.11216 including its title. It explained
+the recorded closure, kept present health and remediation unknown, and said an
+action record was not supplied rather than asserting none existed. Its network
+removal statement is supported by separate canonical record
+`8539f198-82b0-4720-81c1-abdf871e60b1`, targeted at
+`docker-network-7f19c579093f3cd0`. The shared server handoff automatically reads
+related resource history with a five-record limit. This record was within that
+input. Tool calls alone are not the complete model context. The earlier r4
+network criticism is therefore withdrawn as an unsupported qualification
+finding. Both Gemini attempts still fail on their independent unsupported
+claims about action-record absence.
+
+Unavailable-history session `8365f1d5-e20b-4317-b297-3200f37ad67c` completed
+HTTP 200 in 8.957 s, reported 6,843 input and 100 output tokens, estimated
+session cost US$0.07343 and total increase US$0.07883 including its title. It
+stated only that canonical evidence could not be read and left incidents,
+health, actions, cause and transience unknown. Neither Astra turn called tools
+or changed infrastructure. The unavailable case uses the actual formatter's
+error text in controlled handoff context, not a live database outage. Total
+estimated spend across all four turns and titles is US$0.25605475. Actual
+provider billing remains unreconciled. Two failed explanations remain in the
+four-attempt denominator. This is not a population success-rate estimate.
+
+Some earlier saved SSE text had mojibake because the browser receipt helper used
+response.text decoding. Actual pixels rendered punctuation correctly. Subsequent
+capture explicitly decodes response.body as UTF-8. No output-rewriting product
+patch was added. After both turns, the temporary chat model was restored to
+Gemini 3.8 Flash and budget to zero, with Patrol still disabled and read-only.
+Zero budget is omitted by the settings JSON, which initially confused the
+restoration assertion. A subsequent read verified the restored settings.
+
+### R7 responsive investigation correction in progress
+
+One actual note was saved to the owned historical lab occurrence and survived
+read-error retry and desktop reload. Shrinking that open desktop timeline to
+390 pixels exposed a product defect: its card said Hide, but the timeline was
+hidden and no mobile drawer existed. Two read-only attempts confirmed it without
+writing another note. The local mobile drawer selection had diverged from the
+shared expansion state. The mobile layout now projects existing shared resource
+or timeline selection when entering the phone layout and leaves that state
+intact when returning to desktop. Its action label reflects the actual drawer,
+including when other desktop rows remain expanded. Both timeline and resource
+resize regressions pass in the seven-test mobile-list suite. R7 build and full
+affected browser repetition remain required. The responsive correction alone left the model input unchanged. A subsequent
+review found that the handoff discarded operator note text, retaining only its
+"Note added" summary. R7 now preserves the attributed note in shared incident
+model formatting and the Assistant handoff, while excluding unrelated details
+and raw command output. The new memory regression passed in 0.437 s and the
+combined handoff/mobile-list checks passed 11 tests in 1.58 s. One additional
+funded history-and-note explanation is required after the r7 build, within the
+existing US$5 ceiling. The two r6 outcomes remain recorded without replacing
+that final changed-context check.
+
+### Integration with updated main, 2026-09-07
+
+Main advanced from `1a822d164b3119724b01615da217618edf7e37e5` to
+`203b50a46ece5e911d6f5f6ea46bbeef218aeab5` during qualification. The candidate
+was saved to a task-local archive and explicit-path Git stash, main was
+fast-forwarded, and the work was reapplied. Upstream lifecycle replay identity,
+unchanged-checkpoint suppression and their regressions are retained. The
+superseded legacy projection helper remains removed in favour of QueryIncidents.
+Owning contract additions from both changes are preserved.
+
+The upstream cross-resource occurrence regression failed on the initial merge
+in both the two-minute and 500-millisecond cases. An unrelated resource's shell
+was shortening the selected alert occurrence. The shared query now resolves
+resource history identities, separates saved-shell grouping by resource, adopts
+the exact canonical firing target before assigning subsequent evidence, and
+excludes unrelated-resource boundaries for alert events. The five focused
+integrated regression groups passed in 0.491 s. Full integrated source proof and
+r7 qualification remain required. The old-base API comparison only diagnoses the
+earlier full-suite timeout and cannot qualify the integrated candidate.
+
+The matching clean old-base full API race comparison also failed its 30-minute
+bound. The checkout was exactly `1a822d164b3119724b01615da217618edf7e37e5`
+and stayed clean. It ran as the normal worker user through the allocator with
+Go 1.26.8 and GOMAXPROCS=4. The package failed after 1802.195 s, with
+`TestRecoveryEndpointRequiresDirectLoopback` running for 7 m 46 s at timeout.
+The earlier candidate failed after 1802.152 s with a different active test,
+`TestAuthenticatedEndpointsRequireToken`. The worker log is
+`/opt/pulse-release-worker/patrol-incident-history/base-api-proof.log`.
+This establishes that the unchanged old base also cannot finish that broad
+race command within the same bound. It does not attribute every candidate
+effect to the base, and neither run is a passing whole-API-suite receipt.
+The integrated candidate still requires its scoped proof and repository checks.
+
+### R7 integrated source qualification, 2026-09-08
+
+The normal worker r7 command completed with exit 0. All 5,990 core and 60
+enterprise source hashes matched. Complete affected race suites passed:
+incident memory 2.252 s, unified resources 72.880 s, alerting 3.598 s and
+monitoring 206.311 s. Frontend type checking and all 51 tests in the four
+handoff/mobile investigation files passed. The frontend build completed in
+27.50 s. The resulting development runtime is
+`0.0.0-dev-pro+incident-history-r7`, with core base
+`203b50a46ece5e911d6f5f6ea46bbeef218aeab5` plus the scoped changes and enterprise
+`b9fa43dcf0ee743652b20d1a866da8ca9c82cdbd`. Its SHA-256 is
+`341b9d2e3c685d0280a321453546a5a02321d8ba9ce923f99a51a961da9c8340`.
+The same binary and frontend assets were installed on the local development
+stack. Final browser, changed-context model and repository checks remain
+required at this checkpoint.
+
+The remaining r7 scoped race proof also passed: complete shared AI 23.613 s,
+tools 62.645 s and cost 1.148 s, then the selected incident API handlers in
+2.015 s. It ran from the exact integrated Git checkout under the normal worker
+allocator. These passes do not replace the failed broad API runs.
+
+R7 live history and controlled-state Playwright scripts passed at their planned
+widths, including composer focus after both handoffs. Pixel inspection then
+found the saved operator note clipped on the 900-pixel desktop timeline because
+event text inherited the table's no-wrap style. R8 corrects the shared event
+card's wrapping and preserves note line breaks. This is a real browser failure,
+not a passing visual receipt. The affected matrix must repeat on r8. The initial
+resize command also failed in its invocation wrapper before the script ran,
+while node's syntax check of the actual script passed. That invocation provides
+no product evidence. No additional operator note was written.
+The direct resize invocation then reached the real r7 UI and failed the new
+saved-note overflow assertion, independently reproducing the clipped text.
+
+R8 type checking, 51 frontend tests and the 26.50-second build passed. Its
+runtime hash is `90d912e8cea77ffd108be0046430cec1e90d4403900861fcd8c6aa1ae8265152`.
+Live and controlled-state scripts passed. The resize matrix retained the note,
+draft and expanded events across 390/900/767/768-pixel transitions, but closing
+the resource drawer with Escape cleared the background search and lost focus.
+The first assertion reported 22 Resource buttons. A second read-only capture
+confirmed the search had become empty and focus moved to body, so this is a
+product defect rather than merely a selector ambiguity. The shared type-to-search
+registry treated an inert modal background as eligible for keyboard shortcuts.
+Two new regressions failed before the fix. R9 excludes inert inputs from both
+visible and prepared search targets using the shared dialog's existing DOM
+ownership boundary. No new dialog lifecycle or lane-local keyboard handler is
+added. The final browser and funded model check remain pending.
+
+The corrected shared search, Dialog and SearchInput suites passed 36 tests in
+1.54 s locally. The normal worker repeated those 36 tests, type checking and
+the frontend build (28.14 s), then built r9 with exit 0 and matching 5,990/60
+source hashes. The installed runtime SHA-256 is
+`7bad38f8da70a89b56b6693f41af5fa3176c4375bf10b5b1f4958aaa8fc929ba`.
+The shared keyboard hook now has explicit frontend-primitives registry ownership.
+Three existing presentation expectation files were updated after this build
+and passed 118 tests in 1.36 s. Those later edits are test-only and do not change
+the built runtime source. The integrated r7 backend proofs remain applicable
+because r8 and r9 changed only frontend presentation and keyboard ownership.
+
+All three r9 browser scripts passed, including note wrapping, retained draft,
+saved-note reload, modal typing, retained search, Escape and focus return at
+1440/900/390 and the 767/768 breakpoint. The subsequent funded history-and-note
+turn passed factual review. Session `81c92125-cdc3-4611-931a-687e6548bf65`
+completed HTTP 200 in 18.668 s with reported 8,130 input and 456 output tokens.
+Its estimated session cost was US$0.1041, plus US$0.0088 for the title, for
+US$0.1129 total. Five continuation turns and titles now total US$0.36895475
+estimated, with three passing explanations and both Gemini failures retained.
+Actual provider billing is not reconciled, and this is not a population rate.
+The answer attributed the historical closure, retained current-health and
+action-outcome uncertainty, and correctly described the operator note as a
+display/persistence check with no infrastructure change or verified recovery.
+It called no tools and performed no infrastructure action. Temporary model and
+budget settings were restored to Gemini 3.8 Flash and zero, with Patrol disabled
+and read-only. The subscription-provider refusal remains untouched.
+
+The same model run exposed a further responsive defect: shrinking a desktop
+conversation reopened its source history drawer above Assistant. The earlier
+matrix had resized the source before handoff, not the open destination. Two
+regressions reproduced this for timeline and resource history. R10 keeps the
+existing Assistant destination active when projecting history state on a layout
+change. It adds no model-visible context and needs no additional funded turn.
+The affected browser matrix, including resizing the open conversation and
+reading the saved response, must pass before source-bound acceptance and landing.
+
+### Final incident-history source acceptance, r10
+
+R10 passed 43 affected frontend tests and the 27.07-second worker build with
+matching 5,990 core and 60 enterprise source hashes. Its installed runtime hash
+is `2e1958d0856c812d22870144cf228509f2a4a3696258a533d34802442f500edb`.
+All four final functional browser scripts passed, followed by actual pixel
+inspection. `/alerts` was exercised at 1440, 900 and 390 × 1000, with source
+and destination resize transitions also covering 767 and 768 pixels. The saved
+funded response was resumed by exact session ID and read at every width without
+another model submission. Assistant remains visible above the retained source,
+the composer is usable, and the operator-note explanation is readable.
+
+The final interaction matrix includes canonical occurrence selection, native
+Evidence details with keyboard focus and activation, All/None filters, note
+draft enable/clear, actual saved-note reload, source/destination resizing,
+expanded resource events, cached and initial read errors, Retry/Refresh, empty
+and partial history, unknown timestamps, modal typing, Escape and return focus.
+Long notes wrap at the intermediate desktop width. Error toasts are not the only
+failure indication. Controlled HTTP variants qualify rendering, not a real
+database outage. Final acceptance is bound to exact frontend bytes in
+`frontend-modern/browser-verification.json`. Earlier visual and factual failures
+remain recorded above. The final helpers are executable at
+`/Volumes/Development/pulse/tmp/patrol-incident-history/verify-live.mjs`,
+`verify-states.mjs`, `verify-resize.mjs` and `verify-saved-explanation.mjs`.
+Their receipt directories are `browser`, `browser-states`, `browser-resize` and
+`browser-saved-explanation` under that task directory.
+
+Repository commit checks and scoped landing are the remaining local delivery
+steps. The broader customer-outcome gap stays open. These receipts do not
+qualify independent customer environments, unattended autonomy, backup restore,
+population false-alarm/miss rates or latency SLOs. The failed broad API race
+runs remain an explicit test limit, despite passing affected package and handler
+proof. The final history explanation qualifies the funded Astra route and does
+not erase the two Gemini failures or transfer the earlier named lab matrix to
+another model.
+
+Commit preflight initially rejected missing dependent agent-lifecycle and
+storage-recovery contract updates and missing explicit proof mappings. Those
+contracts now state the historical-evidence boundary, and the registry maps the
+actual incident query and lifecycle regression files to their owning paths.
+Additional adapter assertions verify filtered-query forwarding, alias identities
+and unavailable reads. The targeted query tests passed in 0.573 s. These are
+test/governance changes only, leaving the r10 runtime and browser hashes intact.
+The staged canonical completion and registry guards then passed without a
+contract-neutral bypass.
+
+The final upstream integration advances the base to
+`977afdd9559c0e9d5859f4c79bcc48e889381bba`. It adds checkpoint and guest-memory
+tests plus contract text, with no runtime change. Comparison against the 5,990
+source manifest found only three test files and the browser receipt different.
+All 14 accepted frontend content hashes remain identical. The newly integrated
+checkpoint assertion initially compared fresh query timestamps as durable
+incident state and failed. It now compares stable projection identity/events
+separately from refreshed query bounds, while preserving coverage semantics and
+the no-checkpoint-replacement assertion. The targeted occurrence test passed
+in 0.450 s after this test-only integration.
+
+The first full worker hook stopped at missing private repository evidence roots.
+The existing filesystem-proof copies of pulse-pro and pulse-mobile and the
+current task enterprise source export supply those roots through the supported
+repository-root overrides. Status audit then reported no errors or warnings.
+This repairs the proof environment and does not suppress the audit.
+
+Registry audit also requires sibling Git checkouts. Initial sibling links made
+that audit pass, but the cross-repository absolute-path helper correctly rejected
+paths resolved outside its workspace. Real disposable clones of the existing
+private filesystem-proof checkouts replace those links, with no audit bypass.
+Its audit and contract audit pass. The full hook then caught one expected-file
+fixture missing the newly registered monitoring regression. Updating that fixture
+to include the actual proof file preserves the guard's exact mapping assertion.
+All 130 completion-helper tests passed in 2.645 s. This is test-only scope.

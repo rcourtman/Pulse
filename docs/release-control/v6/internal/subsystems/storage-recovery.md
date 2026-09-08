@@ -21,6 +21,12 @@
 
 ## Purpose
 
+Incident history retains canonical storage-related risk, source identity and
+separate observation/occurrence timestamps. A recorded alert closure or operator
+note is not a restore result. Canonical read failure remains unavailable and
+bounded or partial history cannot establish current storage health or backup
+coverage. Recovery judgment still requires independent current evidence.
+
 Delivery-log URL masking occurs in the HTTP diagnostic projection and does not rewrite retained attempt history or destination configuration. Preserved failure context and attempt identifiers describe notification delivery only, not a restore result or storage freshness. Malformed URL diagnostics fail closed in the response; this does not delete the retained failure, change retention windows, or grant retry, storage or recovery authority.
 
 ### Canonical Patrol and Assistant continuation, 2026-09-07

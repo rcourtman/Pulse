@@ -177,10 +177,10 @@ describe('alertIncidentPresentation', () => {
       'px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
     );
     expect(getAlertIncidentTimelineEventCardClass('alt')).toBe(
-      'rounded border border-border bg-surface-alt p-2',
+      'rounded border border-border bg-surface-alt p-2 whitespace-normal break-words',
     );
     expect(getAlertIncidentTimelineEventCardClass('surface')).toBe(
-      'rounded border border-border bg-surface p-2',
+      'rounded border border-border bg-surface p-2 whitespace-normal break-words',
     );
     expect(getAlertIncidentNoteTextareaClass()).toBe(
       'w-full rounded border border-border bg-surface p-2 text-xs text-base-content',
@@ -192,7 +192,9 @@ describe('alertIncidentPresentation', () => {
       'flex flex-wrap items-center gap-2 text-xs text-muted',
     );
     expect(getAlertIncidentTimelineHeadingClass()).toBe('font-medium text-base-content');
-    expect(getAlertIncidentTimelineDetailClass()).toBe('mt-1 text-xs text-base-content');
+    expect(getAlertIncidentTimelineDetailClass()).toBe(
+      'mt-1 text-xs text-base-content whitespace-pre-wrap',
+    );
     expect(getAlertIncidentTimelineCommandClass()).toBe('mt-1 font-mono text-xs text-base-content');
     expect(getAlertIncidentTimelineOutputClass()).toBe('mt-1 text-xs text-muted');
   });

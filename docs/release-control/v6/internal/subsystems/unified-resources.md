@@ -37,6 +37,22 @@ policy remains authoritative; this accessor introduces no second timeout.
 `TestCorrelatedGuestMemoryNextPoll` verifies the manually merged row through the
 next-poll consumers. Existing host-list membership and metric priority are unchanged.
 
+### Bounded incident-history selection
+
+Canonical history queries filter exact alert identifiers and observation windows
+before applying limits. The observation window is inclusive at `since` and
+exclusive at `ObservedBefore`. All aggregate counts use the same filter
+predicate. Both stores order by observation time descending, then event ID
+descending, including late-arriving records. SQLite indexes the same guarded
+alert-identity expression used by the query. Invalid legacy JSON and non-string
+metadata cannot establish an alert identity.
+
+`ResourceHistoryIDs` exposes the existing alias/succession expansion for
+read-only incident memory association. It does not rewrite event resource IDs,
+resource operator state, approvals, action request identity or execution
+capabilities. An unavailable canonical read remains an error.
+
+
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
 Persisted action request identity is scoped to the trusted actor and exact

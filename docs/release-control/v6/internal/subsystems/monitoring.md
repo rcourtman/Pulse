@@ -47,6 +47,15 @@ snapshots and actual memory-threshold evaluation, plus stale/offline/unavailable
 samples and other-instance lookup. It is synthetic runtime proof, not a live
 FreeBSD installation, automatic identity-match or browser receipt.
 
+### Incident-history reconciliation boundary
+
+Active-alert timeline reconciliation uses the shared error-bearing incident
+query. If canonical history is unavailable, reconciliation stops for that alert
+and records the read failure. It must not treat a failed read as proof that a
+firing event is absent. Historical source messages own alert condition wording.
+Projection does not manufacture comparison direction from numeric placeholders.
+
+
 Container filesystem observations are native, resource-scoped reads. The shared
 `pkg/agents/filesystem` contract keeps measurement time, mountpoint, source,
 filesystem type and optional usage together. Unavailable reads have an error

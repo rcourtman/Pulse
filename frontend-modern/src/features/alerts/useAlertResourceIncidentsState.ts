@@ -21,6 +21,9 @@ export function useAlertResourceIncidentsState() {
   const [resourceIncidentLoading, setResourceIncidentLoading] = createSignal<
     Record<string, boolean>
   >({});
+  const [resourceIncidentError, setResourceIncidentError] = createSignal<Record<string, boolean>>(
+    {},
+  );
   const [expandedResourceIncidentIds, setExpandedResourceIncidentIds] = createSignal<Set<string>>(
     new Set(),
   );
@@ -32,10 +35,12 @@ export function useAlertResourceIncidentsState() {
     if (!resourceId) return;
 
     setResourceIncidentLoading((prev) => ({ ...prev, [resourceId]: true }));
+    setResourceIncidentError((prev) => ({ ...prev, [resourceId]: false }));
     try {
       const incidents = await AlertsAPI.getIncidentsForResource(resourceId, limit);
       setResourceIncidents((prev) => ({ ...prev, [resourceId]: incidents }));
     } catch (error) {
+      setResourceIncidentError((prev) => ({ ...prev, [resourceId]: true }));
       logger.error(getAlertResourceIncidentLoadFailure(), error);
       notificationStore.error(getAlertResourceIncidentLoadFailure());
     } finally {
@@ -87,6 +92,7 @@ export function useAlertResourceIncidentsState() {
     setResourceIncidentPanel(null);
     setResourceIncidents({});
     setResourceIncidentLoading({});
+    setResourceIncidentError({});
     setExpandedResourceIncidentIds(new Set<string>());
     setResourceIncidentEventFilters(new Set(INCIDENT_EVENT_TYPES));
   };
@@ -96,6 +102,7 @@ export function useAlertResourceIncidentsState() {
     setResourceIncidentPanel,
     resourceIncidents,
     resourceIncidentLoading,
+    resourceIncidentError,
     expandedResourceIncidentIds,
     resourceIncidentEventFilters,
     setResourceIncidentEventFilters,

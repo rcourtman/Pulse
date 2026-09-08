@@ -86,6 +86,13 @@ var providerPrices = map[string][]modelPrice{
 		// published standard price changes on 2027-01-01. Batch/alias routes
 		// are deliberately not covered by this exact model ID.
 		flatPriceAsOf("google/gemini-3.8-flash", 0.75, 3.75, "2026-09-06"),
+		// Exact funded route reviewed from the Models API on 2026-09-07.
+		// Its override starts at min_prompt_tokens=272000. Cache discounts
+		// are omitted so budget estimates remain conservative.
+		{Pattern: "openai/gpt-6-astra", AsOf: "2026-09-07", Tiers: []priceTier{
+			{MaxInputTokens: 271999, InputUSDPerMTok: 10, OutputUSDPerMTok: 50},
+			{InputUSDPerMTok: 20, OutputUSDPerMTok: 75},
+		}},
 		flatPriceAsOf("nvidia/nemotron-3.5-lightning:free", 0, 0, "2026-08-14"),
 		flatPriceAsOf("nvidia/nemotron-3-super-120b-a12b:free", 0, 0, "2026-08-14"),
 		flatPriceAsOf("nvidia/nemotron-3-ultra-550b-a55b:free", 0, 0, "2026-08-15"),

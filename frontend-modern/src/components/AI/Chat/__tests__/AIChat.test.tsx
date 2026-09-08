@@ -1078,6 +1078,25 @@ describe('AIChat', () => {
       });
     });
 
+    it('focuses and registers the current composer after each reopen', async () => {
+      const [open, setOpen] = createSignal(false);
+      mockAiChatStore.isOpenSignal.mockImplementation(open);
+      renderChat();
+      expect(screen.queryByPlaceholderText('Ask about your infrastructure...')).toBeNull();
+      setOpen(true);
+      const first = await screen.findByPlaceholderText('Ask about your infrastructure...');
+      await waitFor(() => expect(document.activeElement).toBe(first));
+      setOpen(false);
+      expect(mockAiChatStore.registerInput).toHaveBeenLastCalledWith(null);
+      setOpen(true);
+      const second = await screen.findByPlaceholderText('Ask about your infrastructure...');
+      expect(second).not.toBe(first);
+      await waitFor(() => {
+        expect(document.activeElement).toBe(second);
+        expect(mockAiChatStore.registerInput).toHaveBeenLastCalledWith(second);
+      });
+    });
+
     it('renders the ChatMessages child component', () => {
       renderChat();
       expect(screen.getByTestId('chat-messages')).toBeInTheDocument();
