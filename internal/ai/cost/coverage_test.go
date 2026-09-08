@@ -2,6 +2,7 @@ package cost
 
 import (
 	"errors"
+	"math"
 	"testing"
 	"time"
 )
@@ -442,5 +443,23 @@ func TestSummarizeTargets_SortTiebreakers(t *testing.T) {
 	}
 	if rollup[1].TargetID != "a" || rollup[2].TargetID != "b" {
 		t.Fatalf("expected target ID ordering, got %+v", rollup)
+	}
+}
+
+func TestReviewedAstraRouteBudgetBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		input int64
+		want  float64
+	}{
+		{271999, 2.76999},
+		{272000, 5.515},
+	} {
+		usd, known, price := EstimateUSD("openrouter", "openai/gpt-6-astra", tc.input, 1000)
+		if !known || math.Abs(usd-tc.want) > 0.000001 || price.AsOf != "2026-09-07" {
+			t.Fatalf("input=%d: usd=%f known=%v price=%+v", tc.input, usd, known, price)
+		}
+	}
+	if _, known, _ := EstimateUSD("openrouter", "openai/gpt-6-astra:free", 1000, 1000); known {
+		t.Fatal("unreviewed alias must not inherit funded route prices")
 	}
 }

@@ -906,7 +906,7 @@ describe('incident timeline presentation helpers', () => {
 
   it('returns the surface event-card presentation', () => {
     expect(getAlertIncidentTimelineEventCardClass('surface')).toBe(
-      'rounded border border-border bg-surface p-2',
+      'rounded border border-border bg-surface p-2 whitespace-normal break-words',
     );
   });
 
@@ -924,7 +924,9 @@ describe('incident timeline presentation helpers', () => {
       'flex flex-wrap items-center gap-2 text-xs text-muted',
     );
     expect(getAlertIncidentTimelineHeadingClass()).toBe('font-medium text-base-content');
-    expect(getAlertIncidentTimelineDetailClass()).toBe('mt-1 text-xs text-base-content');
+    expect(getAlertIncidentTimelineDetailClass()).toBe(
+      'mt-1 text-xs text-base-content whitespace-pre-wrap',
+    );
     expect(getAlertIncidentTimelineCommandClass()).toBe('mt-1 font-mono text-xs text-base-content');
     expect(getAlertIncidentTimelineOutputClass()).toBe('mt-1 text-xs text-muted');
   });

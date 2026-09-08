@@ -1,10 +1,10 @@
 import type { AIChatContext } from '@/stores/aiChat';
 import type { Incident, IncidentEvent } from '@/types/api';
+import { formatIncidentEvidenceTime } from '@/utils/alertIncidentPresentation';
 import { resolveAlertTargetType } from '@/utils/alertTargetTypes';
 
 interface BuildAlertIncidentAssistantHandoffInput {
   incident: Incident;
-  now?: Date;
 }
 
 interface AlertIncidentAssistantHandoff {
@@ -12,6 +12,19 @@ interface AlertIncidentAssistantHandoff {
 }
 
 interface SanitizedIncidentEvent {
+  source?: string;
+  evidence?: Pick<
+    NonNullable<IncidentEvent['evidence']>,
+    | 'id'
+    | 'resourceId'
+    | 'kind'
+    | 'observedAt'
+    | 'occurredAt'
+    | 'sourceType'
+    | 'sourceAdapter'
+    | 'actor'
+    | 'confidence'
+  >;
   id: string;
   type: string;
   timestamp: string;
@@ -30,7 +43,6 @@ const LABEL_INITIALISMS: Record<string, string> = {
 
 export function buildAlertIncidentAssistantHandoff({
   incident,
-  now = new Date(),
 }: BuildAlertIncidentAssistantHandoffInput): AlertIncidentAssistantHandoff {
   const resourceLabel = incident.resourceName || incident.resourceId || 'unknown resource';
   const targetType = resolveAlertTargetType({
@@ -40,7 +52,7 @@ export function buildAlertIncidentAssistantHandoff({
   });
   const levelLabel = formatIncidentLabel(incident.level);
   const statusLabel = formatIncidentLabel(incident.status);
-  const durationText = formatIncidentDuration(incident.openedAt, incident.closedAt, now);
+  const durationText = formatIncidentDuration(incident.openedAt, incident.closedAt);
   const events = sanitizeIncidentEvents(incident.events ?? []);
   const eventCount = events.length;
   const eventCountLabel = `${eventCount} timeline event${eventCount === 1 ? '' : 's'}`;
@@ -79,7 +91,7 @@ export function buildAlertIncidentAssistantHandoff({
           incident.message ? `Message: ${incident.message}` : undefined,
         ].filter((line): line is string => Boolean(line)),
         evidence: events
-          .slice(0, MAX_BRIEFING_EVENTS)
+          .slice(-MAX_BRIEFING_EVENTS)
           .map((event) => `${formatIncidentLabel(event.type)}: ${event.summary}`),
         actionLabel: `Discuss incident ${incident.id}`,
         safetyNote: 'Diagnostics and remediation require operator approval.',
@@ -95,11 +107,13 @@ export function buildAlertIncidentAssistantHandoff({
         resourceType: incident.resourceType,
         node: incident.node,
         instance: incident.instance,
-        openedAt: incident.openedAt,
+        openedAt: formatIncidentEvidenceTime(incident.openedAt) ? incident.openedAt : undefined,
         closedAt: incident.closedAt,
         acknowledged: incident.acknowledged,
         eventCount,
-        eventSummaries: events.slice(0, MAX_CONTEXT_EVENTS),
+        includedEventCount: Math.min(eventCount, MAX_CONTEXT_EVENTS),
+        history: incident.history ? { ...incident.history } : undefined,
+        eventSummaries: events.slice(-MAX_CONTEXT_EVENTS),
       },
     },
   };
@@ -123,11 +137,11 @@ function buildIncidentAssistantModelContext({
   eventCountLabel: string;
 }): string {
   const eventLines = events
-    .slice(0, MAX_CONTEXT_EVENTS)
+    .slice(-MAX_CONTEXT_EVENTS)
     .map((event, index) =>
       formatContextLine(
         `Timeline Event ${index + 1}`,
-        `${event.timestamp} | ${formatIncidentLabel(event.type)} | ${event.summary}`,
+        `${event.timestamp} | ${formatIncidentLabel(event.type)} | ${event.summary}${event.evidence ? ` | evidence=${JSON.stringify(event.evidence)}` : event.source ? ` | source=${event.source}` : ''}`,
       ),
     );
 
@@ -144,10 +158,22 @@ function buildIncidentAssistantModelContext({
     formatContextLine('Resource Type', incident.resourceType),
     formatContextLine('Node', incident.node),
     formatContextLine('Instance', incident.instance),
-    formatContextLine('Opened At', incident.openedAt),
+    formatContextLine(
+      'Opened At',
+      formatIncidentEvidenceTime(incident.openedAt) ? incident.openedAt : 'unknown',
+    ),
     formatContextLine('Closed At', incident.closedAt),
     formatContextLine('Duration', durationText),
     formatContextLine('Timeline Summary', eventCountLabel),
+    formatContextLine(
+      'Included Events',
+      `Latest ${Math.min(events.length, MAX_CONTEXT_EVENTS)} of ${events.length} returned events`,
+    ),
+    formatContextLine(
+      'History Coverage',
+      incident.history ? JSON.stringify(incident.history) : 'not recorded',
+    ),
+    'History Boundary: Retained historical evidence does not establish current resource health.',
     formatContextLine('Message', incident.message),
     ...eventLines,
     'Timeline Boundary: Command events are summarized only. Raw command details and output stay in the incident or governed approval surface.',
@@ -163,6 +189,22 @@ function sanitizeIncidentEvents(events: IncidentEvent[]): SanitizedIncidentEvent
     type: event.type,
     timestamp: event.timestamp,
     summary: sanitizeIncidentEventSummary(event),
+    ...(event.source ? { source: event.source } : {}),
+    ...(event.evidence
+      ? {
+          evidence: {
+            id: event.evidence.id,
+            resourceId: event.evidence.resourceId,
+            kind: event.evidence.kind,
+            observedAt: event.evidence.observedAt,
+            occurredAt: event.evidence.occurredAt,
+            sourceType: event.evidence.sourceType,
+            sourceAdapter: event.evidence.sourceAdapter,
+            actor: event.evidence.actor,
+            confidence: event.evidence.confidence,
+          },
+        }
+      : {}),
   }));
 }
 
@@ -173,6 +215,10 @@ function sanitizeIncidentEventSummary(event: IncidentEvent): string {
   }
 
   const summary = event.summary.trim();
+  if (normalizedType === 'note' && typeof event.details?.note === 'string') {
+    const note = event.details.note.trim();
+    if (note) return `${summary || 'Operator note'}: ${note}`;
+  }
   return summary.length > 0 ? summary : 'Timeline event recorded';
 }
 
@@ -185,10 +231,12 @@ function formatContextLine(
   return text ? `${label}: ${text}` : undefined;
 }
 
-function formatIncidentDuration(openedAt: string, closedAt: string | undefined, now: Date): string {
+function formatIncidentDuration(openedAt: string, closedAt: string | undefined): string {
+  if (!formatIncidentEvidenceTime(openedAt)) return 'unknown duration';
   const openedMs = new Date(openedAt).getTime();
-  const closedMs = closedAt ? new Date(closedAt).getTime() : now.getTime();
-  if (!Number.isFinite(openedMs) || !Number.isFinite(closedMs)) {
+  if (!closedAt) return 'closure not recorded';
+  const closedMs = new Date(closedAt).getTime();
+  if (!Number.isFinite(openedMs) || !Number.isFinite(closedMs) || closedMs < openedMs) {
     return 'unknown duration';
   }
 

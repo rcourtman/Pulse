@@ -23,7 +23,7 @@ window.finish = (i, status) => status === 'error' ? pending[i].reject(new Error(
 window.count = () => pending.length;
 function Panel() {
   const s = useAlertResourceIncidentsState();
-  window.snapshot = () => ({incidents:s.resourceIncidents(), loading:s.resourceIncidentLoading()});
+  window.snapshot = () => ({incidents:s.resourceIncidents(), loading:s.resourceIncidentLoading(), error:s.resourceIncidentError()});
   return <section><button onClick={() => s.openResourceIncidentPanel('host','Host','row')}>Open row</button><button onClick={s.refreshResourceIncidentPanel}>Overlap refresh</button><button onClick={s.resetResourceIncidentsState}>Reset</button><output style="display:block;overflow-wrap:anywhere" data-testid="state">{JSON.stringify(window.snapshot())}</output><AlertResourceIncidentsPanel state={s}/></section>;
 }
 function Fixture() {
@@ -115,6 +115,10 @@ try {
             (await page.evaluate(() => window.snapshot())).loading.host,
             true,
           );
+          assert.equal(
+            (await page.evaluate(() => window.snapshot())).error.host,
+            false,
+          );
           assert.equal(await page.getByTestId("errors").textContent(), "0");
           await page.evaluate(() => window.finish(1, "Latest incident"));
         } else {
@@ -142,15 +146,21 @@ try {
         scenario === "current-failure" ? "1" : "0",
       );
       if (scenario === "reset") {
-        assert.deepEqual(snapshot, { incidents: {}, loading: {} });
+        assert.deepEqual(snapshot, { incidents: {}, loading: {}, error: {} });
       } else if (scenario.startsWith("dispose")) {
-        assert.deepEqual(snapshot, { incidents: {}, loading: { host: true } });
+        assert.deepEqual(snapshot, {
+          incidents: {},
+          loading: { host: true },
+          error: { host: false },
+        });
         assert.equal(await page.locator("section").count(), 0);
       } else if (scenario === "current-failure") {
         assert.equal(snapshot.loading.host, false);
+        assert.equal(snapshot.error.host, true);
       } else {
         assert.equal(snapshot.incidents.host[0].id, "Latest incident");
         assert.equal(snapshot.loading.host, false);
+        assert.equal(snapshot.error.host, false);
         await page.getByText("Latest incident", { exact: true }).waitFor();
         assert.equal(
           await page.getByText("Obsolete incident", { exact: true }).count(),

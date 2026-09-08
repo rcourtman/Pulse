@@ -49,4 +49,42 @@ describe('IncidentTimelineEventCard', () => {
     expect(screen.queryByText('systemctl restart alert')).not.toBeInTheDocument();
     expect(screen.queryByText('stdout: ok')).not.toBeInTheDocument();
   });
+  it('preserves observation and occurrence provenance behind a disclosure', () => {
+    const { container } = render(() => (
+      <IncidentTimelineEventCard
+        variant="surface"
+        event={makeEvent({
+          evidence: {
+            id: 'canonical-record',
+            resourceId: 'resource-a',
+            kind: 'alert_fired',
+            observedAt: '2026-03-18T12:10:00Z',
+            occurredAt: '2026-03-18T12:00:00Z',
+            sourceType: 'platform_event',
+            sourceAdapter: 'proxmox_adapter',
+            confidence: 'high',
+            actor: 'operator',
+          },
+        })}
+      />
+    ));
+    const details = container.querySelector('details');
+    expect(details).not.toHaveAttribute('open');
+    expect(screen.getByText('Evidence details')).toBeInTheDocument();
+    expect(screen.getByText('Observed')).toBeInTheDocument();
+    expect(screen.getByText('Occurred')).toBeInTheDocument();
+    expect(screen.getByText('canonical-record')).toBeInTheDocument();
+    expect(screen.getByText('operator')).toBeInTheDocument();
+  });
+
+  it('does not fabricate a date for missing evidence time', () => {
+    render(() => (
+      <IncidentTimelineEventCard
+        variant="surface"
+        event={makeEvent({ timestamp: '0001-01-01T00:00:00Z' })}
+      />
+    ));
+    expect(screen.getByText('Time unavailable')).toBeInTheDocument();
+    expect(screen.queryByText(/1\/1\/1/)).not.toBeInTheDocument();
+  });
 });

@@ -521,7 +521,15 @@ func (m *Monitor) reconcileActiveAlertTimelines() {
 	activeAlerts := m.alertManager.GetActiveAlerts()
 	for i := range activeAlerts {
 		alert := &activeAlerts[i]
-		timeline := m.incidentStore.GetTimelineByAlertAt(alert.ID, alert.StartTime)
+		page, err := m.incidentStore.QueryIncidents(memory.IncidentQuery{AlertIdentifier: alert.ID, StartedAt: alert.StartTime, Limit: 1})
+		if err != nil {
+			log.Warn().Err(err).Msg("Skipping alert timeline reconciliation because canonical history is unavailable")
+			continue
+		}
+		var timeline *memory.Incident
+		if len(page.Incidents) > 0 {
+			timeline = page.Incidents[0]
+		}
 		if timeline != nil {
 			hasFired := false
 			for _, event := range timeline.Events {

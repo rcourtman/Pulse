@@ -55,10 +55,8 @@ interface StrictHandoff {
   context: StrictHandoffContext;
 }
 
-const DEFAULT_NOW = new Date('2026-03-20T10:05:00Z');
-
-function buildHandoff(incident: Incident, now: Date = DEFAULT_NOW): StrictHandoff {
-  return buildAlertIncidentAssistantHandoff({ incident, now }) as unknown as StrictHandoff;
+function buildHandoff(incident: Incident): StrictHandoff {
+  return buildAlertIncidentAssistantHandoff({ incident }) as unknown as StrictHandoff;
 }
 
 function makeIncident(overrides: Partial<Incident> = {}): Incident {
@@ -114,7 +112,6 @@ describe('formatIncidentDuration (exercised via buildAlertIncidentAssistantHando
         openedAt: '2026-03-20T10:00:00Z',
         closedAt: '2026-03-20T10:01:00Z',
       }),
-      new Date('2026-03-20T11:00:00Z'),
     );
     expect(handoff.context.briefing.statusLabel).toBe(`${STATUS_PREFIX}1 min`);
     expect(handoff.context.handoffContext).toContain('Duration: 1 min');
@@ -126,7 +123,6 @@ describe('formatIncidentDuration (exercised via buildAlertIncidentAssistantHando
         openedAt: '2026-03-20T10:00:00Z',
         closedAt: '2026-03-20T10:05:00Z',
       }),
-      new Date('2026-03-20T11:00:00Z'),
     );
     expect(handoff.context.briefing.statusLabel).toBe(`${STATUS_PREFIX}5 mins`);
   });
@@ -137,20 +133,18 @@ describe('formatIncidentDuration (exercised via buildAlertIncidentAssistantHando
         openedAt: '2026-03-20T10:00:00Z',
         closedAt: '2026-03-20T10:00:00Z',
       }),
-      new Date('2026-03-20T11:00:00Z'),
     );
     expect(handoff.context.briefing.statusLabel).toBe(`${STATUS_PREFIX}0 mins`);
   });
 
-  it('clamps a negative (closedAt before openedAt) delta to "0 mins" via Math.max(0, ...)', () => {
+  it('keeps an inconsistent closure time unknown', () => {
     const handoff = buildHandoff(
       makeIncident({
         openedAt: '2026-03-20T10:05:00Z',
         closedAt: '2026-03-20T10:00:00Z',
       }),
-      new Date('2026-03-20T11:00:00Z'),
     );
-    expect(handoff.context.briefing.statusLabel).toBe(`${STATUS_PREFIX}0 mins`);
+    expect(handoff.context.briefing.statusLabel).toBe(`${STATUS_PREFIX}unknown duration`);
   });
 
   it('formats a sub-day >= 60min delta as "Xh Ym" (durationMins >= 60, durationHours < 24 arm)', () => {
@@ -159,7 +153,6 @@ describe('formatIncidentDuration (exercised via buildAlertIncidentAssistantHando
         openedAt: '2026-03-20T10:00:00Z',
         closedAt: '2026-03-20T11:05:00Z',
       }),
-      new Date('2026-03-20T12:00:00Z'),
     );
     expect(handoff.context.briefing.statusLabel).toBe(`${STATUS_PREFIX}1h 5m`);
   });
@@ -170,7 +163,6 @@ describe('formatIncidentDuration (exercised via buildAlertIncidentAssistantHando
         openedAt: '2026-03-20T10:00:00Z',
         closedAt: '2026-03-21T14:00:00Z',
       }),
-      new Date('2026-03-22T10:00:00Z'),
     );
     // 28h elapsed -> floor(28/24)=1 day, 28%24=4 hours
     expect(handoff.context.briefing.statusLabel).toBe(`${STATUS_PREFIX}1d 4h`);
@@ -182,7 +174,6 @@ describe('formatIncidentDuration (exercised via buildAlertIncidentAssistantHando
         openedAt: 'not-a-valid-date',
         closedAt: '2026-03-20T11:00:00Z',
       }),
-      new Date('2026-03-20T12:00:00Z'),
     );
     expect(handoff.context.briefing.statusLabel).toBe(`${STATUS_PREFIX}unknown duration`);
     expect(handoff.context.handoffContext).toContain('Duration: unknown duration');
@@ -194,37 +185,13 @@ describe('formatIncidentDuration (exercised via buildAlertIncidentAssistantHando
         openedAt: '2026-03-20T10:00:00Z',
         closedAt: 'not-a-valid-date',
       }),
-      new Date('2026-03-20T12:00:00Z'),
     );
     expect(handoff.context.briefing.statusLabel).toBe(`${STATUS_PREFIX}unknown duration`);
   });
 
-  it('falls back to `now` when closedAt is undefined (closedAt-falsy ternary arm, nonzero delta)', () => {
-    const handoff = buildHandoff(
-      makeIncident({ closedAt: undefined }),
-      new Date('2026-03-20T10:05:00Z'),
-    );
-    expect(handoff.context.briefing.statusLabel).toBe(`${STATUS_PREFIX}5 mins`);
-  });
-
-  it('falls back to `now` yielding zero when closedAt is undefined and now === openedAt', () => {
-    const handoff = buildHandoff(
-      makeIncident({ closedAt: undefined }),
-      new Date('2026-03-20T10:00:00Z'),
-    );
-    expect(handoff.context.briefing.statusLabel).toBe(`${STATUS_PREFIX}0 mins`);
-  });
-
-  it('uses closedAt (not now) when closedAt is present (closedAt-truthy ternary arm)', () => {
-    // closedAt gives 5 mins; now is 1 hour after openedAt and would give 60 mins -> "1h 0m".
-    const handoff = buildHandoff(
-      makeIncident({
-        openedAt: '2026-03-20T10:00:00Z',
-        closedAt: '2026-03-20T10:05:00Z',
-      }),
-      new Date('2026-03-20T11:00:00Z'),
-    );
-    expect(handoff.context.briefing.statusLabel).toBe(`${STATUS_PREFIX}5 mins`);
+  it('keeps an absent closure unrecorded instead of measuring through now', () => {
+    const handoff = buildHandoff(makeIncident({ closedAt: undefined }));
+    expect(handoff.context.briefing.statusLabel).toBe(`${STATUS_PREFIX}closure not recorded`);
   });
 });
 
@@ -374,17 +341,13 @@ describe('formatContextLine (exercised via buildAlertIncidentAssistantHandoff)',
   });
 
   it('renders the "Closed At:" context line when closedAt is a present string', () => {
-    const handoff = buildHandoff(
-      makeIncident({ closedAt: '2026-03-20T10:05:00Z' }),
-      new Date('2026-03-20T11:00:00Z'),
-    );
+    const handoff = buildHandoff(makeIncident({ closedAt: '2026-03-20T10:05:00Z' }));
     expect(handoff.context.handoffContext).toContain('Closed At: 2026-03-20T10:05:00Z');
   });
 
   it('trims a whitespace-padded closedAt value to its inner text', () => {
     const handoff = buildHandoff(
       makeIncident({ closedAt: '  2026-03-20T10:05:00Z  ' as unknown as string }),
-      new Date('2026-03-20T11:00:00Z'),
     );
     expect(handoff.context.handoffContext).toContain('Closed At: 2026-03-20T10:05:00Z');
     expect(handoff.context.handoffContext).not.toContain('Closed At:   2026-03-20T10:05:00Z');
@@ -393,7 +356,7 @@ describe('formatContextLine (exercised via buildAlertIncidentAssistantHandoff)',
 
 describe('buildAlertIncidentAssistantHandoff (resource-label, event-count & capping branches)', () => {
   it('uses resourceName first (|| chain 1st arm) and builds the full concrete handoff', () => {
-    const handoff = buildHandoff(makeIncident(), new Date('2026-03-20T10:05:00Z'));
+    const handoff = buildHandoff(makeIncident());
     // 1st arm of the resource-label || chain.
     expect(handoff.context.briefing.subject).toBe(
       'Critical docker-container-health on checkout-api',

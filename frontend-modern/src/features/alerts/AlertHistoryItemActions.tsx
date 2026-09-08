@@ -14,6 +14,7 @@ interface AlertHistoryItemActionsProps {
   touchSized?: boolean;
   onTimelineClick?: () => void;
   onResourceClick?: () => void;
+  timelineOpen?: boolean;
 }
 
 export function AlertHistoryItemActions(props: AlertHistoryItemActionsProps) {
@@ -40,7 +41,9 @@ export function AlertHistoryItemActions(props: AlertHistoryItemActionsProps) {
             );
           }}
         >
-          {props.state.expandedIncidents().has(rowKey()) ? 'Hide' : 'Timeline'}
+          {(props.timelineOpen ?? props.state.expandedIncidents().has(rowKey()))
+            ? 'Hide'
+            : 'Timeline'}
         </button>
       </Show>
       <Show when={props.alert.source === 'alert' && props.alert.resourceId}>

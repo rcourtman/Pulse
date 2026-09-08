@@ -15,6 +15,24 @@
 
 ## Purpose
 
+Mobile incident drawers transfer their exact context to Assistant and close
+through the shared explicit handoff callback. Keeping the source drawer above
+Assistant, or dropping its occurrence identity to make navigation work, fails
+the linked investigation journey. Both timeline and resource handoffs require
+mounted regression and final-build narrow browser proof.
+
+### Incident history preserves unavailable reads and provenance
+
+Timeline and resource-history views use the shared incident projection. A failed
+canonical read stays visibly unavailable, including after an error toast expires
+or when cached evidence remains. Empty-history copy is shown only after a
+successful empty read. Retry or Refresh repeats the read without discarding
+saved notes. The event card keeps canonical observation/occurrence timestamps,
+source, actor and record ID behind the same accessible evidence disclosure.
+Unknown timestamps remain unavailable. Truncation is explicit. The Assistant
+handoff preserves occurrence identity and the latest bounded event window, and
+labels history as insufficient to establish current health.
+
 ### Retained-queue recovery feedback has no reading deadline
 
 Retry and Dismiss failures have a view-local untimed equivalent beside the

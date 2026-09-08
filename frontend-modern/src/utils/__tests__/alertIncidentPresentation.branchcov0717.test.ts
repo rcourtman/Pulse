@@ -370,13 +370,13 @@ describe('event-filter class helpers — variant + selected branch coverage', ()
 describe('timeline + card class helpers — branch coverage', () => {
   it('getAlertIncidentTimelineEventCardClass uses bg-surface-alt for variant "alt"', () => {
     expect(getAlertIncidentTimelineEventCardClass('alt')).toBe(
-      'rounded border border-border bg-surface-alt p-2',
+      'rounded border border-border bg-surface-alt p-2 whitespace-normal break-words',
     );
   });
 
   it('getAlertIncidentTimelineEventCardClass uses bg-surface for variant "surface"', () => {
     expect(getAlertIncidentTimelineEventCardClass('surface')).toBe(
-      'rounded border border-border bg-surface p-2',
+      'rounded border border-border bg-surface p-2 whitespace-normal break-words',
     );
   });
 
@@ -394,7 +394,9 @@ describe('timeline + card class helpers — branch coverage', () => {
       'flex flex-wrap items-center gap-2 text-xs text-muted',
     );
     expect(getAlertIncidentTimelineHeadingClass()).toBe('font-medium text-base-content');
-    expect(getAlertIncidentTimelineDetailClass()).toBe('mt-1 text-xs text-base-content');
+    expect(getAlertIncidentTimelineDetailClass()).toBe(
+      'mt-1 text-xs text-base-content whitespace-pre-wrap',
+    );
     expect(getAlertIncidentTimelineCommandClass()).toBe('mt-1 font-mono text-xs text-base-content');
     expect(getAlertIncidentTimelineOutputClass()).toBe('mt-1 text-xs text-muted');
     expect(getAlertResourceIncidentCardClass()).toBe('rounded border border-border bg-surface p-3');

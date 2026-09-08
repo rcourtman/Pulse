@@ -2819,8 +2819,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
   createEffect(() => {
     if (!isOpen()) {
       setShowCommandHelp(false);
+      aiChatStore.registerInput?.(null);
       return;
     }
+    queueMicrotask(() => {
+      if (!isOpen()) return;
+      aiChatStore.registerInput?.(textareaRef ?? null);
+      textareaRef?.focus();
+    });
     openInitialization = initializeWhenOpen();
   });
 
@@ -2915,9 +2921,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   // Click outside handler to close all dropdowns
   onMount(() => {
     setPromptHistory(loadPromptHistory());
-    aiChatStore.registerInput?.(textareaRef ?? null);
     restoreStashedComposerDraft();
-    focusComposer();
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;

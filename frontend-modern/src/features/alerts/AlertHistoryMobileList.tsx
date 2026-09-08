@@ -1,4 +1,5 @@
-import { Show, createMemo, createSignal } from 'solid-js';
+import { Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { aiChatStore } from '@/stores/aiChat';
 
 import { getAlertHistoryResourceTypeBadgeClass } from '@/utils/alertHistoryPresentation';
 import {
@@ -41,6 +42,41 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
     return items;
   });
 
+  // The shared expansion state survives layout changes. Project it into the
+  // phone's single drawer instead of leaving a hidden desktop expansion open.
+  onMount(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const viewport = window.matchMedia('(min-width: 768px)');
+    const synchronizeLayout = () => {
+      if (viewport.matches || aiChatStore.isOpen) {
+        setInvestigation(null);
+        return;
+      }
+      const alerts = props.state.groupedAlerts().flatMap((group) => group.alerts);
+      const resourcePanel = props.state.resourceIncidentPanel();
+      const resourceAlert =
+        resourcePanel &&
+        alerts.find((alert) => props.state.getIncidentRowKey(alert) === resourcePanel.rowKey);
+      if (resourcePanel && resourceAlert) {
+        setInvestigation({ kind: 'resource', alert: resourceAlert, rowKey: resourcePanel.rowKey });
+        return;
+      }
+      for (const rowKey of [...props.state.expandedIncidents()].reverse()) {
+        const alert = alerts.find(
+          (candidate) => props.state.getIncidentRowKey(candidate) === rowKey,
+        );
+        if (alert) {
+          setInvestigation({ kind: 'timeline', alert, rowKey });
+          return;
+        }
+      }
+      setInvestigation(null);
+    };
+    synchronizeLayout();
+    viewport.addEventListener('change', synchronizeLayout);
+    onCleanup(() => viewport.removeEventListener('change', synchronizeLayout));
+  });
+
   const getInvestigationReturnFocusTarget = (
     current: MobileAlertHistoryInvestigation,
   ): HTMLElement | null => {
@@ -54,18 +90,20 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
     return action ?? list;
   };
 
-  const closeInvestigation = () => {
+  const closeInvestigation = (restoreFocus = true) => {
     const current = investigation();
     if (!current) return;
     const currentFocusTarget = getInvestigationReturnFocusTarget(current);
     setInvestigation(null);
-    currentFocusTarget?.focus({ preventScroll: true });
+    if (restoreFocus) {
+      currentFocusTarget?.focus({ preventScroll: true });
 
-    requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        getInvestigationReturnFocusTarget(current)?.focus({ preventScroll: true });
+        requestAnimationFrame(() => {
+          getInvestigationReturnFocusTarget(current)?.focus({ preventScroll: true });
+        });
       });
-    });
+    }
 
     if (current.kind === 'timeline') {
       if (props.state.expandedIncidents().has(current.rowKey)) {
@@ -222,6 +260,9 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
                   state={props.state}
                   class="mt-3"
                   touchSized
+                  timelineOpen={
+                    investigation()?.kind === 'timeline' && investigation()?.rowKey === rowKey()
+                  }
                   onTimelineClick={() => openTimelineInvestigation(alert, rowKey())}
                   onResourceClick={() => openResourceInvestigation(alert, rowKey())}
                 />
@@ -236,7 +277,8 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
           <MobileAlertHistoryInvestigationDialog
             investigation={selectedInvestigation()}
             state={props.state}
-            onClose={closeInvestigation}
+            onClose={() => closeInvestigation()}
+            onAssistantHandoff={() => closeInvestigation(false)}
           />
         )}
       </Show>

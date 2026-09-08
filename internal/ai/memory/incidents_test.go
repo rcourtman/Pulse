@@ -838,7 +838,7 @@ func TestIncidentStore_FormatForResource(t *testing.T) {
 	if !strings.Contains(result, "## Incident Memory") {
 		t.Error("expected '## Incident Memory' header")
 	}
-	if !strings.Contains(result, "Recent incidents for this resource") {
+	if !strings.Contains(result, "Recent incidents:") {
 		t.Error("expected resource incidents header")
 	}
 	if !strings.Contains(result, "disk") {
@@ -1209,7 +1209,9 @@ func TestIncidentStore_CanonicalProjectionOccurrenceBounds(t *testing.T) {
 			// Checkpoint all retained boundaries, not just an isolated closed
 			// shell. The canonical timeline remains in memory: this exercises
 			// JSON recovery and projection, not a durable event-store restart.
-			before, err := json.Marshal(projected)
+			beforeProjection := *projected
+			beforeProjection.History = nil // Query coverage is refreshed on each read.
+			before, err := json.Marshal(beforeProjection)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1230,7 +1232,21 @@ func TestIncidentStore_CanonicalProjectionOccurrenceBounds(t *testing.T) {
 			if len(reloaded.incidents) != len(store.incidents) {
 				t.Fatal("checkpoint replay duplicated a retained occurrence")
 			}
-			after, err := json.Marshal(reloaded.GetTimelineByAlertAt(old.ID, start))
+			afterProjection := reloaded.GetTimelineByAlertAt(old.ID, start)
+			if afterProjection == nil || projected.History == nil || afterProjection.History == nil {
+				t.Fatal("checkpoint replay lost the projection or its query coverage")
+			}
+			if afterProjection.History.ObservedBefore.Before(projected.History.ObservedBefore) || afterProjection.History.ObservedSince.Before(projected.History.ObservedSince) {
+				t.Fatal("fresh query coverage moved backwards")
+			}
+			beforeCoverage, afterCoverage := *projected.History, *afterProjection.History
+			afterCoverage.ObservedSince = beforeCoverage.ObservedSince
+			afterCoverage.ObservedBefore = beforeCoverage.ObservedBefore
+			if beforeCoverage != afterCoverage {
+				t.Fatalf("checkpoint replay changed coverage semantics: before %+v, after %+v", beforeCoverage, afterCoverage)
+			}
+			afterProjection.History = nil
+			after, err := json.Marshal(afterProjection)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -34,6 +34,7 @@ describe('resource incident request ownership', () => {
     await load;
     expect(result.resourceIncidents()).toEqual({});
     expect(result.resourceIncidentLoading()).toEqual({});
+    expect(result.resourceIncidentError()).toEqual({});
     expect(result.resourceIncidentPanel()).toBeNull();
   });
 
@@ -63,10 +64,12 @@ describe('resource incident request ownership', () => {
     old.reject(new Error('obsolete read'));
     await load;
     const loadingAfterOldFailure = result.resourceIncidentLoading().host;
+    const errorAfterOldFailure = result.resourceIncidentError().host;
     const obsoleteNotifications = vi.mocked(notificationStore.error).mock.calls.length;
     current.resolve([]);
     await refresh;
     expect(loadingAfterOldFailure).toBe(true);
+    expect(errorAfterOldFailure).toBe(false);
     expect(obsoleteNotifications).toBe(0);
     expect(result.resourceIncidentLoading().host).toBe(false);
   });
@@ -80,6 +83,7 @@ describe('resource incident request ownership', () => {
     pending.reject(new Error('disposed read'));
     await load;
     expect(notificationStore.error).not.toHaveBeenCalled();
+    expect(result.resourceIncidentError().host).toBe(false);
   });
 
   it('keeps a reopened request owned after an older reset-era failure', async () => {
@@ -115,6 +119,7 @@ describe('resource incident request ownership', () => {
     expect(notificationStore.error).not.toHaveBeenCalled();
     expect(result.resourceIncidents().host).toEqual([]);
     expect(result.resourceIncidentLoading().host).toBe(false);
+    expect(result.resourceIncidentError().host).toBe(false);
   });
 
   it('ignores successful reads and new loads after disposal', async () => {
@@ -129,6 +134,7 @@ describe('resource incident request ownership', () => {
     await result.openResourceIncidentPanel('other', 'Other', 'other-row');
     expect(result.resourceIncidents()).toEqual({});
     expect(result.resourceIncidentLoading()).toEqual({ host: true });
+    expect(result.resourceIncidentError()).toEqual({ host: false });
     expect(AlertsAPI.getIncidentsForResource).toHaveBeenCalledTimes(1);
   });
 
@@ -141,6 +147,7 @@ describe('resource incident request ownership', () => {
     const load = result.openResourceIncidentPanel('first', 'First', 'row-1');
     await result.openResourceIncidentPanel('second', 'Second', 'row-2');
     expect(notificationStore.error).toHaveBeenCalledTimes(1);
+    expect(result.resourceIncidentError().second).toBe(true);
     first.resolve([]);
     await load;
     expect(result.resourceIncidents().first).toEqual([]);

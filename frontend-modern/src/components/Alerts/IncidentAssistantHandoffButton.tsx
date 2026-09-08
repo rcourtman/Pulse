@@ -7,6 +7,7 @@ interface IncidentAssistantHandoffButtonProps {
   incident: Incident;
   label?: string;
   class?: string;
+  onAssistantHandoff?: () => void;
 }
 
 export function IncidentAssistantHandoffButton(props: IncidentAssistantHandoffButtonProps) {
@@ -19,7 +20,15 @@ export function IncidentAssistantHandoffButton(props: IncidentAssistantHandoffBu
     event.stopPropagation();
 
     const handoff = buildAlertIncidentAssistantHandoff({ incident: props.incident });
-    aiChatStore.open(handoff.context);
+    const openAssistant = () => aiChatStore.open(handoff.context);
+    if (props.onAssistantHandoff) {
+      props.onAssistantHandoff();
+      // Let the source dialog release its blocking layer before opening the
+      // destination, as with command-palette handoffs.
+      queueMicrotask(openAssistant);
+    } else {
+      openAssistant();
+    }
   };
 
   return (

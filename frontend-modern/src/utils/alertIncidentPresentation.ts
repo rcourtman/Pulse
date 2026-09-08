@@ -234,7 +234,7 @@ export function getAlertIncidentAcknowledgedBadgeClass(): string {
 }
 
 export function getAlertIncidentTimelineEventCardClass(variant: 'surface' | 'alt'): string {
-  return `rounded border border-border ${variant === 'alt' ? 'bg-surface-alt' : 'bg-surface'} p-2`;
+  return `rounded border border-border ${variant === 'alt' ? 'bg-surface-alt' : 'bg-surface'} p-2 whitespace-normal break-words`;
 }
 
 export function getAlertIncidentNoteTextareaClass(): string {
@@ -254,7 +254,7 @@ export function getAlertIncidentTimelineHeadingClass(): string {
 }
 
 export function getAlertIncidentTimelineDetailClass(): string {
-  return 'mt-1 text-xs text-base-content';
+  return 'mt-1 text-xs text-base-content whitespace-pre-wrap';
 }
 
 export function getAlertIncidentTimelineCommandClass(): string {
@@ -297,3 +297,16 @@ export function getAlertResourceIncidentTruncatedEventsLabel(
   }
   return `Showing last ${count} events`;
 }
+
+// A zero Go timestamp means the retained evidence does not establish a time.
+export function formatIncidentEvidenceTime(value?: string | null): string | null {
+  if (!value || value.startsWith('0001-')) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleString();
+}
+
+export const INCIDENT_HISTORY_PARTIAL =
+  'Only part of this history was returned. Earlier occurrences or events may be missing.';
+export const INCIDENT_HISTORY_LEGACY = 'This timeline uses saved incident notes and snapshots.';
+export const INCIDENT_EVIDENCE_DETAILS = 'Evidence details';
+export const INCIDENT_TIME_UNAVAILABLE = 'Time unavailable';

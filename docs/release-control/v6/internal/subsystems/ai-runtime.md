@@ -42,22 +42,20 @@ make acknowledgement event replay idempotent, or prove aggregate write-byte
 reductions or recipient delivery. An evicted occurrence can still be recreated
 by replay; exact identity is guaranteed only while its shell is retained.
 
-Canonical timeline reads for retained incident shells select events from the
-shell's exact opening time up to (but not including) the next retained opening
-for the same alert/resource. A newer firing must not reopen an older resolved
-incident, and a subsecond recurrence must not inherit its predecessor's
-resolution or acknowledgement. Local analysis annotations remain attached to
-their shell. This is a read-projection boundary, not event deletion or a change
-to notification delivery. Canonical-only fallback when no shell is retained,
-missing recurrence boundaries after retention, and already-duplicated shells
-remain outside this guarantee. Legacy shell lookup retains its time tolerance;
-events preceding the selected shell's exact opening are not projected into it.
-`TestIncidentStore_CanonicalProjectionOccurrenceBounds` verifies both boundaries,
-subsecond starts, unordered successors and unrelated alert/resource isolation.
-It also checkpoints all retained shells to JSON, reconstructs the incident store
-and replays a firing: projected identity/state stays identical and the unchanged
-checkpoint is not replaced. The canonical timeline stays in memory; this is not
-a durable event-store restart or installed-process write-rate measurement.
+The shared canonical incident query supersedes the earlier retained-shell-only
+projection. Explicit firing boundaries, resource history identities and retained
+shell boundaries isolate repeated occurrences. An unrelated resource's shell
+cannot shorten the selected occurrence merely because its alert identifier
+matches. Canonical-only occurrences and duplicate saved-shell notes use the same
+query. Query bounds and read failures remain explicit. The upstream
+`TestIncidentStore_CanonicalProjectionOccurrenceBounds` regression is preserved
+alongside the new canonical-only, alias and duplicate-note cases.
+The same regression checkpoints retained shells to JSON, reconstructs the store
+and replays a firing. Stable projected identity and events remain identical,
+while query observation bounds describe each fresh read. The unchanged JSON
+checkpoint is not replaced. The canonical timeline stays in memory, so this is
+not a durable event-store restart or installed-process write-rate measurement.
+
 
 ### Unchanged incident JSON checkpoints
 
@@ -69,6 +67,23 @@ This does not change occurrence identity, retention or notification timing, nor
 does it eliminate snapshot serialization. Proof:
 `internal/ai/memory/incidents_unchanged_test.go` covers unchanged evaluations,
 metadata, restart, resolution/recurrence, file loss and failed-write retry.
+
+Assistant owns composer registration and focus on every open, rather than only
+on component mount. Closing clears the registered input so later keyboard
+commands cannot target a detached composer. A handoff must leave Escape and
+keyboard input in Assistant, not the underlying alert search.
+
+### Canonical incident-history queries
+
+Incident context reads `IncidentStore.QueryIncidents`, whose page contains
+canonical evidence coverage and explicit truncation. Read failures become
+unavailable context, not a healthy or empty-history claim. Explicit firing times
+separate occurrences, and missing starts stay unknown. Historical lifecycle
+status does not establish current resource health. Assistant handoff includes
+the latest bounded events, their source provenance and query coverage. It
+preserves the existing exclusion of raw command arguments/output. An absent
+closure does not acquire a duration measured up to the current time.
+
 
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
@@ -8275,10 +8290,24 @@ distinguishes unavailable archives, failed reads and absent exact resource/windo
 pairs. Proof lives in `internal/metrics/incident_archive_test.go` and the
 registered-tool cases in `internal/ai/tools/incident_history_test.go`.
 
-The legacy incidents listing still exposes incident memory and is not a complete
-canonical incident query. Its old sampler-derived `active_count` is now null with
-`active_count_status=not_measured`. Canonical-only events, alias-aware listing,
-query bounds and projection-read errors remain an explicit modernization gap in
-`patrol-assistant-customer-outcome-qualification`. The shared resource timeline
-remains the evidence owner. Do not invent another incident lifecycle to repair
-this listing.
+The incidents listing now uses the shared canonical incident query, including
+canonical-only events, alias-aware selection, explicit query bounds and surfaced
+read errors. Saved incident shells preserve occurrence identity and local notes.
+They do not own a second lifecycle. The old sampler-derived `active_count` stays
+null with `active_count_status=not_measured`. Implementation and qualification
+receipts are recorded in `docs/qualification/PATROL_ASSISTANT_CUSTOMER_JOURNEY.md`.
+The wider customer-outcome qualification gate remains open.
+
+The history tool describes its actual read scope: alert resolution records
+closure rather than workload recovery, related-resource IDs identify relationships
+rather than additional event targets, and the read does not query action records.
+The model owns interpretation of those records. A history-only read cannot prove
+that a governed action exists or does not exist.
+
+Canonical alert lifecycle evidence owns the projected incident's resource ID,
+resource type, alert type, level and message when present. Saved shells keep
+stable incident IDs and local notes, but cannot override that canonical context.
+Related command targets do not retarget an alert. The funded OpenRouter
+`openai/gpt-6-astra` route has explicitly reviewed, tiered cost estimates dated
+2026-09-07. Unreviewed aliases stay unknown. Its history-explanation qualification
+is distinct from the earlier Gemini lab matrix and from wider rollout evidence.
