@@ -1,8 +1,12 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AlertResourceIncidentsPanel } from '../AlertResourceIncidentsPanel';
+import { AlertsAPI } from '@/api/alerts';
+import type { Incident } from '@/types/api';
+import type { AlertHistoryState } from '../useAlertHistoryState';
+import { useAlertResourceIncidentsState } from '../useAlertResourceIncidentsState';
 import { aiChatStore } from '@/stores/aiChat';
 
 vi.mock('@solidjs/router', () => ({
@@ -20,6 +24,45 @@ describe('AlertResourceIncidentsPanel', () => {
     aiChatStore.setEnabled(false);
     cleanup();
     vi.restoreAllMocks();
+  });
+
+  it('retries through the real hook and retains cached history after a refresh failure', async () => {
+    let state!: ReturnType<typeof useAlertResourceIncidentsState>;
+    const read = vi.spyOn(AlertsAPI, 'getIncidentsForResource');
+    read.mockRejectedValueOnce(new Error('history unavailable'));
+    render(() => {
+      state = useAlertResourceIncidentsState();
+      return <AlertResourceIncidentsPanel state={state as AlertHistoryState} />;
+    });
+
+    await state.openResourceIncidentPanel('resource-1', 'Resource', 'row-1');
+    expect(screen.getByRole('alert')).toHaveTextContent('Use Refresh');
+    expect(screen.queryByText('No incidents recorded for this resource yet.')).toBeNull();
+
+    let resolve!: (incidents: Incident[]) => void;
+    read.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: /Refresh/ })).toBeDisabled();
+    resolve([{
+      id: 'retained', alertType: 'connectivity', level: 'critical',
+      status: 'resolved', acknowledged: false, events: [],
+      openedAt: '2026-09-08T00:00:00Z', message: 'Retained connection incident',
+    } as Incident]);
+    await waitFor(() => expect(screen.getByText('Retained connection incident')).toBeVisible());
+    expect(read).toHaveBeenLastCalledWith('resource-1', 10);
+
+    read.mockRejectedValueOnce(new Error('refresh unavailable'));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Use Refresh'));
+    expect(screen.getByText('Retained connection incident')).toBeVisible();
+    expect(screen.queryByText('No incidents recorded for this resource yet.')).toBeNull();
+
+    read.mockResolvedValueOnce([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => expect(screen.getByText('No incidents recorded for this resource yet.')).toBeVisible());
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('Retained connection incident')).toBeNull();
   });
 
   it('shows persistent read failure without claiming an empty history', () => {
