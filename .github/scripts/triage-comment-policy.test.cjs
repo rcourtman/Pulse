@@ -39,8 +39,18 @@ test("automated workflow issue mutations use the dedicated triage identity", () 
   }
 
   assert.deepEqual(publishers.sort(), [
-    "close-needs-retest-timeout.yml",
     "issue-version-label-sync.yml",
-    "issue-version-retest-comment.yml",
   ]);
+});
+
+
+test("version-only posting and timeout closure workflows are retired", () => {
+  for (const name of ["issue-version-retest-comment.yml", "close-needs-retest-timeout.yml"]) {
+    assert.equal(fs.existsSync(path.join(workflowDir, name)), false, name);
+  }
+  for (const name of fs.readdirSync(workflowDir)) {
+    if (!/\.ya?ml$/.test(name)) continue;
+    const source = fs.readFileSync(path.join(workflowDir, name), "utf8");
+    assert.doesNotMatch(source, /post(?:Eligible)?RetestComments?|issue-version-triage:v1|buildTimeoutCloseCommentBody/, name);
+  }
 });

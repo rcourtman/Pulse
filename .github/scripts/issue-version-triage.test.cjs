@@ -84,7 +84,7 @@ function createCore() {
   };
 }
 
-test("syncLabels adds affects and retest labels for older bug reports", async () => {
+test("syncLabels classifies older bug reports without requesting a retest", async () => {
   const { github, calls } = createGithub({ latestVersion: "6.0.1" });
   const issue = {
     number: 1402,
@@ -103,7 +103,6 @@ test("syncLabels adds affects and retest labels for older bug reports", async ()
   assert.deepEqual(calls.setLabels[0].labels, [
     "affects-6.0.0-rc.1",
     "bug",
-    "needs-retest-on-latest",
   ]);
 });
 
@@ -231,142 +230,38 @@ test("every actionable issue form exposes the decomposition signal", () => {
   }
 });
 
-test("postRetestComment comments once for older non-maintainer bug reports", async () => {
-  const { github, calls } = createGithub({ latestVersion: "6.0.1" });
+test("older-version reports cannot trigger event or scheduled retest posting", async () => {
   const issue = {
     number: 1200,
     title: "Upgrade regression",
-    body: "## Feedback type\nRegression\n\n## Pulse version\n5.1.9\n",
-    labels: [],
+    body: "## Feedback type\nRegression\n\n## Pulse version\n6.3.1\n",
+    labels: [{ name: "bug" }],
     author_association: "NONE",
+    created_at: "2026-09-08T08:55:00Z",
   };
-
-  await triage.postRetestComment({
-    github,
-    context: createContext({ action: "opened", issue }),
-    core: createCore(),
-  });
-
-  assert.equal(calls.createComment.length, 1);
-  assert.match(
-    calls.createComment[0].body,
-    /<!-- issue-version-triage:v1 -->/
-  );
-  assert.ok(
-    calls.createComment[0].body.endsWith(`\n\n${triage.internals.TRIAGE_FOOTER}`)
-  );
-  assert.equal(
-    calls.createComment[0].body.split(triage.internals.TRIAGE_FOOTER).length - 1,
-    1
-  );
+  const { github, calls } = createGithub({ latestVersion: "6.4.1", issues: [issue] });
+  const args = { github, context: createContext({ issue }), core: createCore() };
+  await triage.postRetestComment(args);
+  assert.deepEqual(await triage.postEligibleRetestComments({
+    ...args, nowMs: Date.parse("2026-09-08T09:01:00Z"),
+  }), { eligibleCount: 0, postedCount: 0 });
+  // Retirement must not merely shift the public write to a different API.
+  for (const values of Object.values(calls)) assert.equal(values.length, 0);
 });
 
-test("scheduled retest guidance waits five minutes and reads the current issue", async () => {
-  const nowMs = Date.parse("2026-08-26T09:06:00Z");
-  const issues = [
-    {
-      number: 1780,
-      title: "Agent token scope",
-      body: "## Feedback type\nBug / regression\n\n## Pulse version\n6.3.2\n",
-      labels: [{ name: "bug" }],
-      author_association: "NONE",
-      created_at: "2026-08-26T09:01:51Z",
-    },
-  ];
-  const { github, calls } = createGithub({ latestVersion: "6.3.2", issues });
-
-  const result = await triage.postEligibleRetestComments({
-    github,
-    context: createContext({ issue: null }),
-    core: createCore(),
-    nowMs,
-  });
-
-  assert.deepEqual(result, { eligibleCount: 0, postedCount: 0 });
-  assert.equal(calls.createComment.length, 0);
-
-  const laterResult = await triage.postEligibleRetestComments({
-    github,
-    context: createContext({ issue: null }),
-    core: createCore(),
-    nowMs: Date.parse("2026-08-26T09:07:00Z"),
-  });
-
-  assert.deepEqual(laterResult, { eligibleCount: 1, postedCount: 0 });
-  assert.equal(calls.createComment.length, 0);
-});
-
-test("scheduled retest guidance posts once after the grace window", async () => {
-  const issues = [
-    {
-      number: 1200,
-      title: "Upgrade regression",
-      body: "## Feedback type\nRegression\n\n## Pulse version\n5.1.9\n",
-      labels: [{ name: "bug" }],
-      author_association: "NONE",
-      created_at: "2026-08-26T08:55:00Z",
-    },
-  ];
-  const { github, calls } = createGithub({ latestVersion: "6.3.2", issues });
-
-  const result = await triage.postEligibleRetestComments({
-    github,
-    context: createContext({ issue: null }),
-    core: createCore(),
-    nowMs: Date.parse("2026-08-26T09:01:00Z"),
-  });
-
-  assert.deepEqual(result, { eligibleCount: 1, postedCount: 1 });
-  assert.equal(calls.createComment.length, 1);
-  assert.equal(calls.createComment[0].issue_number, 1200);
-  assert.ok(
-    calls.createComment[0].body.endsWith(`\n\n${triage.internals.TRIAGE_FOOTER}`)
-  );
-});
-
-test("scheduled retest guidance defers to an existing maintainer response", async () => {
-  const issues = [
-    {
-      number: 1790,
-      title: "TrueNAS SMART evidence is hidden",
-      body: "## Feedback type\nBug / regression\n\n## Pulse version\n6.3.1\n",
-      labels: [{ name: "bug" }],
-      author_association: "NONE",
-      created_at: "2026-08-28T08:01:33Z",
-    },
-  ];
-  const existingComments = [
-    {
-      body: "Fixed on main; wait for a release containing the fix before retesting.",
-      author_association: "OWNER",
-    },
-  ];
-  const { github, calls } = createGithub({
-    latestVersion: "6.3.2",
-    existingComments,
-    issues,
-  });
-
-  const result = await triage.postEligibleRetestComments({
-    github,
-    context: createContext({ issue: null }),
-    core: createCore(),
-    nowMs: Date.parse("2026-08-28T08:10:00Z"),
-  });
-
-  assert.deepEqual(result, { eligibleCount: 1, postedCount: 0 });
-  assert.equal(calls.createComment.length, 0);
-});
-
-test("timeout close comments use the canonical triage footer", () => {
-  const { buildTimeoutCloseCommentBody, CLOSE_COMMENT_MARKER, TRIAGE_FOOTER } =
-    triage.internals;
-  const body = buildTimeoutCloseCommentBody(7);
-
-  assert.ok(body.startsWith(CLOSE_COMMENT_MARKER));
-  assert.ok(body.endsWith(`\n\n${TRIAGE_FOOTER}`));
-  assert.equal(body.split(TRIAGE_FOOTER).length - 1, 1);
-  assert.doesNotMatch(body, /automated maintainer|supervised by|AI\)/i);
+test("label sync preserves community-owned retest state regardless of version", async () => {
+  for (const version of ["6.3.1", "6.4.1", "_No response_"]) {
+    const { github, calls } = createGithub({ latestVersion: "6.4.1" });
+    await triage.syncLabels({
+      github, core: createCore(),
+      context: createContext({ issue: {
+        number: 1200, title: "Bug", body: `## Pulse version\n${version}\n`,
+        labels: [{ name: "bug" }, { name: "needs-retest-on-latest" }],
+      } }),
+    });
+    assert.ok(calls.setLabels[0].labels.includes("needs-retest-on-latest"));
+    assert.equal(calls.createComment.length, 0);
+  }
 });
 
 test("postRetestComment skips reopened issues", async () => {

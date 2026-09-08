@@ -2,16 +2,9 @@ const VERSION_LABEL_PREFIX = "affects-";
 const NEEDS_VERSION_LABEL = "needs-version-info";
 const RETEST_LABEL = "needs-retest-on-latest";
 const NEEDS_DECOMPOSITION_LABEL = "needs-decomposition";
-const RETEST_COMMENT_MARKER = "<!-- issue-version-triage:v1 -->";
-const CLOSE_COMMENT_MARKER = "<!-- issue-timeout-close:v1 -->";
-const TRIAGE_FOOTER =
-  "[How Pulse handles triage](https://github.com/rcourtman/Pulse/blob/main/docs/AI_TRANSPARENCY.md)";
 const BUG_LABEL = "bug";
 const DOCS_LABEL = "documentation";
 const ENHANCEMENT_LABEL = "enhancement";
-const MAINTAINER_AUTHOR_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
-const RETEST_COMMENT_GRACE_MS = 5 * 60 * 1000;
-const RETEST_COMMENT_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 
 function escapeRegExp(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -181,27 +174,6 @@ async function ensureLabel(github, context, name, color, description) {
   }
 }
 
-async function getIssueComments(github, context, issueNumber) {
-  return github.paginate(github.rest.issues.listComments, {
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    issue_number: issueNumber,
-    per_page: 100,
-  });
-}
-
-function hasRetestComment(comments) {
-  return comments.some((comment) => (comment.body || "").includes(RETEST_COMMENT_MARKER));
-}
-
-function hasMaintainerResponse(comments) {
-  return comments.some((comment) =>
-    MAINTAINER_AUTHOR_ASSOCIATIONS.has(
-      String(comment.author_association || "").toUpperCase()
-    )
-  );
-}
-
 async function getLatestStableVersion(github, context, core) {
   try {
     const latest = await github.rest.repos.getLatestRelease({
@@ -260,49 +232,6 @@ function keepOnlyReportedVersionLabel(nextLabels, reportedVersion) {
   }
 }
 
-function withTriageFooter(lines) {
-  const body = Array.isArray(lines) ? lines.join("\n") : String(lines || "");
-  return `${body.trimEnd()}\n\n${TRIAGE_FOOTER}`;
-}
-
-function buildRetestCommentBody(reportedVersion, latestVersion) {
-  return withTriageFooter([
-    RETEST_COMMENT_MARKER,
-    "Thanks for the report.",
-    "",
-    `I can see this was reported on **v${reportedVersion}**, while the latest stable release is **v${latestVersion}**.`,
-    `Please retest on **v${latestVersion}** and comment with:`,
-    "",
-    "- whether the issue still reproduces",
-    "- updated logs/diagnostics",
-    "- exact running image tag or digest",
-    "",
-    "If there is no reporter follow-up after 7 days, this issue may be auto-closed until new confirmation is provided.",
-    "",
-    "If it still reproduces on the latest version, I will keep this open as an active regression.",
-  ]);
-}
-
-function buildTimeoutCloseCommentBody(staleDays) {
-  return withTriageFooter([
-    CLOSE_COMMENT_MARKER,
-    `Closing due to missing reporter retest confirmation for ${staleDays} days.`,
-    "",
-    "If this still reproduces on the latest stable release, comment with updated version details and logs and I will reopen.",
-  ]);
-}
-
-function canPostRetestComment(issue, action) {
-  // "opened" only: non-collaborator reporters cannot reopen maintainer-closed
-  // issues, so a "reopened" event is a deliberate maintainer decision made with
-  // context. Posting retest boilerplate there contradicts the maintainer and
-  // plants the auto-close marker on an issue they chose to keep open.
-  const authorAssociation = String(issue.author_association || "").toUpperCase();
-  return (
-    action === "opened" && !MAINTAINER_AUTHOR_ASSOCIATIONS.has(authorAssociation)
-  );
-}
-
 async function syncLabels({ github, context, core }) {
   const issue = context.payload.issue;
   const latestVersion = await getLatestStableVersion(github, context, core);
@@ -310,10 +239,8 @@ async function syncLabels({ github, context, core }) {
     labelNames,
     nextLabels,
     reportedVersion,
-    v6FeedbackClass,
     hasAdditionalActionableTopics,
     isBugLike,
-    comparison,
   } = buildTriageState(issue, core, latestVersion);
 
   if (hasAdditionalActionableTopics === true) {
@@ -350,23 +277,9 @@ async function syncLabels({ github, context, core }) {
       "0e8a16",
       `Bug reported against Pulse ${reportedVersion}`
     );
-    await ensureLabel(
-      github,
-      context,
-      RETEST_LABEL,
-      "d93f0b",
-      "Reporter should retest on current latest stable release"
-    );
-
     keepOnlyReportedVersionLabel(nextLabels, reportedVersion);
     nextLabels.add(`${VERSION_LABEL_PREFIX}${reportedVersion}`);
     nextLabels.delete(NEEDS_VERSION_LABEL);
-
-    if (comparison !== null && comparison < 0) {
-      nextLabels.add(RETEST_LABEL);
-    } else {
-      nextLabels.delete(RETEST_LABEL);
-    }
   } else {
     await ensureLabel(
       github,
@@ -376,9 +289,10 @@ async function syncLabels({ github, context, core }) {
       "Issue is missing required Pulse version metadata"
     );
     nextLabels.add(NEEDS_VERSION_LABEL);
-    nextLabels.delete(RETEST_LABEL);
   }
 
+  // Retest labels are community-owned: version metadata cannot establish
+  // relevant-fix availability or reconcile the live reporter conversation.
   await github.rest.issues.setLabels({
     owner: context.repo.owner,
     repo: context.repo.repo,
@@ -387,118 +301,16 @@ async function syncLabels({ github, context, core }) {
   });
 }
 
-async function postRetestCommentForIssue({
-  github,
-  context,
-  core,
-  issue,
-  latestVersion,
-}) {
-  const { reportedVersion, isBugLike, comparison } = buildTriageState(
-    issue,
-    core,
-    latestVersion
-  );
-
-  if (!isBugLike) {
-    core.info("Issue is not bug-like after classification. Skipping public retest guidance.");
-    return false;
-  }
-  if (!reportedVersion) {
-    core.info("Issue is missing Pulse version metadata. Skipping public retest guidance.");
-    return false;
-  }
-  if (comparison === null || comparison >= 0) {
-    core.info("Issue is already on the latest stable core or newer. Skipping public retest guidance.");
-    return false;
-  }
-  const comments = await getIssueComments(github, context, issue.number);
-  if (hasRetestComment(comments)) {
-    core.info("Retest guidance comment already exists.");
-    return false;
-  }
-  if (hasMaintainerResponse(comments)) {
-    core.info(
-      "A maintainer has already responded. Skipping generic retest guidance."
-    );
-    return false;
-  }
-
-  await github.rest.issues.createComment({
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    issue_number: issue.number,
-    body: buildRetestCommentBody(reportedVersion, latestVersion),
-  });
-  return true;
+// Compatibility entry points for callers using the old helper API. Version
+// metadata alone cannot justify a public retest request. Community owns
+// whole-thread review, relevant-fix and release-inclusion verification.
+async function postRetestComment({ core }) {
+  core.info("Version-only retest posting is retired; Community owns follow-up.");
 }
 
-async function postRetestComment({ github, context, core }) {
-  const issue = context.payload.issue;
-  const action = context.payload.action || "";
-  if (!canPostRetestComment(issue, action)) {
-    core.info("Public retest guidance is disabled for this issue event.");
-    return;
-  }
-
-  const latestVersion = await getLatestStableVersion(github, context, core);
-  await postRetestCommentForIssue({
-    github,
-    context,
-    core,
-    issue,
-    latestVersion,
-  });
-}
-
-async function postEligibleRetestComments({
-  github,
-  context,
-  core,
-  nowMs = Date.now(),
-  graceMs = RETEST_COMMENT_GRACE_MS,
-  lookbackMs = RETEST_COMMENT_LOOKBACK_MS,
-}) {
-  const issues = await github.paginate(github.rest.issues.listForRepo, {
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    state: "open",
-    sort: "created",
-    direction: "desc",
-    since: new Date(nowMs - lookbackMs).toISOString(),
-    per_page: 100,
-  });
-  const latestVersion = await getLatestStableVersion(github, context, core);
-  let eligibleCount = 0;
-  let postedCount = 0;
-
-  for (const issue of issues) {
-    if (issue.pull_request || !canPostRetestComment(issue, "opened")) continue;
-
-    const createdMs = new Date(issue.created_at || "").getTime();
-    if (!Number.isFinite(createdMs)) {
-      core.warning(`Issue #${issue.number} has an invalid created_at value.`);
-      continue;
-    }
-
-    const ageMs = nowMs - createdMs;
-    if (ageMs < graceMs || ageMs > lookbackMs) continue;
-    eligibleCount += 1;
-
-    const posted = await postRetestCommentForIssue({
-      github,
-      context,
-      core,
-      issue,
-      latestVersion,
-    });
-    if (posted) postedCount += 1;
-  }
-
-  core.info(
-    `Retest guidance sweep complete: eligible=${eligibleCount}, posted=${postedCount}.`
-  );
-  return { eligibleCount, postedCount };
+async function postEligibleRetestComments({ core }) {
+  core.info("Version-only retest sweep is retired; Community owns follow-up.");
+  return { eligibleCount: 0, postedCount: 0 };
 }
 
 module.exports = {
@@ -507,21 +319,13 @@ module.exports = {
   postRetestComment,
   internals: {
     BUG_LABEL,
-    CLOSE_COMMENT_MARKER,
     DOCS_LABEL,
     ENHANCEMENT_LABEL,
     NEEDS_DECOMPOSITION_LABEL,
     NEEDS_VERSION_LABEL,
-    RETEST_COMMENT_MARKER,
-    RETEST_COMMENT_GRACE_MS,
-    RETEST_COMMENT_LOOKBACK_MS,
     RETEST_LABEL,
-    TRIAGE_FOOTER,
     VERSION_LABEL_PREFIX,
-    buildRetestCommentBody,
-    buildTimeoutCloseCommentBody,
     buildTriageState,
-    canPostRetestComment,
     classifyAdditionalActionableTopics,
     classifyV6FeedbackType,
     compareCore,
