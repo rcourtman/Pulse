@@ -24785,3 +24785,49 @@ func TestContract_DeliveryDiagnosticPayload(t *testing.T) {
 		t.Fatal("response exposed destination credential")
 	}
 }
+
+// Recovery controls must follow the replacement notifier, not the stopped one.
+func TestRouterSetMonitorRefreshesNotificationQueue(t *testing.T) {
+	for _, entry := range []string{"monitor", "multi-tenant-monitor"} {
+		t.Run(entry, func(t *testing.T) {
+			oldMonitor, _, _ := newTestMonitor(t)
+			replacement, _, _ := newTestMonitor(t)
+			for _, m := range []*monitoring.Monitor{oldMonitor, replacement} {
+				n := notifications.NewNotificationManagerWithDataDir("", t.TempDir())
+				t.Cleanup(n.Stop)
+				setUnexportedField(t, m, "notificationMgr", n)
+			}
+			h := NewNotificationQueueHandlers(oldMonitor)
+			// Capture method values before replacement just as route registration does.
+			handlers := map[string]http.HandlerFunc{
+				"stats": h.GetQueueStats, "dlq": h.GetDLQ,
+				"retry": h.RetryTerminalFailures, "dismiss": h.DismissTerminalFailures,
+			}
+			r := &Router{config: &config.Config{}, notificationQueueHandlers: h}
+			oldMonitor.GetNotificationManager().Stop()
+			if entry == "monitor" {
+				r.SetMonitor(replacement)
+			} else {
+				mtm := &monitoring.MultiTenantMonitor{}
+				setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{"default": replacement})
+				r.SetMultiTenantMonitor(mtm)
+			}
+			if replacement.GetNotificationManager().GetQueue() == nil {
+				t.Fatal("replacement notifier unavailable")
+			}
+			for name, handler := range handlers {
+				t.Run(name, func(t *testing.T) {
+					rec := httptest.NewRecorder()
+					method := http.MethodPost
+					if name == "stats" || name == "dlq" {
+						method = http.MethodGet
+					}
+					handler(rec, httptest.NewRequest(method, "/", nil))
+					if rec.Code != http.StatusOK {
+						t.Fatalf("replacement queue action: status %d: %s", rec.Code, rec.Body.String())
+					}
+				})
+			}
+		})
+	}
+}

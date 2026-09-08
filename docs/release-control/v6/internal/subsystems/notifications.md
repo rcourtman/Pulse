@@ -15,6 +15,24 @@
 
 ## Purpose
 
+### Queue recovery handler ownership after reload
+
+Router monitor replacement must refresh the existing queue/DLQ handler as well
+as the normal notification handler. A stopped manager intentionally clears its
+queue; retaining that manager after reload must not leave Retry, Dismiss or
+queue reads permanently returning `Notification queue not initialized` while
+the replacement manager is available. Handler monitor reads and replacement
+are synchronised; missing monitors/managers remain an explicit 503, not a panic.
+This changes neither queue state semantics nor notification delivery transport.
+Requests already in flight during shutdown may still fail and can be retried.
+
+Verification: `TestRouterSetMonitorRefreshesNotificationQueue` stops the old
+notifier, replaces the router monitor, and exercises stats, Retry and Dismiss;
+`TestNotificationQueueHandlers_MonitorReplacementConcurrent` covers concurrent
+replacement and unavailable-manager reads with the race detector. This is
+lifecycle regression proof, not installed SMTP receipt or reporter confirmation.
+
+
 Own notification delivery transport, provider configuration, queueing, and
 notification-management API surfaces.
 The alert schedule selects firing, grouped, and matching recovery delivery
