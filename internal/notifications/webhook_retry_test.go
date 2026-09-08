@@ -13,7 +13,7 @@ import (
 // A body interrupted after the response headers must not erase the server's
 // rejection. These fixtures use only the HTTP transport, without queue workers.
 func TestWebhookTruncatedResponseClassification(t *testing.T) {
-	for _, code := range []int{200, 401, 403, 422, 429, 503} {
+	for _, code := range []int{200, 401, 403, 421, 422, 423, 425, 429, 503} {
 		t.Run(fmt.Sprint(code), func(t *testing.T) {
 			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Length", "100")
@@ -39,23 +39,26 @@ func TestWebhookTruncatedResponseClassification(t *testing.T) {
 					t.Errorf("class = %s, want %s", got, ClassFromHTTPStatus(code))
 				}
 			}
-			wantRetry := code == 200 || code == 429 || code == 503
+			wantRetry := code == 200 || code == 421 || code == 423 || code == 425 || code == 429 || code == 503
 			if got := isRetryableWebhookError(err); got != wantRetry {
 				t.Errorf("retryable = %v, want %v: %v", got, wantRetry, err)
+			}
+			if got := ClassifyNotificationFailureError(err).Retryable(); got != wantRetry {
+				t.Errorf("queue classification retryable = %v, want %v", got, wantRetry)
 			}
 		})
 	}
 }
 
 func TestWebhookRetryTruncatedResponse(t *testing.T) {
-	for _, code := range []int{403, 503} {
+	for _, code := range []int{403, 421, 423, 425, 503} {
 		t.Run(fmt.Sprint(code), func(t *testing.T) {
 			var attempts atomic.Int32
 			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Header.Get("X-Pulse-Event-ID") != "synthetic:alert" {
 					t.Error("lost event identity")
 				}
-				if attempts.Add(1) > 1 && code == 503 {
+				if attempts.Add(1) > 1 && code != 403 {
 					w.WriteHeader(http.StatusNoContent)
 					return
 				}
@@ -72,7 +75,7 @@ func TestWebhookRetryTruncatedResponse(t *testing.T) {
 				WebhookConfig: WebhookConfig{URL: server.URL}, RetryCount: 1,
 			}, []byte(`{}`), "synthetic:alert")
 			wantAttempts, wantStatus := int32(1), code
-			wantSuccess := code == 503
+			wantSuccess := code != 403
 			if wantSuccess {
 				wantAttempts, wantStatus = 2, http.StatusNoContent
 			}
