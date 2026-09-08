@@ -137,3 +137,69 @@ not merely a larger timeout or successful CDP acknowledgements. No Pulse fixture
 installed convergence, destination receipt or release qualification was exercised.
 Complete output is retained in maintainer run `20260908T065015Z-web-product`,
 `headed-window-control.log`. Earlier failed controls remain relevant.
+
+## Native tab-switch control — 8 September 2026
+
+Run the same owned Xvfb command with `--headed-tab` instead of
+`--headed-window`. This does not request minimisation or require a window
+manager: it creates a second owned blank tab and activates it. Before freezing,
+it requires observed hidden → visible/focused → hidden states, each bounded to
+ten seconds with 250ms samples. It then uses the existing 2100ms host-side frozen
+wait, resumes while backgrounded, and activates the original tab. Ordered
+freeze/resume with unchanged ticks, a subsequent visible event, final focus and
+timer progress remain required. No synthetic visibility events or forced focus
+are used; no Playwright page session is attached.
+
+One run exited 0 on the same Chrome revision, Playwright and Node versions above,
+owned display :99. Preflight recorded hidden at tick 5, visible/focused at tick
+11, then hidden at tick 12. Freeze and resume both recorded tick 12.
+Post-resume remained hidden/unfocused at tick 12; tab activation produced a
+visible event and visible/focused state at tick 18. Complete runtime identities,
+intervention commands/responses and samples are retained in maintainer run
+`20260908T070012Z-web-product/headed-tab-control.log`.
+
+This establishes the positive control for the **tab-switch** mechanism, not
+window minimisation. Earlier adverse results and the default mode's unreliable
+250ms hidden-timer sample remain unchanged. No Pulse fixture or installed-pair
+acceptance ran. The next source-level convergence fixture must retain raw
+single-session ownership, the genuine background preflight, and the suspension
+probe rather than attach a Playwright page and assume equivalent behaviour.
+
+## Suspended incident component convergence — 8 September 2026
+
+```sh
+pulse-heavy-run -- xvfb-run -a -s '-screen 0 1280x800x24 -nolisten tcp' node scripts/check-browser-single-session-control.mjs --incident-convergence
+```
+
+This opt-in mode retains the raw single-session headed-tab preflight and probe,
+then mounts the production incident hook and panel through a loopback Vite
+fixture. No Playwright page is attached. It initiates two synthetic HTTP reads
+before freezing, sends the newer response followed by the obsolete response from
+the host while frozen, waits 2100ms, resumes and activates the original tab.
+Both native foreground recovery and ordered suspension must pass before checking
+convergence (ten-second bound): latest incident retained, obsolete incident
+absent, loading/error cleared and no notification error. Fixture button clicks
+are scripted setup, not a claim of native pointer/keyboard interaction.
+
+The first run used identical pending GET URLs and exited 1 waiting for the
+second request, before freeze. Only one request reached the fixture. Same-URL
+request handling was a possible confounder, not an established browser diagnosis
+or product failure. The revised fixture gives reads distinct query identifiers
+and disables fetch caching. One revised run exited 0: hidden → visible/focused →
+hidden preflight; freeze/resume both at tick 11; visible/focused at tick 17;
+latest incident rendered, obsolete absent, loading/error false, notifications 0.
+
+Both outputs are retained under maintainer run `20260908T072007Z-web-product`:
+`incident-convergence.log` (adverse) and
+`incident-convergence-distinct-reads.log` (passing). Runtime was Chrome
+141.0.7390.37, revision `9f043f63b0e5b728c8d09f3e3ddfc1681a4bd58e`,
+Playwright 1.56.1, Node v24.20.0 linux x64, owned Xvfb display :99.
+The existing ownership runner now imports the unchanged shared fixture string.
+
+This is **component-source evidence**, not full application convergence:
+authentication, application WebSocket refresh, installed restart, selected public/
+private release pair, native mobile lifecycle, and destination receipt are not
+exercised. The fixture replaces AlertsAPI's incident read with synthetic HTTP;
+it does not establish that the application initiates a refresh on foreground,
+nor guarantee network callback execution order from host response order. Earlier
+failed controls remain adverse evidence about their respective mechanisms.

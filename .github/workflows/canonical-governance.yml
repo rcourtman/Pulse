@@ -171,6 +171,9 @@ jobs:
       - name: Run control plane audit unit tests
         run: python3 scripts/release_control/control_plane_audit_test.py
 
+      - name: Run rehearsal source selection unit tests
+        run: python3 scripts/release_control/rehearsal_source_test.py
+
       - name: Run contract audit unit tests
         run: python3 scripts/release_control/contract_audit_test.py
 

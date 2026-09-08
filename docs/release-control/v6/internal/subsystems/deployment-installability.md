@@ -38,6 +38,28 @@ profiles. Collector hierarchy and confidentiality fixtures remain in
 `scripts/release_control/internal/release_resource_snapshot_test.py`. Neither
 fixture constitutes full-suite or installed-release qualification.
 
+### Scheduled rehearsal source identity
+
+The weekly dry-run workflow starts from GitHub's default-branch event, then
+selects the branch governed by that checkout's VERSION. It fetches that branch
+once, resolves a commit, and checks the selected commit's VERSION against the
+workflow checkout's branch policy before detached checkout. Metadata and
+product checks use the selected checkout; a missing branch or policy mismatch
+fails closed rather than falling back to main.
+
+Manual dispatch retains its governed event branch and exact event SHA, VERSION
+equality and explicit rollback requirement. Only scheduled runs may derive the
+preceding stable rollback target. Summaries distinguish workflow event revision
+from tested branch and revision; unresolved selection is not test evidence.
+This watchdog is not an admitted release candidate and cannot qualify or
+replace the fixed release packet.
+
+Verification: `rehearsal_source_test.py` executes the source-selection shell
+against local Git fixtures. `release_promotion_policy_test.py` pins workflow
+ordering, metadata wiring and separate source reporting. Passing local fixtures
+does not establish hosted backend, integration or demo execution; those outcomes
+must be observed after landing.
+
 ### Immutable release source
 
 Continuous development must not change an admitted release's source. The

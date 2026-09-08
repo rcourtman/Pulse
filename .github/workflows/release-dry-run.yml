@@ -2,7 +2,7 @@ name: Release Dry Run
 run-name: Release Dry Run v${{ inputs.version || 'scheduled' }}
 
 on:
-  # Weekly drift watchdog: fires every Tuesday 07:00 UTC against the governed
+  # Weekly drift watchdog: starts on main every Tuesday 07:00 UTC and selects the governed
   # release branch so fixture, manifest, and load-calibration drift surfaces a
   # week at a time instead of piling up until an RC publish. Scheduled runs
   # carry no workflow_dispatch inputs (GitHub does not apply input defaults to
@@ -96,6 +96,8 @@ jobs:
       contents: read
       packages: read
     outputs:
+      tested_sha: ${{ steps.source.outputs.tested_sha }}
+      tested_branch: ${{ steps.source.outputs.tested_branch }}
       version: ${{ steps.rehearsal.outputs.version }}
       tag: ${{ steps.rehearsal.outputs.tag }}
       is_prerelease: ${{ steps.rehearsal.outputs.is_prerelease }}
@@ -139,6 +141,44 @@ jobs:
           python3 scripts/write_github_output.py required_branch "${REQUIRED_BRANCH}"
           echo "[OK] Governed release branch for ${VERSION} is ${REQUIRED_BRANCH}"
 
+      - name: Select exact rehearsal source
+        id: source
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REQUIRED_BRANCH: ${{ steps.branch_policy.outputs.required_branch }}
+        run: |
+          set -euo pipefail
+          TESTED_BRANCH="${GITHUB_REF_NAME}"
+          if [ "${EVENT_NAME}" = "schedule" ]; then
+            # Resolve once; never test a moving branch or rewrite GITHUB_SHA.
+            git check-ref-format "refs/heads/${REQUIRED_BRANCH}"
+            git fetch --no-tags origin "refs/heads/${REQUIRED_BRANCH}"
+            TESTED_SHA="$(git rev-parse --verify 'FETCH_HEAD^{commit}')"
+            SELECTED_VERSION="$(git show "${TESTED_SHA}:VERSION" | tr -d '\r\n')"
+            SELECTED_BRANCH="$(python3 scripts/release_control/control_plane.py --branch-for-version "${SELECTED_VERSION}")"
+            if [ "${SELECTED_BRANCH}" != "${REQUIRED_BRANCH}" ]; then
+              echo "::error::Selected VERSION no longer belongs to ${REQUIRED_BRANCH}."
+              exit 1
+            fi
+            git checkout --detach "${TESTED_SHA}"
+            TESTED_BRANCH="${REQUIRED_BRANCH}"
+          elif [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            TESTED_SHA="$(git rev-parse --verify 'HEAD^{commit}')"
+            if [ "${TESTED_BRANCH}" != "${REQUIRED_BRANCH}" ] || [ "${TESTED_SHA}" != "${GITHUB_SHA}" ]; then
+              echo "::error::Manual rehearsal must retain the exact event SHA on ${REQUIRED_BRANCH}."
+              exit 1
+            fi
+          else
+            echo "::error::Unsupported rehearsal event: ${EVENT_NAME}"
+            exit 1
+          fi
+          # These values are ref-checked / git-produced, never free-form inputs.
+          {
+            echo "tested_sha=${TESTED_SHA}"
+            echo "tested_branch=${TESTED_BRANCH}"
+          } >> "$GITHUB_OUTPUT"
+          echo "[OK] Workflow event SHA ${GITHUB_SHA}; tested ${TESTED_BRANCH}@${TESTED_SHA}"
+
       - name: Resolve rehearsal metadata
         id: rehearsal
         env:
@@ -152,6 +192,7 @@ jobs:
           HOTFIX_REASON_INPUT: ${{ inputs.hotfix_reason }}
           UNSIGNED_WINDOWS_EXCEPTION_INPUT: ${{ inputs.unsigned_windows_exception }}
           UNSIGNED_WINDOWS_REASON_INPUT: ${{ inputs.unsigned_windows_reason }}
+          TESTED_BRANCH: ${{ steps.source.outputs.tested_branch }}
           WORKFLOW_OUTPUT_1: ${{ steps.branch_policy.outputs.required_branch }}
         run: |
           set -euo pipefail
@@ -169,8 +210,8 @@ jobs:
 
           REQUIRED_BRANCH="${WORKFLOW_OUTPUT_1}"
 
-          if [ "${GITHUB_REF_NAME}" != "$REQUIRED_BRANCH" ]; then
-            echo "::error::Rehearsal version ${VERSION} requires branch ${REQUIRED_BRANCH}, but workflow ran on ${GITHUB_REF_NAME}."
+          if [ "${TESTED_BRANCH}" != "$REQUIRED_BRANCH" ]; then
+            echo "::error::Rehearsal version ${VERSION} requires branch ${REQUIRED_BRANCH}, but tested source is on ${TESTED_BRANCH}."
             exit 1
           fi
 
@@ -370,6 +411,8 @@ jobs:
       - name: Write rehearsal summary
         if: always()
         env:
+          TESTED_SHA: ${{ steps.source.outputs.tested_sha }}
+          TESTED_BRANCH: ${{ steps.source.outputs.tested_branch }}
           NOTE: ${{ inputs.note }}
           REHEARSAL_CONCLUSION: ${{ steps.rehearsal.conclusion }}
           JOB_CONCLUSION: ${{ job.status }}
@@ -396,7 +439,8 @@ jobs:
               echo "# Prerelease-to-GA Rehearsal Summary"
               echo ""
               echo "- Workflow run: ${RUN_URL}"
-              echo "- Branch: ${GITHUB_REF_NAME}"
+              echo "- Workflow event: ${GITHUB_REF_NAME}@${GITHUB_SHA}"
+              echo "- Tested source: ${TESTED_BRANCH:-unresolved}@${TESTED_SHA:-unresolved}"
               echo "- Result: ${JOB_CONCLUSION}"
               if [ -n "${NOTE}" ]; then
                 echo "- Operator note: ${NOTE}"
@@ -413,7 +457,8 @@ jobs:
               echo "# Prerelease-to-GA Rehearsal Summary"
               echo ""
               echo "- Workflow run: ${RUN_URL}"
-              echo "- Branch: ${GITHUB_REF_NAME}"
+              echo "- Workflow event: ${GITHUB_REF_NAME}@${GITHUB_SHA}"
+              echo "- Tested source: ${TESTED_BRANCH:-unresolved}@${TESTED_SHA:-unresolved}"
               echo "- Version: ${WORKFLOW_OUTPUT_1}"
               echo "- Candidate stable tag: ${WORKFLOW_OUTPUT_2}"
               echo "- Promotion channel: ${WORKFLOW_OUTPUT_3}"
@@ -497,6 +542,9 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           VERSION_INPUT: ${{ inputs.version }}
+          TESTED_SHA: ${{ needs.dry-run.outputs.tested_sha }}
+          TESTED_BRANCH: ${{ needs.dry-run.outputs.tested_branch }}
+          RESOLVED_VERSION: ${{ needs.dry-run.outputs.version }}
           CANDIDATE_RESULT: ${{ needs.build_release_candidate.result }}
           PREFLIGHT_RESULT: ${{ needs.dry-run.result }}
           DEMO_RESULT: ${{ needs.demo_path_preflight.result }}
@@ -529,8 +577,9 @@ jobs:
           {
             echo "## Definitive dry-run verdict"
             echo
-            echo "- Source SHA: \`${GITHUB_SHA}\`"
-            echo "- Version: \`${VERSION_INPUT:-scheduled}\`"
+            echo "- Workflow event SHA: \`${GITHUB_SHA}\`"
+            echo "- Tested source: \`${TESTED_BRANCH:-unresolved}@${TESTED_SHA:-unresolved}\`"
+            echo "- Version: \`${RESOLVED_VERSION:-unresolved}\`"
             echo "- Release preflight: \`${PREFLIGHT_RESULT}\`"
             echo "- Stable demo verification: \`${DEMO_RESULT}\`"
             echo "- Release candidate: \`${CANDIDATE_RESULT}\`"
