@@ -378,7 +378,7 @@ func (m *Monitor) applyNodePendingUpdates(ctx context.Context, instanceName stri
 					Err(err).
 					Str("node", node.Node).
 					Str("instance", instanceName).
-					Msg("Could not check pending apt updates (may require Sys.Audit permission)")
+					Msg("Could not check pending apt updates with configured Proxmox credentials")
 				modelNode.PendingUpdatesReason = pendingUpdatesFailureReason(err)
 				if hasCached {
 					modelNode.PendingUpdates = cached.count
