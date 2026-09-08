@@ -1561,8 +1561,15 @@ whose threshold tuple exactly matches the current globals into sparse
 enabled-only form. Those full copies were artifacts of the legacy per-guest
 toggle, and the equality condition makes the rewrite behavior-preserving at
 the moment it runs while letting the guest track later global edits (#1126).
-Overrides whose thresholds differ from the current globals are deliberate
-per-guest values and must never be rewritten.
+Overrides whose thresholds differ from the current globals must be preserved:
+persisted values alone cannot distinguish deliberate per-guest settings from a
+legacy copy made before the globals changed. A global-settings screenshot does
+not establish the effective guest threshold.
+`TestBackupDivergentDefaultsOnLoad` in `internal/alerts/alerts_test.go` verifies
+JSON-decoded configuration with 33/34-day globals: absent and enabled-only
+overrides inherit the globals, while a retained 7/14-day override still fires
+a seven-day warning. This is configuration-path evidence, not a reproduction
+of a reporter installation or a migration that guesses operator intent.
 `TestGuestBackupOverrideInheritsGlobalThresholds`,
 `TestFrozenBackupOverrideMigratesToSparse`,
 `TestDeliberateBackupOverridePreserved`, and
