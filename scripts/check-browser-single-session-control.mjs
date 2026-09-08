@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { chromium } from '@playwright/test';
-const incidentConvergence = process.argv.includes('--incident-convergence');
+const incidentUserRefresh = process.argv.includes('--incident-user-refresh');
+const incidentConvergence = incidentUserRefresh || process.argv.includes('--incident-convergence');
 const headedTab = incidentConvergence || process.argv.includes('--headed-tab');
 const headedWindow = headedTab || process.argv.includes('--headed-window');
 const checkForeground = headedWindow || process.argv.includes('--foreground');
@@ -54,7 +55,7 @@ try {
   console.log(JSON.stringify({ browser: await send('Browser.getVersion'),
     playwright: require('@playwright/test/package.json').version, node: process.version,
     platform: process.platform, arch: process.arch, executable: chromium.executablePath(),
-    headedWindow, headedTab, incidentConvergence, display: process.env.DISPLAY, observationBoundMs: headedWindow ? 10000 : 250 }));
+    headedWindow, headedTab, incidentConvergence, incidentUserRefresh, display: process.env.DISPLAY, observationBoundMs: headedWindow ? 10000 : 250 }));
   const results = [];
   // Preselected negative (focus forced) and positive (no forced focus), fresh targets.
   for (const focusEnabled of (headedWindow ? [false] : [true, false])) {
@@ -109,6 +110,23 @@ try {
         } while (Date.now() < deadline);
         throw new Error(stage + ': native visibility transition not observed');
       };
+      const awaitIncident = async id => {
+        const deadline = Date.now() + 10000;
+        while (!await evaluate(`window.snapshot().incidents.host?.[0]?.id === ${JSON.stringify(id)} && window.snapshot().loading.host === false`)) {
+          if (Date.now() > deadline) throw new Error('Incident settlement timeout: ' + id);
+          await wait(100);
+        }
+      };
+      if (incidentUserRefresh) {
+        await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent === 'Open row').click()`);
+        const deadline = Date.now() + 10000;
+        while (fixtureServer.count() !== 1) {
+          if (Date.now() > deadline) throw new Error('Initial incident request timeout');
+          await wait(100);
+        }
+        fixtureServer.finish(0, 'Cached incident');
+        await awaitIncident('Cached incident');
+      }
       if (headedTab) {
         assert.ok(before.visibility === 'visible' && before.focus, 'Tab baseline must be active');
         otherTarget = (await windowCommand('Target.createTarget', { url: 'about:blank' })).targetId;
@@ -124,7 +142,7 @@ try {
         await wait(250);
         console.log(JSON.stringify({ stage: 'minimized', snapshot: await evaluate(snapshot) }));
       }
-      if (incidentConvergence) {
+      if (incidentConvergence && !incidentUserRefresh) {
         for (const [index, label] of ['Open row', 'Overlap refresh'].entries()) {
           await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent === ${JSON.stringify(label)}).click()`);
           const deadline = Date.now() + 10000;
@@ -136,7 +154,7 @@ try {
         console.log(JSON.stringify({ stage: 'incident-before-freeze', state: await evaluate('window.snapshot()') }));
       }
       await command('Page.setWebLifecycleState', { state: 'frozen' });
-      if (incidentConvergence) {
+      if (incidentConvergence && !incidentUserRefresh) {
         fixtureServer.finish(1, 'Latest incident');
         await wait(100);
         fixtureServer.finish(0, 'Obsolete incident');
@@ -172,6 +190,23 @@ try {
           'Fixture must return to native foreground with timer progress');
         const resumeIndex = foreground.events.findIndex(e => e.type === 'resume');
         assert.ok(foreground.events.some((e, i) => i > resumeIndex && e.type === 'visibilitychange' && e.visibility === 'visible'));
+        if (incidentUserRefresh) {
+          assert.equal(fixtureServer.count(), 1, 'Resume alone must not be mistaken for an incident fetch');
+          await awaitIncident('Cached incident');
+          const clicked = await evaluate(`(() => {
+            const button = Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === 'Refresh');
+            if (!button || button.disabled) return false;
+            button.click(); return true;
+          })()`);
+          assert.ok(clicked, 'Use the enabled production Refresh control');
+          const deadline = Date.now() + 10000;
+          while (fixtureServer.count() !== 2) {
+            if (Date.now() > deadline) throw new Error('User refresh request timeout');
+            await wait(100);
+          }
+          assert.equal(await evaluate('window.snapshot().loading.host'), true);
+          fixtureServer.finish(1, 'Latest incident');
+        }
         const deadline = Date.now() + 10000;
         let state;
         do {
@@ -180,12 +215,13 @@ try {
           await wait(250);
         } while (Date.now() < deadline);
         const rendered = await evaluate(`({text: document.querySelector('section').innerText, errors: document.querySelector('[data-testid="errors"]').textContent})`);
-        console.log(JSON.stringify({ stage: 'incident-convergence', state, rendered }));
+        console.log(JSON.stringify({ stage: incidentUserRefresh ? 'incident-user-refresh' : 'incident-convergence', state, rendered }));
         assert.equal(state.incidents.host?.[0]?.id, 'Latest incident');
         assert.equal(state.loading.host, false);
         assert.equal(state.error.host, false);
         assert.ok(rendered.text.includes('Latest incident'));
         assert.ok(!rendered.text.includes('Obsolete incident'));
+        if (incidentUserRefresh) assert.ok(!rendered.text.includes('Cached incident'));
         assert.equal(rendered.errors, '0');
       }
       const result = { focusEnabled, before, after, foreground, commands, suspended };
