@@ -2061,8 +2061,10 @@ func appendDiskTemperature(out map[string]int, diskName string, value any) {
 }
 
 type trueNASRPCClient struct {
-	conn   *websocket.Conn
-	nextID int64
+	conn          *websocket.Conn
+	nextID        int64
+	keepaliveStop chan struct{}
+	keepaliveDone chan struct{}
 }
 
 func (c *trueNASRPCClient) subscribe(ctx context.Context, event string) (string, error) {

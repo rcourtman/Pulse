@@ -414,7 +414,7 @@ func TestTrueNASPollerManualConnectionTestsUpdateSummariesWithoutClearingObserve
 	manualSuccessAt := failureAt.Add(2 * time.Minute)
 
 	poller.mu.Lock()
-	poller.recordConnectionSuccessLocked("default", connection.ID, connection, firstSuccess, snapshot)
+	poller.recordConnectionSuccessLocked("default", connection.ID, connection, firstSuccess, firstSuccess, snapshot)
 	poller.recordConnectionFailureLocked("default", connection.ID, connection, errors.New("manual auth failed"), failureAt)
 	poller.mu.Unlock()
 
@@ -2163,4 +2163,45 @@ func TestTrueNASPollerKeysSystemsByConnection(t *testing.T) {
 		_, secondOK := ids["system:conn-second"]
 		return firstOK && secondOK && len(ids) == 2
 	}, "expected one connection-scoped system source ID per configured connection")
+}
+
+func TestTrueNASSuccessfulPollCadenceIncludesBoundedIdleGap(t *testing.T) {
+	for _, tc := range []struct {
+		name                     string
+		interval, duration, next time.Duration
+	}{
+		{"fast", time.Minute, 2 * time.Second, time.Minute},
+		{"nearly_due", time.Minute, 58 * time.Second, 63 * time.Second},
+		{"slow", time.Minute, 90 * time.Second, 95 * time.Second},
+		{"genuinely_stale", time.Minute, 122 * time.Second, 127 * time.Second},
+		{"short_interval", time.Second, 2 * time.Second, 3 * time.Second},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			poller := NewTrueNASPoller(nil, 0, nil)
+			instance := config.TrueNASInstance{ID: "cadence", PollIntervalSecs: int(tc.interval / time.Second)}
+			start := time.Date(2026, 9, 8, 0, 0, 0, 0, time.UTC)
+			end := start.Add(tc.duration)
+			poller.recordConnectionSuccessLocked("default", instance.ID, instance, start, end, nil)
+			status := poller.ensureConnectionRuntimeStatusLocked("default", instance.ID)
+			want := start.Add(tc.next)
+			if !status.nextPollAt.Equal(want) {
+				t.Errorf("next poll = %v, want %v", status.nextPollAt, want)
+			}
+			if !status.lastSuccessAt.Equal(end) || !status.lastAttemptAt.Equal(end) {
+				t.Error("scheduling altered observed completion timestamps")
+			}
+			if poller.connectionPollDueLocked("default", instance.ID, instance, want.Add(-time.Nanosecond)) {
+				t.Error("poll due before bounded idle gap elapsed")
+			}
+			if !poller.connectionPollDueLocked("default", instance.ID, instance, want) {
+				t.Error("poll not due at scheduled time")
+			}
+			// Failed refreshes retain the full interval after completion; this change
+			// must not accelerate retries against an unavailable appliance.
+			poller.recordConnectionFailureLocked("default", instance.ID, instance, errors.New("offline"), end)
+			if !status.nextPollAt.Equal(end.Add(tc.interval)) {
+				t.Error("failure backoff changed")
+			}
+		})
+	}
 }

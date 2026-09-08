@@ -993,3 +993,105 @@ func TestIssue1631HTTPSUpgradeTargetRules(t *testing.T) {
 		}
 	}
 }
+
+// Model an authenticated appliance with a transport idle limit. This is not
+// evidence of a particular appliance firmware's authenticated timeout policy.
+func TestAuthenticatedRPCSurvivesIdleTransportTimeout(t *testing.T) {
+	var sessions, pings atomic.Int32
+	upgrader := websocket.Upgrader{}
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		sessions.Add(1)
+		resetIdle := func() { _ = conn.SetReadDeadline(time.Now().Add(35 * time.Second)) }
+		conn.SetPingHandler(func(data string) error {
+			pings.Add(1)
+			resetIdle()
+			return conn.WriteControl(websocket.PongMessage, []byte(data), time.Now().Add(time.Second))
+		})
+		resetIdle()
+		for {
+			var request trueNASRPCRequest
+			if err := conn.ReadJSON(&request); err != nil {
+				return
+			}
+			resetIdle()
+			var result any = map[string]any{"version": "TrueNAS-SCALE-25.04.2"}
+			if request.Method == "auth.login_ex" {
+				result = map[string]any{"response_type": "SUCCESS"}
+			}
+			if err := conn.WriteJSON(map[string]any{"jsonrpc": "2.0", "id": request.ID, "result": result}); err != nil {
+				return
+			}
+		}
+	}))
+	defer server.Close()
+	client := protocolFixtureClient(t, server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user"})
+	defer client.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
+	defer cancel()
+	if _, err := client.GetSystemInfo(ctx); err != nil {
+		t.Fatal(err)
+	}
+	client.rpcMu.Lock()
+	session := client.rpc
+	client.rpcMu.Unlock()
+	// Cancelling the opening call must not cancel the persistent session.
+	cancel()
+	ctx, cancel = context.WithTimeout(context.Background(), 50*time.Second)
+	defer cancel()
+	// Longer than the fixture's idle timeout, shorter than two production pings.
+	time.Sleep(40 * time.Second)
+	if _, err := client.GetSystemInfo(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := sessions.Load(); got != 1 {
+		t.Errorf("authenticated sessions = %d, want 1 (idle connection was lost)", got)
+	}
+	if pings.Load() == 0 {
+		t.Error("no websocket keepalive received")
+	}
+	client.Close()
+	select {
+	case <-session.keepaliveDone:
+	default:
+		t.Error("Close returned before keepalive exited")
+	}
+}
+
+func TestRPCSessionKeepaliveConcurrentCallsAndShutdown(t *testing.T) {
+	fixture := newProtocolFixture(t, func(_ int, _ trueNASRPCRequest) protocolFixtureReply {
+		time.Sleep(3 * time.Millisecond)
+		return protocolFixtureReply{result: "ok"}
+	}, nil)
+	client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := client.dialRPC(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rpc := &trueNASRPCClient{conn: conn, nextID: 1}
+	rpc.startKeepalive(time.Millisecond)
+	defer rpc.close()
+	for i := 0; i < 20; i++ {
+		var result string
+		if err := rpc.call(ctx, "fixture.read", nil, &result); err != nil {
+			t.Fatal(err)
+		}
+		if result != "ok" {
+			t.Fatalf("result = %q", result)
+		}
+	}
+	// A failed control write must terminate its sender and close the socket,
+	// rather than retaining a goroutine until a future poll/client shutdown.
+	_ = conn.Close()
+	select {
+	case <-rpc.keepaliveDone:
+	case <-time.After(time.Second):
+		t.Fatal("keepalive did not exit after socket failure")
+	}
+}
