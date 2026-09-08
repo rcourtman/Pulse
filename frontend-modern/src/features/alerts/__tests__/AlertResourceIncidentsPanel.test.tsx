@@ -1,8 +1,13 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { MobileAlertHistoryInvestigationDialog } from '../MobileAlertHistoryInvestigationDialog';
 import { AlertResourceIncidentsPanel } from '../AlertResourceIncidentsPanel';
+import { AlertsAPI } from '@/api/alerts';
+import type { Incident } from '@/types/api';
+import type { AlertHistoryState } from '../useAlertHistoryState';
+import { useAlertResourceIncidentsState } from '../useAlertResourceIncidentsState';
 import { aiChatStore } from '@/stores/aiChat';
 
 vi.mock('@solidjs/router', () => ({
@@ -21,6 +26,79 @@ describe('AlertResourceIncidentsPanel', () => {
     cleanup();
     vi.restoreAllMocks();
   });
+
+  it.each(['inline', 'mobile drawer'] as const)(
+    'retries through the real hook in the %s and retains cached history after a refresh failure',
+    async (surface) => {
+      let state!: ReturnType<typeof useAlertResourceIncidentsState>;
+      const read = vi.spyOn(AlertsAPI, 'getIncidentsForResource');
+      read.mockRejectedValueOnce(new Error('history unavailable'));
+      render(() => {
+        state = useAlertResourceIncidentsState();
+        return surface === 'inline' ? (
+          <AlertResourceIncidentsPanel state={state as unknown as AlertHistoryState} />
+        ) : (
+          <MobileAlertHistoryInvestigationDialog
+            investigation={{
+              kind: 'resource',
+              rowKey: 'row-1',
+              alert: { resourceName: 'Resource' } as Parameters<
+                typeof MobileAlertHistoryInvestigationDialog
+              >[0]['investigation']['alert'],
+            }}
+            state={state as unknown as AlertHistoryState}
+            onClose={() => state.setResourceIncidentPanel(null)}
+          />
+        );
+      });
+
+      await state.openResourceIncidentPanel('resource-1', 'Resource', 'row-1');
+      expect(screen.getByRole('alert')).toHaveTextContent('Use Refresh');
+      expect(screen.queryByText('No incidents recorded for this resource yet.')).toBeNull();
+
+      let resolve!: (incidents: Incident[]) => void;
+      read.mockImplementationOnce(
+        () =>
+          new Promise((done) => {
+            resolve = done;
+          }),
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(screen.getByRole('button', { name: /Refresh/ })).toBeDisabled();
+      resolve([
+        {
+          id: 'retained',
+          alertIdentifier: 'resource-1::connectivity',
+          alertType: 'connectivity',
+          level: 'critical',
+          resourceId: 'resource-1',
+          resourceName: 'Resource',
+          status: 'resolved',
+          acknowledged: false,
+          events: [],
+          openedAt: '2026-09-08T00:00:00Z',
+          message: 'Retained connection incident',
+        },
+      ]);
+      await waitFor(() => expect(screen.getByText('Retained connection incident')).toBeVisible());
+      expect(read).toHaveBeenLastCalledWith('resource-1', 10);
+
+      read.mockRejectedValueOnce(new Error('refresh unavailable'));
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+      await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Use Refresh'));
+      expect(screen.getByText('Retained connection incident')).toBeVisible();
+      expect(screen.queryByText('No incidents recorded for this resource yet.')).toBeNull();
+
+      read.mockResolvedValueOnce([]);
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+      await waitFor(() =>
+        expect(screen.getByText('No incidents recorded for this resource yet.')).toBeVisible(),
+      );
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(screen.queryByText('Retained connection incident')).toBeNull();
+    },
+  );
 
   it('shows persistent read failure without claiming an empty history', () => {
     const [failed, setFailed] = createSignal(true);

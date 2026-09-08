@@ -74,6 +74,32 @@ func TestDeadManRunCycleSendsHealthySignalAndPersistsProgress(t *testing.T) {
 	}
 }
 
+func TestDeadManRunCycleRejectsEncodedNonSuccessEndpoint(t *testing.T) {
+	for _, suffix := range []string{"%66ail", "st%61rt", "lo%67"} {
+		t.Run(suffix, func(t *testing.T) {
+			now := time.Date(2026, 9, 8, 3, 0, 0, 0, time.UTC)
+			calls := 0
+			runtime := newDeadManTestRuntime(t, now, deadManRoundTripFunc(func(*http.Request) (*http.Response, error) {
+				calls++
+				return deadManResponse(http.StatusOK, "OK"), nil
+			}))
+			runtime.runCycle(context.Background(),
+				func() string { return "https://watchdog.example.com/ping/secret-token/" + suffix },
+				func() time.Time { return now }, nil)
+			if calls != 0 {
+				t.Fatalf("invalid endpoint received %d requests", calls)
+			}
+			status := runtime.statusSnapshot()
+			if status.State != "misconfigured" || status.LastSuccessAt != nil {
+				t.Fatalf("invalid endpoint status = %+v", status)
+			}
+			if strings.Contains(status.LastError, "secret-token") {
+				t.Fatal("configuration error exposed the destination token")
+			}
+		})
+	}
+}
+
 func TestDeadManRunCycleSignalsFailureWhenCanonicalMonitorStalls(t *testing.T) {
 	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
 	var method, path, body string

@@ -83,6 +83,7 @@ try {
       "dispose-success",
       "dispose-failure",
       "current-failure",
+      "retry",
     ]) {
       const page = await browser.newPage({ viewport: { width, height: 900 } });
       await page.goto("http://127.0.0.1:5198/qualification");
@@ -99,8 +100,15 @@ try {
           (s) => window.finish(0, s === "dispose-failure" ? "error" : "empty"),
           scenario,
         );
-      } else if (scenario === "current-failure") {
+      } else if (scenario === "current-failure" || scenario === "retry") {
         await page.evaluate(() => window.finish(0, "error"));
+        await page.waitForFunction(() => window.snapshot().error.host === true);
+        if (scenario === "retry") {
+          await page.getByRole("button", { name: "Overlap refresh", exact: true }).click();
+          await page.waitForFunction(() => window.count() === 2);
+          assert.equal((await page.evaluate(() => window.snapshot())).error.host, false);
+          await page.evaluate(() => window.finish(1, "Latest incident"));
+        }
       } else {
         await page
           .getByRole("button", { name: "Overlap refresh", exact: true })
@@ -143,7 +151,7 @@ try {
       const snapshot = await page.evaluate(() => window.snapshot());
       assert.equal(
         await page.getByTestId("errors").textContent(),
-        scenario === "current-failure" ? "1" : "0",
+        ["current-failure", "retry"].includes(scenario) ? "1" : "0",
       );
       if (scenario === "reset") {
         assert.deepEqual(snapshot, { incidents: {}, loading: {}, error: {} });

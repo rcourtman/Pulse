@@ -7254,7 +7254,9 @@ disposal invalidates them and prevents new loads. Overlapping reads for differen
 resources remain independent. Closing a row still permits its in-flight result
 to populate the existing cache; reopening cached history and explicit refresh
 are unchanged. Requests are not transport-cancelled. No API, retention or
-notification-delivery policy changes.
+notification-delivery policy changes. A retry clears the current failed-read
+state while retaining cached history until the owning request succeeds, and a
+superseded success cannot clear a newer failure.
 
 The hook's ten ordinary regression/control cases cover success, catch and
 finally writes, reset/reopen and disposal. The existing panel tests cover its

@@ -69,7 +69,9 @@ func ValidateDeadManPingURL(value string) error {
 		}
 	}
 
-	path := strings.TrimSuffix(strings.ToLower(parsed.EscapedPath()), "/")
+	// Inspect the decoded path, so percent-encoded endpoint names and
+	// separators cannot turn a nominal success URL into a start/fail/log ping.
+	path := strings.TrimSuffix(strings.ToLower(parsed.Path), "/")
 	for _, suffix := range []string{"/start", "/fail", "/log"} {
 		if strings.HasSuffix(path, suffix) {
 			return fmt.Errorf("dead-man ping URL must be the base success URL, without %s", suffix)

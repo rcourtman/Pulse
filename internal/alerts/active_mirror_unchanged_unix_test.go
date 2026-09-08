@@ -3,10 +3,58 @@
 package alerts
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+// Equal size and safe permissions do not establish checkpoint identity. A
+// valid but stale record must be repaired even when metadata looks unchanged.
+func TestActiveMirrorRepairsSameSizeStaleContent(t *testing.T) {
+	dir := t.TempDir()
+	m := &Manager{alertsDir: dir}
+	alerts := []*Alert{{ID: "a", Acknowledged: true, AckUser: "operator"}}
+	save := func() {
+		t.Helper()
+		if err := m.writeActiveAlertsRecoveryMirror(alerts); err != nil {
+			t.Fatal(err)
+		}
+	}
+	save()
+	path := filepath.Join(dir, "active-alerts.json")
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := bytes.Replace(want, []byte("operator"), []byte("previous"), 1)
+	if bytes.Equal(stale, want) || len(stale) != len(want) {
+		t.Fatal("fixture must change content without changing size")
+	}
+	if err := os.WriteFile(path, stale, alertsFilePerm); err != nil {
+		t.Fatal(err)
+	}
+	save()
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatal("same-size stale acknowledgement survived checkpoint")
+	}
+	repaired, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	save()
+	after, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(repaired, after) {
+		t.Fatal("repaired checkpoint did not return to unchanged fast path")
+	}
+}
 
 func TestActiveMirrorUnchangedRepairsUnsafeDestination(t *testing.T) {
 	for _, kind := range []string{"permissions", "symlink"} {
