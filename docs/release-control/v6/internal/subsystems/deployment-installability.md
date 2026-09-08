@@ -2635,24 +2635,26 @@ verification without Authenticode. Stable `v6.4.3` also skips SignPath under the
 standing unavailable policy from `v6.3.2` onward, with public Unknown Publisher
 disclosure and the existing signed integrity controls.
 
-The active prerelease `v6.4.4-beta.1` cut sets the repo-root `VERSION`, repo-root
+The active prerelease `v6.4.4-beta.2` cut sets the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
-Helm chart release metadata to the same `6.4.4-beta.1` release version. It
-follows stable `v6.4.1` and opens the published `v6.4.4` candidate line. It is a
-beta maturity reset above `v6.4.3-rc.1` and is not represented as an RC that
-can become stable unchanged. This prerelease keeps `rollback_version=v6.4.1`,
-publishes a versioned public GitHub prerelease plus versioned Docker and Helm
-artifacts, and does not move stable/latest install pointers or stable semver
-aliases. It carries the unpublished `v6.4.2` packet and published RC1
-foundation together with bounded alert-finality, diagnosis-ordering,
-restart-persistence, host-observation, update-verification, identity,
-reconnect, and accessibility repairs from the protected release line.
+Helm chart release metadata to the same `6.4.4-beta.2` release version. It
+follows `v6.4.4-beta.1` on the published `v6.4.4` candidate line. It remains
+beta because installed recurrence, ordinary destination delivery, and retained
+history across restart still require user testing. This prerelease keeps
+`rollback_version=v6.4.1`, publishes a versioned public GitHub prerelease plus
+versioned Docker and Helm artifacts, and does not move stable/latest install
+pointers or stable semver aliases. It retains beta.1 and adds exact lifecycle
+occurrence matching plus bounded canonical projection so delayed historical
+replay cannot reopen a resolved incident or mutate a newer recurrence. It also
+preserves exponential webhook pacing after a response-specific zero retry hint
+and keeps queue statistics, dead-letter inspection, Retry, and Dismiss bound to
+the active notification queue after runtime replacement.
 
-No governed mobile-facing path changed from `v6.4.1`, so the release decision
-is `no-mobile-impact`; no companion upload or public mobile-store rollout is
-part of this candidate. The prerelease Windows path retains exact-SHA,
-checksum, and detached-signature verification without Authenticode. Stable
-`v6.4.4` also skips SignPath under the standing unavailable policy from
+No governed mobile-facing path changed from `v6.4.1`, so the release
+decision is `no-mobile-impact`; no companion upload or public mobile-store
+rollout is part of this candidate. The prerelease Windows path retains
+exact-SHA, checksum, and detached-signature verification without Authenticode.
+Stable `v6.4.4` also skips SignPath under the standing unavailable policy from
 `v6.3.2` onward, with public Unknown Publisher disclosure and the existing
 signed integrity controls. Exact-candidate validation must still qualify the
 public artifacts, install, upgrade, rollback, and private paid-runtime packet;
@@ -3111,11 +3113,10 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active prerelease `v6.4.4-beta.1` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.4.4-beta.1` until the next
-governed stable cut moves them forward. The published `v6.4.3-rc.1` cut pinned
-`6.4.3-rc.1`, and the tagged but unpublished `v6.4.2` cut pinned `6.4.2`, until
-this beta moved them forward. The stable promotion guard remains in force and
+For the active prerelease `v6.4.4-beta.2` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.4.4-beta.2` until the next
+governed stable cut moves them forward. The published `v6.4.4-beta.1` cut
+pinned `6.4.4-beta.1` until this beta moved them forward. The stable promotion guard remains in force and
 rejects leftover prerelease defaults. Each new release moves
 these two pins together with the repo-root `VERSION` and the Helm chart metadata
 in the same commit; a cut that leaves any of the four on a superseded value is a
