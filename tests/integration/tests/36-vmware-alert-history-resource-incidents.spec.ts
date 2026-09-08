@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
+import { test } from "./native-visibility";
 import { ensureAuthenticated } from "./helpers";
 const SCREENSHOT_PATH = "/tmp/vmware-alert-history-resource-incidents.png";
 
@@ -236,8 +237,6 @@ test.describe("VMware alert history resource incidents", () => {
       console.log(JSON.stringify({ stage: "application-incident-initial-read-settled", incidentReads,
         tokenAuthenticationPresent: await page.evaluate(() => Boolean(sessionStorage.getItem("pulse_auth"))),
         liveWebSocket: false, incidentHTTP: "mocked" }));
-      const cdp = await context.newCDPSession(page);
-      await cdp.send("Emulation.setFocusEmulationEnabled", { enabled: false });
       const other = await context.newPage();
       try {
         await other.goto("about:blank");
@@ -259,7 +258,6 @@ test.describe("VMware alert history resource incidents", () => {
           visibility: "native hidden then visible", freeze: false }));
       } finally {
         await other.close();
-        await cdp.detach();
       }
     }
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });

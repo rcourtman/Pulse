@@ -56,12 +56,26 @@ an exact release-pair, live WebSocket convergence, real incident-store, or deliv
 notification check. Keep any failed application run as evidence, not a component
 fixture success in its place.
 
-Known harness limitation (8 September 2026): the first local run reached the real
+Retained adverse run (8 September 2026, c98c0565a7): the first local run reached the real
 history row and settled initial incident details, then failed the native-hidden
 preflight: the original page stayed `visible` for ten seconds after another
 Playwright page was activated. The source-built frontend/backend succeeded and
 the backend was stopped by cleanup. Do not remove the visibility assertion or
-replace it with a synthetic DOM event to claim foreground coverage. The native
-browser-control prerequisite remains unresolved; the Refresh portion of this
-application scenario has **not** been executed successfully. The raw single-CDP
-component checks above do not clear this application failure.
+replace it with a synthetic DOM event to claim foreground coverage. That revision did not successfully execute Refresh after return. The raw
+single-CDP component checks above do not clear this application failure.
+
+The additive harness uses `tests/integration/tests/native-visibility.ts` only
+when the opt-in is set. Playwright 1.56.1 enables focus emulation on its owning
+CDP session (`crPage.js`); disabling it on a secondary session leaves the first
+override active. A loopback-only CDP proxy forwards commands and replies, changing
+only `Emulation.setFocusEmulationEnabled({enabled:true})` to `false` on that
+owning session. It checks that this command was encountered. It does not inject
+DOM visibility, fabricate events, freeze the page or change assertion results.
+An owned Chromium/profile and proxy are cleaned up afterwards. Native tab
+activation and visibility polling still have to pass before Refresh is clicked.
+This version-sensitive harness must fail rather than infer backgrounding if
+Chromium or Playwright changes. Ordinary runs use the unmodified base fixtures.
+
+For the ordinary-journey control, repeat the command above with
+`PULSE_E2E_INCIDENT_FOREGROUND` unset. Retain both exact-revision results;
+a prior success is not evidence for a later untested revision.
