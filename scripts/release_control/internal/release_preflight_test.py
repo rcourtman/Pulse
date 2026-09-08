@@ -312,6 +312,40 @@ echo CONTINUED
                         self.assertIn('backend-serial' if profile == 'rehearsal' else 'backend-race-sharded', result.stdout)
 
 
+    def test_rehearsal_stream_uses_real_decoder_and_preserves_failure(self):
+        worker = (ROOT / 'scripts/release-preflight-worker.sh').read_text()
+        function = re.search(r'^run_backend\(\) \(\n.*?^\)', worker, re.M | re.S).group(0)
+        for code in (0, 17):
+            script = f'''set -euo pipefail
+PROFILE=rehearsal
+TEST_DATA_DIR=unused
+ACTUAL_GO=fixture
+rm() {{ :; }}
+mkdir() {{ :; }}
+python3() {{
+  if [ "$1" = ./scripts/release-resource-snapshot.py ]; then
+    echo "snapshot $2"
+  else
+    command python3 "$@"
+  fi
+}}
+env() {{
+  [ "$*" = 'PULSE_DATA_DIR=unused go test -json -p 1 ./...' ] || return 42
+  printf '%s\\n' '{{"Action":"output","Output":"synthetic verdict\\n"}}'
+  return {code}
+}}
+phase() {{ shift; "$@"; }}
+{function}
+run_backend
+echo CONTINUED
+'''
+            result = subprocess.run(['bash', '-c', script], cwd=ROOT, text=True, capture_output=True)
+            self.assertEqual(result.returncode, code, result.stderr)
+            self.assertIn('synthetic verdict\n', result.stdout)
+            self.assertIn('snapshot after', result.stdout)
+            self.assertIn(f'RELEASE_BACKEND_EXIT {code}', result.stdout)
+            self.assertEqual('CONTINUED' in result.stdout, code == 0)
+
     def test_browser_mount_identity_and_locked_cli_follow_the_docker_daemon(self) -> None:
         worker = (ROOT / "scripts/release-preflight-worker.sh").read_text()
         functions = []

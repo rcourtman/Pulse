@@ -223,7 +223,14 @@ run_backend() (
   rm -rf "$TEST_DATA_DIR"
   mkdir -p "$TEST_DATA_DIR"
   if [ "$PROFILE" = "rehearsal" ]; then
-    phase backend-serial env PULSE_DATA_DIR="$TEST_DATA_DIR" go test -p 1 ./...
+    # -json streams test events instead of waiting for the package buffer.
+    # Keep readable Output and the original verdict via pipefail; instrument
+    # only the known stress-test window, without changing tests or thresholds.
+    backend_serial() {
+      env PULSE_DATA_DIR="$TEST_DATA_DIR" go test -json -p 1 ./... |
+        python3 ./scripts/release-go-test-events.py
+    }
+    phase backend-serial backend_serial
   else
     phase backend-race-sharded ./scripts/run-release-backend-tests.sh \
       --data-root "$TEST_DATA_DIR" \
