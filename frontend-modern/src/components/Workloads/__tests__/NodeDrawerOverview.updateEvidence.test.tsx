@@ -52,6 +52,6 @@ describe('NodeDrawerOverview update evidence', () => {
       />
     ));
 
-    expect(screen.getByText('Unavailable · Sys.Audit permission required')).toBeInTheDocument();
+    expect(screen.getByText('Unavailable · Update check access denied')).toBeInTheDocument();
   });
 });
