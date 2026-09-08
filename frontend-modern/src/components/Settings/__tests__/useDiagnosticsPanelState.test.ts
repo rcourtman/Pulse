@@ -65,12 +65,12 @@ const currentExportDate = (): string => new Date().toISOString().split('T')[0];
 
 describe('useDiagnosticsPanelState', () => {
   let useDiagnosticsPanelState: UseDiagnosticsPanelStateModule['useDiagnosticsPanelState'];
-  let apiFetchJSONMock: ReturnType<typeof vi.fn>;
-  let showErrorMock: ReturnType<typeof vi.fn>;
-  let showSuccessMock: ReturnType<typeof vi.fn>;
-  let createObjectURLMock: ReturnType<typeof vi.fn>;
-  let revokeObjectURLMock: ReturnType<typeof vi.fn>;
-  let anchorClickMock: ReturnType<typeof vi.fn>;
+  let apiFetchJSONMock: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
+  let showErrorMock: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
+  let showSuccessMock: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
+  let createObjectURLMock: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
+  let revokeObjectURLMock: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
+  let anchorClickMock: ReturnType<typeof vi.fn<(...args: any[]) => any>>;
   let createdAnchor: HTMLAnchorElement | null;
   let originalCreateObjectURL: typeof URL.createObjectURL | undefined;
   let originalRevokeObjectURL: typeof URL.revokeObjectURL | undefined;

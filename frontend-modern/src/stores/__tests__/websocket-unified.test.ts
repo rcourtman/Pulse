@@ -26,7 +26,7 @@ interface MockWebSocketInstance {
 
 let mockWsInstance: MockWebSocketInstance | null = null;
 
-const MockWebSocket = vi.fn().mockImplementation((url: string): MockWebSocketInstance => {
+const MockWebSocket = vi.fn().mockImplementation(function (url: string): MockWebSocketInstance {
   const instance: MockWebSocketInstance = {
     url,
     readyState: 1,
