@@ -322,7 +322,9 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			// Check for Retry-After header from previous response (overrides backoff)
-			if lastResp != nil && lastResp.statusCode == 429 {
+			// Service-unavailable responses can advertise recovery time too
+			// (RFC 9110 section 10.2.3). Keep the same bounded parser and budget.
+			if lastResp != nil && (lastResp.statusCode == http.StatusTooManyRequests || lastResp.statusCode == http.StatusServiceUnavailable) {
 				usedBackoff := false
 				if retryAfter := lastResp.headers.Get("Retry-After"); retryAfter != "" {
 					if customBackoff, ok := parseRetryAfterBackoff(retryAfter, time.Now()); ok {
@@ -352,7 +354,7 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 					time.Sleep(backoff)
 				}
 			} else {
-				// Not a 429, use exponential backoff
+				// No supported retry hint, use exponential backoff
 				log.Debug().
 					Str("webhook", webhook.Name).
 					Int("attempt", attempt).
