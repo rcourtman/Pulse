@@ -18,9 +18,7 @@ func TestAdminBypassPreservesExplicitTokenAuthority(t *testing.T) {
 	record.OrgID = "default"
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "test")
-	t.Cleanup(router.shutdownBackgroundWorkers)
-	t.Cleanup(router.ShutdownResourceStores)
-	t.Cleanup(router.ShutdownRBAC)
+	cleanupTestRouter(t, router)
 	router.mux.HandleFunc("/api/qualification-runner-token", RequireAuth(cfg, RequireScope(config.ScopeAgentExec, func(w http.ResponseWriter, req *http.Request) {
 		actual := getAPITokenRecordFromRequest(req)
 		if actual == nil || actual.ID != record.ID || isAdminBypassRequest(req.Context()) {
@@ -65,6 +63,7 @@ func TestAdminBypassDoesNotAllowAdminEndpointsByDefault(t *testing.T) {
 	record := newTokenRecord(t, "admin-bypass-test-token-123.12345678", nil, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	cleanupTestRouter(t, router)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/system/settings", nil)
 	rec := httptest.NewRecorder()
@@ -84,6 +83,7 @@ func TestAdminBypassAllowsAdminEndpointInDevMode(t *testing.T) {
 	record := newTokenRecord(t, "admin-bypass-dev-token-123.12345678", nil, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	cleanupTestRouter(t, router)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/system/settings", nil)
 	rec := httptest.NewRecorder()
@@ -103,6 +103,7 @@ func TestAdminBypassRequiresExplicitFlag(t *testing.T) {
 	record := newTokenRecord(t, "admin-bypass-flag-token-123.12345678", nil, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	cleanupTestRouter(t, router)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/system/settings", nil)
 	rec := httptest.NewRecorder()
@@ -122,6 +123,7 @@ func TestAdminBypassDeclinedOutsideDevMode(t *testing.T) {
 	record := newTokenRecord(t, "admin-bypass-prod-token-123.12345678", nil, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	cleanupTestRouter(t, router)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/system/settings", nil)
 	rec := httptest.NewRecorder()

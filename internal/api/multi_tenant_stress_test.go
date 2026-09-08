@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -32,6 +33,8 @@ import (
 func TestMultiTenant_ConcurrentAPIStress(t *testing.T) {
 	skipUnderRace(t)
 	suppressTestLogs(t)
+	setupStarted := time.Now()
+	t.Logf("stress phase=setup at=%s gomaxprocs=%d goroutines=%d", setupStarted.UTC().Format(time.RFC3339Nano), runtime.GOMAXPROCS(0), runtime.NumGoroutine())
 
 	const (
 		numOrgs            = 20
@@ -168,19 +171,23 @@ func TestMultiTenant_ConcurrentAPIStress(t *testing.T) {
 		}
 	}
 
+	t.Logf("stress phase=setup-complete at=%s elapsed=%v gomaxprocs=%d goroutines=%d", time.Now().UTC().Format(time.RFC3339Nano), time.Since(setupStarted), runtime.GOMAXPROCS(0), runtime.NumGoroutine())
+
 	// Concurrent stress test: 3 workers per org × 20 orgs = 60 goroutines.
 	// Each worker randomly hits one of three endpoints for its assigned org.
 	type orgResult struct {
-		orgID          string
-		resourceLats   []time.Duration
-		historyLats    []time.Duration
-		statsLats      []time.Duration
-		resourceErrors int64
-		historyErrors  int64
-		statsErrors    int64
-		resourceCount  int64
-		historyCount   int64
-		statsCount     int64
+		orgID             string
+		resourceLats      []time.Duration
+		firstResourceLats []time.Duration
+		laterResourceLats []time.Duration
+		historyLats       []time.Duration
+		statsLats         []time.Duration
+		resourceErrors    int64
+		historyErrors     int64
+		statsErrors       int64
+		resourceCount     int64
+		historyCount      int64
+		statsCount        int64
 	}
 
 	results := make([]orgResult, numOrgs)
@@ -195,6 +202,9 @@ func TestMultiTenant_ConcurrentAPIStress(t *testing.T) {
 
 	var mu sync.Mutex // Protects per-org result slices.
 
+	// Record before spawning workers: the ready barrier can release them before
+	// the parent observes ready.Wait returning. This is an envelope, not a common deadline.
+	t.Logf("stress phase=workers-launch at=%s", time.Now().UTC().Format(time.RFC3339Nano))
 	for orgIdx := 0; orgIdx < numOrgs; orgIdx++ {
 		org := orgs[orgIdx]
 
@@ -217,6 +227,8 @@ func TestMultiTenant_ConcurrentAPIStress(t *testing.T) {
 				deadline := time.Now().Add(duration)
 
 				var localResourceLats, localHistoryLats, localStatsLats []time.Duration
+				var firstResourceLats, laterResourceLats []time.Duration
+				resourceAttempted := false
 				var localResourceErrs, localHistoryErrs, localStatsErrs int64
 
 				for time.Now().Before(deadline) {
@@ -235,7 +247,13 @@ func TestMultiTenant_ConcurrentAPIStress(t *testing.T) {
 							localResourceErrs++
 						} else {
 							localResourceLats = append(localResourceLats, elapsed)
+							if !resourceAttempted {
+								firstResourceLats = append(firstResourceLats, elapsed)
+							} else {
+								laterResourceLats = append(laterResourceLats, elapsed)
+							}
 						}
+						resourceAttempted = true
 
 					case roll < 8: // Metrics history
 						idx := rng.Intn(len(historyURLs))
@@ -265,6 +283,8 @@ func TestMultiTenant_ConcurrentAPIStress(t *testing.T) {
 				}
 
 				mu.Lock()
+				results[workerOrgIdx].firstResourceLats = append(results[workerOrgIdx].firstResourceLats, firstResourceLats...)
+				results[workerOrgIdx].laterResourceLats = append(results[workerOrgIdx].laterResourceLats, laterResourceLats...)
 				results[workerOrgIdx].resourceLats = append(results[workerOrgIdx].resourceLats, localResourceLats...)
 				results[workerOrgIdx].historyLats = append(results[workerOrgIdx].historyLats, localHistoryLats...)
 				results[workerOrgIdx].statsLats = append(results[workerOrgIdx].statsLats, localStatsLats...)
@@ -295,23 +315,31 @@ func TestMultiTenant_ConcurrentAPIStress(t *testing.T) {
 		t.Fatal("multi-tenant stress test timed out (possible deadlock)")
 	}
 	wallTime := time.Since(start)
+	t.Logf("stress phase=workers-complete at=%s goroutines=%d", time.Now().UTC().Format(time.RFC3339Nano), runtime.NumGoroutine())
 
 	// Aggregate results across all orgs.
 	var (
-		allResourceLats []time.Duration
-		allHistoryLats  []time.Duration
-		allStatsLats    []time.Duration
-		totalErrors     int64
-		totalRequests   int64
+		allResourceLats                      []time.Duration
+		firstResourceLats, laterResourceLats []time.Duration
+		allHistoryLats                       []time.Duration
+		allStatsLats                         []time.Duration
+		totalErrors                          int64
+		totalRequests                        int64
 	)
 
 	for _, r := range results {
+		firstResourceLats = append(firstResourceLats, r.firstResourceLats...)
+		laterResourceLats = append(laterResourceLats, r.laterResourceLats...)
 		allResourceLats = append(allResourceLats, r.resourceLats...)
 		allHistoryLats = append(allHistoryLats, r.historyLats...)
 		allStatsLats = append(allStatsLats, r.statsLats...)
 		totalErrors += r.resourceErrors + r.historyErrors + r.statsErrors
 		totalRequests += r.resourceCount + r.historyCount + r.statsCount
 	}
+
+	// First means first attempt per worker, not proven cold construction per tenant.
+	// Keep these observational partitions out of all latency/throughput verdicts.
+	t.Logf("resources first-per-worker: count=%d p95=%v; subsequent: count=%d p95=%v", len(firstResourceLats), percentile(firstResourceLats, 0.95), len(laterResourceLats), percentile(laterResourceLats, 0.95))
 
 	rps := float64(totalRequests) / wallTime.Seconds()
 	t.Logf("multi-tenant stress: %d orgs, %d workers, %d requests in %v (%.1f rps)",
