@@ -71,4 +71,55 @@ describe('useAlertSnoozeState', () => {
     expect(result.effectiveAlerts()[0].operationalRecord).toBeUndefined();
     expect(notificationStore.error).toHaveBeenCalledWith('Failed to snooze alert');
   });
+
+  it.each([false, true])(
+    'restores a failed resume and allows retry (acknowledged=%s)',
+    async (acknowledged) => {
+      const original = makeAlert();
+      original.acknowledged = acknowledged;
+      const [alerts, setAlerts] = createSignal([original]);
+      const updateAlert = vi.fn((id: string, updates: Partial<Alert>) => {
+        setAlerts((current) =>
+          current.map((alert) => (alert.id === id ? { ...alert, ...updates } : alert)),
+        );
+      });
+      vi.mocked(AlertsAPI.snooze).mockResolvedValue({
+        success: true,
+        snoozedUntil: '2026-08-27T14:00:00Z',
+      });
+      const { result } = renderHook(() => useAlertSnoozeState({ alerts, updateAlert }));
+      await result.handleSnooze(alerts()[0], new Date('2026-08-27T14:00:00Z'));
+      const suppressedRecord = alerts()[0].operationalRecord;
+      vi.mocked(notificationStore.success).mockClear();
+
+      let rejectResume!: (error: Error) => void;
+      vi.mocked(AlertsAPI.unsnooze).mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectResume = reject;
+          }),
+      );
+      const pending = result.handleUnsnooze(result.effectiveAlerts()[0]);
+      const rejected = expect(pending).rejects.toThrow('offline');
+      expect(result.processing().has(original.id)).toBe(true);
+      expect(isAlertSnoozed(result.effectiveAlerts()[0])).toBe(false);
+      rejectResume(new Error('offline'));
+      await rejected;
+
+      expect(result.processing().has(original.id)).toBe(false);
+      expect(result.effectiveAlerts()[0].operationalRecord).toEqual(suppressedRecord);
+      expect(alerts()[0].operationalRecord).toEqual(suppressedRecord);
+      expect(isAlertSnoozed(result.effectiveAlerts()[0])).toBe(true);
+      expect(notificationStore.success).not.toHaveBeenCalled();
+      expect(notificationStore.error).toHaveBeenCalledWith('Failed to resume alert notifications');
+
+      vi.mocked(AlertsAPI.unsnooze).mockResolvedValueOnce({ success: true });
+      await result.handleUnsnooze(result.effectiveAlerts()[0]);
+      expect(result.processing().size).toBe(0);
+      expect(isAlertSnoozed(result.effectiveAlerts()[0])).toBe(false);
+      expect(alerts()[0].operationalRecord?.state).toBe(acknowledged ? 'acknowledged' : 'open');
+      expect(alerts()[0].operationalRecord?.suppression).toBeUndefined();
+      expect(notificationStore.success).toHaveBeenCalledTimes(1);
+    },
+  );
 });
