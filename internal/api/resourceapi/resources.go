@@ -21,12 +21,18 @@ import (
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/sync/singleflight"
 )
 
 // QueryService provides HTTP handlers for the unified resource API.
 type QueryService struct {
-	cfg                 *config.Config
-	storeMu             sync.Mutex
+	cfg *config.Config
+	// storeLifecycle prevents eviction from overtaking in-flight constructors.
+	storeLifecycle sync.RWMutex
+	storeOpening   singleflight.Group
+	storeMu        sync.Mutex
+	// openStore is an optional constructor seam, set only before serving requests.
+	openStore           func(string, string) (unified.ResourceStore, error)
 	stores              map[string]unified.ResourceStore
 	cacheMu             sync.Mutex
 	registryCache       map[string]registryCacheEntry
@@ -1318,25 +1324,50 @@ func NormalizeDataSourceAlias(source unified.DataSource) unified.DataSource {
 }
 
 func (h *QueryService) getStore(orgID string) (unified.ResourceStore, error) {
-	h.storeMu.Lock()
-	defer h.storeMu.Unlock()
-	if h.stores == nil {
-		h.stores = make(map[string]unified.ResourceStore)
-	}
+	h.storeLifecycle.RLock()
+	defer h.storeLifecycle.RUnlock()
 	key := cacheKey(orgID)
-	if store, ok := h.stores[key]; ok {
+	lookup := func() (unified.ResourceStore, bool) {
+		h.storeMu.Lock()
+		defer h.storeMu.Unlock()
+		store, ok := h.stores[key]
+		return store, ok
+	}
+	if store, ok := lookup(); ok {
 		return store, nil
 	}
-	dataDir := ""
-	if h.cfg != nil {
-		dataDir = h.cfg.DataPath
-	}
-	store, err := unified.NewSQLiteResourceStore(dataDir, key)
+	// Deduplicate only this tenant. An unrelated tenant's cold constructor must
+	// not hold the cache mutex or delay already-open stores.
+	value, err, _ := h.storeOpening.Do(key, func() (any, error) {
+		if store, ok := lookup(); ok {
+			return store, nil
+		}
+		dataDir := ""
+		if h.cfg != nil {
+			dataDir = h.cfg.DataPath
+		}
+		open := h.openStore
+		if open == nil {
+			open = func(dir, org string) (unified.ResourceStore, error) {
+				return unified.NewSQLiteResourceStore(dir, org)
+			}
+		}
+		store, err := open(dataDir, key)
+		if err != nil {
+			return nil, err
+		}
+		h.storeMu.Lock()
+		if h.stores == nil {
+			h.stores = make(map[string]unified.ResourceStore)
+		}
+		h.stores[key] = store
+		h.storeMu.Unlock()
+		return store, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	h.stores[key] = store
-	return store, nil
+	return value.(unified.ResourceStore), nil
 }
 
 // InvalidateCache clears a tenant's resource registry and presentation cache
@@ -1363,12 +1394,14 @@ func (h *QueryService) CloseTenantStore(orgID string) error {
 	}
 	key := cacheKey(orgID)
 
+	h.storeLifecycle.Lock()
 	h.storeMu.Lock()
 	store, ok := h.stores[key]
 	if ok {
 		delete(h.stores, key)
 	}
 	h.storeMu.Unlock()
+	h.storeLifecycle.Unlock()
 
 	h.invalidateCache(orgID)
 
@@ -1385,6 +1418,7 @@ func (h *QueryService) CloseStores() error {
 		return nil
 	}
 
+	h.storeLifecycle.Lock()
 	h.storeMu.Lock()
 	stores := make(map[string]unified.ResourceStore, len(h.stores))
 	for key, store := range h.stores {
@@ -1392,6 +1426,7 @@ func (h *QueryService) CloseStores() error {
 	}
 	h.stores = make(map[string]unified.ResourceStore)
 	h.storeMu.Unlock()
+	h.storeLifecycle.Unlock()
 
 	var errs []error
 	for key, store := range stores {
