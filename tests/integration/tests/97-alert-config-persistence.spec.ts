@@ -70,8 +70,15 @@ test('saves recovery intent through the UI and preserves it across reload and re
   const initial = true;
   await expect(recovery).toHaveAttribute('aria-pressed', String(initial));
   await recovery.click();
+  await expect(recovery).toHaveAttribute('aria-pressed', String(!initial));
   // A staged edit must not already have altered the server.
   expect((await readConfig()).schedule.notifyOnResolve).toBe(initial);
+  // Reload must discard the unsaved edit rather than restore browser-only state.
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(recovery).toHaveAttribute('aria-pressed', String(initial));
+  expect((await readConfig()).schedule.notifyOnResolve).toBe(initial);
+  await recovery.click();
+  await expect(recovery).toHaveAttribute('aria-pressed', String(!initial));
   const saved = page.waitForResponse(response =>
     new URL(response.url()).pathname === '/api/alerts/config' && response.request().method() === 'PUT');
   await page.getByRole('button', { name: 'Save Changes', exact: true }).click();
@@ -87,7 +94,8 @@ test('saves recovery intent through the UI and preserves it across reload and re
   await expect(recovery).toHaveAttribute('aria-pressed', String(!initial));
   expect(await readConfig()).toMatchObject(expected);
   await testInfo.attach('saved-intent-proof.json', {
-    body: Buffer.from(JSON.stringify({ expected, reload: true, backendRestart: true,
+    body: Buffer.from(JSON.stringify({ expected, unsavedEditDiscardedOnReload: true,
+      reload: true, backendRestart: true,
       mockedAlertEndpoints: false, destinationReceiptProven: false })),
     contentType: 'application/json',
   });
