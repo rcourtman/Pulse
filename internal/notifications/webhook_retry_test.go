@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"testing"
 )
@@ -493,5 +494,36 @@ func TestWebhookRetryRateLimitThenTerminalRejection(t *testing.T) {
 	}
 	if history[0].StatusCode != http.StatusForbidden || history[0].Success || history[0].RetryAttempts != 1 || history[0].PayloadSize != len(payload) {
 		t.Errorf("history lost final rejection or retry accounting: %+v", history[0])
+	}
+}
+
+// Queue retry policy consumes the classified, wrapped transport error, not the
+// HTTP response. Keep both retry layers consistent for every rejection status.
+func TestWebhookHTTPRetryPolicyMatchesQueueClassification(t *testing.T) {
+	for code := 400; code <= 599; code++ {
+		t.Run(fmt.Sprint(code), func(t *testing.T) {
+			nm := &NotificationManager{webhookClient: &http.Client{
+				Transport: confidentialityTransport(func(*http.Request) (*http.Response, error) {
+					return &http.Response{
+						StatusCode: code, Header: make(http.Header),
+						Body: io.NopCloser(strings.NewReader("unauthorized timeout rate limit")),
+					}, nil
+				}),
+			}}
+			_, err := nm.executeWebhookRequest(WebhookConfig{URL: "https://example.test/hook"},
+				[]byte("{}"), webhookRequestOptions{})
+			if err == nil {
+				t.Fatal("expected HTTP rejection")
+			}
+			err = fmt.Errorf("webhook delivery exhausted: %w", err)
+			wantRetry := code >= 500 || code == 408 || code == 421 || code == 423 || code == 425 || code == 429
+			if got := isRetryableWebhookError(err); got != wantRetry {
+				t.Errorf("transport retryable = %v, want %v", got, wantRetry)
+			}
+			class := ClassifyNotificationFailureError(err)
+			if got := class.Retryable(); got != wantRetry {
+				t.Errorf("queue class %s retryable = %v, want %v", class, got, wantRetry)
+			}
+		})
 	}
 }
