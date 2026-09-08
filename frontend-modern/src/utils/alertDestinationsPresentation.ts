@@ -229,7 +229,8 @@ export function getAlertDestinationsDeliveryHealthDescription(
     tls: 'Check certificate trust, hostname matching, and TLS settings.',
     configuration: 'Review the enabled destination configuration and required fields.',
     rejected: 'Check the destination endpoint and payload requirements.',
-    server_error: 'Check the destination service status and server logs. Retry retained deliveries once the service is available.',
+    server_error:
+      'Check the destination service status and server logs. Retry retained deliveries once the service is available.',
     unknown: 'Review the local notification audit details for the terminal error.',
   };
   let diagnostic = 'Check each enabled destination and send a test.';
