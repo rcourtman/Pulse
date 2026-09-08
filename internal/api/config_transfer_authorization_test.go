@@ -43,7 +43,9 @@ func newConfigTransferTestRouter(t *testing.T, hosted bool, sso *config.SSOConfi
 			t.Fatalf("save synthetic SSO config: %v", err)
 		}
 	}
-	return NewRouter(cfg, nil, nil, nil, nil, "test")
+	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	cleanupTestRouter(t, router)
+	return router
 }
 
 func enabledConfigTransferSSO(providerType config.SSOProviderType) *config.SSOConfig {
@@ -129,6 +131,7 @@ func TestConfigTransferEnvironmentOIDCAndSSOLoadFailureFailClosed(t *testing.T) 
 		}
 		cfg := &config.Config{DataPath: dataDir, ConfigPath: dataDir}
 		router := NewRouter(cfg, nil, nil, nil, nil, "test")
+		cleanupTestRouter(t, router)
 		if !router.ssoAuthenticationLoadFailed() {
 			t.Fatal("precondition: corrupt persisted SSO was not recorded as a load failure")
 		}
@@ -220,6 +223,7 @@ func TestConfigTransferAuthorizedInstanceModesReachHandler(t *testing.T) {
 		t.Setenv("PULSE_DATA_DIR", dataDir)
 		cfg := &config.Config{DataPath: dataDir, ConfigPath: dataDir, AuthUser: "admin", AuthPass: hash}
 		router := NewRouter(cfg, nil, nil, nil, nil, "test")
+		cleanupTestRouter(t, router)
 		for _, path := range []string{"/api/config/export", "/api/config/import"} {
 			body := &countingConfigTransferBody{reader: strings.NewReader(`{not-json`)}
 			req := httptest.NewRequest(http.MethodPost, path, body)
@@ -266,6 +270,7 @@ func TestConfigTransferAuthorizedInstanceModesReachHandler(t *testing.T) {
 			ProxyAuthRoleHeader: "X-Proxy-Roles", ProxyAuthAdminRole: "admin",
 		}
 		router := NewRouter(cfg, nil, nil, nil, nil, "test")
+		cleanupTestRouter(t, router)
 		for _, path := range []string{"/api/config/export", "/api/config/import"} {
 			body := &countingConfigTransferBody{reader: strings.NewReader(`{not-json`)}
 			req := httptest.NewRequest(http.MethodPost, path, body)
@@ -289,6 +294,7 @@ func TestConfigTransferTokenScopesAndOrganizationBinding(t *testing.T) {
 	cfg := newTestConfigWithTokens(t, readRecord, writeRecord)
 	t.Setenv("PULSE_DATA_DIR", cfg.DataPath)
 	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	cleanupTestRouter(t, router)
 
 	tests := []struct {
 		name   string
@@ -331,6 +337,7 @@ func TestConfigTransferTokenScopesAndOrganizationBinding(t *testing.T) {
 	boundCfg := newTestConfigWithTokens(t, boundRecord)
 	t.Setenv("PULSE_DATA_DIR", boundCfg.DataPath)
 	boundRouter := NewRouter(boundCfg, nil, nil, nil, nil, "test")
+	cleanupTestRouter(t, boundRouter)
 	body := &countingConfigTransferBody{reader: strings.NewReader(`{not-json`)}
 	req := httptest.NewRequest(http.MethodPost, "/api/config/export", body)
 	req.Header.Set("X-API-Token", boundRaw)
@@ -404,6 +411,7 @@ func TestConfigTransferTenantSessionsRequireManagement(t *testing.T) {
 	mtm := monitoring.NewMultiTenantMonitor(cfg, mtp, nil)
 	t.Cleanup(mtm.Stop)
 	router := NewRouter(cfg, nil, mtm, nil, nil, "test")
+	cleanupTestRouter(t, router)
 
 	tests := []struct {
 		user    string
@@ -517,6 +525,7 @@ func TestDeniedConfigTransferDoesNotMutateOrReload(t *testing.T) {
 		reloadCalls++
 		return nil
 	}, "test")
+	cleanupTestRouter(t, router)
 
 	requests := []struct {
 		path string
@@ -545,5 +554,31 @@ func TestDeniedConfigTransferDoesNotMutateOrReload(t *testing.T) {
 	}
 	if cfg.PublicURL != "https://before.invalid" || cfg.AuthUser != "synthetic-admin" || cfg.AuthPass != hash {
 		t.Fatalf("denied import mutated live config: %+v", cfg)
+	}
+}
+
+func TestConfigTransferFixtureOwnsRouterLifecycle(t *testing.T) {
+	var router *Router
+	workerDone := make(chan struct{})
+	t.Run("fixture", func(t *testing.T) {
+		router = newConfigTransferTestRouter(t, false, nil)
+		router.startLifecycleWorker(func() {
+			<-router.lifecycleCtx.Done()
+			close(workerDone)
+		})
+	})
+	// Retain cleanup even if the helper regresses.
+	defer router.shutdownBackgroundWorkers()
+	defer router.ShutdownResourceStores()
+	defer router.ShutdownRBAC()
+	select {
+	case <-router.lifecycleCtx.Done():
+	default:
+		t.Fatal("config-transfer helper left router lifecycle active")
+	}
+	select {
+	case <-workerDone:
+	default:
+		t.Fatal("config-transfer helper did not join its router worker")
 	}
 }
