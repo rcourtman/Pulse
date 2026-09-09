@@ -63,6 +63,8 @@ func RedactWebhookURLSecrets(urlString string) string {
 	// Decode names exactly once, as net/url does, but retain the original
 	// spelling, order and unrelated values in diagnostic URLs. Inspect every
 	// occurrence rather than Query().Get(), which would miss repeated keys.
+	// Mask recognised credential names regardless of case for diagnostics only;
+	// the destination retains the original, potentially case-sensitive query.
 	parts := strings.Split(parsed.RawQuery, "&")
 	changed := false
 	for i, part := range parts {
@@ -71,7 +73,7 @@ func RedactWebhookURLSecrets(urlString string) string {
 		if err != nil {
 			return invalidWebhookURLDiagnostic
 		}
-		switch decoded {
+		switch strings.ToLower(decoded) {
 		case "token", "apikey", "api_key", "key", "secret", "password":
 			if hasValue {
 				parts[i] = name + "=REDACTED"

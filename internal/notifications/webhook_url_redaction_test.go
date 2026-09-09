@@ -81,6 +81,32 @@ func TestRedactWebhookURLSecrets(t *testing.T) {
 	}
 }
 
+// Diagnostic masking is deliberately conservative even though a destination
+// may treat query names as case-sensitive. It must not change the request URL.
+func TestRedactWebhookMixedCaseQuerySecrets(t *testing.T) {
+	for _, key := range []string{"TOKEN", "ApiKey", "Api_Key", "KEY", "Secret", "PassWord", "%54oKeN"} {
+		t.Run(key, func(t *testing.T) {
+			raw := "https://example.test/hook?" + key + "=synthetic-secret&token=second-secret&extra_TOKEN=visible&channel=ops"
+			want := "https://example.test/hook?" + key + "=REDACTED&token=REDACTED&extra_TOKEN=visible&channel=ops"
+			if got := RedactWebhookURLSecrets(raw); got != want {
+				t.Errorf("URL = %q, want %q", got, want)
+			}
+			if got := RedactWebhookDiagnosticSecrets("post " + raw + " failed"); got != "post "+want+" failed" {
+				t.Errorf("diagnostic = %q", got)
+			}
+			cause := errors.New("connection refused")
+			original := &url.Error{Op: "Post", URL: raw, Err: cause}
+			redacted := redactWebhookTransportError(original)
+			if strings.Contains(redacted.Error(), "synthetic-secret") || strings.Contains(redacted.Error(), "second-secret") {
+				t.Errorf("transport diagnostic exposed synthetic credential: %v", redacted)
+			}
+			if original.URL != raw || !errors.Is(redacted, cause) {
+				t.Fatal("redaction changed request URL or error identity")
+			}
+		})
+	}
+}
+
 func TestRedactWebhookDiagnosticSecrets(t *testing.T) {
 	tests := map[string]struct {
 		input string
