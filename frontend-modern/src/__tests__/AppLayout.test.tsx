@@ -510,6 +510,14 @@ describe('AppLayout navigation icons', () => {
     expect(launcher.closest('.header-controls')).toBeInTheDocument();
   });
 
+  it('allows mobile header controls to wrap without hiding organization or session actions', () => {
+    setViewportWidth(320);
+    const { container } = renderLayout();
+    expect(container.querySelector('.header')).toHaveClass('flex-wrap', 'sm:flex-nowrap');
+    expect(container.querySelector('.header-controls')).toHaveClass('max-w-full', 'flex-wrap', 'sm:flex-nowrap');
+    expect(screen.getByRole('button', { name: 'Logout' })).toBeInTheDocument();
+  });
+
   it('preserves the Assistant edge launcher on desktop', () => {
     setViewportWidth(1440);
     renderLayout();
