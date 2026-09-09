@@ -3,9 +3,11 @@ package sensors
 import (
 	"context"
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -54,34 +56,21 @@ func TestCollectRALP_MockSysfs(t *testing.T) {
 		t.Fatalf("write dram name: %v", err)
 	}
 
-	errCh := make(chan error, 1)
-	go func() {
-		time.Sleep(20 * time.Millisecond)
+	update := func(t *testing.T) {
 		if err := writeEnergyFile(filepath.Join(pkg0, "energy_uj"), "2000000"); err != nil {
-			errCh <- err
-			return
+			t.Fatalf("update energy counter: %v", err)
 		}
 		if err := writeEnergyFile(filepath.Join(core, "energy_uj"), "400000"); err != nil {
-			errCh <- err
-			return
+			t.Fatalf("update energy counter: %v", err)
 		}
 		if err := writeEnergyFile(filepath.Join(dram, "energy_uj"), "600000"); err != nil {
-			errCh <- err
-			return
+			t.Fatalf("update energy counter: %v", err)
 		}
-	}()
+	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	data, err := collectRAPL(ctx)
+	data, err := collectWithEnergyUpdate(t, collectRAPL, update)
 	if err != nil {
 		t.Fatalf("collectRAPL error: %v", err)
-	}
-	select {
-	case err := <-errCh:
-		t.Fatalf("update energy files: %v", err)
-	default:
 	}
 	if !data.Available {
 		t.Fatalf("expected data.Available true")
@@ -91,6 +80,9 @@ func TestCollectRALP_MockSysfs(t *testing.T) {
 	}
 	if data.PackageWatts <= 0 || data.CoreWatts <= 0 || data.DRAMWatts <= 0 {
 		t.Fatalf("expected non-zero watts, got %+v", data)
+	}
+	if math.Abs(data.PackageWatts-10) > 1e-9 || math.Abs(data.CoreWatts-2) > 1e-9 || math.Abs(data.DRAMWatts-3) > 1e-9 {
+		t.Fatalf("expected package/core/DRAM watts 10/2/3, got %+v", data)
 	}
 }
 
@@ -116,25 +108,15 @@ func TestCollectAMDEnergy_MockSysfs(t *testing.T) {
 		t.Fatalf("write energy label: %v", err)
 	}
 
-	errCh := make(chan error, 1)
-	go func() {
-		time.Sleep(20 * time.Millisecond)
+	update := func(t *testing.T) {
 		if err := writeEnergyFile(filepath.Join(hwmon, "energy1_input"), "2000000"); err != nil {
-			errCh <- err
+			t.Fatalf("update energy counter: %v", err)
 		}
-	}()
+	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	data, err := collectAMDEnergy(ctx)
+	data, err := collectWithEnergyUpdate(t, collectAMDEnergy, update)
 	if err != nil {
 		t.Fatalf("collectAMDEnergy error: %v", err)
-	}
-	select {
-	case err := <-errCh:
-		t.Fatalf("update energy input: %v", err)
-	default:
 	}
 	if !data.Available {
 		t.Fatalf("expected data.Available true")
@@ -175,25 +157,15 @@ func TestCollectPower_FallbackToAMD(t *testing.T) {
 		t.Fatalf("write energy label: %v", err)
 	}
 
-	errCh := make(chan error, 1)
-	go func() {
-		time.Sleep(20 * time.Millisecond)
+	update := func(t *testing.T) {
 		if err := writeEnergyFile(filepath.Join(hwmon, "energy1_input"), "2000000"); err != nil {
-			errCh <- err
+			t.Fatalf("update energy counter: %v", err)
 		}
-	}()
+	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	data, err := CollectPower(ctx)
+	data, err := collectWithEnergyUpdate(t, CollectPower, update)
 	if err != nil {
 		t.Fatalf("CollectPower error: %v", err)
-	}
-	select {
-	case err := <-errCh:
-		t.Fatalf("update energy input: %v", err)
-	default:
 	}
 	if data.Source != "amd_energy" {
 		t.Fatalf("expected amd_energy fallback, got %q", data.Source)
@@ -238,7 +210,10 @@ func TestCollectRALP_CanceledDuringSampleWait(t *testing.T) {
 	}
 }
 
-func TestCollectAMDEnergy_CanceledDuringSampleWait(t *testing.T) {
+func TestCollectPower_NilContextFallsBackToAMD(t *testing.T) {
+	originalRAPL := raplBasePath
+	raplBasePath = filepath.Join(t.TempDir(), "missing-rapl")
+	t.Cleanup(func() { raplBasePath = originalRAPL })
 	tmpDir := t.TempDir()
 	original := hwmonBasePath
 	hwmonBasePath = tmpDir
@@ -260,24 +235,46 @@ func TestCollectAMDEnergy_CanceledDuringSampleWait(t *testing.T) {
 		t.Fatalf("write energy label: %v", err)
 	}
 
-	errCh := make(chan error, 1)
-	go func() {
-		time.Sleep(20 * time.Millisecond)
+	update := func(t *testing.T) {
 		if err := writeEnergyFile(filepath.Join(hwmon, "energy1_input"), "2000000"); err != nil {
-			errCh <- err
+			t.Fatalf("update energy counter: %v", err)
 		}
-	}()
+	}
 
-	data, err := CollectPower(nil)
+	data, err := collectWithEnergyUpdate(t, func(context.Context) (*PowerData, error) { return CollectPower(nil) }, update)
 	if err != nil {
 		t.Fatalf("CollectPower error: %v", err)
-	}
-	select {
-	case err := <-errCh:
-		t.Fatalf("update energy input: %v", err)
-	default:
 	}
 	if data.Source != "amd_energy" {
 		t.Fatalf("expected amd_energy fallback, got %q", data.Source)
 	}
+}
+
+// collectWithEnergyUpdate makes the fixture's two counter snapshots independent
+// of host scheduling. The collector must be waiting on its sample timer before
+// any writes begin; virtual time cannot advance while the updater is running.
+// Unlike a sleeping writer goroutine, this cannot expose a partial update or
+// leave writes running after the assertion/temporary-directory cleanup.
+func collectWithEnergyUpdate(t *testing.T, collect func(context.Context) (*PowerData, error), update func(*testing.T)) (*PowerData, error) {
+	t.Helper()
+	var data *PowerData
+	var err error
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		defer func() { cancel(); <-done }()
+		go func() {
+			defer close(done)
+			data, err = collect(ctx)
+		}()
+		synctest.Wait()
+		select {
+		case <-done:
+			t.Fatalf("collector returned before counter update: data=%+v err=%v", data, err)
+		default:
+		}
+		update(t)
+		<-done
+	})
+	return data, err
 }
