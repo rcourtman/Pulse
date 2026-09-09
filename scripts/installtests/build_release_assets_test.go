@@ -4375,3 +4375,43 @@ func workflowStepBlock(t *testing.T, jobBlock, step string) string {
 	}
 	return jobBlock[start : start+len("      - name: "+step+"\n")+end]
 }
+
+// The action's ESM migration must not turn privileged release jobs into cache
+// writers or change the application toolchain requested by release consumers.
+func TestReleaseNodeSetupKeepsExplicitCacheIsolation(t *testing.T) {
+	for _, name := range []string{"build-release-candidate.yml", "compile-release-payload.yml", "create-release.yml", "release-dry-run.yml"} {
+		t.Run(name, func(t *testing.T) {
+			content, err := os.ReadFile(repoFile(".github", "workflows", name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			blocks := regexp.MustCompile(`(?m)^        uses: actions/setup-node@[^\n]+\n(?:          [^\n]*\n|        with:\n)*`).FindAllString(string(content), -1)
+			if len(blocks) == 0 {
+				t.Fatal("missing Node setup")
+			}
+			if name == "create-release.yml" {
+				// First four jobs build/test; only the fifth is the privileged
+				// release consumer. Preserve the three explicit test caches.
+				if len(blocks) != 5 {
+					t.Fatalf("review changed release job layout: %d", len(blocks))
+				}
+				for i, block := range blocks[:4] {
+					if i > 0 && (!strings.Contains(block, "cache: 'npm'") || !strings.Contains(block, "cache-dependency-path: 'frontend-modern/package-lock.json'")) {
+						t.Fatalf("test cache lost its lockfile: %s", block)
+					}
+				}
+				blocks = blocks[4:]
+			}
+			for _, block := range blocks {
+				for _, want := range []string{"actions/setup-node@820762786026740c76f36085b0efc47a31fe5020", "node-version: '24'", "package-manager-cache: false"} {
+					if !strings.Contains(block, want) {
+						t.Fatalf("Node setup lost %s: %s", want, block)
+					}
+				}
+				if strings.Contains(block, "registry-url:") || strings.Contains(block, "          cache:") {
+					t.Fatalf("unexpected authentication or explicit cache: %s", block)
+				}
+			}
+		})
+	}
+}

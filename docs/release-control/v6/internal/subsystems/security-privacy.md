@@ -2830,3 +2830,20 @@ symlink checks and expose no enumeration, sampling or writing capability.
 Removing the disconnected recorder does not alter alert, action approval or
 operator authority. An unrelated organization receives no default archive
 fallback.
+
+### Node setup action v7 compatibility
+
+Workflow consumers pin `actions/setup-node` to
+`820762786026740c76f36085b0efc47a31fe5020` (v7.0.0). The action manifest
+retains the Node 24 execution runtime, setup/cache-save entry points and existing
+inputs. Its internal ESM/toolkit upgrade does not change the requested Node 24
+application toolchain. Consumers do not supply `registry-url` or depend on the
+removed dummy `NODE_AUTH_TOKEN` export. Explicit npm lockfile caching for test
+jobs and disabled automatic package-manager caching for privileged release jobs
+remain unchanged; no permission, dispatch input or signing backend changes.
+
+`test_setup_node_upgrade_preserves_consumer_contract` in the existing workflow
+trust suite verifies every consumer pin, absence of the affected auth assumptions,
+workflow trust controls and the retained native Windows command/lifecycle proof
+steps. Native Windows execution remains a hosted check, not a local Linux claim.
+This upgrade is independent of the grouped signing/Docker/Tailscale updates.

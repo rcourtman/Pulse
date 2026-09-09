@@ -36,6 +36,31 @@ class WorkflowTrustTest(unittest.TestCase):
             path.write_text(content, encoding="utf-8")
             return [finding.message for finding in workflow_trust.audit_workflow(path)]
 
+    def test_setup_node_upgrade_preserves_consumer_contract(self) -> None:
+        # v7 changes its internal module format, not the Node 24 consumer ABI.
+        # No consumer may rely on the removed dummy NODE_AUTH_TOKEN export.
+        count = 0
+        for path in (REPO_ROOT / ".github/workflows").glob("*.yml"):
+            source = path.read_text()
+            if "actions/setup-node@" not in source:
+                continue
+            with self.subTest(workflow=path.name):
+                self.assertNotIn("registry-url:", source)
+                self.assertNotIn("NODE_AUTH_TOKEN", source)
+                for line in source.splitlines():
+                    if "uses: actions/setup-node@" in line:
+                        count += 1
+                        self.assertEqual(
+                            line.strip(),
+                            "uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0",
+                        )
+                self.assertEqual(workflow_trust.audit_workflow(path), [])
+        self.assertGreater(count, 0)
+        native = (REPO_ROOT / ".github/workflows/unified-agent-native.yml").read_text()
+        self.assertIn("agentInstallCommand.windows.test.ts", native)
+        self.assertIn("^Test(InstallPS1|WindowsAgentLifecycle)", native)
+        self.assertIn("node-version: '24'", native)
+
     def test_accepts_immutable_dependencies_and_explicit_checkout_credentials(self) -> None:
         findings = self.audit(
             f"""permissions:
