@@ -5373,3 +5373,20 @@ trust suite verifies every consumer pin, absence of the affected auth assumption
 workflow trust controls and the retained native Windows command/lifecycle proof
 steps. Native Windows execution remains a hosted check, not a local Linux claim.
 This upgrade is independent of the grouped signing/Docker/Tailscale updates.
+
+### Published MSP evaluation bundle guidance
+
+The MSP guide and its shipped mirror select the signed v6.4.1 provider archive,
+not a moving source archive. Verification of the pinned SSH identity/namespace
+and checksum precedes extraction and privileged setup. The licence request
+contains the generated public key, setup-stage and signup-source fields, plus
+email only when explicitly supplied. Describe that request rather than asserting
+anonymous setup or absence of all outbound credentials/network traffic.
+
+`TestProviderMSPEvaluationDocsUsePublishedSignedBundle` checks the synchronized
+guides, exact version, verification commands and bounded payload disclosure.
+Retained provider delivery verification establishes archive SHA256
+`a2f3f6df98385e7dbc47e5df9ca014046b8d81eba353420d8f22a668de621b88`,
+a valid pinned SSH signature and the extracted request expression with absent
+and synthetic email. It does not establish installed onboarding, server acceptance
+or legal identity. See the qualification evidence below.
