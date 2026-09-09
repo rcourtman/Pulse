@@ -19,10 +19,10 @@ spec.loader.exec_module(events)
 class EventsTest(unittest.TestCase):
     def test_output_and_bounded_evidence(self):
         data = [dict(Time='2026-09-08T19:00:00Z', Action=action,
-                     Package=events.PACKAGE, Test=events.TARGET, Elapsed=2.0)
+                     Package=events.PACKAGE, Test="TestMultiTenant_ConcurrentAPIStress", Elapsed=2.0)
                 for action in ('run', 'pause', 'cont', 'pass', 'fail', 'skip')]
         data += [dict(Action='output', Output='FAIL\tpackage\t2s\n'),
-                 dict(Action='run', Package='other', Test=events.TARGET),
+                 dict(Action='run', Package='other', Test="TestMultiTenant_ConcurrentAPIStress"),
                  dict(Action='run', Package=events.PACKAGE, Test='TestOther')]
         output = io.StringIO()
         with patch.object(events.resources, 'snapshot', return_value={'unix_time_ns': 456}) as sample:
@@ -36,8 +36,29 @@ class EventsTest(unittest.TestCase):
             self.assertGreater(evidence['received_unix_time_ns'], 456)
             self.assertEqual(evidence['resources'], {'unix_time_ns': 456})
 
+    def test_slo_exact_target_lifecycle_and_exclusions(self):
+        data = [dict(Action=action, Package=events.PACKAGE,
+                     Test='TestSLO_MetricsHistoryStore')
+                for action in ('run', 'pause', 'cont', 'pass', 'fail', 'skip')]
+        data += [dict(Action='run', Package=package, Test=test)
+                 for package, test in (
+                     ('other', 'TestSLO_MetricsHistoryStore'),
+                     (events.PACKAGE, 'TestSLO_MetricsHistoryStore/subtest'),
+                     (events.PACKAGE, 'TestSLO_MetricsHistoryStoreExtra'),
+                     (events.PACKAGE, 'TestSLO_MetricsHistoryMemory'))]
+        output = io.StringIO()
+        with patch.object(events.resources, 'snapshot', return_value={}) as sample:
+            self.assertEqual(events.render(io.StringIO(''.join(
+                json.dumps(x) + '\n' for x in data)), output), 0)
+        self.assertEqual(sample.call_count, 6)
+        records = [json.loads(line.removeprefix('RELEASE_GO_TEST_EVENT '))
+                   for line in output.getvalue().splitlines()]
+        self.assertEqual([r['Action'] for r in records],
+                         ['run', 'pause', 'cont', 'pass', 'fail', 'skip'])
+        self.assertTrue(all(r['Test'] == 'TestSLO_MetricsHistoryStore' for r in records))
+
     def test_unavailable_snapshot_does_not_change_verdict(self):
-        event = dict(Action='fail', Package=events.PACKAGE, Test=events.TARGET)
+        event = dict(Action='fail', Package=events.PACKAGE, Test="TestMultiTenant_ConcurrentAPIStress")
         output = io.StringIO()
         with patch.object(events.resources, 'snapshot', side_effect=OSError):
             self.assertEqual(events.render(io.StringIO(json.dumps(event)+'\n'), output), 0)
@@ -59,6 +80,7 @@ func TestMultiTenant_ConcurrentAPIStress(t *testing.T) {
  t.Log("synthetic log")
  if os.Getenv("FIXTURE_FAIL") == "1" { t.Fatal("synthetic failure") }
 }
+func TestSLO_MetricsHistoryStore(t *testing.T) { t.Log("synthetic SLO marker") }
 func TestSkipped(t *testing.T) { t.Skip("synthetic skip") }
 ''')
             for fail in ('0', '1'):
@@ -72,7 +94,10 @@ func TestSkipped(t *testing.T) { t.Skip("synthetic skip") }
                            for line in result.stdout.splitlines()
                            if line.startswith('RELEASE_GO_TEST_EVENT ')]
                 self.assertEqual([r['Action'] for r in records],
-                                 ['run', 'fail' if fail == '1' else 'pass'])
+                                 ['run', 'fail' if fail == '1' else 'pass', 'run', 'pass'])
+                self.assertEqual([r['Test'] for r in records],
+                                 ['TestMultiTenant_ConcurrentAPIStress'] * 2 +
+                                 ['TestSLO_MetricsHistoryStore'] * 2)
                 self.assertTrue(all(r.get('Time') for r in records))
                 self.assertIn('synthetic log', result.stdout)
                 self.assertIn('--- SKIP: TestSkipped', result.stdout)

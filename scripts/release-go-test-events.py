@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render streamed go test -json output and retain bounded stress-test timing.
+"""Render streamed go test -json output and retain bounded API timing.
 
 Go's event Time is distinct from receipt time and the resource sample time.
 Samples share the worker cgroup; they do not establish per-test CPU usage or
@@ -18,7 +18,10 @@ spec = importlib.util.spec_from_file_location(
 resources = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(resources)
 
-TARGET = "TestMultiTenant_ConcurrentAPIStress"
+TARGETS = frozenset({
+    "TestMultiTenant_ConcurrentAPIStress",
+    "TestSLO_MetricsHistoryStore",
+})
 PACKAGE = "github.com/rcourtman/pulse-go-rewrite/internal/api"
 ACTIONS = {"run", "pause", "cont", "pass", "fail", "skip"}
 
@@ -40,7 +43,7 @@ def render(source, destination):
             invalid = True
             continue
         destination.write(output)
-        if (event.get("Package") == PACKAGE and event.get("Test") == TARGET
+        if (event.get("Package") == PACKAGE and event.get("Test") in TARGETS
                 and event.get("Action") in ACTIONS):
             evidence = {key: event[key] for key in
                         ("Time", "Action", "Package", "Test", "Elapsed") if key in event}
