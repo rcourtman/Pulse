@@ -203,12 +203,14 @@ jobs:
           path: tests/integration/playwright-report/
           retention-days: 3
 
-      - name: Upload test videos and screenshots
+      # The HTML report already contains screenshots, videos and traces.
+      # Keep only the separate machine-readable result here.
+      - name: Upload JUnit results
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: test-failures-shard-${{ matrix.shard }}
-          path: tests/integration/test-results/
+          name: junit-results-shard-${{ matrix.shard }}
+          path: tests/integration/test-results/junit.xml
           retention-days: 3
 
       # continue-on-error keeps the job green on a probation failure, so
@@ -221,12 +223,12 @@ jobs:
           path: tests/integration/playwright-report-probation/
           retention-days: 3
 
-      - name: Upload probation test videos and screenshots
+      - name: Upload probation JUnit results
         if: ${{ !cancelled() && steps.probation.outcome == 'failure' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: test-failures-probation-shard-${{ matrix.shard }}
-          path: tests/integration/test-results-probation/
+          name: junit-results-probation-shard-${{ matrix.shard }}
+          path: tests/integration/test-results-probation/junit.xml
           retention-days: 3
 
   agent-registration:
