@@ -297,6 +297,36 @@ test('shouldBuildManagedLocalBackendBinary skips rebuild when binary is fresh', 
   );
 });
 
+// A dependency-only update must not accidentally exercise a cached old SDK.
+for (const manifest of ['go.mod', 'go.sum']) {
+  test(`shouldBuildManagedLocalBackendBinary rebuilds after ${manifest}-only dependency update`, async (t) => {
+    const repoRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'pulse-managed-moby-'));
+    t.after(() => fs.rm(repoRoot, { recursive: true, force: true }));
+    const binaryPath = path.join(repoRoot, 'pulse');
+    const embeddedFrontendDistPath = path.join(repoRoot, 'internal', 'api', 'frontend-modern', 'dist');
+    await fs.mkdir(embeddedFrontendDistPath, { recursive: true });
+    const inputs = {
+      'go.mod': 'module example.com/pulse\nrequire github.com/moby/moby/client v0.6.0\n',
+      'go.sum': 'fixture dependency checksum\n',
+    };
+    const older = new Date('2026-03-12T09:00:00Z');
+    const built = new Date('2026-03-12T10:00:00Z');
+    const updated = new Date('2026-03-12T11:00:00Z');
+    for (const [name, content] of Object.entries(inputs)) {
+      await fs.writeFile(path.join(repoRoot, name), content);
+      await fs.utimes(path.join(repoRoot, name), older, older);
+    }
+    await fs.writeFile(binaryPath, 'fixture binary');
+    await fs.utimes(binaryPath, built, built);
+    const state = { repoRoot, binaryPath, embeddedFrontendDistPath };
+    assert.equal(await shouldBuildManagedLocalBackendBinary(state), false);
+    await fs.utimes(path.join(repoRoot, manifest), updated, updated);
+    assert.equal(await shouldBuildManagedLocalBackendBinary(state), true);
+    await fs.utimes(binaryPath, updated, updated);
+    assert.equal(await shouldBuildManagedLocalBackendBinary(state), false);
+  });
+}
+
 test('shouldBuildManagedLocalBackendBinary rebuilds enterprise variant when sibling enterprise source is newer', async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'pulse-managed-backend-enterprise-'));
   const pulseRepoRoot = path.join(workspaceRoot, 'pulse');
