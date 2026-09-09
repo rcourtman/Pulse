@@ -117,3 +117,11 @@ test('applyRequestedEntitlementProfile fails for explicit live-instance runs wit
     /no entitlement write target/i,
   );
 });
+
+test('signed offline activation does not inject a billing profile', async () => {
+  const result = await applyRequestedEntitlementProfile({
+    env: { PULSE_E2E_OFFLINE_ACTIVATION_KEY: 'ephemeral', PULSE_MULTI_TENANT_ENABLED: 'true' },
+    run: () => { throw new Error('must not write billing state'); },
+  });
+  assert.deepEqual(result, { applied: false, reason: 'signed_offline_activation' });
+});

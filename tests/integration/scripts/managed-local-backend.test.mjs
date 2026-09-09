@@ -453,3 +453,31 @@ test('owned runner orchestration proves reaping, signal cleanup and concurrent i
   await run('python3', [path.join(scriptsDir, 'owned-run.test.py')], { timeout: 20000 });
   await run(process.execPath, ['--test', path.join(scriptsDir, 'run-tests-interruption.test.mjs')], { timeout: 15000 });
 });
+
+test('managed offline provisioning preserves ephemeral trust and strict Community validation', async (t) => {
+  const { startOfflineLicenseIssuer } = await import('./offline-license-issuer.mjs');
+  const issuer = await startOfflineLicenseIssuer();
+  t.after(() => issuer.close());
+  const env = {
+    PULSE_E2E_RUN_ID: 'offline-provisioning-contract',
+    PULSE_LICENSE_PUBLIC_KEY: issuer.publicKey,
+    PULSE_LICENSE_SERVER_URL: issuer.url,
+    PULSE_LICENSE_DEV_MODE: 'false',
+    PULSE_MOCK_MODE: 'false',
+    PULSE_MULTI_TENANT_ENABLED: 'true',
+    PULSE_E2E_OFFLINE_ACTIVATION_KEY: issuer.activationKey,
+  };
+  const state = buildManagedLocalBackendState(env);
+  const backend = buildManagedLocalBackendEnv(state, env);
+  assert.equal(state.backendVariant, 'core');
+  assert.deepEqual(state.binaryBuildArgs, ['build', '-o', '__OUTPUT__', './cmd/pulse']);
+  for (const key of Object.keys(env).filter(key => key !== 'PULSE_E2E_RUN_ID')) {
+    assert.equal(backend[key], env[key], `${key} must reach the actual managed backend unchanged`);
+  }
+  assert.equal(new URL(backend.PULSE_LICENSE_SERVER_URL).hostname, '127.0.0.1');
+  assert.equal(Buffer.from(backend.PULSE_LICENSE_PUBLIC_KEY, 'base64').length, 32);
+  assert.equal(backend.PULSE_DATA_DIR, state.dataDir);
+  // Development orchestration remains independent of license validation bypass.
+  assert.equal(backend.PULSE_DEV, 'true');
+  assert.equal(backend.PULSE_LICENSE_DEV_MODE, 'false');
+});

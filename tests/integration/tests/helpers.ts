@@ -1699,6 +1699,26 @@ const toOrgID = (displayName: string) => {
   return `${base}-${suffix}`.slice(0, 64);
 };
 
+// Only the isolated issuer wrapper supplies this ephemeral key. Production and
+// unentitled suites keep their normal activation state.
+export async function activateOfflineOrganization(page: Page, orgId = "default"): Promise<void> {
+  const key = process.env.PULSE_E2E_OFFLINE_ACTIVATION_KEY;
+  if (!key) return;
+  const headers = { "X-Pulse-Org-ID": orgId, "X-Org-ID": orgId };
+  const activation = await apiRequest(page, "/api/license/activate", {
+    method: "POST", headers, data: { license_key: key },
+  });
+  if (!activation.ok()) throw new Error(`Offline org activation failed: ${activation.status()}`);
+  const response = await apiRequest(page, "/api/license/runtime-capabilities", { headers });
+  if (!response.ok()) throw new Error(`Offline capability lookup failed: ${response.status()}`);
+  const payload = await response.json();
+  const security = await apiRequest(page, "/api/security/status", { headers });
+  expect(security.ok()).toBe(true);
+  expect((await security.json()).sessionCapabilities.demoMode).toBe(false);
+  expect(payload.capabilities).toContain("multi_tenant");
+  expect(payload.capabilities).not.toContain("rbac");
+}
+
 export async function createOrg(
   page: Page,
   displayName: string,
@@ -1718,6 +1738,7 @@ export async function createOrg(
     throw new Error("Failed to create org: response missing org id");
   }
 
+  await activateOfflineOrganization(page, payload.id);
   return { id: payload.id };
 }
 
