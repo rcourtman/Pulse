@@ -514,7 +514,11 @@ describe('AppLayout navigation icons', () => {
     setViewportWidth(320);
     const { container } = renderLayout();
     expect(container.querySelector('.header')).toHaveClass('flex-wrap', 'sm:flex-nowrap');
-    expect(container.querySelector('.header-controls')).toHaveClass('max-w-full', 'flex-wrap', 'sm:flex-nowrap');
+    expect(container.querySelector('.header-controls')).toHaveClass(
+      'max-w-full',
+      'flex-wrap',
+      'sm:flex-nowrap',
+    );
     expect(screen.getByRole('button', { name: 'Logout' })).toBeInTheDocument();
   });
 
