@@ -813,6 +813,23 @@ local command or REST URL. `TestHostCustomSensorAlertLifecycle` and
 `internal/alerts/host_unraid_lifecycle_test.go` pin creation, recovery,
 opt-out, and cleanup.
 
+Health-assessment warning→critical transitions dispatch the updated incident
+through the normal acknowledgement, snooze, activation and flapping policy;
+unchanged severity and critical→warning transitions do not dispatch. The shared
+health-assessment caller opts into the configured per-incident hourly limit for
+initial, refired and escalation notifications, so repeated severity oscillations
+cannot bypass that budget. Incident severity still updates when delivery is
+suppressed. This applies to all callers of the shared assessment adapter
+(custom sensors, host storage/RAID and storage ZFS pool/device health), not other
+stateful alert families. No delivery-policy bypass or separate sensor callback
+is introduced.
+`TestHostCustomSensorEscalationDelivery` in
+`internal/alerts/host_unraid_lifecycle_test.go` pins the running-host callback,
+stable incident identity and suppression/no-noise cases;
+`TestHealthAssessmentEscalationDelivery` in
+`internal/alerts/canonical_stateful_test.go` pins shared ZFS escalation and
+hourly-budget exhaustion across warning/critical oscillation.
+
 The alert resource-incident panel
 (`frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`)
 dropped its "Open in Infrastructure / Workloads / Storage / Recovery"
