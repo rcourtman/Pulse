@@ -305,6 +305,15 @@ command-capable profile.
 
 ## Shared Boundaries
 
+### PBS host history correlation
+
+Backups hydrates type=pbs,agent with source=pbs and reuses Overview guest inventory. Deduplicate combined snapshots by canonical ID before correlation, avoiding false ambiguity for agents in both queries. Standalone non-PVE PBS telemetry remains available without downloading the guest estate twice.
+
+Verification: ProxmoxBackupServersTable.drawer.test.tsx covers standalone and
+merged guest targets, missing disks and ambiguous identities;
+ProxmoxPageSurface.contract.test.tsx covers hydration and deduplication.
+
+
 ### Notification recovery reload ownership
 
 Queue recovery API handlers follow router monitor replacement instead of

@@ -573,6 +573,15 @@ that manual-channel consequence must stay visible at desktop and narrow widths.
 
 ## Shared Boundaries
 
+### PBS host history correlation
+
+The Backups surface passes its complete deduplicated route inventory to the PBS table. Only PBS servers render as rows; other resources supply correlation inputs. Preserve PBS drawer identity and use the correlated canonical history target. Missing disk utilisation does not gate CPU/memory history.
+
+Verification: ProxmoxBackupServersTable.drawer.test.tsx covers standalone and
+merged guest targets, missing disks and ambiguous identities;
+ProxmoxPageSurface.contract.test.tsx covers hydration and deduplication.
+
+
 The settings panel registry supplies organisation overview, access and sharing with security-status currentUsername. An explicitly empty principal must not fall back to configured administrator identity; only older responses lacking the field use proxy/SSO/configured-username compatibility fallback. This identity plumbing must not change settings shell framing or bypass panel capability gates.
 
 Settings navigation discoverability is part of the shared settings-shell
