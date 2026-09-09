@@ -285,6 +285,29 @@ Note: The built-in `PVEAuditor` role cannot be modified. Create a custom role (e
 
 **Rocky Linux / RHEL VMs**: The default qemu-guest-agent configuration may block file-read RPCs (`guest-file-open`, `guest-file-read`, `guest-file-close`). If memory or disk data is missing for these VMs, check `/etc/sysconfig/qemu-ga` and ensure those operations are not blocked, then restart the agent. Refer to your distro's qemu-guest-agent documentation for the exact config syntax.
 
+### Proxmox pending-update access
+
+A successful inventory check does not establish access to the package-update list.
+Pulse requests `GET /nodes/{node}/apt/update` with its configured Proxmox credential.
+[Proxmox's endpoint implementation](https://github.com/proxmox/pve-manager/blob/614bede5d65599c67e068cbf18d49717ea8ab33b/PVE/API2/APT.pm)
+requires `Sys.Modify` on `/nodes/{node}` for that GET; `Sys.Audit` alone is not sufficient
+in that implementation. Check the API requirements for your installed Proxmox version.
+
+`Sys.Modify` is broader than read-only monitoring: the same privilege also authorises
+the separate POST that refreshes package indexes. Do not add it automatically to a
+monitoring role just to obtain an update badge. Keeping the narrower role and an
+unavailable update check is a valid choice; unavailable is not a confirmed zero.
+Older Pulse wording that says “Sys.Audit permission required” does not identify the
+actual missing privilege.
+
+For diagnosis, compare the affected node and endpoint using the exact credential
+configured in Pulse, not an administrator's browser session. Keep TLS verification
+enabled and credentials private; report only the HTTP status and a redacted denial
+or whether `data` is empty/nonempty. Do not use POST, Refresh or Upgrade as a test.
+If the matching GET succeeds but Pulse remains unavailable after its next update
+check, report the Pulse version and displayed check time/status separately; API
+success alone does not confirm the Pulse display has recovered.
+
 ### Recovery Mode
 If you are completely locked out, you can trigger a recovery token from localhost:
 ```bash
