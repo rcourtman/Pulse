@@ -325,7 +325,7 @@ describe('NodeCredentialSlot', () => {
     expect(payload).not.toHaveProperty('clusterEndpointOverrides');
   });
 
-  it('passes the edited node to saveNode so edits hit the update path', async () => {
+  it('saves a standalone PVE rename to the original connection after a poll', async () => {
     const settings = createSettings();
     const onSaved = vi.fn();
     const editingNode = {
@@ -340,22 +340,37 @@ describe('NodeCredentialSlot', () => {
       status: 'connected',
     } as unknown as NodeConfigWithStatus;
 
+    const [node, setNode] = createSignal(editingNode);
+
     render(() => (
       <NodeCredentialSlot
         nodeType="pve"
         settings={settings}
-        editingNode={editingNode}
+        editingNode={node()}
         onCancel={vi.fn()}
         onSaved={onSaved}
       />
     ));
+
+    const name = screen.getByLabelText(/^Node Name/);
+    fireEvent.input(name, { target: { value: 'renamed-connection' } });
+    setNode({ ...editingNode, name: 'server-refresh' });
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^Node Name/)).toBe(name);
+      expect(name).toHaveValue('renamed-connection');
+    });
+    expect(settings.saveNode).not.toHaveBeenCalled();
 
     fireEvent.submit(screen.getByRole('button', { name: 'Save changes' }).closest('form')!);
 
     await vi.waitFor(() => {
       expect(settings.saveNode).toHaveBeenCalledTimes(1);
     });
-    expect(vi.mocked(settings.saveNode).mock.calls[0][1]).toBe(editingNode);
+    expect(settings.saveNode).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ name: 'renamed-connection', host: editingNode.host }),
+      node(),
+    );
+    expect(node().id).toBe('pve-0');
     await vi.waitFor(() => {
       expect(onSaved).toHaveBeenCalledTimes(1);
     });
