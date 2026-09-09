@@ -5318,3 +5318,29 @@ are distinct. Cached events and collection overhead limit timing inference.
 synthetic Go pass/skip/fail output, producer exit retention, malformed input,
 allowlisted targeting and unavailable resource evidence. This is not product
 qualification; see `docs/RELEASE_RESOURCE_EVIDENCE.md`.
+
+### Offline signed Organization provisioning
+
+The isolated Community browser harness may provision signed entitlements only
+against its run-local loopback issuer and freshly source-built non-release
+backend. The managed backend must preserve the supplied public trust root and
+issuer URL while keeping license signature bypass and mock mode disabled.
+The issuer retains its private key in memory, binds status/refresh credentials
+to each installation fingerprint, and remains available until backend cleanup.
+A new issuer requires a fresh activation context; production fallback and
+legacy-token exchange are not part of this fixture contract.
+
+The shared Organization helper activates default and every created organisation
+through the authenticated, explicitly scoped API, not by writing billing state
+or copying activation persistence. It asserts advertised multi-tenancy, absent
+Community private RBAC and non-demo security state. Without an offline fixture
+key, existing activation behaviour is unchanged. The separate provisioning CI
+job does not promote quarantined tests or establish private-runtime acceptance.
+
+Verification: `tests/integration/scripts/managed-local-backend.test.mjs` checks
+that the actual managed environment preserves the ephemeral issuer's trust and
+strict-validation settings and uses the source-built Community target. Issuer
+binding and lifecycle regressions are in `offline-license-issuer.test.mjs` and
+`with-offline-entitlements.test.mjs`; the two scoped Chromium provisioning
+scenarios verify the authenticated API/browser path. These are fixture proofs,
+not release qualification or evidence that other Organization failures cleared.

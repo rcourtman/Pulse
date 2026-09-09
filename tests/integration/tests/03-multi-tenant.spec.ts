@@ -3,6 +3,7 @@ import path from 'node:path';
 import { test as base, expect } from '@playwright/test';
 import {
   apiRequest,
+  activateOfflineOrganization,
   createAuthenticatedStorageState,
   createOrg,
   deleteOrg,
@@ -105,6 +106,12 @@ const expectStatusIn = (status: number, allowed: number[], context: string) => {
 };
 
 test.describe('Multi-tenant E2E flows', () => {
+  test.beforeEach(async ({ page }) => {
+    if (process.env.PULSE_E2E_OFFLINE_ACTIVATION_KEY) {
+      await ensureSessionAuthenticated(page);
+      await activateOfflineOrganization(page);
+    }
+  });
   test('Scenario 1: feature flag visibility', async ({ page }) => {
     await ensureAuthenticated(page);
 

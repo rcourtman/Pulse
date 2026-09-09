@@ -136,6 +136,11 @@ export async function applyRequestedEntitlementProfile({
   run = defaultRun,
   fsModule = fs,
 } = {}) {
+  // Signed offline activation is performed through the authenticated API, per org.
+  // Never inject billing capabilities alongside it.
+  if (trim(env.PULSE_E2E_OFFLINE_ACTIVATION_KEY)) {
+    return { applied: false, reason: 'signed_offline_activation' };
+  }
   const request = resolveEntitlementProfile(env);
   if (request.profile === '') {
     return { applied: false, reason: 'no_profile_requested' };

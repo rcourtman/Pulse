@@ -420,7 +420,7 @@ test.describe("Pulse Intelligence settings provider setup", () => {
       waitUntil: "domcontentloaded",
     });
     await expect(
-      page.getByText("Provider connected; Patrol capability not verified"),
+      page.getByText("Provider connected. Patrol capability not verified"),
     ).toBeVisible();
     await expect(
       page.getByText("Provider and selected model are reachable."),

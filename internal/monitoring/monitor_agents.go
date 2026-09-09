@@ -2449,8 +2449,8 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	disks := make([]models.Disk, 0, len(report.Host.Disks))
 	for _, disk := range report.Host.Disks {
 		// Filter virtual/system filesystems (same as ApplyHostReport) to avoid
-		// inflated disk totals from tmpfs, overlayfs, etc.
-		if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(disk.Type, disk.Mountpoint, uint64(disk.TotalBytes), uint64(disk.UsedBytes)); shouldSkip {
+		// inflated disk totals from tmpfs, overlayfs, etc., unless explicitly selected.
+		if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(disk.Type, disk.Mountpoint, uint64(disk.TotalBytes), uint64(disk.UsedBytes)); shouldSkip && !disk.ExplicitlyIncluded {
 			continue
 		}
 		disks = append(disks, models.Disk{
@@ -3287,8 +3287,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	for _, disk := range report.Disks {
 		// Filter virtual/system filesystems and read-only filesystems to avoid cluttering
 		// the UI with tmpfs, devtmpfs, /dev, /run, /sys, docker overlay mounts, snap mounts,
-		// immutable OS images, etc. (issues #505, #690, #790).
-		if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(disk.Type, disk.Mountpoint, uint64(disk.TotalBytes), uint64(disk.UsedBytes)); shouldSkip {
+		// immutable OS images, etc. (issues #505, #690, #790). Preserve the
+		// agent operator's explicit include override rather than filtering it again.
+		if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(disk.Type, disk.Mountpoint, uint64(disk.TotalBytes), uint64(disk.UsedBytes)); shouldSkip && !disk.ExplicitlyIncluded {
 			continue
 		}
 

@@ -15,6 +15,23 @@
 
 ## Purpose
 
+### Explicit filesystem selections survive the report boundary
+
+Disk reports carry optional `explicitlyIncluded` evidence when the collector
+matches the operator's disk-include setting. Explicit exclusions still win
+before usage collection; inclusion does not fabricate capacity when usage fails
+or reports zero total. Host and Docker snapshot copies preserve this field.
+It changes metric selection only, not enrollment, token scopes, identity or
+command authority.
+
+The flag is omitted when false. Older agents therefore retain default server
+filtering; older servers ignore the additive field. Preserving selected tmpfs
+through ingestion requires both agent and server support, not a server-only
+upgrade. `TestDiskExplicitIncludeWireCompatibility` pins omission and round
+trip; `TestIssue1875MountinfoToExplicitDiskCollection` pins include/exclude
+selection and marker production; `TestBuildReportForwardsExplicitDiskIncludesAndExcludes`
+pins report forwarding. These are synthetic proofs, not estate acceptance.
+
 Historical incident reads preserve canonical event targets and treat resource
 aliases as read selectors. They do not grant command authority to an alias or
 infer present agent liveness from an old alert closure. A failed canonical read
