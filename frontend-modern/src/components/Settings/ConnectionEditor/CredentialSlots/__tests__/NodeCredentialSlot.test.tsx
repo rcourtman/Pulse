@@ -3,6 +3,7 @@ import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { InfrastructurePlatformSettingsProps } from '@/components/Settings/proxmoxSettingsModel';
 import type { NodeConfigWithStatus } from '@/types/nodes';
+import { MonitoredSystemLedgerAPI } from '@/api/monitoredSystemLedger';
 import { NodeCredentialSlot } from '../NodeCredentialSlot';
 
 const importApprovalRequiredMessage =
@@ -20,7 +21,10 @@ const createSettings = (): InfrastructurePlatformSettingsProps =>
   }) as unknown as InfrastructurePlatformSettingsProps;
 
 describe('NodeCredentialSlot', () => {
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
 
   it('syncs an untouched mounted editor to a refreshed node snapshot', async () => {
     const settings = createSettings();
@@ -158,6 +162,43 @@ describe('NodeCredentialSlot', () => {
       expect(screen.getByLabelText(/^Endpoint URL/)).toHaveValue('https://pve2.local:8006');
     });
     expect(settings.saveNode).not.toHaveBeenCalled();
+  });
+
+  it('discards an obsolete preview error after the endpoint changes', async () => {
+    let rejectPreview!: (error: Error) => void;
+    const pending = new Promise<never>((_, reject) => {
+      rejectPreview = reject;
+    });
+    vi.spyOn(MonitoredSystemLedgerAPI, 'preview').mockReturnValueOnce(pending);
+    render(() => (
+      <NodeCredentialSlot
+        nodeType="pve"
+        settings={createSettings()}
+        prefillNode={{ name: 'tower', host: 'https://tower.local:8006' }}
+        importCandidate={{
+          kind: 'discovery',
+          server: {
+            type: 'pve',
+            ip: '10.0.0.10',
+            hostname: 'tower.local',
+            port: 8006,
+            version: '9.0',
+          },
+        }}
+        onCancel={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Preview impact' }));
+    fireEvent.input(screen.getByLabelText(/^Endpoint URL/), {
+      target: { value: 'https://replacement.local:8006' },
+    });
+    rejectPreview(new Error('Obsolete endpoint failure'));
+    await pending.catch(() => undefined);
+    await waitFor(() => {
+      expect(screen.queryByText('Obsolete endpoint failure')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Preview impact' })).toBeEnabled();
+    });
   });
 
   it('requires candidate import plan approval before guided setup handoff or manual save', () => {

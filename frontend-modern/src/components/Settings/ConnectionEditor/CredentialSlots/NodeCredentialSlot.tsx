@@ -1,4 +1,4 @@
-import { Component, createEffect, createMemo, createSignal } from 'solid-js';
+import { Component, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import {
   MonitoredSystemLedgerAPI,
   type MonitoredSystemLedgerPreviewResponse,
@@ -103,6 +103,10 @@ export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) =>
     buildNodeImportPlan(props.nodeType, state.formData(), props.importCandidate),
   );
 
+  let previewGeneration = 0;
+  onCleanup(() => {
+    previewGeneration += 1;
+  });
   let previousImportPlanSignature = '';
 
   createEffect(() => {
@@ -111,6 +115,9 @@ export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) =>
       return;
     }
     previousImportPlanSignature = signature;
+    // Pending results belong to the old plan, including an A → B → A edit.
+    previewGeneration += 1;
+    setPreviewingImportImpact(false);
     setImportApproved(false);
     setImportImpactPreview(null);
     setImportImpactPreviewError(null);
@@ -125,19 +132,22 @@ export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) =>
       return;
     }
 
+    const generation = ++previewGeneration;
     setPreviewingImportImpact(true);
     setImportImpactPreviewError(null);
     try {
       const preview = await MonitoredSystemLedgerAPI.preview(plan.previewRequest);
+      if (generation !== previewGeneration) return;
       setImportImpactPreview(preview);
     } catch (error) {
+      if (generation !== previewGeneration) return;
       logger.error('[Infrastructure Import Plan] Impact preview failed', error);
       setImportImpactPreview(null);
       setImportImpactPreviewError(
         error instanceof Error ? error.message : 'Unable to calculate import impact right now.',
       );
     } finally {
-      setPreviewingImportImpact(false);
+      if (generation === previewGeneration) setPreviewingImportImpact(false);
     }
   };
 

@@ -15,6 +15,20 @@
 
 ## Purpose
 
+### Import preview lifetime and setup authority
+
+The node credential editor binds each monitored-system impact preview to the
+current import-plan generation. Changing that plan (including changing away
+and back to the same endpoint), or disposing the editor, invalidates outstanding
+requests. Obsolete success, error and completion handlers cannot update the
+preview or end a newer request's loading state.
+
+Preview completion does not approve an import or grant setup-command authority.
+Plan changes still clear explicit approval; generating setup commands and saving
+remain subject to the existing approval guard. Preview generation is local UI
+state, not an agent identity, enrollment token or liveness signal.
+
+
 ### Explicit filesystem selections survive the report boundary
 
 Disk reports carry optional `explicitlyIncluded` evidence when the collector

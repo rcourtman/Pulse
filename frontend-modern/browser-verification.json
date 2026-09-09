@@ -1,42 +1,38 @@
 {
   "version": 1,
-  "base_sha": "14a109444c6d1cad420797ea30f279e77b6fc517",
-  "verified_at": "2026-09-09T10:42:06.278902Z",
+  "base_sha": "a61f1c7c82ad5c3229618a71b379b2deca0538bd",
+  "verified_at": "2026-09-09T23:36:48.909107Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/AppLayout.tsx"
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/AppLayout.tsx": "71cbc527fae0dbae3891174bb8a140d90f50917405d6c15a3b0d8ae7dcb31644"
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx": "842afd8a7cd6a96309896c15ab9a428e27078f1d4176feaa24982fbae94acf9a"
   },
   "routes": [
-    "/settings/organization",
-    "/settings/organization/access",
-    "/settings/organization/sharing"
+    "/settings/infrastructure",
+    "/settings/infrastructure?add=pve"
   ],
   "viewports": [
     {
-      "width": 320,
-      "height": 568
+      "width": 1280,
+      "height": 844
     },
     {
       "width": 390,
       "height": 844
-    },
-    {
-      "width": 1280,
-      "height": 720
     }
   ],
   "states": [
-    "Signed entitled default and created organizations; non-demo Community backend",
-    "Access invitation and outgoing sharing fixture",
-    "Desktop incoming share pending then accepted"
+    "Managed source-built Community backend with authenticated local session; discovery and impact API responses controlled by Playwright fixtures",
+    "Candidate review with explicit approval; pending preview; edited endpoint; current success/error; disposed editor"
   ],
   "interactions": [
-    "Chromium and mobile WebKit: switch organization; audit three routes at both phone widths; reach shell bottom and assert page/shell width within one pixel",
-    "Desktop Chromium Scenario 6: verify owner identity relationships, editor/viewer roles and pending approval; click Accept and verify accepted state via API"
+    "At both widths: discover candidate, open review, request preview, approve then edit endpoint and assert approval resets",
+    "Start replacement preview, deliver obsolete error, retain new loading state; resolve current success",
+    "Request preview then change endpoint away and back; obsolete success stays hidden; current error is visible and retry enabled",
+    "Close editor during pending request, resolve response, assert no preview appears outside disposed editor"
   ],
-  "command": "pulse-heavy-run -- bash -c \"cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=true node scripts/with-offline-entitlements.mjs node scripts/run-playwright.mjs tests/05-settings-mobile-audit.spec.ts --project=chromium --project=mobile-safari --grep settings/organization --workers=1 --retries=0\"; separate diagnostic config Scenario 6 desktop run",
-  "notes": "Exact actual mobile grep: settings/organization(/(sharing|access))?$ . Six mobile route tests passed (53.0s); desktop sharing scenario passed (3.8s). Source-built real Community backend, ephemeral loopback signing issuer, no mock mode or signature bypass. Phone Chromium/WebKit and desktop acceptance screenshots inspected. Evidence retained in Web20260909T103517Z outcome directory browser-proof, org-fixed.log and scenario6-desktop.log. Not private RBAC, hosted probation clearance or release qualification."
+  "command": "pulse-heavy-run -- bash -c 'cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=true node scripts/run-playwright.mjs tests/68-infrastructure-onboarding.spec.ts --project=chromium --grep \"import preview ignores\" --workers=1 --retries=0'",
+  "notes": "Final current production build and both Chromium cases passed (8.1s). Desktop and narrow screenshots inspected. Real managed backend; discovery/impact are synthetic API fixtures, not appliance or reporter acceptance. Evidence: Web20260909T232514Z outcome browser-proof. No release qualification claim."
 }
