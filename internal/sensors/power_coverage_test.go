@@ -3,11 +3,11 @@ package sensors
 import (
 	"context"
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestCollectPower_PrefersRAPLWhenAvailable(t *testing.T) {
@@ -42,25 +42,15 @@ func TestCollectPower_PrefersRAPLWhenAvailable(t *testing.T) {
 		t.Fatalf("write amd energy: %v", err)
 	}
 
-	errCh := make(chan error, 1)
-	go func() {
-		time.Sleep(20 * time.Millisecond)
+	update := func(t *testing.T) {
 		if err := writeEnergyFile(filepath.Join(pkg0, "energy_uj"), "2000000"); err != nil {
-			errCh <- err
+			t.Fatalf("update energy counter: %v", err)
 		}
-	}()
+	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	data, err := CollectPower(ctx)
+	data, err := collectWithEnergyUpdate(t, CollectPower, update)
 	if err != nil {
 		t.Fatalf("CollectPower error: %v", err)
-	}
-	select {
-	case err := <-errCh:
-		t.Fatalf("update RAPL energy: %v", err)
-	default:
 	}
 	if data.Source != "rapl" {
 		t.Fatalf("expected rapl source, got %q", data.Source)
@@ -125,29 +115,18 @@ func TestCollectAMDEnergy_LabelRoutingAndWraparound(t *testing.T) {
 		t.Fatalf("write misc label: %v", err)
 	}
 
-	errCh := make(chan error, 1)
-	go func() {
-		time.Sleep(20 * time.Millisecond)
+	update := func(t *testing.T) {
 		if err := writeEnergyFile(filepath.Join(hwmon, "energy1_input"), "2000000"); err != nil {
-			errCh <- err
-			return
+			t.Fatalf("update energy counter: %v", err)
 		}
 		if err := writeEnergyFile(filepath.Join(hwmon, "energy2_input"), "100"); err != nil {
-			errCh <- err
+			t.Fatalf("update energy counter: %v", err)
 		}
-	}()
+	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	data, err := collectAMDEnergy(ctx)
+	data, err := collectWithEnergyUpdate(t, collectAMDEnergy, update)
 	if err != nil {
 		t.Fatalf("collectAMDEnergy error: %v", err)
-	}
-	select {
-	case err := <-errCh:
-		t.Fatalf("update AMD energy inputs: %v", err)
-	default:
 	}
 
 	if !data.Available {
@@ -164,6 +143,9 @@ func TestCollectAMDEnergy_LabelRoutingAndWraparound(t *testing.T) {
 	}
 	if data.PackageWatts >= 1 {
 		t.Fatalf("expected wraparound-derived package watts to stay small, got %f", data.PackageWatts)
+	}
+	if math.Abs(data.CoreWatts-10) > 1e-9 || math.Abs(data.PackageWatts-0.00106) > 1e-12 {
+		t.Fatalf("expected core watts 10 and 106uJ wraparound delta, got %+v", data)
 	}
 }
 
