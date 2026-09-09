@@ -42,7 +42,7 @@ python3 -m unittest discover -s scripts/release_control/internal -p 'release_pre
 bash -n scripts/release-preflight-worker.sh
 ```
 
-## Stress-test event window
+## Bounded API test event windows
 
 Rehearsal backend Go output is streamed with `-json` and decoded by
 `release-go-test-events.py`. Every Output string is retained verbatim (including
@@ -50,7 +50,8 @@ verbose test logs, skips and package summaries); stderr remains on stderr.
 Shell pipefail retains a failing Go exit. Invalid event input is drained,
 retained and fails the reader rather than quietly losing diagnostics.
 
-Only the exact API `TestMultiTenant_ConcurrentAPIStress` lifecycle receives
+Only the exact API `TestMultiTenant_ConcurrentAPIStress` and
+`TestSLO_MetricsHistoryStore` lifecycles receive
 `RELEASE_GO_TEST_EVENT` records with Go's event Time, a separately labelled
 receipt timestamp and the same allowlisted resource snapshot. Resource time is
 collection time, not the Go event time. Sampling and verbose streaming add
@@ -67,3 +68,10 @@ terminal events. Cgroup ancestry remains shared context, not per-test CPU usage.
 ```sh
 python3 -m unittest discover -s scripts/release_control/internal -p 'release_go_test_events_test.py' -v
 ```
+
+The store-history SLO marker addresses a separate timing gap in failed rehearsal
+20260908T221214Z: its completed latency assertion was buffered until package
+output, so launcher resource samples cannot locate the actual test interval.
+Neither parent throttling over the backend window nor a later passing isolated
+sample would establish the cause. The marker observes test lifecycle only; it
+adds no database inspection, replay or threshold change.
