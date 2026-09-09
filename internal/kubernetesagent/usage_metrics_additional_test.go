@@ -12,30 +12,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 	restfake "k8s.io/client-go/rest/fake"
 )
-
-type kubeClientWithDiscovery struct {
-	kubernetes.Interface
-	discoveryClient discovery.DiscoveryInterface
-}
-
-func (c *kubeClientWithDiscovery) Discovery() discovery.DiscoveryInterface {
-	return c.discoveryClient
-}
-
-type discoveryWithREST struct {
-	discovery.DiscoveryInterface
-	restClient rest.Interface
-}
-
-func (d *discoveryWithREST) RESTClient() rest.Interface {
-	return d.restClient
-}
 
 func newTestRESTClient(handler func(path string) (int, string)) *restfake.RESTClient {
 	scheme := runtime.NewScheme()
@@ -62,17 +42,18 @@ func newTestRESTClient(handler func(path string) (int, string)) *restfake.RESTCl
 	}
 }
 
-func newTestAgentWithREST(restClient rest.Interface) *Agent {
-	base := fake.NewSimpleClientset()
+// Use the real discovery client over an in-memory HTTP transport rather than
+// overriding Discovery: client-go can extend its return interface independently
+// of the metrics REST API this fixture exercises.
+func newTestAgentWithREST(t *testing.T, restClient *restfake.RESTClient) *Agent {
+	t.Helper()
+	client, err := kubernetes.NewForConfigAndClient(&rest.Config{Host: "https://kubernetes.invalid"}, restClient.Client)
+	if err != nil {
+		t.Fatalf("create Kubernetes test client: %v", err)
+	}
 	return &Agent{
-		logger: zerolog.New(io.Discard),
-		kubeClient: &kubeClientWithDiscovery{
-			Interface: base,
-			discoveryClient: &discoveryWithREST{
-				DiscoveryInterface: base.Discovery(),
-				restClient:         restClient,
-			},
-		},
+		logger:     zerolog.New(io.Discard),
+		kubeClient: client,
 	}
 }
 
@@ -249,7 +230,7 @@ func TestCollectUsageMetrics_MergesMetricsAndSummary(t *testing.T) {
 		}
 	})
 
-	agent := newTestAgentWithREST(restClient)
+	agent := newTestAgentWithREST(t, restClient)
 	nodes := []agentsk8s.Node{{Name: "node-a"}}
 
 	nodeUsage, podUsage, err := agent.collectUsageMetrics(context.Background(), nodes)
@@ -284,7 +265,7 @@ func TestCollectUsageMetrics_ReturnsErrorWhenAllBackendsUnavailable(t *testing.T
 		}
 	})
 
-	agent := newTestAgentWithREST(restClient)
+	agent := newTestAgentWithREST(t, restClient)
 	nodes := []agentsk8s.Node{{Name: "node-a"}}
 
 	nodeUsage, podUsage, err := agent.collectUsageMetrics(context.Background(), nodes)

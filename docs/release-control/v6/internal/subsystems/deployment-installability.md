@@ -5344,3 +5344,16 @@ binding and lifecycle regressions are in `offline-license-issuer.test.mjs` and
 `with-offline-entitlements.test.mjs`; the two scoped Chromium provisioning
 scenarios verify the authenticated API/browser path. These are fixture proofs,
 not release qualification or evidence that other Organization failures cleared.
+
+
+### Kubernetes dependency cohort
+
+The native agent's `k8s.io/api`, `k8s.io/apimachinery` and `k8s.io/client-go`
+modules move together at the same release version. Local orchestration checks
+resolve the selected graph read-only and reject incomplete or mixed cohorts;
+future aligned upgrades need not retain a fixed minor-version pin. Dependency
+updates must also run the native Kubernetes agent tests, including real discovery
+REST transport coverage of metrics/summary merging and backend unavailability.
+The test transport remains in-memory and does not contact a cluster. Version
+0.37 compatibility is not installed-cluster acceptance or qualification of other
+libraries in a grouped dependency proposal.
