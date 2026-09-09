@@ -33,6 +33,28 @@ and publication-authority boundaries still apply.
 Its executable identity cases are in `release_snapshot_test.py`, and the staged
 workflow contract is verified in `release_promotion_policy_test.py`.
 
+### Backend preflight resource evidence
+
+The exact-source worker brackets the backend phase with bounded, read-only
+resource snapshots in stdout so the launcher's retained log keeps evidence
+when the disposable worker directory is removed after failure. The records
+include the actual Go toolchain, backend exit status, allowlisted runtime
+settings and host/cgroup counters including mapped ancestors. Environment
+and process-command dumps, credentials and application data are excluded.
+Unmapped hierarchies, missing counters and collection failures are unavailable
+evidence, not zero pressure. Collection failure must neither replace a backend
+failure nor prevent its ordinary after-boundary observation.
+
+The backend retains errexit semantics, original exit status, test selection,
+concurrency and qualification thresholds. Phase-boundary evidence cannot
+localise contention to a test, establish causation or clear historical adverse
+qualification; abrupt termination may omit the after record. The executed
+worker-function fixtures in
+`scripts/release_control/internal/release_preflight_test.py` prove successful
+and failed backend exits with successful and failed telemetry for both worker
+profiles. Collector hierarchy and confidentiality fixtures remain in
+`scripts/release_control/internal/release_resource_snapshot_test.py`. Neither
+fixture constitutes full-suite or installed-release qualification.
 
 ### Benchmark qualification evidence
 
@@ -5093,3 +5115,15 @@ the first release train so the workflow refuses a v6.5 dispatch from any other
 branch. `scripts/release_control/resolve_release_promotion_test.py` pins the
 allowlist, the drift refusal, the hotfix path, and the minor soak;
 `release_promotion_policy_test.py` pins the policy's Release Train section.
+
+### Rehearsal event timing
+
+`scripts/release-go-test-events.py` renders streamed Go JSON Output verbatim and
+adds bounded lifecycle/resource records for the API concurrent stress test.
+The worker uses pipefail; source failures remain failures and malformed event
+input fails closed after draining. Event, receipt and resource collection times
+are distinct. Cached events and collection overhead limit timing inference.
+`scripts/release_control/internal/release_go_test_events_test.py` covers real
+synthetic Go pass/skip/fail output, producer exit retention, malformed input,
+allowlisted targeting and unavailable resource evidence. This is not product
+qualification; see `docs/RELEASE_RESOURCE_EVIDENCE.md`.
