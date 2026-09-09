@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 
 interface PackageManifest {
   dependencies: Record<string, string>;
+  devDependencies: Record<string, string>;
+  overrides: Record<string, string>;
 }
 
 interface PackageLock {
@@ -58,6 +60,34 @@ const nanoidIsPatched = (version: string): boolean => {
 };
 
 describe('frontend dependency security floors', () => {
+  it('keeps Vitest and its mocker above the redirect-mock file-read floor', () => {
+    // GHSA-82fw-gwwq-j7x9: the maintained 4.x fix starts at 4.1.11.
+    expect(manifest.devDependencies.vitest).toBe('^4.1.11');
+    expect(manifest.devDependencies['@vitest/coverage-v8']).toBe('^4.1.11');
+    const runner = lockedVersions('vitest');
+    expect(runner).toHaveLength(1);
+    for (const name of ['vitest', '@vitest/mocker', '@vitest/coverage-v8']) {
+      const versions = lockedVersions(name);
+      expect(versions).not.toHaveLength(0);
+      for (const version of versions) {
+        expect(version).not.toContain('-');
+        expect(atLeast(version, [4, 1, 11]), `${name} ${version} is vulnerable`).toBe(true);
+        expect(version, `${name} must match the runner`).toBe(runner[0]);
+      }
+    }
+  });
+
+  it('keeps every js-yaml copy above the empty-merge CPU exhaustion floor', () => {
+    // GHSA-2883-xcg3-v3hh: our override keeps every transitive copy on patched 4.x.
+    expect(manifest.overrides['js-yaml']).toBe('^4.3.2');
+    const versions = lockedVersions('js-yaml');
+    expect(versions).not.toHaveLength(0);
+    for (const version of versions) {
+      expect(version).not.toContain('-');
+      expect(atLeast(version, [4, 3, 2]), `js-yaml ${version} is vulnerable`).toBe(true);
+    }
+  });
+
   it('keeps DOMPurify above the hook-detachment XSS floor', () => {
     expect(manifest.dependencies.dompurify).toBe('^3.4.13');
     const versions = lockedVersions('dompurify');

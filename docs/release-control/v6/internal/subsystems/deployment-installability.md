@@ -3230,6 +3230,18 @@ stages pin the Docker Official Images Linux amd64 manifest
 the checked-in toolchain files and release-script guards must reject an older
 compiler so local, exact-candidate, provider control-plane, and container builds
 cannot silently reintroduce the vulnerable runtime.
+The frontend development-tool dependency boundary must retain patched Vitest
+and mocker versions at or above `4.1.11`, with the V8 coverage provider matched
+to the runner, and a `js-yaml` override at or above `4.3.2`. These floors prevent
+reintroducing redirect-mock file reads (GHSA-82fw-gwwq-j7x9) and empty-merge CPU
+exhaustion (GHSA-2883-xcg3-v3hh) through the locked development graph. The
+`frontend-modern/src/security/__tests__/dependencySecurity.test.ts` proof must
+check manifest floors and all installed lockfile copies, including nested
+copies; a successful production build alone does not establish this property.
+Vitest migration must preserve test assertions while using constructable
+constructor mocks and explicit standalone mock-history cleanup. Dependency
+updates must retain the required full-graph audit rather than suppressing it.
+
 That same dev-runtime dependency-manifest boundary now also owns the maintained
 Docker engine module floor. `go.mod`, `go.sum`, and
 `internal/cloudcp/docker/manager.go` must route hosted runtime orchestration
