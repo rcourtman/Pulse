@@ -5,7 +5,8 @@ for Preview-channel testers. It supersedes `v6.4.4-beta.1`, carries every
 change from the `v6.4.2` packet that was tagged but never published, adds exact
 occurrence boundaries for delayed lifecycle replay, and keeps retained-delivery
 controls connected to the active notification queue after a runtime reload. It
-is not an RC or stable release.
+also isolates cold tenant-store startup from unrelated API requests. It is not
+an RC or stable release.
 
 ## What's improved
 
@@ -32,6 +33,9 @@ is not an RC or stable release.
   Slack and Discord paths, Telegram bot tokens, encoded query credentials, and
   ntfy transport URLs are masked while useful status and destination context is
   retained.
+- **Cold tenants no longer stall unrelated API traffic** - Resource-store
+  construction now runs outside the shared cache lock while same-tenant opens
+  remain deduplicated and eviction waits safely for in-flight construction.
 - **Recovery requires real observations** - Storage and PBS incidents do not
   clear merely because a metric or provider sample is absent. Incident identity
   and history survive configuration reloads and restarts until measured recovery.
@@ -91,11 +95,11 @@ is not an RC or stable release.
 - This beta has alert-lifecycle repairs but does not claim reduced aggregate
   writes, migration of old duplicates, or resolution on that installation. On
   flash-constrained systems, monitor write volume and keep the rollback pin ready.
-- An advisory paired CI comparison measured UUID route-segment normalization
-  at 62.50 ns/op versus 51.64 ns/op, a 21.04% increase with no allocations.
-  Local comparisons measured roughly 9-11%.
-- No end-user latency or throughput regression is demonstrated. Candidate-only
-  benchmarking passed, but does not erase the paired result. This uncertainty is
+- An advisory paired comparison measured the metrics-store statistics handler
+  at 94.42 µs/op versus 81.86 µs/op, a 15.35% increase. The benchmarked
+  handler was not changed by the tenant-isolation repair.
+- No end-user latency or throughput regression is demonstrated. The absolute
+  increase and its relationship to real workloads remain uncertain, so this is
   accepted for beta observation and needs a new disposition before RC.
 - Permanent SMTP authentication, configuration, or rejection errors can still
   consume the inner retry budget before queue handling. This beta improves
