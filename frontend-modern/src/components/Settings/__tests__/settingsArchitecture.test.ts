@@ -2094,3 +2094,20 @@ describe('organisation principal shell boundary', () => {
     }
   });
 });
+
+describe('node import preview authority boundary', () => {
+  it('keeps preview responses informational and setup approval explicit', () => {
+    const previewHandler = nodeCredentialSlotSource.slice(
+      nodeCredentialSlotSource.indexOf('const handlePreviewImportImpact'),
+      nodeCredentialSlotSource.indexOf('const handleSubmit'),
+    );
+    expect(previewHandler).toContain('MonitoredSystemLedgerAPI.preview(plan.previewRequest)');
+    expect(previewHandler).not.toContain('setImportApproved');
+    expect(previewHandler).not.toContain('saveNode');
+    expect(previewHandler).not.toContain('handleSubmit');
+    expect(nodeCredentialSlotSource).toContain(
+      'setupHandoffDisabled: () => Boolean(props.importCandidate && !importApproved())',
+    );
+    expect(nodeCredentialSlotSource).toContain('if (saveBlockedByImportPlan())');
+  });
+});

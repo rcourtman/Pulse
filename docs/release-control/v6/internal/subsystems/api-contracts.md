@@ -20,6 +20,21 @@
 
 ## Purpose
 
+### Node import preview response ownership
+
+The node credential editor calls the existing monitored-system-ledger preview
+endpoint with the current plan's preview request. It accepts asynchronous
+response state only for the request's still-current local generation. A plan
+change or unmount retires that generation, including for error and loading-state
+updates; returning to the same endpoint does not revive a retired request.
+
+This is a consumer-side response-lifetime rule, not a wire-schema or server
+cancellation change. Current-request errors remain visible and retryable.
+A preview is informational: it cannot approve setup or mutate a connection.
+The focused NodeCredentialSlot regression and settings architecture boundary
+check accompany desktop/narrow browser interaction proof.
+
+
 The delivery-log response redacts embedded webhook URLs in errorMessage rather than treating the entire diagnostic as a URL. Non-secret operation and failure context survive alongside notificationId, destinationId, outcome, failureClass and attempts; malformed URL diagnostics fail closed. The HTTP payload proof is TestContract_DeliveryDiagnosticPayload; notification handler tests pin plain, credential-bearing and malformed errors. No response keys or route permissions change.
 
 ### Canonical incident-history query contract
