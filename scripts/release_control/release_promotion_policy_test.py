@@ -302,6 +302,40 @@ STAGED_GOVERNANCE_INPUT_ERRORS = (
 
 
 class ReleasePromotionPolicyTest(unittest.TestCase):
+
+    def test_reviewed_action_manifests_cover_all_release_consumers(self) -> None:
+        # Snapshot is derived from each immutable upstream action.yml, not from
+        # our consumers: unknown inputs therefore fail rather than being blessed.
+        manifests = read_json("scripts/release_control/action_consumer_manifests.json")
+        seen = set()
+        for path in (REPO_ROOT / ".github/workflows").glob("*.yml"):
+            workflow = yaml.safe_load(read(str(path.relative_to(REPO_ROOT))))
+            for job in workflow.get("jobs", {}).values():
+                for step in job.get("steps", []):
+                    action, _, revision = step.get("uses", "").partition("@")
+                    if action not in manifests:
+                        continue
+                    with self.subTest(workflow=path.name, action=action):
+                        manifest = manifests[action]
+                        self.assertEqual(revision, manifest["sha"])
+                        self.assertEqual(manifest["runs"]["using"], "node24")
+                        self.assertRegex(manifest["manifest_sha256"], r"^[0-9a-f]{64}$")
+                        self.assertLessEqual(set(step.get("with", {})), set(manifest["inputs"]))
+                        seen.add(action)
+                        if action == "azure/setup-helm":
+                            self.assertEqual(str(step["with"]["version"]).lstrip("v"), "3.15.2")
+                        if action == "actions/attest":
+                            if path.name in {"publish-docker.yml", "publish-helm-chart.yml"}:
+                                self.assertIn("subject-name", step["with"])
+                                self.assertIn("subject-digest", step["with"])
+                                self.assertTrue(step["with"]["push-to-registry"])
+                            else:
+                                self.assertIn("subject-checksums", step["with"])
+                        if action == "signpath/github-action-submit-signing-request":
+                            self.assertIn("api-token", step["with"])
+                            self.assertIn("organization-id", step["with"])
+        self.assertEqual(seen, set(manifests))
+
     def setUp(self) -> None:
         if USE_STAGED_GOVERNANCE and not REQUIRES_STAGED_GOVERNANCE_INPUTS:
             self.skipTest("staged slice does not touch the promotion-proof surface")
@@ -1546,7 +1580,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             workflow,
         )
         self.assertIn(
-            "signpath/github-action-submit-signing-request@b9d91eadd323de506c0c81cf0c7fe7438f3360fd # v2",
+            "signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2",
             workflow,
         )
         self.assertIn("signedArtifactsPublished = $false", workflow)
@@ -1924,7 +1958,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("windows_signing_backend: signpath", content)
         self.assertIn('if [[ "$REQUIRE_WINDOWS_SIGNING" == "true" ]]', candidate_workflow)
         self.assertIn("inputs.require_windows_signing", candidate_workflow)
-        self.assertIn("signpath/github-action-submit-signing-request@b9d91eadd323de506c0c81cf0c7fe7438f3360fd # v2", candidate_workflow)
+        self.assertIn("signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2", candidate_workflow)
         self.assertIn("github-artifact-id: ${{ steps.upload-unsigned-windows.outputs.artifact-id }}", candidate_workflow)
         self.assertIn("windows-signing-evidence.json", candidate_workflow)
         for signpath_setting in (
@@ -1959,7 +1993,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("bash .github/scripts/setup-demo-ssh.sh", update_demo_workflow)
         self.assertIn("bash .github/scripts/check-demo-reachability.sh", update_demo_workflow)
         self.assertIn("ping: ${{ secrets.DEMO_SERVER_HOST }}", update_demo_workflow)
-        self.assertIn("tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4", update_demo_workflow)
+        self.assertIn("tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3", update_demo_workflow)
         self.assertIn("uses: ./.github/workflows/update-demo-server.yml", deploy_demo_workflow)
         self.assertIn("verify_only: true", deploy_demo_workflow)
         self.assertIn('MAX_SSH_SETUP_ATTEMPTS="${DEMO_SSH_SETUP_ATTEMPTS:-3}"', demo_ssh_helper)
@@ -2003,7 +2037,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("id-token: write", candidate_workflow)
         self.assertIn("attestations: write", candidate_workflow)
         self.assertIn(
-            "uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4",
+            "uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2",
             candidate_workflow,
         )
         self.assertIn(
@@ -2318,7 +2352,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("fail-fast: false", publish)
         self.assertIn("if: matrix.image == 'server'", publish)
         self.assertIn("if: matrix.image == 'control-plane'", publish)
-        self.assertIn("uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4", publish)
+        self.assertIn("uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2", publish)
         self.assertIn("subject-name: docker.io/rcourtman/pulse", publish)
         self.assertIn("subject-name: ghcr.io/${{ github.repository_owner }}/pulse", publish)
         # pulse-agent ships as release-asset binaries, not as a Docker image
@@ -2362,7 +2396,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("tag: latest", dry_run_workflow)
         self.assertIn("verify_only: true", dry_run_workflow)
         self.assertIn("Verify Current Stable Demo Path (No Mutation)", dry_run_workflow)
-        self.assertIn("tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4", demo)
+        self.assertIn("tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3", demo)
         self.assertIn("oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}", demo)
         self.assertIn("oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}", demo)
         self.assertIn("ping: ${{ secrets.DEMO_SERVER_HOST }}", demo)
