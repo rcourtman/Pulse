@@ -187,6 +187,7 @@ func (m *Manager) syncCanonicalHealthAssessmentAlert(params canonicalHealthAsses
 		return alertspecs.EvaluationResult{}, false
 	}
 
+	severity := storageHealthAssessmentSeverity(params.Reasons)
 	now := time.Now()
 	return m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
 		Spec: spec,
@@ -194,7 +195,7 @@ func (m *Manager) syncCanonicalHealthAssessmentAlert(params canonicalHealthAsses
 			ObservedAt: now,
 			HealthAssessment: &alertspecs.HealthAssessmentEvidence{
 				Signal:   params.Signal,
-				Severity: storageHealthAssessmentSeverity(params.Reasons),
+				Severity: severity,
 				Codes:    storageHealthReasonCodes(params.Reasons),
 			},
 		},
@@ -209,5 +210,9 @@ func (m *Manager) syncCanonicalHealthAssessmentAlert(params canonicalHealthAsses
 		AddToRecent:    true,
 		AddToHistory:   true,
 		MessageBuilder: params.MessageBuilder,
+		// Health assessments have warning/critical firing levels. Only upward
+		// transitions notify; unchanged observations and downgrades stay quiet.
+		NotifyOnSeverityChange: severity == alertspecs.AlertSeverityCritical,
+		RateLimit:              true,
 	})
 }
