@@ -15,6 +15,23 @@
 
 ## Purpose
 
+### Docker SDK dependency compatibility
+
+The Docker consumers use Moby API v1.56.0 and client v0.6.0 together, without
+changing other direct module versions. API negotiation remains enabled: the
+new 1.56 ceiling is not a requirement that existing daemons implement 1.56.
+Container recreation must retain image, environment, persistent binds, restart
+policy and normalised capabilities without mutating caller-owned capability
+lists. `internal/dockeragent/moby_compatibility_test.go` exercises real HTTP
+negotiation and list/create payloads at API 1.44, 1.51 and 1.56; this is synthetic
+compatibility evidence, not native daemon or installed-agent acceptance.
+
+Dependency-only changes to either `go.mod` or `go.sum` must invalidate a stale
+managed backend binary so development checks cannot unknowingly exercise the
+previous SDK. The manifest-only fixtures in
+`tests/integration/scripts/managed-local-backend.test.mjs` verify fresh, stale
+and rebuilt decisions independently for both manifests.
+
 ### Backend preflight resource evidence
 
 The exact-source worker brackets the backend phase with bounded, read-only
