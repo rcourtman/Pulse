@@ -97,9 +97,12 @@ describe('frontend dependency security floors', () => {
     expect(dompurifyRangeIsPatched(range)).toBe(true);
   });
 
-  it.each(['^3.4.12', '^3.3.99', '^4.0.0', '^3.4.13-beta.1', '*', '>=3.4.13', '^3.4.13 || ^2.0.0'])('rejects unsafe or unreviewed DOMPurify range %s', (range) => {
-    expect(dompurifyRangeIsPatched(range)).toBe(false);
-  });
+  it.each(['^3.4.12', '^3.3.99', '^4.0.0', '^3.4.13-beta.1', '*', '>=3.4.13', '^3.4.13 || ^2.0.0'])(
+    'rejects unsafe or unreviewed DOMPurify range %s',
+    (range) => {
+      expect(dompurifyRangeIsPatched(range)).toBe(false);
+    },
+  );
 
   it('keeps DOMPurify above the hook-detachment XSS floor', () => {
     expect(dompurifyRangeIsPatched(manifest.dependencies.dompurify)).toBe(true);
