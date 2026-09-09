@@ -576,10 +576,18 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('selectedOrgId={props.activeOrgID()}');
     expect(appLayoutSource).toContain('onChange={props.onSwitchOrg}');
     expect(appLayoutSource).not.toContain('/api/license/activate');
-    const audit = readFileSync(join(integrationTestsDir, '05-settings-mobile-audit.spec.ts'), 'utf8');
-    const preparation = audit.slice(audit.indexOf('const prepareOrganizationAuditFixture'), audit.indexOf('const test = base.extend'));
+    const audit = readFileSync(
+      join(integrationTestsDir, '05-settings-mobile-audit.spec.ts'),
+      'utf8',
+    );
+    const preparation = audit.slice(
+      audit.indexOf('const prepareOrganizationAuditFixture'),
+      audit.indexOf('const test = base.extend'),
+    );
     const activation = preparation.indexOf('await activateOfflineOrganization(page)');
-    expect(activation).toBeGreaterThan(preparation.indexOf('await ensureSessionAuthenticated(page)'));
+    expect(activation).toBeGreaterThan(
+      preparation.indexOf('await ensureSessionAuthenticated(page)'),
+    );
     expect(activation).toBeLessThan(preparation.indexOf('await createOrg(page'));
     expect(activation).toBeGreaterThan(0);
     expect(preparation).toContain('process.env.PULSE_E2E_OFFLINE_ACTIVATION_KEY');
