@@ -5169,3 +5169,21 @@ them. Overview rows may still truncate identity; keyboard expansion exposes the
 full heading. This shared drawer rule applies across resource types. The 390px
 browser qualification checks heading fit and keyboard expansion; no data model,
 authorisation, action dispatch or resource admission contract changes.
+
+### Provider link network corroboration
+
+An existing reciprocal host/provider link remains authoritative, including a
+manual link whose provider name differs from the agent hostname. Lending that
+agent identity to another configured provider, or accepting a one-way link,
+must not use loopback, link-local, Docker interfaces or generated Docker bridge
+addresses as machine corroboration. These addresses recur independently on
+unrelated hosts. Ordinary private management addresses, vmbr0/custom management
+bridges and explicit global-unicast report-IP hints remain eligible; this rule
+must not erase retained link intent or change the public resource schema.
+
+Validation: `TestProxmoxInferenceRejectsSharedHostLocalNetworks` covers the
+inference and presentation path, including preservation of the reciprocal link;
+`TestProxmoxInferencePreservesManagementNetworkCorroboration` and
+`TestProxmoxOneWayLinkRejectsHostLocalEndpointCorroboration` protect management
+network and explicit report-IP compatibility. These synthetic cases do not
+establish the cause of a particular installation's association.
