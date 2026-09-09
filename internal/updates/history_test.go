@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/oklog/ulid/v2"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewUpdateHistory(t *testing.T) {
@@ -864,4 +867,24 @@ func contains(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// TestUpdateHistoryIDDependencyContract protects persisted ID encoding and
+// uniqueness rather than only checking that the generated string is nonempty.
+func TestUpdateHistoryIDDependencyContract(t *testing.T) {
+	h, err := NewUpdateHistory(t.TempDir())
+	require.NoError(t, err)
+	seen := make(map[string]bool)
+	for range 64 {
+		id, err := h.CreateEntry(context.Background(), UpdateHistoryEntry{Action: "update", Status: StatusInProgress})
+		require.NoError(t, err)
+		parsed, err := ulid.ParseStrict(id)
+		require.NoError(t, err)
+		require.Equal(t, id, parsed.String())
+		require.False(t, seen[id], "duplicate history ID")
+		seen[id] = true
+		entry, err := h.GetEntry(id)
+		require.NoError(t, err)
+		require.Equal(t, id, entry.EventID)
+	}
 }

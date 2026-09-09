@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -508,5 +509,50 @@ func TestOIDCServiceMatchesNilConfig(t *testing.T) {
 func TestGenerateRandomURLString_ErrorSize(t *testing.T) {
 	if _, err := generateRandomURLString(0); err != nil {
 		t.Fatalf("expected no error for size 0, got %v", err)
+	}
+}
+
+// TestOIDCRefreshDependencyContract exercises the real OAuth transport through
+// Pulse's adapter, including providers that do not rotate refresh tokens.
+func TestOIDCRefreshDependencyContract(t *testing.T) {
+	for _, rotate := range []bool{false, true} {
+		t.Run(fmt.Sprint("rotate=", rotate), func(t *testing.T) {
+			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if err := r.ParseForm(); err != nil {
+					t.Error(err)
+					w.WriteHeader(400)
+					return
+				}
+				if r.Form.Get("grant_type") != "refresh_token" || r.Form.Get("refresh_token") != "old-refresh" {
+					t.Error("refresh request lost grant or token")
+					w.WriteHeader(400)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				extra := ""
+				if rotate {
+					extra = `,"refresh_token":"rotated"`
+				}
+				fmt.Fprintf(w, `{"access_token":"access","token_type":"Bearer","expires_in":3600%s}`, extra)
+			}))
+			defer server.Close()
+			svc := &OIDCService{oauth2Cfg: &oauth2.Config{ClientID: "client", Endpoint: oauth2.Endpoint{TokenURL: server.URL}}, httpClient: server.Client()}
+			result, err := svc.RefreshToken(context.Background(), "old-refresh")
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "old-refresh"
+			if rotate {
+				want = "rotated"
+			}
+			if result.RefreshToken != want || result.AccessToken != "access" || !result.Expiry.After(time.Now()) {
+				t.Fatal("refresh response was not preserved")
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			if _, err := svc.RefreshToken(ctx, "old-refresh"); !errors.Is(err, context.Canceled) {
+				t.Fatalf("cancelled refresh error = %v", err)
+			}
+		})
 	}
 }
