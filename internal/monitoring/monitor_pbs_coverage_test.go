@@ -697,12 +697,33 @@ func TestPBSPolledCapacityRequiresObservedRecovery(t *testing.T) {
 		t.Fatalf("incorrect recovery: %+v", resolved)
 	}
 	// Alternate PBS counter names must feed the same policy and identity.
-	// Stay below the separate 90% backup-posture incident threshold; the
-	// configured minimum delta of one permits this immediate recurrence.
+	// The configured minimum delta of one permits this immediate recurrence.
 	response.Store(`{"data":{"total-space":1000,"used-space":860,"avail-space":140}}`)
 	poll()
 	active = manager.GetActiveAlerts()
 	if len(active) != 1 || active[0].ID != original.ID || active[0].Value != 86 || !active[0].StartTime.After(original.StartTime) {
 		t.Fatalf("incorrect recurrent incident: %+v", active)
+	}
+	// The reported 97.9% crosses both topology bands. Neither the datastore
+	// nor parent posture may bypass the UI's 99% capacity policy.
+	response.Store(`{"data":{"total":1000,"used":979,"avail":21}}`)
+	highPolicy := basePolicy
+	highPolicy.Overrides = map[string]alerts.ThresholdConfig{"pbs-pbs-capacity/backups": {
+		Usage: &alerts.HysteresisThreshold{Trigger: 99, Clear: 98},
+	}}
+	manager.UpdateConfig(highPolicy)
+	poll()
+	if active := manager.GetActiveAlerts(); len(active) != 0 {
+		t.Fatalf("97.9%% poll bypassed 99%% policy with topology incidents: %+v", active)
+	}
+	manager.UpdateConfig(basePolicy)
+	poll()
+	if active := manager.GetActiveAlerts(); len(active) != 1 || active[0].Type != "usage" {
+		t.Fatalf("high usage must have one policy-owned alert: %+v", active)
+	}
+	manager.UpdateConfig(highPolicy)
+	poll()
+	if active := manager.GetActiveAlerts(); len(active) != 0 {
+		t.Fatalf("raised policy did not clear high-usage alert: %+v", active)
 	}
 }
