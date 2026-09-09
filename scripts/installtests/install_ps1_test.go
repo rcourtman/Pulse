@@ -136,6 +136,9 @@ func TestNativeWindowsExecutesGeneratedInstallCommand(t *testing.T) {
 	for _, needle := range []string{
 		`frontend-modern/src/utils/agentInstallCommand.ts`,
 		`Execute generated command with Windows PowerShell 5.1`,
+		`uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0`,
+		`node-version: '24'`,
+		`cache-dependency-path: 'frontend-modern/package-lock.json'`,
 		`agentInstallCommand.windows.test.ts`,
 	} {
 		if !strings.Contains(workflow, needle) {
