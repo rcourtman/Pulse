@@ -34,6 +34,7 @@ func TestGeneralAPIRateLimitDevelopmentOverride(t *testing.T) {
 }
 
 func TestGetRateLimiterForEndpoint(t *testing.T) {
+	isolateRateLimitFixture(t)
 	// Ensure rate limiters are initialized
 	InitializeRateLimiters()
 
@@ -330,6 +331,7 @@ func identifyLimiter(rl *RateLimiter) string {
 }
 
 func TestGetRateLimiterForEndpoint_PriorityOrder(t *testing.T) {
+	isolateRateLimitFixture(t)
 	// Test that more specific patterns match before general ones
 	InitializeRateLimiters()
 
@@ -376,12 +378,7 @@ func TestGetRateLimiterForEndpoint_PriorityOrder(t *testing.T) {
 }
 
 func TestGetRateLimiterForEndpoint_InitializesIfNeeded(t *testing.T) {
-	// Save and restore global state
-	saved := globalRateLimitConfig
-	globalRateLimitConfig = nil
-	t.Cleanup(func() {
-		globalRateLimitConfig = saved
-	})
+	isolateRateLimitFixture(t)
 
 	// Call GetRateLimiterForEndpoint with nil config - should initialize
 	got := GetRateLimiterForEndpoint("/api/login", http.MethodPost)
@@ -394,6 +391,7 @@ func TestGetRateLimiterForEndpoint_InitializesIfNeeded(t *testing.T) {
 }
 
 func TestUniversalRateLimitMiddleware_HeaderFormat(t *testing.T) {
+	isolateRateLimitFixture(t)
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -441,12 +439,7 @@ func TestUniversalRateLimitMiddleware_HeaderFormat(t *testing.T) {
 }
 
 func TestUniversalRateLimitMiddleware_InitializesIfNeeded(t *testing.T) {
-	// Save and restore global state
-	saved := globalRateLimitConfig
-	globalRateLimitConfig = nil
-	t.Cleanup(func() {
-		globalRateLimitConfig = saved
-	})
+	isolateRateLimitFixture(t)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -475,7 +468,9 @@ func TestUniversalRateLimitMiddlewareWithConfig_UsesIndependentState(t *testing.
 	})
 
 	firstConfig := newEndpointRateLimitConfig()
+	t.Cleanup(func() { stopRateLimitFixture(firstConfig) })
 	secondConfig := newEndpointRateLimitConfig()
+	t.Cleanup(func() { stopRateLimitFixture(secondConfig) })
 
 	first := UniversalRateLimitMiddlewareWithConfig(firstConfig, handler)
 	second := UniversalRateLimitMiddlewareWithConfig(secondConfig, handler)
@@ -511,6 +506,7 @@ func TestUniversalRateLimitMiddlewareWithConfig_UsesIndependentState(t *testing.
 }
 
 func TestUniversalRateLimitMiddleware_StaticAssetBypass(t *testing.T) {
+	isolateRateLimitFixture(t)
 	InitializeRateLimiters()
 
 	handlerCalled := false
@@ -549,6 +545,7 @@ func TestUniversalRateLimitMiddleware_StaticAssetBypass(t *testing.T) {
 }
 
 func TestResetRateLimitForIP(t *testing.T) {
+	isolateRateLimitFixture(t)
 	t.Run("nil globalRateLimitConfig does not panic", func(t *testing.T) {
 		// Save current config and restore after test
 		savedConfig := globalRateLimitConfig
