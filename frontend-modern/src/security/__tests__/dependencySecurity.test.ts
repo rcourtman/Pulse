@@ -59,6 +59,11 @@ const nanoidIsPatched = (version: string): boolean => {
   return major >= 5 && atLeast(version, [5, 1, 6]);
 };
 
+// Accept maintained 3.x patch/minor upgrades without pinning the manifest to
+// one historical fix. Reject broader ranges, prereleases and unreviewed majors.
+const dompurifyRangeIsPatched = (range: string): boolean =>
+  /^\^3\.\d+\.\d+$/.test(range) && atLeast(range.slice(1), [3, 4, 13]);
+
 describe('frontend dependency security floors', () => {
   it('keeps Vitest and its mocker above the redirect-mock file-read floor', () => {
     // GHSA-82fw-gwwq-j7x9: the maintained 4.x fix starts at 4.1.11.
@@ -88,11 +93,20 @@ describe('frontend dependency security floors', () => {
     }
   });
 
+  it.each(['^3.4.13', '^3.4.14', '^3.5.0'])('accepts patched DOMPurify range %s', (range) => {
+    expect(dompurifyRangeIsPatched(range)).toBe(true);
+  });
+
+  it.each(['^3.4.12', '^3.3.99', '^4.0.0', '^3.4.13-beta.1', '*', '>=3.4.13', '^3.4.13 || ^2.0.0'])('rejects unsafe or unreviewed DOMPurify range %s', (range) => {
+    expect(dompurifyRangeIsPatched(range)).toBe(false);
+  });
+
   it('keeps DOMPurify above the hook-detachment XSS floor', () => {
-    expect(manifest.dependencies.dompurify).toBe('^3.4.13');
+    expect(dompurifyRangeIsPatched(manifest.dependencies.dompurify)).toBe(true);
     const versions = lockedVersions('dompurify');
     expect(versions).not.toHaveLength(0);
     for (const version of versions) {
+      expect(version).not.toContain('-');
       expect(atLeast(version, [3, 4, 13]), `dompurify ${version} is vulnerable`).toBe(true);
     }
   });
