@@ -72,6 +72,59 @@ jobs:
         working-directory: tests/integration
         run: node --test scripts/report-stable-e2e-failures.test.mjs
 
+  offline-org-provisioning:
+    name: Offline Organization provisioning
+    # Fixture acceptance only, not quarantine promotion or private RBAC proof.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: |
+            tests/integration/package-lock.json
+            frontend-modern/package-lock.json
+            internal/cloudcp/portal/frontend/package-lock.json
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+      - name: Install locked dependencies
+        run: |
+          npm ci --prefix tests/integration
+          npm ci --prefix frontend-modern
+          npm ci --prefix internal/cloudcp/portal/frontend
+          cd tests/integration
+          npx playwright install --with-deps chromium
+      - name: Validate offline issuer boundaries
+        working-directory: tests/integration
+        run: >-
+          node --test scripts/offline-license-issuer.test.mjs
+          scripts/with-offline-entitlements.test.mjs
+          scripts/entitlement-bootstrap.test.mjs
+      - name: Prove authenticated default and created-org activation
+        working-directory: tests/integration
+        env:
+          PULSE_E2E_USE_LOCAL_BACKEND: 'true'
+          PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL: 'true'
+        run: >-
+          node scripts/with-offline-entitlements.mjs node scripts/run-playwright.mjs
+          --config=playwright.multi-tenant-diagnostic.config.ts
+          --grep 'Scenario 1:|create, update, member manage' --workers=1 --retries=0
+      - name: Upload offline provisioning failure report
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: offline-org-provisioning-report
+          path: tests/integration/playwright-report/multi-tenant-diagnostic/
+          retention-days: 3
+
   e2e:
     name: Playwright Core E2E (shard ${{ matrix.shard }}/8)
     needs: tier-selection
