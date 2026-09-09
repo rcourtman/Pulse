@@ -456,6 +456,22 @@ func TestFilterCapabilitiesForRuntimeIdentity_BlocksPrivateRuntimeCapabilitiesOn
 	}
 }
 
+// The E2E runtime flag can enable backend development gates, but it is not
+// an entitlement. Community builds retain multi-tenancy only when supplied
+// by the entitlement payload; a private runtime is not required for this key.
+func TestFilterCapabilitiesForRuntimeIdentity_CommunityMultiTenantEntitlement(t *testing.T) {
+	for _, granted := range []bool{false, true} {
+		capabilities := []string{FeatureRelay}
+		if granted {
+			capabilities = append(capabilities, FeatureMultiTenant)
+		}
+		filtered, blocked := FilterCapabilitiesForRuntimeIdentity(capabilities, CommunityRuntimeIdentity())
+		if !reflect.DeepEqual(filtered, capabilities) || len(blocked) != 0 {
+			t.Fatalf("granted=%v: filtered=%v blocked=%v, want %v without blocks", granted, filtered, blocked, capabilities)
+		}
+	}
+}
+
 func TestFilterCapabilitiesForRuntimeIdentity_PreservesPrivateRuntimeCapabilitiesOnProBuild(t *testing.T) {
 	capabilities := []string{FeatureRelay, FeatureAuditLogging, FeatureRBAC, FeatureAIAutoFix}
 	filtered, blocked := FilterCapabilitiesForRuntimeIdentity(capabilities, ProRuntimeIdentity())
