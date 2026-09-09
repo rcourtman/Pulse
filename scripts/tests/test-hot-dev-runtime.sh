@@ -359,6 +359,43 @@ test_go_module_security_dependency_floors() {
   assert_module_at_least "Go module floor keeps x/sys aligned with security module graph" "${output}" "golang.org/x/sys" "v0.47.0"
 }
 
+# Kubernetes publishes these generated APIs as a coordinated release. A grouped
+# update must not leave the native agent compiling against mixed minor versions.
+kubernetes_module_cohort_is_aligned() {
+  awk '
+    $1 == "k8s.io/api" || $1 == "k8s.io/apimachinery" || $1 == "k8s.io/client-go" {
+      if (seen[$1]++) exit 1
+      if (version != "" && version != $2) exit 1
+      version = $2
+      count++
+    }
+    END { if (count != 3 || version == "") exit 1 }
+  '
+}
+
+test_go_kubernetes_module_cohort() {
+  local output
+  output="$(cd "${ROOT_DIR}" && go list -mod=readonly -m k8s.io/api k8s.io/apimachinery k8s.io/client-go)"
+  if printf '%s\n' "${output}" | kubernetes_module_cohort_is_aligned; then
+    echo "[PASS] native Kubernetes module cohort is aligned"
+  else
+    echo "[FAIL] native Kubernetes module cohort is incomplete or mismatched" >&2
+    ((failures++))
+  fi
+  if printf '%s\n' 'k8s.io/api v0.37.0' 'k8s.io/apimachinery v0.36.2' 'k8s.io/client-go v0.37.0' | kubernetes_module_cohort_is_aligned; then
+    echo "[FAIL] Kubernetes cohort check accepted mixed releases" >&2
+    ((failures++))
+  else
+    echo "[PASS] Kubernetes cohort check rejects mixed releases"
+  fi
+  if printf '%s\n' 'k8s.io/api v0.37.0' 'k8s.io/client-go v0.37.0' | kubernetes_module_cohort_is_aligned; then
+    echo "[FAIL] Kubernetes cohort check accepted a missing module" >&2
+    ((failures++))
+  else
+    echo "[PASS] Kubernetes cohort check rejects a missing module"
+  fi
+}
+
 test_go_release_toolchain_floor() {
   local module_toolchain installed_toolchain
   module_toolchain="$(sed -n 's/^toolchain //p' "${ROOT_DIR}/go.mod")"
@@ -390,6 +427,7 @@ test_hot_dev_lab_agent_mode_enables_lan_and_guest_docker_inventory_defaults
 test_hot_dev_remembers_explicit_lab_agent_mode_for_later_managed_starts
 test_hot_dev_browser_urls_distinguish_bind_and_browser_hosts
 test_go_module_security_dependency_floors
+test_go_kubernetes_module_cohort
 test_go_release_toolchain_floor
 test_backend_race_suite_keeps_hosted_runner_timeout_headroom
 

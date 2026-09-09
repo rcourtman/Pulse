@@ -5344,3 +5344,32 @@ binding and lifecycle regressions are in `offline-license-issuer.test.mjs` and
 `with-offline-entitlements.test.mjs`; the two scoped Chromium provisioning
 scenarios verify the authenticated API/browser path. These are fixture proofs,
 not release qualification or evidence that other Organization failures cleared.
+
+### Kubernetes dependency cohort
+
+The native agent's `k8s.io/api`, `k8s.io/apimachinery` and `k8s.io/client-go`
+modules move together at the same release version. Local orchestration checks
+resolve the selected graph read-only and reject incomplete or mixed cohorts;
+future aligned upgrades need not retain a fixed minor-version pin. Dependency
+updates must also run the native Kubernetes agent tests, including real discovery
+REST transport coverage of metrics/summary merging and backend unavailability.
+The test transport remains in-memory and does not contact a cluster. Version
+0.37 compatibility is not installed-cluster acceptance or qualification of other
+libraries in a grouped dependency proposal.
+
+### Node setup action v7 compatibility
+
+Workflow consumers pin `actions/setup-node` to
+`820762786026740c76f36085b0efc47a31fe5020` (v7.0.0). The action manifest
+retains the Node 24 execution runtime, setup/cache-save entry points and existing
+inputs. Its internal ESM/toolkit upgrade does not change the requested Node 24
+application toolchain. Consumers do not supply `registry-url` or depend on the
+removed dummy `NODE_AUTH_TOKEN` export. Explicit npm lockfile caching for test
+jobs and disabled automatic package-manager caching for privileged release jobs
+remain unchanged; no permission, dispatch input or signing backend changes.
+
+`test_setup_node_upgrade_preserves_consumer_contract` in the existing workflow
+trust suite verifies every consumer pin, absence of the affected auth assumptions,
+workflow trust controls and the retained native Windows command/lifecycle proof
+steps. Native Windows execution remains a hosted check, not a local Linux claim.
+This upgrade is independent of the grouped signing/Docker/Tailscale updates.
