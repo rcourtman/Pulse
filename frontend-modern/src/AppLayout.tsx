@@ -741,7 +741,7 @@ export function AppLayout(props: AppLayoutProps) {
         />
       </Show>
       <div
-        class={`header mb-1 flex items-center gap-1 sm:mb-3 sm:gap-2 ${
+        class={`header mb-1 flex flex-wrap items-center gap-1 sm:flex-nowrap sm:mb-3 sm:gap-2 ${
           kioskMode()
             ? 'fixed top-0 left-0 right-0 z-50 justify-end bg-surface shadow-sm'
             : 'justify-between sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0'
@@ -808,7 +808,7 @@ export function AppLayout(props: AppLayoutProps) {
           </div>
         </Show>
         <div
-          class={`header-controls flex items-center gap-1 sm:gap-2 ${kioskMode() ? '' : 'justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end'}`}
+          class={`header-controls flex max-w-full flex-wrap items-center gap-1 sm:flex-nowrap sm:gap-2 ${kioskMode() ? '' : 'justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end'}`}
         >
           <Show when={assistantLauncherVisible() && viewport.isBelow('lg')}>
             {renderAssistantLauncher(AI_CHAT_MOBILE_LAUNCHER_BUTTON_CLASS)}

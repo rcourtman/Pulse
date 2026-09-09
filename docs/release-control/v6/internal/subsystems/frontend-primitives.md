@@ -7280,3 +7280,17 @@ must not clear a background history filter or invalidate its return-focus target
 Ordinary search shortcuts resume when the background becomes interactive again.
 When Assistant is already open, a desktop-to-phone transition must retain that
 destination rather than reopening the underlying history drawer above it.
+
+### Compact Organization header wrapping
+
+The shared header and its controls must wrap below the small-screen breakpoint
+instead of forcing the document wider when an entitled Organization selector
+joins the session controls. Keep the selector, kiosk/logout controls and
+connection indicator available; do not hide overflow to conceal an inaccessible
+action. Desktop grid placement remains unchanged.
+
+Proof: `AppLayout.test.tsx` pins wrapping and retained logout semantics. The
+signed-offline `05-settings-mobile-audit.spec.ts` exercises real Organization,
+Access and Sharing routes at 320px and 390px, with app-shell width and full-scroll
+assertions; header screenshots retain the compact layout. This is independent
+of private RBAC implementation and hosted probation acceptance.

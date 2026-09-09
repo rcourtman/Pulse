@@ -8311,3 +8311,13 @@ Related command targets do not retarget an alert. The funded OpenRouter
 `openai/gpt-6-astra` route has explicitly reviewed, tiered cost estimates dated
 2026-09-07. Unreviewed aliases stay unknown. Its history-explanation qualification
 is distinct from the earlier Gemini lab matrix and from wider rollout evidence.
+
+### Compact shell Assistant coexistence
+
+The mobile Assistant launcher remains in shared header flow. That header and
+its controls may wrap at compact widths so an entitled Organization selector
+does not displace session actions or the connection indicator beyond the page.
+Keep desktop launcher placement and existing visibility decisions unchanged;
+wrapping must not introduce entitlement reads or alter Assistant authority.
+AppLayout component and architecture regressions preserve these boundaries;
+real-backend phone geometry proof is retained by the Organization mobile audit.
