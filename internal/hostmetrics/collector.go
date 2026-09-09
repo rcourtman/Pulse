@@ -474,14 +474,15 @@ func collectDisksWithIncludes(ctx context.Context, diskExclude, diskInclude []st
 		}
 
 		disks = append(disks, agentshost.Disk{
-			Device:     part.Device,
-			Mountpoint: part.Mountpoint,
-			Filesystem: part.Fstype,
-			Type:       part.Fstype,
-			TotalBytes: int64(usage.Total),
-			UsedBytes:  int64(usage.Used),
-			FreeBytes:  int64(usage.Free),
-			Usage:      usage.UsedPercent,
+			ExplicitlyIncluded: explicitlyIncluded,
+			Device:             part.Device,
+			Mountpoint:         part.Mountpoint,
+			Filesystem:         part.Fstype,
+			Type:               part.Fstype,
+			TotalBytes:         int64(usage.Total),
+			UsedBytes:          int64(usage.Used),
+			FreeBytes:          int64(usage.Free),
+			Usage:              usage.UsedPercent,
 		})
 	}
 

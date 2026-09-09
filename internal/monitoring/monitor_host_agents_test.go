@@ -5836,3 +5836,51 @@ func TestApplyHostReportBridgeIdentity(t *testing.T) {
 		})
 	}
 }
+
+// Explicit includes must survive the wire and both server report paths.
+func TestAgentReportsPreserveExplicitDiskIncludes(t *testing.T) {
+	var disks []agentshost.Disk
+	if err := json.Unmarshal([]byte(`[
+ {"device":"log2ram","mountpoint":"/var/log","type":"tmpfs","totalBytes":1024,"usedBytes":768,"explicitlyIncluded":true},
+ {"device":"tmpfs","mountpoint":"/mnt/ramdisk/plex-transcode","type":"tmpfs","totalBytes":1024,"usedBytes":256,"explicitlyIncluded":true},
+ {"device":"tmpfs","mountpoint":"/run","type":"tmpfs","totalBytes":1024},
+ {"device":"/dev/sda","mountpoint":"/","type":"ext4","totalBytes":4096,"usedBytes":1024}
+ ]`), &disks); err != nil {
+		t.Fatal(err)
+	}
+	check := func(t *testing.T, got []models.Disk) {
+		t.Helper()
+		if len(got) != 3 {
+			t.Fatalf("accepted disks = %+v, want both selected tmpfs and root only", got)
+		}
+		for i, want := range []string{"/var/log", "/mnt/ramdisk/plex-transcode", "/"} {
+			if got[i].Mountpoint != want || got[i].Total != []int64{1024, 1024, 4096}[i] {
+				t.Fatalf("disk %d = %+v", i, got[i])
+			}
+		}
+	}
+	t.Run("host", func(t *testing.T) {
+		m := newTestMonitor(t)
+		host, err := m.ApplyHostReport(agentshost.Report{
+			Agent: agentshost.AgentInfo{ID: "include-host", IntervalSeconds: 30},
+			Host:  agentshost.HostInfo{ID: "include-machine", Hostname: "include-host"},
+			Disks: disks, Timestamp: time.Now().UTC(),
+		}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, host.Disks)
+	})
+	t.Run("docker", func(t *testing.T) {
+		m := newTestMonitor(t)
+		host, err := m.ApplyDockerReport(agentsdocker.Report{
+			Agent:     agentsdocker.AgentInfo{ID: "include-docker", IntervalSeconds: 30},
+			Host:      agentsdocker.HostInfo{MachineID: "include-docker-machine", Hostname: "include-docker", Disks: disks},
+			Timestamp: time.Now().UTC(),
+		}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, host.Disks)
+	})
+}

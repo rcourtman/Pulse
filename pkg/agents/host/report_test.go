@@ -850,3 +850,27 @@ func TestReportProxmoxLXCInventoryJSONRoundTrip(t *testing.T) {
 		t.Fatalf("nil Proxmox LXC inventory should be omitted: %s", bare)
 	}
 }
+
+func TestDiskExplicitIncludeWireCompatibility(t *testing.T) {
+	for _, included := range []bool{false, true} {
+		disk := Disk{Mountpoint: "/var/log", Type: "tmpfs", TotalBytes: 1024, ExplicitlyIncluded: included}
+		data, err := json.Marshal(disk)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(data, &fields); err != nil {
+			t.Fatal(err)
+		}
+		if _, present := fields["explicitlyIncluded"]; present != included {
+			t.Fatalf("include field presence = %v, want %v: %s", present, included, data)
+		}
+		var decoded Disk
+		if err := json.Unmarshal(data, &decoded); err != nil {
+			t.Fatal(err)
+		}
+		if decoded.ExplicitlyIncluded != included || decoded.Mountpoint != disk.Mountpoint || decoded.TotalBytes != disk.TotalBytes || decoded.Type != disk.Type {
+			t.Fatalf("round trip = %+v, want %+v", decoded, disk)
+		}
+	}
+}

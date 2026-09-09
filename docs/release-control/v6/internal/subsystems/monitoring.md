@@ -17,6 +17,24 @@
 
 ## Purpose
 
+### Preserve explicit agent filesystem selection at ingestion
+
+Both `ApplyHostReport` and `ApplyDockerReport` honour a disk's optional
+`explicitlyIncluded` marker when applying automatic filesystem filtering.
+Selected tmpfs mounts must not be discarded a second time after the agent
+has admitted them. Unmarked virtual/system filesystems remain filtered and
+ordinary physical filesystem handling is unchanged. Selection evidence does
+not confer command authority or imply successful observation beyond the
+reported metrics.
+
+`TestAgentReportsPreserveExplicitDiskIncludes` in
+`internal/monitoring/monitor_host_agents_test.go` exercises JSON-decoded disks
+through both ingestion paths: two selected equal-capacity tmpfs mounts survive,
+unselected /run is rejected, and root remains. Agent-side exclusions still
+precede marker production. Legacy reports without the marker retain the
+existing default policy; matched agent and server support is required.
+This proves ingestion behaviour, not reporter installation or release delivery.
+
 ### TrueNAS persistent-session liveness and successful poll cadence
 
 Authenticated JSON-RPC WebSocket sessions send transport-only PING controls

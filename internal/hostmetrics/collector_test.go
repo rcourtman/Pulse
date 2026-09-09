@@ -405,7 +405,7 @@ func TestIssue1875MountinfoToExplicitDiskCollection(t *testing.T) {
 			var got []string
 			for _, disk := range disks {
 				got = append(got, disk.Mountpoint)
-				if disk.Filesystem != "tmpfs" || disk.TotalBytes != 1024 || disk.Usage != 75 {
+				if !disk.ExplicitlyIncluded || disk.Filesystem != "tmpfs" || disk.TotalBytes != 1024 || disk.Usage != 75 {
 					t.Fatalf("incorrect capacity/type: %+v", disk)
 				}
 			}
