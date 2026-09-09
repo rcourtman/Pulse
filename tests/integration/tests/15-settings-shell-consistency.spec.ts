@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { observeBootstrapTiming } from '../scripts/bootstrap-timing.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test as base, expect } from '@playwright/test';
@@ -175,30 +176,38 @@ test.describe('Settings shell consistency', () => {
     });
   }
 
-  test('keeps direct Settings content inside a 390px viewport after desktop resize', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto('/settings/pulse-intelligence/billing/plan', {
-      waitUntil: 'domcontentloaded',
-    });
+  test('keeps direct Settings content inside a 390px viewport after desktop resize', async ({ page }, testInfo) => {
+    const finishTiming = observeBootstrapTiming(page);
+    try {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.goto('/settings/pulse-intelligence/billing/plan', {
+        waitUntil: 'domcontentloaded',
+      });
 
-    const content = page.locator('[data-settings-content]');
-    await expect(content).toBeVisible();
-    await expect(page.getByRole('heading', { level: 1, name: 'Plans & Billing' })).toBeVisible();
+      const content = page.locator('[data-settings-content]');
+      await expect(content).toBeVisible();
+      await expect(page.getByRole('heading', { level: 1, name: 'Plans & Billing' })).toBeVisible();
 
-    await page.setViewportSize({ width: 390, height: 844 });
+      await page.setViewportSize({ width: 390, height: 844 });
 
-    const layout = await content.evaluate((element) => {
-      const bounds = element.getBoundingClientRect();
-      return {
-        animationName: getComputedStyle(element).animationName,
-        left: bounds.left,
-        right: bounds.right,
-        viewportWidth: document.documentElement.clientWidth,
-      };
-    });
+      const layout = await content.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        return {
+          animationName: getComputedStyle(element).animationName,
+          left: bounds.left,
+          right: bounds.right,
+          viewportWidth: document.documentElement.clientWidth,
+        };
+      });
 
-    expect(layout.animationName).toBe('none');
-    expect(layout.left).toBeGreaterThanOrEqual(0);
-    expect(layout.right).toBeLessThanOrEqual(layout.viewportWidth);
+      expect(layout.animationName).toBe('none');
+      expect(layout.left).toBeGreaterThanOrEqual(0);
+      expect(layout.right).toBeLessThanOrEqual(layout.viewportWidth);
+    } finally {
+      await testInfo.attach('bootstrap-paired-timing', {
+        body: JSON.stringify(await finishTiming(), null, 2),
+        contentType: 'application/json',
+      });
+    }
   });
 });
