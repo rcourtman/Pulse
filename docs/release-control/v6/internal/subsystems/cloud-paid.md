@@ -3462,3 +3462,13 @@ A failed reconnect admission request retains the current tenant's last valid
 facet. The synchronous organisation-switch reset still clears outgoing
 admission before requesting the new tenant, including when that request fails.
 This is navigation continuity, not an authorization or entitlement decision.
+
+### Compact entitled Organization chrome
+
+An entitled self-hosted Organization selector must not push session controls
+outside a compact viewport. The shared header may wrap on phones while retaining
+desktop placement; this must not change organization scope, feature gates or
+activation semantics. The offline mobile audit explicitly activates the default
+context before it creates and activates isolated organizations, using the normal
+authenticated API. Its route/overflow checks and AppLayout regression cover this
+boundary without granting Community private RBAC or changing CI tier membership.

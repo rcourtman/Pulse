@@ -1,39 +1,42 @@
 {
   "version": 1,
-  "base_sha": "6f3547bc5fbb10ddf313a8cd2f184b6359173a59",
-  "verified_at": "2026-09-08T22:29:31.643744Z",
+  "base_sha": "14a109444c6d1cad420797ea30f279e77b6fc517",
+  "verified_at": "2026-09-09T10:42:06.278902Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts"
+    "frontend-modern/src/AppLayout.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts": "14f0dceb069fe52b9a47100c50998ae53a2c5c8a29a524e342f7458546cb4a19"
+    "frontend-modern/src/AppLayout.tsx": "71cbc527fae0dbae3891174bb8a140d90f50917405d6c15a3b0d8ae7dcb31644"
   },
   "routes": [
-    "/qualification (real WebhookConfigForm and hook; synthetic callbacks)"
+    "/settings/organization",
+    "/settings/organization/access",
+    "/settings/organization/sharing"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 900
-    },
-    {
-      "width": 900,
-      "height": 900
+      "width": 320,
+      "height": 568
     },
     {
       "width": 390,
-      "height": 900
+      "height": 844
+    },
+    {
+      "width": 1280,
+      "height": 720
     }
   ],
   "states": [
-    "Unsaved manually entered Pushover aliases",
-    "Test callback payload",
-    "Save callback payload"
+    "Signed entitled default and created organizations; non-demo Community backend",
+    "Access invitation and outgoing sharing fixture",
+    "Desktop incoming share pending then accepted"
   ],
   "interactions": [
-    "Click Test then Add Webhook at each width; assert both canonical token/user payloads, no page errors or horizontal overflow."
+    "Chromium and mobile WebKit: switch organization; audit three routes at both phone widths; reach shell bottom and assert page/shell width within one pixel",
+    "Desktop Chromium Scenario 6: verify owner identity relationships, editor/viewer roles and pending approval; click Accept and verify accepted state via API"
   ],
-  "notes": "Real component with Vite dev transform in Chromium, not production build or installed/provider delivery. Phone screenshot visually inspected; synthetic credentials only. Screenshots /tmp/pulse-webhook-parity.",
-  "command": "pulse-heavy-run -- node scripts/check-webhook-test-save-parity.mjs"
+  "command": "pulse-heavy-run -- bash -c \"cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=true node scripts/with-offline-entitlements.mjs node scripts/run-playwright.mjs tests/05-settings-mobile-audit.spec.ts --project=chromium --project=mobile-safari --grep settings/organization --workers=1 --retries=0\"; separate diagnostic config Scenario 6 desktop run",
+  "notes": "Exact actual mobile grep: settings/organization(/(sharing|access))?$ . Six mobile route tests passed (53.0s); desktop sharing scenario passed (3.8s). Source-built real Community backend, ephemeral loopback signing issuer, no mock mode or signature bypass. Phone Chromium/WebKit and desktop acceptance screenshots inspected. Evidence retained in Web20260909T103517Z outcome directory browser-proof, org-fixed.log and scenario6-desktop.log. Not private RBAC, hosted probation clearance or release qualification."
 }

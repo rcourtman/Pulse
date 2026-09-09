@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { test as base, expect } from "@playwright/test";
 import {
   apiRequest,
+  activateOfflineOrganization,
+  ensureSessionAuthenticated,
   createAuthenticatedStorageState,
   createOrg,
 } from "./helpers";
@@ -97,6 +99,11 @@ const prepareOrganizationAuditFixture = async (
 ): Promise<string[]> => {
   if (!(ORGANIZATION_SETTINGS_ROUTES as readonly string[]).includes(route))
     return [];
+
+  if (process.env.PULSE_E2E_OFFLINE_ACTIVATION_KEY) {
+    await ensureSessionAuthenticated(page);
+    await activateOfflineOrganization(page);
+  }
 
   await page.goto("/settings/infrastructure", {
     waitUntil: "domcontentloaded",
@@ -255,6 +262,11 @@ test.describe("Settings mobile optimization audit", () => {
             audit.pageWidth,
             `Mobile overflow on ${route} at ${viewport.width}px (viewport=${audit.viewportWidth}, page=${audit.pageWidth}, offenders=${JSON.stringify(audit.offenders)})`,
           ).toBeLessThanOrEqual(audit.viewportWidth + 1);
+          if ((ORGANIZATION_SETTINGS_ROUTES as readonly string[]).includes(route)) {
+            // Retain the header as well as the bottom-of-content width proof.
+            await page.locator(".app-scroll-shell").evaluate((element) => { element.scrollTop = 0; });
+            await page.screenshot({ path: test.info().outputPath(`organization-${viewport.width}.png`) });
+          }
         }
       } finally {
         if (createdOrgIDs.length > 0) {
