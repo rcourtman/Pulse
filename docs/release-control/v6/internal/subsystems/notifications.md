@@ -822,11 +822,18 @@ outside this bounded change.
 
 ### Bounded diagnostic confidentiality: query representations and bypass callers
 
-Recognised query names are exactly token, apikey, api_key, key, secret and
-password after one URL query decode. Every repeated occurrence is masked,
-including mixed literal/escaped names. Unrelated names, ordering and values
+Recognised query names are token, apikey, api_key, key, secret and
+password, matched case-insensitively after one URL query decode. Every repeated
+occurrence is masked, including mixed literal/escaped names and mixed-case
+spellings. Case folding is limited to diagnostic matching: original query-name
+spelling is retained, and configured outbound URLs are not normalised. Unrelated names, ordering and values
 remain intact; invalid name escapes fail closed. This is diagnostic projection,
 not mutation of configured destinations or a claim to recognise arbitrary secrets.
+
+`TestRedactWebhookMixedCaseQuerySecrets` covers all six recognised names plus
+an escaped mixed-case name through URL, embedded-message and transport-error
+projection. It preserves unrelated lookalikes, the original request URL and
+wrapped error identity; these synthetic cases do not establish customer exposure.
 
 Resolved ntfy must apply the same transport-error projection before both its
 error log and returned error. Common HTTP execution preserves payload bytes,
