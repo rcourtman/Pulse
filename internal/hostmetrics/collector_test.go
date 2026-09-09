@@ -3,6 +3,9 @@ package hostmetrics
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
 	"runtime"
 	"testing"
 
@@ -358,5 +361,65 @@ func TestCollectDerivesMemoryPressureFromAvailableMemory(t *testing.T) {
 	sum := snapshot.Memory.UsedBytes + snapshot.Memory.CacheBytes + snapshot.Memory.FreeBytes
 	if got, want := sum, snapshot.Memory.TotalBytes; got != want {
 		t.Fatalf("used+cache+free = %d, want total %d", got, want)
+	}
+}
+
+// Exercise the real gopsutil mountinfo parser, not a pre-parsed partition
+// stub. The reporter's df/service data establish these filesystem types and
+// include paths, but not the actual running service's mountinfo or environment.
+// This proves the expected path only; it is not an installed-estate reproduction.
+func TestIssue1875MountinfoToExplicitDiskCollection(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux mountinfo only")
+	}
+	mountinfo := filepath.Join(t.TempDir(), "mountinfo")
+	fixture := "31 1 0:31 / /var/log rw - tmpfs log2ram rw,size=524288k\n" +
+		"32 1 0:32 / /mnt/ramdisk/plex-transcode rw - tmpfs tmpfs rw,size=524288k\n" +
+		"33 1 0:33 / /run rw - tmpfs tmpfs rw,size=524288k\n"
+	if err := os.WriteFile(mountinfo, []byte(fixture), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.WithValue(context.Background(), gopsutilcommon.EnvKey, gopsutilcommon.EnvMap{
+		gopsutilcommon.HostProcMountinfo: mountinfo,
+	})
+	originalUsage := diskUsage
+	t.Cleanup(func() { diskUsage = originalUsage })
+	var queried []string
+	diskUsage = func(_ context.Context, path string) (*godisk.UsageStat, error) {
+		queried = append(queried, path)
+		return &godisk.UsageStat{Path: path, Total: 1024, Used: 768, Free: 256, UsedPercent: 75}, nil
+	}
+	for _, tc := range []struct {
+		name                   string
+		include, exclude, want []string
+	}{
+		{name: "no runtime include"},
+		{name: "PVE single include", include: []string{"/var/log"}, want: []string{"/var/log"}},
+		{name: "LXC last assignment only", include: []string{"/mnt/ramdisk/plex-transcode"}, want: []string{"/mnt/ramdisk/plex-transcode"}},
+		{name: "LXC combined include", include: []string{"/var/log", "/mnt/ramdisk/plex-transcode"}, want: []string{"/mnt/ramdisk/plex-transcode", "/var/log"}},
+		{name: "explicit exclusion wins", include: []string{"/var/log"}, exclude: []string{"/var/log"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			queried = nil
+			disks := collectDisksWithIncludes(ctx, tc.exclude, tc.include)
+			var got []string
+			for _, disk := range disks {
+				got = append(got, disk.Mountpoint)
+				if disk.Filesystem != "tmpfs" || disk.TotalBytes != 1024 || disk.Usage != 75 {
+					t.Fatalf("incorrect capacity/type: %+v", disk)
+				}
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("mounts = %v, want %v", got, tc.want)
+			}
+			if len(queried) != len(tc.want) {
+				t.Fatalf("usage calls = %v, want only selected mounts %v", queried, tc.want)
+			}
+			for _, path := range queried {
+				if path == "/run" {
+					t.Fatal("queried automatically filtered /run")
+				}
+			}
+		})
 	}
 }
