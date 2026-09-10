@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -2145,6 +2147,19 @@ func TestTypedOperation_TimeoutSendsCancelAndExpiredContextNeverDispatches(t *te
 // Probe the scheduling window after publication but before the registration
 // acknowledgement. No sleeps or repeated runs are needed to expose this order.
 func TestRegistrationReservesFirstFrameBeforePublishingSession(t *testing.T) {
+	// Other tests can leave upgraded HTTP handlers finishing their log writes.
+	// Run the global logging hook in a fresh copy of this same race-instrumented
+	// test binary; joining our own handler alone cannot join those prior tests.
+	if os.Getenv("PULSE_REGISTRATION_ORDER_PROBE") != "1" {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestRegistrationReservesFirstFrameBeforePublishingSession$", "-test.count=1")
+		cmd.Env = append(os.Environ(), "PULSE_REGISTRATION_ORDER_PROBE=1")
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("isolated registration probe: %v\n%s", err, output)
+		}
+		return
+	}
 	server := NewServer(allowAllTestTokens)
 	original := log.Logger
 	checked := make(chan bool, 1)

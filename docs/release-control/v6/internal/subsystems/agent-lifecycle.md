@@ -8019,3 +8019,9 @@ window deterministically and checks the first wire frame. It joins the handler
 before restoring its test logger. Real unified-agent receipt replay tests cover
 APT, cleanup and Docker mutation-once behaviour, and Proxmox cancellation/reconnect.
 This is synthetic transport proof, not installed delivery or CI qualification.
+
+The deterministic registration-order regression runs its global logging hook in
+an isolated copy of the same test binary. Joining that probe's handler does not
+join upgraded handlers from preceding tests; process isolation keeps their final
+log writes from racing with the hook. The child retains race instrumentation and
+an explicit timeout, and the original server still fails the ordering assertion.
