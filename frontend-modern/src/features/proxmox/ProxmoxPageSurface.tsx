@@ -66,13 +66,13 @@ import {
 } from './proxmoxPageModel';
 
 // Each workflow hydrates only the source-scoped resource families it consumes.
-// Backups reuse the Overview guest snapshot and add only PBS rows, so opening
-// that workflow never downloads the same large guest inventory twice.
+// Backups reuse the Overview guest snapshot and add PBS servers and standalone
+// host telemetry, without downloading the same large guest inventory twice.
 const PROXMOX_RESOURCE_QUERY_BY_TAB: Record<ProxmoxPageTabId, string> = {
   overview: 'type=agent,vm,system-container,oci-container&source=proxmox',
   storage: 'type=agent,pbs,storage,physical_disk,ceph&source=proxmox,pbs,agent',
   replication: 'type=agent&source=proxmox',
-  backups: 'type=pbs&source=pbs',
+  backups: 'type=pbs,agent&source=pbs',
   ceph: 'type=ceph&source=proxmox',
   mail: 'type=pmg&source=pmg',
 };
@@ -223,10 +223,16 @@ export function ProxmoxPageSurface() {
     buildProxmoxPageModel(normalizeSnapshot(snapshot));
   const overviewModel = createMemo(() => buildModel(overviewResources.resources()));
   const backupModel = createMemo(() =>
-    buildModel([
-      ...normalizeSnapshot(overviewResources.resources()),
-      ...normalizeSnapshot(backupResources.resources()),
-    ]),
+    buildModel(
+      Array.from(
+        new Map(
+          [
+            ...normalizeSnapshot(overviewResources.resources()),
+            ...normalizeSnapshot(backupResources.resources()),
+          ].map((resource) => [resource.id, resource]),
+        ).values(),
+      ),
+    ),
   );
   const model = createMemo(() => {
     if (activeTab() === 'overview') return overviewModel();
@@ -389,7 +395,7 @@ export function ProxmoxPageSurface() {
               <ProxmoxBackupsTable
                 emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
                 workloads={model().guests}
-                servers={model().pbs}
+                servers={model().resources}
               />
             </Show>
             <Show when={activeTab() === 'ceph'}>

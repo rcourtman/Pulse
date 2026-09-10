@@ -10516,3 +10516,12 @@ container ID, name, image, state, status, and creation summaries. Absence
 retains the existing direct-runtime contract. Clients must treat unknown future
 values defensively and must not infer stats, secondary inventories, update
 checks, or lifecycle authority from a summary-mode report.
+
+### Release-line History coordinates — 10 September 2026
+
+Node API typing carries optional MetricsTarget through Resource adaptation.
+Proxmox-only infrastructure returns resourceType=node with its written source
+ID; an explicitly installed agent retains agent coordinates. Display identity
+and discovery routing are not substitutes for telemetry identity. The focused
+BuildMetricsTarget and Node adapter/drawer regressions in
+docs/qualification/release-v6.4-history/README.md validate this bounded backport.

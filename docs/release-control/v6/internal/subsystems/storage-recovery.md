@@ -5929,3 +5929,10 @@ interpreted as authoritative emptiness, deletion, backup completion, recovery
 state, or permission to clean up storage. Propagating the marker through the
 shared resource projection creates no snapshot, restore, retention, or
 container-action authority.
+
+
+### Release-line History repair — 10 September 2026
+
+PBS History keeps the PBS drawer identity while reading the uniquely correlated host metrics target. Missing disk telemetry does not prevent CPU/memory history. Guests without agent evidence and ambiguous host matches remain excluded.
+
+Bounded adaptations of reviewed main 3a189f31d447 (identity only) and 605643b01722. No metrics-store/storage-tier implementation or release metadata changes. Focused regressions and release-line browser proof are recorded in docs/qualification/release-v6.4-history/README.md. This is source qualification, not installed or published acceptance.

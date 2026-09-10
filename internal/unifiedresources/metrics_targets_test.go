@@ -7,12 +7,13 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
-func TestBuildMetricsTarget_UsesCanonicalAgentTypeForInfrastructureFamilies(t *testing.T) {
+func TestBuildMetricsTarget_UsesWrittenStoreCoordinatesForInfrastructureFamilies(t *testing.T) {
 	tests := []struct {
 		name          string
 		resource      Resource
 		sourceTargets []SourceTarget
 		wantID        string
+		wantType      string
 	}{
 		{
 			name: "proxmox infrastructure node",
@@ -23,7 +24,8 @@ func TestBuildMetricsTarget_UsesCanonicalAgentTypeForInfrastructureFamilies(t *t
 				Source:   SourceProxmox,
 				SourceID: "pve-node-1",
 			}},
-			wantID: "pve-node-1",
+			wantID:   "pve-node-1",
+			wantType: "node",
 		},
 		{
 			name: "vmware host",
@@ -66,8 +68,12 @@ func TestBuildMetricsTarget_UsesCanonicalAgentTypeForInfrastructureFamilies(t *t
 			if target == nil {
 				t.Fatal("BuildMetricsTarget() returned nil")
 			}
-			if target.ResourceType != "agent" {
-				t.Fatalf("ResourceType = %q, want agent", target.ResourceType)
+			wantType := tt.wantType
+			if wantType == "" {
+				wantType = "agent"
+			}
+			if target.ResourceType != wantType {
+				t.Fatalf("ResourceType = %q, want %q", target.ResourceType, wantType)
 			}
 			if target.ResourceID != tt.wantID {
 				t.Fatalf("ResourceID = %q, want %q", target.ResourceID, tt.wantID)

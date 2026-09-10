@@ -5022,3 +5022,10 @@ initialDataReceived. Only a state frame with a resources field sets this signal;
 an explicit empty resources array is authoritative, while an alert-only frame
 is not. Preserve the signal across transport reconnect and clear it with
 organisation URL state reset. The global no-op store reports false.
+
+
+### Release-line History repair — 10 September 2026
+
+Proxmox-only infrastructure metricsTarget uses node storage coordinates; Resource-to-Node preserves that target and only explicit agent identity supplies linkedAgentId. Discovery routing alone does not establish agent telemetry.
+
+Bounded adaptations of reviewed main 3a189f31d447 (identity only) and 605643b01722. No metrics-store/storage-tier implementation or release metadata changes. Focused regressions and release-line browser proof are recorded in docs/qualification/release-v6.4-history/README.md. This is source qualification, not installed or published acceptance.

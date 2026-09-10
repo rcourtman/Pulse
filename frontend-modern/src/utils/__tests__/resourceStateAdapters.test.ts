@@ -52,6 +52,20 @@ const createServiceResource = (
   }) as Resource;
 
 describe('resourceStateAdapters nodeFromResource', () => {
+  it('keeps Proxmox metric coordinates without inventing an agent from discovery routing', () => {
+    const resource = {
+      ...createNodeResource({ proxmox: { nodeName: 'pve-node-1' } }),
+      id: 'agent-canonical-id',
+      metricsTarget: { resourceType: 'node', resourceId: 'cluster-pve-node-1' },
+      discoveryTarget: { resourceType: 'agent', resourceId: 'pve-node-1', agentId: 'pve-node-1' },
+    } as Resource;
+    const node = nodeFromResource(resource);
+    expect(node?.metricsTarget).toEqual(resource.metricsTarget);
+    expect(node?.linkedAgentId).toBeUndefined();
+    const linked = nodeFromResource({ ...resource, agent: { agentId: 'real-agent' } });
+    expect(linked?.linkedAgentId).toBe('real-agent');
+  });
+
   it('maps canonical linkedAgentId', () => {
     const node = nodeFromResource(
       createNodeResource({

@@ -399,7 +399,7 @@ describe('ProxmoxPageSurface contract', () => {
       'type=agent,vm,system-container,oci-container&source=proxmox',
       'type=agent,pbs,storage,physical_disk,ceph&source=proxmox,pbs,agent',
       'type=agent&source=proxmox',
-      'type=pbs&source=pbs',
+      'type=pbs,agent&source=pbs',
       'type=ceph&source=proxmox',
       'type=pmg&source=pmg',
     ]);
@@ -410,9 +410,13 @@ describe('ProxmoxPageSurface contract', () => {
     expect(proxmoxPageSurfaceSource).toContain('resourceSource={storageResources}');
   });
 
-  it('reuses the overview guest snapshot and fetches only PBS rows for Backups', () => {
+  it('reuses guests and hydrates standalone PBS telemetry without duplicate candidates', () => {
     mockPathname.mockReturnValue('/proxmox/backups');
-    const guest = makeResource({ id: 'vm-100', type: 'vm', proxmox: { vmid: 100 } });
+    const guest = makeResource({ id: 'vm-100', type: 'vm', proxmox: { vmid: 100 },
+      agent: { agentId: 'guest-agent', hostname: 'pbs-vm' } });
+    const agent = makeResource({ id: 'pbs-agent', type: 'agent',
+      platformType: 'proxmox-pbs', sources: ['pbs', 'agent'],
+      metricsTarget: { resourceType: 'agent', resourceId: 'pbs-agent' } });
     const server = makeResource({
       id: 'pbs-1',
       type: 'pbs',
@@ -421,8 +425,8 @@ describe('ProxmoxPageSurface contract', () => {
     });
     mockUseUnifiedResources.mockImplementation((options: { cacheKey: string }) => ({
       resources: () => {
-        if (options.cacheKey === 'proxmox-overview') return [guest];
-        if (options.cacheKey === 'proxmox-backups-shell') return [server];
+        if (options.cacheKey === 'proxmox-overview') return [guest, agent];
+        if (options.cacheKey === 'proxmox-backups-shell') return [server, agent];
         return [];
       },
       loading: () => false,
@@ -445,10 +449,10 @@ describe('ProxmoxPageSurface contract', () => {
     ]);
     expect(options[3]).toMatchObject({
       cacheKey: 'proxmox-backups-shell',
-      query: 'type=pbs&source=pbs',
+      query: 'type=pbs,agent&source=pbs',
     });
     expect(mockBackupsTableProps).toHaveBeenCalledWith(
-      expect.objectContaining({ workloads: [guest], servers: [server] }),
+      expect.objectContaining({ workloads: [guest], servers: [guest, agent, server] }),
     );
   });
 
