@@ -2292,6 +2292,15 @@ back into the canonical read state through the unified-resources-owned overlay
 path instead of rebuilding registry truth locally. A server restart or v6
 upgrade must not briefly forget an already admitted standalone host and
 misclassify its next report as a brand-new counted system.
+Re-enrollment can leave older saved identities for a currently reporting
+machine. Continuity hydration must use `ReadStateWithHostContinuity`, which
+adds only canonically absent resources. An older enrollment must not replace
+the live host ID, erase metrics, or turn its linked Proxmox node offline in
+`HostsSnapshot`, `NodesSnapshot`, or the unified snapshot. This read does not
+delete continuity records or change token binding. The regression in
+`internal/monitoring/issue1913_host_continuity_test.go` exercises repeated reads
+with a live successor, an older enrollment, and a genuinely absent host.
+
 That same standalone-host continuity boundary also owns host snapshot and
 connection-list continuity during monitor reloads. `internal/monitoring/monitor.go`
 must apply the same continuity overlay when `HostsSnapshot()` resolves its

@@ -566,6 +566,10 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 
 // IngestRecords ingests normalized records for a single source.
 func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRecord) {
+	rr.ingestRecords(source, records, false)
+}
+
+func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRecord, onlyMissing bool) {
 	var successions []CanonicalIDSuccession
 	supersededSeen := make(map[string]struct{})
 	for _, record := range records {
@@ -580,7 +584,7 @@ func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRec
 				resource.ParentID = &parentID
 			}
 		}
-		newID := rr.ingest(source, sourceID, resource, record.Identity)
+		newID := rr.ingestRecord(source, sourceID, resource, record.Identity, onlyMissing)
 		rr.retainSupersededCanonicalIDs(newID, record.SupersededCanonicalIDs)
 		for _, superseded := range record.SupersededCanonicalIDs {
 			superseded = CanonicalResourceID(superseded)
@@ -2647,6 +2651,14 @@ func (rr *ResourceRegistry) ingestKubernetesReplicaSet(cluster models.Kubernetes
 }
 
 func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource Resource, identity ResourceIdentity) string {
+	return rr.ingestRecord(source, sourceID, resource, identity, false)
+}
+
+// onlyMissing is used by read-only host continuity hydration. It uses the
+// normal canonical matching rules, but may only introduce absent resources.
+// Returning an empty ID also prevents a skipped record from attaching retired
+// identities or migrating operator-owned state onto the current resource.
+func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, resource Resource, identity ResourceIdentity, onlyMissing bool) string {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
 	rr.invalidateSourceTargetsLocked()
@@ -2695,6 +2707,9 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 			existing.Type == resource.Type &&
 			(resource.Type != ResourceTypePhysicalDisk ||
 				physicalDiskMatchScopeCompatible(existing, &resource)) {
+			if onlyMissing {
+				return ""
+			}
 			rr.mergeInto(existing, resource, source)
 			return existing.ID
 		}
@@ -2704,6 +2719,9 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 	if linked := rr.resolveLinkedResource(source, sourceID, resource); linked != "" {
 		existing := rr.resources[linked]
 		if existing != nil {
+			if onlyMissing {
+				return ""
+			}
 			rr.mergeInto(existing, resource, source)
 			rr.bySource[source][sourceID] = existing.ID
 			return existing.ID
@@ -2716,12 +2734,18 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 		if match, excluded := rr.findMatch(resource, candidateID); match != nil {
 			existing := rr.resources[match.ResourceB]
 			if existing != nil {
+				if onlyMissing {
+					return ""
+				}
 				rr.mergeInto(existing, resource, source)
 				rr.bySource[source][sourceID] = existing.ID
 				return existing.ID
 			}
 		} else if excluded {
 			resource.ID = candidateID
+			if onlyMissing && rr.resources[resource.ID] != nil {
+				return ""
+			}
 			rr.resources[resource.ID] = &resource
 			rr.bySource[source][sourceID] = resource.ID
 			rr.matcher.Add(resource.ID, identity)
@@ -2732,6 +2756,9 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 	resource.ID = rr.chooseNewID(resource.Type, identity, source, sourceID)
 	normalizeResourceRelationships(&resource)
 	if existing := rr.resources[resource.ID]; existing != nil {
+		if onlyMissing {
+			return ""
+		}
 		rr.mergeInto(existing, resource, source)
 		rr.bySource[source][sourceID] = existing.ID
 		rr.matcher.Add(existing.ID, existing.Identity)
