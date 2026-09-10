@@ -1,20 +1,22 @@
 {
   "version": 1,
-  "base_sha": "837a5b8843fa4a4ca293f66f43123b9f9c127d4d",
-  "verified_at": "2026-09-10T14:54:37.800409Z",
+  "base_sha": "7294e60afdbf473830ea3270c29b5c8961edbba7",
+  "verified_at": "2026-09-10T17:21:10.327527Z",
   "result": "passed",
   "changed_paths": [
-    "internal/monitoring/monitored_system_usage.go",
-    "internal/unifiedresources/monitor_adapter.go",
-    "internal/unifiedresources/registry.go"
+    "frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx",
+    "frontend-modern/src/components/Settings/aiSettingsModel.ts",
+    "frontend-modern/src/components/Settings/useAISettingsState.ts",
+    "frontend-modern/src/types/ai.ts"
   ],
   "content_sha256": {
-    "internal/monitoring/monitored_system_usage.go": "125f39dbfc448a37d0ee74756a03534d435abdacb4e0c7fed8c0710364af5f4a",
-    "internal/unifiedresources/monitor_adapter.go": "7720ba164373cdf6a8a9f950215f27e0e5a24e48edc2f9c1e444b4144e35b3d6",
-    "internal/unifiedresources/registry.go": "b49125258595bfdabb2a0a06dc51e51e7e27f998c8d9cb8e8ad69cffc1e4272c"
+    "frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx": "76f3ed93e95cbe9f24f5cd55d49aeae7397f739e6520665f1b8de074ccaeaa96",
+    "frontend-modern/src/components/Settings/aiSettingsModel.ts": "9dee0d8b8bd013e870732c3893fa4742e40914ec4931a044b1698bc90f598c22",
+    "frontend-modern/src/components/Settings/useAISettingsState.ts": "d4bdd6ce19279e5e243b69e9ca769436c3d88a50f243bd8241c7aeffafeb2613",
+    "frontend-modern/src/types/ai.ts": "bdad2e3926976f761b2a75db03ed4473f67e73cdc60e6327f15acc6626225507"
   },
   "routes": [
-    "/proxmox"
+    "/ (isolated AISettings component harness)"
   ],
   "viewports": [
     {
@@ -27,17 +29,21 @@
     }
   ],
   "states": [
-    "6.4.1 reproduction shows Offline and unavailable CPU despite live host report",
-    "Repaired backend output shows current agent and 17 percent CPU",
-    "Explicit offline control remains offline with unavailable live metrics",
-    "Expanded node Overview displays current agent identity"
+    "Saved password presence with blank masked input",
+    "Unrelated save preserves credentials",
+    "Replacement preserves password whitespace and discards draft after save",
+    "Explicit password and username clearing",
+    "Reload retains cleared state"
   ],
   "interactions": [
-    "Two reloads preserve current identity, metrics and node count",
-    "Hover node row and expand inline details",
-    "Hover and focus collapse button, Escape preserves inline disclosure, Enter collapses it",
-    "Inspect actual pixels for node status, CPU, identity and narrow layout"
+    "Expand Ollama accordion",
+    "Focus password and Tab",
+    "Save unrelated option",
+    "Replace credentials and save",
+    "Clear saved credentials and save",
+    "Reload and inspect no horizontal overflow",
+    "Inspect desktop and narrow screenshots"
   ],
-  "command": "node .agent-coordination/issue-1913-upgrade/browser-check.cjs (workspace root)",
-  "notes": "Current local frontend with a synthetic canonical resource emitted by the exact Go reproduction, added to the existing local API inventory. Browser isolated from inventory websocket updates. Compared original 6.4.1 backend output with repaired source. No production mutations or reporter environment access. Initial full-inventory replacement fixture caused reactive-cache errors and was excluded from proof. Final fixture preserves the existing inventory and source-query contract. Screenshots and backend receipts retained in the local issue investigation directory."
+  "command": "pulse-heavy-run -- node .ai-coordination/ollama/browser.cjs",
+  "notes": "Production-built current AISettings component and real API client against synthetic HTTP responses, not a running Pulse backend or customer server. Normal frontend CSS and esnext build target. Go race tests separately prove persistence, Basic Auth connection endpoints and Patrol runtime streaming factory. Private evidence retains harness and screenshots; initial build target and ambiguous-locator failures are retained, not counted as passes."
 }
