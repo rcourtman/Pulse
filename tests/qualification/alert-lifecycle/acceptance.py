@@ -38,6 +38,19 @@ def loopback_url(url):
     return url.rstrip("/")
 
 
+def webhook_start(alert):
+    # Published prepareWebhookData uses time.RFC3339, not RFC3339Nano.
+    # Keep the full API value for incident queries; only project recipient matching.
+    start = datetime.datetime.fromisoformat(alert["startTime"].replace("Z", "+00:00"))
+    check(start.tzinfo is not None, "occurrence start lacks timezone")
+    return start.isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def distinct_webhook_occurrences(old, current):
+    check(webhook_start(old) != webhook_start(current),
+          "occurrences indistinguishable at webhook timestamp precision")
+
+
 def report(name, cpu):
     return {"agent": {"id": name, "type": "unified", "intervalSeconds": 5,
                       "commandsEnabled": False},
@@ -190,6 +203,11 @@ class Driver:
         return [e for e in entries if alert["id"] in (e["alertIds"] or [])
                 and e["outcome"] == outcome]
 
+    def received_occurrence(self, name, alert):
+        return any(r["payload"].get("id") == alert["id"]
+                   and r["payload"].get("start") == webhook_start(alert)
+                   for r in self.recipient.matching(name))
+
     def retry_terminal(self, alert, terminal_ids):
         retry = self.api("/api/notifications/terminal-failures/retry", {})
         # Preserve the returned result even when the assertion fails.
@@ -265,15 +283,15 @@ class Driver:
         # cancels obsolete terminal firing rows; a later recurrence cannot revive them.
         self.recipient.mode(0)
         self.retry_terminal(old, terminal_ids)
+        self.wait("terminal-retry-recipient", lambda: self.received_occurrence(terminal, old))
         self.snapshot("old-occurrence-after-retry", old)
         self.wait("resolved", lambda: not self.active(terminal),
                   tick=lambda: self.ingest(terminal, 10))
         current = self.wait("recurrence", lambda: self.active(terminal),
                             tick=lambda: self.ingest(terminal, 95))
         check(current["startTime"] != old["startTime"], "recurrence reused old start")
-        self.wait("recurrence-recipient", lambda: any(
-            r["payload"]["start"] == current["startTime"]
-            for r in self.recipient.matching(terminal)))
+        distinct_webhook_occurrences(old, current)
+        self.wait("recurrence-recipient", lambda: self.received_occurrence(terminal, current))
         self.snapshot("old-occurrence-after-recurrence", old)
         self.snapshot("current-occurrence-after-recurrence", current)
         # Occurrence-side-effect correctness requires review of both retained timelines.

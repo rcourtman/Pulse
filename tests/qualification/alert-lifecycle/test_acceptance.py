@@ -80,6 +80,37 @@ class AcceptanceContractTests(unittest.TestCase):
         with patch.dict(os.environ, {"PULSE_ACCEPTANCE_TOKEN": "synthetic-secret"}):
             return a.Driver(args, self.evidence, a.Recipient(self.evidence))
 
+    def test_recipient_matches_fractional_api_start_at_webhook_precision(self):
+        driver = self.driver()
+        alert = {"id": "cpu", "startTime": "2026-09-10T15:30:02.123456789Z"}
+        driver.recipient.accept({"id": "cpu", "resource": "x", "event": "alert",
+                                 "start": "2026-09-10T15:30:02Z"})
+        self.assertTrue(driver.received_occurrence("x", alert))
+
+    def test_recipient_rejects_old_occurrence_and_wrong_alert(self):
+        driver = self.driver()
+        alert = {"id": "cpu", "startTime": "2026-09-10T15:30:02.123456789Z"}
+        for identity, start in (("cpu", "2026-09-10T15:30:01Z"),
+                                ("other", "2026-09-10T15:30:02Z")):
+            driver.recipient.accept({"id": identity, "resource": "x", "event": "alert",
+                                     "start": start})
+        self.assertFalse(driver.received_occurrence("x", alert))
+
+    def test_same_second_occurrences_fail_closed(self):
+        with self.assertRaisesRegex(AssertionError, "indistinguishable"):
+            a.distinct_webhook_occurrences(
+                {"startTime": "2026-09-10T15:30:02.123456789Z"},
+                {"startTime": "2026-09-10T15:30:02.987654321Z"})
+        a.distinct_webhook_occurrences(
+            {"startTime": "2026-09-10T15:30:02.123456789Z"},
+            {"startTime": "2026-09-10T15:30:03.123456789Z"})
+
+    def test_webhook_projection_preserves_offset_and_requires_timezone(self):
+        self.assertEqual(a.webhook_start({"startTime": "2026-09-10T16:30:02.123+01:00"}),
+                         "2026-09-10T16:30:02+01:00")
+        with self.assertRaisesRegex(AssertionError, "timezone"):
+            a.webhook_start({"startTime": "2026-09-10T15:30:02"})
+
     def test_retry_precedes_resolution_in_scenario(self):
         # Guard scenario ordering separately from the recipient/identity proof.
         tree = ast.parse(textwrap.dedent(inspect.getsource(a.Driver.run)))
