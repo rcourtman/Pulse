@@ -3,7 +3,14 @@ package alertlifecycle
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apihttp"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"text/template"
 
@@ -54,5 +61,47 @@ func TestExternalDriverWireContract(t *testing.T) {
 	if receipt["id"] != "agent-cpu" || receipt["resource"] != report.Host.Hostname ||
 		receipt["start"] != "2026-09-10T14:30:00Z" || receipt["event"] != "alert" {
 		t.Fatalf("invalid receipt: %v", receipt)
+	}
+}
+
+// Keep the provisioning contract aligned with the real scope guard. This is
+// authorization proof only, not permission to replay a rejected installed run.
+func TestDocumentedFixtureScopesAdmitAlertConfiguration(t *testing.T) {
+	documentation, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	required := []string{
+		config.ScopeAgentReport, config.ScopeMonitoringRead,
+		config.ScopeMonitoringWrite, config.ScopeSettingsRead, config.ScopeSettingsWrite,
+	}
+	for _, scope := range required {
+		if !strings.Contains(string(documentation), scope) {
+			t.Fatalf("fixture instructions omit required scope %q", scope)
+		}
+	}
+	for _, tc := range []struct {
+		name    string
+		scopes  []string
+		allowed bool
+	}{
+		{"documented", required, true},
+		{"original-missing-monitoring-write", []string{config.ScopeAgentReport, config.ScopeMonitoringRead, config.ScopeSettingsRead, config.ScopeSettingsWrite}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			record, err := config.NewAPITokenRecord("synthetic-fixture-contract-token", tc.name, tc.scopes)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req := httptest.NewRequest(http.MethodPut, "/api/alerts/config", nil)
+			req = req.WithContext(internalauth.WithAPIToken(req.Context(), record))
+			response := httptest.NewRecorder()
+			if got := apihttp.EnsureScope(response, req, config.ScopeMonitoringWrite); got != tc.allowed {
+				t.Fatalf("admitted=%v, want %v", got, tc.allowed)
+			}
+			if !tc.allowed && response.Code != http.StatusForbidden {
+				t.Fatalf("missing scope returned %d, want 403", response.Code)
+			}
+		})
 	}
 }
