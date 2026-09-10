@@ -435,6 +435,19 @@ enums locally.
 
 ## Shared Boundaries
 
+### Development-only general API budget
+
+The shared general API limiter is keyed by client IP, not browser cookie.
+Production retains 500 requests per minute even when a development budget is
+configured. Only exact `PULSE_DEV=true` accepts
+`PULSE_DEV_GENERAL_API_RATE_LIMIT` in the inclusive range 500–100000; missing,
+malformed or out-of-range values retain 500. The integration Compose stack
+explicitly selects 5000 for browser sessions sharing a bridge IP. Exhaustion
+still returns 429 with rate-limit and Retry-After headers for bootstrap orgs
+and runtime-capabilities requests. Authentication retains its independent
+10-request budget. `TestJourneyGeneralAPIBudgetIsolation` in
+`internal/api/contract_test.go` verifies these shared middleware boundaries.
+
 ### Notification recovery reload ownership
 
 Queue recovery routes retain stable handler objects across router reloads, but

@@ -640,6 +640,17 @@ installer download and the agent's subsequent Pulse TLS connection.
 
 ## Shared Boundaries
 
+### Development harness rate-budget isolation
+
+Agent lifecycle API extensions share the router's endpoint-category limiter;
+a browser cookie does not create a new general API budget. The integration
+stack may explicitly raise only the development general budget to 5000 to
+isolate shared bridge-IP traffic. Production remains 500 requests per minute,
+and authentication remains independently limited to 10. This override grants
+no agent authority and does not bypass admission, token scope or endpoint
+category enforcement. The shared middleware boundary is verified by
+`TestJourneyGeneralAPIBudgetIsolation` in `internal/api/contract_test.go`.
+
 ### Notification recovery reload ownership
 
 Notification recovery handler ownership is refreshed alongside agent and
