@@ -313,6 +313,9 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
 
     try {
       await AlertsAPI.clearHistory();
+      // Reads started before the clear completed may still contain deleted rows.
+      fetchRequestId++;
+      setLoading(false);
       setAlertHistory([]);
     } catch (error) {
       logger.error(getAlertAdministrationClearHistoryError(), error);

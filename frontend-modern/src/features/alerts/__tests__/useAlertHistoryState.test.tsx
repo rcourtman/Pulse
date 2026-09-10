@@ -156,6 +156,57 @@ describe('useAlertHistoryState', () => {
     expect(result.alertHistory()).toEqual([]);
   });
 
+  it.each([true, false])(
+    'handles a pending fetch when clearing history succeeds=%s',
+    async (succeeds) => {
+      type History = Awaited<ReturnType<typeof AlertsAPI.getHistory>>;
+      let resolveHistory!: (value: History) => void;
+      const pendingHistory = new Promise<History>((resolve) => {
+        resolveHistory = resolve;
+      });
+      vi.mocked(AlertsAPI.getHistory).mockReturnValueOnce(pendingHistory);
+      if (succeeds) {
+        vi.mocked(AlertsAPI.clearHistory).mockResolvedValue(undefined as any);
+      } else {
+        vi.mocked(AlertsAPI.clearHistory).mockRejectedValue(new Error('Unavailable'));
+      }
+      const staleHistory = [
+        {
+          id: 'old-alert',
+          type: 'cpu',
+          level: 'warning',
+          startTime: new Date().toISOString(),
+          lastSeen: new Date().toISOString(),
+          resourceId: 'resource-1',
+          resourceName: 'db-01',
+          message: 'CPU high',
+          acknowledged: false,
+        },
+      ] as History;
+      const { result } = renderHook(() =>
+        useAlertHistoryState({
+          activeAlerts: () => ({}),
+          getResource: () => undefined,
+          allResources: () => [],
+        }),
+      );
+      await waitFor(() => expect(AlertsAPI.getHistory).toHaveBeenCalledTimes(1));
+      expect(result.loading()).toBe(true);
+
+      await result.clearAlertHistory();
+      resolveHistory(staleHistory);
+      await pendingHistory;
+      await waitFor(() => expect(result.loading()).toBe(false));
+      expect(result.alertHistory()).toEqual(succeeds ? [] : staleHistory);
+
+      // Successful clearing must not suppress subsequent range refreshes.
+      vi.mocked(AlertsAPI.getHistory).mockResolvedValue(staleHistory);
+      result.setTimeFilter('24h');
+      await waitFor(() => expect(AlertsAPI.getHistory).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(result.alertHistory()).toEqual(staleHistory));
+    },
+  );
+
   it('counts each severity chip from the same predicate the list filters with', async () => {
     const [activeAlerts] = createSignal({});
     const now = Date.now();
