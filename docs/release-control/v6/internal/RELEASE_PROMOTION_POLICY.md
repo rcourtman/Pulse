@@ -323,11 +323,13 @@ without the other lanes changing the candidate underneath it.
    artifact. It is not valid customer guidance and must not update the live
    paid-download manifest or private Docker customer tag.
 5. Customer-facing private Pro archive and exact-version Docker staging is part
-   of the public v6 release pipeline. After the governed tag and unpublished
-   draft exist, `create-release.yml` must dispatch
-   `rcourtman/pulse-enterprise` `Build Pro Release` against the exact public
-   tag with `upload_to_r2=true`, `publish_docker_image=true`, and an R2 prefix
-   derived by the release run, then wait for that workflow to succeed. Every
+   of the public v6 release pipeline. After preparation and publication trust
+   preflight, `create-release.yml` dispatches
+   `rcourtman/pulse-enterprise` `Build Pro Release` with the exact public
+   source SHA and anticipated governed tag, `upload_to_r2=true`,
+   `publish_docker_image=true`, and an R2 prefix derived by the release run.
+   This inert staging may run before public draft creation. The immutable
+   readiness gate must wait for that workflow to succeed. Every
    cross-repository dispatch must request GitHub's returned workflow-run details
    and poll that exact run ID. Selecting the newest run by workflow, branch, or
    dispatch timestamp is forbidden because different release versions and manual
@@ -601,9 +603,10 @@ without the other lanes changing the candidate underneath it.
 1. Every normal alpha, beta, RC, stable, and patch release is initiated once through
    `create-release.yml`. The workflow builds one exact-SHA candidate with the
    native signing lanes required by that version's governed policy while
-   frontend, backend, Docker, Helm, and integration checks run in parallel. No
-   tag, draft, or public release mutation occurs until those checks and the
-   candidate build pass.
+   frontend, backend, Docker, Helm, and integration checks run in parallel. The
+   candidate build and required release-note visuals must pass before tag and
+   draft assembly. The draft remains unpublished while every applicable check
+   and exact-version staging path converges at the immutable readiness gate.
 2. The release candidate is uploaded as a one-day Actions artifact with a
    machine-readable manifest that pins source SHA, version, filename, size, and
    SHA-256 for every release asset. Publication downloads and verifies that
@@ -614,16 +617,20 @@ without the other lanes changing the candidate underneath it.
    already proven before upload. Manual and release-edit repair validation may
    retain the full-download fallback when no same-run candidate manifest exists.
 4. Exact-version Docker publication, staged release-asset verification, exact
-   Helm OCI publication, staged install smoke, and the exact-version private
-   Pro build begin from the unpublished draft and converge at one immutable
-   readiness gate. The pipeline must durably dispatch the release convergence
-   run before publication. `activate_release` then publishes the GitHub release,
-   verifies the public checksums, installer, provider-MSP bundle, and canonical
-   Linux archive URLs, and returns the release to draft quarantine on any
-   failure before `release-activation.json` is successfully uploaded. The upload
-   is the irreversible release commit point because convergence may observe it
-   immediately; activation-side read-back and the final verdict are post-commit
-   public proof and may never return the release to draft.
+   Helm OCI publication and staged install smoke consume the unpublished draft.
+   They join the exact-version private Pro build and all applicable checks at
+   one immutable readiness gate. The pipeline must durably dispatch a viable
+   release convergence run before publication. After readiness,
+   `activate_release` stages `release-activation.json` in the draft, verifies
+   its server-side SHA-256 digest, and rechecks repository release immutability.
+   It then publishes the complete release, including the marker, immutably.
+   Immutable publication is the irreversible release commit point. A marker
+   in an unpublished draft is not a committed release and cannot authorise
+   customer promotion. Public read-back of checksums, installer, provider-MSP
+   bundle, canonical Linux archives and the activation marker follows the
+   commit. A failed read-back or final verdict remains visible debt and must
+   never return an immutable release to draft or claim rollback. Recovery
+   verifies the exact existing release and marker before resuming delivery.
 5. Mutable Docker aliases, the live paid-runtime broker, the additive public
    Helm Pages index, and stable demo deployment belong to the separately visible Release
    Convergence run after the commit point. A global repository-ref lease must
@@ -642,10 +649,12 @@ without the other lanes changing the candidate underneath it.
    The activation marker keeps the original convergence owner immutable. After
    that owner completes, a fresh workflow dispatch from repaired `main` may
    adopt the same exact release, source run, target commit, release ID, and R2
-   lineage. It must first acquire the global lease, then publish a unique
-   immutable owner asset named with its run ID, attempt, and lease SHA. Every
-   child receives that exact asset name and digest. A clobbered constant owner
-   asset is forbidden because stale CDN bytes could authorize the prior owner.
+   lineage. The owner record lives inside the exact lease commit, retained by
+   a unique evidence tag named with the convergence run ID and attempt. The
+   lease and evidence refs are created atomically. Every child receives that
+   exact lease SHA, record name and digest. Recovery must not append assets to
+   the immutable public release or clobber a constant owner record that could
+   authorize the prior owner.
 6. `Release Dry Run` remains the no-public-release rehearsal surface. It calls
    the same candidate builder and no-mutation demo verification, but a separate
    dry run is not required before a normal release because the single publish
