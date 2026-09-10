@@ -192,7 +192,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                       fallback={
                         <>
                           <p class="mt-1 text-lg font-bold text-base-content">
-                            {getUpdatePrimaryStatusLabel(false)}
+                            {getUpdatePrimaryStatusLabel(false, props.versionInfo()?.isSourceBuild)}
                           </p>
                           <Show when={!props.versionInfo()?.isSourceBuild}>
                             <p class="mt-0.5 text-xs text-muted">
@@ -225,7 +225,12 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
 
             {/* Check for updates button */}
             <div class="bg-surface border-t border-border px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p class="text-xs text-muted">{getUpdateCheckModeLabel(props.autoUpdateEnabled())}</p>
+              <p class="text-xs text-muted">
+                {getUpdateCheckModeLabel(
+                  props.autoUpdateEnabled(),
+                  props.versionInfo()?.isSourceBuild,
+                )}
+              </p>
               <button
                 type="button"
                 onClick={props.checkForUpdates}

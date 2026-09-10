@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "base_sha": "7294e60afdbf473830ea3270c29b5c8961edbba7",
-  "verified_at": "2026-09-10T17:21:10.327527Z",
+  "base_sha": "a3eab37bcd36a0a087680ece938ca862c6f4b4d9",
+  "verified_at": "2026-09-10T20:31:10.676001Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx",
@@ -16,7 +16,9 @@
     "frontend-modern/src/types/ai.ts": "bdad2e3926976f761b2a75db03ed4473f67e73cdc60e6327f15acc6626225507"
   },
   "routes": [
-    "/ (isolated AISettings component harness)"
+    "/settings/pulse-intelligence/provider",
+    "/settings/system-updates",
+    "/proxmox"
   ],
   "viewports": [
     {
@@ -29,21 +31,25 @@
     }
   ],
   "states": [
-    "Saved password presence with blank masked input",
+    "Saved Ollama password with blank masked input",
     "Unrelated save preserves credentials",
-    "Replacement preserves password whitespace and discards draft after save",
-    "Explicit password and username clearing",
-    "Reload retains cleared state"
+    "Loading disables save and credential controls",
+    "Failed save retains replacement draft, successful retry preserves whitespace and clears draft",
+    "Explicit password and username clearing persists across reload",
+    "Source build clears cached release offers and disables release updates",
+    "Stable and preview builds retain manual update checks",
+    "Live Proxmox agent identity and CPU with no source-build agent upgrade target"
   ],
   "interactions": [
-    "Expand Ollama accordion",
-    "Focus password and Tab",
-    "Save unrelated option",
-    "Replace credentials and save",
-    "Clear saved credentials and save",
-    "Reload and inspect no horizontal overflow",
-    "Inspect desktop and narrow screenshots"
+    "Expand Ollama accordion, focus password and Tab",
+    "Save unrelated option with keyboard Enter",
+    "Fail replacement save then retry",
+    "Clear saved credentials and reload",
+    "Hover and focus disabled source update check",
+    "Keyboard manual stable and preview update checks",
+    "Expand and collapse Proxmox details with keyboard, reload",
+    "Inspect desktop and narrow screenshots, no horizontal overflow in provider form"
   ],
-  "command": "pulse-heavy-run -- node .ai-coordination/ollama/browser.cjs",
-  "notes": "Production-built current AISettings component and real API client against synthetic HTTP responses, not a running Pulse backend or customer server. Normal frontend CSS and esnext build target. Go race tests separately prove persistence, Basic Auth connection endpoints and Patrol runtime streaming factory. Private evidence retains harness and screenshots; initial build target and ambiguous-locator failures are retained, not counted as passes."
+  "command": "node merged-ollama-browser.cjs && node merged-source-build-browser.cjs",
+  "notes": "Fresh verification of merged source on isolated Vite port 5174 at 1440x900 and 390x900. Playwright uses synthetic provider, version, update and agent HTTP responses over the managed local dev backend. Credential writes are intercepted. Actual pixels inspected for provider saved, clear and reloaded states, source update controls and Proxmox detail. Evidence scripts, interaction matrix, logs and screenshots retained in machine-local issue-1913-upgrade task directory. Earlier locator failures are retained and not counted as passes. No release qualification is claimed."
 }

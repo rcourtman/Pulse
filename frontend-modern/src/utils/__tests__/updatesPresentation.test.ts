@@ -46,8 +46,11 @@ describe('updatesPresentation', () => {
     expect(getUpdateAvailabilityHeading(false)).toBe('Status');
     expect(getUpdatePrimaryStatusLabel(true)).toBe('Update Ready');
     expect(getUpdatePrimaryStatusLabel(false)).toBe('Up to date');
+    expect(getUpdatePrimaryStatusLabel(false, true)).toBe('Source build');
+    expect(getUpdatePrimaryStatusLabel(true, true)).toBe('Source build');
     expect(getUpdateCheckModeLabel(true)).toBe('Auto-check enabled');
     expect(getUpdateCheckModeLabel(false)).toBe('Manual checks only');
+    expect(getUpdateCheckModeLabel(true, true)).toBe('Release updates disabled');
     expect(getUpdateCheckActionLabel(true)).toBe('Checking...');
     expect(getUpdateCheckActionLabel(false)).toBe('Check Now');
   });

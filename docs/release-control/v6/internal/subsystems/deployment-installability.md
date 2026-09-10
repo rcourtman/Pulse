@@ -3295,6 +3295,13 @@ strings into normalized release identity fields for browser preview payloads
 and operator telemetry reporting, so unpublished `git describe` / manual / dev
 builds cannot pollute published stable or RC adoption reads just because they
 share a semver-looking prefix.
+Runtime version responses consume that same identity. Build metadata such as
+`6.4.1+test.1913.bd37ae18`, development bases, and sentinel versions are source
+builds even when their version was injected by release build tooling. Their
+exact version remains visible, but they expose no published release channel
+and do not enter the release-update flow. The existing `BUILD_FROM_SOURCE`
+marker retains the same source-only update restriction. Published stable and
+preview builds retain their normal channel and update behavior.
 The development flag in that identity is defined by the `0.0.0` sentinel, not
 by prerelease spelling. `normalizeVersionString` assigns `0.0.0-<sanitized>` to
 every build string it cannot parse as a release version, so any version whose

@@ -5484,6 +5484,16 @@ the global payload boundary is
 `frontend-modern/src/features/alerts/__tests__/useAlertsConfigurationState.test.tsx`.
 
 The updates settings surface now follows the same presentation-owner rule.
+Source builds have no published release-update target. The shared update
+store must discard a cached release offer when the current runtime reports
+`isSourceBuild` or `isDevelopment`, even if its version string did not change.
+The update panel labels this state `Source build`, disables release checks
+and automatic updates, and omits release notes. `UpdateInstallGuide` suppresses
+release install actions and generic Docker pull commands for source builds,
+including stale cached offers. Docker source builds instead explain manual
+image replacement. Stable and preview release flows retain their existing
+checks and installation guidance. The update-store, install-guide, and
+presentation tests own this cross-control contract.
 `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx` stays the
 top-level settings shell, while
 `frontend-modern/src/components/Settings/UpdateInstallGuide.tsx`,

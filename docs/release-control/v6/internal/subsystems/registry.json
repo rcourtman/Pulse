@@ -5215,6 +5215,7 @@
         "frontend-modern/src/index.css",
         "frontend-modern/src/routing/routePreload.ts",
         "frontend-modern/src/stores/aiChat.ts",
+        "frontend-modern/src/stores/updates.ts",
         "frontend-modern/src/utils/aiSettingsPresentation.ts",
         "frontend-modern/src/utils/diagnosticsPresentation.ts",
         "frontend-modern/src/utils/discoveryPresentation.ts",
@@ -5249,6 +5250,32 @@
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "settings-update-install-guide",
+            "label": "settings update install guide proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/UpdateInstallGuide.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/UpdateInstallGuide.test.tsx"
+            ]
+          },
+          {
+            "id": "release-update-store",
+            "label": "release update store proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/stores/updates.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/stores/__tests__/updates.test.ts"
+            ]
+          },
           {
             "id": "settings-update-feedback",
             "label": "settings update feedback proof",

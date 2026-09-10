@@ -7,6 +7,45 @@ describe('UpdateInstallGuide', () => {
     cleanup();
   });
 
+  it.each([false, true])(
+    'keeps source Docker builds out of release installation guidance (cached update: %s)',
+    (available) => {
+      render(() => (
+        <UpdateInstallGuide
+          versionInfo={{
+            version: '6.4.1+test.1913.bd37ae18',
+            build: 'development',
+            runtime: 'go',
+            isDocker: true,
+            isSourceBuild: true,
+            isDevelopment: true,
+          }}
+          updateInfo={{
+            available,
+            currentVersion: '6.4.1+test.1913.bd37ae18',
+            latestVersion: '6.4.4',
+            releaseNotes: '',
+            downloadUrl: '',
+            isPrerelease: false,
+            isMajorUpgrade: false,
+          }}
+          updatePlan={null}
+          isInstalling={false}
+          dockerImageTag="latest"
+          systemdDownloadCommand=""
+          isProRuntime={false}
+          onInstallUpdate={vi.fn()}
+        />
+      ));
+      expect(
+        screen.getByText('Replace the container image manually to change versions.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('Docker Installation')).not.toBeInTheDocument();
+      expect(document.querySelector('code')).toBeNull();
+      expect(screen.queryByRole('button', { name: /install/i })).not.toBeInTheDocument();
+    },
+  );
+
   it('shows upgrade readiness checks from the update plan', () => {
     render(() => (
       <UpdateInstallGuide

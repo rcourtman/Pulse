@@ -59,6 +59,7 @@ func TestCheckForUpdatesWithChannel_UsesConfiguredRepoPath(t *testing.T) {
 }
 
 func TestCheckForUpdatesWithChannel_SourceBuild(t *testing.T) {
+	withBuildVersion(t, "6.4.0")
 	markerPath := "BUILD_FROM_SOURCE"
 	if err := os.WriteFile(markerPath, []byte("1"), 0644); err != nil {
 		t.Fatalf("write %s: %v", markerPath, err)
@@ -78,6 +79,20 @@ func TestCheckForUpdatesWithChannel_SourceBuild(t *testing.T) {
 	}
 	if info.LatestVersion != info.CurrentVersion {
 		t.Fatalf("LatestVersion = %q, want %q", info.LatestVersion, info.CurrentVersion)
+	}
+}
+
+func TestCheckForUpdatesWithChannel_DiagnosticBuild(t *testing.T) {
+	oldBuildVersion := BuildVersion
+	BuildVersion = "6.4.1+test.1913.bd37ae18"
+	t.Cleanup(func() { BuildVersion = oldBuildVersion })
+	manager := NewManager(&config.Config{UpdateChannel: "stable"})
+	info, err := manager.CheckForUpdatesWithChannel(context.Background(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Available || info.CurrentVersion != BuildVersion || info.LatestVersion != BuildVersion {
+		t.Fatalf("diagnostic build must not enter release update flow: %+v", info)
 	}
 }
 

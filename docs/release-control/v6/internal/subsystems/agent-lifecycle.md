@@ -1187,7 +1187,11 @@ connection IDs, but command rendering stays lifecycle-owned in Settings.
 `currentAgentTargetVersion()` is the canonical agent update target and must be
 projected to browser clients as `/api/version.agentUpdateTargetVersion`;
 platform pages and Settings must not compare agent binaries against the app
-build `version` when the server would tell agents `dev`. For Unix-like agents
+build `version` when the server would tell agents `dev`. The same exclusion
+applies when `isSourceBuild` is true, including a server
+whose injected version carries diagnostic test metadata. Such a build has no
+published agent target and must not ask existing agents to install its
+unpublished server version. For Unix-like agents
 that Pulse already sees, the copied stale-agent update command must use
 `scripts/install.sh --update` and recover URL, token, identity, custom CA, and
 insecure transport from installer-owned saved state instead of asking the

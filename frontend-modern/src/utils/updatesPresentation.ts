@@ -66,11 +66,13 @@ export function getUpdateAvailabilityHeading(available: boolean): string {
   return available ? 'Available' : 'Status';
 }
 
-export function getUpdatePrimaryStatusLabel(available: boolean): string {
+export function getUpdatePrimaryStatusLabel(available: boolean, sourceBuild = false): string {
+  if (sourceBuild) return 'Source build';
   return available ? 'Update Ready' : 'Up to date';
 }
 
-export function getUpdateCheckModeLabel(enabled: boolean): string {
+export function getUpdateCheckModeLabel(enabled: boolean, sourceBuild = false): string {
+  if (sourceBuild) return 'Release updates disabled';
   return enabled ? 'Auto-check enabled' : 'Manual checks only';
 }
 

@@ -232,14 +232,27 @@ func GetCurrentVersion() (*VersionInfo, error) {
 
 	buildInfo := func(raw string, build string, isDev bool) *VersionInfo {
 		normalized := normalizeVersionString(raw)
+		identity := DescribeUsageDataVersion(normalized)
+		isDev = isDev || identity.IsDevelopment
+		sourceBuild := isSourceBuildEnvironment() || isDev
+		channel := detectChannelFromVersion(normalized)
+		if sourceBuild {
+			// Source builds have no published release channel. Keep their
+			// exact version while excluding them from release update flows.
+			channel = ""
+			build = "source"
+			if isDev {
+				build = "development"
+			}
+		}
 		info := &VersionInfo{
 			Version:        normalized,
 			Build:          build,
 			Runtime:        "go",
-			Channel:        detectChannelFromVersion(normalized),
+			Channel:        channel,
 			IsDevelopment:  isDev,
 			IsDocker:       isDockerEnvironment(),
-			IsSourceBuild:  isSourceBuildEnvironment(),
+			IsSourceBuild:  sourceBuild,
 			DeploymentType: GetDeploymentType(),
 		}
 
