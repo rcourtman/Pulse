@@ -20,6 +20,16 @@
 
 ## Purpose
 
+### Ollama credential editing
+The provider panel exposes the existing Basic Auth configuration. Saved passwords
+are represented by presence text, never a placeholder secret or input value.
+Blank password input preserves the saved value; explicit clearing takes precedence
+over a draft replacement. Successful saves discard the password draft. Username
+clearing is independent. Password bytes are not trimmed. Tests exercise preservation,
+replacement and clearing through the Settings save action. Connection testing uses
+saved settings; the panel tells users to save before testing and use HTTPS remotely.
+
+
 Assistant owns composer registration and focus on every open, rather than only
 on component mount. Closing clears the registered input so later keyboard
 commands cannot target a detached composer. A handoff must leave Escape and

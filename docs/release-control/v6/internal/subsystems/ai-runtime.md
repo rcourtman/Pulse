@@ -25,6 +25,14 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Ollama Basic Auth continuity
+Patrol's runtime provider factory must carry the persisted Ollama username and
+password into streaming requests without trimming password bytes.
+`TestPatrolProviderUsesPersistedOllamaCredentials` verifies the persisted-config
+to runtime-factory to HTTP Basic Auth path with a synthetic server. This is not
+model capability or installed Patrol acceptance.
+
+
 ### Incident lifecycle occurrence identity (7 September 2026)
 
 Fired, resolved and acknowledgement snapshots with a nonzero start time select

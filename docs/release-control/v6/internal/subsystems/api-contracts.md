@@ -20,6 +20,15 @@
 
 ## Purpose
 
+### Ollama credential lifecycle
+Settings return only `ollama_username` and `ollama_password_set`, never the
+password. An omitted password preserves it, a supplied password replaces it
+verbatim, and `clear_ollama_password: true` removes it. An empty username clears
+the username independently. `TestAISettingsOllamaPasswordLifecycle` proves these
+existing wire semantics against persistence; the connection and provider tests
+verify authenticated requests to synthetic Ollama endpoints.
+
+
 ### Node import preview response ownership
 
 The node credential editor calls the existing monitored-system-ledger preview

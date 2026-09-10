@@ -1026,6 +1026,18 @@ describe('settings architecture guardrails', () => {
     expect(aiSettingsModelSource).not.toContain('qwen');
   });
 
+  it('keeps Ollama credentials in the provider editor with write-only saved state', () => {
+    expect(aiProviderConfigurationSectionSource).toContain('props.settings()?.ollama_password_set');
+    expect(aiProviderConfigurationSectionSource).toContain('Clear saved Ollama password');
+    expect(aiProviderConfigurationSectionSource).not.toMatch(/props\.settings\(\)\?\.ollama_password\b/);
+    expect(aiSettingsModelSource).toContain("inputField: 'ollamaPassword'");
+    expect(aiSettingsStateSource).toContain("ollamaPassword: ''");
+    expect(aiSettingsStateSource).not.toMatch(/data\.ollama_password\b/);
+    expect(aiSettingsStateSource).toContain('payload.ollama_password = form.ollamaPassword;');
+    expect(aiSettingsStateSource).toContain('payload.clear_ollama_password = true;');
+    expect(aiSettingsStateSource).not.toContain('form.ollamaPassword.trim()');
+  });
+
   it('keeps local provider inheritance and removal on explicit lifecycle contracts', () => {
     expect(aiSettingsStateSource).toContain("data.ollama_keep_alive ?? ''");
     expect(aiSettingsStateSource).toContain('remove_providers: [provider]');
@@ -1420,7 +1432,10 @@ describe('settings architecture guardrails', () => {
       "autocomplete={config.inputType === 'password' ? 'new-password' : 'off'}",
     );
     expect(aiProviderConfigurationSectionSource).toContain(
-      'aria-label={`${getAIProviderDisplayName(config.provider)} ${extraField.label}`}\n                            autocomplete="off"',
+      'aria-label={`${getAIProviderDisplayName(config.provider)} ${extraField.label}`}',
+    );
+    expect(aiProviderConfigurationSectionSource).toContain(
+      "autocomplete={extraField.type === 'password' ? 'new-password' : 'off'}",
     );
   });
 
