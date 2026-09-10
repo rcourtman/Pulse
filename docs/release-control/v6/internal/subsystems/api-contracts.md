@@ -524,6 +524,8 @@ enums locally.
 
 ## Shared Boundaries
 
+- Quick security setup must synchronise the router-captured configurable authorizer when committing the local administrator identity, before establishing its session. The resulting Settings capabilities must grant both administrator-session surfaces and API Access/Pulse Intelligence permission surfaces without requiring a process restart. Permission checks and token scopes remain enforced for other identities.
+
 ### Notification recovery reload ownership
 
 Queue recovery routes retain stable handler objects across router reloads, but

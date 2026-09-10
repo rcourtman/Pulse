@@ -42,6 +42,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/chartapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/configapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/resourceapi"
+	"github.com/rcourtman/pulse-go-rewrite/internal/bootstrap"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
@@ -24829,5 +24830,63 @@ func TestRouterSetMonitorRefreshesNotificationQueue(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+// Exercise first-run setup with a real policy authorizer and an empty file-backed
+// role manager. No persistence fault or customer data is needed to reproduce the
+// split between administrator-session and permission-gated Settings surfaces.
+func TestContract_QuickSetupSynchronizesConfiguredAdminCapabilities(t *testing.T) {
+	t.Setenv("PULSE_DOCKER", "true")
+	t.Setenv("INVOCATION_ID", "")
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+	resetTrustedProxyConfig()
+	dir := t.TempDir()
+	InitPersistentAuthStores(dir)
+	manager, err := authpkg.NewFileManager(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorizer := authpkg.NewRBACAuthorizer(manager)
+	cfg := &config.Config{DataPath: dir, ConfigPath: dir}
+	router := &Router{config: cfg, persistence: config.NewConfigPersistence(dir), authorizer: authorizer}
+	router.initializeBootstrapToken()
+	token, _, _, err := bootstrap.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authLimiter.Reset("198.51.100.81")
+	req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(`{"username":"local-admin","password":"StrongPass!1","apiToken":"`+strings.Repeat("ab", 32)+`"}`))
+	req.RemoteAddr = "198.51.100.81:54321"
+	req.Header.Set(bootstrapTokenHeader, token)
+	rec := httptest.NewRecorder()
+	handleQuickSecuritySetupFixed(router)(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("setup status = %d", rec.Code)
+	}
+	cookie := findCookie(rec.Result().Cookies(), sessionCookieName(false))
+	if cookie == nil {
+		t.Fatal("no session cookie")
+	}
+	statusReq := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	statusReq.AddCookie(cookie)
+	snapshot := router.buildSecurityStatusAuthSnapshot(statusReq)
+	caps := router.securityStatusSettingsCapabilitiesFromSnapshot(snapshot)
+	if !caps.InfrastructureRead || !caps.SystemSettingsRead || !caps.DiagnosticsRead || !caps.SystemLogsRead || !caps.AuthenticationRead {
+		t.Fatalf("configured administrator lost admin-session settings: %+v", caps)
+	}
+	if !caps.APIAccessRead || !caps.PulseIntelligenceRead {
+		t.Errorf("configured administrator has split Settings capabilities after setup: %+v", caps)
+	}
+	allowed, err := authorizer.Authorize(authpkg.WithUser(req.Context(), "outsider"), authpkg.ActionAdmin, authpkg.ResourceUsers)
+	if err != nil || allowed {
+		t.Fatalf("outsider permission = %v, %v", allowed, err)
+	}
+	// Reapply the startup synchronisation: a restart is sufficient for this
+	// specific stale-admin condition without changing roles or deleting state.
+	authorizer.SetAdminUser(cfg.AuthUser)
+	caps = router.securityStatusSettingsCapabilitiesFromSnapshot(snapshot)
+	if !caps.APIAccessRead || !caps.PulseIntelligenceRead {
+		t.Fatal("startup synchronisation did not restore capabilities")
 	}
 }

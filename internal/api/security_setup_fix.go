@@ -502,6 +502,10 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		config.Mu.Lock()
 		previousTokens := append([]config.APITokenRecord(nil), r.config.APITokens...)
 		r.config.AuthUser = setupRequest.Username
+		// Keep permission-gated routes aligned with the configured administrator
+		// immediately, including when token persistence below fails after the
+		// password configuration has already been saved.
+		r.syncConfiguredAdminAuthorizer()
 		r.config.AuthPass = hashedPassword
 		r.config.APITokens = []config.APITokenRecord{*tokenRecord}
 		r.config.SortAPITokens()
@@ -843,4 +847,14 @@ func (r *Router) HandleValidateAPIToken(w http.ResponseWriter, rq *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// syncConfiguredAdminAuthorizer updates the same authorizer captured by this
+// router's permission gates. Call while changing AuthUser under config.Mu, or
+// during router construction before serving requests. Empty clears a prior
+// configured-admin grant; it must not survive first-run reset.
+func (r *Router) syncConfiguredAdminAuthorizer() {
+	if configurable, ok := r.authorizer.(internalauth.AdminConfigurable); ok {
+		configurable.SetAdminUser(r.config.AuthUser)
+	}
 }

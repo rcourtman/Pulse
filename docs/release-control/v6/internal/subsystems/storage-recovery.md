@@ -305,6 +305,8 @@ command-capable profile.
 
 ## Shared Boundaries
 
+- After password configuration has been persisted and the runtime local-admin identity changes, authorizer synchronisation must also occur if subsequent API-token persistence fails. Development first-run reset must clear the configured-admin bypass only on successful auth reset, not on its persistence-failure rollback path. No role-store deletion or migration is part of this recovery.
+
 ### PBS host history correlation
 
 Backups hydrates type=pbs,agent with source=pbs and reuses Overview guest inventory. Deduplicate combined snapshots by canonical ID before correlation, avoiding false ambiguity for agents in both queries. Standalone non-PVE PBS telemetry remains available without downloading the guest estate twice.

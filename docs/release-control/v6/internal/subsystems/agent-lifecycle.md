@@ -723,6 +723,8 @@ installer download and the agent's subsequent Pulse TLS connection.
 
 ## Shared Boundaries
 
+- Local administrator setup synchronises the router authorizer before returning a browser session, so API Access remains available to manage agent credentials. This changes neither agent token scopes nor command-policy intent, and must not grant an unrelated identity access to credential management.
+
 ### Notification recovery reload ownership
 
 Notification recovery handler ownership is refreshed alongside agent and
