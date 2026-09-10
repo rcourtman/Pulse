@@ -462,7 +462,8 @@ func TestGetStateRefreshesLiveAlertSnapshots(t *testing.T) {
 	source := string(data)
 
 	for _, snippet := range []string{
-		"state := m.state.GetSnapshot()",
+		"currentState := m.state",
+		"state := currentState.GetSnapshot()",
 		"state.ActiveAlerts = m.activeAlertsSnapshot()",
 		"state.RecentlyResolved = m.recentlyResolvedAlertsSnapshot()",
 	} {
