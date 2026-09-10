@@ -78,6 +78,7 @@ vi.mock('@/utils/apiClient', () => ({
 
 vi.mock('@/stores/updates', () => ({
   updateStore: {
+    lastError: vi.fn().mockReturnValue(null),
     checkForUpdates: mocks.updateStoreCheckForUpdatesMock,
     applyUpdate: mocks.updateStoreApplyUpdateMock,
     updateInfo: mocks.updateStoreUpdateInfoMock,

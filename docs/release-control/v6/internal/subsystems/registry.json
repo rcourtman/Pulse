@@ -668,14 +668,14 @@
       ]
     },
     {
-	  "path": "internal/agentcapabilities/patrol_scope_tools.go",
-	  "rationale": "the typed Patrol resource-scope evidence mapping is both the AI runtime least-manifest projection contract and the canonical API/agent vocabulary that keeps scoped Watch and investigation tool reductions aligned across the Pulse and enterprise boundary",
-	  "subsystems": [
-		"ai-runtime",
-		"api-contracts"
-	  ]
-	},
-	{
+      "path": "internal/agentcapabilities/patrol_scope_tools.go",
+      "rationale": "the typed Patrol resource-scope evidence mapping is both the AI runtime least-manifest projection contract and the canonical API/agent vocabulary that keeps scoped Watch and investigation tool reductions aligned across the Pulse and enterprise boundary",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
       "path": "internal/agentcapabilities/projection.go",
       "rationale": "the agent capability external-tool projection helper, normalized manifest-owned surface tool contract resolution and tools-affordance gating, manifest-owned resource-context route and argument vocabulary, operator-state capability and route vocabulary, finding workflow capability and lifecycle argument vocabulary including resolution and dismissal notes, governed action capability, route, and argument vocabulary, manifest-owned tool title and outputSchema projection, structured Pulse capability _meta, and shared tool behavior hints are both the canonical API manifest projection contract and the AI runtime adapter projection for Pulse Assistant and MCP-facing agent tools, with MCP annotation and metadata wire names confined to adapter-edge aliases",
       "subsystems": [
@@ -1466,8 +1466,8 @@
               "internal/hostagent/action_runner_client_test.go"
             ]
           },
-        {
-          "id": "agent-privilege-helper-runtime",
+          {
+            "id": "agent-privilege-helper-runtime",
             "label": "typed no-network agent privilege helper proof",
             "match_prefixes": [
               "internal/agenthelper/"
@@ -1479,11 +1479,11 @@
             "test_prefixes": [
               "internal/agenthelper/"
             ],
-          "exact_files": [
-            "cmd/pulse-agent-helper/main_test.go",
-            "internal/agenthelper/container_inventory_test.go",
-            "internal/agenthelper/update_activation_test.go"
-          ]
+            "exact_files": [
+              "cmd/pulse-agent-helper/main_test.go",
+              "internal/agenthelper/container_inventory_test.go",
+              "internal/agenthelper/update_activation_test.go"
+            ]
           },
           {
             "id": "native-pve-action-qualification",
@@ -1746,9 +1746,9 @@
               "internal/hostagent/docker_lifecycle_test.go",
               "internal/hostagent/issue1595_sas_collection_test.go",
               "internal/hostagent/observer_delivery_test.go",
-            "internal/hostagent/package_updates_test.go",
-            "internal/hostagent/privilege_helper_client_test.go",
-            "internal/hostagent/send_report_test.go",
+              "internal/hostagent/package_updates_test.go",
+              "internal/hostagent/privilege_helper_client_test.go",
+              "internal/hostagent/send_report_test.go",
               "internal/hostagent/smartctl_standby_guard_test.go",
               "internal/hostagent/storage_cleanup_test.go",
               "internal/hostagent/unraid_test.go",
@@ -1764,11 +1764,11 @@
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
-          "exact_files": [
-            "scripts/installtests/agent_state_dir_lifecycle_test.go",
-            "scripts/installtests/install_sh_test.go",
-            "scripts/installtests/safe_profile_migration_test.go"
-          ]
+            "exact_files": [
+              "scripts/installtests/agent_state_dir_lifecycle_test.go",
+              "scripts/installtests/install_sh_test.go",
+              "scripts/installtests/safe_profile_migration_test.go"
+            ]
           },
           {
             "id": "windows-agent-installer-runtime",
@@ -3251,11 +3251,11 @@
             "test_prefixes": [
               "frontend-modern/src/api/__tests__/"
             ],
-          "exact_files": [
-            "frontend-modern/src/types/api.ts",
-            "internal/api/action_runner_credentials_test.go",
-            "internal/api/ai_handlers_investigation_additional_test.go",
-            "internal/api/ai_handlers_more_test.go",
+            "exact_files": [
+              "frontend-modern/src/types/api.ts",
+              "internal/api/action_runner_credentials_test.go",
+              "internal/api/ai_handlers_investigation_additional_test.go",
+              "internal/api/ai_handlers_more_test.go",
               "internal/api/ai_handlers_patrol_actions_additional_test.go",
               "internal/api/alerting/external_probe_notifications_test.go",
               "internal/api/audit_handlers_test.go",
@@ -4835,14 +4835,14 @@
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
-          "exact_files": [
-            "pulse-enterprise:scripts/validate-pro-release-line_test.sh",
-            "scripts/installtests/backfill_release_assets_test.go",
-            "scripts/installtests/build_release_assets_test.go",
-            "scripts/installtests/release_ldflags_test.go",
-            "scripts/installtests/safe_profile_migration_test.go",
-            "scripts/release_control/secure_runtime_attestation_v6_test.py",
-            "scripts/release_control/secure_runtime_attestation_v7_test.py"
+            "exact_files": [
+              "pulse-enterprise:scripts/validate-pro-release-line_test.sh",
+              "scripts/installtests/backfill_release_assets_test.go",
+              "scripts/installtests/build_release_assets_test.go",
+              "scripts/installtests/release_ldflags_test.go",
+              "scripts/installtests/safe_profile_migration_test.go",
+              "scripts/release_control/secure_runtime_attestation_v6_test.py",
+              "scripts/release_control/secure_runtime_attestation_v7_test.py"
             ]
           },
           {
@@ -5088,8 +5088,8 @@
               "tests/integration/tests/16-dev-runtime-recovery.spec.ts"
             ]
           },
-        {
-          "id": "shell-installer-runtime",
+          {
+            "id": "shell-installer-runtime",
             "label": "shell installer runtime proof",
             "match_prefixes": [],
             "match_files": [
@@ -5097,11 +5097,11 @@
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
-          "exact_files": [
-            "scripts/installtests/agent_state_dir_lifecycle_test.go",
-            "scripts/installtests/install_sh_test.go",
-            "scripts/installtests/safe_profile_migration_test.go"
-          ]
+            "exact_files": [
+              "scripts/installtests/agent_state_dir_lifecycle_test.go",
+              "scripts/installtests/install_sh_test.go",
+              "scripts/installtests/safe_profile_migration_test.go"
+            ]
           }
         ],
         "match_files": null
@@ -5249,6 +5249,19 @@
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "settings-update-feedback",
+            "label": "settings update feedback proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/updatesPresentation.test.ts"
+            ]
+          },
           {
             "id": "type-to-search-keyboard-ownership",
             "label": "shared search keyboard and modal ownership proof",
@@ -5402,7 +5415,6 @@
               "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
               "frontend-modern/src/components/Settings/UpdateInstallGuide.tsx",
               "frontend-modern/src/components/Settings/updatesSettingsModel.ts",
-              "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
               "frontend-modern/src/components/Settings/useAISettingsState.ts",
               "frontend-modern/src/components/Settings/useAuditLogPanelState.ts",
               "frontend-modern/src/components/Settings/useAuditWebhookPanelState.ts",
@@ -5509,21 +5521,21 @@
               "frontend-modern/src/utils/__tests__/reportingResourceTypes.test.ts"
             ]
           },
-      {
-        "id": "compact-info-card-consumers",
-        "label": "compact information card consumer proof",
-        "match_prefixes": [],
-        "match_files": [
-          "frontend-modern/src/components/Workloads/AvailabilityProbeSuggestionCard.tsx"
-        ],
-        "allow_same_subsystem_tests": false,
-        "test_prefixes": [],
-        "exact_files": [
-          "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts"
-        ]
-      },
-      {
-        "id": "workload-presentation-helpers",
+          {
+            "id": "compact-info-card-consumers",
+            "label": "compact information card consumer proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Workloads/AvailabilityProbeSuggestionCard.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts"
+            ]
+          },
+          {
+            "id": "workload-presentation-helpers",
             "label": "workload presentation helper proof",
             "match_prefixes": [],
             "match_files": [
@@ -6563,11 +6575,11 @@
         "frontend-modern/src/components/Settings/useRBACFeatureGateState.ts",
         "frontend-modern/src/components/Settings/useRolesPanelState.ts",
         "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts",
-		"frontend-modern/src/types/rbac.ts",
+        "frontend-modern/src/types/rbac.ts",
         "frontend-modern/src/utils/organizationRolePresentation.ts",
         "frontend-modern/src/utils/organizationSettingsPresentation.ts",
         "frontend-modern/src/utils/orgUtils.ts",
-		"frontend-modern/src/utils/rbacPresentation.ts",
+        "frontend-modern/src/utils/rbacPresentation.ts",
         "internal/api/access_control_handlers.go",
         "internal/api/enterprise_extension_rbac_admin.go",
         "internal/api/org_handlers.go",
@@ -6592,8 +6604,8 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/api/orgs.ts",
-			  "frontend-modern/src/api/rbac.ts",
-			  "frontend-modern/src/types/rbac.ts"
+              "frontend-modern/src/api/rbac.ts",
+              "frontend-modern/src/types/rbac.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -6682,8 +6694,8 @@
               "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts",
               "frontend-modern/src/utils/organizationRolePresentation.ts",
               "frontend-modern/src/utils/organizationSettingsPresentation.ts",
-			  "frontend-modern/src/utils/orgUtils.ts",
-			  "frontend-modern/src/utils/rbacPresentation.ts"
+              "frontend-modern/src/utils/orgUtils.ts",
+              "frontend-modern/src/utils/rbacPresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -6697,8 +6709,8 @@
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
               "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
-			  "frontend-modern/src/utils/__tests__/orgUtils.test.ts",
-			  "frontend-modern/src/utils/__tests__/rbacPresentation.test.ts"
+              "frontend-modern/src/utils/__tests__/orgUtils.test.ts",
+              "frontend-modern/src/utils/__tests__/rbacPresentation.test.ts"
             ]
           },
           {
@@ -7489,7 +7501,7 @@
         "pkg/audit/sqlite_logger.go",
         "pkg/auth/agent_credentials.go",
         "pkg/auth/rbac.go",
-		"pkg/auth/rbac_manager.go",
+        "pkg/auth/rbac_manager.go",
         "pkg/auth/sqlite_manager.go",
         "pkg/extensions/audit_admin.go",
         "pkg/server/server.go",
@@ -7527,13 +7539,25 @@
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
+            "id": "system-settings-state",
+            "label": "system settings state proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/useSystemSettingsState.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/useSystemSettingsState.test.ts"
+            ]
+          },
+          {
             "id": "privacy-docs-and-telemetry",
             "label": "privacy docs and telemetry proof",
             "match_prefixes": [],
             "match_files": [
               "docs/PRIVACY.md",
               "frontend-modern/public/docs/PRIVACY.md",
-              "frontend-modern/src/components/Settings/useSystemSettingsState.ts",
               "internal/telemetry/service_health.go",
               "internal/telemetry/telemetry.go",
               "pkg/server/server.go",
@@ -7760,7 +7784,7 @@
             "match_prefixes": [],
             "match_files": [
               "pkg/auth/rbac.go",
-			  "pkg/auth/rbac_manager.go",
+              "pkg/auth/rbac_manager.go",
               "pkg/auth/sqlite_manager.go",
               "pkg/server/server.go"
             ],
@@ -7771,7 +7795,7 @@
               "internal/api/rbac_tenant_provider_test.go",
               "internal/api/security_regression_test.go",
               "pkg/auth/rbac_manager_test.go",
-			  "pkg/auth/sqlite_manager_queryplan_test.go",
+              "pkg/auth/sqlite_manager_queryplan_test.go",
               "pkg/auth/sqlite_manager_test.go",
               "pkg/server/server_test.go"
             ]

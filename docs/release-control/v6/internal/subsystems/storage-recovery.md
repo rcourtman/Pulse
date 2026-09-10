@@ -2597,6 +2597,14 @@ vdev layout is reported` in
 
 ## Current State
 
+### Manual update freshness
+
+Server update-check freshness changes observation only. A refreshed availability
+result or an omitted publication date does not create a backup, perform rollback
+or establish recovery success. Existing update history and recovery authority
+remain independent of GET /api/updates/check.
+
+
 ### TrueNAS workflows hydrate only their owning inventory
 
 The TrueNAS Protection tab is a first-class workflow once a TrueNAS system is
