@@ -3163,16 +3163,26 @@ func (m *Monitor) GetState() models.StateSnapshot {
 		}
 		return state
 	}
-	if m.state == nil {
+	// Mock-mode transitions replace the state under m.mu. Capture the fully
+	// initialized pointer under the same lock, then let State protect its own
+	// snapshot without holding the monitor lock across downstream readers.
+	m.mu.RLock()
+	currentState := m.state
+	m.mu.RUnlock()
+	if currentState == nil {
 		return models.StateSnapshot{}
 	}
 
-	state := m.state.GetSnapshot()
+	state := currentState.GetSnapshot()
 	// Keep externally served alert arrays aligned with the live alert manager
 	// even between explicit sync points, so APIs do not expose stale alert
 	// counts or recently resolved incidents from cached state.
-	state.ActiveAlerts = m.activeAlertsSnapshot()
-	state.RecentlyResolved = m.recentlyResolvedAlertsSnapshot()
+	if m.alertManager != nil {
+		state.ActiveAlerts = m.activeAlertsSnapshot()
+		state.RecentlyResolved = m.recentlyResolvedAlertsSnapshot()
+	}
+	// Without an alert manager, retain alerts from this same captured state;
+	// the fallback helpers would read the replaceable pointer again.
 	// Surface filesystems reported by a unified pulse-agent inside a guest
 	// (for example ZFS mounts that qemu-guest-agent's get-fsinfo cannot see
 	// on PBS, #1438) in the guest overview disk listing.
