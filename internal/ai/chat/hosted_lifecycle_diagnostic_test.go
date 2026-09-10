@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const diagnosticModel = "google/gemini-2.5-flash"
+const diagnosticModel = "deepseek/deepseek-v4.1-flash"
 const diagnosticPrompt = "Find the five VMs named win-01 through win-05 and prepare their reboot plans. Do not execute any action."
 
 // A hard logical-call boundary also counts final-response/recovery calls, which
