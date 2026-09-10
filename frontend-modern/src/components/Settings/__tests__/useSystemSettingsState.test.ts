@@ -308,6 +308,7 @@ describe('useSystemSettingsState', () => {
 
     vi.doMock('@/stores/updates', () => ({
       updateStore: {
+        lastError: vi.fn().mockReturnValue(null),
         checkForUpdates: vi.fn().mockResolvedValue(undefined),
         applyUpdate: vi.fn().mockResolvedValue(true),
         updateInfo: vi.fn().mockReturnValue(null),
@@ -367,6 +368,19 @@ describe('useSystemSettingsState', () => {
 
     return { dispose, hookState: hookState! };
   };
+
+  it('does not report latest-version success when a manual refresh fails', async () => {
+    const { hookState, dispose } = mountHookWithTab('system-updates');
+    const { updateStore } = await import('@/stores/updates');
+    const { notificationStore } = await import('@/stores/notifications');
+    vi.mocked(updateStore.lastError).mockReturnValue('Refresh unavailable');
+    await hookState.checkForUpdates();
+    expect(hookState.checkingForUpdates()).toBe(false);
+    expect(notificationStore.success).not.toHaveBeenCalledWith(
+      'You are running the latest version',
+    );
+    dispose();
+  });
 
   it('shows clean success toast without port reference when saving from General tab', async () => {
     const { hookState, dispose } = mountHookWithTab('system-general');

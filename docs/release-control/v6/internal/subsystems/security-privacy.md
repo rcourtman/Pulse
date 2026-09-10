@@ -942,6 +942,18 @@ tokens, and path-normalization variants.
 
 ## Current State
 
+### Manual update availability feedback
+
+The settings state owner has a dedicated proof route to
+`useSystemSettingsState.test.ts`, which exercises its telemetry and update
+feedback behavior rather than substituting an unrelated telemetry test.
+
+The system settings owner reads runtime identity from the shared update store,
+rather than retaining a stale snapshot if another check is already pending.
+Manual check failure reports an error and cannot emit a latest-version success
+notification. This read-only feedback does not broaden update installation or
+settings-write permissions.
+
 ### Alert-quality telemetry remains aggregate and comparison-safe
 
 Telemetry schema v14 exports only counts and closed buckets. It exports no

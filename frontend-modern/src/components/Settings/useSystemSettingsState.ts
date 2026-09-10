@@ -1,7 +1,7 @@
 import { Accessor, Setter, createSignal } from 'solid-js';
 import { SettingsAPI, type TelemetryPreviewResponse } from '@/api/settings';
 import { UpdatesAPI } from '@/api/updates';
-import type { UpdateInfo, UpdatePlan, VersionInfo } from '@/api/updates';
+import type { UpdateInfo, UpdatePlan } from '@/api/updates';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { updateStore } from '@/stores/updates';
@@ -73,7 +73,7 @@ export function useSystemSettingsState({
   );
   const [loadingTelemetryPreview, setLoadingTelemetryPreview] = createSignal(false);
   const [resettingTelemetryInstallID, setResettingTelemetryInstallID] = createSignal(false);
-  const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
+  const versionInfo = updateStore.versionInfo;
   const [updateInfo, setUpdateInfo] = createSignal<UpdateInfo | null>(null);
   const [checkingForUpdates, setCheckingForUpdates] = createSignal(false);
   const [updateChannel, setUpdateChannel] = createSignal<'stable' | 'rc'>('stable');
@@ -218,17 +218,7 @@ export function useSystemSettingsState({
     }
 
     try {
-      const cachedVersion = updateStore.versionInfo();
-      if (cachedVersion) {
-        setVersionInfo(cachedVersion);
-      }
-
       await updateStore.checkForUpdates();
-      const version = updateStore.versionInfo();
-      if (version) {
-        setVersionInfo(version);
-      }
-
       const storeInfo = updateStore.updateInfo();
       if (storeInfo) {
         setUpdateInfo(storeInfo);
@@ -242,6 +232,7 @@ export function useSystemSettingsState({
         }
       }
 
+      const version = versionInfo();
       if (version?.channel && !updateChannel()) {
         setUpdateChannel(version.channel as 'stable' | 'rc');
       }
@@ -499,6 +490,7 @@ export function useSystemSettingsState({
     setCheckingForUpdates(true);
     try {
       await updateStore.checkForUpdates(true);
+      if (updateStore.lastError()) return;
       const info = updateStore.updateInfo();
       setUpdateInfo(info);
 

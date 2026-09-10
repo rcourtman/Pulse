@@ -2616,6 +2616,12 @@ class SubsystemLookupTest(unittest.TestCase):
             )
             self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/frontend-primitives.md")
             self.assertEqual(match["lane_context"]["lane_id"], "L8")
+            if file_entry["path"] == "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx":
+                self.assertEqual(match["verification_requirement"]["id"], "settings-update-feedback")
+                self.assertEqual(match["verification_requirement"]["exact_files"], [
+                    "frontend-modern/src/utils/__tests__/updatesPresentation.test.ts"
+                ])
+                continue
             self.assertEqual(
                 match["verification_requirement"]["id"],
                 "settings-shell-and-framing",

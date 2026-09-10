@@ -4514,6 +4514,16 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Manual update freshness
+
+GET /api/updates/check accepts an optional boolean force query alongside the
+existing channel selector. The handler rejects malformed or repeated force values,
+passes freshness explicitly to the manager and marks responses no-store. Manual
+checks send force=true without overriding the saved channel. UpdateInfo.releaseDate
+is optional when the provider has no publication date. Handler and client tests
+cover this transport contract.
+
+
 ### Attention flapping summary and finding alert-mirror fields
 
 `GET /api/ai/patrol/attention` items and `GET /api/ai/patrol/attention/{id}`

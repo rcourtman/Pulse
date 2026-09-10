@@ -2830,6 +2830,21 @@ None yet.
             ],
         )
 
+    def test_update_settings_use_their_own_behavioral_proofs(self):
+        for subsystem, source, proof, policy in [
+            ("frontend-primitives", "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
+             "frontend-modern/src/utils/__tests__/updatesPresentation.test.ts", "settings-update-feedback"),
+            ("security-privacy", "frontend-modern/src/components/Settings/useSystemSettingsState.ts",
+             "frontend-modern/src/components/Settings/__tests__/useSystemSettingsState.test.ts", "system-settings-state"),
+        ]:
+            with self.subTest(subsystem=subsystem):
+                rule = next(rule for rule in load_subsystem_rules() if rule["id"] == subsystem)
+                requirements = build_verification_requirements(rule, [source])
+                self.assertEqual(len(requirements), 1)
+                self.assertEqual(requirements[0]["id"], policy)
+                self.assertEqual(requirements[0]["exact_files"], [proof])
+                self.assertFalse(requirements[0]["allow_same_subsystem_tests"])
+
     def test_frontend_primitive_remaining_settings_shells_use_specific_guardrails(self):
         rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "frontend-primitives")
         runtime_files = [
@@ -2841,7 +2856,6 @@ None yet.
             "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
             "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
             "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
-            "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
         ]
         requirements = build_verification_requirements(rule, runtime_files)
         self.assertEqual(

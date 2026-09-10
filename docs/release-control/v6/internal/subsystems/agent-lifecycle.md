@@ -3386,6 +3386,14 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Manual update freshness
+
+Server update-check freshness is owned by internal/updates and its API adapter.
+The force query requests a new provider read only. It grants no agent update,
+installation or command-execution authority, and an available server update is
+not evidence that any agent was upgraded.
+
+
 ### Privileged helper framing and identities are architecture-safe
 
 The no-network helper rejects a framed allocation size that cannot include its

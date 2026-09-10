@@ -6,7 +6,7 @@ export interface UpdateInfo {
   currentVersion: string;
   latestVersion: string;
   releaseNotes: string;
-  releaseDate: string;
+  releaseDate?: string;
   downloadUrl: string;
   isPrerelease: boolean;
   isMajorUpgrade: boolean;
@@ -116,12 +116,13 @@ const requireNonEmpty = (value: string, fieldName: string): string => {
 };
 
 export class UpdatesAPI {
-  static async checkForUpdates(channel?: UpdateChannel): Promise<UpdateInfo> {
+  static async checkForUpdates(channel?: UpdateChannel, force = false): Promise<UpdateInfo> {
     const search = new URLSearchParams();
     const trimmedChannel = channel?.trim();
     if (trimmedChannel) {
       search.set('channel', trimmedChannel);
     }
+    if (force) search.set('force', 'true');
     const query = search.toString();
     const url = query ? `/api/updates/check?${query}` : '/api/updates/check';
     return apiFetchJSON(url);

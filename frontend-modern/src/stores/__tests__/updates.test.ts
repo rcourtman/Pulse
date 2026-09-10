@@ -62,6 +62,39 @@ describe('updateStore', () => {
     mockNotifyError.mockReset();
   });
 
+  it('forces a server refresh and preserves an unknown date in cached results', async () => {
+    mockGetVersion.mockResolvedValue(baseVersionInfo);
+    const info = { ...baseUpdateInfo, releaseDate: undefined };
+    mockCheckForUpdates.mockResolvedValue(info);
+    const store = await loadUpdateStore();
+    await store.checkForUpdates(true);
+    expect(mockCheckForUpdates).toHaveBeenCalledWith(undefined, true);
+    await store.checkForUpdates();
+    expect(mockCheckForUpdates).toHaveBeenCalledTimes(1);
+    expect(store.updateInfo()?.latestVersion).toBe(info.latestVersion);
+  });
+
+  it('does not drop a manual refresh arriving during a background check', async () => {
+    mockGetVersion.mockResolvedValue(baseVersionInfo);
+    let finish: (value: typeof baseUpdateInfo) => void = () => {};
+    mockCheckForUpdates.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    mockCheckForUpdates.mockResolvedValueOnce({ ...baseUpdateInfo, latestVersion: 'v1.2.0' });
+    const store = await loadUpdateStore();
+    const background = store.checkForUpdates();
+    await vi.waitFor(() => expect(mockCheckForUpdates).toHaveBeenCalledTimes(1));
+    const manual = store.checkForUpdates(true);
+    finish(baseUpdateInfo);
+    await Promise.all([background, manual]);
+    expect(mockCheckForUpdates).toHaveBeenNthCalledWith(1, undefined, false);
+    expect(mockCheckForUpdates).toHaveBeenNthCalledWith(2, undefined, true);
+    expect(store.updateInfo()?.latestVersion).toBe('v1.2.0');
+  });
+
   it('retries transient update-check failures before succeeding', async () => {
     mockGetVersion.mockResolvedValue(baseVersionInfo);
     mockCheckForUpdates

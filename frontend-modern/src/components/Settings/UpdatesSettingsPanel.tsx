@@ -27,6 +27,7 @@ import {
 } from '@/components/Settings/updatesSettingsModel';
 import {
   getUpdateCheckActionLabel,
+  formatUpdateReleaseDate,
   getUpdateAvailabilityHeading,
   getUpdateBuildBadges,
   getUpdateCheckedLabel,
@@ -204,9 +205,9 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                       <p class="mt-1 text-lg font-bold text-green-700 dark:text-green-300">
                         {props.updateInfo()?.latestVersion}
                       </p>
-                      <Show when={props.updateInfo()?.releaseDate}>
+                      <Show when={formatUpdateReleaseDate(props.updateInfo()?.releaseDate)}>
                         <p class="mt-0.5 text-xs text-green-600 dark:text-green-400">
-                          Released {new Date(props.updateInfo()!.releaseDate).toLocaleDateString()}
+                          Released {formatUpdateReleaseDate(props.updateInfo()?.releaseDate)}
                         </p>
                       </Show>
                     </Show>
@@ -214,6 +215,13 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                 </div>
               </div>
             </div>
+
+            <Show when={updateStore.lastError()}>
+              <p role="alert" class="px-4 py-3 text-sm text-red-600 dark:text-red-400">
+                Could not check for updates.
+                <Show when={props.updateInfo()}> Showing the last successful result.</Show>
+              </p>
+            </Show>
 
             {/* Check for updates button */}
             <div class="bg-surface border-t border-border px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

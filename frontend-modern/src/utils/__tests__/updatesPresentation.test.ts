@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   getUpdateCheckActionLabel,
+  formatUpdateReleaseDate,
   getUpdateAvailabilityHeading,
   getUpdateBuildBadges,
   getUpdateCheckedLabel,
@@ -76,4 +77,12 @@ describe('updatesPresentation', () => {
       );
     });
   });
+});
+
+it('omits unknown and invalid release dates while formatting known dates', () => {
+  for (const value of [undefined, '', '0001-01-01T00:00:00Z', 'invalid']) {
+    expect(formatUpdateReleaseDate(value)).toBeUndefined();
+  }
+  const date = '2026-09-10T14:06:01Z';
+  expect(formatUpdateReleaseDate(date)).toBe(new Date(date).toLocaleDateString());
 });

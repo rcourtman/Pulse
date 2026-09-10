@@ -3360,6 +3360,21 @@ resolves late` in
 
 ## Current State
 
+### Manual update freshness
+
+The update panel has a dedicated proof route to `updatesPresentation.test.ts`,
+with exact-content browser verification still required for rendered changes.
+
+Check Now propagates explicit freshness through the shared update store and API
+client. A manual request arriving during a background check waits for it and then
+performs its own fresh read rather than returning early. A successful response records completion time, while failed refreshes
+retain the last successful result and its age. The settings release date uses the
+shared presentation helper, which omits absent, invalid and legacy zero timestamps.
+Cached update responses remain valid without a release date. Browser qualification
+covers the current settings route, pending/retry states, keyboard checks and date
+presentation at desktop, intermediate and narrow widths.
+
+
 ### Provider tabs use compact canonical evidence during route hydration
 
 Evidence-gated provider tabs consume the unified-resource owner's

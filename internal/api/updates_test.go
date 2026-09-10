@@ -17,6 +17,7 @@ import (
 
 // MockUpdateManager implements UpdateManager interface for testing
 type MockUpdateManager struct {
+	CheckOptionsFunc       func(context.Context, updates.UpdateCheckOptions) (*updates.UpdateInfo, error)
 	CheckForUpdatesFunc    func(ctx context.Context, channel string) (*updates.UpdateInfo, error)
 	GetReleaseNotesFunc    func(ctx context.Context, version string) (*updates.ReleaseNotesInfo, error)
 	ApplyUpdateFunc        func(ctx context.Context, req updates.ApplyUpdateRequest) error
@@ -34,7 +35,11 @@ func (m *MockUpdateManager) GetReleaseNotes(ctx context.Context, version string)
 	return nil, updates.ErrReleaseNotFound
 }
 
-func (m *MockUpdateManager) CheckForUpdatesWithChannel(ctx context.Context, channel string) (*updates.UpdateInfo, error) {
+func (m *MockUpdateManager) CheckForUpdatesWithOptions(ctx context.Context, options updates.UpdateCheckOptions) (*updates.UpdateInfo, error) {
+	if m.CheckOptionsFunc != nil {
+		return m.CheckOptionsFunc(ctx, options)
+	}
+	channel := options.Channel
 	if m.CheckForUpdatesFunc != nil {
 		return m.CheckForUpdatesFunc(ctx, channel)
 	}
@@ -1038,5 +1043,37 @@ func TestClassifyApplyUpdateStartError_ProActivation(t *testing.T) {
 	}
 	if !strings.Contains(msg, "activated license") {
 		t.Fatalf("expected the actionable refusal message to pass through, got %q", msg)
+	}
+}
+
+func TestHandleCheckUpdatesFreshness(t *testing.T) {
+	for _, tc := range []struct {
+		query  string
+		status int
+		force  bool
+	}{
+		{"", 200, false}, {"?force=true", 200, true}, {"?channel=rc&force=true", 200, true}, {"?force=false", 200, false}, {"?force=maybe", 400, false}, {"?force=true&force=false", 400, false},
+	} {
+		t.Run(tc.query, func(t *testing.T) {
+			called := false
+			m := &MockUpdateManager{CheckOptionsFunc: func(_ context.Context, options updates.UpdateCheckOptions) (*updates.UpdateInfo, error) {
+				called = true
+				if options.Force != tc.force {
+					t.Fatalf("force=%v", options.Force)
+				}
+				if strings.Contains(tc.query, "channel=rc") && options.Channel != "rc" {
+					t.Fatalf("channel=%q", options.Channel)
+				}
+				return &updates.UpdateInfo{}, nil
+			}}
+			w := httptest.NewRecorder()
+			NewUpdateHandlers(m, nil).HandleCheckUpdates(w, httptest.NewRequest("GET", "/updates/check"+tc.query, nil))
+			if w.Code != tc.status || called != (tc.status == 200) {
+				t.Fatalf("status=%d called=%v", w.Code, called)
+			}
+			if tc.status == 200 && w.Header().Get("Cache-Control") != "no-store" {
+				t.Fatal("missing no-store")
+			}
+		})
 	}
 }
