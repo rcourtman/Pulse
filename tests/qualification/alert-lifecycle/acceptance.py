@@ -190,6 +190,15 @@ class Driver:
         return [e for e in entries if alert["id"] in (e["alertIds"] or [])
                 and e["outcome"] == outcome]
 
+    def retry_terminal(self, alert, terminal_ids):
+        retry = self.api("/api/notifications/terminal-failures/retry", {})
+        # Preserve the returned result even when the assertion fails.
+        self.evidence.save("retry-response", retry)
+        check(retry.get("affected", 0) >= 1, "no terminal retry admitted")
+        self.wait("terminal-retry-sent", lambda: any(
+            entry["notificationId"] in terminal_ids
+            for entry in self.delivery(alert, "sent")))
+
     def run(self):
         # Operator supplies independent immutable image inspection, not an API version claim.
         identity = json.loads(Path(self.args.identity).read_text())
@@ -252,22 +261,21 @@ class Driver:
         check(self.delivery(old, "dead_letter"), "terminal audit lost at restart")
         self.results.append("restart-preserved-terminal-and-incident")
 
+        # Retry while the occurrence is still firing. Resolution intentionally
+        # cancels obsolete terminal firing rows; a later recurrence cannot revive them.
+        self.recipient.mode(0)
+        self.retry_terminal(old, terminal_ids)
+        self.snapshot("old-occurrence-after-retry", old)
         self.wait("resolved", lambda: not self.active(terminal),
                   tick=lambda: self.ingest(terminal, 10))
         current = self.wait("recurrence", lambda: self.active(terminal),
                             tick=lambda: self.ingest(terminal, 95))
         check(current["startTime"] != old["startTime"], "recurrence reused old start")
-        self.snapshot("recurrence-before-replay", current)
-        self.recipient.mode(0)
-        retry = self.api("/api/notifications/terminal-failures/retry", {})
-        check(retry.get("affected", 0) >= 1, "no terminal retry admitted")
-        self.evidence.save("retry-response", retry)
-        self.wait("historical-retry-sent", lambda: any(
-            entry["notificationId"] in terminal_ids for entry in self.delivery(old, "sent")))
-        self.wait("recurrence-recipient", lambda: len({
-            r["payload"]["start"] for r in self.recipient.matching(terminal)}) >= 2)
-        self.snapshot("old-occurrence-after-replay", old)
-        self.snapshot("current-occurrence-after-replay", current)
+        self.wait("recurrence-recipient", lambda: any(
+            r["payload"]["start"] == current["startTime"]
+            for r in self.recipient.matching(terminal)))
+        self.snapshot("old-occurrence-after-recurrence", old)
+        self.snapshot("current-occurrence-after-recurrence", current)
         # Occurrence-side-effect correctness requires review of both retained timelines.
         config["disableAllAgents"] = True
         self.api("/api/alerts/config", config, "PUT")
