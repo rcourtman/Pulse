@@ -8002,3 +8002,20 @@ trust suite verifies every consumer pin, absence of the affected auth assumption
 workflow trust controls and the retained native Windows command/lifecycle proof
 steps. Native Windows execution remains a hosted check, not a local Linux claim.
 This upgrade is independent of the grouped signing/Docker/Tailscale updates.
+
+### Command-channel registration frame ordering
+
+The server reserves each new session's write lock while still holding the
+session-map lock, before dispatchers can discover it. Registration success
+must be the first frame: the unified client rejects a command received instead
+of the acknowledgement. Serializing individual writes after publication is
+insufficient because a dispatcher could win the lock first. The lock is on a
+new, unpublished connection, not an existing session. Rejection, replacement,
+pending activation and token admission semantics remain unchanged.
+
+`TestRegistrationReservesFirstFrameBeforePublishingSession` in
+`internal/agentexec/server_websocket_test.go` probes the publication-to-ack
+window deterministically and checks the first wire frame. It joins the handler
+before restoring its test logger. Real unified-agent receipt replay tests cover
+APT, cleanup and Docker mutation-once behaviour, and Proxmox cancellation/reconnect.
+This is synthetic transport proof, not installed delivery or CI qualification.
