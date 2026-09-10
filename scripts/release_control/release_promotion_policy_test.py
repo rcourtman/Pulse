@@ -2670,7 +2670,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 f"The active control-plane target is `{active_target_id}`, so stable or GA",
                 blocked,
             )
-        elif active_target_id == "v6-product-lane-expansion":
+        elif active_target_id in {"v6-product-lane-expansion", "v6-release-reliability"}:
             self.assertIn(
                 "The active control-plane target is `v6-ga-promotion`, so stable or GA",
                 blocked,

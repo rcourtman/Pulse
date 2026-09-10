@@ -587,7 +587,7 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 	if !ok || activeTargetID == "" {
 		t.Fatalf("%s missing active_target_id", jsonRel)
 	}
-	if activeTargetID != "v6-rc-cut" && activeTargetID != "v6-rc-stabilization" && activeTargetID != "v6-ga-promotion" && activeTargetID != "v6-product-lane-expansion" {
+	if activeTargetID != "v6-rc-cut" && activeTargetID != "v6-rc-stabilization" && activeTargetID != "v6-ga-promotion" && activeTargetID != "v6-product-lane-expansion" && activeTargetID != "v6-release-reliability" {
 		t.Fatalf("%s has unexpected active_target_id %q", jsonRel, activeTargetID)
 	}
 
@@ -623,7 +623,7 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 		}
 	}
 
-	for _, requiredID := range []string{"v6-rc-cut", "v6-rc-stabilization", "v6-ga-promotion", "v6-product-lane-expansion"} {
+	for _, requiredID := range []string{"v6-rc-cut", "v6-rc-stabilization", "v6-ga-promotion", "v6-product-lane-expansion", "v6-release-reliability"} {
 		if _, ok := targetsByID[requiredID]; !ok {
 			t.Fatalf("%s missing target %q", jsonRel, requiredID)
 		}

@@ -6,7 +6,7 @@
   "control_plane_doc": "docs/release-control/internal/CONTROL_PLANE.md",
   "control_plane_schema": "docs/release-control/control_plane.schema.json",
   "active_profile_id": "v6",
-  "active_target_id": "v6-product-lane-expansion",
+  "active_target_id": "v6-release-reliability",
   "legacy_release_lines": [
     {
       "version_prefix": "5.1.",
@@ -83,8 +83,17 @@
       "id": "v6-product-lane-expansion",
       "profile_id": "v6",
       "kind": "feature",
+      "status": "planned",
+      "summary": "Post-GA active development runs on main and promotes proactive Pulse Intelligence, policy-aware data governance, resource-change intelligence, action-governance, fleet-governance, agent-operable infrastructure onboarding, continuous discovery reconciliation, and agent-ready operations contract proof after the monitoring-first v6 floor; Patrol is the detection and investigation engine, Assistant is the contextual explanation, approval, and governed action surface, and agent-ready proof is API/CLI-first with MCP only as an adapter over canonical contracts. The planned product priority is a coherent Patrol-to-Assistant customer journey: explain the selected issue from current evidence, preserve governed approval and verification, and qualify useful outcomes for unhealthy services, backup or capacity risks, and supported VM or LXC actions before claiming broad Pulse Pro value.",
+      "completion_rule": "manual",
+      "proof_scope": "none"
+    },
+    {
+      "id": "v6-release-reliability",
+      "profile_id": "v6",
+      "kind": "maintenance",
       "status": "active",
-      "summary": "Post-GA active development runs on main and promotes proactive Pulse Intelligence, policy-aware data governance, resource-change intelligence, action-governance, fleet-governance, agent-operable infrastructure onboarding, continuous discovery reconciliation, and agent-ready operations contract proof after the monitoring-first v6 floor; Patrol is the detection and investigation engine, Assistant is the contextual explanation, approval, and governed action surface, and agent-ready proof is API/CLI-first with MCP only as an adapter over canonical contracts. The current product priority is a coherent Patrol-to-Assistant customer journey: explain the selected issue from current evidence, preserve governed approval and verification, and qualify useful outcomes for unhealthy services, backup or capacity risks, and supported VM or LXC actions before claiming broad Pulse Pro value.",
+      "summary": "Priority set on 10 September 2026: stability, consistent updates and fixing reported issues are the highest current objective, to rebuild user trust through dependable delivery. Prioritize resolving release blockers and verifying qualification, publication and customer delivery through the existing release process. Keep failed attempts owned through repair and verified recovery without repeated founder chasing. Release consistency remains unconfirmed until actual release and recovery evidence establishes dependable end-to-end delivery. A repaired component, passing source check or started retry does not establish this outcome. Feature expansion is not a current priority.",
       "completion_rule": "manual",
       "proof_scope": "none"
     }
