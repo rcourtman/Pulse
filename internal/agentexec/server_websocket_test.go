@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +18,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 type wsRawMessage struct {
@@ -2137,4 +2142,68 @@ func TestTypedOperation_TimeoutSendsCancelAndExpiredContextNeverDispatches(t *te
 			t.Fatalf("timeout cancellation = %+v", cancelMessage)
 		}
 	})
+}
+
+// Probe the scheduling window after publication but before the registration
+// acknowledgement. No sleeps or repeated runs are needed to expose this order.
+func TestRegistrationReservesFirstFrameBeforePublishingSession(t *testing.T) {
+	// Other tests can leave upgraded HTTP handlers finishing their log writes.
+	// Run the global logging hook in a fresh copy of this same race-instrumented
+	// test binary; joining our own handler alone cannot join those prior tests.
+	if os.Getenv("PULSE_REGISTRATION_ORDER_PROBE") != "1" {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestRegistrationReservesFirstFrameBeforePublishingSession$", "-test.count=1")
+		cmd.Env = append(os.Environ(), "PULSE_REGISTRATION_ORDER_PROBE=1")
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("isolated registration probe: %v\n%s", err, output)
+		}
+		return
+	}
+	server := NewServer(allowAllTestTokens)
+	original := log.Logger
+	checked := make(chan bool, 1)
+	log.Logger = zerolog.New(io.Discard).Hook(zerolog.HookFunc(func(_ *zerolog.Event, _ zerolog.Level, message string) {
+		if message != "Agent connected" {
+			return
+		}
+		server.mu.RLock()
+		ac := server.agents[agentSessionKey(defaultOrganizationID, "registration-order")]
+		server.mu.RUnlock()
+		if ac == nil {
+			checked <- false
+			return
+		}
+		// A dispatcher acquiring this lock here can send a command as the first
+		// frame. CommandClient.waitForRegistration rejects that frame and exits.
+		available := ac.writeMu.TryLock()
+		if available {
+			ac.writeMu.Unlock()
+		}
+		checked <- !available
+	}))
+	defer func() { log.Logger = original }()
+	handlerDone := make(chan struct{})
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer close(handlerDone)
+		server.HandleWebSocket(w, r)
+	}))
+	defer ts.Close()
+	defer server.Shutdown()
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = conn.Close()
+		<-handlerDone
+	}()
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{AgentID: "registration-order", Hostname: "host", Token: "ok"}))
+	first := wsReadRawMessage(t, conn)
+	if first.Type != MsgTypeRegistered {
+		t.Fatalf("first frame = %s, want registered", first.Type)
+	}
+	if !<-checked {
+		t.Fatal("published session permits command writes before registration acknowledgement")
+	}
 }

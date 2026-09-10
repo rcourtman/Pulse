@@ -30,6 +30,9 @@ func TestAlertExporterWireFormats(t *testing.T) {
 	handler := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
 	for _, format := range []struct{ name, accept string }{
 		{"text", "text/plain; version=0.0.4"},
+		{"wildcard", "*/*"},
+		{"browser", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"},
+		{"json-fallback", "application/json, */*"},
 		{"protobuf", "application/vnd.google.protobuf; proto=io.prometheus.client.MetricFamily; encoding=delimited"},
 	} {
 		for _, encoding := range []string{"identity", "gzip", "zstd"} {
@@ -63,7 +66,7 @@ func TestAlertExporterWireFormats(t *testing.T) {
 				if format.name == "protobuf" && negotiated.FormatType() != expfmt.TypeProtoDelim {
 					t.Fatalf("not protobuf: %s", negotiated)
 				}
-				if format.name == "text" && negotiated.FormatType() != expfmt.TypeTextPlain {
+				if format.name != "protobuf" && negotiated.FormatType() != expfmt.TypeTextPlain {
 					t.Fatalf("not text: %s", negotiated)
 				}
 				decoder := expfmt.NewDecoder(body, negotiated)
