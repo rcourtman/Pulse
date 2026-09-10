@@ -127,7 +127,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertIsInstance(result["status_audit_errors"], list)
         self.assertIn(
             result["control_plane"]["active_target"]["id"],
-            {"v6-rc-cut", "v6-rc-stabilization", "v6-ga-promotion", "v6-product-lane-expansion"},
+            {"v6-rc-cut", "v6-rc-stabilization", "v6-ga-promotion", "v6-product-lane-expansion", "v6-release-reliability"},
         )
         self.assertEqual(result["scope"]["control_plane_repo"], "pulse")
         self.assertEqual(result["status_summary"]["lane_count"], 24)
