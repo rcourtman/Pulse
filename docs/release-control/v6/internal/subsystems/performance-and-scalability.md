@@ -3028,3 +3028,14 @@ Runtime resource resolution uses a store signal recording resource snapshot
 receipt, or an already populated resource array, rather than alert payload
 presence. Reconnect must not add an estate fetch or scan to recover navigation.
 The signal survives transport loss and resets on organisation URL changes.
+
+### Release-line History identity boundary — 10 September 2026
+
+Resource-to-Node adaptation preserves canonical metricsTarget and uses explicit
+agent evidence rather than discovery routing for linkedAgentId. This avoids
+querying a nonexistent history family without changing history storage, query
+implementation, tiers, thresholds or retention. Backups reuses and deduplicates
+the existing Overview snapshot rather than requesting guest inventory again.
+Focused identity and surface proof is recorded in
+docs/qualification/release-v6.4-history/README.md; no store performance or
+installed-data claim follows from it.

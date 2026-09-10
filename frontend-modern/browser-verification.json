@@ -1,37 +1,41 @@
 {
   "version": 1,
-  "base_sha": "101bae33963ee65a5a83bc229d081b43825de889",
-  "verified_at": "2026-09-06T16:42:39.585210Z",
+  "base_sha": "a97e67e0a19382cdcff3eca0b3dd2d50063e9b01",
+  "verified_at": "2026-09-10T16:01:53.205993Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/useAlertOverviewState.ts"
+    "frontend-modern/src/components/Workloads/nodeDrawerModel.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/types/api.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "64d0b891e7ad228e8590da859dc25e825b6164c8cf76a01983a219d6cd079b23"
+    "frontend-modern/src/components/Workloads/nodeDrawerModel.ts": "2a46640db19fe358e9f0ab32c4819a1c30a7c91b71015104b53253296176bdd6",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "df5409c90be1326cdc17bd3fe28204d6d9946a41aca88c62180bba06f49ee5f9",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "fc9b99f3b89f997153cf66b9014922d8ce09bc6408311f7544f772ab03c68493",
+    "frontend-modern/src/types/api.ts": "16e3c1c60450eb5bb8e4f0db57f595d29cc9dbfd2e01bffee1f0529262f9f60a",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "98ee10447e5fa0fe122122727ce1b59a29c92afbcdcf7f046f4cea9f2edc9e80"
   },
   "routes": [
-    "/qualification (loopback synthetic Overview, not production routing)"
+    "/proxmox/backups"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 1000
-    },
-    {
-      "width": 900,
-      "height": 1000
+      "width": 1280,
+      "height": 844
     },
     {
       "width": 390,
-      "height": 1000
+      "height": 844
     }
   ],
   "states": [
-    "Newer notifications-disabled response remains visible after older dispatch response completes. Synthetic diagnoses, not recipient receipt.",
-    "Desktop and phone screenshots visually inspected: current warning and card controls remain visible within viewport."
+    "Synthetic PBS VM and standalone-agent inventory; CPU/memory plotted without disk telemetry. Network/disk missing series remain collecting.",
+    "Node canonical coordinates and explicit-agent adaptation validated by focused component/model/adapter tests; not a separate node browser scenario."
   ],
   "interactions": [
-    "pulse-heavy-run -- node scripts/check-alert-diagnosis-ordering.mjs passed at 1440, 900 and 390 pixels: retained warning, absent stale dispatch, new alert present, text within viewport, no page errors.",
-    "Exact-parent failing and patched passing evidence: docs/qualification/release-v6.4-diagnosis-ordering/."
+    "Expand each PBS drawer, select History, verify exact vm/history-vm and agent/history-agent requests and no wrong PBS target; collapse via keyboard.",
+    "2 Chromium tests passed on source-built isolated backend. Desktop VM and phone agent screenshots visually inspected. See docs/qualification/release-v6.4-history/README.md."
   ]
 }

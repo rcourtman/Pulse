@@ -405,7 +405,7 @@ func TestResourceListUsesCanonicalContractTypes(t *testing.T) {
 	// Agent-backed host resources should publish agent metrics targets.
 	var foundAgentHost *unified.Resource
 	for i := range resp.Data {
-		if resp.Data[i].Type == "agent" {
+		if resp.Data[i].Type == "agent" && resp.Data[i].Agent != nil && resp.Data[i].Agent.AgentID == "agent-host-1" {
 			foundAgentHost = &resp.Data[i]
 			break
 		}

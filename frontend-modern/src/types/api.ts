@@ -152,6 +152,7 @@ export interface KubernetesDeployment {
 }
 
 export interface Node {
+  metricsTarget?: Resource['metricsTarget'];
   id: string;
   name: string;
   displayName?: string;
