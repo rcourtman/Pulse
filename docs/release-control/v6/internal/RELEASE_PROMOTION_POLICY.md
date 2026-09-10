@@ -307,6 +307,15 @@ without the other lanes changing the candidate underneath it.
    to the release line before taking a fresh bound packet. Unlisted patches
    and new product work retain their existing mapping and scope.
 
+9. The following reliability patch `v6.4.5` also uses `release/v6.4`,
+   explicitly mapped for beta, RC and stable. It remains separate from the
+   selected `v6.4.4` candidates: this mapping does not change their source,
+   version or qualification. Land the mapping and resolver tests on main,
+   then adapt them to the release line at the following patch checkpoint
+   before selecting a `v6.4.5` candidate. Unlisted patches still use their
+   existing branch policy. Normal qualification, checkpoint spacing and
+   exact-RC soak requirements remain unchanged.
+
 ## Paid Pro Artifact Lineage
 
 1. Customer-facing private Pulse Pro archives and private Pulse Pro Docker images
