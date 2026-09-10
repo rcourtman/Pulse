@@ -52,6 +52,11 @@ describe('UpdatesAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/updates/check?channel=rc');
   });
 
+  it('passes explicit freshness without overriding the saved channel', async () => {
+    await UpdatesAPI.checkForUpdates(undefined, true);
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/updates/check?force=true');
+  });
+
   it('omits blank channel for update checks', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({ available: false } as any);
     await UpdatesAPI.checkForUpdates('   ' as UpdateChannel);

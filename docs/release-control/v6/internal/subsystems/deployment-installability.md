@@ -2357,6 +2357,17 @@ artifact-selection behaviour.
 
 ## Current State
 
+### Manual update freshness
+
+Manual update checks carry explicit freshness to the update manager. They bypass
+its saved-channel cache and replace that cache only after a successful provider
+check. A forced provider failure cannot masquerade as a successful cached check.
+Background checks retain their cache policy. Unknown release dates are omitted
+from UpdateInfo JSON rather than encoded as the zero time. Targeted manager tests
+exercise stale-cache replacement and unknown/known date serialization. This
+contract does not install updates or establish release qualification.
+
+
 ### Candidate notes cover restored Proxmox node network details
 
 The current v6.4 candidate notes record that configured PVE node interface

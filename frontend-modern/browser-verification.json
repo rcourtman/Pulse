@@ -1,20 +1,32 @@
 {
   "version": 1,
-  "base_sha": "86f99bf9e724699551866e36990ac40224585a28",
-  "verified_at": "2026-09-10T05:44:37.361985Z",
+  "base_sha": "93a039fb17035734bf933caf6be12fe8f849a734",
+  "verified_at": "2026-09-10T14:28:32.143948Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/useAlertHistoryState.ts"
+    "frontend-modern/src/api/updates.ts",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
+    "frontend-modern/src/components/Settings/useSystemSettingsState.ts",
+    "frontend-modern/src/stores/updates.ts",
+    "frontend-modern/src/utils/updatesPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/useAlertHistoryState.ts": "68bee9367a986329cc63354e781e09137577391671cf0285da0bd74e8df38386"
+    "frontend-modern/src/api/updates.ts": "02539e8292615d218740f2ff157dfe5e1d157a93536216f4dd63b6243e73ac14",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx": "24fedb95e9f2600a9552d0c731917b62efd376d959cb04dcc7f28e13885f6243",
+    "frontend-modern/src/components/Settings/useSystemSettingsState.ts": "bd481aec6551d0ad93b56aa551b1ca06fbb5f140a715692641d2ec19506e06d3",
+    "frontend-modern/src/stores/updates.ts": "eeb9b3744e43bdf818f6b89eb71ea5380ec33036253c57444f546f5a3a084a17",
+    "frontend-modern/src/utils/updatesPresentation.ts": "d2d8f92b5773d38c86a4808b4d8632381091bb1730fd69a10d8415bc23f3b1ca"
   },
   "routes": [
-    "/history-qualification"
+    "/settings/system-updates"
   ],
   "viewports": [
     {
       "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 900,
       "height": 900
     },
     {
@@ -23,11 +35,18 @@
     }
   ],
   "states": [
-    "Real history hook and administration card with scripted API; existing history and pending range read"
+    "Initial no-update result and live runtime identity",
+    "Pending manual refresh disabled",
+    "Fresh available beta2 with missing, legacy zero and known dates",
+    "Failed refresh retains result and unchanged saved check time, visible inline error",
+    "Successful retry and persisted reload without a release date"
   ],
   "interactions": [
-    "Load row, refresh range, confirm Clear All History, release obsolete response; assert zero rows and settled loading at both widths"
+    "Hover, focus and keyboard Enter on Check Now",
+    "Verified force=true on each manual check without channel override",
+    "Repeat check and provider failure followed by retry",
+    "Reload cached result and inspect pixels at all three widths"
   ],
-  "command": "pulse-heavy-run -- node scripts/check-incident-request-ownership.mjs",
-  "notes": "18 Chromium cases pass including two history clear cases. Narrow screenshot inspected. Component fixture proof, not installed backend deletion or delivery acceptance. First attempt lacked root Playwright dependency; locked npm ci resolved it. Subsequent selector timeout corrected to actual Clear All History label; adverse log retained in lane proof directory."
+  "command": "node .agent-coordination/receipts/release-measurement-resolution-20260910/check-update-freshness.cjs (workspace root)",
+  "notes": "Current local Vite route with real settings/store/API client and controlled update/version HTTP responses. Final4 browser log and screenshots retained locally. Backend cache/JSON separately verified by targeted Go tests. No installation or production runtime change. Browser fixtures do not establish deployed customer behavior."
 }

@@ -86,3 +86,10 @@ export function getUpdateCheckedLabel(lastCheckedMs: number | null | undefined):
 export function getUpdateCheckActionLabel(checking: boolean): string {
   return checking ? UPDATES_PANEL_COPY.checkingLabel : UPDATES_PANEL_COPY.checkNowLabel;
 }
+
+// Older servers serialize an unknown release date as Go's zero time.
+export function formatUpdateReleaseDate(value?: string): string | undefined {
+  if (!value || value.startsWith('0001-01-01')) return undefined;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toLocaleDateString() : undefined;
+}

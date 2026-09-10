@@ -55,7 +55,7 @@ const normalizeUpdateInfo = (value: unknown): UpdateInfo | undefined => {
     typeof currentVersion !== 'string' ||
     typeof latestVersion !== 'string' ||
     typeof releaseNotes !== 'string' ||
-    typeof releaseDate !== 'string' ||
+    (releaseDate !== undefined && typeof releaseDate !== 'string') ||
     typeof downloadUrl !== 'string' ||
     typeof isPrerelease !== 'boolean'
   ) {
@@ -298,10 +298,24 @@ const rollbackUpdate = async (params: {
 };
 
 // Check for updates
-const checkForUpdates = async (force = false): Promise<void> => {
-  // Don't check if already checking
-  if (isChecking()) return;
+let checkInFlight: Promise<void> | undefined;
 
+const checkForUpdates = async (force = false): Promise<void> => {
+  // A manual check arriving during a background check must still request fresh data.
+  while (checkInFlight) {
+    await checkInFlight;
+    if (!force) return;
+  }
+  const pending = performUpdateCheck(force);
+  checkInFlight = pending;
+  try {
+    await pending;
+  } finally {
+    if (checkInFlight === pending) checkInFlight = undefined;
+  }
+};
+
+const performUpdateCheck = async (force: boolean): Promise<void> => {
   const state = loadState();
   const now = Date.now();
 
@@ -381,7 +395,9 @@ const checkForUpdates = async (force = false): Promise<void> => {
     }
 
     // Get the saved update channel from system settings
-    const info = await withTransientRetry('check request', () => UpdatesAPI.checkForUpdates());
+    const info = await withTransientRetry('check request', () =>
+      UpdatesAPI.checkForUpdates(undefined, force),
+    );
 
     setUpdateInfo(info);
     setUpdateAvailable(info.available);
@@ -394,10 +410,11 @@ const checkForUpdates = async (force = false): Promise<void> => {
     }
 
     // Save to cache
-    setLastCheckedAt(now);
+    const completedAt = Date.now();
+    setLastCheckedAt(completedAt);
     saveState({
       ...state,
-      lastCheck: now,
+      lastCheck: completedAt,
       updateInfo: info,
     });
   } catch (error) {

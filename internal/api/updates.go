@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -36,7 +37,7 @@ type UpdateHandlers struct {
 
 // UpdateManager defines the interface for update management operations
 type UpdateManager interface {
-	CheckForUpdatesWithChannel(ctx context.Context, channel string) (*updates.UpdateInfo, error)
+	CheckForUpdatesWithOptions(ctx context.Context, options updates.UpdateCheckOptions) (*updates.UpdateInfo, error)
 	ApplyUpdate(ctx context.Context, req updates.ApplyUpdateRequest) error
 	RollbackToBackup(ctx context.Context, req updates.RollbackRequest) error
 	GetStatus() updates.UpdateStatus
@@ -112,7 +113,20 @@ func (h *UpdateHandlers) HandleCheckUpdates(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	info, err := h.manager.CheckForUpdatesWithChannel(ctx, channel)
+	force := false
+	if raw, present := r.URL.Query()["force"]; present {
+		if len(raw) != 1 {
+			http.Error(w, "force must be a boolean", http.StatusBadRequest)
+			return
+		}
+		force, err = strconv.ParseBool(raw[0])
+		if err != nil {
+			http.Error(w, "force must be a boolean", http.StatusBadRequest)
+			return
+		}
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	info, err := h.manager.CheckForUpdatesWithOptions(ctx, updates.UpdateCheckOptions{Channel: channel, Force: force})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to check for updates")
 		http.Error(w, "Failed to check for updates", http.StatusInternalServerError)

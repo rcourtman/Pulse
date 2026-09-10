@@ -64,7 +64,7 @@ type UpdateInfo struct {
 	CurrentVersion string    `json:"currentVersion"`
 	LatestVersion  string    `json:"latestVersion"`
 	ReleaseNotes   string    `json:"releaseNotes"`
-	ReleaseDate    time.Time `json:"releaseDate"`
+	ReleaseDate    time.Time `json:"releaseDate,omitzero"`
 	DownloadURL    string    `json:"downloadUrl"`
 	IsPrerelease   bool      `json:"isPrerelease"`
 	IsMajorUpgrade bool      `json:"isMajorUpgrade"`
@@ -360,6 +360,18 @@ func (m *Manager) CheckForUpdates(ctx context.Context) (*UpdateInfo, error) {
 
 // CheckForUpdatesWithChannel checks GitHub for available updates with optional channel override
 func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string) (*UpdateInfo, error) {
+	return m.CheckForUpdatesWithOptions(ctx, UpdateCheckOptions{Channel: channel})
+}
+
+// UpdateCheckOptions controls channel selection and explicit freshness requests.
+type UpdateCheckOptions struct {
+	Channel string
+	Force   bool
+}
+
+// CheckForUpdatesWithOptions refreshes the saved-channel cache after a forced check.
+func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options UpdateCheckOptions) (*UpdateInfo, error) {
+	channel := options.Channel
 	// Get current version first to auto-detect channel if needed
 	currentInfo, err := GetCurrentVersion()
 	if err != nil {
@@ -376,7 +388,7 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 	useCache := !explicitChannelProvided
 
 	// Check cache first (only if using saved channel)
-	if useCache {
+	if useCache && !options.Force {
 		m.statusMu.RLock()
 		cachedInfo, hasCached := m.checkCache[channel]
 		cachedTime, hasTime := m.cacheTime[channel]
@@ -444,6 +456,10 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 		if errors.Is(err, errGitHubRateLimited) {
 			log.Warn().Err(err).Str("channel", channel).Msg("GitHub rate limit encountered while checking for updates")
 
+			if options.Force {
+				m.updateStatus("error", 0, "Fresh update check unavailable", err)
+				return nil, fmt.Errorf("fresh update check unavailable: %w", err)
+			}
 			if useCache {
 				m.statusMu.RLock()
 				cachedInfo, hasCached := m.checkCache[channel]
