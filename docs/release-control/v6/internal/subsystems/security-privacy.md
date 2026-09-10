@@ -289,6 +289,8 @@ invisible to operators reviewing exactly what Pulse sends.
 
 ## Shared Boundaries
 
+- Configured local-admin synchronisation is a runtime identity replacement, not an additive role grant: changing the configured identity removes the previous bypass, and clearing it during first-run reset clears that bypass. Configurable authorizers must synchronise identity updates with concurrent authorization reads; other users still require their own policy grants.
+
 ### Notification recovery reload ownership
 
 Refreshing the notification queue handler on reload changes only its default

@@ -89,6 +89,7 @@ func (r *Router) handleResetFirstRunSecurity(w http.ResponseWriter, req *http.Re
 		}
 	}
 	r.config.AuthUser = ""
+	r.syncConfiguredAdminAuthorizer()
 	r.config.AuthPass = ""
 	r.config.APIToken = ""
 	r.config.APITokens = nil

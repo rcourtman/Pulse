@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"strings"
+	"sync"
 )
 
 // PolicyEvaluator implements Authorizer with advanced policy evaluation.
@@ -151,6 +152,7 @@ func (e *PolicyEvaluator) substituteVariables(value, username string, attributes
 // RBACAuthorizer wraps PolicyEvaluator to implement Authorizer for the RBAC system.
 type RBACAuthorizer struct {
 	evaluator *PolicyEvaluator
+	adminMu   sync.RWMutex
 	adminUser string
 }
 
@@ -166,7 +168,10 @@ func (a *RBACAuthorizer) Authorize(ctx context.Context, action string, resource 
 	username := GetUser(ctx)
 
 	// Admin user bypass
-	if a.adminUser != "" && username == a.adminUser {
+	a.adminMu.RLock()
+	isAdmin := a.adminUser != "" && username == a.adminUser
+	a.adminMu.RUnlock()
+	if isAdmin {
 		return true, nil
 	}
 
@@ -175,7 +180,9 @@ func (a *RBACAuthorizer) Authorize(ctx context.Context, action string, resource 
 
 // SetAdminUser sets the admin user who has full access.
 func (a *RBACAuthorizer) SetAdminUser(username string) {
+	a.adminMu.Lock()
 	a.adminUser = username
+	a.adminMu.Unlock()
 }
 
 // AttributeAuthorizer extends Authorizer with attribute-based authorization.

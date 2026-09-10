@@ -270,9 +270,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	)
 
 	// Sync the configured admin user to the authorizer (if supported)
-	if cfg.AuthUser != "" {
-		auth.SetAdminUser(cfg.AuthUser)
-	}
+	r.syncConfiguredAdminAuthorizer()
 
 	// The tenant provider is the sole owner of v6 RBAC persistence. Initialize
 	// the default manager before SSO services and routes so settings, SSO role
