@@ -4471,6 +4471,7 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
             [
                 "internal/monitoring/issue1595_collection_trust_test.go",
+                "internal/monitoring/issue1913_host_continuity_test.go",
                 "internal/unifiedresources/action_request_identity_test.go",
                 "internal/unifiedresources/availability_link_test.go",
                 "internal/unifiedresources/history_identity_test.go",
@@ -4504,6 +4505,7 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
             [
                 "internal/monitoring/issue1595_collection_trust_test.go",
+                "internal/monitoring/issue1913_host_continuity_test.go",
                 "internal/unifiedresources/action_request_identity_test.go",
                 "internal/unifiedresources/availability_link_test.go",
                 "internal/unifiedresources/history_identity_test.go",

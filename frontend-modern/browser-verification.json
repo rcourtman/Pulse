@@ -1,32 +1,24 @@
 {
   "version": 1,
-  "base_sha": "93a039fb17035734bf933caf6be12fe8f849a734",
-  "verified_at": "2026-09-10T14:28:32.143948Z",
+  "base_sha": "837a5b8843fa4a4ca293f66f43123b9f9c127d4d",
+  "verified_at": "2026-09-10T14:54:37.800409Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/updates.ts",
-    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
-    "frontend-modern/src/components/Settings/useSystemSettingsState.ts",
-    "frontend-modern/src/stores/updates.ts",
-    "frontend-modern/src/utils/updatesPresentation.ts"
+    "internal/monitoring/monitored_system_usage.go",
+    "internal/unifiedresources/monitor_adapter.go",
+    "internal/unifiedresources/registry.go"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/updates.ts": "02539e8292615d218740f2ff157dfe5e1d157a93536216f4dd63b6243e73ac14",
-    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx": "24fedb95e9f2600a9552d0c731917b62efd376d959cb04dcc7f28e13885f6243",
-    "frontend-modern/src/components/Settings/useSystemSettingsState.ts": "bd481aec6551d0ad93b56aa551b1ca06fbb5f140a715692641d2ec19506e06d3",
-    "frontend-modern/src/stores/updates.ts": "eeb9b3744e43bdf818f6b89eb71ea5380ec33036253c57444f546f5a3a084a17",
-    "frontend-modern/src/utils/updatesPresentation.ts": "d2d8f92b5773d38c86a4808b4d8632381091bb1730fd69a10d8415bc23f3b1ca"
+    "internal/monitoring/monitored_system_usage.go": "125f39dbfc448a37d0ee74756a03534d435abdacb4e0c7fed8c0710364af5f4a",
+    "internal/unifiedresources/monitor_adapter.go": "7720ba164373cdf6a8a9f950215f27e0e5a24e48edc2f9c1e444b4144e35b3d6",
+    "internal/unifiedresources/registry.go": "b49125258595bfdabb2a0a06dc51e51e7e27f998c8d9cb8e8ad69cffc1e4272c"
   },
   "routes": [
-    "/settings/system-updates"
+    "/proxmox"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 900
-    },
-    {
-      "width": 900,
       "height": 900
     },
     {
@@ -35,18 +27,17 @@
     }
   ],
   "states": [
-    "Initial no-update result and live runtime identity",
-    "Pending manual refresh disabled",
-    "Fresh available beta2 with missing, legacy zero and known dates",
-    "Failed refresh retains result and unchanged saved check time, visible inline error",
-    "Successful retry and persisted reload without a release date"
+    "6.4.1 reproduction shows Offline and unavailable CPU despite live host report",
+    "Repaired backend output shows current agent and 17 percent CPU",
+    "Explicit offline control remains offline with unavailable live metrics",
+    "Expanded node Overview displays current agent identity"
   ],
   "interactions": [
-    "Hover, focus and keyboard Enter on Check Now",
-    "Verified force=true on each manual check without channel override",
-    "Repeat check and provider failure followed by retry",
-    "Reload cached result and inspect pixels at all three widths"
+    "Two reloads preserve current identity, metrics and node count",
+    "Hover node row and expand inline details",
+    "Hover and focus collapse button, Escape preserves inline disclosure, Enter collapses it",
+    "Inspect actual pixels for node status, CPU, identity and narrow layout"
   ],
-  "command": "node .agent-coordination/receipts/release-measurement-resolution-20260910/check-update-freshness.cjs (workspace root)",
-  "notes": "Current local Vite route with real settings/store/API client and controlled update/version HTTP responses. Final4 browser log and screenshots retained locally. Backend cache/JSON separately verified by targeted Go tests. No installation or production runtime change. Browser fixtures do not establish deployed customer behavior."
+  "command": "node .agent-coordination/issue-1913-upgrade/browser-check.cjs (workspace root)",
+  "notes": "Current local frontend with a synthetic canonical resource emitted by the exact Go reproduction, added to the existing local API inventory. Browser isolated from inventory websocket updates. Compared original 6.4.1 backend output with repaired source. No production mutations or reporter environment access. Initial full-inventory replacement fixture caused reactive-cache errors and was excluded from proof. Final fixture preserves the existing inventory and source-query contract. Screenshots and backend receipts retained in the local issue investigation directory."
 }

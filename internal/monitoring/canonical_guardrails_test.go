@@ -746,7 +746,7 @@ func TestMonitoredSystemUsageReadinessGuardrailsRemainCanonical(t *testing.T) {
 			"Count:     unifiedresources.MonitoredSystemCount(readState),",
 			"Available: true,",
 			"func (m *Monitor) readStateWithStandaloneHostContinuity(",
-			"return unifiedresources.ReadStateWithRecords(readState, unifiedresources.SourceAgent, records)",
+			"return unifiedresources.ReadStateWithHostContinuity(readState, records)",
 		},
 		"truenas_poller.go": {
 			"func (p *TrueNASPoller) SupplementalInventoryReadyAt(_ *Monitor, orgID string) (time.Time, bool) {",
