@@ -78,8 +78,11 @@ HTTP redirects are disabled for the authenticated client.
 4. Actual operator-owned restart; require retained incident ID and terminal
    audit. Keep this occurrence firing for the operator Retry.
 5. Global terminal Retry; require the **original terminal notification ID** to
-   gain a sent audit **before resolution**. Then low CPU clears and high CPU
-   creates a distinct recurrence; require its exact start time at the recipient.
+   gain a sent audit **before resolution** and require its firing receipt. Then
+   low CPU clears and high CPU creates a distinct recurrence; require its alert
+   ID and start time at the recipient, projected to the published webhook’s
+   whole-second RFC3339 precision. Fail closed if old and new starts share that
+   second; full-precision API timestamps remain unchanged in incident queries.
    Retain old and current timelines separately. Resolution deliberately cancels
    obsolete terminal firing rows, so do not expect Retry to resurrect them.
 6. Disable agent alerts; ingest a fresh high-CPU identity for 30s and require
