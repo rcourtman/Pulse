@@ -1029,7 +1029,9 @@ describe('settings architecture guardrails', () => {
   it('keeps Ollama credentials in the provider editor with write-only saved state', () => {
     expect(aiProviderConfigurationSectionSource).toContain('props.settings()?.ollama_password_set');
     expect(aiProviderConfigurationSectionSource).toContain('Clear saved Ollama password');
-    expect(aiProviderConfigurationSectionSource).not.toMatch(/props\.settings\(\)\?\.ollama_password\b/);
+    expect(aiProviderConfigurationSectionSource).not.toMatch(
+      /props\.settings\(\)\?\.ollama_password\b/,
+    );
     expect(aiSettingsModelSource).toContain("inputField: 'ollamaPassword'");
     expect(aiSettingsStateSource).toContain("ollamaPassword: ''");
     expect(aiSettingsStateSource).not.toMatch(/data\.ollama_password\b/);
