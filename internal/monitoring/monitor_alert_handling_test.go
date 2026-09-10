@@ -957,17 +957,7 @@ func TestMonitor_HandleAlertEscalated_QuietHoursSuppressesNotification(t *testin
 		alertManager:    mgr,
 	}
 
-	alert := &alerts.Alert{
-		ID:           "escalated-offline",
-		Type:         "connectivity",
-		Level:        alerts.AlertLevelCritical,
-		ResourceID:   "node/pve-1",
-		ResourceName: "pve-1",
-		Node:         "pve-1",
-		Instance:     "pve",
-		Message:      "Node offline",
-		StartTime:    time.Now(),
-	}
+	alert := activeEscalationFixture(t, mgr, "connectivity", alerts.AlertLevelCritical)
 
 	m.handleAlertEscalated(nil, alert, 1)
 
@@ -1013,17 +1003,7 @@ func TestMonitor_HandleAlertEscalated_SendsNotificationWhenNotSuppressed(t *test
 		alertManager:    mgr,
 	}
 
-	alert := &alerts.Alert{
-		ID:           "escalated-normal",
-		Type:         "connectivity",
-		Level:        alerts.AlertLevelCritical,
-		ResourceID:   "node/pve-1",
-		ResourceName: "pve-1",
-		Node:         "pve-1",
-		Instance:     "pve",
-		Message:      "Node offline",
-		StartTime:    time.Now(),
-	}
+	alert := activeEscalationFixture(t, mgr, "connectivity", alerts.AlertLevelCritical)
 
 	m.handleAlertEscalated(nil, alert, 1)
 
@@ -1069,17 +1049,7 @@ func TestMonitor_HandleAlertEscalated_BypassesDeliveryCooldown(t *testing.T) {
 		alertManager:    mgr,
 	}
 
-	alert := &alerts.Alert{
-		ID:           "escalated-with-cooldown",
-		Type:         "memory",
-		Level:        alerts.AlertLevelWarning,
-		ResourceID:   "vm/100",
-		ResourceName: "vm-100",
-		Node:         "pve-1",
-		Instance:     "pve",
-		Message:      "Memory threshold crossed",
-		StartTime:    time.Now().Add(-10 * time.Minute),
-	}
+	alert := activeEscalationFixture(t, mgr, "memory", alerts.AlertLevelWarning)
 
 	notifMgr.SendAlert(alert)
 	select {

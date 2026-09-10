@@ -4008,3 +4008,13 @@ without a request consumer, and after acceptance, plus late completion and
 success/error propagation using channel-only fixtures without starting monitors
 or storage. This is shutdown handshake proof, not installed notification receipt
 or full server reload acceptance.
+
+### Stale escalation callback snapshots are not delivery authority
+
+`handleAlertEscalated` obtains current occurrence/policy admission from the
+alert manager before dispatch. `monitor_escalation_stale_test.go` invokes the
+callback after disablement, inactive activation, recovery, recurrence,
+and acknowledgement, requiring no queued notification. Existing routing,
+quiet-hours and cooldown tests now use real active manager occurrences rather
+than fabricated inactive alerts. This is callback-boundary proof, not a claim
+that already admitted or provider-accepted deliveries can be recalled.
