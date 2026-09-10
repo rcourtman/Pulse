@@ -8369,3 +8369,13 @@ read-only policy, missing state and executor-only configurations. Search probes
 retain the existing normalised literal matching: wildcard strings do not expand,
 while a broader literal query can find the five synthetic targets. That read
 proof does not establish model-owned recovery or permit broadening action scope.
+
+Service control-setting, execution-mode and Assistant projection fixtures must
+install a typed planner whenever they expect planning to be available; a mock
+agent transport alone does not model that capability. Provider projection must
+not invoke the planner merely to list tools. The read-only projection control
+must include an installed planner so it tests policy rather than accidentally
+passing because capability wiring is absent. Surface regressions also remove
+the planner while retaining execute authority and transport, and assert control
+is absent in both provider tools and the surface contract. These are offline
+fixture and policy proofs, not hosted-model or installed acceptance.
