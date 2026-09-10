@@ -76,10 +76,15 @@ HTTP redirects are disabled for the authenticated client.
 3. Indefinite HTTP503 until a dead-letter audit appears (600s deadline); retain
    the exact notification IDs and occurrence-specific incident timeline.
 4. Actual operator-owned restart; require retained incident ID and terminal
-   audit, then low CPU to clear and high CPU for a distinct recurrence.
+   audit. Keep this occurrence firing for the operator Retry.
 5. Global terminal Retry; require the **original terminal notification ID** to
-   gain a sent audit and two distinct delivered occurrence start times. Retain
-   old and current incident timelines separately.
+   gain a sent audit **before resolution** and require its firing receipt. Then
+   low CPU clears and high CPU creates a distinct recurrence; require its alert
+   ID and start time at the recipient, projected to the published webhook’s
+   whole-second RFC3339 precision. Fail closed if old and new starts share that
+   second; full-precision API timestamps remain unchanged in incident queries.
+   Retain old and current timelines separately. Resolution deliberately cancels
+   obsolete terminal firing rows, so do not expect Retry to resurrect them.
 6. Disable agent alerts; ingest a fresh high-CPU identity for 30s and require
    no CPU alert or successful alert delivery for that identity.
 7. Re-enable agent alerts, exhaust that identity (another 600s bound), Dismiss
@@ -96,7 +101,9 @@ escalation and resolved notifications to isolate these scenarios.
 
 A zero exit means only the named assertions passed. The result deliberately
 keeps `installed_acceptance_complete: false`. Review all receipt/snapshot files,
-including failures. Do not infer that the entire release is qualified.
+including failures. The original installed probe incorrectly expected replay after
+resolution; retain that failed attempt rather than reclassifying it as a pass.
+Do not infer that the entire release is qualified.
 
 Still separate: recurrence timeline side-effect correctness (historical replay
 must not mark the new occurrence delivered), retirement of the visible system
