@@ -8350,3 +8350,22 @@ Acceptance requires each target's actual approval-required tool receipt, not
 final prose. This fixture changes no production behaviour and proves no hosted
 acceptance until the fixed-source, credential-contained execution has actually
 completed.
+
+#### Plan-only capability exposure
+
+The available tool list and rendered governance manifest advertise
+`pulse_control` only when the canonical typed-action planner and read state are
+installed, subject to the existing control-level policy. Agent command transport
+and native app execution providers are neither prerequisites nor substitutes for
+that planner. Read-only sessions still hide control. Discovery, capability
+validation, approval and execution remain distinct; advertising planning grants
+no execution authority.
+
+The offline lifecycle fixture checks the offered provider-neutral tools and
+rendered manifest before returning scripted calls, and the loopback gateway
+checks actual wire tool names. A scripted call to an unoffered tool is not
+capability acceptance. Availability regressions cover planner-only operation,
+read-only policy, missing state and executor-only configurations. Search probes
+retain the existing normalised literal matching: wildcard strings do not expand,
+while a broader literal query can find the five synthetic targets. That read
+proof does not establish model-owned recovery or permit broadening action scope.

@@ -36,13 +36,15 @@ func (s *stubAppContainerActionProvider) ExecuteAction(_ context.Context, req Ap
 	return &result, nil
 }
 
-func TestPulseToolExecutor_ListTools_IncludesPulseControlForNativeAppProvider(t *testing.T) {
+func TestPulseToolExecutor_ListTools_IncludesPulseControlForNativeAppPlanner(t *testing.T) {
 	provider := newTrueNASUnifiedQueryProvider(t)
 	executor := NewPulseToolExecutor(ExecutorConfig{
-		UnifiedResourceProvider:    provider,
-		ReadState:                  provider.ResourceRegistry,
-		AppContainerActionProvider: &stubAppContainerActionProvider{},
-		ControlLevel:               ControlLevelControlled,
+		UnifiedResourceProvider: provider,
+		ReadState:               provider.ResourceRegistry,
+		TypedActionPlanner: typedActionPlannerFunc(func(context.Context, string, unifiedresources.ActionRequest) (*unifiedresources.ActionPlan, error) {
+			return nil, nil
+		}),
+		ControlLevel: ControlLevelControlled,
 	})
 
 	tools := executor.ListTools()
@@ -54,15 +56,17 @@ func TestPulseToolExecutor_ListTools_IncludesPulseControlForNativeAppProvider(t 
 		}
 	}
 	if !found {
-		t.Fatalf("expected pulse_control to be available with native app action provider, got %+v", tools)
+		t.Fatalf("expected pulse_control to be available with native app planner, got %+v", tools)
 	}
 }
 
 func TestPulseToolExecutor_ListTools_PulseControlDescriptionStaysCapabilityBounded(t *testing.T) {
 	executor := NewPulseToolExecutor(ExecutorConfig{
 		StateProvider: &mockStateProvider{},
-		AgentServer:   &mockAgentServer{},
-		ControlLevel:  ControlLevelControlled,
+		TypedActionPlanner: typedActionPlannerFunc(func(context.Context, string, unifiedresources.ActionRequest) (*unifiedresources.ActionPlan, error) {
+			return nil, nil
+		}),
+		ControlLevel: ControlLevelControlled,
 	})
 
 	tools := executor.ListTools()
@@ -165,4 +169,38 @@ type typedActionPlannerFunc func(context.Context, string, unifiedresources.Actio
 
 func (f typedActionPlannerFunc) PlanTypedAction(ctx context.Context, orgID string, req unifiedresources.ActionRequest) (*unifiedresources.ActionPlan, error) {
 	return f(ctx, orgID, req)
+}
+
+// Tool exposure follows the plan-only lifecycle boundary, not an execution
+// transport. Read-only policy must still hide it even when planning is wired.
+func TestPulseControlAvailabilityUsesPlanner(t *testing.T) {
+	planner := typedActionPlannerFunc(func(context.Context, string, unifiedresources.ActionRequest) (*unifiedresources.ActionPlan, error) {
+		t.Fatal("listing tools must not plan or execute")
+		return nil, nil
+	})
+	for _, tc := range []struct {
+		name string
+		cfg  ExecutorConfig
+		want bool
+	}{
+		{"planner", ExecutorConfig{StateProvider: &mockStateProvider{}, TypedActionPlanner: planner, ControlLevel: ControlLevelControlled}, true},
+		{"read_only", ExecutorConfig{StateProvider: &mockStateProvider{}, TypedActionPlanner: planner, ControlLevel: ControlLevelReadOnly}, false},
+		{"no_state", ExecutorConfig{TypedActionPlanner: planner, ControlLevel: ControlLevelControlled}, false},
+		{"agent_only", ExecutorConfig{StateProvider: &mockStateProvider{}, AgentServer: &mockAgentServer{}, ControlLevel: ControlLevelControlled}, false},
+		{"app_executor_only", ExecutorConfig{StateProvider: &mockStateProvider{}, AppContainerActionProvider: &stubAppContainerActionProvider{}, ControlLevel: ControlLevelControlled}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := NewPulseToolExecutor(tc.cfg)
+			offered, governed := false, false
+			for _, tool := range e.ListTools() {
+				offered = offered || tool.Name == "pulse_control"
+			}
+			for _, tool := range e.ListToolGovernance() {
+				governed = governed || tool.Name == "pulse_control"
+			}
+			if offered != tc.want || governed != tc.want {
+				t.Fatalf("offered=%v governed=%v want=%v", offered, governed, tc.want)
+			}
+		})
+	}
 }
