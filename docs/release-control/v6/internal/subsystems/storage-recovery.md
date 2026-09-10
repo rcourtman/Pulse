@@ -254,6 +254,17 @@ command-capable profile.
 
 ## Shared Boundaries
 
+### Development harness rate-budget isolation
+
+Recovery API extensions retain their dedicated endpoint-category budget when
+the development integration stack explicitly raises the general API budget.
+The override applies only with `PULSE_DEV=true` and a bounded configured value;
+production ignores it. This does not change queue persistence, retry or
+dismissal semantics, storage access, or recovery authority. General bootstrap
+requests remain bounded and return 429 on exhaustion rather than bypassing
+rate enforcement; the shared middleware contract is covered by
+`TestJourneyGeneralAPIBudgetIsolation` in `internal/api/contract_test.go`.
+
 ### Notification recovery reload ownership
 
 Queue recovery API handlers follow router monitor replacement instead of
