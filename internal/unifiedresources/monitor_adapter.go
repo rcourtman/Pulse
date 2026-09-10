@@ -73,6 +73,17 @@ func ReadStateWithRecords(
 	source DataSource,
 	records []IngestRecord,
 ) ReadState {
+	return readStateWithRecords(readState, source, records, false)
+}
+
+// ReadStateWithHostContinuity fills absent machines from saved enrollments.
+// A saved enrollment is not a current observation: if canonical correlation
+// finds an existing resource, retain that resource's identity and telemetry.
+func ReadStateWithHostContinuity(readState ReadState, records []IngestRecord) ReadState {
+	return readStateWithRecords(readState, SourceAgent, records, true)
+}
+
+func readStateWithRecords(readState ReadState, source DataSource, records []IngestRecord, onlyMissing bool) ReadState {
 	if readState == nil || len(records) == 0 || strings.TrimSpace(string(source)) == "" {
 		return readState
 	}
@@ -90,7 +101,7 @@ func ReadStateWithRecords(
 	cloned := NewRegistry(registry.store)
 	thresholds := adapter.currentStaleThresholds()
 	cloned.IngestResourcesWithStaleThresholds(registry.List(), thresholds)
-	cloned.IngestRecords(source, records)
+	cloned.ingestRecords(source, records, onlyMissing)
 	return NewMonitorAdapterWithStaleThresholds(cloned, thresholds)
 }
 
