@@ -1,17 +1,18 @@
 {
   "version": 1,
-  "base_sha": "a61f1c7c82ad5c3229618a71b379b2deca0538bd",
-  "verified_at": "2026-09-09T23:36:48.909107Z",
+  "base_sha": "1dcf4db9eaacf1cf4dc7d1629916d6218fe8abf1",
+  "verified_at": "2026-09-10T00:03:38.494393Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx": "842afd8a7cd6a96309896c15ab9a428e27078f1d4176feaa24982fbae94acf9a"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "092c6561bf59e1485a0602603e43da1fb5f2ce2c6b0fa312a1f3fe8fa0437c31",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "0aba67a461e39a45fdddf199eb4230fbed93724f9795fa4b09c61ebc31b6715e"
   },
   "routes": [
-    "/settings/infrastructure",
-    "/settings/infrastructure?add=pve"
+    "/proxmox/backups"
   ],
   "viewports": [
     {
@@ -24,15 +25,12 @@
     }
   ],
   "states": [
-    "Managed source-built Community backend with authenticated local session; discovery and impact API responses controlled by Playwright fixtures",
-    "Candidate review with explicit approval; pending preview; edited endpoint; current success/error; disposed editor"
+    "Authenticated source-built local backend; resource/history API fixtures; websocket disabled to isolate fixture inventory",
+    "Standalone PBS agent and PVE VM with agent facet; disk series absent; CPU and memory series populated"
   ],
   "interactions": [
-    "At both widths: discover candidate, open review, request preview, approve then edit endpoint and assert approval resets",
-    "Start replacement preview, deliver obsolete error, retain new loading state; resolve current success",
-    "Request preview then change endpoint away and back; obsolete success stays hidden; current error is visible and retry enabled",
-    "Close editor during pending request, resolve response, assert no preview appears outside disposed editor"
+    "Keyboard expand PBS row, select History, assert exact canonical type/id request and two utilization plot paths, collapse; repeat for both host types at both widths"
   ],
-  "command": "pulse-heavy-run -- bash -c 'cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=true node scripts/run-playwright.mjs tests/68-infrastructure-onboarding.spec.ts --project=chromium --grep \"import preview ignores\" --workers=1 --retries=0'",
-  "notes": "Final current production build and both Chromium cases passed (8.1s). Desktop and narrow screenshots inspected. Real managed backend; discovery/impact are synthetic API fixtures, not appliance or reporter acceptance. Evidence: Web20260909T232514Z outcome browser-proof. No release qualification claim."
+  "command": "pulse-heavy-run -- bash -c 'cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=true node scripts/run-playwright.mjs tests/63-pbs-history-targets.spec.ts --project=chromium --workers=1 --retries=0'",
+  "notes": "Two final Chromium tests pass (3.2s); desktop and narrow screenshots inspected. Synthetic API proof, not reporter/PBS installation acceptance. First attempt retained: live snapshots overwrote fixtures, and narrow pointer target was intercepted by row text; final fixture isolates websocket and uses supported keyboard expansion. Proof retained in Web20260909T235527Z outcome directory."
 }

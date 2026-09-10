@@ -21,6 +21,7 @@ vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
         data-host-details-open={String(props.initialShowHostDetails === true)}
         data-agent-id={props.resource.agent?.agentId}
         data-metrics-resource-id={props.resource.metricsTarget?.resourceId}
+        data-metrics-resource-type={props.resource.metricsTarget?.resourceType}
       >
         <button type="button" onClick={props.onClose}>
           Close details
@@ -95,7 +96,7 @@ describe('ProxmoxBackupServersTable details', () => {
     expect(screen.queryByTestId('pbs-resource-detail')).not.toBeInTheDocument();
   });
 
-  it('uses the uniquely correlated agent resource for host details and metrics history', () => {
+  it.each(['agent', 'vm', 'system-container'] as const)('uses the uniquely correlated %s resource for host details and metrics history', (type) => {
     const pbs = makePbsResource();
     pbs.sources = ['pbs'];
     pbs.agent = undefined;
@@ -106,7 +107,7 @@ describe('ProxmoxBackupServersTable details', () => {
     };
     const agent = {
       id: 'agent-host-1',
-      type: 'agent',
+      type,
       name: 'pbs-main.local',
       displayName: 'PBS host',
       platformId: 'agent-host-1',
@@ -116,13 +117,14 @@ describe('ProxmoxBackupServersTable details', () => {
       status: 'online',
       lastSeen: pbs.lastSeen + 1_000,
       agent: { agentId: 'agent-pbs-1', hostname: 'pbs-main.local', osName: 'Debian GNU/Linux' },
-      metricsTarget: { resourceType: 'agent', resourceId: 'agent-pbs-1' },
+      metricsTarget: { resourceType: type, resourceId: 'agent-pbs-1' },
       platformData: {
         sources: ['agent', 'pbs'],
         agent: { agentId: 'agent-pbs-1', hostname: 'pbs-main.local' },
       },
     } as Resource;
 
+    expect(agent.disk).toBeUndefined();
     render(() => <ProxmoxBackupServersTable servers={[pbs, agent]} />);
     fireEvent.click(screen.getByRole('button', { name: 'Expand details for pbs-main' }));
 
@@ -130,9 +132,23 @@ describe('ProxmoxBackupServersTable details', () => {
     expect(detail).toHaveAttribute('data-resource-id', 'pbs-1');
     expect(detail).toHaveAttribute('data-agent-id', 'agent-pbs-1');
     expect(detail).toHaveAttribute('data-metrics-resource-id', 'agent-pbs-1');
+    expect(detail).toHaveAttribute('data-metrics-resource-type', type);
   });
 
-  it('does not guess when two agent resources share the PBS hostname', () => {
+  it('does not correlate a guest without host telemetry just by name', () => {
+    const pbs = makePbsResource();
+    pbs.metricsTarget = { resourceType: 'agent', resourceId: 'pbs-main' };
+    const guest = { ...pbs, id: 'vm-unrelated', type: 'vm',
+      agent: undefined, platformData: {}, pbs: undefined,
+      metricsTarget: { resourceType: 'vm', resourceId: 'unrelated' } } as Resource;
+    render(() => <ProxmoxBackupServersTable servers={[pbs, guest]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Expand details for pbs-main' }));
+    expect(screen.getByTestId('pbs-resource-detail')).toHaveAttribute(
+      'data-metrics-resource-id', 'pbs-main',
+    );
+  });
+
+  it.each(['agent', 'vm'] as const)('does not guess when an agent and %s share the PBS hostname', (type) => {
     const pbs = makePbsResource();
     pbs.sources = ['pbs'];
     pbs.agent = undefined;
@@ -140,7 +156,7 @@ describe('ProxmoxBackupServersTable details', () => {
     const candidate = (id: string): Resource =>
       ({
         id,
-        type: 'agent',
+        type: id === 'agent-pbs-b' ? type : 'agent',
         name: 'pbs-main.local',
         displayName: id,
         platformId: id,
