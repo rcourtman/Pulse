@@ -593,10 +593,11 @@ func TestService_AbortSession_UsesRegisteredActiveLoops(t *testing.T) {
 func TestService_SettersAndUpdateControlSettings(t *testing.T) {
 	service := NewService(Config{
 		AIConfig: &config.AIConfig{ControlLevel: config.ControlLevelReadOnly},
-		// Agent server makes pulse_control eligible when control is enabled.
+		// Control policy is tested with canonical planning wired below.
 		AgentServer:   &mockAgentServer{},
 		StateProvider: &mockStateProvider{},
 	})
+	service.SetTypedActionPlanner(&gateTestPlanner{})
 
 	require.NotNil(t, service.executor)
 	// In read-only mode, pulse_control is not available
@@ -630,6 +631,7 @@ func TestService_ToolsForExecutionMode_ExposesGovernedTools(t *testing.T) {
 		StateProvider: &mockStateProvider{},
 		AgentServer:   &mockAgentServer{},
 	})
+	service.SetTypedActionPlanner(&gateTestPlanner{})
 	// After tool consolidation: pulse_control handles commands and guest control,
 	// pulse_docker handles Docker operations
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_control"))
@@ -648,6 +650,7 @@ func TestService_ToolsForExecutionMode_InteractiveAddsQuestionTool(t *testing.T)
 		StateProvider: &mockStateProvider{},
 		AgentServer:   &mockAgentServer{},
 	})
+	service.SetTypedActionPlanner(&gateTestPlanner{})
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_control"))
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_docker"))
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_query"))

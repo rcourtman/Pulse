@@ -234,10 +234,11 @@ func TestAssistantPromptQualifiesForLocalInventoryCount(t *testing.T) {
 
 func TestAssistantSurfaceToolContractUsesRuntimeAssistantProjection(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
-		StateProvider: fakeStateProvider{},
-		AgentServer:   fakeAgentServer{},
-		ReadState:     &fakeCanonicalReadState{},
-		ControlLevel:  tools.ControlLevelControlled,
+		StateProvider:      fakeStateProvider{},
+		TypedActionPlanner: &gateTestPlanner{},
+		AgentServer:        fakeAgentServer{},
+		ReadState:          &fakeCanonicalReadState{},
+		ControlLevel:       tools.ControlLevelControlled,
 	})
 	svc := &Service{
 		executor: exec,
@@ -272,6 +273,13 @@ func TestAssistantSurfaceToolContractUsesRuntimeAssistantProjection(t *testing.T
 		t.Fatalf("execute-authorized controlled surface missing governed infrastructure control: %#v", executeAuthorized.ToolNames)
 	}
 
+	// Execute authority cannot substitute for an installed planner.
+	svc.SetTypedActionPlanner(nil)
+	unavailable := svc.AssistantSurfaceToolContract(WithExecuteAuthority(context.Background(), true))
+	if stringSliceContains(unavailable.ToolNames, agentcapabilities.PulseControlToolName) {
+		t.Fatalf("planner-less surface exposed control: %#v", unavailable.ToolNames)
+	}
+
 	svc.SetAutonomousMode(true)
 	autonomous := svc.AssistantSurfaceToolContract(context.Background())
 	if stringSliceContains(autonomous.NativeToolNames, agentcapabilities.PulseQuestionToolName) ||
@@ -285,9 +293,10 @@ func TestAssistantSurfaceToolContractUsesRuntimeAssistantProjection(t *testing.T
 
 func TestToolsForExecutionMode_AutonomousNonPatrolExposesGovernedTools(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
-		StateProvider: fakeStateProvider{},
-		AgentServer:   fakeAgentServer{},
-		ControlLevel:  tools.ControlLevelControlled,
+		StateProvider:      fakeStateProvider{},
+		TypedActionPlanner: &gateTestPlanner{},
+		AgentServer:        fakeAgentServer{},
+		ControlLevel:       tools.ControlLevelControlled,
 	})
 
 	svc := &Service{executor: exec}
