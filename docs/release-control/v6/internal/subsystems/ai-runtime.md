@@ -8328,3 +8328,21 @@ Keep desktop launcher placement and existing visibility decisions unchanged;
 wrapping must not introduce entitlement reads or alter Assistant authority.
 AppLayout component and architecture regressions preserve these boundaries;
 real-backend phone geometry proof is retained by the Organization mobile audit.
+
+### Synthetic hosted lifecycle diagnostic
+
+`internal/ai/chat/hosted_lifecycle_diagnostic_test.go` provides an opt-in,
+synthetic-only lifecycle acceptance probe using production-built Assistant
+instructions and the OpenAI-compatible gateway adapter. Native Gemini wire
+regressions remain separate: gateway model behaviour is not native transport
+acceptance. Normal tests skip the hosted entry point without its explicit flag.
+
+The fixed five-VM inventory has no agent, action executor or persistent store.
+The recording planner accepts only those VMs' reboot capabilities and always
+requires approval. Three fresh sessions each allow at most eight provider calls
+(including final/recovery calls), 120 seconds, 128 KiB per request and 2048 output
+tokens per call: at most 49,152 requested output tokens across the experiment.
+Model-owned tool choice and adverse/tool-free results are preserved. Acceptance
+requires each target's actual approval-required tool receipt, not final prose.
+This fixture changes no production behaviour and proves no hosted acceptance
+until the fixed-source, credential-contained execution has actually completed.
