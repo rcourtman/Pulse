@@ -225,10 +225,12 @@ export function ProxmoxPageSurface() {
   const backupModel = createMemo(() =>
     buildModel(
       Array.from(
-        new Map([
-          ...normalizeSnapshot(overviewResources.resources()),
-          ...normalizeSnapshot(backupResources.resources()),
-        ].map((resource) => [resource.id, resource])).values(),
+        new Map(
+          [
+            ...normalizeSnapshot(overviewResources.resources()),
+            ...normalizeSnapshot(backupResources.resources()),
+          ].map((resource) => [resource.id, resource]),
+        ).values(),
       ),
     ),
   );
