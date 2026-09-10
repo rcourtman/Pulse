@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "decision": "No screenshots are proposed because this checkpoint changes the data target used by existing History charts without changing their layout. A static chart image cannot establish which node or agent API coordinates supplied the series, while the focused request and plotting checks verify that behavior directly.",
+  "captures": []
+}
