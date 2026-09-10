@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 const root = resolve("frontend-modern");
 process.chdir(root);
 import { fixture } from './incident-browser-fixture.mjs';
+import { historyFixture } from './history-clear-browser-fixture.mjs';
 
 const server = await createServer({
   root,
@@ -24,19 +25,20 @@ const server = await createServer({
       name: "incident-fixture",
       configureServer(s) {
         s.middlewares.use((req, res, next) => {
-          if (req.url === "/qualification") {
+          if ((req.url === "/qualification" || req.url === "/history-qualification")) {
             res.setHeader("Content-Type", "text/html");
             res.end(
-              '<div id="root"></div><script type="module" src="/incident-fixture.tsx"></script>',
+              '<div id="root"></div><script type="module" src="' + (req.url === '/history-qualification' ? '/history-fixture.tsx' : '/incident-fixture.tsx') + '"></script>',
             );
           } else next();
         });
       },
       resolveId(id) {
-        if (id === "/incident-fixture.tsx") return id;
+        if (id === "/incident-fixture.tsx" || id === "/history-fixture.tsx") return id;
       },
       load(id) {
         if (id === "/incident-fixture.tsx") return fixture;
+        if (id === "/history-fixture.tsx") return historyFixture;
       },
     },
   ],
@@ -164,6 +166,25 @@ try {
       await page.close();
       cases++;
     }
+  }
+  for (const width of [1440, 390]) {
+    const page = await browser.newPage({ viewport: { width, height: 900 } });
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    page.on('dialog', dialog => dialog.accept());
+    await page.goto('http://127.0.0.1:5198/history-qualification');
+    await page.waitForFunction(() => window.snapshot?.().rows === 1);
+    await page.getByRole('button', {name:'Refresh range',exact:true}).click();
+    await page.waitForFunction(() => window.snapshot().loading && !!window.finishHistory);
+    await page.getByRole('button', {name: /Clear All History/i}).click();
+    await page.waitForFunction(() => window.snapshot().rows === 0 && !window.snapshot().loading);
+    await page.evaluate(() => window.finishHistory());
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+    assert.deepEqual(await page.evaluate(() => window.snapshot()), {rows:0,loading:false});
+    assert.deepEqual(errors, []);
+    await page.screenshot({path: output + '/' + width + '-history-clear.png'});
+    await page.close();
+    cases++;
   }
   console.log(
     JSON.stringify({

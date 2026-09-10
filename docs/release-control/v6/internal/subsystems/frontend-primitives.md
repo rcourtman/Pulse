@@ -7303,3 +7303,19 @@ signed-offline `05-settings-mobile-audit.spec.ts` exercises real Organization,
 Access and Sharing routes at 320px and 390px, with app-shell width and full-scroll
 assertions; header screenshots retain the compact layout. This is independent
 of private RBAC implementation and hosted probation acceptance.
+
+### Alert history clear/read ordering
+
+A successful history clear invalidates reads started before its completion and
+settles their loading state, so delayed responses cannot repopulate deleted
+history rows. Failed clearing leaves the pending read valid; later range
+refreshes remain available. This is view-state ordering, not a change to retention,
+active alerts, acknowledgement or notification recovery semantics.
+
+The deferred-response cases in useAlertHistoryState.test.tsx verify successful
+and failed clearing plus subsequent range refresh. The registered
+scripts/check-incident-request-ownership.mjs browser proof also exercises the
+real history hook and administration card: load a row, start a pending range
+read, confirm clear, then release the obsolete response at desktop and phone
+widths. Scripted API responses establish component behaviour, not installed
+backend deletion or destination delivery.

@@ -1,36 +1,33 @@
 {
   "version": 1,
-  "base_sha": "1dcf4db9eaacf1cf4dc7d1629916d6218fe8abf1",
-  "verified_at": "2026-09-10T00:03:38.494393Z",
+  "base_sha": "86f99bf9e724699551866e36990ac40224585a28",
+  "verified_at": "2026-09-10T05:44:37.361985Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
+    "frontend-modern/src/features/alerts/useAlertHistoryState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "092c6561bf59e1485a0602603e43da1fb5f2ce2c6b0fa312a1f3fe8fa0437c31",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "0aba67a461e39a45fdddf199eb4230fbed93724f9795fa4b09c61ebc31b6715e"
+    "frontend-modern/src/features/alerts/useAlertHistoryState.ts": "68bee9367a986329cc63354e781e09137577391671cf0285da0bd74e8df38386"
   },
   "routes": [
-    "/proxmox/backups"
+    "/history-qualification"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 844
+      "width": 1440,
+      "height": 900
     },
     {
       "width": 390,
-      "height": 844
+      "height": 900
     }
   ],
   "states": [
-    "Authenticated source-built local backend; resource/history API fixtures; websocket disabled to isolate fixture inventory",
-    "Standalone PBS agent and PVE VM with agent facet; disk series absent; CPU and memory series populated"
+    "Real history hook and administration card with scripted API; existing history and pending range read"
   ],
   "interactions": [
-    "Keyboard expand PBS row, select History, assert exact canonical type/id request and two utilization plot paths, collapse; repeat for both host types at both widths"
+    "Load row, refresh range, confirm Clear All History, release obsolete response; assert zero rows and settled loading at both widths"
   ],
-  "command": "pulse-heavy-run -- bash -c 'cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=true node scripts/run-playwright.mjs tests/63-pbs-history-targets.spec.ts --project=chromium --workers=1 --retries=0'",
-  "notes": "Two final Chromium tests pass (3.2s); desktop and narrow screenshots inspected. Synthetic API proof, not reporter/PBS installation acceptance. First attempt retained: live snapshots overwrote fixtures, and narrow pointer target was intercepted by row text; final fixture isolates websocket and uses supported keyboard expansion. Proof retained in Web20260909T235527Z outcome directory."
+  "command": "pulse-heavy-run -- node scripts/check-incident-request-ownership.mjs",
+  "notes": "18 Chromium cases pass including two history clear cases. Narrow screenshot inspected. Component fixture proof, not installed backend deletion or delivery acceptance. First attempt lacked root Playwright dependency; locked npm ci resolved it. Subsequent selector timeout corrected to actual Clear All History label; adverse log retained in lane proof directory."
 }
