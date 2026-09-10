@@ -21,8 +21,10 @@ import (
 const diagnosticModel = "google/gemini-2.5-flash"
 const diagnosticPrompt = "Find the five VMs named win-01 through win-05 and prepare their reboot plans. Do not execute any action."
 
-// A hard provider boundary also counts final-response/recovery calls, which may
-// occur outside the loop's ordinary turn budget. No forced tool selection.
+// A hard logical-call boundary also counts final-response/recovery calls, which
+// may occur outside the loop's ordinary turn budget. The wrapped production
+// adapter retains its own transport retry/fallback behavior. No forced tool
+// selection.
 type lifecycleDiagnosticProvider struct {
 	providers.StreamingProvider
 	requests []providers.ChatRequest
@@ -39,6 +41,8 @@ func (p *lifecycleDiagnosticProvider) ChatStream(ctx context.Context, req provid
 	}
 	req.Model = diagnosticModel
 	req.MaxTokens = 2048
+	// Bound the provider-neutral request before the production adapter projects
+	// it to its wire format. This is not a wire-byte or billing-attempt counter.
 	body, err := json.Marshal(req)
 	if err != nil || len(body) > 128*1024 {
 		return fmt.Errorf("diagnostic input size limit")

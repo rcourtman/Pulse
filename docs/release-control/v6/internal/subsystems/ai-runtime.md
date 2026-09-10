@@ -8339,10 +8339,14 @@ acceptance. Normal tests skip the hosted entry point without its explicit flag.
 
 The fixed five-VM inventory has no agent, action executor or persistent store.
 The recording planner accepts only those VMs' reboot capabilities and always
-requires approval. Three fresh sessions each allow at most eight provider calls
-(including final/recovery calls), 120 seconds, 128 KiB per request and 2048 output
-tokens per call: at most 49,152 requested output tokens across the experiment.
-Model-owned tool choice and adverse/tool-free results are preserved. Acceptance
-requires each target's actual approval-required tool receipt, not final prose.
-This fixture changes no production behaviour and proves no hosted acceptance
-until the fixed-source, credential-contained execution has actually completed.
+requires approval. Three fresh sessions each allow at most eight logical adapter
+calls (including final/recovery calls), 120 seconds, a 128 KiB provider-neutral
+request snapshot and 2048 output tokens per logical call. This is a 49,152-token
+logical request budget across the experiment. It is not an upstream-attempt or
+billing ceiling: the fixed production adapter retains bounded transport retries
+and compatibility fallbacks, and execution accounting must include those
+attempts. Model-owned tool choice and adverse/tool-free results are preserved.
+Acceptance requires each target's actual approval-required tool receipt, not
+final prose. This fixture changes no production behaviour and proves no hosted
+acceptance until the fixed-source, credential-contained execution has actually
+completed.
