@@ -329,8 +329,13 @@ const performUpdateCheck = async (force: boolean): Promise<void> => {
           UpdatesAPI.getVersion(),
         );
         confirmPendingApply(currentVersion.version, state);
-        if (state.updateInfo.currentVersion !== currentVersion.version) {
-          // Version changed, invalidate cache and check again
+        if (
+          state.updateInfo.currentVersion !== currentVersion.version ||
+          currentVersion.isDevelopment ||
+          currentVersion.isSourceBuild
+        ) {
+          // Build identity also controls eligibility, even when a source
+          // marker keeps the same version as a previously installed release.
           state.updateInfo = undefined;
           state.dismissedVersion = undefined;
           state.lastCheck = 0;

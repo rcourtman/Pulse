@@ -1104,6 +1104,11 @@ builds that intentionally report `dev` to agents do not surface update nags
 when no real agent update target exists. Windows remains on the existing
 token-gated PowerShell payload until its installer owns the same saved-state
 update contract.
+This exclusion also covers build-injected diagnostic metadata and explicit
+source-build markers. `/api/version` preserves the full diagnostic version,
+sets `isSourceBuild`, and omits both `channel` and `agentUpdateTargetVersion`.
+`TestHandleVersionBuildIdentityContract` exercises the actual handler response
+for a release, a diagnostic build, and a marker-declared source build.
 
 Summary-chart response caching is a shared API boundary:
 `internal/api/chartapi/service.go` may serve a short cached JSON payload for repeated

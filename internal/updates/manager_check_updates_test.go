@@ -79,6 +79,20 @@ func TestCheckForUpdatesWithChannel_SourceBuild(t *testing.T) {
 	}
 }
 
+func TestCheckForUpdatesWithChannel_DiagnosticBuild(t *testing.T) {
+	oldBuildVersion := BuildVersion
+	BuildVersion = "6.4.1+test.1913.bd37ae18"
+	t.Cleanup(func() { BuildVersion = oldBuildVersion })
+	manager := NewManager(&config.Config{UpdateChannel: "stable"})
+	info, err := manager.CheckForUpdatesWithChannel(context.Background(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Available || info.CurrentVersion != BuildVersion || info.LatestVersion != BuildVersion {
+		t.Fatalf("diagnostic build must not enter release update flow: %+v", info)
+	}
+}
+
 func TestCheckForUpdatesWithChannel_AvailableUsesCache(t *testing.T) {
 	var hits int32
 	releaseTime := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)

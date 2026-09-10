@@ -72,6 +72,50 @@ import (
 	tmock "github.com/stretchr/testify/mock"
 )
 
+func TestHandleVersionBuildIdentityContract(t *testing.T) {
+	oldBuildVersion := updates.BuildVersion
+	t.Cleanup(func() { updates.BuildVersion = oldBuildVersion })
+	for _, tc := range []struct {
+		name, version  string
+		marker, source bool
+	}{
+		{name: "release", version: "6.4.1"},
+		{name: "diagnostic", version: "6.4.1+test.1913.bd37ae18", source: true},
+		{name: "source marker", version: "6.4.1", marker: true, source: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			updates.BuildVersion = tc.version
+			if tc.marker {
+				if err := os.WriteFile("BUILD_FROM_SOURCE", []byte("1"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			router := &Router{updateManager: updates.NewManager(&config.Config{})}
+			rec := httptest.NewRecorder()
+			router.handleVersion(rec, httptest.NewRequest(http.MethodGet, "/api/version", nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("version status = %d", rec.Code)
+			}
+			var payload VersionResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+				t.Fatal(err)
+			}
+			if payload.Version != tc.version || payload.IsSourceBuild != tc.source {
+				t.Fatalf("unexpected build identity: %+v", payload)
+			}
+			if tc.source {
+				if payload.AgentUpdateTargetVersion != "" || payload.Channel != "" {
+					t.Fatalf("source build advertises a release target: %+v", payload)
+				}
+			} else if payload.AgentUpdateTargetVersion != tc.version || payload.Channel != "stable" {
+				t.Fatalf("release target was lost: %+v", payload)
+			}
+			t.Logf("version payload: %s", rec.Body.String())
+		})
+	}
+}
+
 func TestContractProxmoxInstallScopesRequireExplicitCommandChoice(t *testing.T) {
 	monitoringScopes := proxmoxAgentInstallScopes(false)
 	monitoringRecord := &config.APITokenRecord{Scopes: monitoringScopes}

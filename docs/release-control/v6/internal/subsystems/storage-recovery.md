@@ -397,6 +397,12 @@ protection posture, recovery-point evidence, or restore readiness.
 
 ## Extension Points
 
+Diagnostic source-build identity is not a recovery checkpoint or a schema
+transition. A build-injected test version retains the current data and config
+while the version API disables release-update and agent-target suggestions.
+Returning from a reporter image remains an explicit image rollback with the
+operator's backup available, not an automatic update or retention action.
+
 The authenticated runtime-display projection under shared `internal/api/` may
 publish effective Docker-action visibility and outbound-telemetry booleans,
 plus the effective PVE polling cadence in seconds, to read-only viewers. Those

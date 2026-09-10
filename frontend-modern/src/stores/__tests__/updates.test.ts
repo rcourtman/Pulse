@@ -62,6 +62,25 @@ describe('updateStore', () => {
     mockNotifyError.mockReset();
   });
 
+  it.each(['isSourceBuild', 'isDevelopment'])(
+    'discards release cache for %s with the same version',
+    async (flag) => {
+      mockGetVersion.mockResolvedValue({ ...baseVersionInfo, [flag]: true });
+      localStorage.setItem(
+        STORAGE_KEYS.UPDATES,
+        JSON.stringify({
+          lastCheck: Date.now(),
+          updateInfo: baseUpdateInfo,
+        }),
+      );
+      const updateStore = await loadUpdateStore();
+      await updateStore.checkForUpdates();
+      expect(updateStore.updateAvailable()).toBe(false);
+      expect(updateStore.updateInfo()).toBeNull();
+      expect(mockCheckForUpdates).not.toHaveBeenCalled();
+    },
+  );
+
   it('forces a server refresh and preserves an unknown date in cached results', async () => {
     mockGetVersion.mockResolvedValue(baseVersionInfo);
     const info = { ...baseUpdateInfo, releaseDate: undefined };

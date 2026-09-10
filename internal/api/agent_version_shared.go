@@ -8,7 +8,7 @@ import "github.com/rcourtman/pulse-go-rewrite/internal/updates"
 // when the server reports "dev" to avoid agent update loops.
 func currentAgentTargetVersion() string {
 	versionInfo, err := updates.GetCurrentVersion()
-	if err != nil || versionInfo.IsDevelopment {
+	if err != nil || versionInfo.IsDevelopment || versionInfo.IsSourceBuild {
 		return ""
 	}
 	return versionInfo.Version

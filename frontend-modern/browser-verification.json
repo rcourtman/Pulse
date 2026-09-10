@@ -1,19 +1,22 @@
 {
   "version": 1,
-  "base_sha": "837a5b8843fa4a4ca293f66f43123b9f9c127d4d",
-  "verified_at": "2026-09-10T14:54:37.800409Z",
+  "base_sha": "dd388decf5896123b6587b1b16f9aee7c3a747f3",
+  "verified_at": "2026-09-10T16:01:12.114821Z",
   "result": "passed",
   "changed_paths": [
-    "internal/monitoring/monitored_system_usage.go",
-    "internal/unifiedresources/monitor_adapter.go",
-    "internal/unifiedresources/registry.go"
+    "frontend-modern/src/components/Settings/UpdateInstallGuide.tsx",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
+    "frontend-modern/src/utils/updatesPresentation.ts",
+    "frontend-modern/src/stores/updates.ts"
   ],
   "content_sha256": {
-    "internal/monitoring/monitored_system_usage.go": "125f39dbfc448a37d0ee74756a03534d435abdacb4e0c7fed8c0710364af5f4a",
-    "internal/unifiedresources/monitor_adapter.go": "7720ba164373cdf6a8a9f950215f27e0e5a24e48edc2f9c1e444b4144e35b3d6",
-    "internal/unifiedresources/registry.go": "b49125258595bfdabb2a0a06dc51e51e7e27f998c8d9cb8e8ad69cffc1e4272c"
+    "frontend-modern/src/components/Settings/UpdateInstallGuide.tsx": "ee102c072050b70fe0fcf732073f6016cc6ac853edbac2d1e1db6c1ec7bda5a6",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx": "f4f5f9bb31be48b20fc8a08175c378f071b61a5b20fe05a51c5990290026bf6f",
+    "frontend-modern/src/utils/updatesPresentation.ts": "c279a3c89e1160d30eab4c3dfb257627dc92f1a00dc83a2e34a52826fec49f0a",
+    "frontend-modern/src/stores/updates.ts": "9f285a67198f095f69197b434874fcf70cddcec2c3ba0131e7897349a8d33ef8"
   },
   "routes": [
+    "/settings/system-updates",
     "/proxmox"
   ],
   "viewports": [
@@ -27,17 +30,24 @@
     }
   ],
   "states": [
-    "6.4.1 reproduction shows Offline and unavailable CPU despite live host report",
-    "Repaired backend output shows current agent and 17 percent CPU",
-    "Explicit offline control remains offline with unavailable live metrics",
-    "Expanded node Overview displays current agent identity"
+    "Diagnostic source version, Source and Development badges, no published release channel or agent update target",
+    "Cached same-version release offer discarded, source status and manual container image guidance",
+    "Disabled manual check, automatic updates and channel selection",
+    "Stable and preview release controls and install guidance remain available",
+    "Proxmox live host continuity shows current identity and 17 percent CPU with an older agent version, without an unpublished upgrade link"
   ],
   "interactions": [
-    "Two reloads preserve current identity, metrics and node count",
-    "Hover node row and expand inline details",
-    "Hover and focus collapse button, Escape preserves inline disclosure, Enter collapses it",
-    "Inspect actual pixels for node status, CPU, identity and narrow layout"
+    "Reload source build and inspect status, version and absent release offers",
+    "Hover and attempt focus on disabled Check Now",
+    "Scroll to automatic update control and inspect actual pixels at both viewports",
+    "Focus and press Enter on stable and preview Check Now, observe one forced check and successful result",
+    "Expand Proxmox node details, inspect current identity, collapse with Enter, reload and verify live CPU",
+    "Inspect source, stable, preview and expanded Proxmox pixels at both viewports"
   ],
-  "command": "node .agent-coordination/issue-1913-upgrade/browser-check.cjs (workspace root)",
-  "notes": "Current local frontend with a synthetic canonical resource emitted by the exact Go reproduction, added to the existing local API inventory. Browser isolated from inventory websocket updates. Compared original 6.4.1 backend output with repaired source. No production mutations or reporter environment access. Initial full-inventory replacement fixture caused reactive-cache errors and was excluded from proof. Final fixture preserves the existing inventory and source-query contract. Screenshots and backend receipts retained in the local issue investigation directory."
+  "command": "node .agent-coordination/issue-1913-upgrade/source-build-browser.cjs (workspace root)",
+  "notes": "Current local Vite build using actual version-handler regression payloads adapted to Docker context and public community runtime. Preview control derives from the stable payload using the version classifier fixture. Source cache seeded with a same-version available release. Proxmox uses the real Go continuity fixture inserted into the existing API inventory and an old synthetic agent version. No reporter environment access or production mutations. Browser page-error assertions pass. Screenshots, interaction matrix and proof logs retained in the local issue investigation directory.",
+  "backend_content_sha256": {
+    "internal/updates/version.go": "d8e426cfcc36e130a9b0faea97087620813ad07690865fa51e96b171d7fb7f17",
+    "internal/api/agent_version_shared.go": "3d40fe90f3d20a4b2e8fbe330198d70f0f2217447e776e775d47d2f9cdef53e7"
+  }
 }

@@ -151,7 +151,13 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
 
   return (
     <>
-      <Show when={props.versionInfo?.isDocker && !props.updateInfo?.available}>
+      <Show
+        when={
+          props.versionInfo?.isDocker &&
+          !props.versionInfo?.isSourceBuild &&
+          !props.updateInfo?.available
+        }
+      >
         <div class="space-y-3 rounded-md border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900">
           <div class="flex items-center gap-2">
             <svg
@@ -193,7 +199,13 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
       <Show when={props.versionInfo?.isSourceBuild}>
         <div class="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900">
           <p class="text-xs text-blue-800 dark:text-blue-200">
-            <strong>Built from source:</strong> Pull the latest code from git and rebuild to update.
+            <strong>Built from source:</strong>{' '}
+            <Show
+              when={props.versionInfo?.isDocker}
+              fallback="Pull the latest code from git and rebuild to change versions."
+            >
+              Replace the container image manually to change versions.
+            </Show>
           </p>
         </div>
       </Show>
@@ -204,7 +216,7 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
         </div>
       </Show>
 
-      <Show when={props.updateInfo?.available && guide()}>
+      <Show when={!props.versionInfo?.isSourceBuild && props.updateInfo?.available && guide()}>
         <div class="overflow-hidden rounded-md border border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900">
           <div class="border-b border-green-200 bg-green-100 px-5 py-4 dark:border-green-800 dark:bg-green-800">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

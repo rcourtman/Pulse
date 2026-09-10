@@ -49,6 +49,42 @@ func TestGetCurrentVersion_UsesBuildVersion(t *testing.T) {
 	}
 }
 
+func TestGetCurrentVersion_SourceBuildIdentity(t *testing.T) {
+	oldBuildVersion := BuildVersion
+	t.Cleanup(func() { BuildVersion = oldBuildVersion })
+	t.Setenv("PATH", "")
+	for _, tc := range []struct {
+		name, version, build, channel string
+		marker, source, development   bool
+	}{
+		{name: "stable", version: "6.4.1", build: "release", channel: "stable"},
+		{name: "preview", version: "6.4.4-beta.1", build: "release", channel: "rc"},
+		{name: "reporter", version: "6.4.1+test.1913.bd37ae18", build: "development", source: true, development: true},
+		{name: "git metadata", version: "6.4.1+git.2.gabcdef", build: "development", source: true, development: true},
+		{name: "dev base", version: "6.4.1-dev", build: "development", source: true, development: true},
+		{name: "sentinel", version: "0.0.0-qual-build", build: "development", source: true, development: true},
+		{name: "marker", version: "6.4.1", build: "source", marker: true, source: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			BuildVersion = tc.version
+			if tc.marker {
+				if err := os.WriteFile("BUILD_FROM_SOURCE", []byte("1"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			info, err := GetCurrentVersion()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Version != tc.version || info.Build != tc.build || info.Channel != tc.channel ||
+				info.IsSourceBuild != tc.source || info.IsDevelopment != tc.development {
+				t.Fatalf("unexpected build identity: %+v", info)
+			}
+		})
+	}
+}
+
 func TestGetCurrentVersion_UsesVersionFile(t *testing.T) {
 	setMockRuntime(t, false)
 
@@ -140,8 +176,8 @@ func TestGetCurrentVersion_UsesVersionFileAsDevelopmentBase(t *testing.T) {
 	if !info.IsDevelopment {
 		t.Fatalf("IsDevelopment = false, want true")
 	}
-	if info.Channel != "stable" {
-		t.Fatalf("Channel = %q, want stable", info.Channel)
+	if !info.IsSourceBuild || info.Channel != "" {
+		t.Fatalf("development build must be source-only: %+v", info)
 	}
 }
 
