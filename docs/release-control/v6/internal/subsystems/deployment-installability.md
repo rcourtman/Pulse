@@ -5407,3 +5407,22 @@ Retained provider delivery verification establishes archive SHA256
 a valid pinned SSH signature and the extracted request expression with absent
 and synthetic email. It does not establish installed onboarding, server acceptance
 or legal identity. See the qualification evidence below.
+
+### Pinned release action consumer compatibility
+
+The grouped release actions use immutable revisions recorded in
+`scripts/release_control/action_consumer_manifests.json`: Attest 4.2.2,
+Helm setup 5.0.1, Docker build/push 7.3.0, login 4.6.0, Buildx/QEMU
+setup 4.3.0, SignPath v2 and Tailscale 4.1.3. The snapshot records the
+upstream action manifest hash, accepted inputs/outputs and Node 24 entry points.
+It is reviewed input, not runtime attestation or permission to publish.
+
+`test_reviewed_action_manifests_cover_all_release_consumers` checks every
+workflow consumer against those upstream inputs and immutable revisions.
+Helm remains 3.15.2; attestation keeps checksum subjects; signing keeps the
+existing organisation/token interface. Existing signing, checksum, Docker
+promotion and exact-dispatch contract tests remain required. Action upgrades
+must not alter permissions, environments, source identity, rollback, signing
+backend selection or release qualification. Local contract success does not
+establish hosted action execution, signature acceptance, image publication or
+production deployment.

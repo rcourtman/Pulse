@@ -8,11 +8,13 @@ package api
 // keepalives while the evaluation runs; these tests pin that transport shape.
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -84,19 +86,26 @@ func TestIssue1640FastEvaluationEmitsNoPadding(t *testing.T) {
 }
 
 // The transport must survive a real HTTP connection, not just a recorder: the
-// status line has to be committed and flushed before the evaluation starts,
-// because a proxy with a time-to-first-byte timeout shorter than the keepalive
-// interval would otherwise still sever a slow readiness run.
+// headers and keepalive bytes must reach the client while evaluation is still
+// running, rather than remaining buffered until the final JSON response.
 func TestIssue1640ResponseStartsBeforeEvaluationCompletes(t *testing.T) {
 	t.Parallel()
 
-	const evaluationDuration = 300 * time.Millisecond
-	completed := make(chan time.Time, 1)
+	// This is a deadlock guard, not a latency SLO. Completion is controlled
+	// by the client observing flushed headers and a keepalive, not by a sleep.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	releaseEvaluation := make(chan struct{})
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(releaseEvaluation) }) }
+	started := make(chan struct{})
+	completed := make(chan struct{})
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		result := streamPatrolModelReadinessKeepalives(w, 50*time.Millisecond, func() ai.PatrolModelReadinessResult {
-			time.Sleep(evaluationDuration)
-			completed <- time.Now()
+			close(started)
+			<-releaseEvaluation
+			close(completed)
 			return passingReadinessResult("verified over the wire")
 		})
 		response := patrolModelReadinessSnapshot(&result, time.Now())
@@ -105,9 +114,13 @@ func TestIssue1640ResponseStartsBeforeEvaluationCompletes(t *testing.T) {
 		}
 	}))
 	defer server.Close()
+	// Release before Close even on a failed assertion, so a transport
+	// regression cannot strand the evaluator or hang server cleanup.
+	defer release()
 
-	started := time.Now()
-	resp, err := server.Client().Get(server.URL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL, nil)
+	require.NoError(t, err)
+	resp, err := server.Client().Do(req)
 	require.NoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
 
@@ -116,33 +129,35 @@ func TestIssue1640ResponseStartsBeforeEvaluationCompletes(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 	assert.Equal(t, "no", resp.Header.Get("X-Accel-Buffering"))
-	assert.Less(t, time.Since(started), evaluationDuration,
-		"headers must reach the client before the evaluation finishes")
-
-	// Read the first body byte under a deadline well short of the evaluation.
-	// A buffered or unstarted response cannot satisfy it.
-	one := make([]byte, 1)
-	readDone := make(chan struct{})
-	var (
-		firstByteAt time.Time
-		readErr     error
-	)
-	go func() {
-		defer close(readDone)
-		_, readErr = io.ReadFull(resp.Body, one)
-		firstByteAt = time.Now()
-	}()
 	select {
-	case <-readDone:
-	case <-time.After(evaluationDuration - 100*time.Millisecond):
-		t.Fatal("no body byte arrived before the evaluation completed")
+	case <-started:
+	case <-ctx.Done():
+		t.Fatal("evaluation did not start")
 	}
-	require.NoError(t, readErr)
-	assert.Equal(t, "\n", string(one), "the first body byte should be a keepalive newline")
+	select {
+	case <-completed:
+		t.Fatal("evaluation completed before the client released it")
+	default:
+	}
 
-	evaluationFinishedAt := <-completed
-	assert.True(t, firstByteAt.Before(evaluationFinishedAt),
-		"keepalive byte at %s must precede evaluation completion at %s", firstByteAt, evaluationFinishedAt)
+	// The evaluator cannot finish until this actual socket read succeeds.
+	// An unstarted response or buffered keepalives instead reach the request
+	// deadline; neither can pass just because a sleeping evaluator woke late.
+	one := make([]byte, 1)
+	_, err = io.ReadFull(resp.Body, one)
+	require.NoError(t, err, "keepalive must reach the client while evaluation is blocked")
+	assert.Equal(t, "\n", string(one), "the first body byte should be a keepalive newline")
+	select {
+	case <-completed:
+		t.Fatal("evaluation completed before the keepalive was observed")
+	default:
+	}
+	release()
+	select {
+	case <-completed:
+	case <-ctx.Done():
+		t.Fatal("evaluation did not complete after release")
+	}
 
 	rest, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)

@@ -1,42 +1,36 @@
 {
   "version": 1,
-  "base_sha": "14a109444c6d1cad420797ea30f279e77b6fc517",
-  "verified_at": "2026-09-09T10:42:06.278902Z",
+  "base_sha": "1dcf4db9eaacf1cf4dc7d1629916d6218fe8abf1",
+  "verified_at": "2026-09-10T00:03:38.494393Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/AppLayout.tsx"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/AppLayout.tsx": "71cbc527fae0dbae3891174bb8a140d90f50917405d6c15a3b0d8ae7dcb31644"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "092c6561bf59e1485a0602603e43da1fb5f2ce2c6b0fa312a1f3fe8fa0437c31",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "0aba67a461e39a45fdddf199eb4230fbed93724f9795fa4b09c61ebc31b6715e"
   },
   "routes": [
-    "/settings/organization",
-    "/settings/organization/access",
-    "/settings/organization/sharing"
+    "/proxmox/backups"
   ],
   "viewports": [
     {
-      "width": 320,
-      "height": 568
+      "width": 1280,
+      "height": 844
     },
     {
       "width": 390,
       "height": 844
-    },
-    {
-      "width": 1280,
-      "height": 720
     }
   ],
   "states": [
-    "Signed entitled default and created organizations; non-demo Community backend",
-    "Access invitation and outgoing sharing fixture",
-    "Desktop incoming share pending then accepted"
+    "Authenticated source-built local backend; resource/history API fixtures; websocket disabled to isolate fixture inventory",
+    "Standalone PBS agent and PVE VM with agent facet; disk series absent; CPU and memory series populated"
   ],
   "interactions": [
-    "Chromium and mobile WebKit: switch organization; audit three routes at both phone widths; reach shell bottom and assert page/shell width within one pixel",
-    "Desktop Chromium Scenario 6: verify owner identity relationships, editor/viewer roles and pending approval; click Accept and verify accepted state via API"
+    "Keyboard expand PBS row, select History, assert exact canonical type/id request and two utilization plot paths, collapse; repeat for both host types at both widths"
   ],
-  "command": "pulse-heavy-run -- bash -c \"cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=true node scripts/with-offline-entitlements.mjs node scripts/run-playwright.mjs tests/05-settings-mobile-audit.spec.ts --project=chromium --project=mobile-safari --grep settings/organization --workers=1 --retries=0\"; separate diagnostic config Scenario 6 desktop run",
-  "notes": "Exact actual mobile grep: settings/organization(/(sharing|access))?$ . Six mobile route tests passed (53.0s); desktop sharing scenario passed (3.8s). Source-built real Community backend, ephemeral loopback signing issuer, no mock mode or signature bypass. Phone Chromium/WebKit and desktop acceptance screenshots inspected. Evidence retained in Web20260909T103517Z outcome directory browser-proof, org-fixed.log and scenario6-desktop.log. Not private RBAC, hosted probation clearance or release qualification."
+  "command": "pulse-heavy-run -- bash -c 'cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=true node scripts/run-playwright.mjs tests/63-pbs-history-targets.spec.ts --project=chromium --workers=1 --retries=0'",
+  "notes": "Two final Chromium tests pass (3.2s); desktop and narrow screenshots inspected. Synthetic API proof, not reporter/PBS installation acceptance. First attempt retained: live snapshots overwrote fixtures, and narrow pointer target was intercepted by row text; final fixture isolates websocket and uses supported keyboard expansion. Proof retained in Web20260909T235527Z outcome directory."
 }

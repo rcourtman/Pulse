@@ -1,0 +1,225 @@
+{
+  "actions/attest": {
+    "sha": "1e69f48acb82d1966a394da916b4c1698aa569d6",
+    "manifest_sha256": "9e4a1b808433f9ec87120b534e11fc35469a039bdbdc62b019441444c9ad0449",
+    "inputs": [
+      "create-storage-record",
+      "github-token",
+      "predicate",
+      "predicate-path",
+      "predicate-type",
+      "push-to-registry",
+      "sbom-path",
+      "show-summary",
+      "subject-checksums",
+      "subject-digest",
+      "subject-name",
+      "subject-path",
+      "subject-version"
+    ],
+    "outputs": [
+      "attestation-id",
+      "attestation-url",
+      "bundle-path",
+      "storage-record-ids"
+    ],
+    "runs": {
+      "using": "node24",
+      "main": "./dist/index.js"
+    }
+  },
+  "azure/setup-helm": {
+    "sha": "9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310",
+    "manifest_sha256": "a80a29bbe87c77663a47a75d4163cf54f0bd24ae2485b868dd81d6758ec29647",
+    "inputs": [
+      "downloadBaseURL",
+      "token",
+      "version"
+    ],
+    "outputs": [
+      "helm-path"
+    ],
+    "runs": {
+      "using": "node24",
+      "main": "lib/index.js"
+    }
+  },
+  "docker/build-push-action": {
+    "sha": "53b7df96c91f9c12dcc8a07bcb9ccacbed38856a",
+    "manifest_sha256": "5c1ade75252eabe541b96cc39a2165a07c8850f9bcd3f9b75f5394fbdfb215fd",
+    "inputs": [
+      "add-hosts",
+      "allow",
+      "annotations",
+      "attests",
+      "build-args",
+      "build-contexts",
+      "builder",
+      "cache-from",
+      "cache-to",
+      "call",
+      "cgroup-parent",
+      "context",
+      "file",
+      "github-token",
+      "labels",
+      "load",
+      "network",
+      "no-cache",
+      "no-cache-filters",
+      "outputs",
+      "platforms",
+      "provenance",
+      "pull",
+      "push",
+      "sbom",
+      "secret-envs",
+      "secret-files",
+      "secrets",
+      "shm-size",
+      "ssh",
+      "tags",
+      "target",
+      "ulimit"
+    ],
+    "outputs": [
+      "digest",
+      "imageid",
+      "metadata"
+    ],
+    "runs": {
+      "using": "node24",
+      "main": "dist/index.cjs",
+      "post": "dist/index.cjs"
+    }
+  },
+  "docker/login-action": {
+    "sha": "dbcb813823bdd20940b903addbd779551569679f",
+    "manifest_sha256": "e65e6bdc57fc10adcee036a393229aae6b9a9f451b69528f4ff50d4b0e93f156",
+    "inputs": [
+      "ecr",
+      "logout",
+      "password",
+      "registry",
+      "registry-auth",
+      "scope",
+      "username"
+    ],
+    "outputs": [],
+    "runs": {
+      "using": "node24",
+      "main": "dist/index.cjs",
+      "post": "dist/index.cjs"
+    }
+  },
+  "docker/setup-buildx-action": {
+    "sha": "37fe631027851001ddb9b187196cc803df7f5f0e",
+    "manifest_sha256": "9c55229011a0566758962f36c74309c8ab06f8905a5997591a6a46319401ab38",
+    "inputs": [
+      "append",
+      "buildkitd-config",
+      "buildkitd-config-inline",
+      "buildkitd-flags",
+      "cache-binary",
+      "cleanup",
+      "driver",
+      "driver-opts",
+      "endpoint",
+      "keep-state",
+      "name",
+      "platforms",
+      "use",
+      "version"
+    ],
+    "outputs": [
+      "driver",
+      "endpoint",
+      "flags",
+      "name",
+      "nodes",
+      "platforms",
+      "status"
+    ],
+    "runs": {
+      "using": "node24",
+      "main": "dist/index.cjs",
+      "post": "dist/index.cjs"
+    }
+  },
+  "docker/setup-qemu-action": {
+    "sha": "1f40c72289eff860ee54a304f1438e3cff362e0a",
+    "manifest_sha256": "9c74c218c37b889976b0af59861f3fceaec87bd12da00bf6dc37ded77d8954f8",
+    "inputs": [
+      "cache-image",
+      "image",
+      "platforms",
+      "reset"
+    ],
+    "outputs": [
+      "platforms"
+    ],
+    "runs": {
+      "using": "node24",
+      "main": "dist/index.cjs",
+      "post": "dist/index.cjs"
+    }
+  },
+  "signpath/github-action-submit-signing-request": {
+    "sha": "c92b958760219087e01f8d67a1669ed57afe2627",
+    "manifest_sha256": "d0b52fdfa234d87c1ff4d21c06a91d2b6e0dd45e1a8866ad3b58cbdeb9aef326",
+    "inputs": [
+      "api-token",
+      "artifact-configuration-slug",
+      "connector-url",
+      "download-signed-artifact-timeout-in-seconds",
+      "github-artifact-id",
+      "github-token",
+      "organization-id",
+      "output-artifact-directory",
+      "parameters",
+      "project-slug",
+      "service-unavailable-timeout-in-seconds",
+      "signing-policy-slug",
+      "skip-decompress",
+      "wait-for-completion",
+      "wait-for-completion-timeout-in-seconds"
+    ],
+    "outputs": [
+      "signed-artifact-download-url",
+      "signing-request-id",
+      "signing-request-web-url",
+      "signpath-api-url"
+    ],
+    "runs": {
+      "using": "node24",
+      "main": "index.js"
+    }
+  },
+  "tailscale/github-action": {
+    "sha": "780049a30b6ff5c378a9e7b389d15ece7a204888",
+    "manifest_sha256": "d63e612f47dad1520586efec4b79f2c7f0e0aadabeeca53709aa616202e43c6c",
+    "inputs": [
+      "args",
+      "audience",
+      "authkey",
+      "hostname",
+      "oauth-client-id",
+      "oauth-secret",
+      "ping",
+      "retry",
+      "sha256sum",
+      "statedir",
+      "tags",
+      "tailscaled-args",
+      "timeout",
+      "use-cache",
+      "version"
+    ],
+    "outputs": [],
+    "runs": {
+      "using": "node24",
+      "main": "dist/index.js",
+      "post": "dist/logout/index.js"
+    }
+  }
+}

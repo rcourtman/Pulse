@@ -133,7 +133,12 @@ const uniquelyCorrelatedAgent = (
   const serverTokens = identityTokens(server);
   if (serverTokens.size === 0) return undefined;
   const matches = candidates.filter((candidate) => {
-    if (candidate.type !== 'agent') return false;
+    // Host telemetry can be merged into a PVE guest rather than a standalone
+    // agent. Keep the unique-identity check and require an actual agent facet.
+    const guestWithAgent =
+      (candidate.type === 'vm' || candidate.type === 'system-container') &&
+      Boolean(candidate.agent ?? candidate.platformData?.agent);
+    if (candidate.type !== 'agent' && !guestWithAgent) return false;
     for (const token of identityTokens(candidate)) {
       if (serverTokens.has(token)) return true;
     }

@@ -157,7 +157,7 @@ func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 		`github.event_name != 'workflow_run' || !contains(github.event.workflow_run.display_title, '-')`,
 		"release-continuity:",
 		"Latest stable release continuity",
-		"docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5",
+		"docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e",
 		`"repos/${REPOSITORY}/releases/latest"`,
 		`scripts/release_control/release_continuity.py release`,
 		"release-diagnostic.json",
@@ -1747,7 +1747,7 @@ func TestReleaseCandidateRequiresPlatformNativeAgentSigning(t *testing.T) {
 		`sign-windows-agent:`,
 		`collect-windows-signing:`,
 		`windows_signing_backend:`,
-		`signpath/github-action-submit-signing-request@b9d91eadd323de506c0c81cf0c7fe7438f3360fd # v2`,
+		`signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2`,
 		`github-artifact-id: ${{ steps.upload-unsigned-windows.outputs.artifact-id }}`,
 		`wait-for-completion: false`,
 		`windows-signing-request.json`,
@@ -1852,7 +1852,7 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 		`does not trust the configured release signing key.`,
 		`id-token: write`,
 		`attestations: write`,
-		`uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4`,
+		`uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2`,
 	}
 	containerJob := workflowJobBlock(t, string(qualifierWorkflowBytes), "qualify")
 	for _, needle := range []string{
@@ -2272,7 +2272,7 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 	workflow := string(workflowBytes) + "\n" + string(profileBytes)
 	required := []string{
 		`- name: Tailscale`,
-		`uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4`,
+		`uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3`,
 		`oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}`,
 		`oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}`,
 		`tags: tag:infra`,
@@ -3189,7 +3189,7 @@ func TestPublishHelmChartReachableViaWorkflowCall(t *testing.T) {
 		`name: Verify public GHCR chart identity and provenance`,
 		`helm registry logout ghcr.io || true`,
 		`name: Authenticate OCI attestation client with GHCR`,
-		`uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0`,
+		`uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0`,
 		`registry: ghcr.io`,
 		`username: ${{ github.actor }}`,
 		`password: ${{ github.token }}`,

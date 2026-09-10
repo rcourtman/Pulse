@@ -10,6 +10,37 @@ from release_promotion_policy_support import (
 
 
 class ReleasePromotionPolicySupportTest(unittest.TestCase):
+    def test_action_inputs_do_not_satisfy_dispatch_requirements(self) -> None:
+        # Signing action inputs are nested consumer data, not callable workflow
+        # inputs. A pin upgrade must not make this dispatch guard accept them.
+        content = """
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        type: string
+jobs:
+  sign:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627
+        with:
+          organization-id: fixture
+          api-token: fixture
+          expected_head_sha: fixture
+"""
+        self.assertEqual(parse_workflow_dispatch_inputs(content), ("version",))
+        with patch("release_promotion_policy_support.branch_workflow_text", return_value=content), patch(
+            "release_promotion_policy_support.origin_default_branch", return_value="main"
+        ):
+            self.assertEqual(
+                missing_workflow_dispatch_inputs(
+                    workflow_path=".github/workflows/signpath-test-signing.yml",
+                    required_inputs=("version", "expected_head_sha"),
+                ),
+                ("main", ("expected_head_sha",)),
+            )
+
     def test_parse_workflow_dispatch_inputs_reads_top_level_inputs(self) -> None:
         content = """
 name: Example

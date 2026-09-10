@@ -428,6 +428,15 @@ about the same disk cannot diverge.
 
 ## Shared Boundaries
 
+### PBS host history correlation
+
+PBS presentation correlation accepts standalone agents and VM/system-container resources with an agent facet. Preserve unique identity matching and canonical metricsTarget type and ID. Guests without telemetry and mixed ambiguous agent/guest matches must not replace the PBS target.
+
+Verification: ProxmoxBackupServersTable.drawer.test.tsx covers standalone and
+merged guest targets, missing disks and ambiguous identities;
+ProxmoxPageSurface.contract.test.tsx covers hydration and deduplication.
+
+
 Platform estate orientation consumes the same canonical resource projection as
 the platform's tables. Pages must not issue a second summary fetch or create a
 parallel metric-card projection. Unified resources owns identity, type,
@@ -968,13 +977,13 @@ container inventory table.
     contract below while owning the domain-specific artifact request.
     Each row carries the canonical PBS `Resource` into the shared platform
     resource-detail row. When coalescence has attached an agent facet, or when
-    the product-family projection contains exactly one separate Agent resource
+    the route projection contains exactly one agent-bearing host or guest resource
     with a matching normalized host identity, that same drawer must expose
     host system, hardware, network, disks, thermals, history, and management
     context without recreating a PBS-local host model or returning the
     provider-owned resource to the standalone Machines list. Presentation-only
     correlation retains the canonical PBS row id and service facet, uses the
-    Agent metrics target and telemetry facets, and fails closed when no Agent
+    canonical host/guest metrics target and telemetry facets, and fails closed when no host
     matches or more than one candidate matches. It must not alter registry
     identity or treat input order as correlation evidence.
 13. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx` shared with `storage-recovery`: Proxmox workload coverage rows are both a storage/recovery protection-posture surface and a unified-resource identity consumer boundary.
@@ -2235,7 +2244,7 @@ because canonical merge preserves the provider source beside the agent source;
 the pages must not admit every agent merely to recover those merged rows.
 Proxmox route queries likewise declare their exact PVE, PBS, PMG, or agent
 source boundary. Backups extend the source-scoped Overview guest snapshot with
-a PBS-only snapshot, so a route transition composes canonical resources rather
+a PBS-source server/agent snapshot, so a route transition composes canonical resources rather
 than repeating the guest enumeration under another cache key.
 TrueNAS follows the same rule: a merged agent-backed appliance retains its
 `truenas` source, so the page queries that provider alone instead of admitting

@@ -459,6 +459,187 @@ test.describe("Infrastructure onboarding", () => {
     ).toHaveValue("https://discovered-pve.lab:8006");
   });
 
+  for (const width of [1280, 390]) {
+    test(`import preview ignores obsolete responses at ${width}px`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 844 });
+
+      await prepareOnboardingPage(page);
+
+      // The "Run discovery" scan button only renders when discovery is enabled.
+      // Enable it by passing the real system-settings response through with
+      // discoveryEnabled flipped on, so this test can exercise the scan flow.
+      await page.route("**/api/system/settings", async (route) => {
+        if (route.request().method() !== "GET") {
+          await route.continue();
+          return;
+        }
+        const response = await route.fetch();
+        const body = await response.json();
+        body.discoveryEnabled = true;
+        await route.fulfill({ response, json: body });
+      });
+
+      await page.route("**/api/discover", async (route) => {
+        const requestUrl = new URL(route.request().url());
+        if (requestUrl.pathname !== "/api/discover") {
+          await route.continue();
+          return;
+        }
+
+        if (route.request().method() === "GET") {
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              servers: [],
+              errors: [],
+              cached: true,
+              updated: 0,
+              age: 0,
+            }),
+          });
+          return;
+        }
+
+        if (route.request().method() === "POST") {
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              servers: [
+                {
+                  ip: "10.0.0.55",
+                  port: 8006,
+                  type: "pve",
+                  version: "8.2.2",
+                  hostname: "discovered-pve.lab",
+                },
+              ],
+              errors: [],
+              cached: false,
+              scanning: false,
+              timestamp: 1_700_000_000_000,
+            }),
+          });
+          return;
+        }
+
+        await route.continue();
+      });
+
+      await page.goto("/settings/infrastructure", {
+        waitUntil: "domcontentloaded",
+      });
+      await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, {
+        timeout: 15_000,
+      });
+
+      await page.getByRole("button", { name: /Run discovery/i }).click();
+
+      await expect(
+        page.getByText("discovered-pve.lab", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: /^Review$/i }),
+      ).toBeVisible();
+
+      await page.getByRole("button", { name: /^Review$/i }).click();
+      await page.waitForURL(/\/settings\/infrastructure\?add=pve$/, {
+        timeout: 15_000,
+      });
+
+      await expect(page.getByRole("dialog")).toBeVisible();
+      await expect(
+        page
+          .getByRole("dialog")
+          .getByRole("heading", { name: "Add Proxmox VE", exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByPlaceholder("https://proxmox.example.com:8006"),
+      ).toHaveValue("https://discovered-pve.lab:8006");
+
+      const dialog = page.getByRole("dialog");
+      const endpoint = dialog.getByLabel(/^Endpoint URL/);
+      const previewButton = dialog.getByRole("button", {
+        name: "Preview impact",
+        exact: true,
+      });
+      const requests: import("@playwright/test").Route[] = [];
+      await page.route(
+        "**/api/license/monitored-system-ledger/preview",
+        (route) => {
+          requests.push(route);
+        },
+      );
+      const success = {
+        current_count: 1,
+        projected_count: 1,
+        additional_count: 0,
+        effect: "unchanged",
+        current_systems: [],
+        projected_systems: [],
+        current_system: null,
+        projected_system: null,
+      };
+      await previewButton.click();
+      await expect.poll(() => requests.length).toBe(1);
+      await dialog.getByLabel(/Approve this import plan/i).check();
+      await endpoint.fill("https://replacement.lab:8006");
+      await expect(
+        dialog.getByLabel(/Approve this import plan/i),
+      ).not.toBeChecked();
+      await expect(previewButton).toBeEnabled();
+      await previewButton.click();
+      await expect.poll(() => requests.length).toBe(2);
+      await requests[0].fulfill({
+        status: 400,
+        json: { error: "Obsolete endpoint failure" },
+      });
+      await expect(
+        dialog.getByText("Calculating monitored-system impact…"),
+      ).toBeVisible();
+      await expect(dialog.getByText("Obsolete endpoint failure")).toHaveCount(
+        0,
+      );
+      await requests[1].fulfill({ json: success });
+      await expect(
+        dialog.getByText("This change keeps monitored-system count unchanged"),
+      ).toBeVisible();
+
+      // An obsolete success must not reappear even after returning to the same endpoint.
+      await previewButton.click();
+      await expect.poll(() => requests.length).toBe(3);
+      await endpoint.fill("https://third.lab:8006");
+      await endpoint.fill("https://replacement.lab:8006");
+      await requests[2].fulfill({ json: success });
+      await expect(
+        dialog.getByText("This change keeps monitored-system count unchanged"),
+      ).toHaveCount(0);
+      await previewButton.click();
+      await expect.poll(() => requests.length).toBe(4);
+      await requests[3].fulfill({
+        status: 400,
+        json: { error: "Current endpoint failure" },
+      });
+      await expect(dialog.getByText("Current endpoint failure")).toBeVisible();
+      await expect(previewButton).toBeEnabled();
+      await page.screenshot({
+        path: testInfo.outputPath(`preview-${width}.png`),
+        fullPage: true,
+      });
+      await previewButton.click();
+      await expect.poll(() => requests.length).toBe(5);
+      await dialog.getByRole("button", { name: /^(Cancel|Close)$/ }).click();
+      await expect(dialog).not.toBeVisible();
+      await requests[4].fulfill({ json: success });
+      await expect(
+        page.getByText("This change keeps monitored-system count unchanged"),
+      ).toHaveCount(0);
+    });
+  }
+
   test("desktop detect utility offers no-match agent fallback from the add-infrastructure picker", async ({
     page,
   }, testInfo) => {
