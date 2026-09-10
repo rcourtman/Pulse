@@ -8116,7 +8116,14 @@ Regression sources: `internal/ai/chat/agentic_action_gate_test.go`,
 `internal/ai/chat/agentic_look_gate_test.go`, `internal/ai/chat/agentic_test.go`,
 `internal/ai/tools/control_targets_test.go`. Current-source real-model and browser
 qualification is recorded in the customer-journey plan. Historical passes do
-not satisfy that gate. Patrol's request-local proposal capture and its forced
+not satisfy that gate. `TestAgenticLoop_GeminiDiscoveryToLifecyclePlan` also exercises
+the actual Gemini wire adapter against synthetic SSE responses: discovery returns
+canonical inventory, a submitted reboot reaches typed planning with approval
+retained, and a tool-free model conclusion does not manufacture an action. This
+is transport/orchestration coverage, not hosted-model action-selection acceptance.
+The tool-free case deliberately returns an invented binding prerequisite: the
+loop preserves that provider conclusion and does not plan an action. Patrol's
+request-local proposal capture and its forced
 final turn remain an explicitly unfinished boundary until canonical planning
 acceptance/refusal is returned inside the tool call.
 

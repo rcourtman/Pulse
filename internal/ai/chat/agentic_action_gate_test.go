@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -182,6 +184,91 @@ func TestAgenticLoop_ModelMayConcludeWithoutAnAction(t *testing.T) {
 			require.Equal(t, 2, turn)
 			require.Empty(t, planner.snapshot())
 			require.Equal(t, answer, messages[len(messages)-1].Content)
+		})
+	}
+}
+
+// Exercise the supported Gemini wire adapter rather than only a Provider stub.
+// Scripted responses establish transport/orchestration behaviour, not whether a
+// hosted model will choose the requested action. Planning never executes a VM.
+func TestAgenticLoop_GeminiDiscoveryToLifecyclePlan(t *testing.T) {
+	for _, submit := range []bool{true, false} {
+		t.Run(fmt.Sprintf("submit_control_%t", submit), func(t *testing.T) {
+			vm := gateTestProxmoxVM("win-01", 101)
+			final := "No VM has been restarted."
+			if !submit {
+				// Deliberately invented provider prose, not an actual prerequisite.
+				final = "A discovery binding is required before rebooting."
+			}
+			planner := &gateTestPlanner{}
+			executor := newGateTestExecutor(t, planner, vm)
+			var mu sync.Mutex
+			var requests []string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var body json.RawMessage
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Error(err)
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				mu.Lock()
+				requests = append(requests, string(body))
+				turn := len(requests)
+				mu.Unlock()
+				var part map[string]any
+				switch {
+				case turn == 1:
+					part = map[string]any{"functionCall": map[string]any{"name": "pulse_query", "args": map[string]any{"action": "search", "query": "win", "type": "vm"}}}
+				case turn == 2 && submit:
+					part = map[string]any{"functionCall": map[string]any{"name": "pulse_control", "args": map[string]any{"type": "resource", "resource_id": vm.ID, "action": "reboot"}}}
+				default:
+					part = map[string]any{"text": final}
+				}
+				payload, err := json.Marshal(map[string]any{"candidates": []any{map[string]any{"content": map[string]any{"role": "model", "parts": []any{part}}, "finishReason": "STOP"}}})
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				w.Header().Set("Content-Type", "text/event-stream")
+				fmt.Fprintf(w, "data: %s\n\n", payload)
+			}))
+			defer server.Close()
+			provider := providers.NewGeminiClient("synthetic-key", "gemini-test", server.URL, 0)
+			loop := NewAgenticLoop(provider, executor, "Use canonical capabilities; preserve approval requirements.")
+			messages, err := loop.ExecuteWithTools(context.Background(), "gemini-lifecycle", []Message{{Role: "user", Content: "Find win-01 and prepare its reboot."}}, nil, func(StreamEvent) {})
+			require.NoError(t, err)
+			mu.Lock()
+			captured := append([]string(nil), requests...)
+			mu.Unlock()
+			require.GreaterOrEqual(t, len(captured), 2)
+			require.Contains(t, captured[0], "functionDeclarations")
+			require.Contains(t, captured[0], "pulse_control")
+			require.Contains(t, captured[1], "functionResponse")
+			require.Contains(t, captured[1], vm.ID, "discovery must return canonical inventory to Gemini")
+			if submit {
+				require.Len(t, captured, 3)
+				plans := planner.snapshot()
+				require.Len(t, plans, 1)
+				require.Equal(t, vm.ID, plans[0].ResourceID)
+				require.Equal(t, "reboot", plans[0].CapabilityName)
+				foundPlan := false
+				for _, message := range messages {
+					if message.ToolResult == nil {
+						continue
+					}
+					var result map[string]any
+					if json.Unmarshal([]byte(message.ToolResult.Content), &result) == nil && result["planned"] == true {
+						require.False(t, message.ToolResult.IsError)
+						require.Equal(t, true, result["requires_approval"])
+						foundPlan = true
+					}
+				}
+				require.True(t, foundPlan, "typed planning must return a pending-approval receipt")
+			} else {
+				require.Len(t, captured, 2, "do not invent a forced model continuation")
+				require.Empty(t, planner.snapshot())
+			}
+			require.Equal(t, final, messages[len(messages)-1].Content)
 		})
 	}
 }
