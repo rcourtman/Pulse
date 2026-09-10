@@ -5,9 +5,12 @@ comparison, not release readiness. It never runs package tests, other benchmarks
 or layout interventions, and never changes a release threshold.
 
 The source pair is fixed in `scripts/diagnose-root-pair.py`: baseline
-`9168d16a32e948665eba80e2899604933292cdc0` and candidate
-`4cdf250f474ad9cde6ffb121527f021b7387603f`. Tree and HTTP source hashes must
-match. Both API test binaries use Go 1.26.8, readonly modules and identical CI
+`9168d16a32e948665eba80e2899604933292cdc0` and durable main candidate
+`dd388decf5896123b6587b1b16f9aee7c3a747f3`. The candidate has the exact
+`1120cce4d631bca5525cafc5b5620251998773f7` tree measured from ephemeral
+source commit `4cdf250f474ad9cde6ffb121527f021b7387603f7`; metadata retains that original
+evidence identity. Tree and HTTP source hashes must match. Both API test binaries
+use Go 1.26.8, readonly modules and identical CI
 embed text; compilation finishes before either warm-up. Four available CPUs
 are selected and inherited by children, GOMAXPROCS is four. After two 100ms
 warm-ups and ten seconds settling, ten rounds alternate AB/BA with one 1s

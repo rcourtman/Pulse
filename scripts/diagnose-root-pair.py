@@ -11,7 +11,8 @@ import tempfile
 from datetime import datetime, timezone
 
 BASE = '9168d16a32e948665eba80e2899604933292cdc0'
-CANDIDATE = '4cdf250f474ad9cde6ffb121527f021b7387603f'
+CANDIDATE = 'dd388decf5896123b6587b1b16f9aee7c3a747f3'
+EVIDENCE_CANDIDATE = '4cdf250f474ad9cde6ffb121527f021b7387603f7'
 TREES = {BASE: '439848bb1d62a8ccf743b923eef89f8b47369edf',
          CANDIDATE: '1120cce4d631bca5525cafc5b5620251998773f7'}
 SOURCE_HASHES = {
@@ -75,6 +76,7 @@ def execute(repo, output):
     metadata = {
         'purpose': 'diagnostic-only; no gate disposition or release candidate',
         'rounds': ROUNDS, 'gomaxprocs': 4, 'benchtime': '1s',
+        'original_evidence_candidate': EVIDENCE_CANDIDATE,
         'workflow_sha': os.environ.get('GITHUB_SHA'),
         'run_id': os.environ.get('GITHUB_RUN_ID'),
         'run_attempt': os.environ.get('GITHUB_RUN_ATTEMPT'),

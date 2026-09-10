@@ -23,8 +23,15 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(diag.ROUNDS, 10)
         for label in diag.LABELS:
             for position in range(2):
-                self.assertIn(sum(diag.order(n)[position] == label for n in range(1, 11)), (0, 5))
+                self.assertEqual(sum(diag.order(n)[position] == label for n in range(1, 11)), 5)
         self.assertEqual(diag.order(2), tuple(reversed(diag.order(1))))
+
+    def test_candidate_uses_durable_tree_identical_main_commit(self):
+        self.assertEqual(diag.CANDIDATE, 'dd388decf5896123b6587b1b16f9aee7c3a747f3')
+        self.assertEqual(diag.EVIDENCE_CANDIDATE,
+                         '4cdf250f474ad9cde6ffb121527f021b7387603f7')
+        self.assertEqual(diag.TREES[diag.CANDIDATE],
+                         '1120cce4d631bca5525cafc5b5620251998773f7')
 
     def test_execution_is_root_only(self):
         for warmup in (True, False):
@@ -94,6 +101,7 @@ class DiagnosticTests(unittest.TestCase):
             calls = self.exercise(output)
             metadata = json.loads((output / 'metadata.json').read_text())
             self.assertTrue(metadata['complete'])
+            self.assertEqual(metadata['original_evidence_candidate'], diag.EVIDENCE_CANDIDATE)
             self.assertEqual(len(metadata['conditions']), 2)
             for label in diag.LABELS:
                 self.assertEqual((output / (label + '.txt')).read_text(), SAMPLE * 10)
