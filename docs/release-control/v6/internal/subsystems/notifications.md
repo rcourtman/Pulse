@@ -899,3 +899,14 @@ wraps its returned error and checks both transport retry policy and the shared
 class predicate used by the queue. `TestClassFromHTTPStatus` pins the reason
 classes. This proves the classification boundary without starting queue/storage
 workers; it does not establish installed receipt or queue scheduling execution.
+
+### Initial routing edits and previously queued firing work
+
+Changing the initial target affects new sends; it does not rewrite a previously
+queued email or revoke independent per-level escalation routing. Queue delivery
+uses the admitted destination configuration while checking current global and
+destination enablement. Resolution independently cancels obsolete firing work.
+`queue_policy_change_test.go` verifies retained email routing after a webhook
+initial-target edit with an in-memory SMTP acceptance, and prevents a previously
+fetched pending item from sending after cancellation. This does not establish
+recipient inbox timing or recall mail already accepted by a provider.

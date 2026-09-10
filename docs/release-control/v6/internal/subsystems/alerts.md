@@ -2908,3 +2908,18 @@ real history hook and administration card: load a row, start a pending range
 read, confirm clear, then release the obsolete response at desktop and phone
 widths. Scripted API responses establish component behaviour, not installed
 backend deletion or destination delivery.
+
+### Escalation callback admission uses current policy and occurrence
+
+`PrepareEscalationNotification` rejects asynchronous snapshots after escalation
+or global alert disablement, inactive activation, recovery, acknowledgement,
+snooze, or replacement by another occurrence of the same alert ID. It returns
+the current alert and detached current per-level routing, not mutable manager
+state. The monitoring callback must use this admission before enqueueing.
+This check does not recall provider-accepted messages or make the subsequent
+notification enqueue atomic with alert resolution.
+
+`escalation_policy_change_test.go` pins a short-lived alert and disabled policy
+before the former 180-minute deadline, plus current payload/routing selection,
+copy isolation, snooze and invalid-level rejection. These deterministic component tests
+establish neither installed delivery timing nor the cause of a delayed email.
