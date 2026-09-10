@@ -96,89 +96,102 @@ describe('ProxmoxBackupServersTable details', () => {
     expect(screen.queryByTestId('pbs-resource-detail')).not.toBeInTheDocument();
   });
 
-  it.each(['agent', 'vm', 'system-container'] as const)('uses the uniquely correlated %s resource for host details and metrics history', (type) => {
-    const pbs = makePbsResource();
-    pbs.sources = ['pbs'];
-    pbs.agent = undefined;
-    pbs.metricsTarget = { resourceType: 'agent', resourceId: 'pbs-main' };
-    pbs.platformData = {
-      sources: ['pbs'],
-      pbs: { instanceId: 'pbs-main', hostname: 'pbs-main', datastoreCount: 1 },
-    };
-    const agent = {
-      id: 'agent-host-1',
-      type,
-      name: 'pbs-main.local',
-      displayName: 'PBS host',
-      platformId: 'agent-host-1',
-      platformType: 'proxmox-pbs',
-      sourceType: 'hybrid',
-      sources: ['agent', 'pbs'],
-      status: 'online',
-      lastSeen: pbs.lastSeen + 1_000,
-      agent: { agentId: 'agent-pbs-1', hostname: 'pbs-main.local', osName: 'Debian GNU/Linux' },
-      metricsTarget: { resourceType: type, resourceId: 'agent-pbs-1' },
-      platformData: {
-        sources: ['agent', 'pbs'],
-        agent: { agentId: 'agent-pbs-1', hostname: 'pbs-main.local' },
-      },
-    } as Resource;
-
-    expect(agent.disk).toBeUndefined();
-    render(() => <ProxmoxBackupServersTable servers={[pbs, agent]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Expand details for pbs-main' }));
-
-    const detail = screen.getByTestId('pbs-resource-detail');
-    expect(detail).toHaveAttribute('data-resource-id', 'pbs-1');
-    expect(detail).toHaveAttribute('data-agent-id', 'agent-pbs-1');
-    expect(detail).toHaveAttribute('data-metrics-resource-id', 'agent-pbs-1');
-    expect(detail).toHaveAttribute('data-metrics-resource-type', type);
-  });
-
-  it('does not correlate a guest without host telemetry just by name', () => {
-    const pbs = makePbsResource();
-    pbs.metricsTarget = { resourceType: 'agent', resourceId: 'pbs-main' };
-    const guest = { ...pbs, id: 'vm-unrelated', type: 'vm',
-      agent: undefined, platformData: {}, pbs: undefined,
-      metricsTarget: { resourceType: 'vm', resourceId: 'unrelated' } } as Resource;
-    render(() => <ProxmoxBackupServersTable servers={[pbs, guest]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Expand details for pbs-main' }));
-    expect(screen.getByTestId('pbs-resource-detail')).toHaveAttribute(
-      'data-metrics-resource-id', 'pbs-main',
-    );
-  });
-
-  it.each(['agent', 'vm'] as const)('does not guess when an agent and %s share the PBS hostname', (type) => {
-    const pbs = makePbsResource();
-    pbs.sources = ['pbs'];
-    pbs.agent = undefined;
-    pbs.metricsTarget = { resourceType: 'agent', resourceId: 'pbs-main' };
-    const candidate = (id: string): Resource =>
-      ({
-        id,
-        type: id === 'agent-pbs-b' ? type : 'agent',
+  it.each(['agent', 'vm', 'system-container'] as const)(
+    'uses the uniquely correlated %s resource for host details and metrics history',
+    (type) => {
+      const pbs = makePbsResource();
+      pbs.sources = ['pbs'];
+      pbs.agent = undefined;
+      pbs.metricsTarget = { resourceType: 'agent', resourceId: 'pbs-main' };
+      pbs.platformData = {
+        sources: ['pbs'],
+        pbs: { instanceId: 'pbs-main', hostname: 'pbs-main', datastoreCount: 1 },
+      };
+      const agent = {
+        id: 'agent-host-1',
+        type,
         name: 'pbs-main.local',
-        displayName: id,
-        platformId: id,
+        displayName: 'PBS host',
+        platformId: 'agent-host-1',
         platformType: 'proxmox-pbs',
         sourceType: 'hybrid',
         sources: ['agent', 'pbs'],
         status: 'online',
-        lastSeen: pbs.lastSeen,
-        agent: { agentId: id, hostname: 'pbs-main.local' },
-        metricsTarget: { resourceType: 'agent', resourceId: id },
-      }) as Resource;
+        lastSeen: pbs.lastSeen + 1_000,
+        agent: { agentId: 'agent-pbs-1', hostname: 'pbs-main.local', osName: 'Debian GNU/Linux' },
+        metricsTarget: { resourceType: type, resourceId: 'agent-pbs-1' },
+        platformData: {
+          sources: ['agent', 'pbs'],
+          agent: { agentId: 'agent-pbs-1', hostname: 'pbs-main.local' },
+        },
+      } as Resource;
 
-    render(() => (
-      <ProxmoxBackupServersTable
-        servers={[pbs, candidate('agent-pbs-a'), candidate('agent-pbs-b')]}
-      />
-    ));
+      expect(agent.disk).toBeUndefined();
+      render(() => <ProxmoxBackupServersTable servers={[pbs, agent]} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Expand details for pbs-main' }));
+
+      const detail = screen.getByTestId('pbs-resource-detail');
+      expect(detail).toHaveAttribute('data-resource-id', 'pbs-1');
+      expect(detail).toHaveAttribute('data-agent-id', 'agent-pbs-1');
+      expect(detail).toHaveAttribute('data-metrics-resource-id', 'agent-pbs-1');
+      expect(detail).toHaveAttribute('data-metrics-resource-type', type);
+    },
+  );
+
+  it('does not correlate a guest without host telemetry just by name', () => {
+    const pbs = makePbsResource();
+    pbs.metricsTarget = { resourceType: 'agent', resourceId: 'pbs-main' };
+    const guest = {
+      ...pbs,
+      id: 'vm-unrelated',
+      type: 'vm',
+      agent: undefined,
+      platformData: {},
+      pbs: undefined,
+      metricsTarget: { resourceType: 'vm', resourceId: 'unrelated' },
+    } as Resource;
+    render(() => <ProxmoxBackupServersTable servers={[pbs, guest]} />);
     fireEvent.click(screen.getByRole('button', { name: 'Expand details for pbs-main' }));
-
     expect(screen.getByTestId('pbs-resource-detail')).toHaveAttribute(
       'data-metrics-resource-id',
       'pbs-main',
     );
   });
+
+  it.each(['agent', 'vm'] as const)(
+    'does not guess when an agent and %s share the PBS hostname',
+    (type) => {
+      const pbs = makePbsResource();
+      pbs.sources = ['pbs'];
+      pbs.agent = undefined;
+      pbs.metricsTarget = { resourceType: 'agent', resourceId: 'pbs-main' };
+      const candidate = (id: string): Resource =>
+        ({
+          id,
+          type: id === 'agent-pbs-b' ? type : 'agent',
+          name: 'pbs-main.local',
+          displayName: id,
+          platformId: id,
+          platformType: 'proxmox-pbs',
+          sourceType: 'hybrid',
+          sources: ['agent', 'pbs'],
+          status: 'online',
+          lastSeen: pbs.lastSeen,
+          agent: { agentId: id, hostname: 'pbs-main.local' },
+          metricsTarget: { resourceType: 'agent', resourceId: id },
+        }) as Resource;
+
+      render(() => (
+        <ProxmoxBackupServersTable
+          servers={[pbs, candidate('agent-pbs-a'), candidate('agent-pbs-b')]}
+        />
+      ));
+      fireEvent.click(screen.getByRole('button', { name: 'Expand details for pbs-main' }));
+
+      expect(screen.getByTestId('pbs-resource-detail')).toHaveAttribute(
+        'data-metrics-resource-id',
+        'pbs-main',
+      );
+    },
+  );
 });

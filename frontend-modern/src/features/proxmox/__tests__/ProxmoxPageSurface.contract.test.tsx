@@ -412,11 +412,19 @@ describe('ProxmoxPageSurface contract', () => {
 
   it('reuses guests and hydrates standalone PBS telemetry without duplicate candidates', () => {
     mockPathname.mockReturnValue('/proxmox/backups');
-    const guest = makeResource({ id: 'vm-100', type: 'vm', proxmox: { vmid: 100 },
-      agent: { agentId: 'guest-agent', hostname: 'pbs-vm' } });
-    const agent = makeResource({ id: 'pbs-agent', type: 'agent',
-      platformType: 'proxmox-pbs', sources: ['pbs', 'agent'],
-      metricsTarget: { resourceType: 'agent', resourceId: 'pbs-agent' } });
+    const guest = makeResource({
+      id: 'vm-100',
+      type: 'vm',
+      proxmox: { vmid: 100 },
+      agent: { agentId: 'guest-agent', hostname: 'pbs-vm' },
+    });
+    const agent = makeResource({
+      id: 'pbs-agent',
+      type: 'agent',
+      platformType: 'proxmox-pbs',
+      sources: ['pbs', 'agent'],
+      metricsTarget: { resourceType: 'agent', resourceId: 'pbs-agent' },
+    });
     const server = makeResource({
       id: 'pbs-1',
       type: 'pbs',
