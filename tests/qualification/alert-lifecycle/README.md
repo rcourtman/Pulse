@@ -27,8 +27,12 @@ The fixture operator must supply:
   isolated network namespace (for example, both inside a disposable VM with the
   server using host networking); the receiver binds only loopback.
 - A disposable admin API token with agent:report, monitoring:read,
-  settings:read and settings:write scopes, injected as
+  monitoring:write, settings:read and settings:write scopes, injected as
   `PULSE_ACCEPTANCE_TOKEN` without writing it to evidence or command arguments.
+- Alert configuration PUTs require `monitoring:write`; `settings:write` does
+  not imply it. A 403 stops the attempt: preserve it, correct the fixture
+  credential contract through review, and use a fresh fixture rather than
+  switching authentication methods or weakening the server scope check.
 - An executable restart hook taking no arguments. It must verify the server is
   still healthy, gracefully stop/start **only this server** with the same exact
   image and volume, and wait for authenticated HTTP readiness. It must fail on
