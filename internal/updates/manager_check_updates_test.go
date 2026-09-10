@@ -31,6 +31,7 @@ func newReleaseServer(t *testing.T, releases []ReleaseInfo, hitCount *int32) *ht
 }
 
 func TestCheckForUpdatesWithChannel_UsesConfiguredRepoPath(t *testing.T) {
+	withBuildVersion(t, "6.4.0")
 	var hits int32
 	releases := []ReleaseInfo{
 		{
@@ -57,6 +58,7 @@ func TestCheckForUpdatesWithChannel_UsesConfiguredRepoPath(t *testing.T) {
 }
 
 func TestCheckForUpdatesWithChannel_SourceBuild(t *testing.T) {
+	withBuildVersion(t, "6.4.0")
 	markerPath := "BUILD_FROM_SOURCE"
 	if err := os.WriteFile(markerPath, []byte("1"), 0644); err != nil {
 		t.Fatalf("write %s: %v", markerPath, err)
@@ -94,6 +96,7 @@ func TestCheckForUpdatesWithChannel_DiagnosticBuild(t *testing.T) {
 }
 
 func TestCheckForUpdatesWithChannel_AvailableUsesCache(t *testing.T) {
+	withBuildVersion(t, "6.4.0")
 	var hits int32
 	releaseTime := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
 	releases := []ReleaseInfo{
@@ -146,6 +149,7 @@ func TestCheckForUpdatesWithChannel_AvailableUsesCache(t *testing.T) {
 }
 
 func TestCheckForUpdatesWithChannel_NoReleases(t *testing.T) {
+	withBuildVersion(t, "6.4.0")
 	var hits int32
 	releases := []ReleaseInfo{
 		{
@@ -176,6 +180,7 @@ func TestCheckForUpdatesWithChannel_NoReleases(t *testing.T) {
 }
 
 func TestCheckForUpdates_Wrapper(t *testing.T) {
+	withBuildVersion(t, "6.4.0")
 	var hits int32
 	releases := []ReleaseInfo{
 		{
@@ -213,6 +218,7 @@ func TestCheckForUpdates_Wrapper(t *testing.T) {
 }
 
 func TestForcedUpdateCheckRefreshesSavedChannelCache(t *testing.T) {
+	withBuildVersion(t, "6.4.0")
 	var hits int32
 	server := newReleaseServer(t, []ReleaseInfo{{TagName: "v99.0.0", Assets: []ReleaseAsset{{Name: "pulse-v99.0.0-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.com/new.tar.gz"}}}}, &hits)
 	defer server.Close()
