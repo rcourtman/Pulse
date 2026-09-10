@@ -1,4 +1,7 @@
 import argparse
+import ast
+import inspect
+import textwrap
 import json
 import io
 import os
@@ -76,6 +79,44 @@ class AcceptanceContractTests(unittest.TestCase):
         args = argparse.Namespace(base="http://127.0.0.1:12345", run_id="test")
         with patch.dict(os.environ, {"PULSE_ACCEPTANCE_TOKEN": "synthetic-secret"}):
             return a.Driver(args, self.evidence, a.Recipient(self.evidence))
+
+    def test_retry_precedes_resolution_in_scenario(self):
+        # Guard scenario ordering separately from the recipient/identity proof.
+        tree = ast.parse(textwrap.dedent(inspect.getsource(a.Driver.run)))
+        retry_lines = [n.lineno for n in ast.walk(tree) if isinstance(n, ast.Call)
+                       and isinstance(n.func, ast.Attribute)
+                       and n.func.attr == "retry_terminal"]
+        resolved_lines = [n.lineno for n in ast.walk(tree) if isinstance(n, ast.Call)
+                          and isinstance(n.func, ast.Attribute) and n.func.attr == "wait"
+                          and n.args and isinstance(n.args[0], ast.Constant)
+                          and n.args[0].value == "resolved"]
+        self.assertEqual(len(retry_lines), 1)
+        self.assertEqual(len(resolved_lines), 1)
+        self.assertLess(retry_lines[0], resolved_lines[0])
+
+    def test_retry_retains_zero_response_before_failure(self):
+        driver = self.driver()
+        with patch.object(driver, "api", return_value={"success": True, "affected": 0}):
+            with self.assertRaisesRegex(AssertionError, "no terminal retry admitted"):
+                driver.retry_terminal({"id": "alert"}, {"original"})
+        files = list(self.evidence.directory.glob("*retry-response.json"))
+        self.assertEqual(len(files), 1)
+        self.assertEqual(json.loads(files[0].read_text())["affected"], 0)
+
+    def test_retry_requires_original_notification_identity(self):
+        driver = self.driver()
+        with patch.object(driver, "api", return_value={"success": True, "affected": 1}), \
+             patch.object(driver, "delivery", return_value=[{"notificationId": "other"}]), \
+             patch.object(a.time, "monotonic", side_effect=[0, 100]):
+            with self.assertRaises(TimeoutError):
+                driver.retry_terminal({"id": "alert"}, {"original"})
+
+    def test_retry_original_notification_succeeds(self):
+        driver = self.driver()
+        with patch.object(driver, "api", return_value={"success": True, "affected": 1}), \
+             patch.object(driver, "delivery", return_value=[{"notificationId": "original"}]):
+            driver.retry_terminal({"id": "alert"}, {"original"})
+        self.assertIn("terminal-retry-sent", driver.results)
 
     def test_deadline_fails_instead_of_passing_empty_observation(self):
         driver = self.driver()
