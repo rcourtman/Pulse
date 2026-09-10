@@ -934,6 +934,54 @@ describe('AISettings Ollama provider options', () => {
     cleanup();
   });
 
+  it('keeps saved passwords write-only and supports replacement and explicit clearing', async () => {
+    const saved = {
+      ...baseSettings(),
+      configured: true,
+      model: 'ollama:llama3',
+      ollama_configured: true,
+      configured_providers: ['ollama'],
+      ollama_username: 'monitor',
+      ollama_password_set: true,
+    };
+    getSettingsMock.mockResolvedValue(saved);
+    updateSettingsMock.mockResolvedValue(saved);
+    renderComponent();
+    fireEvent.click(await screen.findByRole('button', { name: /ollama/i }));
+    const password = (await screen.findByLabelText('Ollama Password')) as HTMLInputElement;
+    expect(password.type).toBe('password');
+    expect(password.value).toBe('');
+    expect(screen.getByText('Ollama password is saved.')).toBeInTheDocument();
+    fireEvent.input(screen.getByLabelText('Ollama Keep Alive'), { target: { value: '24h' } });
+    fireEvent.click(screen.getByRole('button', { name: /Save provider settings/i }));
+    await waitFor(() => expect(updateSettingsMock).toHaveBeenCalledTimes(1));
+    expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('ollama_password');
+
+    fireEvent.input(password, { target: { value: ' replacement with spaces ' } });
+    fireEvent.input(screen.getByLabelText('Ollama Username'), { target: { value: 'new-monitor' } });
+    fireEvent.click(screen.getByRole('button', { name: /Save provider settings/i }));
+    await waitFor(() => expect(updateSettingsMock).toHaveBeenCalledTimes(2));
+    expect(updateSettingsMock.mock.calls[1][0]).toEqual(
+      expect.objectContaining({
+        ollama_username: 'new-monitor',
+        ollama_password: ' replacement with spaces ',
+      }),
+    );
+    await waitFor(() => expect(password.value).toBe(''));
+
+    fireEvent.input(screen.getByLabelText('Ollama Username'), { target: { value: '' } });
+    fireEvent.click(screen.getByLabelText('Clear saved Ollama password'));
+    fireEvent.click(screen.getByRole('button', { name: /Save provider settings/i }));
+    await waitFor(() => expect(updateSettingsMock).toHaveBeenCalledTimes(3));
+    expect(updateSettingsMock.mock.calls[2][0]).toEqual(
+      expect.objectContaining({
+        ollama_username: '',
+        clear_ollama_password: true,
+      }),
+    );
+    expect(updateSettingsMock.mock.calls[2][0]).not.toHaveProperty('ollama_password');
+  });
+
   it('saves Ollama keep alive through the provider settings panel', async () => {
     getSettingsMock.mockResolvedValue({
       ...baseSettings(),
