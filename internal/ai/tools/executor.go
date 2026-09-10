@@ -1211,7 +1211,9 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	case agentcapabilities.PulseReadToolName:
 		return e.agentServer != nil || (e.appContainerReadProvider != nil && e.hasReadState())
 	case agentcapabilities.PulseControlToolName:
-		return (e.agentServer != nil || e.appContainerActionProvider != nil) && e.hasReadState()
+		// Control only creates canonical plans. Execution transports neither
+		// enable planning nor substitute for the installed lifecycle planner.
+		return e.typedActionPlanner != nil && e.hasReadState()
 	case agentcapabilities.PulseFileEditToolName:
 		return e.agentServer != nil
 	case agentcapabilities.PulseDiscoveryToolName:

@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const diagnosticModel = "google/gemini-2.5-flash"
+const diagnosticModel = "deepseek/deepseek-v4.1-flash"
 const diagnosticPrompt = "Find the five VMs named win-01 through win-05 and prepare their reboot plans. Do not execute any action."
 
 // A hard logical-call boundary also counts final-response/recovery calls, which
@@ -161,6 +161,12 @@ func TestLifecycleDiagnosticFixture(t *testing.T) {
 			backend.chatStream = func(_ context.Context, req providers.ChatRequest, cb providers.StreamCallback) error {
 				turn++
 				require.Equal(t, 2048, req.MaxTokens)
+				names := map[string]bool{}
+				for _, tool := range req.Tools {
+					names[tool.Name] = true
+				}
+				require.True(t, names["pulse_control"], "scripted calls must be offered to a real provider")
+				require.Contains(t, req.System, "pulse_control")
 				require.Equal(t, diagnosticModel, req.Model)
 				require.Contains(t, req.System, "first-party in-app Pulse Intelligence")
 				require.Contains(t, req.System, "QEMU guest agent")
@@ -249,6 +255,14 @@ func TestLifecycleDiagnosticGatewayWire(t *testing.T) {
 		if req["max_tokens"] != float64(2048) && req["max_completion_tokens"] != float64(2048) {
 			t.Error("missing token cap")
 		}
+		offered := map[string]bool{}
+		for _, raw := range req["tools"].([]any) {
+			tool := raw.(map[string]any)["function"].(map[string]any)
+			offered[tool["name"].(string)] = true
+		}
+		if !offered["pulse_control"] || !offered["pulse_query"] {
+			t.Error("gateway must receive query and plan tools")
+		}
 		mu.Lock()
 		turn++
 		n := turn
@@ -291,5 +305,35 @@ func TestLifecycleDiagnosticGatewayWire(t *testing.T) {
 		if message.ToolResult != nil {
 			require.False(t, message.ToolResult.IsError, message.ToolResult.Content)
 		}
+	}
+}
+
+// The hosted model's wildcard queries are not interpreted as globs. A literal
+// broader query can discover the same five targets; this is not model recovery
+// acceptance and must not silently broaden a lifecycle action's target set.
+func TestLifecycleDiagnosticLiteralSearch(t *testing.T) {
+	vms := make([]unifiedresources.Resource, 0, 5)
+	for i := 1; i <= 5; i++ {
+		vms = append(vms, gateTestProxmoxVM(fmt.Sprintf("win-%02d", i), 100+i))
+	}
+	e := tools.NewPulseToolExecutor(tools.ExecutorConfig{
+		StateProvider: &mockStateProvider{}, UnifiedResourceProvider: plainTextResourceTestProvider(vms...),
+	})
+	for _, tc := range []struct {
+		query string
+		total int
+	}{
+		{"win-0?", 0}, {"win-0*", 0}, {"win-0", 5}, {"win-01", 1},
+	} {
+		t.Run(tc.query, func(t *testing.T) {
+			result, err := e.ExecuteTool(context.Background(), "pulse_query", map[string]interface{}{"action": "search", "query": tc.query, "type": "vm", "limit": 5})
+			require.NoError(t, err)
+			require.False(t, result.IsError, result.Content)
+			var payload struct {
+				Total int `json:"total"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
+			require.Equal(t, tc.total, payload.Total)
+		})
 	}
 }

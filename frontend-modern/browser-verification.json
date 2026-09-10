@@ -1,21 +1,22 @@
 {
   "version": 1,
-  "base_sha": "dd388decf5896123b6587b1b16f9aee7c3a747f3",
-  "verified_at": "2026-09-10T16:01:12.114821Z",
+  "base_sha": "a3eab37bcd36a0a087680ece938ca862c6f4b4d9",
+  "verified_at": "2026-09-10T20:31:10.676001Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/UpdateInstallGuide.tsx",
-    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
-    "frontend-modern/src/utils/updatesPresentation.ts",
-    "frontend-modern/src/stores/updates.ts"
+    "frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx",
+    "frontend-modern/src/components/Settings/aiSettingsModel.ts",
+    "frontend-modern/src/components/Settings/useAISettingsState.ts",
+    "frontend-modern/src/types/ai.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/UpdateInstallGuide.tsx": "ee102c072050b70fe0fcf732073f6016cc6ac853edbac2d1e1db6c1ec7bda5a6",
-    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx": "f4f5f9bb31be48b20fc8a08175c378f071b61a5b20fe05a51c5990290026bf6f",
-    "frontend-modern/src/utils/updatesPresentation.ts": "c279a3c89e1160d30eab4c3dfb257627dc92f1a00dc83a2e34a52826fec49f0a",
-    "frontend-modern/src/stores/updates.ts": "9f285a67198f095f69197b434874fcf70cddcec2c3ba0131e7897349a8d33ef8"
+    "frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx": "76f3ed93e95cbe9f24f5cd55d49aeae7397f739e6520665f1b8de074ccaeaa96",
+    "frontend-modern/src/components/Settings/aiSettingsModel.ts": "9dee0d8b8bd013e870732c3893fa4742e40914ec4931a044b1698bc90f598c22",
+    "frontend-modern/src/components/Settings/useAISettingsState.ts": "d4bdd6ce19279e5e243b69e9ca769436c3d88a50f243bd8241c7aeffafeb2613",
+    "frontend-modern/src/types/ai.ts": "bdad2e3926976f761b2a75db03ed4473f67e73cdc60e6327f15acc6626225507"
   },
   "routes": [
+    "/settings/pulse-intelligence/provider",
     "/settings/system-updates",
     "/proxmox"
   ],
@@ -30,24 +31,25 @@
     }
   ],
   "states": [
-    "Diagnostic source version, Source and Development badges, no published release channel or agent update target",
-    "Cached same-version release offer discarded, source status and manual container image guidance",
-    "Disabled manual check, automatic updates and channel selection",
-    "Stable and preview release controls and install guidance remain available",
-    "Proxmox live host continuity shows current identity and 17 percent CPU with an older agent version, without an unpublished upgrade link"
+    "Saved Ollama password with blank masked input",
+    "Unrelated save preserves credentials",
+    "Loading disables save and credential controls",
+    "Failed save retains replacement draft, successful retry preserves whitespace and clears draft",
+    "Explicit password and username clearing persists across reload",
+    "Source build clears cached release offers and disables release updates",
+    "Stable and preview builds retain manual update checks",
+    "Live Proxmox agent identity and CPU with no source-build agent upgrade target"
   ],
   "interactions": [
-    "Reload source build and inspect status, version and absent release offers",
-    "Hover and attempt focus on disabled Check Now",
-    "Scroll to automatic update control and inspect actual pixels at both viewports",
-    "Focus and press Enter on stable and preview Check Now, observe one forced check and successful result",
-    "Expand Proxmox node details, inspect current identity, collapse with Enter, reload and verify live CPU",
-    "Inspect source, stable, preview and expanded Proxmox pixels at both viewports"
+    "Expand Ollama accordion, focus password and Tab",
+    "Save unrelated option with keyboard Enter",
+    "Fail replacement save then retry",
+    "Clear saved credentials and reload",
+    "Hover and focus disabled source update check",
+    "Keyboard manual stable and preview update checks",
+    "Expand and collapse Proxmox details with keyboard, reload",
+    "Inspect desktop and narrow screenshots, no horizontal overflow in provider form"
   ],
-  "command": "node .agent-coordination/issue-1913-upgrade/source-build-browser.cjs (workspace root)",
-  "notes": "Current local Vite build using actual version-handler regression payloads adapted to Docker context and public community runtime. Preview control derives from the stable payload using the version classifier fixture. Source cache seeded with a same-version available release. Proxmox uses the real Go continuity fixture inserted into the existing API inventory and an old synthetic agent version. No reporter environment access or production mutations. Browser page-error assertions pass. Screenshots, interaction matrix and proof logs retained in the local issue investigation directory.",
-  "backend_content_sha256": {
-    "internal/updates/version.go": "d8e426cfcc36e130a9b0faea97087620813ad07690865fa51e96b171d7fb7f17",
-    "internal/api/agent_version_shared.go": "3d40fe90f3d20a4b2e8fbe330198d70f0f2217447e776e775d47d2f9cdef53e7"
-  }
+  "command": "node merged-ollama-browser.cjs && node merged-source-build-browser.cjs",
+  "notes": "Fresh verification of merged source on isolated Vite port 5174 at 1440x900 and 390x900. Playwright uses synthetic provider, version, update and agent HTTP responses over the managed local dev backend. Credential writes are intercepted. Actual pixels inspected for provider saved, clear and reloaded states, source update controls and Proxmox detail. Evidence scripts, interaction matrix, logs and screenshots retained in machine-local issue-1913-upgrade task directory. Earlier locator failures are retained and not counted as passes. No release qualification is claimed."
 }

@@ -1,13 +1,24 @@
 package tools
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+// Projection requires planning availability but must not invoke the planner.
+func projectionTestPlanner(t *testing.T) TypedActionPlanner {
+	t.Helper()
+	return typedActionPlannerFunc(func(context.Context, string, unifiedresources.ActionRequest) (*unifiedresources.ActionPlan, error) {
+		t.Fatal("tool projection must not plan or execute")
+		return nil, nil
+	})
+}
 
 func providerToolNameSet(list []agentcapabilities.ProviderTool) map[string]bool {
 	set := make(map[string]bool, len(list))
@@ -28,9 +39,10 @@ func providerToolByName(list []agentcapabilities.ProviderTool, name string) (age
 
 func TestPulseToolExecutorAssistantProviderToolsUsesRuntimeAvailability(t *testing.T) {
 	exec := NewPulseToolExecutor(ExecutorConfig{
-		ReadState:    &fakeReadState{},
-		AgentServer:  &mockAgentServer{agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "node-1"}}},
-		ControlLevel: ControlLevelControlled,
+		ReadState:          &fakeReadState{},
+		TypedActionPlanner: projectionTestPlanner(t),
+		AgentServer:        &mockAgentServer{agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "node-1"}}},
+		ControlLevel:       ControlLevelControlled,
 	})
 
 	projected := exec.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{IncludeQuestionTool: true})
@@ -141,9 +153,10 @@ func TestPulseToolExecutorAssistantProviderToolsHonorsInteractionMode(t *testing
 
 func TestPulseToolExecutorAssistantProviderToolsHonorsControlLevel(t *testing.T) {
 	exec := NewPulseToolExecutor(ExecutorConfig{
-		ReadState:    &fakeReadState{},
-		AgentServer:  &mockAgentServer{agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "node-1"}}},
-		ControlLevel: ControlLevelReadOnly,
+		ReadState:          &fakeReadState{},
+		TypedActionPlanner: projectionTestPlanner(t),
+		AgentServer:        &mockAgentServer{agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "node-1"}}},
+		ControlLevel:       ControlLevelReadOnly,
 	})
 
 	names := providerToolNameSet(exec.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{}))
@@ -157,9 +170,10 @@ func TestPulseToolExecutorAssistantProviderToolsHonorsControlLevel(t *testing.T)
 
 func TestPulseToolExecutorAssistantSurfaceToolContractUsesRuntimeProjection(t *testing.T) {
 	exec := NewPulseToolExecutor(ExecutorConfig{
-		ReadState:    &fakeReadState{},
-		AgentServer:  &mockAgentServer{agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "node-1"}}},
-		ControlLevel: ControlLevelControlled,
+		ReadState:          &fakeReadState{},
+		TypedActionPlanner: projectionTestPlanner(t),
+		AgentServer:        &mockAgentServer{agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "node-1"}}},
+		ControlLevel:       ControlLevelControlled,
 	})
 
 	contract := exec.AssistantSurfaceToolContract(agentcapabilities.AssistantProviderToolOptions{IncludeQuestionTool: true})
@@ -197,5 +211,37 @@ func TestPulseToolExecutorAssistantSurfaceToolContractUsesRuntimeProjection(t *t
 	}
 	if len(contract.CapabilityNames) != 0 {
 		t.Fatalf("Assistant surface contract must not duplicate MCP capability names: %+v", contract.CapabilityNames)
+	}
+}
+
+// Retired execution transports alone must not advertise canonical planning on
+// either provider-facing projection, even when execution authority is enabled.
+func TestAssistantProjectionsRequireTypedPlanner(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		planner TypedActionPlanner
+		want    bool
+	}{
+		{name: "transport_only"},
+		{name: "typed_planner", planner: projectionTestPlanner(t), want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			exec := NewPulseToolExecutor(ExecutorConfig{
+				ReadState:          &fakeReadState{},
+				AgentServer:        &mockAgentServer{},
+				TypedActionPlanner: tc.planner,
+				ControlLevel:       ControlLevelControlled,
+			})
+			opts := agentcapabilities.AssistantProviderToolOptions{}
+			names := providerToolNameSet(exec.AssistantProviderTools(opts))
+			contract := exec.AssistantSurfaceToolContract(opts)
+			found := false
+			for _, name := range contract.ToolNames {
+				found = found || name == agentcapabilities.PulseControlToolName
+			}
+			if names[agentcapabilities.PulseControlToolName] != tc.want || found != tc.want {
+				t.Fatalf("provider control=%v surface control=%v want=%v", names[agentcapabilities.PulseControlToolName], found, tc.want)
+			}
+		})
 	}
 }

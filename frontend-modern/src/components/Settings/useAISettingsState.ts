@@ -74,7 +74,13 @@ const AI_SETTINGS_PROVIDER_PAYLOAD_FIELDS: Record<AIProvider, string[]> = {
   together: ['together_api_key'],
   fireworks: ['fireworks_api_key'],
   gemini: ['gemini_api_key'],
-  ollama: ['ollama_base_url', 'ollama_keep_alive'],
+  ollama: [
+    'ollama_base_url',
+    'ollama_keep_alive',
+    'ollama_username',
+    'ollama_password',
+    'clear_ollama_password',
+  ],
   'codex-subscription': ['codex_subscription_enabled'],
   'claude-subscription': ['claude_subscription_enabled'],
 };
@@ -400,6 +406,9 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     geminiApiKey: '',
     ollamaBaseUrl: 'http://localhost:11434',
     ollamaKeepAlive: '',
+    ollamaUsername: '',
+    ollamaPassword: '',
+    clearOllamaPassword: false,
     openaiBaseUrl: '',
     zaiBaseUrl: '',
     codexSubscriptionEnabled: false,
@@ -500,6 +509,9 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         geminiApiKey: '',
         ollamaBaseUrl: 'http://localhost:11434',
         ollamaKeepAlive: '',
+        ollamaUsername: '',
+        ollamaPassword: '',
+        clearOllamaPassword: false,
         openaiBaseUrl: '',
         zaiBaseUrl: '',
         codexSubscriptionEnabled: false,
@@ -548,6 +560,9 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       geminiApiKey: '',
       ollamaBaseUrl: data.ollama_base_url || 'http://localhost:11434',
       ollamaKeepAlive: data.ollama_keep_alive ?? '',
+      ollamaUsername: data.ollama_username ?? '',
+      ollamaPassword: '',
+      clearOllamaPassword: false,
       openaiBaseUrl: data.openai_base_url || '',
       zaiBaseUrl: data.zai_base_url || '',
       codexSubscriptionEnabled: Boolean(data.codex_subscription_enabled),
@@ -1153,6 +1168,14 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       }
       if (form.ollamaKeepAlive.trim() !== (settings()?.ollama_keep_alive ?? '')) {
         payload.ollama_keep_alive = form.ollamaKeepAlive.trim();
+      }
+      if (form.ollamaUsername.trim() !== (settings()?.ollama_username ?? '')) {
+        payload.ollama_username = form.ollamaUsername.trim();
+      }
+      if (form.clearOllamaPassword) {
+        payload.clear_ollama_password = true;
+      } else if (form.ollamaPassword !== '') {
+        payload.ollama_password = form.ollamaPassword;
       }
       if (form.openaiBaseUrl !== (settings()?.openai_base_url || '')) {
         payload.openai_base_url = form.openaiBaseUrl.trim();

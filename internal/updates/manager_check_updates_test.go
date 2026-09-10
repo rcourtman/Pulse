@@ -31,6 +31,7 @@ func newReleaseServer(t *testing.T, releases []ReleaseInfo, hitCount *int32) *ht
 }
 
 func TestCheckForUpdatesWithChannel_UsesConfiguredRepoPath(t *testing.T) {
+	// Exercise published-release behaviour independently of the checkout identity.
 	withBuildVersion(t, "6.4.0")
 	var hits int32
 	releases := []ReleaseInfo{
@@ -96,6 +97,7 @@ func TestCheckForUpdatesWithChannel_DiagnosticBuild(t *testing.T) {
 }
 
 func TestCheckForUpdatesWithChannel_AvailableUsesCache(t *testing.T) {
+	// Exercise published-release behaviour independently of the checkout identity.
 	withBuildVersion(t, "6.4.0")
 	var hits int32
 	releaseTime := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
@@ -149,6 +151,7 @@ func TestCheckForUpdatesWithChannel_AvailableUsesCache(t *testing.T) {
 }
 
 func TestCheckForUpdatesWithChannel_NoReleases(t *testing.T) {
+	// Exercise published-release behaviour independently of the checkout identity.
 	withBuildVersion(t, "6.4.0")
 	var hits int32
 	releases := []ReleaseInfo{
@@ -180,6 +183,7 @@ func TestCheckForUpdatesWithChannel_NoReleases(t *testing.T) {
 }
 
 func TestCheckForUpdates_Wrapper(t *testing.T) {
+	// Exercise published-release behaviour independently of the checkout identity.
 	withBuildVersion(t, "6.4.0")
 	var hits int32
 	releases := []ReleaseInfo{
@@ -218,6 +222,7 @@ func TestCheckForUpdates_Wrapper(t *testing.T) {
 }
 
 func TestForcedUpdateCheckRefreshesSavedChannelCache(t *testing.T) {
+	// Exercise published-release behaviour independently of the checkout identity.
 	withBuildVersion(t, "6.4.0")
 	var hits int32
 	server := newReleaseServer(t, []ReleaseInfo{{TagName: "v99.0.0", Assets: []ReleaseAsset{{Name: "pulse-v99.0.0-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.com/new.tar.gz"}}}}, &hits)
