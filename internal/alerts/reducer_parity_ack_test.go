@@ -229,3 +229,36 @@ func TestReducerParityWithManagerAckLifecycle(t *testing.T) {
 		})
 	}
 }
+
+func TestAutoAcknowledgementSurvivesMetricEvaluation(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.config.SuppressionWindow = 0
+	m.config.MinimumDelta = 0
+	m.config.AutoAcknowledgeAfterHours = 2
+	m.mu.Unlock()
+	threshold := &HysteresisThreshold{Trigger: 80, Clear: 70}
+	evaluate := func(value float64) {
+		m.checkMetric("auto-ack-resource", "Resource", "node", "instance", "guest", "usage", value, threshold, nil)
+	}
+	evaluate(90)
+	key := buildCanonicalStateID("auto-ack-resource", "metric-threshold:usage")
+	m.mu.Lock()
+	m.activeAlerts[key].StartTime = time.Now().Add(-3 * time.Hour)
+	m.mu.Unlock()
+	m.Cleanup(time.Hour)
+	assertAcknowledged := func(stage string) {
+		t.Helper()
+		alerts := m.GetActiveAlerts()
+		if len(alerts) != 1 || !alerts[0].Acknowledged || alerts[0].AckUser != "system-auto" || alerts[0].AckTime == nil {
+			t.Fatalf("%s: automatic acknowledgement lost: %+v", stage, alerts)
+		}
+	}
+	assertAcknowledged("cleanup")
+	evaluate(85)
+	assertAcknowledged("next evaluation")
+	evaluate(60)
+	evaluate(90)
+	assertAcknowledged("short recovery and refire")
+}

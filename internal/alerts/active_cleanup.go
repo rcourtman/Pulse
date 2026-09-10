@@ -38,6 +38,14 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 				ackTime := now
 				alert.AckTime = &ackTime
 				alert.AckUser = "system-auto"
+				// Preserve the same recurrence retention and reducer state as a
+				// manual acknowledgement, not just the active alert's display.
+				m.setAckRecordNoLock(alert, id, ackRecord{
+					acknowledged: true,
+					user:         "system-auto",
+					time:         ackTime,
+				})
+				m.mirrorAcknowledgeNoLock(alert, "system-auto", ackTime)
 				autoAcked = append(autoAcked, alert.Clone())
 
 				if recordAlertAcknowledged != nil {
@@ -213,6 +221,9 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 
 	m.mu.Unlock()
 
+	if len(autoAcked) > 0 {
+		m.saveActiveAlertsAsync("auto acknowledge")
+	}
 	for _, alert := range autoAcked {
 		m.safeCallAcknowledgedCallback(alert, "system-auto")
 	}
