@@ -1288,20 +1288,36 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"# Pulse v"+version+" Release Notes",
 		"## What's improved",
 		"## Before you upgrade",
-		"Same-name systems stay separate",
-		"Windows agent delivery is restored",
-		"Large Availability estates scan faster",
-		"Slow starts are recoverable",
-		"Disk I/O totals are more accurate",
-		"carries every change from the `v6.4.2` packet",
 		"map at least one trusted IdP group to the built-in `admin` role",
 		"not Authenticode-signed",
 		"Unknown Publisher warning",
 		"does not require a companion mobile release",
 		"The rollback target is stable `v"+previous+"`",
 	)
+	// The fixed-forward History checkpoint has deliberately narrower release copy.
+	// Keep shared install safety assertions above and inherited repairs below.
+	if version == "6.4.4-beta.4" {
+		assertFileContainsAllNormalized(t, releaseNotesPath,
+			"Proxmox node History uses the right source",
+			"PBS History supports more installed shapes",
+			"Statistics stay available during History bursts",
+			"still need confirmation on installed Proxmox and PBS systems",
+		)
+	} else {
+		assertFileContainsAllNormalized(t, releaseNotesPath,
+			"Same-name systems stay separate",
+			"Windows agent delivery is restored",
+			"Large Availability estates scan faster",
+			"Slow starts are recoverable",
+			"Disk I/O totals are more accurate",
+			"carries every change from the `v6.4.2` packet",
+		)
+	}
 	assertFileDoesNotContain(t, releaseNotesPath, "## Fixes")
 	comparisonSummary := "This changelog describes the changes since `v" + comparisonVersion + "`"
+	if version == "6.4.4-beta.4" {
+		comparisonSummary = "This changelog describes the changes since published `v6.4.4-beta.2`."
+	}
 	if version == "6.4.0-rc.10" {
 		comparisonSummary = "The `v6.4.0-rc.9` release staged an immutable draft, tag, and exact-version artifacts but did not activate publicly."
 	}
