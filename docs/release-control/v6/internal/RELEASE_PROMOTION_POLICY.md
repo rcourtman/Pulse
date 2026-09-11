@@ -613,9 +613,10 @@ without the other lanes changing the candidate underneath it.
    `create-release.yml`. The workflow builds one exact-SHA candidate with the
    native signing lanes required by that version's governed policy while
    frontend, backend, Docker, Helm, and integration checks run in parallel. The
-   candidate build and required release-note visuals must pass before tag and
-   draft assembly. The draft remains unpublished while every applicable check
-   and exact-version staging path converges at the immutable readiness gate.
+   candidate build and required release-note visuals must pass before restricted
+   draft assembly. The draft binds its intended version to the exact source SHA
+   without creating a public Git tag. Candidate checks must finish before any
+   public versioned artifact is written.
 2. The release candidate is uploaded as a one-day Actions artifact with a
    machine-readable manifest that pins source SHA, version, filename, size, and
    SHA-256 for every release asset. Publication downloads and verifies that
@@ -625,10 +626,21 @@ without the other lanes changing the candidate underneath it.
    not re-download the multi-gigabyte release packet merely to recompute hashes
    already proven before upload. Manual and release-edit repair validation may
    retain the full-download fallback when no same-run candidate manifest exists.
-4. Exact-version Docker publication, staged release-asset verification, exact
-   Helm OCI publication and staged install smoke consume the unpublished draft.
-   They join the exact-version private Pro build and all applicable checks at
-   one immutable readiness gate. The pipeline must durably dispatch a viable
+4. Restricted draft asset verification and staged install smoke join container,
+   frontend, backend, integration and private Pro qualification at
+   `candidate_qualification`. A failed, cancelled, or missing required check
+   prevents public Git tags, versioned Docker images and Helm charts from being
+   created. A draft-only run never crosses this boundary. Public versioned
+   artifacts are publication, even before the GitHub release is announced.
+   After candidate qualification, publish the exact Git tag without rewriting
+   any existing identity, then publish and verify Docker and Helm artifacts.
+   `release_readiness` joins those verified public digests before activation.
+   A draft with no exposed tag or versioned artifacts may be repaired under its
+   intended version. An already exposed version must retain its source identity,
+   even if its GitHub release remains a draft. Publication failures after first
+   exposure require exact-source recovery or an explicitly explained successor,
+   not silent replacement. Cross-registry publication is not atomic.
+   The pipeline must durably dispatch a viable
    release convergence run before publication. After readiness,
    `activate_release` stages `release-activation.json` in the draft, verifies
    its server-side SHA-256 digest, and rechecks repository release immutability.

@@ -459,13 +459,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 self.assertIn("- publication_trust_preflight", early_job)
 
         for dependency in (
-            "publication_trust_preflight",
-            "create_release",
-            "publish_docker",
-            "validate_release_assets",
-            "install_sh_smoke",
-            "publish_helm_chart",
-            "stage_private_pro_runtime",
+            "candidate_qualification", "publish_release_tag", "publish_docker", "publish_helm_chart",
         ):
             self.assertIn(f"- {dependency}", readiness)
         for mutable_job in (
@@ -483,7 +477,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
 
         self.assertIn("- release_readiness", activation)
         self.assertIn(
-            "needs.publication_trust_preflight.result == 'success'", readiness
+            "needs.publication_trust_preflight.result == 'success'",
+            workflow_job_block(workflow, "candidate_qualification")
         )
         self.assertIn("- publication_trust_preflight", commit_verdict)
         self.assertIn(
@@ -1816,16 +1811,14 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("activate_release:", content)
         self.assertIn("Publish the fully staged release", content)
         self.assertIn('gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate', content)
-        self.assertIn('git push origin "refs/tags/${TAG}" --force', content)
-
-        self.assertIn('Retargeting existing draft tag ${TAG}', content)
-        self.assertIn('Resuming quarantined draft for ${TAG}', content)
+        self.assertNotIn('git push origin "refs/tags/${TAG}" --force', content)
+        self.assertNotIn('Retargeting existing draft tag', content)
+        self.assertIn('Public tag ${TAG} already identifies', content)
         self.assertIn('Resuming quarantined draft release for ${TAG}', content)
         self.assertIn(
             'write_github_output.py release_activation_committed "${RELEASE_ACTIVATION_COMMITTED}"',
             content,
         )
-        self.assertIn('[ "$EXISTING_RELEASE_ACTIVATION_COMMITTED" != "true" ]', content)
         self.assertIn('[ "$ACTIVATION_COMMITTED" != "true" ]', content)
         self.assertNotIn('[ -z "$EXISTING_RELEASE_PUBLISHED_AT" ]', content)
         self.assertNotIn('[ -z "$PUBLISHED_AT" ]', content)
@@ -2839,6 +2832,91 @@ The product owner explicitly approved this change after a cohort reached 7.9%.
             errors = material_approval_evidence_errors(read(rel), record_rel=rel)
             failures.extend(f"{rel}: {error}" for error in errors)
         self.assertEqual(failures, [], "\n".join(failures))
+
+
+class CandidatePublicationBoundaryTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.jobs = yaml.load(read(".github/workflows/create-release.yml"), Loader=UniqueKeyLoader)["jobs"]
+
+    def condition(self, job: str, results: dict[str, str], *, draft: bool = False) -> bool:
+        # Execute the workflow's Boolean condition with explicit job outcomes.
+        # This intentionally fails if the workflow adds an unsupported expression.
+        expression = self.jobs[job]["if"].removeprefix("${{").removesuffix("}}").strip()
+        expression = re.sub(r"needs\.([a-z_]+)\.result", lambda m: repr(results[m[1]]), expression)
+        expression = expression.replace("needs.prepare.outputs.version", repr("6.4.4-beta.9"))
+        expression = expression.replace("needs.prepare.outputs.historical_asset_backfill_only", repr("false"))
+        expression = expression.replace("github.event.inputs.draft_only", repr(str(draft).lower()))
+        expression = expression.replace("always()", "True").replace("&&", " and ").replace("||", " or ")
+        expression = re.sub(r"!(?!=)", "not ", expression)
+        return bool(eval(expression, {"__builtins__": {}, "startsWith": lambda value, prefix: value.startswith(prefix)}))
+
+    def test_failed_candidate_cannot_reach_any_public_version_writer(self) -> None:
+        required = {
+            "prepare", "publication_trust_preflight", "build_release_candidate",
+            "qualify_release_containers", "frontend_bundle", "frontend_checks",
+            "windows_install_command_smoke", "backend_tests", "integration_tests",
+            "release_smoke", "create_release", "validate_release_assets",
+            "install_sh_smoke", "stage_private_pro_runtime",
+        }
+        self.assertEqual(set(self.jobs["candidate_qualification"]["needs"]), required)
+        good = dict.fromkeys(self.jobs, "success")
+        self.assertTrue(self.condition("candidate_qualification", good))
+        self.assertFalse(self.condition("candidate_qualification", good, draft=True))
+        for failed in required:
+            for state in ("failure", "cancelled", "skipped"):
+                if failed == "integration_tests" and state == "skipped":
+                    continue  # Existing alpha/beta policy omits integration tests.
+                with self.subTest(failed=failed, state=state):
+                    outcomes = good | {failed: state}
+                    self.assertFalse(self.condition("candidate_qualification", outcomes))
+        for writer in ("publish_release_tag", "publish_docker", "publish_helm_chart"):
+            self.assertIn("candidate_qualification", self.jobs[writer]["needs"])
+            for state in ("failure", "cancelled", "skipped"):
+                with self.subTest(writer=writer, state=state):
+                    self.assertFalse(self.condition(writer, good | {"candidate_qualification": state}))
+        # Detect accidental dependency cycles, including moving publication into
+        # the candidate join that publication itself must wait for.
+        def visit(name: str, stack: tuple[str, ...] = ()) -> None:
+            self.assertNotIn(name, stack)
+            deps = self.jobs[name].get("needs", [])
+            for dependency in ([deps] if isinstance(deps, str) else deps):
+                visit(dependency, (*stack, name))
+        for name in self.jobs:
+            visit(name)
+
+    def test_draft_never_pushes_a_tag_and_publication_never_retargets(self) -> None:
+        draft = self.jobs["create_release"]
+        self.assertFalse(draft["steps"][0]["with"]["persist-credentials"])
+        self.assertTrue(self.jobs["publish_release_tag"]["steps"][0]["with"]["persist-credentials"])
+        scripts = "\n".join(step.get("run", "") for step in draft["steps"])
+        self.assertNotRegex(scripts, r"git (?:push|tag)\b")
+        self.assertIn('--arg target_commitish "$HEAD_SHA"', scripts)
+        checks = [
+            next(step["run"] for step in draft["steps"] if step["name"] == "Check existing public tag without changing it"),
+            self.jobs["publish_release_tag"]["steps"][-1]["run"],
+        ]
+        for check_index, script in enumerate(checks):
+            for existing in ("", "a" * 40, "b" * 40):
+                with self.subTest(step=check_index, existing=existing), tempfile.TemporaryDirectory() as temp:
+                    root = Path(temp)
+                    fake = root / "git"
+                    fake.write_text("#!/usr/bin/env python3\nimport os,sys,json\na=sys.argv[1:]\n"
+                                    "with open(os.environ['CALL_LOG'],'a') as f: f.write(json.dumps(a)+'\\n')\n"
+                                    "if a[0]=='rev-parse': print('a'*40)\n"
+                                    "elif a[0]=='ls-remote' and os.environ['EXISTING']: print(os.environ['EXISTING']+'\\tref')\n")
+                    fake.chmod(0o755)
+                    log = root / "calls"
+                    env = os.environ | {"PATH": str(root) + os.pathsep + os.environ["PATH"],
+                                        "TAG": "v6.4.4-beta.9", "EXISTING": existing, "CALL_LOG": str(log)}
+                    result = subprocess.run(["bash", "-c", script], env=env, text=True, capture_output=True)
+                    self.assertEqual(result.returncode == 0, existing != "b" * 40, result.stderr)
+                    calls = [json.loads(line) for line in log.read_text().splitlines()]
+                    writes = [call for call in calls if call[0] in ("tag", "push")]
+                    if check_index == 1 and not existing:
+                        self.assertEqual([call[0] for call in writes], ["tag", "push"])
+                        self.assertNotIn("--force", str(writes))
+                    else:
+                        self.assertEqual(writes, [])
 
 
 if __name__ == "__main__":

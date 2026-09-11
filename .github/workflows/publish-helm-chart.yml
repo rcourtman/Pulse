@@ -3,8 +3,8 @@ name: Publish Helm Chart
 # Triggers:
 # - release: published — fires when a release is initially created with
 #   draft=false (legacy publish path).
-# - workflow_call — called from create-release.yml after validate_release_assets
-#   succeeds. create-release.yml's publish step creates releases as drafts and
+# - workflow_call — called from create-release.yml after candidate qualification
+#   and qualified public tag creation succeed. create-release.yml's publish step creates releases as drafts and
 #   PATCHes to draft=false later, which does NOT fire the `release: published`
 #   webhook (GitHub-documented quirk). Without this workflow_call trigger,
 #   v6 rc.1 → rc.5 published successfully but never produced a Helm chart on
