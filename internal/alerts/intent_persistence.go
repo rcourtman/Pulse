@@ -1,9 +1,11 @@
 package alerts
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -30,6 +32,19 @@ func (m *Manager) saveIntentPendingSnapshot() error {
 	if err := os.MkdirAll(alertsDir, alertsDirPerm); err != nil {
 		return fmt.Errorf("create alert intent state directory: %w", err)
 	}
+	finalPath := filepath.Join(alertsDir, intentPendingFileName)
+	// SaveActiveAlerts serializes snapshots and writes. Check the actual bounded
+	// file bytes so missing, stale and failed checkpoints remain retryable.
+	if info, err := os.Lstat(finalPath); err == nil && info.Mode().IsRegular() &&
+		info.Mode().Perm() == alertsFilePerm && info.Size() == int64(len(data)) {
+		if file, err := os.Open(finalPath); err == nil {
+			existing, readErr := io.ReadAll(io.LimitReader(file, int64(len(data))+1))
+			closeErr := file.Close()
+			if readErr == nil && closeErr == nil && bytes.Equal(existing, data) {
+				return nil
+			}
+		}
+	}
 	tmp, err := os.CreateTemp(alertsDir, "intent-pending-*.json.tmp")
 	if err != nil {
 		return fmt.Errorf("create alert intent state temp file: %w", err)
@@ -51,7 +66,6 @@ func (m *Manager) saveIntentPendingSnapshot() error {
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("close alert intent state temp file: %w", err)
 	}
-	finalPath := filepath.Join(alertsDir, intentPendingFileName)
 	if err := os.Rename(tmpName, finalPath); err != nil {
 		return fmt.Errorf("persist alert intent pending state: %w", err)
 	}

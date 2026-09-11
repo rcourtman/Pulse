@@ -2923,3 +2923,16 @@ notification enqueue atomic with alert resolution.
 before the former 180-minute deadline, plus current payload/routing selection,
 copy isolation, snooze and invalid-level rejection. These deterministic component tests
 establish neither installed delivery timing nor the cause of a delayed email.
+
+### Unchanged intent-pending checkpoints
+
+The serialized active-alert checkpoint also compares the complete, sorted
+pending-policy JSON against a bounded regular file with mode 0600 before
+replacement. Empty and nonempty unchanged pending state leave the file intact;
+changed or cleared state, missing/stale content, unsafe destinations and failed
+writes retain replacement/retry semantics. This does not change intent timing,
+retention, alert freshness or the existing persistence durability contract.
+`TestIntentCheckpoint*` exercises the complete JSON-only checkpoint without
+starting database workers, including restart loading and Unix hardening. The
+active mirror's unchanged fast path alone does not cover this companion file.
+This is a narrow write contributor, not aggregate installed-write acceptance.
