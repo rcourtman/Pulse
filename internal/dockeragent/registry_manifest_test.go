@@ -15,6 +15,7 @@ func TestRegistryChecker_ResolveManifestList(t *testing.T) {
 	logger := zerolog.Nop()
 	t.Run("resolve manifest list", func(t *testing.T) {
 		manifestListBody := `{
+                    "schemaVersion": 2,
                     "manifests": [
                         {
                             "digest": "sha256:armv7",
