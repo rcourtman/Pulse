@@ -986,7 +986,7 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`gh release upload failed after ${max_attempts} attempts`,
 		`release/release-build-provenance.sigstore.json`,
 		`gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate`,
-		`git push origin "refs/tags/${TAG}" --force`,
+		`git push origin "refs/tags/${TAG}"`,
 		`--rawfile body "$NOTES_FILE"`,
 		`--input "$RELEASE_PAYLOAD"`,
 		`--expected-body-file "$NOTES_FILE"`,
@@ -1059,9 +1059,9 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 	if !strings.Contains(installSmokeJob, "contents: write") {
 		t.Fatal("create-release.yml install_sh_smoke must grant contents: write so the called workflow can read unpublished draft assets")
 	}
-	readinessJob := workflowJobBlock(t, workflow, "release_readiness")
-	if !strings.Contains(readinessJob, publishedReleaseGuard) {
-		t.Fatal("release_readiness must skip historical backfill and draft-only runs")
+	qualificationJob := workflowJobBlock(t, workflow, "candidate_qualification")
+	if !strings.Contains(qualificationJob, publishedReleaseGuard) {
+		t.Fatal("candidate qualification must skip historical backfill and draft-only runs")
 	}
 	for _, job := range []string{"promote_floating_tags", "publish_helm_pages", "promote_private_pro_runtime", "update_stable_demo"} {
 		if strings.Contains(workflow, "\n  "+job+":\n") {
@@ -3290,6 +3290,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	integrationJob := workflowJobBlock(t, createWorkflow, "integration_tests")
 	validationJob := workflowJobBlock(t, createWorkflow, "validate_release_assets")
 	privateStageJob := workflowJobBlock(t, createWorkflow, "stage_private_pro_runtime")
+	qualificationJob := workflowJobBlock(t, createWorkflow, "candidate_qualification")
 	readinessJob := workflowJobBlock(t, createWorkflow, "release_readiness")
 	dispatchJob := workflowJobBlock(t, createWorkflow, "dispatch_release_convergence")
 	activationJob := workflowJobBlock(t, createWorkflow, "activate_release")
@@ -3442,21 +3443,28 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 			t.Fatalf("build-release-candidate.yml missing single-build contract: %s", needle)
 		}
 	}
+	for _, jobName := range []string{"publish_release_tag", "publish_docker", "publish_helm_chart"} {
+		job := workflowJobBlock(t, createWorkflow, jobName)
+		if !strings.Contains(job, "- candidate_qualification") ||
+			!strings.Contains(job, "needs.candidate_qualification.result == 'success'") {
+			t.Fatalf("public writer %s must require successful candidate qualification", jobName)
+		}
+	}
 	publishDockerJob := workflowJobBlock(t, createWorkflow, "publish_docker")
 	for _, needle := range []string{
 		"- build_release_candidate",
 		"- create_release",
+		"- publish_release_tag",
 		"needs.create_release.result == 'success'",
+		"needs.publish_release_tag.result == 'success'",
 		`source_sha: ${{ github.sha }}`,
 	} {
 		if !strings.Contains(publishDockerJob, needle) {
-			t.Fatalf("inert exact-version Docker staging missing recovery-safe dependency contract: %s", needle)
+			t.Fatalf("qualified Docker publication missing exact-source dependency contract: %s", needle)
 		}
 	}
-	for _, forbiddenDependency := range []string{"- qualify_release_containers"} {
-		if strings.Contains(publishDockerJob, forbiddenDependency) {
-			t.Fatalf("inert exact-version Docker staging must overlap independent qualification: %s", forbiddenDependency)
-		}
+	if strings.Contains(createJob, "git push") || strings.Contains(createWorkflow, `git push origin "refs/tags/${TAG}" --force`) {
+		t.Fatal("restricted draft staging must not publish or rewrite a public tag")
 	}
 
 	for _, needle := range []string{
@@ -3485,7 +3493,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		t.Fatal("integration release gate must not target the quarantined multi-tenant spec")
 	}
 	if strings.Contains(validationJob, "- publish_docker") {
-		t.Fatal("release asset digest validation must run in parallel with Docker publication")
+		t.Fatal("release asset digest validation must not depend on public Docker publication")
 	}
 	if !strings.Contains(privateStageJob, "- prepare") ||
 		strings.Contains(privateStageJob, "- create_release") ||
@@ -3502,21 +3510,23 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		}
 	}
 	for _, dependency := range []string{
-		"- publication_trust_preflight",
-		"- create_release",
-		"- publish_docker",
-		"- validate_release_assets",
-		"- install_sh_smoke",
-		"- publish_helm_chart",
-		"- stage_private_pro_runtime",
+		"publication_trust_preflight", "create_release", "validate_release_assets",
+		"install_sh_smoke", "stage_private_pro_runtime",
 	} {
-		if !strings.Contains(readinessJob, dependency) {
-			t.Fatalf("immutable release readiness missing dependency: %s", dependency)
+		if !strings.Contains(qualificationJob, "- "+dependency) ||
+			!strings.Contains(qualificationJob, "needs."+dependency+".result == 'success'") {
+			t.Fatalf("candidate qualification must require successful %s", dependency)
 		}
 	}
-	if !strings.Contains(readinessJob, `needs.publication_trust_preflight.result == 'success'`) {
-		t.Fatal("immutable release readiness must require successful publication trust preflight")
+	for _, dependency := range []string{
+		"candidate_qualification", "publish_release_tag", "publish_docker", "publish_helm_chart",
+	} {
+		if !strings.Contains(readinessJob, "- "+dependency) ||
+			!strings.Contains(readinessJob, "needs."+dependency+".result == 'success'") {
+			t.Fatalf("release readiness must require successful %s", dependency)
+		}
 	}
+
 	if !strings.Contains(commitVerdictJob, "- publication_trust_preflight") ||
 		!strings.Contains(commitVerdictJob, `require_result "publication trust preflight"`) {
 		t.Fatal("release commit verdict must surface publication trust preflight failure")
@@ -3588,12 +3598,10 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		!strings.Contains(activationJob, `already committed by successful recovery run`) {
 		t.Fatal("release activation reruns must recognize a qualified recovery before considering marker replacement")
 	}
-	if !strings.Contains(createJob, `Resuming quarantined draft for ${TAG}`) ||
-		!strings.Contains(createJob, `Resuming quarantined draft release for ${TAG}`) {
+	if !strings.Contains(createJob, `Resuming quarantined draft release for ${TAG}`) {
 		t.Fatal("release creation must explicitly support resuming a quarantined draft")
 	}
 	if !strings.Contains(createJob, `write_github_output.py release_activation_committed "${RELEASE_ACTIVATION_COMMITTED}"`) ||
-		!strings.Contains(createJob, `[ "$EXISTING_RELEASE_ACTIVATION_COMMITTED" != "true" ]`) ||
 		!strings.Contains(createJob, `[ "$ACTIVATION_COMMITTED" != "true" ]`) {
 		t.Fatal("release creation must refuse to retarget a draft whose irreversible activation marker exists")
 	}
@@ -3782,7 +3790,7 @@ func TestReleaseCutGatesCriticalFrontendAndWindowsRuntimeProof(t *testing.T) {
 	windowsJob := workflowJobBlock(t, workflow, "windows_install_command_smoke")
 	smokeJob := workflowJobBlock(t, workflow, "release_smoke")
 	createJob := workflowJobBlock(t, workflow, "create_release")
-	readinessJob := workflowJobBlock(t, workflow, "release_readiness")
+	qualificationJob := workflowJobBlock(t, workflow, "candidate_qualification")
 	verdictJob := workflowJobBlock(t, workflow, "release_commit_verdict")
 
 	for _, needle := range []string{
@@ -3810,8 +3818,8 @@ func TestReleaseCutGatesCriticalFrontendAndWindowsRuntimeProof(t *testing.T) {
 			t.Fatalf("release render smoke missing %s", needle)
 		}
 	}
-	if !strings.Contains(readinessJob, `needs.windows_install_command_smoke.result == 'success'`) {
-		t.Fatal("release readiness must fail closed on the Windows install-command smoke")
+	if !strings.Contains(qualificationJob, `needs.windows_install_command_smoke.result == 'success'`) {
+		t.Fatal("candidate qualification must fail closed on the Windows install-command smoke")
 	}
 	if strings.Contains(createJob, `needs.windows_install_command_smoke.result`) {
 		t.Fatal("inert draft staging must overlap independent Windows qualification")
@@ -3822,8 +3830,8 @@ func TestReleaseCutGatesCriticalFrontendAndWindowsRuntimeProof(t *testing.T) {
 		"needs.backend_tests.result == 'success'",
 		"needs.release_smoke.result == 'success'",
 	} {
-		if !strings.Contains(readinessJob, result) {
-			t.Fatalf("release readiness missing deferred qualification join: %s", result)
+		if !strings.Contains(qualificationJob, result) {
+			t.Fatalf("candidate qualification missing required proof: %s", result)
 		}
 		if strings.Contains(createJob, result) {
 			t.Fatalf("inert draft staging must not serialize on deferred qualification: %s", result)

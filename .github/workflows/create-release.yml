@@ -861,8 +861,8 @@ jobs:
       - prepare
       - build_release_candidate
       - release_note_visuals
-    # Draft metadata and immutable assets are inert staging. Qualification is
-    # joined at release_readiness before any activation boundary can open.
+    # Only restricted draft metadata/assets are staged here. No public Git tag
+    # is created until candidate_qualification passes every prepublication check.
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.release_note_visuals.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -877,7 +877,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: true  # required: authenticated git writes
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Download immutable release candidate
@@ -1002,50 +1002,23 @@ jobs:
           python3 scripts/write_github_output.py release_published_at "${RELEASE_PUBLISHED_AT}"
           python3 scripts/write_github_output.py release_activation_committed "${RELEASE_ACTIVATION_COMMITTED}"
 
-      - name: Create tag
+      - name: Check existing public tag without changing it
         env:
-          GH_TOKEN: ${{ github.token }}
-          WORKFLOW_OUTPUT_1: ${{ needs.prepare.outputs.tag }}
-          WORKFLOW_OUTPUT_2: ${{ steps.existing_release.outputs.release_id }}
-          WORKFLOW_OUTPUT_3: ${{ steps.existing_release.outputs.release_is_draft }}
-          WORKFLOW_OUTPUT_4: ${{ steps.existing_release.outputs.release_published_at }}
-          WORKFLOW_OUTPUT_5: ${{ steps.existing_release.outputs.release_activation_committed }}
+          TAG: ${{ needs.prepare.outputs.tag }}
         run: |
-          TAG="${WORKFLOW_OUTPUT_1}"
+          set -euo pipefail
           HEAD_SHA=$(git rev-parse HEAD)
-          EXISTING_RELEASE_ID="${WORKFLOW_OUTPUT_2}"
-          EXISTING_RELEASE_DRAFT="${WORKFLOW_OUTPUT_3}"
-          EXISTING_RELEASE_PUBLISHED_AT="${WORKFLOW_OUTPUT_4}"
-          EXISTING_RELEASE_ACTIVATION_COMMITTED="${WORKFLOW_OUTPUT_5}"
-
           REMOTE_TAG_SHA=$(git ls-remote --tags origin "refs/tags/${TAG}" | awk '{print $1}')
-
           if [ -n "$REMOTE_TAG_SHA" ]; then
             REMOTE_COMMIT_SHA=$(git ls-remote --tags origin "refs/tags/${TAG}^{}" | awk '{print $1}')
             [ -z "$REMOTE_COMMIT_SHA" ] && REMOTE_COMMIT_SHA="$REMOTE_TAG_SHA"
-
-            if [ "$REMOTE_COMMIT_SHA" = "$HEAD_SHA" ]; then
-              echo "Tag ${TAG} already exists and points to HEAD - continuing"
-            elif [ -n "$EXISTING_RELEASE_ID" ] && [ "$EXISTING_RELEASE_DRAFT" = "true" ] && [ "$EXISTING_RELEASE_ACTIVATION_COMMITTED" != "true" ]; then
-              if [ -n "$EXISTING_RELEASE_PUBLISHED_AT" ]; then
-                echo "Resuming quarantined draft for ${TAG}; GitHub retained historical published_at=${EXISTING_RELEASE_PUBLISHED_AT}."
-              fi
-              echo "Retargeting existing draft tag ${TAG} from ${REMOTE_COMMIT_SHA} to ${HEAD_SHA}"
-              git config user.name "github-actions[bot]"
-              git config user.email "github-actions[bot]@users.noreply.github.com"
-              git tag -fa "${TAG}" -m "Release ${TAG}" "${HEAD_SHA}"
-              git push origin "refs/tags/${TAG}" --force
-            else
-              echo "::error::Tag ${TAG} already exists but points to ${REMOTE_COMMIT_SHA}, not HEAD (${HEAD_SHA}). Delete the tag first: git push origin --delete ${TAG}"
+            if [ "$REMOTE_COMMIT_SHA" != "$HEAD_SHA" ]; then
+              echo "::error::Public tag ${TAG} already identifies ${REMOTE_COMMIT_SHA}; it cannot be reused for ${HEAD_SHA}, even when its release is a draft."
               exit 1
             fi
-          else
-            echo "Creating tag ${TAG}..."
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git tag -a "${TAG}" -m "Release ${TAG}"
-            git push origin "${TAG}"
           fi
+          # A draft binds its intended tag to target_commitish without pushing
+          # a public Git ref. Failed candidates remain private and replaceable.
 
       - name: Create draft release
         id: create_release
@@ -1405,12 +1378,74 @@ jobs:
           echo "[SUCCESS] Historical release assets repaired"
           echo "Release: ${WORKFLOW_OUTPUT_1}"
 
+  # Restricted candidate checks finish before the first public versioned write.
+  candidate_qualification:
+    needs:
+      - prepare
+      - publication_trust_preflight
+      - build_release_candidate
+      - qualify_release_containers
+      - frontend_bundle
+      - frontend_checks
+      - windows_install_command_smoke
+      - backend_tests
+      - integration_tests
+      - release_smoke
+      - create_release
+      - validate_release_assets
+      - install_sh_smoke
+      - stage_private_pro_runtime
+    if: ${{ always() && needs.prepare.result == 'success' && needs.publication_trust_preflight.result == 'success' && needs.build_release_candidate.result == 'success' && needs.qualify_release_containers.result == 'success' && needs.frontend_bundle.result == 'success' && needs.frontend_checks.result == 'success' && needs.windows_install_command_smoke.result == 'success' && needs.backend_tests.result == 'success' && needs.release_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') && needs.create_release.result == 'success' && needs.validate_release_assets.result == 'success' && needs.install_sh_smoke.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Confirm candidate qualification before public exposure
+        run: echo "All exact-source candidate checks passed. Public version publication may begin."
+
+  publish_release_tag:
+    needs:
+      - prepare
+      - candidate_qualification
+    if: ${{ needs.candidate_qualification.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout qualified source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true  # required: authenticated git writes
+          fetch-depth: 0
+      - name: Publish qualified tag without rewriting an existing identity
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          HEAD_SHA=$(git rev-parse HEAD)
+          REMOTE_TAG_SHA=$(git ls-remote --tags origin "refs/tags/${TAG}" | awk '{print $1}')
+          if [ -n "$REMOTE_TAG_SHA" ]; then
+            REMOTE_COMMIT_SHA=$(git ls-remote --tags origin "refs/tags/${TAG}^{}" | awk '{print $1}')
+            [ -z "$REMOTE_COMMIT_SHA" ] && REMOTE_COMMIT_SHA="$REMOTE_TAG_SHA"
+            if [ "$REMOTE_COMMIT_SHA" != "$HEAD_SHA" ]; then
+              echo "::error::Public tag ${TAG} already identifies a different source. Preserve that identity."
+              exit 1
+            fi
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "${TAG}" -m "Release ${TAG}" "${HEAD_SHA}"
+            git push origin "refs/tags/${TAG}"
+          fi
+
   publish_docker:
     needs:
+      - candidate_qualification
+      - publish_release_tag
       - prepare
       - build_release_candidate
       - create_release
-    if: ${{ always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+    if: ${{ always() && needs.candidate_qualification.result == 'success' && needs.publish_release_tag.result == 'success' && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
     permissions:
       contents: read
       packages: write
@@ -1489,9 +1524,11 @@ jobs:
   # release has not crossed the operator-controlled publication boundary.
   publish_helm_chart:
     needs:
+      - candidate_qualification
+      - publish_release_tag
       - prepare
       - validate_release_assets
-    if: ${{ always() && needs.prepare.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+    if: ${{ always() && needs.candidate_qualification.result == 'success' && needs.publish_release_tag.result == 'success' && needs.prepare.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
     permissions:
       contents: write
       packages: write
@@ -1503,35 +1540,20 @@ jobs:
       chart_version: ${{ needs.prepare.outputs.version }}
       app_version: ${{ needs.prepare.outputs.version }}
 
-  # One immutable-readiness gate joins every exact-version path before the
-  # GitHub release crosses its public activation boundary. v6 additionally
-  # requires the staged Pro image and signed packet; older release lines have
-  # no private Pro job. Mutable indexes, aliases, brokers, and live environments
-  # are deliberately excluded from this pre-activation join.
+  # Candidate qualification owns prepublication checks. This final join adds
+  # verified public registry digests before GitHub release activation.
   release_readiness:
     needs:
-      - prepare
-      - publication_trust_preflight
-      - build_release_candidate
-      - qualify_release_containers
-      - frontend_bundle
-      - frontend_checks
-      - windows_install_command_smoke
-      - backend_tests
-      - integration_tests
-      - release_smoke
-      - create_release
+      - candidate_qualification
+      - publish_release_tag
       - publish_docker
-      - validate_release_assets
-      - install_sh_smoke
       - publish_helm_chart
-      - stage_private_pro_runtime
-    if: ${{ always() && needs.prepare.result == 'success' && needs.publication_trust_preflight.result == 'success' && needs.build_release_candidate.result == 'success' && needs.qualify_release_containers.result == 'success' && needs.frontend_bundle.result == 'success' && needs.frontend_checks.result == 'success' && needs.windows_install_command_smoke.result == 'success' && needs.backend_tests.result == 'success' && needs.release_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') && needs.create_release.result == 'success' && needs.publish_docker.result == 'success' && needs.validate_release_assets.result == 'success' && needs.install_sh_smoke.result == 'success' && needs.publish_helm_chart.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+    if: ${{ always() && needs.candidate_qualification.result == 'success' && needs.publish_release_tag.result == 'success' && needs.publish_docker.result == 'success' && needs.publish_helm_chart.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Confirm immutable release readiness
-        run: echo "All exact-version release paths are ready for customer activation."
+        run: echo "Qualified source and verified public artifacts are ready for release activation."
 
   # Stage the exact private Pro image and signed R2 packet from the anticipated
   # tag and immutable public SHA as soon as preparation succeeds. These assets
@@ -2005,7 +2027,7 @@ jobs:
             exit 1
           fi
 
-          # Publication is now the only irreversible boundary. GitHub must
+          # Public version artifacts already exist. GitHub activation must
           # confirm the repository setting before publication and report the
           # complete release as immutable afterward. The immediate setting
           # check prevents a mutable public interval if configuration drifts;
