@@ -21322,3 +21322,118 @@ func TestActiveMirrorUnchangedRepairsDirectoryPermissions(t *testing.T) {
 		})
 	}
 }
+
+// Use the complete JSON-only checkpoint, not just the active-alert mirror:
+// unchanged pending-policy state must not undo the mirror's write reduction.
+func TestIntentCheckpointUnchanged(t *testing.T) {
+	m := &Manager{alertsDir: t.TempDir()}
+	save := func() {
+		t.Helper()
+		if err := m.SaveActiveAlerts(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	save()
+	path := filepath.Join(m.alertsDir, intentPendingFileName)
+	first, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 20; i++ {
+		save()
+		after, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !os.SameFile(first, after) {
+			t.Fatal("unchanged empty pending state was replaced")
+		}
+	}
+	after, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(first, after) {
+		t.Fatal("unchanged empty pending state was replaced")
+	}
+	now := time.Now().UTC()
+	m.intentPending = map[string]IntentPendingState{"a": {TrackingKey: "a", ResourceID: "r", Signal: "offline", FirstMatchedAt: now, LastObservedAt: now}}
+	save()
+	restored := &Manager{alertsDir: m.alertsDir}
+	if err := restored.loadIntentPendingNoLock(); err != nil {
+		t.Fatal(err)
+	}
+	if len(restored.intentPending) != 1 {
+		t.Fatal("changed pending state was not persisted")
+	}
+	first, err = os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	save()
+	after, err = os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(first, after) {
+		t.Fatal("unchanged nonempty pending state was replaced")
+	}
+	// Compare actual bytes, not cached metadata: same-size stale state is repaired.
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := append([]byte(nil), data...)
+	stale[0] = ' '
+	if err := os.WriteFile(path, stale, alertsFilePerm); err != nil {
+		t.Fatal(err)
+	}
+	save()
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(data) {
+		t.Fatal("stale state survived checkpoint")
+	}
+	if err := os.Rename(path, path+".saved"); err != nil {
+		t.Fatal(err)
+	}
+	save()
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal(err)
+	}
+	m.intentPending = nil
+	save()
+	got, err = os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "[]" {
+		t.Fatal("cleared pending state was not persisted")
+	}
+}
+
+func TestIntentCheckpointRetriesFailedWrite(t *testing.T) {
+	m := &Manager{alertsDir: t.TempDir()}
+	path := filepath.Join(m.alertsDir, intentPendingFileName)
+	if err := os.Mkdir(path, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SaveActiveAlerts(); err == nil {
+		t.Fatal("expected obstructed checkpoint failure")
+	}
+	if err := os.Rename(path, path+".obstruction"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SaveActiveAlerts(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "[]" {
+		t.Fatalf("retry wrote %q", got)
+	}
+}
