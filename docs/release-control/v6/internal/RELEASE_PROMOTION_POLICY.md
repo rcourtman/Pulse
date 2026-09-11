@@ -606,9 +606,11 @@ without the other lanes changing the candidate underneath it.
 1. Every normal alpha, beta, RC, stable, and patch release is initiated once through
    `create-release.yml`. The workflow builds one exact-SHA candidate with the
    native signing lanes required by that version's governed policy while
-   frontend, backend, Docker, Helm, and integration checks run in parallel. No
-   tag, draft, or public release mutation occurs until those checks and the
-   candidate build pass.
+   frontend, backend, Docker, Helm, and integration checks run in parallel. The
+   candidate build and required release-note visuals must pass before restricted
+   draft assembly. The draft binds its intended version to the exact source SHA
+   without creating a public Git tag. Candidate checks must finish before any
+   public versioned artifact is written.
 2. The release candidate is uploaded as a one-day Actions artifact with a
    machine-readable manifest that pins source SHA, version, filename, size, and
    SHA-256 for every release asset. Publication downloads and verifies that
@@ -618,17 +620,32 @@ without the other lanes changing the candidate underneath it.
    not re-download the multi-gigabyte release packet merely to recompute hashes
    already proven before upload. Manual and release-edit repair validation may
    retain the full-download fallback when no same-run candidate manifest exists.
-4. Exact-version Docker publication, staged release-asset verification, exact
-   Helm OCI publication, staged install smoke, and the exact-version private
-   Pro build begin from the unpublished draft and converge at one immutable
-   readiness gate. The pipeline must durably dispatch the release convergence
-   run before publication. `activate_release` then publishes the GitHub release,
-   verifies the public checksums, installer, provider-MSP bundle, and canonical
-   Linux archive URLs, and returns the release to draft quarantine on any
-   failure before `release-activation.json` is successfully uploaded. The upload
-   is the irreversible release commit point because convergence may observe it
-   immediately; activation-side read-back and the final verdict are post-commit
-   public proof and may never return the release to draft.
+4. Restricted draft asset verification and staged install smoke join container,
+   frontend, backend, integration and private Pro qualification at
+   `candidate_qualification`. A failed, cancelled, or missing required check
+   prevents public Git tags, versioned Docker images and Helm charts from being
+   created. A draft-only run never crosses this boundary. Public versioned
+   artifacts are publication, even before the GitHub release is announced.
+   After candidate qualification, publish the exact Git tag without rewriting
+   any existing identity, then publish and verify Docker and Helm artifacts.
+   `release_readiness` joins those verified public digests before activation.
+   A draft with no exposed tag or versioned artifacts may be repaired under its
+   intended version. An already exposed version must retain its source identity,
+   even if its GitHub release remains a draft. Publication failures after first
+   exposure require exact-source recovery or an explicitly explained successor,
+   not silent replacement. Cross-registry publication is not atomic.
+   The pipeline must durably dispatch a viable
+   release convergence run before publication. After readiness,
+   `activate_release` stages `release-activation.json` in the draft, verifies
+   its server-side SHA-256 digest, and rechecks repository release immutability.
+   It then publishes the complete release, including the marker, immutably.
+   Immutable publication is the irreversible release commit point. A marker
+   in an unpublished draft is not a committed release and cannot authorise
+   customer promotion. Public read-back of checksums, installer, provider-MSP
+   bundle, canonical Linux archives and the activation marker follows the
+   commit. A failed read-back or final verdict remains visible debt and must
+   never return an immutable release to draft or claim rollback. Recovery
+   verifies the exact existing release and marker before resuming delivery.
 5. Mutable Docker aliases, the live paid-runtime broker, the additive public
    Helm Pages index, and stable demo deployment belong to the separately visible Release
    Convergence run after the commit point. A global repository-ref lease must
