@@ -246,10 +246,12 @@ class ControlPlaneAuditTest(unittest.TestCase):
 
     def test_forward_patch_train_uses_actual_control_plane(self) -> None:
         for version in ("6.4.4-beta.1", "v6.4.4-beta.2", "6.4.4-rc.1",
-                        "6.4.4", "v6.4.4+build.1", "6.4.3-rc.1", "6.4.3"):
+                        "6.4.4", "v6.4.4+build.1", "6.4.3-rc.1", "6.4.3",
+                        "6.4.5-beta.1", "v6.4.5-beta.2", "6.4.5-rc.1",
+                        "6.4.5", "v6.4.5+build.1"):
             with self.subTest(version=version):
                 self.assertEqual(release_branch_for_version(version), "release/v6.4")
-        for version in ("6.4.1", "6.4.2", "6.4.5-beta.1", "6.4.40-beta.1",
+        for version in ("6.4.1", "6.4.2", "6.4.6-beta.1", "6.4.50-beta.1", "6.4.40-beta.1",
                         "6.4.30", "6.3.20", "6.6.0-beta.1"):
             with self.subTest(version=version):
                 self.assertEqual(release_branch_for_version(version), "main")
@@ -265,24 +267,25 @@ class ControlPlaneAuditTest(unittest.TestCase):
             )
             self.assertIsNotNone(match)
             script = textwrap.dedent(match.group(1))
-            for branch in ("main", "release/v6.4"):
-                with self.subTest(workflow=workflow, branch=branch), tempfile.TemporaryDirectory() as tmp:
-                    output = os.path.join(tmp, "output")
-                    result = subprocess.run(
-                        ["bash", "-euo", "pipefail", "-c", script],
-                        cwd=REPO_ROOT, capture_output=True, text=True,
-                        env={**os.environ, "GITHUB_OUTPUT": output,
-                             "VERSION_INPUT": "6.4.4-beta.1",
-                             "WORKFLOW_OUTPUT_1": "6.4.4-beta.1",
-                             "WORKFLOW_OUTPUT_2": branch},
-                    )
-                    rejects = workflow == "create-release.yml" and branch == "main"
-                    self.assertEqual(result.returncode, 1 if rejects else 0, result.stderr)
-                    if rejects:
-                        self.assertIn("must run from release/v6.4", result.stdout)
-                    else:
-                        self.assertRegex(Path(output).read_text(),
-                                         r"^required_branch<<([^\n]+)\nrelease/v6.4\n\1\n$")
+            for version in ("6.4.4-beta.1", "6.4.5-beta.1", "6.4.5-rc.1", "6.4.5"):
+                for branch in ("main", "release/v6.4"):
+                    with self.subTest(workflow=workflow, branch=branch, version=version), tempfile.TemporaryDirectory() as tmp:
+                        output = os.path.join(tmp, "output")
+                        result = subprocess.run(
+                            ["bash", "-euo", "pipefail", "-c", script],
+                            cwd=REPO_ROOT, capture_output=True, text=True,
+                            env={**os.environ, "GITHUB_OUTPUT": output,
+                                 "VERSION_INPUT": version,
+                                 "WORKFLOW_OUTPUT_1": version,
+                                 "WORKFLOW_OUTPUT_2": branch},
+                        )
+                        rejects = workflow == "create-release.yml" and branch == "main"
+                        self.assertEqual(result.returncode, 1 if rejects else 0, result.stderr)
+                        if rejects:
+                            self.assertIn("must run from release/v6.4", result.stdout)
+                        else:
+                            self.assertRegex(Path(output).read_text(),
+                                             r"^required_branch<<([^\n]+)\nrelease/v6.4\n\1\n$")
 
     def test_audit_flags_stale_active_target(self) -> None:
         report = audit_control_plane_payload(
