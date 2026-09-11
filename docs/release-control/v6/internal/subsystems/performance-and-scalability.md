@@ -3039,3 +3039,13 @@ the existing Overview snapshot rather than requesting guest inventory again.
 Focused identity and surface proof is recorded in
 docs/qualification/release-v6.4-history/README.md; no store performance or
 installed-data claim follows from it.
+
+Metrics-store operational statistics use one dedicated read-only connection,
+separate from the bounded history/write pool. Saturating history connections
+must not prevent `GetStats` from reading current committed tier counts. This
+is connection-capacity isolation, not cached or estimated statistics. The
+statistics pool belongs to the store and closes on normal or timed-out shutdown.
+The existing 500-node mixed-endpoint workload and latency budgets remain intact.
+`pkg/metrics/store_additional_test.go` holds every history connection to
+prove availability without relying on favourable scheduling, and covers
+committed-data visibility, write rejection, clear and pool shutdown.

@@ -2,6 +2,9 @@ package metrics
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -1219,5 +1222,111 @@ func TestCommercialHistoryRetentionNeverExpandsOperatorPolicy(t *testing.T) {
 	store.SetCommercialHistoryRetention(14, now)
 	if got := store.effectiveRetention(7*24*time.Hour, now); got != 7*24*time.Hour {
 		t.Fatalf("commercial ceiling expanded shorter operator retention: %v", got)
+	}
+}
+
+// Holding every history connection makes starvation deterministic, independent
+// of machine speed or how database/sql happens to schedule a request burst.
+func TestStoreStatsRemainAvailableWhenHistoryPoolIsSaturated(t *testing.T) {
+	for _, size := range []int{1, 4} {
+		t.Run(fmt.Sprintf("history_connections_%d", size), func(t *testing.T) {
+			cfg := DefaultConfig(t.TempDir())
+			cfg.FlushInterval = time.Hour
+			store, err := NewStore(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { store.Close() })
+			if err := store.WaitForMaintenance(5 * time.Second); err != nil {
+				t.Fatal(err)
+			}
+			store.Write("node", "one", "cpu", 10, time.Now())
+			store.Flush()
+			store.SetMaxOpenConns(size)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			var held []*sql.Conn
+			release := func() {
+				for _, conn := range held {
+					conn.Close()
+				}
+				held = nil
+			}
+			defer release()
+			for i := 0; i < size; i++ {
+				conn, err := store.db.DB.Conn(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				held = append(held, conn)
+			}
+			done := make(chan Stats, 1)
+			go func() { done <- store.GetStats() }()
+			select {
+			case stats := <-done:
+				if stats.RawCount != 1 {
+					t.Fatalf("statistics lost committed data: %+v", stats)
+				}
+			case <-time.After(2 * time.Second):
+				release()
+				<-done
+				t.Fatal("statistics waited for the saturated history connection pool")
+			}
+		})
+	}
+}
+
+func TestStoreStatsReaderObservesCommittedDataAndCloses(t *testing.T) {
+	cfg := DefaultConfig(t.TempDir() + "/metrics with spaces")
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { store.Close() })
+	if err := store.WaitForMaintenance(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	store.Write("node", "one", "cpu", 10, time.Now())
+	store.Flush()
+	if stats := store.GetStats(); stats.RawCount != 1 {
+		t.Fatalf("missing flushed sample: %+v", stats)
+	}
+
+	tx, err := store.db.DB.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`INSERT INTO metrics
+		(resource_type, resource_id, metric_type, value, timestamp, tier)
+		VALUES ('node', 'two', 'cpu', 20, ?, 'raw')`, time.Now().Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if stats := store.GetStats(); stats.RawCount != 1 {
+		t.Fatalf("statistics exposed an uncommitted write: %+v", stats)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if stats := store.GetStats(); stats.RawCount != 2 {
+		t.Fatalf("statistics failed to observe commit: %+v", stats)
+	}
+	if _, err := store.statsDB.Exec(`DELETE FROM metrics`); err == nil {
+		t.Fatal("statistics connection permitted a write")
+	}
+	if err := store.Clear(); err != nil {
+		t.Fatal(err)
+	}
+	if stats := store.GetStats(); stats.RawCount != 0 {
+		t.Fatalf("statistics retained cleared data: %+v", stats)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.statsDB.DB.Ping(); err == nil {
+		t.Fatal("statistics pool remained open after store shutdown")
+	}
+	if err := store.db.DB.Ping(); err == nil {
+		t.Fatal("main pool remained open after store shutdown")
 	}
 }
