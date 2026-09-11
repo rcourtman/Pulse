@@ -192,8 +192,12 @@ var (
 
 // Store provides persistent metrics storage
 type Store struct {
-	db     *pdb.InstrumentedDB
-	config StoreConfig
+	db *pdb.InstrumentedDB
+	// Operational statistics must remain readable when history requests occupy
+	// every connection in the main pool. This separate pool has one read-only
+	// connection and reads current committed data, without a result cache.
+	statsDB *pdb.InstrumentedDB
+	config  StoreConfig
 
 	// Write buffer
 	bufferMu sync.Mutex
@@ -316,6 +320,28 @@ func NewStore(config StoreConfig) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("failed to secure metrics db files: %w", err)
 	}
+
+	statsPath := filepath.ToSlash(config.DBPath)
+	if !strings.HasPrefix(statsPath, "/") {
+		statsPath = "/" + statsPath // Windows drive paths in a file URI.
+	}
+	statsURI := url.URL{Scheme: "file", Path: statsPath, RawQuery: url.Values{
+		"mode":    {"ro"},
+		"_pragma": {"busy_timeout(30000)"},
+	}.Encode()}
+	statsDB, err := sql.Open("sqlite", statsURI.String())
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to open metrics statistics reader: %w", err)
+	}
+	statsDB.SetMaxOpenConns(1)
+	statsDB.SetMaxIdleConns(1)
+	if err := statsDB.Ping(); err != nil {
+		statsDB.Close()
+		db.Close()
+		return nil, fmt.Errorf("failed to initialize metrics statistics reader: %w", err)
+	}
+	store.statsDB = pdb.Wrap(statsDB, "metrics")
 
 	// Keep metric ingestion independent from rollup, retention, and one-time
 	// startup maintenance. SQLite remains the write-serialization boundary,
@@ -2258,7 +2284,7 @@ func (s *Store) Close() error {
 	case <-s.doneCh:
 	case <-shutdownTimer.C:
 		log.Warn().Msg("Metrics store ingestion shutdown timed out")
-		return s.db.Close()
+		return s.closeDatabases()
 	}
 
 	select {
@@ -2267,7 +2293,15 @@ func (s *Store) Close() error {
 		log.Warn().Msg("Metrics store maintenance shutdown timed out")
 	}
 
-	return s.db.Close()
+	return s.closeDatabases()
+}
+
+func (s *Store) closeDatabases() error {
+	var statsErr error
+	if s.statsDB != nil {
+		statsErr = s.statsDB.Close()
+	}
+	return errors.Join(statsErr, s.db.Close())
 }
 
 func ensureOwnerOnlyDir(dir string) error {
@@ -2373,7 +2407,7 @@ func (s *Store) GetStats() Stats {
 	stats := Stats{}
 
 	// Count by tier
-	rows, err := s.db.Query(`SELECT tier, COUNT(*) FROM metrics GROUP BY tier`)
+	rows, err := s.statsDB.Query(`SELECT tier, COUNT(*) FROM metrics GROUP BY tier`)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
