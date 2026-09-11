@@ -344,6 +344,14 @@ const frontendIndexCssSource = readFileSync(join(process.cwd(), 'src/index.css')
 const readFrontendSource = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 
 describe('shared primitive guardrails', () => {
+  it('keeps disk mounts in the parent scrolling flow rather than a hidden nested list', () => {
+    const source = readFrontendSource('src/components/shared/cards/DisksCard.tsx');
+    expect(source).toContain('data-testid="disks-card-mounts"');
+    expect(source).not.toMatch(/max-h-|overflow-y-|custom-scrollbar/);
+    expect(source).toContain('<For each={props.disks}>');
+    expect(source).toContain('<StackedDiskBar');
+  });
+
   it('keeps one canonical agent-host metric history group catalog', () => {
     expect(HOST_METRICS_HISTORY_GROUPS.map((group) => group.id)).toEqual([
       'utilization',

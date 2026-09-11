@@ -20,6 +20,17 @@
 
 ## Purpose
 
+### Disk mount scrolling
+
+DisksCard keeps every supplied mount in its parent's scrolling flow. It must not
+cap the mount list or create a nested scroll target whose only overflow cue is
+a platform scrollbar. Large lists intentionally increase card height; aggregate
+usage, individual mount data and empty-state behaviour remain unchanged. This
+boundary is local to DisksCard, not a global scrollbar styling requirement.
+SharedPrimitives.guardrails.test.ts protects this composition; component tests
+preserve mount counts and totals. The disk-mounts qualification fixture checks
+short/long lists, themes and keyboard reachability with production CSS.
+
 ### Ollama credential editing
 The provider panel exposes the existing Basic Auth configuration. Saved passwords
 are represented by presence text, never a placeholder secret or input value.
