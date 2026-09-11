@@ -3151,3 +3151,13 @@ Router initialization no longer launches their five-second cached-metrics loop
 or allocates per-resource pre-incident buffers. Explicit legacy archive reads
 are lazy and bounded to the existing 16 MiB file limit. Canonical resource
 history supplies current diagnostic evidence without a second sampling loop.
+
+Metrics-store operational statistics use one dedicated read-only connection,
+separate from the bounded history/write pool. Saturating history connections
+must not prevent `GetStats` from reading current committed tier counts. This
+is connection-capacity isolation, not cached or estimated statistics. The
+statistics pool belongs to the store and closes on normal or timed-out shutdown.
+The existing 500-node mixed-endpoint workload and latency budgets remain intact.
+`pkg/metrics/store_additional_test.go` holds every history connection to
+prove availability without relying on favourable scheduling, and covers
+committed-data visibility, write rejection, clear and pool shutdown.
