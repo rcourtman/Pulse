@@ -35,8 +35,9 @@ authentication middleware. No credential or authorization acceptance is claimed.
 `fetchManifest` requires a schema-2 manifest envelope (config digest or index
 manifest array) before using a GET fallback body or its digest metadata. This
 is a minimal error-page discriminator, not full descriptor/cryptographic
-validation. See the [OCI manifest specification](https://github.com/opencontainers/image-spec/blob/main/manifest.md)
-and [image index specification](https://github.com/opencontainers/image-spec/blob/main/image-index.md).
+validation. See the [OCI manifest specification](https://github.com/opencontainers/image-spec/blob/147f9c13cedb47a0c4d9a11a222961073d585877/manifest.md)
+and [image index specification](https://github.com/opencontainers/image-spec/blob/147f9c13cedb47a0c4d9a11a222961073d585877/image-index.md),
+both pinned to OCI Image Specification v1.1.1.
 Existing HEAD digest handling, credentials, TLS, cache intervals and HTTP
 error handling remain unchanged. A failed check is not proof of an up-to-date
 image; consumers must retain the error field. No new UI state is introduced.
