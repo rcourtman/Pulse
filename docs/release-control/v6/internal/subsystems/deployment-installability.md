@@ -5444,3 +5444,20 @@ must not alter permissions, environments, source identity, rollback, signing
 backend selection or release qualification. Local contract success does not
 establish hosted action execution, signature acceptance, image publication or
 production deployment.
+
+### Quarantined release identity after tag deletion
+
+Draft preparation retains the existing release's target_commitish. A historical
+published_at is evidence that the version was exposed even if its Git tag is
+now absent. Before PATCH, such a draft must retain an exact target equal to the
+admitted checkout SHA; changed, absent and branch-name targets fail closed.
+Same-SHA quarantined recovery remains available unless the activation marker
+has committed the packet. Never-published private drafts remain replaceable.
+This guard complements, rather than replaces, PR2056's immutable public-tag
+check and qualification-first Git, Docker and Helm writers.
+
+The executable release policy regression runs the actual absent-tag check and
+draft shell with recording fake APIs. It must reject changed/unknown/branch
+historical targets before any API mutation, admit same-identity recovery and
+private replacement, and preserve activated/published refusals. This is local
+workflow proof, not publication or installed acceptance.

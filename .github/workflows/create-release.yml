@@ -993,12 +993,14 @@ jobs:
           RELEASE_ID=$(echo "$EXISTING_RELEASE" | jq -r '.id // empty')
           RELEASE_URL=$(echo "$EXISTING_RELEASE" | jq -r '.html_url // empty')
           RELEASE_IS_DRAFT=$(echo "$EXISTING_RELEASE" | jq -r '.draft // false')
+          RELEASE_TARGET_COMMITISH=$(echo "$EXISTING_RELEASE" | jq -r '.target_commitish // empty')
           RELEASE_PUBLISHED_AT=$(echo "$EXISTING_RELEASE" | jq -r '.published_at // empty')
           RELEASE_ACTIVATION_COMMITTED=$(echo "$EXISTING_RELEASE" | jq -r 'any(.assets[]?; .name == "release-activation.json")')
 
           python3 scripts/write_github_output.py release_id "${RELEASE_ID}"
           python3 scripts/write_github_output.py release_url "${RELEASE_URL}"
           python3 scripts/write_github_output.py release_is_draft "${RELEASE_IS_DRAFT}"
+          python3 scripts/write_github_output.py release_target_commitish "${RELEASE_TARGET_COMMITISH}"
           python3 scripts/write_github_output.py release_published_at "${RELEASE_PUBLISHED_AT}"
           python3 scripts/write_github_output.py release_activation_committed "${RELEASE_ACTIVATION_COMMITTED}"
 
@@ -1059,6 +1061,7 @@ jobs:
           WORKFLOW_OUTPUT_6: ${{ steps.existing_release.outputs.release_is_draft }}
           WORKFLOW_OUTPUT_7: ${{ steps.existing_release.outputs.release_published_at }}
           WORKFLOW_OUTPUT_8: ${{ steps.existing_release.outputs.release_activation_committed }}
+          WORKFLOW_OUTPUT_10: ${{ steps.existing_release.outputs.release_target_commitish }}
           WORKFLOW_OUTPUT_9: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
@@ -1072,6 +1075,7 @@ jobs:
           IS_DRAFT="${WORKFLOW_OUTPUT_6}"
           PUBLISHED_AT="${WORKFLOW_OUTPUT_7}"
           ACTIVATION_COMMITTED="${WORKFLOW_OUTPUT_8}"
+          PREVIOUS_TARGET_COMMITISH="${WORKFLOW_OUTPUT_10}"
           RELEASE_PAYLOAD=$(mktemp)
           RELEASE_JSON_FILE=$(mktemp)
           ACTUAL_BODY_FILE=$(mktemp)
@@ -1095,6 +1099,13 @@ jobs:
           if [ -n "$RELEASE_ID" ]; then
             if [ "$IS_DRAFT" = "true" ] && [ "$ACTIVATION_COMMITTED" != "true" ]; then
               if [ -n "$PUBLISHED_AT" ]; then
+                # Deleting a public tag does not make its version reusable.
+                # Only an exact retained commit proves same-identity recovery;
+                # a missing target or moving branch name is not such proof.
+                if [ "$PREVIOUS_TARGET_COMMITISH" != "$HEAD_SHA" ]; then
+                  echo "::error::Previously published release ${TAG} identifies ${PREVIOUS_TARGET_COMMITISH:-unknown}, not HEAD (${HEAD_SHA}); use a new version."
+                  exit 1
+                fi
                 echo "Resuming quarantined draft release for ${TAG}; GitHub retained historical published_at=${PUBLISHED_AT}."
               fi
               echo "Updating existing draft release for ${TAG}"

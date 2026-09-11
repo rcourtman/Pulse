@@ -303,6 +303,63 @@ STAGED_GOVERNANCE_INPUT_ERRORS = (
 
 class ReleasePromotionPolicyTest(unittest.TestCase):
 
+    def test_quarantined_draft_identity_before_patch(self):
+        workflow = yaml.safe_load(read(".github/workflows/create-release.yml"))
+        steps = workflow["jobs"]["create_release"]["steps"]
+        create = next(step for step in steps if step.get("name") == "Create draft release")
+        locate = next(step for step in steps if step.get("id") == "existing_release")
+        self.assertIn(".target_commitish // empty", locate["run"])
+        self.assertIn('write_github_output.py release_target_commitish "${RELEASE_TARGET_COMMITISH}"',
+                      locate["run"])
+        self.assertEqual(create["env"]["WORKFLOW_OUTPUT_10"],
+                         "${{ steps.existing_release.outputs.release_target_commitish }}")
+        check = next(step for step in steps
+                     if step.get("name") == "Check existing public tag without changing it")
+        self.assertLess(steps.index(check), steps.index(create))
+        script = (check["run"] + "\n" + create["run"]).replace(
+            "${{ github.repository }}", "fixture/pulse")
+        # Execute the actual draft shell with an absent-tag fake Git and a
+        # recording API sentinel. No network or public writer is available.
+        head = "a" * 40
+        cases = [
+            ("different", "b" * 40, "2026-09-01T00:00:00Z", "true", "false", False),
+            ("unknown", "", "2026-09-01T00:00:00Z", "true", "false", False),
+            ("branch", "main", "2026-09-01T00:00:00Z", "true", "false", False),
+            ("same", head, "2026-09-01T00:00:00Z", "true", "false", True),
+            ("private", "b" * 40, "", "true", "false", True),
+            ("activated", head, "2026-09-01T00:00:00Z", "true", "true", False),
+            ("published", head, "2026-09-01T00:00:00Z", "false", "false", False),
+        ]
+        for label, target, published, draft, activated, allowed in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "notes").write_text("Fixture notes")
+                (root / "git").write_text(
+                    "#!/bin/bash\n"
+                    'if [ "$*" = "rev-parse HEAD" ]; then echo ' + head + '; exit 0; fi\n'
+                    'if [ "$1" = "ls-remote" ]; then exit 0; fi\nexit 98\n'
+                )
+                (root / "gh").write_text(
+                    "#!/bin/bash\nprintf '%s\\n' \"$*\" >> \"$CALLS\"\nexit 73\n"
+                )
+                for name in ("git", "gh"):
+                    (root / name).chmod(0o755)
+                env = dict(os.environ, PATH=f"{root}:/usr/bin:/bin", TMPDIR=tmp,
+                           CALLS=str(root / "calls"), TAG="v6.4.4-beta.4")
+                values = ["v6.4.4-beta.4", str(root / "notes"), "true", "123",
+                          "https://example.invalid/release", draft, published, activated,
+                          "6.4.4-beta.4", target]
+                env.update({f"WORKFLOW_OUTPUT_{i}": v for i, v in enumerate(values, 1)})
+                result = subprocess.run(["bash", "-euo", "pipefail", "-c", script],
+                                        cwd=root, env=env, text=True, capture_output=True)
+                calls = (root / "calls").read_text() if (root / "calls").exists() else ""
+                if allowed:
+                    self.assertEqual(result.returncode, 73, result.stdout + result.stderr)
+                    self.assertIn("-X PATCH", calls)
+                else:
+                    self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                    self.assertEqual(calls, "", "refusal must precede API mutation")
+
     def test_reviewed_action_manifests_cover_all_release_consumers(self) -> None:
         # Snapshot is derived from each immutable upstream action.yml, not from
         # our consumers: unknown inputs therefore fail rather than being blessed.
