@@ -1,10 +1,9 @@
 name: Publish Docker Images
 run-name: Publish Docker Images ${{ inputs.tag }}
 
-# Called by create-release.yml as soon as the immutable candidate exists.
-# Exact-version images are inert staging surfaces, so assembly and publication
-# overlap container qualification and draft creation. The release-readiness
-# barrier still joins both paths before any customer-facing alias can move.
+# Called only after exact candidate qualification and public tag creation.
+# Versioned registry images are public release surfaces, not private staging.
+# The release-readiness join verifies published digests before activation.
 on:
   workflow_call:
     inputs:

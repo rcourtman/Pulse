@@ -1178,11 +1178,19 @@ artifact-selection behaviour.
    container qualification and draft creation when release-line validation is
    bound to the anticipated exact 40-character source SHA, verifies that SHA is
    reachable from the governed release branch, and rejects an existing tag at
-   any other commit. Exact-version tags are inert staging surfaces; the
-   canonical `release_readiness` join must still require candidate container
-   qualification, draft release validation, exact Docker publication, installer
-   smoke, and every other immutable gate before activation or floating-alias
-   promotion. The exact-version server and provider control-plane image builds
+   any other commit. Exact-version registry tags are public publication surfaces.
+   The `candidate_qualification` join must require all exact-source candidate
+   checks, including container qualification, draft validation, installer smoke
+   and private Pro qualification, before the first public Git tag, Docker tag or
+   Helm chart write. Restricted drafts bind `target_commitish` without pushing
+   a Git ref and do not retain checkout credentials. Only the qualified Git-tag
+   publication job retains credentials for its authenticated ref write. Draft
+   state never authorizes rewriting an existing public tag.
+   The `release_readiness` join then requires verified Docker and Helm digests
+   before activation or floating-alias promotion. A failure before qualification
+   leaves the unexposed candidate repairable under its intended version. A
+   failure during public distribution retains the exposed source identity for
+   recovery or a clearly explained successor, since registries are not atomic. The exact-version server and provider control-plane image builds
    are independent consumers of the same immutable container payload and must
    publish and attest in separate matrix jobs. Each matrix leg independently
    verifies the exact checkout and candidate manifest. After both legs finish,
@@ -5129,3 +5137,20 @@ are distinct. Cached events and collection overhead limit timing inference.
 synthetic Go pass/skip/fail output, producer exit retention, malformed input,
 allowlisted targeting and unavailable resource evidence. This is not product
 qualification; see `docs/RELEASE_RESOURCE_EVIDENCE.md`.
+
+### Quarantined release identity after tag deletion
+
+Draft preparation retains the existing release's target_commitish. A historical
+published_at is evidence that the version was exposed even if its Git tag is
+now absent. Before PATCH, such a draft must retain an exact target equal to the
+admitted checkout SHA; changed, absent and branch-name targets fail closed.
+Same-SHA quarantined recovery remains available unless the activation marker
+has committed the packet. Never-published private drafts remain replaceable.
+This guard complements, rather than replaces, PR2056's immutable public-tag
+check and qualification-first Git, Docker and Helm writers.
+
+The executable release policy regression runs the actual absent-tag check and
+draft shell with recording fake APIs. It must reject changed/unknown/branch
+historical targets before any API mutation, admit same-identity recovery and
+private replacement, and preserve activated/published refusals. This is local
+workflow proof, not publication or installed acceptance.
