@@ -5112,7 +5112,8 @@
       "lane": "L8",
       "contract": "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
       "owned_prefixes": [
-        "frontend-modern/src/components/shared/"
+        "frontend-modern/src/components/shared/",
+        "frontend-modern/src/features/docs/"
       ],
       "owned_files": [
         "frontend-modern/scripts/__tests__/planning-doc-status-audit.test.mjs",
@@ -5213,6 +5214,7 @@
         "frontend-modern/src/i18n/messages.ts",
         "frontend-modern/src/i18n/policy.ts",
         "frontend-modern/src/index.css",
+        "frontend-modern/src/pages/Docs.tsx",
         "frontend-modern/src/routing/routePreload.ts",
         "frontend-modern/src/stores/aiChat.ts",
         "frontend-modern/src/stores/updates.ts",
@@ -5880,6 +5882,22 @@
               "frontend-modern/src/components/shared/FilterToolbar.test.tsx",
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
               "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts"
+            ]
+          },
+          {
+            "id": "shipped-documentation-navigation",
+            "label": "sanitized documentation rendering and fragment navigation proof",
+            "match_prefixes": [
+              "frontend-modern/src/features/docs/"
+            ],
+            "match_files": [
+              "frontend-modern/src/pages/Docs.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/features/docs/__tests__/docMarkdown.test.ts",
+              "frontend-modern/src/pages/__tests__/Docs.test.ts"
             ]
           }
         ],

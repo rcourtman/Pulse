@@ -10,7 +10,15 @@ interface PackageManifest {
 }
 
 interface PackageLock {
-  packages: Record<string, { version?: string }>;
+  packages: Record<
+    string,
+    {
+      version?: string;
+      integrity?: string;
+      dependencies?: Record<string, string>;
+      hasInstallScript?: boolean;
+    }
+  >;
 }
 
 const manifest = JSON.parse(
@@ -65,6 +73,15 @@ const dompurifyRangeIsPatched = (range: string): boolean =>
   /^\^3\.\d+\.\d+$/.test(range) && atLeast(range.slice(1), [3, 4, 13]);
 
 describe('frontend dependency security floors', () => {
+  it('locks the documentation heading helper without install scripts or transitive dependencies', () => {
+    const slugger = lock.packages['node_modules/github-slugger'];
+    expect(slugger).toBeDefined();
+    expect(manifest.dependencies['github-slugger']).toBe(slugger.version);
+    expect(slugger.integrity).toMatch(/^sha512-/);
+    expect(slugger.dependencies ?? {}).toEqual({});
+    expect(slugger.hasInstallScript).not.toBe(true);
+  });
+
   it('keeps Vitest and its mocker above the redirect-mock file-read floor', () => {
     // GHSA-82fw-gwwq-j7x9: the maintained 4.x fix starts at 4.1.11.
     expect(manifest.devDependencies.vitest).toBe('^4.1.11');

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   docAssetUrlForPath,
   docRouteForPath,
@@ -6,6 +6,7 @@ import {
   normalizeDocPath,
   renderDocMarkdown,
   resolveDocLink,
+  scrollToDocFragment,
   stripLeadingTitle,
   wrapTables,
 } from '../docMarkdown';
@@ -86,6 +87,34 @@ describe('renderDocMarkdown', () => {
     expect(html).toContain('<li>one</li>');
   });
 
+  it('creates stable GitHub fragments from heading text, including duplicate headings', () => {
+    const source = '## Resource **Maintenance**\n\n## Resource Maintenance\n\n## Привет 你好';
+    const container = document.createElement('div');
+    container.innerHTML = renderDocMarkdown(source, 'API');
+    expect(Array.from(container.querySelectorAll('h2'), (heading) => heading.id)).toEqual([
+      'resource-maintenance',
+      'resource-maintenance-1',
+      'привет-你好',
+    ]);
+    // Rendering another document must not inherit the first one's counters.
+    expect(renderDocMarkdown('## Resource Maintenance', 'OTHER')).toContain(
+      'id="resource-maintenance"',
+    );
+  });
+
+  it('keeps explicit anchors and avoids assigning their IDs to another heading', () => {
+    const container = document.createElement('div');
+    container.innerHTML = renderDocMarkdown(
+      '<a id="maintenance"></a>\n\n## Maintenance\n\n## Maintenance',
+      'API',
+    );
+    expect(container.querySelector('a')?.id).toBe('maintenance');
+    expect(Array.from(container.querySelectorAll('h2'), (heading) => heading.id)).toEqual([
+      'maintenance-1',
+      'maintenance-2',
+    ]);
+  });
+
   it('points intra-doc links at the viewer and marks them for routing', () => {
     const html = renderDocMarkdown('[Install](INSTALL.md)', 'README');
     expect(html).toContain('href="/docs/INSTALL"');
@@ -128,6 +157,33 @@ describe('renderDocMarkdown', () => {
     const link = template.content.querySelector('a');
     expect(link?.getAttribute('href')).toBe('/docs/INSTALL');
     expect(link?.hasAttribute('data-doc-link')).toBe(true);
+  });
+});
+
+describe('scrollToDocFragment', () => {
+  it('scrolls and moves keyboard focus to an encoded fragment in the rendered document', () => {
+    const container = document.createElement('article');
+    container.innerHTML = renderDocMarkdown('## Привет 你好', 'API');
+    document.body.appendChild(container);
+    const heading = container.querySelector('h2')!;
+    heading.scrollIntoView = vi.fn();
+    try {
+      scrollToDocFragment(container, `#${encodeURIComponent(heading.id)}`);
+      expect(heading.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+      expect(document.activeElement).toBe(heading);
+      expect(heading.tabIndex).toBe(-1);
+    } finally {
+      container.remove();
+    }
+  });
+
+  it('ignores absent or malformed fragments without moving focus', () => {
+    const container = document.createElement('article');
+    container.innerHTML = '<h2 id="maintenance">Maintenance</h2>';
+    const heading = container.querySelector('h2')!;
+    heading.scrollIntoView = vi.fn();
+    for (const hash of ['', '#', '#missing', '#%invalid']) scrollToDocFragment(container, hash);
+    expect(heading.scrollIntoView).not.toHaveBeenCalled();
   });
 });
 
