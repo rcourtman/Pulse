@@ -59,6 +59,7 @@ export function getPlatformResourceDetailRowInteractionProps(
 export const PlatformResourceDetailToggleButton: Component<{
   expanded: boolean;
   resourceLabel: string;
+  hideWhenRowTappableOnMobile?: boolean;
   controlsId?: string;
   class?: string;
   onToggle: () => void;
@@ -69,7 +70,7 @@ export const PlatformResourceDetailToggleButton: Component<{
     subjectLabel={`details for ${props.resourceLabel}`}
     controlsId={props.controlsId}
     class={props.class}
-    hideWhenRowTappableOnMobile
+    hideWhenRowTappableOnMobile={props.hideWhenRowTappableOnMobile ?? true}
     onAction={props.onToggle}
   />
 );

@@ -618,11 +618,13 @@ describe('ProxmoxNodesTable', () => {
     expect(rowNames()).toEqual(['pve-node-1', 'pve-node-2']);
   });
 
-  it('opens the host details drawer from the host-owned top table row', async () => {
+  it('selects guests from the row and reserves the chevron for node details', async () => {
+    const onShowGuests = vi.fn();
     render(() => (
       <ProxmoxNodesTable
         nodes={[makeNodeResource()]}
         guests={[]}
+        onShowGuests={onShowGuests}
         emptyIcon={<span />}
         emptyTitle="No Proxmox VE nodes"
         emptyDescription="No nodes"
@@ -639,6 +641,10 @@ describe('ProxmoxNodesTable', () => {
     expect(screen.queryByTestId('node-drawer')).not.toBeInTheDocument();
 
     await fireEvent.click(row!);
+    expect(onShowGuests).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('node-drawer')).not.toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Expand details for pve-node-1' }));
+    expect(onShowGuests).toHaveBeenCalledTimes(1);
 
     expect(row).not.toHaveAttribute('aria-expanded');
     expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
@@ -650,7 +656,8 @@ describe('ProxmoxNodesTable', () => {
       }),
     );
 
-    await fireEvent.click(row!);
+    await fireEvent.click(screen.getByRole('button', { name: 'Collapse details for pve-node-1' }));
+    expect(onShowGuests).toHaveBeenCalledTimes(1);
 
     expect(row).not.toHaveAttribute('aria-expanded');
     expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute(

@@ -1,7 +1,7 @@
 import { createSignal, onMount, type Accessor, type Setter } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
-import { deserializeWorkloadViewMode } from './workloadRouteModel';
+import { deserializeWorkloadViewMode, type WorkloadInventoryNode } from './workloadRouteModel';
 import {
   WORKLOADS_WORKLOAD_ROUTE_RESET_STATE,
   deserializeWorkloadsContainerRuntime,
@@ -13,6 +13,7 @@ import { WORKLOADS_QUERY_PARAMS } from '@/routing/resourceLinks';
 
 export interface WorkloadRouteStateOptions {
   allGuests: Accessor<WorkloadGuest[]>;
+  nodes?: Accessor<readonly WorkloadInventoryNode[]>;
   forcedPlatform?: string;
   forcedViewMode?: ViewMode;
   routeStateEnabled?: Accessor<boolean>;
@@ -125,6 +126,7 @@ export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
 
   const filterOptions = useWorkloadFilterOptions({
     allGuests: options.allGuests,
+    nodes: options.nodes,
     isWorkloadsRoute,
     allowEmbeddedScopeFilters: () => true,
     viewMode: filterViewMode,

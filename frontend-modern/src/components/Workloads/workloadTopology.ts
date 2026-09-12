@@ -30,7 +30,7 @@ const dedupeTrimmed = (values: Array<string | null | undefined>): string[] => {
   return result;
 };
 
-export const workloadNodeScopeId = (guest: WorkloadGuest): string =>
+export const workloadNodeScopeId = (guest: Pick<WorkloadGuest, 'instance' | 'node'>): string =>
   `${(guest.instance || '').trim()}-${(guest.node || '').trim()}`;
 
 export const getKubernetesContextKey = (guest: WorkloadGuest): string => {

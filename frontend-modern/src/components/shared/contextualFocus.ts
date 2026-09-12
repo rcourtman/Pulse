@@ -130,6 +130,25 @@ const scrollVerticalScroller = (
   }
 };
 
+// Leave a visible target anchored. Only off-screen navigation needs a reveal.
+export const revealElementInViewport = (options: {
+  element: HTMLElement;
+  bottomPadding?: number;
+  behavior?: ScrollBehavior;
+}): boolean => {
+  if (typeof window === 'undefined') return false;
+  const scroller = resolveVerticalScroller(options.element);
+  const metrics = getScrollerMetrics(scroller);
+  const rect = options.element.getBoundingClientRect();
+  const top = Math.max(0, metrics.top);
+  const bottom = Math.min(window.innerHeight, metrics.bottom);
+  if (rect.top >= top && rect.bottom <= bottom) return false;
+  const offset =
+    rect.top < top ? rect.top - top : rect.bottom - bottom + (options.bottomPadding ?? 0);
+  scrollVerticalScroller(scroller, metrics.scrollTop + offset, options.behavior ?? 'instant');
+  return true;
+};
+
 export const findInlineDetailElement = (
   root: ParentNode | null | undefined,
   seriesId: string | null | undefined,

@@ -11,6 +11,10 @@ import StorageSurface from '@/components/Storage/Storage';
 import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
 import { useWorkloadsState } from '@/components/Workloads/useWorkloadsState';
+import { workloadNodeScopeId } from '@/components/Workloads/workloadTopology';
+import { revealElementInViewport } from '@/components/shared/contextualFocus';
+import { nodeFromResource } from '@/utils/resourceStateAdapters';
+import { TABLE_CARD_HEADER_CLEAR_BUTTON_CLASS } from '@/components/shared/TableCardHeader';
 import {
   DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
   getWorkloadsMetricFilterProps,
@@ -470,6 +474,57 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
       workloadsState.allGuests().length > 0,
   );
   const estateTopology = createMemo(() => buildProxmoxEstateTopology(currentModel().resources));
+  // Use the same node identity as the workload table, including empty nodes.
+  const nodeScopes = createMemo(
+    () =>
+      new Map(
+        currentModel().pveNodes.map((resource) => {
+          const node = nodeFromResource(resource);
+          return [
+            resource.id,
+            workloadNodeScopeId({
+              node: node?.name ?? resource.name,
+              instance: node?.instance ?? '',
+            }),
+          ];
+        }),
+      ),
+  );
+  const selectedScope = () => workloadsState.selectedNode() || workloadsState.selectedHostHint();
+  const selectedNode = createMemo(() =>
+    currentModel().pveNodes.find((node) => nodeScopes().get(node.id) === selectedScope()),
+  );
+  const selectedNodeLabel = createMemo(() => {
+    const scope = selectedScope();
+    if (!scope) return null;
+    return (
+      selectedNode()?.name ||
+      workloadsState.hostFilterConfig()?.options.find((option) => option.value === scope)?.label ||
+      scope
+    );
+  });
+  let guestsHeading: HTMLHeadingElement | undefined;
+  const focusGuests = () => {
+    guestsHeading?.focus({ preventScroll: true });
+    if (guestsHeading) {
+      revealElementInViewport({ element: guestsHeading, bottomPadding: 96 });
+    }
+  };
+  const showNodeGuests = (node: Resource) => {
+    const scope = nodeScopes().get(node.id);
+    if (!scope) return;
+    const nextScope = selectedScope() === scope ? null : scope;
+    workloadsState.handleNodeSelect(nextScope, nextScope ? 'pve' : null);
+    if (nextScope) {
+      requestAnimationFrame(() => {
+        if (selectedScope() === nextScope) focusGuests();
+      });
+    }
+  };
+  const clearNodeFilter = () => {
+    workloadsState.handleNodeSelect(null, null);
+    guestsHeading?.focus({ preventScroll: true });
+  };
 
   return (
     <div ref={overviewWidth.setElement} class="pulse-wide-data-surface flex flex-col gap-4">
@@ -486,6 +541,8 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
           emptyDescription="Proxmox VE nodes appear here once a PVE host reports inventory."
           topology={estateTopology()}
           inventoryCountsVisible={props.inventoryCountsVisible}
+          onShowGuests={showNodeGuests}
+          guestFilterNodeId={() => selectedNode()?.id ?? null}
         />
       </section>
       <section
@@ -550,14 +607,30 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
           emptyStateTitle="No Proxmox workloads"
           emptyStateDescription="Proxmox VMs and LXCs appear here when inventory is available."
           tableTitle={
-            <h2 id="proxmox-guests-heading" class="inline-flex items-center gap-1.5">
-              Guests
-              <Show when={showSharedFilterToolbar()}>
-                <span class="font-semibold tabular-nums text-base-content">
-                  {workloadsState.allGuests().length}
-                </span>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h2
+                ref={guestsHeading}
+                id="proxmox-guests-heading"
+                tabIndex={-1}
+                class="inline-flex flex-wrap items-center gap-1.5 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              >
+                {selectedNodeLabel() ? `Guests on ${selectedNodeLabel()}` : 'Guests'}
+                <Show when={showSharedFilterToolbar()}>
+                  <span class="font-semibold tabular-nums text-base-content">
+                    {workloadsState.filteredGuests().length}
+                  </span>
+                </Show>
+              </h2>
+              <Show when={selectedNodeLabel()}>
+                <button
+                  type="button"
+                  class={`${TABLE_CARD_HEADER_CLEAR_BUTTON_CLASS} min-h-6`}
+                  onClick={clearNodeFilter}
+                >
+                  Show all nodes
+                </button>
               </Show>
-            </h2>
+            </div>
           }
         />
       </section>

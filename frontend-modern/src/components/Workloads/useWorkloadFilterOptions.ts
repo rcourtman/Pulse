@@ -1,7 +1,10 @@
 import { createMemo, type Accessor } from 'solid-js';
 
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
-import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
+import {
+  normalizeSourcePlatformQueryValue,
+  sourcePlatformScopeMatchesFilter,
+} from '@/utils/sourcePlatforms';
 import { workloadMatchesPlatformScope } from '@/utils/workloads';
 import type { WorkloadsToolbarFilterConfig } from './workloadsFilterModel';
 import {
@@ -11,6 +14,7 @@ import {
   buildWorkloadsKubernetesNamespaceOptions,
   buildWorkloadsVmwareClusterOptions,
   buildWorkloadNodeOptions,
+  type WorkloadInventoryNode,
 } from './workloadRouteModel';
 import {
   buildWorkloadsContainerRuntimeFilterConfig,
@@ -22,6 +26,7 @@ import {
 
 interface WorkloadsWorkloadFilterOptionsOptions {
   allGuests: Accessor<WorkloadGuest[]>;
+  nodes?: Accessor<readonly WorkloadInventoryNode[]>;
   isWorkloadsRoute: Accessor<boolean>;
   allowEmbeddedScopeFilters: Accessor<boolean>;
   viewMode: Accessor<ViewMode>;
@@ -51,7 +56,14 @@ export function useWorkloadFilterOptions(options: WorkloadsWorkloadFilterOptions
       .filter((guest) => workloadMatchesPlatformScope(guest, normalizedScope));
   });
 
-  const workloadNodeOptions = createMemo(() => buildWorkloadNodeOptions(platformScopedGuests()));
+  const workloadNodeOptions = createMemo(() =>
+    buildWorkloadNodeOptions(
+      platformScopedGuests(),
+      sourcePlatformScopeMatchesFilter('proxmox-pve', options.platformScope?.())
+        ? (options.nodes?.() ?? [])
+        : [],
+    ),
+  );
 
   const kubernetesContextOptions = createMemo(() =>
     buildWorkloadsKubernetesContextOptions(platformScopedGuests()),

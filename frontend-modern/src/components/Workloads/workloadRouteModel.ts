@@ -1,3 +1,4 @@
+import type { Node } from '@/types/api';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import {
   getWorkloadPlatformScopes,
@@ -11,6 +12,7 @@ import {
   getKubernetesContextKey,
   getWorkloadHostLabel,
   workloadHostScopeId,
+  workloadNodeScopeId,
 } from './workloadTopology';
 
 export type WorkloadNodeOption = WorkloadsFilterSelectOption;
@@ -20,9 +22,23 @@ export const deserializeWorkloadViewMode = (raw: unknown): ViewMode => {
   return normalizeWorkloadViewModeParam(raw) ?? 'all';
 };
 
-export const buildWorkloadNodeOptions = (guests: WorkloadGuest[]): WorkloadNodeOption[] => {
+export type WorkloadInventoryNode = Pick<Node, 'name' | 'instance'>;
+
+export const buildWorkloadNodeOptions = (
+  guests: WorkloadGuest[],
+  nodes: readonly WorkloadInventoryNode[] = [],
+): WorkloadNodeOption[] => {
   const labelsByScope = new Map<string, string>();
   const scopesByLabel = new Map<string, Set<string>>();
+
+  // Inventory owns node identity even when a node currently has no guests.
+  for (const node of nodes) {
+    const name = node.name.trim();
+    if (!name) continue;
+    const scopes = scopesByLabel.get(name) ?? new Set<string>();
+    scopes.add(workloadNodeScopeId({ node: name, instance: node.instance }));
+    scopesByLabel.set(name, scopes);
+  }
 
   for (const guest of guests) {
     const type = resolveWorkloadType(guest);
@@ -59,6 +75,17 @@ export const buildWorkloadNodeOptions = (guests: WorkloadGuest[]): WorkloadNodeO
     if (!nodeName) continue;
     const hasDuplicateNodeName = (scopesByLabel.get(nodeName)?.size ?? 0) > 1;
     const label = hasDuplicateNodeName && instance ? `${nodeName} (${instance})` : nodeName;
+    labelsByScope.set(scope, label);
+  }
+
+  for (const node of nodes) {
+    const name = node.name.trim();
+    if (!name) continue;
+    const instance = (node.instance || '').trim();
+    const scope = workloadNodeScopeId({ node: name, instance });
+    if (labelsByScope.has(scope)) continue;
+    const label =
+      (scopesByLabel.get(name)?.size ?? 0) > 1 && instance ? `${name} (${instance})` : name;
     labelsByScope.set(scope, label);
   }
 

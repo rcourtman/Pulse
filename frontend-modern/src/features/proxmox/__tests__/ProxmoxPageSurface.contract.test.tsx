@@ -16,6 +16,8 @@ const mockTotalStats = vi.hoisted(() => vi.fn());
 const mockNodesTableProps = vi.hoisted(() => vi.fn());
 const mockBackupsTableProps = vi.hoisted(() => vi.fn());
 const mockWorkloadSearch = vi.hoisted(() => vi.fn(() => ''));
+const mockSelectedNode = vi.hoisted(() => vi.fn<() => string | null>(() => null));
+const mockHandleNodeSelect = vi.hoisted(() => vi.fn());
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource =>
   ({
@@ -90,6 +92,9 @@ vi.mock('@/components/Workloads/useWorkloadsState', () => ({
     surfaceConnected: () => false,
     surfaceInitialDataReceived: () => false,
     allGuests: () => [],
+    selectedNode: mockSelectedNode,
+    handleNodeSelect: mockHandleNodeSelect,
+    selectedHostHint: () => null,
     totalStats: mockTotalStats,
     search: mockWorkloadSearch,
     setSearch: vi.fn(),
@@ -154,6 +159,8 @@ const renderSurface = () =>
 
 describe('ProxmoxPageSurface contract', () => {
   beforeEach(() => {
+    mockSelectedNode.mockReturnValue(null);
+    mockHandleNodeSelect.mockClear();
     mockPathname.mockReturnValue('/proxmox/overview');
     mockVersionInfo.mockReturnValue(null);
     mockTotalStats.mockReturnValue({
@@ -222,6 +229,33 @@ describe('ProxmoxPageSurface contract', () => {
       'href',
       '/settings/infrastructure/agent-doctor?agents=agent%3Aagent-delly',
     );
+  });
+
+  it('toggles only the node scope when the selected node is activated again', () => {
+    const node = makeResource({
+      id: 'agent:pve1',
+      name: 'pve1',
+      type: 'agent',
+      proxmox: { nodeName: 'pve1', instance: 'lab' },
+    });
+    setResources([node]);
+    renderSurface();
+    const { onShowGuests } = mockNodesTableProps.mock.lastCall![0];
+    const revealFrame = vi.spyOn(window, 'requestAnimationFrame');
+
+    onShowGuests(node);
+    expect(mockHandleNodeSelect).toHaveBeenLastCalledWith('lab-pve1', 'pve');
+    expect(revealFrame).toHaveBeenCalledTimes(1);
+    revealFrame.mockClear();
+    mockSelectedNode.mockReturnValue('lab-pve1');
+    onShowGuests(node);
+    expect(mockHandleNodeSelect).toHaveBeenLastCalledWith(null, null);
+    expect(revealFrame).not.toHaveBeenCalled();
+    mockSelectedNode.mockReturnValue('lab-other');
+    onShowGuests(node);
+    expect(mockHandleNodeSelect).toHaveBeenLastCalledWith('lab-pve1', 'pve');
+    expect(revealFrame).toHaveBeenCalledTimes(1);
+    revealFrame.mockRestore();
   });
 
   it('passes committed workload search terms to the node table', () => {

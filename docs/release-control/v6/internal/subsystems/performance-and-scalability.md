@@ -1850,6 +1850,13 @@ The Workloads selector path and the Workloads runtime that consumes it
 are now part of the protected performance surface rather than proof-only
 context. Future hot-path filter/group/sort/windowing changes must route through
 the explicit Workloads performance proof policy in the subsystem registry.
+Node filter options combine the existing canonical Proxmox node snapshot
+with workload-derived hosts. Empty nodes retain instance-scoped identities
+and labels without an extra inventory request. Only matching platform scopes
+include these Proxmox nodes. A filtered-empty guest result cannot present an
+unrelated source outage as its cause when the unfiltered guest inventory is
+populated. Verify node option disambiguation and filtered-empty handling in
+`workloadRouteModel.test.ts` and `WorkloadsSurface.k8s.test.tsx`.
 Route-backed workload `resource` focus on that hot path is contextual state
 only, not inferred filter state: opening or closing an inline drawer must not
 invent, retain, or clear `agent` or node-scope filters unless those filters

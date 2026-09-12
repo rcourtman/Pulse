@@ -360,8 +360,18 @@ whole-row pointer activation, Enter/Space keyboard activation, focus treatment,
 `aria-expanded` / `aria-controls`, and exclusion of embedded links and controls.
 `PlatformResourceDetailToggleButton` is the desktop disclosure affordance and
 is visually removed on phone layouts where the complete row is the touch target;
-provider tables must not add a second mobile chevron. Operator overrides remain
-in the shared `Manage` tab and use the explicit compact density of `FormSelect`
+provider tables must not add a second mobile chevron. When row activation
+performs a different primary action, such as selecting a node's guests on
+Proxmox, the shared toggle remains visible on phones through its
+`hideWhenRowTappableOnMobile={false}` option. The node name supplies native
+keyboard activation for guest selection, and embedded controls retain their
+separate actions. Explicit guest selection focuses the guest heading with
+scroll prevention. The shared `revealElementInViewport` helper leaves a
+visible heading anchored and reveals an off-screen heading only far enough
+to show the start of its results. It uses the actual scroll container and
+marks deliberate movement so route-state restoration cannot compete with it. Activating the selected node again clears its node scope without
+moving scroll or focus, while hover leaves the guest inventory unchanged.
+Operator overrides remain in the shared `Manage` tab and use the explicit compact density of `FormSelect`
 and `FormTextarea`, keeping form labels, help relationships, touch targets, and
 control chrome canonical without expanding the low-frequency management surface.
 When the summary row already owns a canonical unified `Resource`, its expanded
