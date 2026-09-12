@@ -665,9 +665,13 @@ describe('frontend resource type boundaries', () => {
     expect(workloadsControlsStateSource).toContain('DEFAULT_WORKLOADS_SORT_KEY');
     expect(workloadsWorkloadRouteStateSource).toContain('useWorkloadFilterOptions');
     expect(workloadsWorkloadFilterOptionsSource).toContain("from './workloadFilterConfigModel'");
-    expect(workloadsWorkloadFilterOptionsSource).toContain(
-      'buildWorkloadNodeOptions(platformScopedGuests())',
+    expect(workloadsWorkloadFilterOptionsSource).toMatch(
+      /buildWorkloadNodeOptions\(\s*platformScopedGuests\(\),/,
     );
+    expect(workloadsWorkloadFilterOptionsSource).toContain(
+      "sourcePlatformScopeMatchesFilter('proxmox-pve', options.platformScope?.())",
+    );
+    expect(workloadsWorkloadFilterOptionsSource).toContain('? (options.nodes?.() ?? [])');
     expect(workloadsWorkloadFilterOptionsSource).not.toContain(
       'const onContextChange = (value: string) =>',
     );
