@@ -3386,10 +3386,10 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		t.Fatal("release compilation must avoid Actions cache archival")
 	}
 	if strings.Contains(frontendBundleJob, "cache: 'npm'") {
-		t.Fatal("PVE frontend bundle must use its persistent runner-local npm cache")
+		t.Fatal("frontend bundle must avoid restoring an Actions npm cache")
 	}
 	if !strings.Contains(backendJob, "cache: false") {
-		t.Fatal("PVE backend qualification must not archive its persistent Go caches through Actions")
+		t.Fatal("backend qualification must keep Actions Go caching disabled")
 	}
 	for _, needle := range []string{
 		`scripts/release_candidate_manifest.py create`,
@@ -3950,8 +3950,8 @@ func TestReleaseBackendRaceGateUsesCompleteWorkerPartition(t *testing.T) {
 			t.Fatalf("release backend job must not restore a ceiling that can pre-empt the 45-minute API watchdog: %s", invalidCeiling)
 		}
 	}
-	if !strings.Contains(backendJob, "pulse-pve-tests") || !strings.Contains(backendJob, "run-release-backend-tests.sh") {
-		t.Fatal("release backend job must use the dedicated PVE partition runner")
+	if !strings.Contains(backendJob, "runs-on: ubuntu-24.04") || strings.Contains(backendJob, "self-hosted") || !strings.Contains(backendJob, "run-release-backend-tests.sh") {
+		t.Fatal("release backend job must use the canonical partition runner on a fresh hosted VM")
 	}
 
 	backendScriptBytes, err := os.ReadFile(repoFile("scripts", "run-release-backend-tests.sh"))
