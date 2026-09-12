@@ -2,6 +2,7 @@ package ai
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -206,9 +207,10 @@ func normalizeAlertResourceType(raw string) string {
 	}
 }
 
-// ResolveAlert clears an active alert. Returns true if the alert was found and cleared.
+// ResolveAlert clears a resource alert. System health recovery belongs to its
+// owning evaluator, including when resolution is requested outside Patrol.
 func (a *AlertManagerAdapter) ResolveAlert(alertID string) bool {
-	if a.manager == nil {
+	if a.manager == nil || strings.HasPrefix(alertID, alerts.SystemAlertIDPrefix) {
 		return false
 	}
 	return a.manager.ClearAlert(alertID)
