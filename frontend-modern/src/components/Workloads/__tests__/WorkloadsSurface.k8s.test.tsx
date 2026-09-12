@@ -301,6 +301,16 @@ describe('Workloads pod workloads integration', () => {
             surfaceInitialDataReceived: () => true,
             allGuests: () => [{ id: 'vm-1' }],
             filteredGuests: () => [],
+            workloadInventoryIssues: () => [
+              {
+                id: 'other-node',
+                type: 'pve',
+                name: 'other-node',
+                stateLabel: 'Source unreachable',
+                coverageLabel: 'VMs and containers',
+                description: 'Unrelated connection failure.',
+              },
+            ],
             search: () => '',
             viewMode: () => 'vm',
             statusMode: () => 'stopped',
@@ -320,6 +330,7 @@ describe('Workloads pod workloads integration', () => {
     expect(screen.getByText('No guests found')).toBeInTheDocument();
     expect(screen.getByText('No guests match your current filters')).toBeInTheDocument();
     expect(screen.queryByText('No vSphere VMs')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('workload-inventory-source-issues')).not.toBeInTheDocument();
   });
 
   it('keeps page-owned table-only empty copy when no operator filters are active', () => {

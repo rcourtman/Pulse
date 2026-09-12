@@ -788,7 +788,12 @@ tables own which row opens, which resource label is exposed, and which
 source-specific detail payload or drawer is rendered, but the disclosure
 affordance itself must compose
 `PlatformResourceDetailToggleButton` from the frontend-primitives-owned
-`PlatformResourceDetailTableRow.tsx` contract. Future platform tables must not
+`PlatformResourceDetailTableRow.tsx` contract. When whole-row activation selects workload scope instead of opening details,
+the shared toggle stays visible on phones and continues to own disclosure
+semantics and event containment. Proxmox guest selection derives its node
+scope through `nodeFromResource` and `workloadNodeScopeId`, including empty
+nodes, rather than inferring identity from the visible guest collection.
+Future platform tables must not
 add page-local chevron buttons, bespoke `aria-expanded` handling, or local
 event-propagation variants for row detail expansion.
 Inline detail section content follows the same ownership split.

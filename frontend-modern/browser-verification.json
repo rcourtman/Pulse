@@ -1,37 +1,83 @@
 {
   "version": 1,
-  "base_sha": "72809bc1cf71e2493d1f0c492b926110a969bdb4",
-  "verified_at": "2026-09-11T10:26:20.316799Z",
+  "base_sha": "5a4163ff83890005142ed81b025b8dea2a755b56",
+  "verified_at": "2026-09-12T16:22:19.408045Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/cards/DisksCard.tsx"
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
+    "frontend-modern/src/components/Workloads/useWorkloadFilterOptions.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadRouteState.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/components/Workloads/workloadRouteModel.ts",
+    "frontend-modern/src/components/Workloads/workloadTopology.ts",
+    "frontend-modern/src/components/shared/contextualFocus.ts",
+    "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/cards/DisksCard.tsx": "cdda554f93b7aecb925d803b0192260ef1a445065c501468a0412b824dc08028"
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "8f0befdd56d332c9fb9e74319b8a7cb3db6fcb5518cd6dbc560f0710d83bd471",
+    "frontend-modern/src/components/Workloads/useWorkloadFilterOptions.ts": "d4e44b1410578876832ae8ba205b5e212154b8b940baa7f42bf72c4b5611ccde",
+    "frontend-modern/src/components/Workloads/useWorkloadRouteState.ts": "b669aed8d88287230a72d98d6916ed77c51455ea0c68fbda3d0623a66859944f",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "1d515d140099a05219f97773b988d065bc5784d95910626f0e797ff3acd1e283",
+    "frontend-modern/src/components/Workloads/workloadRouteModel.ts": "fb8d8d45ee9acce9359efefb2778a7a246946c84da25f502cbddb398d0ff02a6",
+    "frontend-modern/src/components/Workloads/workloadTopology.ts": "0917dfb1d9e7b1d65e3ff3afebc9a725b68d40188177fe7181547aebc9b1c3c7",
+    "frontend-modern/src/components/shared/contextualFocus.ts": "2c83a1ab5ca16c45d0c8a90bbdc0a7d75aedb1c1ec46b5513e31fbc26dfcab2e",
+    "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx": "76a2ccdbfa460492f4eb3b6cae91bda72d15915c6b172056c987e18a11116c94",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "33c6804b64cbacc0e770aabdd162a3e5121e0db5947d91fde95297c621772459",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "d4c7072f66a8a8ed50d920a18982ffef2ffca1fd972daa6471d3c0fe5857ef24"
   },
   "routes": [
-    "/qualification/disks/?theme=light&count=2",
-    "/qualification/disks/?theme=dark&count=24"
+    "/proxmox/overview"
   ],
   "viewports": [
     {
-      "width": 600,
-      "height": 500
+      "width": 1440,
+      "height": 1000
     },
     {
-      "width": 1200,
-      "height": 500
+      "width": 1440,
+      "height": 700
+    },
+    {
+      "width": 1024,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "2 and 24 mounts in light and dark themes",
-    "No nested clipping before scrolling; all mounts remain in outer flow"
+    "Default inventory and inert node hover",
+    "Selected and cleared node with matching guest count",
+    "Empty node and type-filtered empty result",
+    "Node and guest details expanded independently",
+    "Restored node selection after reload",
+    "Mobile filters expanded and collapsed",
+    "Node name default and hover without link decoration",
+    "Keyboard focus ring without underline",
+    "Selected and unselected guest scope",
+    "Separate desktop external website link"
   ],
   "interactions": [
-    "Focus Before disks, keyboard End then Tab",
-    "Verify final mount in viewport and After disks focused",
-    "Inspect full-page Firefox dark narrow and Chromium light desktop screenshots"
+    "Click node name, count and plain row cell to filter guests",
+    "Activate the node name with Enter and Space, and select with touch",
+    "Reveal and focus the guest heading when it starts below the viewport",
+    "Expand and collapse node details with the chevron without changing guest scope",
+    "Keep external links independent of row selection",
+    "Switch nodes and activate the selected node again to clear its scope with pointer, keyboard and touch",
+    "Preserve search, status and type filters while selecting and clearing nodes",
+    "Open guest details and dismiss with Escape while retaining node scope",
+    "Inspect desktop, intermediate and mobile pixels, including touch controls and empty results",
+    "Assert the selected node keeps its screen position and keyboard focus when deselected, including with a long open details panel",
+    "Select and switch minipc, delly and delly2 with an already visible guest heading and assert unchanged node screen position at all four viewports",
+    "Hover node name and inspect computed decoration and actual pixels",
+    "Tab and Shift+Tab to node name and inspect visible keyboard focus ring",
+    "Enter selects guests and Space clears node scope",
+    "Touch selects and clears the node on phone",
+    "Verify external website icon remains an independent link"
   ],
-  "command": "pulse-heavy-run -- node tests/qualification/disk-mounts/check.mjs",
-  "notes": "16 synthetic production-card/CSS cases passed in Firefox142.0.1 and Chromium141.0.7390.37. Screenshots retained in lane outcome screenshots directory. No full installed drawer or reporter Firefox140 ESR reproduction claimed. Production runtime unchanged during completion repair."
+  "command": "Playwright scripts check.cjs, adjacent.cjs, reveal.cjs, deselect.cjs and selection-scroll.cjs against the current local Vite server",
+  "notes": "Live inventory. Final source hashes match the browser-verified implementation. Screenshots and interaction scripts retained locally in the proxmox-node-row-review receipt directory. Rebased onto current main with byte-identical verified runtime files. Final presentation follow-up removes the node-name hover underline. The affected hover, focus, selection and touch matrix passed at1440x1000 and390x844, with other runtime content unchanged."
 }

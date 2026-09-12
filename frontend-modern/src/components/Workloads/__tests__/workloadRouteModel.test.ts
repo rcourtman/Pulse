@@ -62,6 +62,22 @@ describe('workloadRouteModel', () => {
     ]);
   });
 
+  it('includes empty inventory nodes and disambiguates them against occupied nodes', () => {
+    const options = buildWorkloadNodeOptions(
+      [makeGuest({ node: 'node-a', instance: 'cluster-a' })],
+      [
+        { name: 'node-a', instance: 'cluster-a' },
+        { name: 'node-a', instance: 'cluster-b' },
+        { name: 'empty', instance: 'cluster-a' },
+      ],
+    );
+    expect(options).toEqual([
+      { value: 'cluster-a-empty', label: 'empty' },
+      { value: 'cluster-a-node-a', label: 'node-a (cluster-a)' },
+      { value: 'cluster-b-node-a', label: 'node-a (cluster-b)' },
+    ]);
+  });
+
   it('builds app-container host options from Docker host ids and host labels', () => {
     const options = buildWorkloadNodeOptions([
       makeGuest({
