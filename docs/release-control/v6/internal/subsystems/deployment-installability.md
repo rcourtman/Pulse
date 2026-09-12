@@ -2643,21 +2643,23 @@ verification without Authenticode. Stable `v6.4.3` also skips SignPath under the
 standing unavailable policy from `v6.3.2` onward, with public Unknown Publisher
 disclosure and the existing signed integrity controls.
 
-The active prerelease `v6.4.4-beta.3` cut sets the repo-root `VERSION`, repo-root
+The active prerelease `v6.4.4-beta.4` cut sets the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
-Helm chart release metadata to the same `6.4.4-beta.3` release version. It
-follows `v6.4.4-beta.2` on the published `v6.4.4` candidate line. It remains
+Helm chart release metadata to the same `6.4.4-beta.4` release version. It
+follows published `v6.4.4-beta.2`; beta.3 did not complete publication. It remains
 beta because corrected Proxmox and PBS History target selection still requires
 installed observation. This prerelease keeps
 `rollback_version=v6.4.1`, publishes a versioned public GitHub prerelease plus
 versioned Docker and Helm artifacts, and does not move stable/latest install
 pointers or stable semver aliases. It retains beta.2 and adds canonical
 Proxmox node History coordinates plus standalone and uniquely correlated PBS
-agent targets. Missing disk data and ambiguous PBS identities continue to fail
+agent targets. A dedicated read-only statistics connection keeps current
+committed tier counts available when the bounded History pool is saturated.
+Missing disk data and ambiguous PBS identities continue to fail
 conservatively rather than fabricating chart data or guessing a target. The
-replacement also synchronizes monitoring lifecycle snapshots with startup and
-reset writes after the first beta.3 packet exposed a protected-check race and
-was rejected without publication.
+checkpoint also synchronizes monitoring lifecycle snapshots with startup and
+reset writes. It fixes forward from beta.3 after that tagged build failed
+performance qualification and remained unpublished.
 
 No governed mobile-facing path changed from `v6.4.1`, so the release
 decision is `no-mobile-impact`; no companion upload or public mobile-store
@@ -3122,10 +3124,10 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active prerelease `v6.4.4-beta.3` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.4.4-beta.3` until the next
+For the active prerelease `v6.4.4-beta.4` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.4.4-beta.4` until the next
 governed stable cut moves them forward. The published `v6.4.4-beta.2` cut
-pinned `6.4.4-beta.2` until this beta moved them forward. The stable promotion guard remains in force and
+pinned `6.4.4-beta.2`; beta.3 remained unpublished. The stable promotion guard remains in force and
 rejects leftover prerelease defaults. Each new release moves
 these two pins together with the repo-root `VERSION` and the Helm chart metadata
 in the same commit; a cut that leaves any of the four on a superseded value is a
