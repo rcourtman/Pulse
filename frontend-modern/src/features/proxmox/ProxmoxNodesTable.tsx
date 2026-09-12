@@ -519,7 +519,7 @@ export const ProxmoxNodesTable: Component<{
                               >
                                 <button
                                   type="button"
-                                  class={`block max-w-full truncate rounded-sm text-left hover:underline ${SUMMARY_ROW_ACTION_BUTTON_FOCUS_CLASS}`}
+                                  class={`block max-w-full truncate rounded-sm text-left ${SUMMARY_ROW_ACTION_BUTTON_FOCUS_CLASS}`}
                                   aria-label={`Show guests on ${name()}`}
                                   aria-controls="proxmox-guests-section"
                                   aria-pressed={isGuestFilterSelected()}
