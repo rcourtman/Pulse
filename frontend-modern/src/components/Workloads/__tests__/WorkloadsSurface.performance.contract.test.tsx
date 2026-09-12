@@ -1227,8 +1227,8 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadRouteStateSource).toContain('WORKLOADS_WORKLOAD_ROUTE_RESET_STATE');
       expect(workloadsWorkloadRouteStateSource).toContain('isWorkloadsRoute,');
       expect(workloadsWorkloadFilterOptionsSource).toContain("from './workloadFilterConfigModel'");
-      expect(workloadsWorkloadFilterOptionsSource).toContain(
-        'buildWorkloadNodeOptions(platformScopedGuests())',
+      expect(workloadsWorkloadFilterOptionsSource).toMatch(
+        /const workloadNodeOptions = createMemo\(\(\) =>\s*buildWorkloadNodeOptions\(\s*platformScopedGuests\(\),/,
       );
       expect(workloadsWorkloadFilterOptionsSource).not.toContain(
         'const onContextChange = (value: string) =>',
