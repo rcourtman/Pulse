@@ -1,5 +1,6 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import GithubSlugger from 'github-slugger';
 
 // Shipped documentation lives at /docs/<path>.md as a static asset. The
 // rendered viewer is the same path without the .md suffix, which cannot
@@ -148,6 +149,18 @@ export function rewriteDocLinks(html: string, currentDocPath: string): string {
   if (typeof document === 'undefined') return html;
   const container = document.createElement('div');
   container.innerHTML = html;
+  // Repository links use GitHub heading fragments. Marked emits headings
+  // without IDs, so generate them from sanitized text and keep duplicate
+  // headings distinct without colliding with explicit document anchors.
+  const slugger = new GithubSlugger();
+  const ids = new Set(Array.from(container.querySelectorAll('[id]'), (element) => element.id));
+  container.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach((heading) => {
+    if (heading.id) return;
+    let id = slugger.slug(heading.textContent ?? '');
+    while (ids.has(id)) id = slugger.slug(heading.textContent ?? '');
+    heading.id = id;
+    ids.add(id);
+  });
   wrapTables(container);
 
   container.querySelectorAll('a[href]').forEach((anchor) => {
@@ -167,6 +180,24 @@ export function rewriteDocLinks(html: string, currentDocPath: string): string {
   });
 
   return container.innerHTML;
+}
+
+/** Follow a fragment after the asynchronously loaded document is rendered. */
+export function scrollToDocFragment(container: HTMLElement, hash: string): void {
+  if (!hash || hash === '#') return;
+  let id: string;
+  try {
+    id = decodeURIComponent(hash.replace(/^#/, ''));
+  } catch {
+    return;
+  }
+  const target = Array.from(container.querySelectorAll<HTMLElement>('[id]')).find(
+    (element) => element.id === id,
+  );
+  if (!target) return;
+  target.tabIndex = -1;
+  target.scrollIntoView({ block: 'start' });
+  target.focus({ preventScroll: true });
 }
 
 /** First level-one heading, used as the document title. */

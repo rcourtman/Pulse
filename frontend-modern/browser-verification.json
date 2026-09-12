@@ -1,37 +1,41 @@
 {
   "version": 1,
-  "base_sha": "72809bc1cf71e2493d1f0c492b926110a969bdb4",
-  "verified_at": "2026-09-11T10:26:20.316799Z",
+  "base_sha": "c7c503994b097023cc56f65434d35b46beac7918",
+  "verified_at": "2026-09-12T20:24:17Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/cards/DisksCard.tsx"
+    "frontend-modern/src/features/docs/docMarkdown.ts",
+    "frontend-modern/src/pages/Docs.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/cards/DisksCard.tsx": "cdda554f93b7aecb925d803b0192260ef1a445065c501468a0412b824dc08028"
+    "frontend-modern/src/features/docs/docMarkdown.ts": "b6408f3475721522eb22a9b8910e34b326b1c4cec045931baec05f4683c97c80",
+    "frontend-modern/src/pages/Docs.tsx": "c6c4b066c6af8a4eb8f01a9e03c2f939ee1592867dea2bf0f328bf111f99f2eb"
   },
   "routes": [
-    "/qualification/disks/?theme=light&count=2",
-    "/qualification/disks/?theme=dark&count=24"
+    "/docs/API",
+    "/docs/API#resource-maintenance-and-operator-state"
   ],
   "viewports": [
     {
-      "width": 600,
-      "height": 500
+      "width": 1440,
+      "height": 900
     },
     {
-      "width": 1200,
-      "height": 500
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "2 and 24 mounts in light and dark themes",
-    "No nested clipping before scrolling; all mounts remain in outer flow"
+    "Final canonical and shipped API content agree",
+    "Maintenance endpoint table, example, expiry and preservation warnings readable",
+    "Fragment target visible and keyboard focused after delayed Markdown fetch",
+    "Malformed fragment leaves viewer usable"
   ],
   "interactions": [
-    "Focus Before disks, keyboard End then Tab",
-    "Verify final mount in viewport and After disks focused",
-    "Inspect full-page Firefox dark narrow and Chromium light desktop screenshots"
-  ],
-  "command": "pulse-heavy-run -- node tests/qualification/disk-mounts/check.mjs",
-  "notes": "16 synthetic production-card/CSS cases passed in Firefox142.0.1 and Chromium141.0.7390.37. Screenshots retained in lane outcome screenshots directory. No full installed drawer or reporter Firefox140 ESR reproduction claimed. Production runtime unchanged during completion repair."
+    "Hover and focus Alerts maintenance link, activate with Enter",
+    "Follow direct section URL and reload after delayed document fetch",
+    "Scroll to example and expiry instructions",
+    "Scroll narrow endpoint table horizontally and back",
+    "Inspect desktop and narrow screenshots with no page overflow"
+  ]
 }

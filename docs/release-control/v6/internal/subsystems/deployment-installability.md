@@ -15,6 +15,14 @@
 
 ## Purpose
 
+### Documentation heading dependency
+
+The frontend locks `github-slugger` 2.0.0 for GitHub-compatible documentation
+heading IDs. It adds no transitive dependency or installation script. The
+dependency-security proof verifies its integrity-backed lock entry and bounded
+installation footprint, while the shared documentation renderer tests cover
+heading behavior. Existing DOMPurify sanitization remains the HTML boundary.
+
 ### Docker SDK dependency compatibility
 
 The Docker consumers use Moby API v1.56.0 and client v0.6.0 together, without

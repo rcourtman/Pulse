@@ -20,6 +20,17 @@
 
 ## Purpose
 
+### Shipped documentation fragment navigation
+
+The shared documentation renderer assigns GitHub-compatible, document-local
+heading IDs from sanitized text, retaining explicit anchors and avoiding
+duplicate IDs. The documentation viewer follows fragments after asynchronous
+content rendering as well as in-page navigation. Fragment targets receive
+keyboard focus without entering the normal tab order. Missing or malformed
+fragments do not throw or move focus. The renderer and fragment helper are
+covered by `frontend-modern/src/features/docs/__tests__/docMarkdown.test.ts`,
+with direct-link, reload and keyboard navigation verified in the live viewer.
+
 ### Disk mount scrolling
 
 DisksCard keeps every supplied mount in its parent's scrolling flow. It must not
