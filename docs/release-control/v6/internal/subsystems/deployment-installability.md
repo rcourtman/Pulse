@@ -1138,27 +1138,22 @@ artifact-selection behaviour.
    integration-environment preparation as independent lanes after producing
    the frontend embed bundle. Its receipt must distinguish elapsed wall time
    from the sum of overlapping phase times.
-   The canonical public prerelease workflow may run its credential-free prepare
-   job on the PVE compilation identity so hosted-runner allocation cannot hold
-   the entire dependency graph. Stable releases must use GitHub-hosted runners
-   for preparation, the frontend embed bundle, and the backend race gate
-   regardless of whether Windows signing is required or a version-bound
-   unsigned-Windows exception applies. Runner selection is a release-channel
-   reliability decision and must not be coupled to signing policy. Prerelease
-   preparation must release the PVE identity before exact-SHA compilation
-   becomes eligible and must use a complete exact-SHA checkout: leaving
-   sparse-worktree state in the persistent runner can make the following
-   compilation checkout appear complete while required root files remain
-   absent.
+   Release preparation runs on a fresh GitHub-hosted VM for every channel.
+   Previous source execution must not influence admission or the outputs that
+   start the release dependency graph. It retains a complete exact-SHA checkout
+   and all snapshot, source and workflow identity checks. Frontend, backend and
+   exact-container qualification also use fresh hosted VMs for every channel,
+   independently of Windows-signing policy. Existing capacity planning, inner
+   watchdogs and qualification criteria remain unchanged.
    Signing, package publication, and release mutation authority must remain on
    hosted jobs. The bundle job must be independent from frontend quality so
    backend and browser-smoke lanes can start as soon as the bundle is available.
    Cross-platform compilation for every release channel runs once on the
-   dedicated, credential-free PVE compiler identity using only public embedding
-   keys in a separately dispatched GitHub Actions workflow run. The release
+   fresh GitHub-hosted compiler VM using only public embedding keys in a
+   separately dispatched GitHub Actions workflow run. The release
    candidate and SignPath workflow run must contain only GitHub-hosted jobs;
    its hosted handoff job may dispatch and wait for the isolated compiler run,
-   but the self-hosted job must never appear in the signing run. The compiler
+   and compilation must remain separate from signing authority. The compiler
    workflow must execute from the same exact workflow SHA as the parent release
    and must produce one exact-version, exact-source-SHA manifest
    covering the complete frontend and binary payload. That manifest may cover
@@ -1179,7 +1174,7 @@ artifact-selection behaviour.
    from an earlier sibling step, because GitHub Actions does not preserve
    step-local environment variables across steps.
    Private signing material and publication credentials must never enter the
-   PVE compilation job.
+   compilation job.
    Post-publication secure-runtime qualification must authenticate before it
    executes. `.github/workflows/qualify-secure-runtime-release.yml` may download
    caller-owned release assets only into a non-executable holding directory.
@@ -1198,7 +1193,7 @@ artifact-selection behaviour.
    useful test or compilation process has already completed.
    Private Pro compilation must additionally bind the exact Pulse and
    pulse-enterprise commits in a manifest-covered identity record. It runs once
-   on the dedicated credential-free PVE enterprise compiler for every channel,
+   on a fresh hosted VM for every channel without restored build caches,
    then crosses the same immutable GitHub artifact-id, archive-digest, run-id,
    head-SHA, and inner-manifest verification boundary before any hosted private
    signing or publication step. The compiler must build only the public Unified Agent matrix

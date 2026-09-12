@@ -1777,7 +1777,7 @@ func TestReleaseCandidateRequiresPlatformNativeAgentSigning(t *testing.T) {
 	assertFileContainsAll(t, repoFile(".github", "workflows", "create-release.yml"),
 		`require_macos_signing: true`,
 		`require_windows_signing: ${{ needs.prepare.outputs.require_windows_signing == 'true' }}`,
-		`!contains(inputs.version, '-') && 'ubuntu-24.04'`,
+		`runs-on: ubuntu-24.04`,
 		`unsigned_windows_exception:`,
 		`unsigned_windows_reason:`,
 		`windows_signing_backend: signpath`,
@@ -1855,13 +1855,8 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 		`uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2`,
 	}
 	containerJob := workflowJobBlock(t, string(qualifierWorkflowBytes), "qualify")
-	for _, needle := range []string{
-		`!contains(inputs.version, '-') && 'ubuntu-24.04'`,
-		"pulse-pve-build",
-	} {
-		if !strings.Contains(containerJob, needle) {
-			t.Fatalf("exact-candidate container qualification missing stable-hosted runner contract: %s", needle)
-		}
+	if !strings.Contains(containerJob, "runs-on: ubuntu-24.04") || strings.Contains(containerJob, "self-hosted") {
+		t.Fatal("container qualification must use a fresh hosted VM for every channel")
 	}
 	if !strings.Contains(string(candidateWorkflowBytes), "always() && inputs.qualify_containers && needs.build.result == 'success'") {
 		t.Fatal("standalone exact-candidate qualification must not inherit skipped native-signing dependencies")
@@ -3304,17 +3299,14 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	candidateBuildJob := workflowJobBlock(t, candidateWorkflow, "build")
 	compiledPayloadVerificationStep := workflowStepBlock(t, candidateBuildJob, "Verify exact-SHA compiled payload")
 
-	for _, needle := range []string{
-		`!contains(inputs.version, '-') && 'ubuntu-24.04'`,
-		`'ubuntu-24.04'`,
-		`pulse-pve-compile`,
-	} {
-		if !strings.Contains(prepareJob, needle) {
-			t.Fatalf("release preparation missing stable-hosted runner selection: %s", needle)
-		}
+	if !strings.Contains(prepareJob, "runs-on: ubuntu-24.04") ||
+		strings.Contains(prepareJob, "self-hosted") ||
+		strings.Contains(prepareJob, "pulse-pve-compile") ||
+		strings.Contains(prepareJob, "contains(inputs.version") {
+		t.Fatal("release preparation must use a fresh hosted VM for every channel")
 	}
 	if strings.Contains(prepareJob, "sparse-checkout") {
-		t.Fatal("release preparation must leave a complete worktree for the following compile job")
+		t.Fatal("release preparation must use the complete admitted source")
 	}
 	for _, needle := range []string{
 		`runs-on: ubuntu-24.04`,
@@ -3383,11 +3375,8 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		"frontend bundle": frontendBundleJob,
 		"backend tests":   backendJob,
 	} {
-		if !strings.Contains(job, `!contains(inputs.version, '-') && 'ubuntu-24.04'`) {
-			t.Fatalf("%s must stay GitHub-hosted for every stable release", label)
-		}
-		if !strings.Contains(job, "pulse-pve-") {
-			t.Fatalf("%s must retain PVE acceleration for prereleases", label)
+		if !strings.Contains(job, "runs-on: ubuntu-24.04") || strings.Contains(job, "self-hosted") {
+			t.Fatalf("%s must use a fresh hosted VM for every channel", label)
 		}
 		if strings.Contains(job, "require_windows_signing") || strings.Contains(job, "unsigned_windows_exception") {
 			t.Fatalf("%s runner selection must not depend on the Windows-signing decision", label)

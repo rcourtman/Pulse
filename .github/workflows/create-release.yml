@@ -97,9 +97,9 @@ jobs:
       actions: read
       contents: read
       pull-requests: read
-    # Stable releases use hosted runners regardless of their Windows-signing
-    # decision. Prereleases retain the credential-free PVE acceleration path.
-    runs-on: ${{ !contains(inputs.version, '-') && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64","pulse-pve-compile"]') }}
+    # Admission must start from a fresh VM for every release channel so earlier
+    # source execution cannot influence release preparation or its outputs.
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       version: ${{ steps.extract.outputs.version }}
@@ -400,7 +400,7 @@ jobs:
       - prepare
       - publication_trust_preflight
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
-    runs-on: ${{ !contains(inputs.version, '-') && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64","pulse-pve-build"]') }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout repository
@@ -497,15 +497,14 @@ jobs:
         working-directory: frontend-modern
         run: npm test -- --run src/utils/__tests__/agentInstallCommand.windows.test.ts
 
-  # The dedicated PVE test runner provides the memory needed to run two
-  # complete, disjoint internal/api shards while all other packages run in a
-  # third lane. It holds no signing or publication credentials.
+  # Every channel qualifies on a fresh hosted VM. The existing planner admits
+  # disjoint API shards from measured capacity without sharing prior job state.
   backend_tests:
     needs:
       - prepare
       - frontend_bundle
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
-    runs-on: ${{ !contains(inputs.version, '-') && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64","pulse-pve-tests"]') }}
+    runs-on: ubuntu-24.04
     # The rc.9 race-enabled API shards consumed more than 18 minutes on the PVE
     # runner before post-step accounting. Keep the outer job above the canonical
     # 45-minute API watchdog so checkout, bundle transfer, shard planning, and
