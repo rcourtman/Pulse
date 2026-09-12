@@ -139,36 +139,11 @@ func (m *Manager) cleanupStaleMaps() {
 		}
 	}
 
-	staleAlerts := make([]string, 0)
-	for storageKey, alert := range m.activeAlerts {
-		alertID := effectiveAlertID(alert, storageKey)
-		if alert != nil && now.Sub(alert.LastSeen) > staleThreshold {
-			staleAlerts = append(staleAlerts, alertID)
-		}
-	}
-	staleResolved := 0
-	for _, alertID := range staleAlerts {
-		alert, exists := m.getActiveAlertNoLock(alertID)
-		if !exists || alert == nil {
-			continue
-		}
-		log.Info().
-			Str("alertID", alertID).
-			Str("resourceName", alert.ResourceName).
-			Time("lastSeen", alert.LastSeen).
-			Dur("staleFor", now.Sub(alert.LastSeen)).
-			Msg("Auto-resolving stale alert - resource no longer being monitored")
-		m.clearAlertNoLock(alertID)
-		cleaned++
-		staleResolved++
-	}
-
-	if staleResolved > 0 {
-		m.saveActiveAlertsAsync("stale cleanup")
-		log.Info().
-			Int("count", staleResolved).
-			Msg("Auto-resolved stale alerts")
-	}
+	// LastSeen describes the last observation, not proof that the condition
+	// recovered or the resource was removed. Resolving active alerts here
+	// manufactured recovery notifications 24 hours after monitoring stopped.
+	// Leave their lifecycle to observed recovery, explicit resource/operator
+	// reconciliation, and the configured retention policy in Cleanup.
 
 	if cleaned > 0 {
 		log.Debug().
