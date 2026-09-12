@@ -2429,6 +2429,12 @@ func (p *PatrolService) reviewAndResolveAlertsState(ctx context.Context, state p
 	var alertsToReview []AlertInfo
 	stillFiring := 0
 	for _, alert := range activeAlerts {
+		// Pulse health has no inventory resource. Only its owning health
+		// evaluator can establish recovery; a missing "Pulse VM" cannot.
+		if strings.HasPrefix(alert.ID, alerts.SystemAlertIDPrefix) {
+			continue
+		}
+
 		if time.Since(alert.StartTime) < minAge {
 			continue
 		}
