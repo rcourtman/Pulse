@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "decision": "No screenshots are proposed because this checkpoint changes existing History data targeting and backend statistics connection isolation without changing layout. A static chart image cannot establish the API coordinates or database connection that supplied its series and counts. Exact request, plotting, saturation, and load checks are the relevant evidence.",
+  "captures": []
+}
