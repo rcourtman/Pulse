@@ -23,6 +23,7 @@ import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { TableCell, TableRow } from '@/components/shared/Table';
+import { SUMMARY_ROW_ACTION_BUTTON_FOCUS_CLASS } from '@/components/shared/summaryInteractionA11y';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { getNodeExternalUrl } from '@/utils/nodes';
 import { asTrimmedString } from '@/utils/stringUtils';
@@ -46,7 +47,10 @@ import {
   getPlatformTableCellClassForKind,
   type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
-import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import {
+  getPlatformResourceDetailRowInteractionProps,
+  PlatformResourceDetailToggleButton,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
 import { type ProxmoxEstateTopology } from '@/features/platformPage/platformEstateOverviewModel';
 import { type WorkloadsMetricDisplayMode } from '@/components/Workloads/workloadsFilterModel';
 import { type WorkloadTableMetricHistoryRange } from '@/components/Workloads/workloadMetricHistoryModel';
@@ -204,6 +208,8 @@ export const ProxmoxNodesTable: Component<{
   emptyDescription: string;
   topology?: ProxmoxEstateTopology;
   inventoryCountsVisible?: Accessor<boolean>;
+  onShowGuests?: (node: Resource) => void;
+  guestFilterNodeId?: Accessor<string | null>;
 }> = (props) => {
   const breakpoint = useBreakpoint();
   const inventoryCountsVisible = () => props.inventoryCountsVisible?.() ?? true;
@@ -375,6 +381,12 @@ export const ProxmoxNodesTable: Component<{
                 const version = () => asTrimmedString(getResourceVersion(node));
                 const cluster = () => getResourceClusterLabel(node);
                 const counts = () => countGuestsForNode(props.guests, node);
+                const isGuestFilterSelected = () => props.guestFilterNodeId?.() === node.id;
+                const showGuests = () => props.onShowGuests?.(node);
+                const rowInteraction = getPlatformResourceDetailRowInteractionProps({
+                  expanded: false,
+                  onToggle: showGuests,
+                });
                 const indicator = () => getSimpleStatusIndicator(node.status);
                 const connectionHealth = createMemo(() =>
                   (asTrimmedString(node.proxmox?.connectionHealth) ?? '').toLowerCase(),
@@ -484,6 +496,7 @@ export const ProxmoxNodesTable: Component<{
                               expanded={isSelected()}
                               resourceLabel={name()}
                               controlsId={detailRowId()}
+                              hideWhenRowTappableOnMobile={false}
                               onToggle={toggleNodeDrawer}
                             />
                             <StatusDot
@@ -504,7 +517,24 @@ export const ProxmoxNodesTable: Component<{
                                     : `Open ${name()} web interface`
                                 }
                               >
-                                {visibleNodeLabel()}
+                                <button
+                                  type="button"
+                                  class={`block max-w-full truncate rounded-sm text-left ${SUMMARY_ROW_ACTION_BUTTON_FOCUS_CLASS}`}
+                                  aria-label={`Show guests on ${name()}`}
+                                  aria-controls="proxmox-guests-section"
+                                  aria-pressed={isGuestFilterSelected()}
+                                  title={
+                                    isGuestFilterSelected()
+                                      ? `Clear guest filter for ${name()}`
+                                      : `Show guests on ${name()}`
+                                  }
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    showGuests();
+                                  }}
+                                >
+                                  {visibleNodeLabel()}
+                                </button>
                               </ResourceNameWithWebInterfaceLink>
                             </div>
                             <Show when={!isOnline()}>
@@ -721,7 +751,8 @@ export const ProxmoxNodesTable: Component<{
                       } ${isOnline() ? '' : 'opacity-60'}`}
                       data-proxmox-host-row={node.id}
                       data-workload-alert-accent={alertAccentTone()}
-                      onClick={toggleNodeDrawer}
+                      data-summary-row-active={isGuestFilterSelected() ? 'true' : undefined}
+                      onClick={rowInteraction.onClick}
                     >
                       <For each={visibleColumns()}>{(column) => renderColumnCell(column)}</For>
                     </TableRow>

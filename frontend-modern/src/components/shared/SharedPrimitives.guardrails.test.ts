@@ -7700,6 +7700,12 @@ describe('shared primitive guardrails', () => {
     ]) {
       expect(source).toContain('PlatformResourceDetailToggleButton');
     }
+    // A row with a different primary action must retain the shared disclosure.
+    expect(proxmoxNodesTableSource).toContain('hideWhenRowTappableOnMobile={false}');
+    expect(proxmoxNodesTableSource).not.toContain('<SummaryRowActionButton');
+    expect(platformResourceDetailTableRowSource).toContain(
+      'hideWhenRowTappableOnMobile={props.hideWhenRowTappableOnMobile ?? true}',
+    );
     expect(agentsMachinesTableSource).not.toContain('data-agent-machine-expand-icon');
   });
 

@@ -646,6 +646,14 @@ the page supplies it through the Workloads `tableTitle` slot and the shared
 states. This heading alignment changes neither workload backup scope nor the
 storage/recovery evidence carried by the adjacent Backup column and Backups
 tab.
+The overview's node-row action selects the shared workload node scope and
+reveals the guest section. The title names the selected node and reports the
+filtered guest count, including zero. Activating the selected node again or
+using its Show all nodes control clears only
+the node scope, preserving search, status and type filters. These navigation
+actions do not change backup ownership or recovery evidence. Verify selection,
+clear and independent node disclosure in the Proxmox table tests and the
+current `frontend-modern/browser-verification.json` interaction matrix.
 Those counts and layout controls must not imply
 protection, verification, or restore readiness beyond the evidence held by the
 workflow-owned Storage, Backups, Ceph, and Mail surfaces.

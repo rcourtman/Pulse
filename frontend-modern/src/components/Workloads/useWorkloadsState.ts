@@ -251,6 +251,24 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     ),
   );
 
+  const infrastructureNodes = createMemo<Node[]>(() => {
+    const merged = new Map<string, Node>();
+    props.nodes.forEach((node) => merged.set(node.id, node));
+
+    if (workloadsEnabled()) {
+      infrastructureResources()
+        .filter(isProxmoxNodeResource)
+        .map(nodeFromResource)
+        .filter((node): node is Node => Boolean(node))
+        .forEach((node) => {
+          const existing = merged.get(node.id);
+          merged.set(node.id, existing ? { ...existing, ...node } : node);
+        });
+    }
+
+    return Array.from(merged.values());
+  });
+
   const {
     clusterFilterConfig,
     clusterOptions,
@@ -282,6 +300,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     containerRuntimeOptions,
   } = useWorkloadRouteState({
     allGuests,
+    nodes: infrastructureNodes,
     forcedPlatform: props.forcedPlatform,
     forcedViewMode: props.forcedViewMode,
     showFilters,
@@ -356,23 +375,6 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     routeStateEnabled: props.routeStateEnabled,
   });
 
-  const infrastructureNodes = createMemo<Node[]>(() => {
-    const merged = new Map<string, Node>();
-    props.nodes.forEach((node) => merged.set(node.id, node));
-
-    if (workloadsEnabled()) {
-      infrastructureResources()
-        .filter(isProxmoxNodeResource)
-        .map(nodeFromResource)
-        .filter((node): node is Node => Boolean(node))
-        .forEach((node) => {
-          const existing = merged.get(node.id);
-          merged.set(node.id, existing ? { ...existing, ...node } : node);
-        });
-    }
-
-    return Array.from(merged.values());
-  });
   const workloadMemoryDisplayBasis: Accessor<WorkloadsMemoryDisplayBasis> =
     props.memoryDisplayBasis ?? (() => 'guest');
   const memoryParentNodeByGuestId = createMemo(() =>

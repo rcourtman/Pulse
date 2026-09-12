@@ -76,6 +76,9 @@ function WorkloadInventoryIssueList(props: { issues: readonly WorkloadInventoryS
 export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
   const state = props.state ?? useWorkloadsState(props);
   const visibleInventoryIssues = createMemo(() => {
+    // A filtered-empty table is not an inventory outage. Once inventory is
+    // present, unrelated source failures cannot explain an empty selection.
+    if (state.allGuests().length > 0) return [];
     const issues = state.workloadInventoryIssues?.() ?? [];
     const forcedPlatform = props.forcedPlatform?.trim().toLowerCase();
     const platformIssueTypes = forcedPlatform ? PLATFORM_ISSUE_TYPES[forcedPlatform] : undefined;
