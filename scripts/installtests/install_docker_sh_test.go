@@ -437,6 +437,9 @@ func TestInstallDockerProofTracksPrereleaseContract(t *testing.T) {
 	if version == "6.4.4-beta.4" {
 		comparisonLine = "It follows published `v6.4.4-beta.2`; beta.3 did not complete publication."
 	}
+	if version == "6.4.4-beta.5" {
+		comparisonLine = "It follows published `v6.4.4-beta.2`; beta.3 and beta.4 did not complete publication."
+	}
 	if version == "6.4.0-rc.10" {
 		comparisonLine = "The `v6.4.0-rc.9` release staged an immutable draft, tag, and exact-version artifacts but did not activate publicly"
 	}

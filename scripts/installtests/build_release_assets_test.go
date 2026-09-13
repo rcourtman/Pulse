@@ -1296,7 +1296,7 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 	)
 	// The fixed-forward History checkpoint has deliberately narrower release copy.
 	// Keep shared install safety assertions above and inherited repairs below.
-	if version == "6.4.4-beta.4" {
+	if version == "6.4.4-beta.4" || version == "6.4.4-beta.5" {
 		assertFileContainsAllNormalized(t, releaseNotesPath,
 			"Proxmox node History uses the right source",
 			"PBS History supports more installed shapes",
@@ -1315,7 +1315,7 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 	}
 	assertFileDoesNotContain(t, releaseNotesPath, "## Fixes")
 	comparisonSummary := "This changelog describes the changes since `v" + comparisonVersion + "`"
-	if version == "6.4.4-beta.4" {
+	if version == "6.4.4-beta.4" || version == "6.4.4-beta.5" {
 		comparisonSummary = "This changelog describes the changes since published `v6.4.4-beta.2`."
 	}
 	if version == "6.4.0-rc.10" {
