@@ -2819,6 +2819,21 @@ class CandidatePublicationBoundaryTest(unittest.TestCase):
         expression = re.sub(r"!(?!=)", "not ", expression)
         return bool(eval(expression, {"__builtins__": {}, "startsWith": lambda value, prefix: value.startswith(prefix)}))
 
+    def test_qualified_beta_tag_survives_intentionally_skipped_ancestor(self) -> None:
+        outcomes = dict.fromkeys(self.jobs, "success")
+        outcomes["integration_tests"] = "skipped"
+        self.assertTrue(self.condition("candidate_qualification", outcomes))
+        # Actions applies implicit success() when no status function is present.
+        # A skipped ancestor therefore prevents the writer despite the explicit
+        # qualification result. Model that status gate as well as its expression.
+        writer = self.jobs["publish_release_tag"]
+        has_status = bool(re.search(r"\b(always|success|failure|cancelled)\(", writer["if"]))
+        self.assertTrue(has_status and self.condition("publish_release_tag", outcomes))
+        for dependency in writer["needs"]:
+            for state in ("failure", "cancelled", "skipped"):
+                with self.subTest(dependency=dependency, state=state):
+                    self.assertFalse(self.condition("publish_release_tag", outcomes | {dependency: state}))
+
     def test_failed_candidate_cannot_reach_any_public_version_writer(self) -> None:
         required = {
             "prepare", "publication_trust_preflight", "build_release_candidate",
