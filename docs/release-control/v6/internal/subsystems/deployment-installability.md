@@ -5166,3 +5166,19 @@ in `scripts/release_control/release_promotion_policy_test.py` models the skipped
 ancestor and all adverse direct-prerequisite outcomes. Existing writer tests retain
 the candidate-failure and draft barriers. Source validation is not hosted recovery
 or evidence that a previously frozen workflow has changed.
+
+### Workflow cancellation at the public writer boundary
+
+Explicit status guards for tag, Docker and Helm publication, readiness, convergence
+dispatch and activation use `!cancelled()`, not `always()`. A cancelled workflow
+must not start or retain these jobs merely because its prerequisites already
+succeeded. Successful beta qualification still admits intentionally skipped
+ancestors; every existing prerequisite and immutable-identity check is retained.
+Cancellation cannot undo an external write already completed; exact-output
+reconciliation remains required before recovery.
+
+`CandidatePublicationBoundaryTest.test_workflow_cancellation_blocks_completed_prerequisite_writers`
+models workflow cancellation independently of successful needs, covers all six
+boundaries and retains the final `always()` evidence/verdict join. Evidence
+uploads and cleanup remain unchanged. This is source-policy regression proof,
+not hosted cancellation acceptance or authorization to retry a frozen workflow.

@@ -2807,7 +2807,7 @@ class CandidatePublicationBoundaryTest(unittest.TestCase):
     def setUp(self) -> None:
         self.jobs = yaml.load(read(".github/workflows/create-release.yml"), Loader=UniqueKeyLoader)["jobs"]
 
-    def condition(self, job: str, results: dict[str, str], *, draft: bool = False) -> bool:
+    def condition(self, job: str, results: dict[str, str], *, draft: bool = False, cancelled: bool = False) -> bool:
         # Execute the workflow's Boolean condition with explicit job outcomes.
         # This intentionally fails if the workflow adds an unsupported expression.
         expression = self.jobs[job]["if"].removeprefix("${{").removesuffix("}}").strip()
@@ -2815,6 +2815,7 @@ class CandidatePublicationBoundaryTest(unittest.TestCase):
         expression = expression.replace("needs.prepare.outputs.version", repr("6.4.4-beta.9"))
         expression = expression.replace("needs.prepare.outputs.historical_asset_backfill_only", repr("false"))
         expression = expression.replace("github.event.inputs.draft_only", repr(str(draft).lower()))
+        expression = expression.replace("cancelled()", repr(cancelled))
         expression = expression.replace("always()", "True").replace("&&", " and ").replace("||", " or ")
         expression = re.sub(r"!(?!=)", "not ", expression)
         return bool(eval(expression, {"__builtins__": {}, "startsWith": lambda value, prefix: value.startswith(prefix)}))
@@ -2833,6 +2834,18 @@ class CandidatePublicationBoundaryTest(unittest.TestCase):
             for state in ("failure", "cancelled", "skipped"):
                 with self.subTest(dependency=dependency, state=state):
                     self.assertFalse(self.condition("publish_release_tag", outcomes | {dependency: state}))
+
+    def test_workflow_cancellation_blocks_completed_prerequisite_writers(self) -> None:
+        good = dict.fromkeys(self.jobs, "success")
+        for writer in ("publish_release_tag", "publish_docker", "publish_helm_chart",
+                       "release_readiness", "dispatch_release_convergence", "activate_release"):
+            with self.subTest(writer=writer):
+                self.assertTrue(self.condition(writer, good))
+                # Cancellation is workflow state, not a changed needs.result:
+                # all prerequisites may already have completed successfully.
+                self.assertFalse(self.condition(writer, good, cancelled=True))
+        # Keep the final evidence/verdict join available after cancellation.
+        self.assertTrue(self.condition("release_commit_verdict", good, cancelled=True))
 
     def test_failed_candidate_cannot_reach_any_public_version_writer(self) -> None:
         required = {
