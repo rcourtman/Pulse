@@ -6066,6 +6066,7 @@
             "exact_files": [
               "internal/api/resourceapi/resources_test.go",
               "internal/monitoring/monitor_polling_test.go",
+              "internal/truenas/alert_args_test.go",
               "internal/truenas/client_api_shapes_test.go",
               "internal/truenas/client_test.go",
               "internal/truenas/contract_test.go",

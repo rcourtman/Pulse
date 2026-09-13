@@ -1265,15 +1265,18 @@ func (c *Client) getAlertsREST(ctx context.Context) ([]Alert, error) {
 			return nil, fmt.Errorf("parse alert %q datetime: %w", id, err)
 		}
 
-		uncorrected, uncorrectedReported, availableSpare, availableReported := smartAlertEvidenceFromArgs(item.Class, item.Args)
+		// Legacy alert args may be any JSON value. Only objects provide typed
+		// disk identity or SMART evidence; formatted text remains the message.
+		args, _ := item.Args.(map[string]any)
+		uncorrected, uncorrectedReported, availableSpare, availableReported := smartAlertEvidenceFromArgs(item.Class, args)
 		alerts = append(alerts, Alert{
 			ID:                          id,
 			Level:                       strings.TrimSpace(item.Level),
 			Message:                     strings.TrimSpace(item.Formatted),
 			Source:                      strings.TrimSpace(item.Source),
 			Class:                       strings.TrimSpace(item.Class),
-			DiskName:                    strings.TrimSpace(readStringAny(item.Args, "name", "disk", "device")),
-			DiskSerial:                  strings.TrimSpace(readStringAny(item.Args, "serial", "serial_number", "serialNumber")),
+			DiskName:                    strings.TrimSpace(readStringAny(args, "name", "disk", "device")),
+			DiskSerial:                  strings.TrimSpace(readStringAny(args, "serial", "serial_number", "serialNumber")),
 			SMARTUncorrectedErrors:      uncorrected,
 			SMARTUncorrectedReported:    uncorrectedReported,
 			SMARTAvailableSpare:         availableSpare,
@@ -4533,7 +4536,7 @@ type alertResponse struct {
 	Formatted string          `json:"formatted"`
 	Source    string          `json:"source"`
 	Class     string          `json:"klass"`
-	Args      map[string]any  `json:"args"`
+	Args      any             `json:"args"`
 	Dismissed bool            `json:"dismissed"`
 	Datetime  struct {
 		Date json.RawMessage `json:"$date"`
