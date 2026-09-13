@@ -1417,8 +1417,9 @@ jobs:
       - prepare
       - candidate_qualification
     # Beta qualification deliberately permits skipped integration ancestors.
-    # Override implicit success(), but never bypass either direct prerequisite.
-    if: ${{ always() && needs.prepare.result == 'success' && needs.candidate_qualification.result == 'success' }}
+    # Override implicit success(), but reject workflow cancellation even after
+    # both direct prerequisites have succeeded.
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.candidate_qualification.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -1457,7 +1458,7 @@ jobs:
       - prepare
       - build_release_candidate
       - create_release
-    if: ${{ always() && needs.candidate_qualification.result == 'success' && needs.publish_release_tag.result == 'success' && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+    if: ${{ !cancelled() && needs.candidate_qualification.result == 'success' && needs.publish_release_tag.result == 'success' && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
     permissions:
       contents: read
       packages: write
@@ -1540,7 +1541,7 @@ jobs:
       - publish_release_tag
       - prepare
       - validate_release_assets
-    if: ${{ always() && needs.candidate_qualification.result == 'success' && needs.publish_release_tag.result == 'success' && needs.prepare.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+    if: ${{ !cancelled() && needs.candidate_qualification.result == 'success' && needs.publish_release_tag.result == 'success' && needs.prepare.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
     permissions:
       contents: write
       packages: write
@@ -1560,7 +1561,7 @@ jobs:
       - publish_release_tag
       - publish_docker
       - publish_helm_chart
-    if: ${{ always() && needs.candidate_qualification.result == 'success' && needs.publish_release_tag.result == 'success' && needs.publish_docker.result == 'success' && needs.publish_helm_chart.result == 'success' }}
+    if: ${{ !cancelled() && needs.candidate_qualification.result == 'success' && needs.publish_release_tag.result == 'success' && needs.publish_docker.result == 'success' && needs.publish_helm_chart.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -1707,7 +1708,7 @@ jobs:
       - prepare
       - create_release
       - stage_private_pro_runtime
-    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) }}
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -1781,7 +1782,7 @@ jobs:
       - release_readiness
       - dispatch_release_convergence
       - stage_private_pro_runtime
-    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.release_readiness.result == 'success' && needs.dispatch_release_convergence.result == 'success' }}
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.release_readiness.result == 'success' && needs.dispatch_release_convergence.result == 'success' }}
     continue-on-error: true
     runs-on: ubuntu-24.04
     timeout-minutes: 15
