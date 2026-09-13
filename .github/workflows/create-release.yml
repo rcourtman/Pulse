@@ -1416,7 +1416,9 @@ jobs:
     needs:
       - prepare
       - candidate_qualification
-    if: ${{ needs.candidate_qualification.result == 'success' }}
+    # Beta qualification deliberately permits skipped integration ancestors.
+    # Override implicit success(), but never bypass either direct prerequisite.
+    if: ${{ always() && needs.prepare.result == 'success' && needs.candidate_qualification.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

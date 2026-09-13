@@ -5464,3 +5464,18 @@ draft shell with recording fake APIs. It must reject changed/unknown/branch
 historical targets before any API mutation, admit same-identity recovery and
 private replacement, and preserve activated/published refusals. This is local
 workflow proof, not publication or installed acceptance.
+
+### Qualified publication after optional skipped checks
+
+The public tag writer must use an explicit status function and require both
+preparation and candidate qualification to succeed. Beta policy can intentionally
+skip integration tests upstream of qualification; GitHub's implicit `success()`
+must not suppress tag publication after the qualification join accepts that
+skip. Failure, cancellation or skipping of either direct prerequisite must still
+block publication. This changes no qualification requirement or immutable identity.
+
+Regression: `CandidatePublicationBoundaryTest.test_qualified_beta_tag_survives_intentionally_skipped_ancestor`
+in `scripts/release_control/release_promotion_policy_test.py` models the skipped
+ancestor and all adverse direct-prerequisite outcomes. Existing writer tests retain
+the candidate-failure and draft barriers. Source validation is not hosted recovery
+or evidence that a previously frozen workflow has changed.
