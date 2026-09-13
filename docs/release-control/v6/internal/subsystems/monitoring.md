@@ -4027,3 +4027,20 @@ and acknowledgement, requiring no queued notification. Existing routing,
 quiet-hours and cooldown tests now use real active manager occurrences rather
 than fabricated inactive alerts. This is callback-boundary proof, not a claim
 that already admitted or provider-accepted deliveries can be recalled.
+
+### Physical-disk provider identity round trip
+
+The monitor's disk readback preserves the Proxmox source ID separately from
+its canonical resource ID. Skipped physical-disk polls may refresh SMART data
+but must not feed canonical hashes into source inventory, changing identity at
+each subsequent projection. Views without Proxmox source metadata retain the
+legacy ID fallback. This does not relax cross-host/device correlation, migrate
+old duplicates, change agent authority, or redefine serial-less disk matching.
+
+`TestPhysicalDiskSkippedPollPreservesSourceIdentity` in
+`internal/monitoring/physical_disk_roundtrip_test.go` drives eight real skipped
+polls and adapter rebuilds for both path-shaped and bare device names, checking
+provider keys, canonical IDs, JSON projection, temperature/size/cadence, separate
+nodes/controller members, and confirmed inventory removal.
+`TestPhysicalDiskReadbackSourceIDFallback` covers missing source metadata.
+This is synthetic runtime evidence, not USB hardware or reporter acceptance.

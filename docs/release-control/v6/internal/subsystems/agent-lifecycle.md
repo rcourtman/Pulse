@@ -8039,3 +8039,20 @@ an isolated copy of the same test binary. Joining that probe's handler does not
 join upgraded handlers from preceding tests; process isolation keeps their final
 log writes from racing with the hook. The child retains race instrumentation and
 an explicit timeout, and the original server still fails the ordering assertion.
+
+### Physical-disk provider identity round trip
+
+The monitor's disk readback preserves the Proxmox source ID separately from
+its canonical resource ID. Skipped physical-disk polls may refresh SMART data
+but must not feed canonical hashes into source inventory, changing identity at
+each subsequent projection. Views without Proxmox source metadata retain the
+legacy ID fallback. This does not relax cross-host/device correlation, migrate
+old duplicates, change agent authority, or redefine serial-less disk matching.
+
+`TestPhysicalDiskSkippedPollPreservesSourceIdentity` in
+`internal/monitoring/physical_disk_roundtrip_test.go` drives eight real skipped
+polls and adapter rebuilds for both path-shaped and bare device names, checking
+provider keys, canonical IDs, JSON projection, temperature/size/cadence, separate
+nodes/controller members, and confirmed inventory removal.
+`TestPhysicalDiskReadbackSourceIDFallback` covers missing source metadata.
+This is synthetic runtime evidence, not USB hardware or reporter acceptance.
