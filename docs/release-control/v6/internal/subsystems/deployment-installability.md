@@ -2638,11 +2638,10 @@ verification without Authenticode. Stable `v6.4.3` also skips SignPath under the
 standing unavailable policy from `v6.3.2` onward, with public Unknown Publisher
 disclosure and the existing signed integrity controls.
 
-The active prerelease `v6.4.4-beta.5` cut sets the repo-root `VERSION`, repo-root
+The active prerelease `v6.4.4-beta.4` cut sets the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
-Helm chart release metadata to the same `6.4.4-beta.5` release version. It
-follows published `v6.4.4-beta.2`; beta.3 and beta.4 did not complete
-publication. It remains
+Helm chart release metadata to the same `6.4.4-beta.4` release version. It
+follows published `v6.4.4-beta.2`; beta.3 did not complete publication. It remains
 beta because corrected Proxmox and PBS History target selection still requires
 installed observation. This prerelease keeps
 `rollback_version=v6.4.1`, publishes a versioned public GitHub prerelease plus
@@ -3120,10 +3119,10 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active prerelease `v6.4.4-beta.5` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.4.4-beta.5` until the next
+For the active prerelease `v6.4.4-beta.4` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.4.4-beta.4` until the next
 governed stable cut moves them forward. The published `v6.4.4-beta.2` cut
-pinned `6.4.4-beta.2`; beta.3 and beta.4 remained unpublished. The stable promotion guard remains in force and
+pinned `6.4.4-beta.2`; beta.3 remained unpublished. The stable promotion guard remains in force and
 rejects leftover prerelease defaults. Each new release moves
 these two pins together with the repo-root `VERSION` and the Helm chart metadata
 in the same commit; a cut that leaves any of the four on a superseded value is a
@@ -5183,15 +5182,3 @@ models workflow cancellation independently of successful needs, covers all six
 boundaries and retains the final `always()` evidence/verdict join. Evidence
 uploads and cleanup remain unchanged. This is source-policy regression proof,
 not hosted cancellation acceptance or authorization to retry a frozen workflow.
-
-### Fixed-forward beta.5 packet verification
-
-The beta.5 History checkpoint retains the narrower beta.4 History scope, not
-the older broad release-note headings. Packet assertions must still require
-Proxmox and PBS targeting, statistics isolation, installed-observation limits,
-inherited repairs, rollback instructions and aligned install metadata.
-Publication lineage is independent of numerical prerelease order: beta.5
-follows published beta.2, while beta.3 and beta.4 did not complete publication.
-The current packet and Docker prerelease contract tests enforce these distinct
-requirements; accepting beta.5 must not claim beta.4 was published or waive
-exact-source qualification.
