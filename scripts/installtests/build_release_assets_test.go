@@ -1302,6 +1302,11 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("validate customer release body: %v\n%s", err, output)
 		}
+		visualCmd := exec.Command("python3", repoFile("scripts", "release_control", "release_note_visuals.py"),
+			"validate", "--plan", releaseNotesPath+".visuals.json")
+		if output, err := visualCmd.CombinedOutput(); err != nil {
+			t.Fatalf("validate committed release visual plan: %v\n%s", err, output)
+		}
 		if releaseBranch != "release/v6.4" {
 			t.Fatalf("bounded TrueNAS preview must remain on release/v6.4, got %q", releaseBranch)
 		}
