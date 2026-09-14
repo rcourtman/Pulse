@@ -783,3 +783,13 @@ If conflicts appear:
 3. `PRE_RELEASE_CHECKLIST.md` and
    `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` own execution proof for a
    specific promotion.
+
+### 6.4.5 maintenance preview routing
+
+Version 6.4.5 uses `release/v6.4` for beta, RC and stable source. The first beta
+carries the bounded TrueNAS CORE alert parsing fix and inherited release-line
+repairs without merging unrelated main development. This routing selects no
+stable release and waives no observation, source-pair, qualification, signing,
+artifact-integrity or installed recovery requirement. Failed earlier candidates
+remain retained evidence; a new version is not proof that their failures were
+resolved.

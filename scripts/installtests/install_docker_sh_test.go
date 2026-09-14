@@ -450,6 +450,14 @@ func TestInstallDockerProofTracksPrereleaseContract(t *testing.T) {
 		"The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode. Stable `v"+stableTarget+"` also skips SignPath under the standing unavailable policy",
 		"For the active prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
 	)
+	if version == "6.4.5-beta.1" {
+		assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
+			"no previous 6.4.5 candidate is published",
+			"The previous public preview remains v6.4.4-beta.2",
+			"Fresh exact-source qualification, source pairing and installed rollback evidence remain mandatory",
+		)
+	}
+
 	if version == "6.3.0-rc.6" {
 		assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
 			"For `v6.3.0-rc.6`, the release path retains credential-free PVE compilation while requiring the measured memory floor for API race shards after a bounded admission wait.",

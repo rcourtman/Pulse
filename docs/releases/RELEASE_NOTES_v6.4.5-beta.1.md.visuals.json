@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "decision": "No new layout is introduced. Synthetic snapshot/alert decoding checks and live installed data continuity are the relevant evidence; static screenshots cannot prove either.",
+  "captures": []
+}
