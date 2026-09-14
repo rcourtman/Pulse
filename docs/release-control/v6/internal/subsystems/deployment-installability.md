@@ -5203,3 +5203,29 @@ Subsequent release selection must set all versioned install surfaces together,
 retain the known stable rollback target and pass the required private source-pair,
 qualification, artifact-integrity and installed upgrade/recovery checks. No
 source-only contract restoration permits retagging an existing release.
+
+### Bounded TrueNAS preview preparation
+
+The active prerelease `v6.4.5-beta.1` cut sets the repo-root `VERSION`, repo-root
+`docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
+Helm chart release metadata to the same `6.4.5-beta.1` release version.
+It follows stable `v6.4.1` and opens the published `v6.4.5` candidate line.
+Here that comparison identifies the stable rollback baseline; no previous
+6.4.5 candidate is published. The previous public preview remains v6.4.4-beta.2.
+This prerelease keeps `rollback_version=v6.4.1`, publishes a versioned public
+GitHub prerelease plus versioned Docker and Helm artifacts, and does not move
+stable/latest install pointers or stable semver aliases. These are publication
+requirements, not evidence that the unqualified preparation has shipped.
+No governed mobile-facing path changed from `v6.4.1`, so the release decision
+is `no-mobile-impact`; no companion upload or public mobile-store rollout is
+part of this candidate. The prerelease Windows path retains exact-SHA,
+checksum, and detached-signature verification without Authenticode. Stable
+`v6.4.5` also skips SignPath under the standing unavailable policy; no stable
+promotion is selected or authorized by this beta preparation.
+For the active prerelease `v6.4.5-beta.1` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.4.5-beta.1` until the next
+governed stable cut moves them forward. A later preview must realign those pins
+through the same reviewed source process before publication. The new customer
+scope is TrueNAS alert shape tolerance, with inherited History repairs and
+existing adverse qualification evidence retained. Fresh exact-source
+qualification, source pairing and installed rollback evidence remain mandatory.

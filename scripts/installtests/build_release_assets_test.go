@@ -1294,6 +1294,17 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"does not require a companion mobile release",
 		"The rollback target is stable `v"+previous+"`",
 	)
+	if version == "6.4.5-beta.1" {
+		if releaseBranch != "release/v6.4" {
+			t.Fatalf("bounded TrueNAS preview must remain on release/v6.4, got %q", releaseBranch)
+		}
+		assertFileContainsAllNormalized(t, releaseNotesPath,
+			"TrueNAS CORE snapshots survive legacy alert shapes",
+			"The previous published preview is `v6.4.4-beta.2`",
+			"Physical-appliance and reporter acceptance remain unconfirmed",
+			"version number is not evidence that their stability failures were resolved",
+		)
+	}
 	// The fixed-forward History checkpoint has deliberately narrower release copy.
 	// Keep shared install safety assertions above and inherited repairs below.
 	if version == "6.4.4-beta.4" {
