@@ -78,7 +78,9 @@ export function WebhookConfigList(props: WebhookConfigListProps) {
               </span>
               <span class="rounded bg-surface-alt px-2 py-0.5 text-base-content">
                 {getAlertDestinationSeverityLabel(
-                  webhook.minimumSeverity === 'critical' ? 'critical' : 'all',
+                  webhook.minimumSeverity === 'critical' || webhook.minimumSeverity === 'warning'
+                    ? webhook.minimumSeverity
+                    : 'all',
                 )}
               </span>
               <For each={webhook.tagFilter ?? []}>
