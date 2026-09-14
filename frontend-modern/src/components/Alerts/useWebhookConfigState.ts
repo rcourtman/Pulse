@@ -185,7 +185,9 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
       mention: webhook.mention || '',
       tagFilter: webhook.tagFilter ?? [],
       tagFilterMode: webhook.tagFilterMode === 'any' ? 'any' : 'all',
-      minimumSeverity: webhook.minimumSeverity === 'critical' ? 'critical' : 'all',
+      minimumSeverity: webhook.minimumSeverity === 'critical' || webhook.minimumSeverity === 'warning'
+        ? webhook.minimumSeverity
+        : 'all',
     });
 
     const headers = webhook.headers || {};
@@ -271,7 +273,9 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
       mention: data.mention,
       tagFilter: data.tagFilter ?? [],
       tagFilterMode: data.tagFilterMode === 'any' ? 'any' : 'all',
-      minimumSeverity: data.minimumSeverity === 'critical' ? 'critical' : 'all',
+      minimumSeverity: data.minimumSeverity === 'critical' || data.minimumSeverity === 'warning'
+        ? data.minimumSeverity
+        : 'all',
     });
     resetForm();
   };

@@ -2936,3 +2936,11 @@ retention, alert freshness or the existing persistence durability contract.
 starting database workers, including restart loading and Unix hardening. The
 active mirror's unchanged fast path alone does not cover this companion file.
 This is a narrow write contributor, not aggregate installed-write acceptance.
+
+### Warning-level destination preference persistence
+
+Email API decoding and encoding, plus webhook edit/create and list presentation,
+preserve all three supported minimum-severity values: all, warning, critical.
+Unknown values still fall back to all. The email adapter round-trip matrix and
+webhook edit/save regression cover issue #2069 without altering delivery filters
+or sending provider notifications. Component proof is not installed delivery.

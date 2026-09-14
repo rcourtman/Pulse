@@ -437,7 +437,9 @@ export class NotificationsAPI {
     if (typeof backendConfig.tagFilterMode === 'string') {
       config.tagFilterMode = backendConfig.tagFilterMode === 'any' ? 'any' : 'all';
     }
-    config.minimumSeverity = backendConfig.minimumSeverity === 'critical' ? 'critical' : 'all';
+    config.minimumSeverity = backendConfig.minimumSeverity === 'critical' || backendConfig.minimumSeverity === 'warning'
+        ? backendConfig.minimumSeverity
+        : 'all';
     return config;
   }
 
@@ -467,7 +469,9 @@ export class NotificationsAPI {
       backendConfig.tagFilterMode = config.tagFilterMode === 'any' ? 'any' : 'all';
     }
     if (config.minimumSeverity !== undefined) {
-      backendConfig.minimumSeverity = config.minimumSeverity === 'critical' ? 'critical' : 'all';
+      backendConfig.minimumSeverity = config.minimumSeverity === 'critical' || config.minimumSeverity === 'warning'
+        ? config.minimumSeverity
+        : 'all';
     }
 
     return apiFetchJSON(`${this.baseUrl}/email`, {
