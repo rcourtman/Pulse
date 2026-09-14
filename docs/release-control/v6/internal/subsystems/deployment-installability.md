@@ -5235,3 +5235,7 @@ semicolons or em dashes, as required by the publication body validator. The
 versioned install-metadata test also checks that constraint before preparation.
 This editorial correction retains all limitations, upgrade guidance and rollback
 requirements and does not change the selected product source or qualification scope.
+
+The metadata regression invokes the full release-body validator, including its
+flat improvement list and per-bullet length bounds, rather than checking
+punctuation alone. Inherited improvements remain in that single customer list.

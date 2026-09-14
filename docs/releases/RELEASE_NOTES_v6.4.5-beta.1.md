@@ -8,18 +8,15 @@ rollback target remains `v6.4.1`. This is not an RC or stable release.
 
 ## What's improved
 
-- **TrueNAS CORE snapshots survive legacy alert shapes** - String, array,
-  numeric, boolean and null alert arguments no longer abort collection (#2077).
-  Formatted messages remain intact. Only object fields supply disk identity
-  and SMART measurements. Malformed JSON and failed HTTP responses remain errors.
+- **TrueNAS CORE snapshots survive legacy alert shapes** - Non-object arguments
+  no longer abort snapshots (#2077). Messages stay intact. Only objects supply
+  disk identity and SMART data. Malformed JSON and HTTP failures remain errors.
 - **Proxmox node History selects the right series** - Existing canonical node
   series are selected for API-only and agent-linked nodes.
 - **PBS History supports more installed shapes** - Standalone and PVE-hosted
   PBS history can select available CPU and memory without requiring disk history.
 - **Statistics stay available during History bursts** - The release line retains
   statistics connection isolation from long-running History reads.
-
-### Inherited reliability improvements
 
 - **Recurring incidents keep their own history** - Delayed firing,
   resolution, or acknowledgement replay for an older occurrence cannot reopen
