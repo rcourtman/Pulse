@@ -2944,3 +2944,7 @@ preserve all three supported minimum-severity values: all, warning, critical.
 Unknown values still fall back to all. The email adapter round-trip matrix and
 webhook edit/save regression cover issue #2069 without altering delivery filters
 or sending provider notifications. Component proof is not installed delivery.
+
+Formatting-only follow-up retains this warning-level contract. The production-component
+browser matrix was rerun after formatting at desktop and narrow widths, including
+all/critical/warning save/reload, cancel, and warning webhook creation.

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "base_sha": "ce1e99ba4e37b735d22158ac74a93afa26d7611f",
-  "verified_at": "2026-09-14T21:33:45.967568Z",
+  "verified_at": "2026-09-14T21:45:40.182293Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/api/notifications.ts",
@@ -9,9 +9,9 @@
     "frontend-modern/src/components/Alerts/useWebhookConfigState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/notifications.ts": "6eb5080070913baa025b07ffef1c38f3297ddfce8095ff71b6297b7e2cf09892",
+    "frontend-modern/src/api/notifications.ts": "ed4d7dd4946ed2295dff919134f394d0139d270bb446d069f4ddc8a9784b1667",
     "frontend-modern/src/components/Alerts/WebhookConfigList.tsx": "0830ab5c9f7e0173dbdf3e92ed0e0c9cbf0a34942edb58001a3220d43b39d6c3",
-    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts": "e79778f3e0b85536c672509210a81d258f8f8e483d09f5ef295118d428cf7a70"
+    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts": "b641c911baeda41adfbf82621ede005db2bdc032f25786d4533c422b59b64047"
   },
   "routes": [
     "/browser-tests/severity.html"

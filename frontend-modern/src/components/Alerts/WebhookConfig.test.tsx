@@ -714,12 +714,19 @@ describe('WebhookConfig', () => {
   it('preserves warning severity when editing and saving a webhook', () => {
     const webhook = makeWebhook({ minimumSeverity: 'warning' });
     render(() => (
-      <WebhookConfig webhooks={[webhook]} onAdd={onAddMock} onUpdate={onUpdateMock}
-        onDelete={onDeleteMock} onTest={onTestMock} />
+      <WebhookConfig
+        webhooks={[webhook]}
+        onAdd={onAddMock}
+        onUpdate={onUpdateMock}
+        onDelete={onDeleteMock}
+        onTest={onTestMock}
+      />
     ));
     fireEvent.click(screen.getByText('Edit'));
     fireEvent.click(screen.getByText('Update Webhook'));
-    expect(onUpdateMock).toHaveBeenCalledWith(expect.objectContaining({ minimumSeverity: 'warning' }));
+    expect(onUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ minimumSeverity: 'warning' }),
+    );
   });
 
   it('calls onUpdate with updated data when saving an edited webhook', () => {
