@@ -15,6 +15,17 @@
 
 ## Purpose
 
+### Unchanged pending-intent checkpoints
+
+The JSON pending-intent checkpoint must not replace a regular private file when
+its actual bounded bytes already equal the serialized state. Missing, stale,
+unsafe-permission, symlink and failed destinations remain repairable; changed
+or cleared state must still persist and load. SaveActiveAlerts serializes this
+comparison and write. Regression tests cover empty/nonempty repeats, changed
+and cleared state, stale bytes, missing files, retry and unsafe destinations.
+This backports reviewed main 3e920df03d (PR2046) for one write source in #1966;
+it does not claim aggregate disk-write reduction or change metrics/SQLite.
+
 ### Warning severity maintenance backport
 
 Issue #2069: preserve `warning` alongside `critical` through email API load/save
