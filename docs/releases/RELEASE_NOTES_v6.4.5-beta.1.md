@@ -3,23 +3,20 @@
 This opt-in Preview-channel beta fixes TrueNAS CORE snapshot refresh when a
 REST alert has non-object arguments. It retains the release-line History and
 reliability fixes and carries every change from the `v6.4.2` packet that was
-never published. The previous published preview is `v6.4.4-beta.2`; the stable
+never published. The previous published preview is `v6.4.4-beta.2`. The stable
 rollback target remains `v6.4.1`. This is not an RC or stable release.
 
 ## What's improved
 
-- **TrueNAS CORE snapshots survive legacy alert shapes** - String, array,
-  numeric, boolean and null alert arguments no longer abort collection (#2077).
-  Formatted messages remain intact. Only object fields supply disk identity
-  and SMART measurements; malformed JSON and failed HTTP responses remain errors.
+- **TrueNAS CORE snapshots survive legacy alert shapes** - Non-object arguments
+  no longer abort snapshots (#2077). Messages stay intact. Only objects supply
+  disk identity and SMART data. Malformed JSON and HTTP failures remain errors.
 - **Proxmox node History selects the right series** - Existing canonical node
   series are selected for API-only and agent-linked nodes.
 - **PBS History supports more installed shapes** - Standalone and PVE-hosted
   PBS history can select available CPU and memory without requiring disk history.
 - **Statistics stay available during History bursts** - The release line retains
   statistics connection isolation from long-running History reads.
-
-### Inherited reliability improvements
 
 - **Recurring incidents keep their own history** - Delayed firing,
   resolution, or acknowledgement replay for an older occurrence cannot reopen
@@ -89,7 +86,7 @@ rollback target remains `v6.4.1`. This is not an RC or stable release.
   coverage. Physical-appliance and reporter acceptance remain unconfirmed.
 - History corrections still need confirmation on installed Proxmox and PBS systems.
   Existing stored history is not rewritten. Active long-running reads may still
-  extend shutdown; cancellation and fault-injection coverage remain incomplete.
+  extend shutdown. Cancellation and fault-injection coverage remain incomplete.
 - Previous unpublished preview candidates did not complete qualification. This
   version number is not evidence that their stability failures were resolved.
 - Performance risk remains open: earlier main-line comparisons measured slower
@@ -110,7 +107,7 @@ rollback target remains `v6.4.1`. This is not an RC or stable release.
 
 - Use only published, integrity-verified artifacts. Back up the Pulse data
   directory and configuration before opting into Preview.
-- The v6.4.4-beta.3 and beta.4 candidates were not published; beta.5 was withdrawn.
+- The v6.4.4-beta.3 and beta.4 candidates were not published. Beta.5 was withdrawn.
   Their version numbers must not be treated as available upgrade targets.
 - On SSO-only deployments, map at least one trusted IdP group to the built-in
   `admin` role so intended administrator access remains available.
@@ -122,8 +119,8 @@ rollback target remains `v6.4.1`. This is not an RC or stable release.
 - For Docker Compose, pin `rcourtman/pulse:6.4.1` and recreate the container.
 - For Helm, run `helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart/pulse --version 6.4.1`
   with the installation's saved values.
-- Keep the pre-upgrade backup until health and data continuity are verified;
-  restore it if rollback cannot read the upgraded data safely.
+- Keep the pre-upgrade backup until health and data continuity are verified.
+  Restore it if rollback cannot read the upgraded data safely.
 - Verify repeated TrueNAS snapshots and alert messages after upgrading. Check
   7-day History for Proxmox nodes and PBS systems, and confirm expected series
   appear where the provider collects those metrics.
