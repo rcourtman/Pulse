@@ -10401,7 +10401,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "pulse-maintainer-lane-l1",
+      "agent_id": "pulse-maintainer",
+      "summary": "Bind future maintenance stable promotion to its soaked candidate, preserving explicit hotfix reason and soak checks",
+      "target_id": "v6-release-reliability",
+      "claimed_at": "2026-09-14T23:35:36Z",
+      "heartbeat_at": "2026-09-14T23:35:36Z",
+      "expires_at": "2026-09-15T01:35:36Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L1"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
