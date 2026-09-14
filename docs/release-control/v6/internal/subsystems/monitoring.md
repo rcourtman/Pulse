@@ -1344,6 +1344,17 @@ HTTP polling through normal alert-manager publication, not destination delivery.
 
 ## Current State
 
+TrueNAS REST alert arguments may be object, scalar, array, null or absent.
+Non-object arguments must not abort snapshot collection or discard alerts.
+Only typed object fields supply disk identity and SMART counters; neither scalar
+arguments nor formatted messages establish those measurements. Alert identity,
+severity, dismissal and timestamp remain intact. Malformed JSON and HTTP
+failures still fail collection rather than falsely reporting recovery.
+`TestRESTAlertArgsSnapshot` covers two snapshot cycles and mixed SMART alerts
+through an in-memory HTTP transport with REST already selected; it does not
+qualify negotiation or a physical TrueNAS appliance.
+
+
 ### Install snapshots aggregate alert quality across isolated tenant managers
 
 `ReloadableMonitor.AggregateInstallSnapshotCounts` loads each provisioned
