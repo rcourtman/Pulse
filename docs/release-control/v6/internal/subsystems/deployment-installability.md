@@ -5182,3 +5182,24 @@ models workflow cancellation independently of successful needs, covers all six
 boundaries and retains the final `always()` evidence/verdict join. Evidence
 uploads and cleanup remain unchanged. This is source-policy regression proof,
 not hosted cancellation acceptance or authorization to retry a frozen workflow.
+
+### Withdrawn preparation metadata and source-only maintenance
+
+Withdrawing an unqualified preparation restores its version, installer defaults,
+Helm metadata and active release-note projections to the release-line source
+baseline. That baseline is not evidence that its named prerelease was published
+or is safe to install. A source-only maintenance proposal must not activate those
+defaults or create release artifacts. Only separately admitted exact-source
+qualification and immutable publication can establish a new install target.
+
+The withdrawn beta.5 preparation and its reversal remain explicit commits in
+history. The retained failed packet, original qualification failure and previous
+unpublished beta.3/beta.4 lineage remain adverse evidence. Removing active beta.5
+source projections neither clears that evidence nor authorizes a qualification
+retry. An independent TrueNAS source regression test is not whole-application
+qualification, installed acceptance or permission to reproduce excluded failures.
+
+Subsequent release selection must set all versioned install surfaces together,
+retain the known stable rollback target and pass the required private source-pair,
+qualification, artifact-integrity and installed upgrade/recovery checks. No
+source-only contract restoration permits retagging an existing release.
