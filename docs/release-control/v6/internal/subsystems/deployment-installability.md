@@ -5229,3 +5229,9 @@ through the same reviewed source process before publication. The new customer
 scope is TrueNAS alert shape tolerance, with inherited History repairs and
 existing adverse qualification evidence retained. Fresh exact-source
 qualification, source pairing and installed rollback evidence remain mandatory.
+
+The 6.4.5-beta.1 customer release body uses separate sentences rather than
+semicolons or em dashes, as required by the publication body validator. The
+versioned install-metadata test also checks that constraint before preparation.
+This editorial correction retains all limitations, upgrade guidance and rollback
+requirements and does not change the selected product source or qualification scope.

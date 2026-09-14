@@ -1295,6 +1295,8 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"The rollback target is stable `v"+previous+"`",
 	)
 	if version == "6.4.5-beta.1" {
+		assertFileDoesNotContain(t, releaseNotesPath, ";")
+		assertFileDoesNotContain(t, releaseNotesPath, "—")
 		if releaseBranch != "release/v6.4" {
 			t.Fatalf("bounded TrueNAS preview must remain on release/v6.4, got %q", releaseBranch)
 		}
