@@ -20,6 +20,14 @@
 
 ## Purpose
 
+### Warning severity maintenance backport
+
+Issue #2069: preserve `warning` alongside `critical` through email API load/save
+and webhook create/edit/display; only unknown values retain the existing `all`
+fallback. Backend notification filtering is unchanged. This carries the reviewed
+main repair e8bbda6f and formatting 10d466e1 without unrelated main changes.
+Adapter round-trip and webhook edit/save regressions cover the reported selection.
+
 The public `PBSBackup` projection keeps `inProgress` as the compatibility field
 for an incomplete, manifestless snapshot. Optional
 `writeActivityObserved: true` says the collector obtained a complete bounded
