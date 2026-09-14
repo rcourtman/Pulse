@@ -735,8 +735,14 @@ func physicalDiskFromReadStateView(view *unifiedresources.PhysicalDiskView) mode
 		return models.PhysicalDisk{Wearout: unifiedresources.WearoutUnreported}
 	}
 
+	// Preserve the provider key across the canonical read-state round trip.
+	// Older/synthetic views without source metadata retain their existing fallback.
+	sourceID := view.SourceID()
+	if sourceID == "" {
+		sourceID = view.ID()
+	}
 	disk := models.PhysicalDisk{
-		ID:              view.ID(),
+		ID:              sourceID,
 		Node:            view.Node(),
 		Instance:        view.Instance(),
 		DevPath:         view.DevPath(),

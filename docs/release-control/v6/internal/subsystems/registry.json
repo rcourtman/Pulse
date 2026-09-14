@@ -1623,6 +1623,7 @@
               "internal/monitoring/docker_metric_presence_test.go",
               "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
               "internal/monitoring/monitor_host_agents_test.go",
+              "internal/monitoring/physical_disk_roundtrip_test.go",
               "scripts/installtests/agent_state_dir_lifecycle_test.go",
               "scripts/installtests/install_ps1_test.go",
               "scripts/installtests/install_sh_test.go"
@@ -6065,6 +6066,7 @@
             "exact_files": [
               "internal/api/resourceapi/resources_test.go",
               "internal/monitoring/monitor_polling_test.go",
+              "internal/truenas/alert_args_test.go",
               "internal/truenas/client_api_shapes_test.go",
               "internal/truenas/client_test.go",
               "internal/truenas/contract_test.go",
@@ -6464,6 +6466,7 @@
               "internal/monitoring/monitor_mock_alerts_test.go",
               "internal/monitoring/monitor_pve_cluster_refresh_test.go",
               "internal/monitoring/monitor_pve_guest_lxc_test.go",
+              "internal/monitoring/physical_disk_roundtrip_test.go",
               "internal/monitoring/proxmox_large_cluster_poll_budget_test.go",
               "internal/monitoring/pve_protection_observation_test.go",
               "internal/monitoring/ratetracker_test.go",
@@ -8218,6 +8221,7 @@
               "internal/monitoring/docker_filesystem_evidence_test.go",
               "internal/monitoring/issue1595_collection_trust_test.go",
               "internal/monitoring/issue1913_host_continuity_test.go",
+              "internal/monitoring/physical_disk_roundtrip_test.go",
               "internal/unifiedresources/adapter_coverage_test.go",
               "internal/unifiedresources/adapters_test.go",
               "internal/unifiedresources/ceph_pool_health_contract_test.go",
