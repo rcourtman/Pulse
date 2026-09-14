@@ -10828,3 +10828,15 @@ gates retain the explicit credential's normal validation and scopes. In
 particular, runner activation and self-revocation continue to require the exact
 credential-bound host and tenant, including in the managed development runtime.
 Invalid explicit credentials cannot fall back to the convenience bypass.
+
+### Notification severity round trips
+
+Email management payload mapping preserves all, warning and critical in both
+GET decoding and PUT encoding. Unknown inputs retain the all fallback. This
+repairs a dropped supported value without introducing a new wire enum or changing
+backend routing. The notification adapter save/reload matrix verifies each
+supported severity in frontend-modern/src/api/__tests__/notifications.test.ts.
+
+Formatting-only follow-up retains this warning-level contract. The production-component
+browser matrix was rerun after formatting at desktop and narrow widths, including
+all/critical/warning save/reload, cancel, and warning webhook creation.

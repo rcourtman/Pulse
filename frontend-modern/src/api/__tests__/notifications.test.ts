@@ -424,3 +424,22 @@ describe('NotificationsAPI', () => {
     expect(result.status).toBe('success');
   });
 });
+
+describe('email minimum severity save/reload (#2069)', () => {
+  it.each(['all', 'warning', 'critical'] as const)(
+    'preserves %s through the API adapter',
+    async (minimumSeverity) => {
+      const mock = vi.mocked(apiFetchJSON);
+      mock.mockReset();
+      mock.mockResolvedValueOnce({ minimumSeverity });
+      const loaded = await NotificationsAPI.getEmailConfig();
+      expect(loaded.minimumSeverity).toBe(minimumSeverity);
+      mock.mockResolvedValueOnce({ success: true });
+      await NotificationsAPI.updateEmailConfig(loaded);
+      const saved = JSON.parse(String(mock.mock.calls[1][1]?.body));
+      expect(saved.minimumSeverity).toBe(minimumSeverity);
+      mock.mockResolvedValueOnce(saved);
+      expect((await NotificationsAPI.getEmailConfig()).minimumSeverity).toBe(minimumSeverity);
+    },
+  );
+});

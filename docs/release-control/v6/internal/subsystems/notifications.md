@@ -910,3 +910,15 @@ destination enablement. Resolution independently cancels obsolete firing work.
 initial-target edit with an in-memory SMTP acceptance, and prevents a previously
 fetched pending item from sending after cancellation. This does not establish
 recipient inbox timing or recall mail already accepted by a provider.
+
+### Warning-level destination controls
+
+Email settings and webhook edit/create/list controls retain warning as distinct
+from all and critical. A warning selection must not become all through frontend
+normalization. Existing backend severity admission and delivery queues remain
+unchanged. The notification API adapter round trips and WebhookConfig edit/save
+regression establish frontend control preservation, not provider delivery.
+
+Formatting-only follow-up retains this warning-level contract. The production-component
+browser matrix was rerun after formatting at desktop and narrow widths, including
+all/critical/warning save/reload, cancel, and warning webhook creation.
