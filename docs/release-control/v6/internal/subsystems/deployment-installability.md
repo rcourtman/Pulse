@@ -17,6 +17,11 @@
 
 ### Immutable release source
 
+The committed release-note visual plan must pass the same validator as the
+preparation proposal. The current prerelease install-metadata regression runs
+`release_note_visuals.py validate` on that committed plan so malformed rationale
+punctuation cannot survive source checks and reappear during preparation.
+
 Continuous development must not change an admitted release's source. The
 preparation PR's qualified head stays fixed on `release-candidate/<packet>`
 while its governed source branch continues receiving work. Dispatch verifies
