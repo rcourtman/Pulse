@@ -15,6 +15,15 @@
 
 ## Purpose
 
+### Superseded pull request validation
+
+Build and Test and Core E2E cancel an older run for the same pull request when
+a newer commit starts validation. Branch pushes and manual dispatches retain
+their in-progress runs, so busy main and release branches still finish verdicts.
+Concurrency groups continue to isolate workflows and refs. Cancellation of an
+obsolete PR run supplies no passing evidence for its replacement, which still
+needs its own checks. Release publication workflows are unaffected.
+
 ### Docker SDK dependency compatibility
 
 The Docker consumers use Moby API v1.56.0 and client v0.6.0 together, without

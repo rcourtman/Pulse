@@ -16,14 +16,12 @@ on:
 permissions:
   contents: read
 
-# Let the in-progress run finish (pushes land here every few minutes on a
-# busy day, and cancelling would mean main never completes a verdict — four
-# consecutive runs were cancelled on 2026-07-17 alone); queued runs collapse
-# to the newest pending one, so intermediate pushes skip. Mirrors the Core
-# E2E workflow's concurrency policy.
+# Let branch runs finish so busy main and release branches retain verdicts.
+# A newer PR commit supersedes its previous validation, so do not queue the
+# replacement behind obsolete checks. Keep this aligned with Core E2E.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   secret-scan:
