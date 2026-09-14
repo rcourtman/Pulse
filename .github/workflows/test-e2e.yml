@@ -26,12 +26,12 @@ on:
       - '.github/workflows/test-e2e.yml'
   workflow_dispatch:
 
-# Let the in-progress run finish (pushes land here every few minutes, and
-# cancelling would mean a busy main never completes a verdict); queued runs
-# collapse to the newest pending one, so intermediate pushes skip.
+# Let branch runs finish so busy main and release branches retain verdicts.
+# A newer PR commit supersedes its previous validation, so do not queue the
+# replacement behind obsolete checks. Keep this aligned with Build and Test.
 concurrency:
   group: e2e-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
