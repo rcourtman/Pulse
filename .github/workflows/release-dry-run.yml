@@ -142,6 +142,7 @@ jobs:
       - name: Resolve rehearsal metadata
         id: rehearsal
         env:
+          GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
           VERSION_INPUT: ${{ inputs.version }}
           PROMOTED_FROM_TAG_INPUT: ${{ inputs.promoted_from_tag }}
