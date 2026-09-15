@@ -55,6 +55,21 @@ describe('DisksCard', () => {
     expect(screen.getByText('/data')).toBeInTheDocument();
   });
 
+  it.each([2, 24])('keeps all %i mounts in the parent scroll flow', (count) => {
+    const disks = Array.from({ length: count }, (_, i) => ({
+      mountpoint: `/mnt/disk-${i}`,
+      total: 100,
+      used: 50,
+      free: 50,
+      usage: 0.5,
+    }));
+    render(() => <DisksCard disks={disks} />);
+    const mounts = screen.getByTestId('disks-card-mounts');
+    expect(mounts.children).toHaveLength(count);
+    expect(mounts.className).not.toMatch(/max-h-|overflow-|custom-scrollbar/);
+    expect(screen.getByTitle(`/mnt/disk-${count - 1}`)).toBeInTheDocument();
+  });
+
   it('renders nothing when no disks are available', () => {
     const { container } = render(() => <DisksCard disks={[]} />);
 

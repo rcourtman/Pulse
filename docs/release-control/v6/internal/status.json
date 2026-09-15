@@ -10042,7 +10042,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "pulse-maintainer-lane-l8",
+      "agent_id": "pulse-maintainer",
+      "summary": "Verify and backport mount-list overflow repair for issue2051",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-09-14T23:28:45Z",
+      "heartbeat_at": "2026-09-14T23:28:45Z",
+      "expires_at": "2026-09-15T01:28:45Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L8"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

@@ -382,7 +382,7 @@ func TestRegistryChecker_FetchDigest_DigestHeaders(t *testing.T) {
 	})
 
 	t.Run("GET fallback resolves manifest list", func(t *testing.T) {
-		manifestBody := `{"manifests":[{"digest":"sha256:amd64","platform":{"architecture":"amd64","os":"linux"}}]}`
+		manifestBody := `{"schemaVersion":2,"manifests":[{"digest":"sha256:amd64","platform":{"architecture":"amd64","os":"linux"}}]}`
 		checker := &RegistryChecker{
 			httpClient: &http.Client{
 				Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -407,7 +407,7 @@ func TestRegistryChecker_FetchDigest_DigestHeaders(t *testing.T) {
 	})
 
 	t.Run("GET fallback preserves index digest when HEAD identifies a manifest list", func(t *testing.T) {
-		manifestBody := `{"manifests":[{"digest":"sha256:amd64","platform":{"architecture":"amd64","os":"linux"}}]}`
+		manifestBody := `{"schemaVersion":2,"manifests":[{"digest":"sha256:amd64","platform":{"architecture":"amd64","os":"linux"}}]}`
 		var methods []string
 		checker := &RegistryChecker{
 			httpClient: &http.Client{

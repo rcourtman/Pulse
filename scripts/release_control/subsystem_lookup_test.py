@@ -4315,6 +4315,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/monitoring/availability_probe_agent_test.go",
                 "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
                 "internal/monitoring/monitor_host_agents_test.go",
+                "internal/monitoring/physical_disk_roundtrip_test.go",
                 "scripts/installtests/agent_state_dir_lifecycle_test.go",
                 "scripts/installtests/install_ps1_test.go",
                 "scripts/installtests/install_sh_test.go",

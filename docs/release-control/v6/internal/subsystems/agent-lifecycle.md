@@ -15,6 +15,15 @@
 
 ## Purpose
 
+### Physical disk skipped-poll identity
+
+Read-state round trips preserve the provider SourceID rather than rehashing a
+canonical ID. Older views without source metadata retain their ID fallback.
+Preserve disk metadata supported by this release model. Repeated-cycle
+regressions cover serial-less disks, node/controller separation, JSON identity,
+metadata and confirmed removal. This carries main01742e2279/c9e71eac86 for #2076
+without main-only interval fields or unrelated main metrics changes.
+
 ### Host-local network evidence exclusion
 
 Automatic PVE association must not treat loopback, unspecified, multicast or

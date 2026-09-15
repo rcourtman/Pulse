@@ -1,44 +1,33 @@
 {
   "version": 1,
-  "base_sha": "062e7c805046f8a40852ac0fd92376fa6096950d",
-  "verified_at": "2026-09-14T22:42:59.987155Z",
+  "base_sha": "ea4c4a71475629e45dd053dc024532443c293809",
+  "verified_at": "2026-09-14T23:30:14.962745Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/notifications.ts",
-    "frontend-modern/src/components/Alerts/WebhookConfigList.tsx",
-    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts"
+    "frontend-modern/src/components/shared/cards/DisksCard.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/notifications.ts": "ed4d7dd4946ed2295dff919134f394d0139d270bb446d069f4ddc8a9784b1667",
-    "frontend-modern/src/components/Alerts/WebhookConfigList.tsx": "0830ab5c9f7e0173dbdf3e92ed0e0c9cbf0a34942edb58001a3220d43b39d6c3",
-    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts": "49c4aadf57899de6cc47690ecc682787d82183d76bacc8c6e250d5da39e30033"
+    "frontend-modern/src/components/shared/cards/DisksCard.tsx": "cdda554f93b7aecb925d803b0192260ef1a445065c501468a0412b824dc08028"
   },
   "routes": [
-    "/browser-tests/severity.html"
+    "/qualification/disks/"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 1000
+      "width": 600,
+      "height": 500
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 1200,
+      "height": 500
     }
   ],
   "states": [
-    "Existing warning email and webhook",
-    "All, critical and warning severity saved and reloaded",
-    "Cancelled webhook edit",
-    "New warning webhook persisted"
+    "2 and 24 mounts, light and dark themes, in parent scroll flow"
   ],
   "interactions": [
-    "Change production email severity selector, save through NotificationsAPI to synthetic backend, reload page and assert each supported value",
-    "Edit production webhook, save and reload each supported severity",
-    "Cancel changed webhook severity and verify original warning preserved",
-    "Create warning webhook and reload synthetic persisted store",
-    "Inspect desktop edit and narrow saved screenshots"
+    "Focus Before disks, End then Tab; final mount visible and After disks focused"
   ],
-  "command": "pulse-worker-browser severity-browser.cjs",
-  "notes": "Production-component fixture built with Vite esnext and project CSS. Synthetic email HTTP responses and webhook localStorage persistence; no live backend, notification delivery or whole-application navigation proof. Runtime source hashes match the verified implementation. Desktop edit and narrow saved screenshots inspected."
+  "command": "pulse-worker-browser mount-proof.cjs",
+  "notes": "Production DisksCard fixture with project CSS; eight styled Chromium cases verified at the original recorded observation time. Source content unchanged by recovery. Earlier warning-severity evidence belongs to already published PR2090 and is retained there, not claimed as a new observation here. Screenshots 600px dark with 24 mounts and 1200px light with 2 mounts inspected. Firefox and reporter attachments not verified. This is synthetic component proof, not installed reporter acceptance. Initial module-path and unstyled runs not counted."
 }
