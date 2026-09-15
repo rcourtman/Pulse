@@ -10840,3 +10840,18 @@ supported severity in frontend-modern/src/api/__tests__/notifications.test.ts.
 Formatting-only follow-up retains this warning-level contract. The production-component
 browser matrix was rerun after formatting at desktop and narrow widths, including
 all/critical/warning save/reload, cancel, and warning webhook creation.
+
+### Quick security setup preserves unrelated settings
+
+Authenticated force setup in `internal/api/security_setup_fix.go` retains the
+existing authentication and settings-write authorization checks. Rotating local
+credentials does not reset non-auth system preferences.
+`ConfigPersistence.InitializeSystemSettings` in `internal/config/persistence.go`
+creates defaults only when system settings are absent, under the same instance
+mutex as ordinary saves; existing bytes (including unknown fields and malformed
+data requiring recovery) are not rewritten. A read error prevents initialization,
+while authentication setup retains its existing nonfatal settings-error behavior.
+This does not change token scopes, agent admission, or existing agent cleanup.
+Regression coverage: `TestQuickSecuritySetupForcePreservesSystemSettings` and
+`TestInitializeSystemSettingsPreservesExistingBytes`, `TestInitializeSystemSettingsMissing`,
+`TestInitializeSystemSettingsReadError`.

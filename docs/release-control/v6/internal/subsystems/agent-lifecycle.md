@@ -8056,3 +8056,18 @@ provider keys, canonical IDs, JSON projection, temperature/size/cadence, separat
 nodes/controller members, and confirmed inventory removal.
 `TestPhysicalDiskReadbackSourceIDFallback` covers missing source metadata.
 This is synthetic runtime evidence, not USB hardware or reporter acceptance.
+
+### Quick security setup preserves unrelated settings
+
+Authenticated force setup in `internal/api/security_setup_fix.go` retains the
+existing authentication and settings-write authorization checks. Rotating local
+credentials does not reset non-auth system preferences.
+`ConfigPersistence.InitializeSystemSettings` in `internal/config/persistence.go`
+creates defaults only when system settings are absent, under the same instance
+mutex as ordinary saves; existing bytes (including unknown fields and malformed
+data requiring recovery) are not rewritten. A read error prevents initialization,
+while authentication setup retains its existing nonfatal settings-error behavior.
+This does not change token scopes, agent admission, or existing agent cleanup.
+Regression coverage: `TestQuickSecuritySetupForcePreservesSystemSettings` and
+`TestInitializeSystemSettingsPreservesExistingBytes`, `TestInitializeSystemSettingsMissing`,
+`TestInitializeSystemSettingsReadError`.
