@@ -10859,6 +10859,6 @@ Regression coverage: `TestQuickSecuritySetupForcePreservesSystemSettings` and
 The dedicated `internal/api/security_setup_settings_preservation_test.go` is an
 explicit backend-payload verification artifact. It exercises authenticated force
 setup and checks persisted non-auth preferences, rather than substituting a
-status-only or unrelated test for the setup contract. The registry accepts this
-narrow file alongside existing API proof files; no runtime paths or required
-contract updates are exempted.
+status-only or unrelated test for the setup contract. The registry routes only `internal/api/security_setup_fix.go` to this narrow
+setup proof policy; unrelated API runtime paths retain their existing verification
+requirements. No runtime paths or required contract updates are exempted.
