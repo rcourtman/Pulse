@@ -10044,16 +10044,16 @@
   ],
   "work_claims": [
     {
-      "id": "pulse-maintainer-lane-l8",
+      "id": "pulse-maintainer-lane-l13",
       "agent_id": "pulse-maintainer",
-      "summary": "Verify and backport mount-list overflow repair for issue2051",
+      "summary": "Backport bounded correlated VM agent memory fallback for issue 1962 to maintenance release line.",
       "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-09-14T23:28:45Z",
-      "heartbeat_at": "2026-09-14T23:28:45Z",
-      "expires_at": "2026-09-15T01:28:45Z",
+      "claimed_at": "2026-09-15T01:45:37Z",
+      "heartbeat_at": "2026-09-15T01:45:37Z",
+      "expires_at": "2026-09-15T03:45:37Z",
       "work_item": {
         "kind": "lane",
-        "id": "L8"
+        "id": "L13"
       }
     }
   ],
