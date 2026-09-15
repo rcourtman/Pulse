@@ -3280,6 +3280,8 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+The initializer retains its resolved adapter for deciding whether the provider
+fallback is needed; unrelated resource-provider lookup remains unchanged.
 Tenant initialization installs the adapter and all supplied supplemental providers
 before one synchronous inventory fill. Provider reads keep their tenant identity;
 initial inventory remains ready on return. Existing single-provider live updates

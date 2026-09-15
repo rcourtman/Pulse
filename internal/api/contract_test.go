@@ -24910,6 +24910,9 @@ func TestConfigureTenantMonitorFillsAllProvidersOnce(t *testing.T) {
 	a, b := &initializationCountingProvider{}, &initializationCountingProvider{}
 	r := &Router{monitorSupplementalRecords: map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider{unifiedresources.SourceTrueNAS: a, unifiedresources.SourceVMware: b}}
 	r.configureMonitorDependencies(m)
+	if r.monitorResourceAdapters["batch-org"] == nil {
+		t.Fatal("tenant adapter not installed")
+	}
 	if a.calls != 1 || b.calls != 1 || a.org != "batch-org" || b.org != "batch-org" {
 		t.Fatalf("provider calls/tenants: %+v %+v", a, b)
 	}

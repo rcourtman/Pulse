@@ -1790,8 +1790,7 @@ func (r *Router) unifiedResourceProviderForMonitor(m *monitoring.Monitor) ai.Uni
 		}
 	}
 
-	adapter := r.monitorAdapterForMonitor(m)
-	if adapter != nil {
+	if adapter := r.monitorAdapterForMonitor(m); adapter != nil {
 		return adapter
 	}
 	if r.monitorResourceAdapter != nil {
@@ -1852,7 +1851,8 @@ func (r *Router) configureMonitorDependencies(m *monitoring.Monitor) {
 		return
 	}
 
-	if adapter := r.monitorAdapterForMonitor(m); adapter != nil {
+	adapter := r.monitorAdapterForMonitor(m)
+	if adapter != nil {
 		log.Debug().Msg("[Router] Injecting unified resource adapter into monitor")
 		m.SetResourceStoreWithSupplementalProviders(adapter, r.monitorSupplementalRecords)
 	}
