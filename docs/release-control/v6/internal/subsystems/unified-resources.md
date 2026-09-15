@@ -2071,6 +2071,24 @@ served clones. Proof: `TestClonedResourcesPreservePlatformAdmission` and
 
 ## Current State
 
+
+**Maintenance correlated VM memory fallback (#1962)**
+
+For correlated VM rows, previous-poll guest context reads the agent-owned
+memory sample and agent source status, never the platform-priority merged
+percentage. Only online, non-stale, known-usage samples with positive capacity
+qualify; valid zero usage remains valid. Existing preferred guest-memory
+sources and instance-scoped VM identity remain unchanged.
+
+Release proof: `TestCorrelatedGuestMemoryReleaseNextPoll` exercises retained-link
+registry reconstruction, next-poll resolution, builder/card projection and
+cross-instance isolation without creating an alert database.
+`TestAutomaticGuestMemoryLinkNextPoll` separately covers automatic hostname
+link hints and ambiguous-name refusal. `TestVMViewLinkedAgentMemory` covers
+freshness and invalid samples. These source proofs do not establish actual
+FreeBSD installation, alert delivery or installed restart acceptance.
+
+
 Discovery-led availability proposals present their evidence and canonical
 attachment boundary as short, complete sentences in both the inline card and
 machine-wide review. The colocated component test pins that operator-facing

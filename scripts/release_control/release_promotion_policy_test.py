@@ -301,6 +301,19 @@ STAGED_GOVERNANCE_INPUT_ERRORS = (
 
 
 class ReleasePromotionPolicyTest(unittest.TestCase):
+    def test_stable_rehearsal_publication_lookup_has_read_token(self) -> None:
+        workflow = yaml.safe_load(read(".github/workflows/release-dry-run.yml"))
+        found = []
+        for job in workflow["jobs"].values():
+            for step in job.get("steps", []):
+                if step.get("name") == "Resolve rehearsal metadata":
+                    found.append(step)
+                    self.assertEqual(step.get("env", {}).get("GH_TOKEN"), "${{ github.token }}")
+                    self.assertIn("resolve_release_promotion.py", step.get("run", ""))
+                    permissions = job.get("permissions", workflow.get("permissions", {}))
+                    self.assertEqual(permissions.get("contents"), "read")
+        self.assertEqual(len(found), 1)
+
 
     def test_quarantined_draft_identity_before_patch(self):
         workflow = yaml.safe_load(read(".github/workflows/create-release.yml"))

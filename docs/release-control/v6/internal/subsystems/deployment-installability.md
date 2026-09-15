@@ -2234,6 +2234,13 @@ artifact-selection behaviour.
 
 ## Current State
 
+Stable rehearsal metadata resolves candidate publication through GitHub using
+only the existing job contents-read token, bound to the resolver step as
+`GH_TOKEN`. This caller wiring is covered by
+`test_stable_rehearsal_publication_lookup_has_read_token`; mocked resolver
+tests alone do not prove workflow authentication. No publication write scope
+or provider credential is added.
+
 ### Candidate notes cover restored Proxmox node network details
 
 The current v6.4 candidate notes record that configured PVE node interface

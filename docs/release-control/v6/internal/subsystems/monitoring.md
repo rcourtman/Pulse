@@ -1353,6 +1353,24 @@ HTTP polling through normal alert-manager publication, not destination delivery.
 
 ## Current State
 
+
+**Maintenance correlated VM memory fallback (#1962)**
+
+For correlated VM rows, previous-poll guest context reads the agent-owned
+memory sample and agent source status, never the platform-priority merged
+percentage. Only online, non-stale, known-usage samples with positive capacity
+qualify; valid zero usage remains valid. Existing preferred guest-memory
+sources and instance-scoped VM identity remain unchanged.
+
+Release proof: `TestCorrelatedGuestMemoryReleaseNextPoll` exercises retained-link
+registry reconstruction, next-poll resolution, builder/card projection and
+cross-instance isolation without creating an alert database.
+`TestAutomaticGuestMemoryLinkNextPoll` separately covers automatic hostname
+link hints and ambiguous-name refusal. `TestVMViewLinkedAgentMemory` covers
+freshness and invalid samples. These source proofs do not establish actual
+FreeBSD installation, alert delivery or installed restart acceptance.
+
+
 TrueNAS REST alert arguments may be object, scalar, array, null or absent.
 Non-object arguments must not abort snapshot collection or discard alerts.
 Only typed object fields supply disk identity and SMART counters; neither scalar

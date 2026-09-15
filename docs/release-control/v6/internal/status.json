@@ -10044,16 +10044,29 @@
   ],
   "work_claims": [
     {
-      "id": "pulse-maintainer-lane-l8",
+      "id": "pulse-maintainer-lane-l13",
       "agent_id": "pulse-maintainer",
-      "summary": "Verify and backport mount-list overflow repair for issue2051",
+      "summary": "Complete maintenance source binding and exact candidate observation contract alongside correlated memory release acceptance.",
       "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-09-14T23:28:45Z",
-      "heartbeat_at": "2026-09-14T23:28:45Z",
-      "expires_at": "2026-09-15T01:28:45Z",
+      "claimed_at": "2026-09-15T01:45:37Z",
+      "heartbeat_at": "2026-09-15T01:56:13Z",
+      "expires_at": "2026-09-15T03:56:13Z",
       "work_item": {
         "kind": "lane",
-        "id": "L8"
+        "id": "L13"
+      }
+    },
+    {
+      "id": "pulse-maintainer-owner-lane-l10",
+      "agent_id": "pulse-maintainer-owner",
+      "summary": "Resolve exact PR2093 startup-maintenance test phase timing and failure cleanup; no database runtime changes or excluded crash work",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-09-15T02:30:15Z",
+      "heartbeat_at": "2026-09-15T02:30:15Z",
+      "expires_at": "2026-09-15T04:30:15Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L10"
       }
     }
   ],
