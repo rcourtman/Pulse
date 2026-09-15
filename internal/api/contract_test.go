@@ -9,8 +9,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -24853,5 +24855,275 @@ func TestJourneyGeneralAPIBudgetIsolation(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestTenantMonitorGuardHonorsCancellationDuringInitialization(t *testing.T) {
+	for _, cancelDuringInit := range []bool{false, true} {
+		name := "live"
+		if cancelDuringInit {
+			name = "cancelled"
+		}
+		t.Run(name, func(t *testing.T) {
+			cfg := &config.Config{DataPath: t.TempDir()}
+			router := newMultiTenantRouter(t, cfg)
+			if err := router.multiTenant.SaveOrganization(&models.Organization{ID: "cancel-test", DisplayName: "Cancellation test"}); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(context.WithValue(context.Background(), OrgIDContextKey, "cancel-test"))
+			defer cancel()
+			initialized := false
+			router.mtMonitor.SetMonitorInitializer(func(_ *monitoring.Monitor) {
+				initialized = true
+				if cancelDuringInit {
+					cancel()
+				}
+			})
+			called := false
+			handler := router.tenantMonitorGuardMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true }))
+			handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/resources", nil).WithContext(ctx))
+			if !initialized {
+				t.Fatal("cold tenant was not initialized")
+			}
+			if called == cancelDuringInit {
+				t.Fatalf("handler called=%v, cancelled=%v", called, cancelDuringInit)
+			}
+		})
+	}
+}
+
+type initializationCountingProvider struct {
+	calls int
+	org   string
+}
+
+func (p *initializationCountingProvider) SupplementalRecords(_ *monitoring.Monitor, org string) []unifiedresources.IngestRecord {
+	p.calls++
+	p.org = org
+	return nil
+}
+func TestConfigureTenantMonitorFillsAllProvidersOnce(t *testing.T) {
+	m, err := monitoring.New(&config.Config{DataPath: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(m.Stop)
+	m.SetOrgID("batch-org")
+	a, b := &initializationCountingProvider{}, &initializationCountingProvider{}
+	r := &Router{monitorSupplementalRecords: map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider{unifiedresources.SourceTrueNAS: a, unifiedresources.SourceVMware: b}}
+	r.configureMonitorDependencies(m)
+	if r.monitorResourceAdapters["batch-org"] == nil {
+		t.Fatal("tenant adapter not installed")
+	}
+	if a.calls != 1 || b.calls != 1 || a.org != "batch-org" || b.org != "batch-org" {
+		t.Fatalf("provider calls/tenants: %+v %+v", a, b)
+	}
+}
+
+func TestTokenCreationTenantGuardDoesNotRequireInventory(t *testing.T) {
+	for _, status := range []string{"active", "suspended", "pending_deletion", "missing", "unavailable"} {
+		t.Run(status, func(t *testing.T) {
+			persistence := config.NewMultiTenantPersistence(t.TempDir())
+			org := &models.Organization{ID: "control-org", DisplayName: "Control org"}
+			org.Status = models.OrgStatus(status)
+			if status == "missing" && persistence.OrgExists("control-org") {
+				t.Fatal("missing tenant fixture unexpectedly exists")
+			}
+			if status != "missing" {
+				if err := persistence.SaveOrganization(org); err != nil {
+					t.Fatal(err)
+				}
+			}
+			r := &Router{multiTenant: persistence}
+			if status == "unavailable" {
+				r.multiTenant = nil
+			}
+			called := false
+			h := r.tenantMonitorGuardMiddleware(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) { called = true; w.WriteHeader(http.StatusCreated) }))
+			req := httptest.NewRequest(http.MethodPost, "/api/security/tokens", nil)
+			req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "control-org"))
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if called != (status == "active") {
+				t.Fatalf("handler called=%v for %s", called, status)
+			}
+			want := http.StatusForbidden
+			if status == "missing" || status == "unavailable" {
+				want = http.StatusServiceUnavailable
+			}
+			if status != "active" && rec.Code != want {
+				t.Fatalf("status=%d", rec.Code)
+			}
+			// Inventory still fails closed without a tenant monitor.
+			req.Method = http.MethodGet
+			req.URL.Path = "/api/resources"
+			called = false
+			rec = httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if called || rec.Code != http.StatusServiceUnavailable {
+				t.Fatal("inventory guard bypassed")
+			}
+		})
+	}
+}
+
+func TestSessionTokenCreationWithProductionMonitorWiring(t *testing.T) {
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+	t.Setenv("PULSE_DEV", "true")
+
+	const rawToken = "org-bound-router-token-123.12345678"
+
+	dataDir := t.TempDir()
+	hashedPass, err := authpkg.HashPassword("super-secure-pass")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	record, err := config.NewAPITokenRecord(rawToken, "org-a-token", []string{config.ScopeMonitoringRead})
+	if err != nil {
+		t.Fatalf("create api token record: %v", err)
+	}
+	record.OrgID = "org-a"
+
+	cfg := &config.Config{
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+		AuthUser:   "admin",
+		AuthPass:   hashedPass,
+		APITokens:  []config.APITokenRecord{*record},
+	}
+	cfg.SortAPITokens()
+
+	mtp := config.NewMultiTenantPersistence(dataDir)
+	for _, orgID := range []string{"org-a", "org-b"} {
+		if err := mtp.SaveOrganization(&models.Organization{
+			ID:          orgID,
+			DisplayName: strings.ToUpper(orgID),
+			OwnerUserID: "admin",
+			Members: []models.OrganizationMember{
+				{UserID: "admin", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+			},
+		}); err != nil {
+			t.Fatalf("save organization %s: %v", orgID, err)
+		}
+	}
+
+	mtm := monitoring.NewMultiTenantMonitor(cfg, mtp, nil)
+	t.Cleanup(mtm.Stop)
+	// Match server construction: authentication captures a non-nil manager.
+	router := NewRouter(cfg, nil, mtm, nil, nil, "1.0.0")
+	router.SetMultiTenantMonitor(mtm)
+	var initializations atomic.Int32
+	mtm.SetMonitorInitializer(func(m *monitoring.Monitor) {
+		if m.GetOrgID() == "org-a" {
+			initializations.Add(1)
+		}
+		router.configureMonitorDependencies(m)
+	})
+	server := httptest.NewServer(router.Handler())
+	t.Cleanup(server.Close)
+
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatalf("create cookie jar: %v", err)
+	}
+	sessionClient := &http.Client{Jar: jar}
+
+	loginBody, err := json.Marshal(map[string]string{
+		"username": "admin",
+		"password": "super-secure-pass",
+	})
+	if err != nil {
+		t.Fatalf("marshal login payload: %v", err)
+	}
+
+	loginReq, err := http.NewRequest(http.MethodPost, server.URL+"/api/login", bytes.NewReader(loginBody))
+	if err != nil {
+		t.Fatalf("create login request: %v", err)
+	}
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginResp, err := sessionClient.Do(loginReq)
+	if err != nil {
+		t.Fatalf("login request failed: %v", err)
+	}
+	loginResp.Body.Close()
+	if loginResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 on login, got %d", loginResp.StatusCode)
+	}
+
+	createReq, err := http.NewRequest(http.MethodPost, server.URL+"/api/security/tokens", strings.NewReader(`{"name":"cold-session-token","scopes":["settings:read"]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("X-Pulse-Org-ID", "org-a")
+	for _, cookie := range jar.Cookies(createReq.URL) {
+		if cookie.Name == "pulse_csrf" {
+			createReq.Header.Set("X-CSRF-Token", cookie.Value)
+		}
+	}
+	if createReq.Header.Get("X-CSRF-Token") == "" {
+		t.Fatal("missing login CSRF cookie")
+	}
+	sessionClient.Timeout = 10 * time.Second
+	response, err := sessionClient.Do(createReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close() // Never log the issued credential.
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("creation status=%d", response.StatusCode)
+	}
+	if got := initializations.Load(); got != 0 {
+		t.Fatalf("session token creation initialized tenant monitoring %d times", got)
+	}
+
+	// A bad explicit credential must not fall back to this valid session.
+	invalidReq, err := http.NewRequest(http.MethodGet, server.URL+"/api/config", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalidReq.Header.Set("X-Pulse-Org-ID", "org-a")
+	invalidReq.Header.Set("Authorization", "Bearer invalid-explicit-token")
+	invalidResp, err := sessionClient.Do(invalidReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalidResp.Body.Close()
+	if invalidResp.StatusCode != http.StatusUnauthorized && invalidResp.StatusCode != http.StatusForbidden {
+		t.Fatalf("invalid explicit credential accepted with session: %d", invalidResp.StatusCode)
+	}
+
+	assertConfigAccess := func(orgID string, wantStatus int) string {
+		t.Helper()
+
+		req, err := http.NewRequest(http.MethodGet, server.URL+"/api/config", nil)
+		if err != nil {
+			t.Fatalf("create config request: %v", err)
+		}
+		req.Header.Set("X-Pulse-Org-ID", orgID)
+		req.Header.Set("Authorization", "Bearer "+rawToken)
+
+		res, err := sessionClient.Do(req)
+		if err != nil {
+			t.Fatalf("config request failed: %v", err)
+		}
+		defer res.Body.Close()
+
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			t.Fatalf("read config response: %v", err)
+		}
+		if res.StatusCode != wantStatus {
+			t.Fatalf("expected %d for org %s, got %d: %s", wantStatus, orgID, res.StatusCode, string(body))
+		}
+		return string(body)
+	}
+
+	assertConfigAccess("org-a", http.StatusOK)
+	body := assertConfigAccess("org-b", http.StatusForbidden)
+	if !strings.Contains(body, "access_denied") || !strings.Contains(body, "Token") {
+		t.Fatalf("expected cross-org denial payload to mention access_denied and token binding, got %q", body)
 	}
 }

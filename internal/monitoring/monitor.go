@@ -4576,6 +4576,38 @@ func (m *Monitor) DisableTemperatureMonitoring() {
 	log.Info().Msg("temperature monitoring disabled")
 }
 
+// SetResourceStoreWithSupplementalProviders installs initialization dependencies
+// before the single synchronous inventory backfill. It merges only supplied
+// providers, preserving other providers and the immediate-readiness contract.
+func (m *Monitor) SetResourceStoreWithSupplementalProviders(store ResourceStoreInterface, providers map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider) {
+	if m == nil {
+		return
+	}
+	keys := make([]string, 0, len(providers))
+	for source := range providers {
+		keys = append(keys, string(source))
+	}
+	sort.Strings(keys)
+	m.mu.Lock()
+	if m.supplementalProviders == nil {
+		m.supplementalProviders = make(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider)
+	}
+	for _, key := range keys {
+		normalized := unifiedresources.DataSource(strings.ToLower(strings.TrimSpace(key)))
+		if normalized == "" {
+			continue
+		}
+		provider := providers[unifiedresources.DataSource(key)]
+		if provider == nil {
+			delete(m.supplementalProviders, normalized)
+		} else {
+			m.supplementalProviders[normalized] = provider
+		}
+	}
+	m.mu.Unlock()
+	m.SetResourceStore(store)
+}
+
 // SetResourceStore sets the resource store for polling optimization.
 // When set, the monitor will check if it should reduce polling frequency
 // for nodes that have host agents providing data.

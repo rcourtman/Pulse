@@ -1353,6 +1353,12 @@ HTTP polling through normal alert-manager publication, not destination delivery.
 
 ## Current State
 
+Tenant initialization installs the adapter and all supplied supplemental providers
+before one synchronous inventory fill. Provider reads keep their tenant identity;
+initial inventory remains ready on return. Existing single-provider live updates
+retain immediate refresh and removal semantics. This avoids repeated startup
+fills; it does not claim to resolve client cancellation or waive timeout proof.
+
 
 **Maintenance correlated VM memory fallback (#1962)**
 

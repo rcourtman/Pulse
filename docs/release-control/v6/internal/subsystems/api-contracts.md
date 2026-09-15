@@ -4417,6 +4417,36 @@ auto-register mutation boundary.
 
 ## Current State
 
+- Session-only authentication skips tenant-monitor resolution when no explicit API token is supplied. Proxy authentication and explicit global/tenant token precedence remain unchanged; an invalid explicit token does not fall back to a session. The cold token-creation regression constructs the router with a non-nil multi-tenant manager, matching the server authentication wiring, and asserts no tenant initialization during creation. This avoids inventory startup on that control-plane path, not a general guarantee that client disconnects cancel mutations.
+
+Exact `POST /api/security/tokens` is a tenant control-plane operation: it checks
+persisted organization existence before metadata loading (which may synthesize
+legacy metadata), and lifecycle without constructing monitoring
+inventory. Outer authentication, feature/license, membership and CSRF checks
+remain in force, as do token owner/scope restrictions. Missing tenant storage
+fails closed, including absent organization records or unavailable persistence;
+suspended/deleting organizations are denied. All other routes
+retain the monitor-availability guard. A client deadline is still not a promise
+that an already-started server mutation was cancelled.
+
+The initializer retains its resolved adapter for deciding whether the provider
+fallback is needed; unrelated resource-provider lookup remains unchanged.
+Tenant initialization installs the adapter and all supplied supplemental providers
+before one synchronous inventory fill. Provider reads keep their tenant identity;
+initial inventory remains ready on return. Existing single-provider live updates
+retain immediate refresh and removal semantics. This avoids repeated startup
+fills; it does not claim to resolve client cancellation or waive timeout proof.
+
+Cold-tenant request cancellation: the tenant monitor guard rechecks the request
+context after synchronous initialization, before dispatching downstream handlers.
+An already-cancelled server request context does not reach a token mutation
+after that boundary. Client timeout alone does not guarantee server context
+cancellation has been observed. Live requests retain normal tenant isolation
+and availability checks. Regression
+`TestTenantMonitorGuardHonorsCancellationDuringInitialization` covers both paths.
+This does not bound initialization latency, interrupt monitor construction, or
+claim the hosted mobile Safari timeout is resolved.
+
 ### Resource-list facets preserve scoped navigation evidence
 
 `GET /api/resources` returns a compact `facets` object beside the paged row

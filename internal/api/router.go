@@ -344,7 +344,8 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	if r.tenantRateLimiter != nil {
 		handler = TenantRateLimitMiddleware(r.tenantRateLimiter)(handler)
 	}
-	// Security: fail closed for non-default org requests when tenant monitor resolution fails.
+	// Security: fail closed on tenant availability; token creation checks persisted
+	// control-plane state while inventory routes also require a tenant monitor.
 	// Wrapped before TenantMiddleware so TenantMiddleware executes first and sets org context.
 	handler = r.tenantMonitorGuardMiddleware(handler)
 	handler = tenantMiddleware.Middleware(handler)
@@ -365,11 +366,41 @@ func (r *Router) tenantMonitorGuardMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Token creation is a tenant control-plane operation, not an inventory
+		// read. The outer tenant/auth middleware still enforces feature access,
+		// membership and lifecycle; fail closed on persisted tenant availability
+		// here without constructing a monitoring runtime.
+		if req.Method == http.MethodPost && req.URL.Path == "/api/security/tokens" {
+			if r.multiTenant == nil || !r.multiTenant.OrgExists(orgID) {
+				writeErrorResponse(w, http.StatusServiceUnavailable, "tenant_unavailable", "Tenant configuration is not available", nil)
+				return
+			}
+			org, err := r.multiTenant.LoadOrganization(orgID)
+			if err != nil || org == nil {
+				writeErrorResponse(w, http.StatusServiceUnavailable, "tenant_unavailable", "Tenant configuration is not available", nil)
+				return
+			}
+			status := models.NormalizeOrgStatus(org.Status)
+			if status == models.OrgStatusSuspended || status == models.OrgStatusPendingDeletion {
+				writeErrorResponse(w, http.StatusForbidden, "org_suspended", "Organization is suspended", nil)
+				return
+			}
+			if req.Context().Err() == nil {
+				next.ServeHTTP(w, req)
+			}
+			return
+		}
+
 		if r.mtMonitor == nil {
 			writeErrorResponse(w, http.StatusServiceUnavailable, "tenant_unavailable", "Tenant monitor is not configured", nil)
 			return
 		}
 		monitor, err := r.mtMonitor.GetMonitor(orgID)
+		// Cold tenant initialization can outlive the caller. Do not dispatch a
+		// mutation after the client has already cancelled its request.
+		if req.Context().Err() != nil {
+			return
+		}
 		if err != nil || monitor == nil {
 			writeErrorResponse(w, http.StatusServiceUnavailable, "tenant_unavailable", "Tenant monitor is not available", nil)
 			return
@@ -1846,9 +1877,10 @@ func (r *Router) configureMonitorDependencies(m *monitoring.Monitor) {
 		return
 	}
 
-	if adapter := r.monitorAdapterForMonitor(m); adapter != nil {
+	adapter := r.monitorAdapterForMonitor(m)
+	if adapter != nil {
 		log.Debug().Msg("[Router] Injecting unified resource adapter into monitor")
-		m.SetResourceStore(adapter)
+		m.SetResourceStoreWithSupplementalProviders(adapter, r.monitorSupplementalRecords)
 	}
 
 	// Tenant monitors must inherit the persisted instance-wide notification
@@ -1874,7 +1906,7 @@ func (r *Router) configureMonitorDependencies(m *monitoring.Monitor) {
 		}
 	}
 
-	if len(r.monitorSupplementalRecords) == 0 {
+	if adapter != nil || len(r.monitorSupplementalRecords) == 0 {
 		return
 	}
 
