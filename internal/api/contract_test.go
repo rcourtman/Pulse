@@ -24975,7 +24975,7 @@ func TestSessionTokenCreationWithProductionMonitorWiring(t *testing.T) {
 	const rawToken = "org-bound-router-token-123.12345678"
 
 	dataDir := t.TempDir()
-	hashedPass, err := internalauth.HashPassword("super-secure-pass")
+	hashedPass, err := authpkg.HashPassword("super-secure-pass")
 	if err != nil {
 		t.Fatalf("hash password: %v", err)
 	}
