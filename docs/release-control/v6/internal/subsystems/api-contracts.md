@@ -10855,3 +10855,10 @@ This does not change token scopes, agent admission, or existing agent cleanup.
 Regression coverage: `TestQuickSecuritySetupForcePreservesSystemSettings` and
 `TestInitializeSystemSettingsPreservesExistingBytes`, `TestInitializeSystemSettingsMissing`,
 `TestInitializeSystemSettingsReadError`.
+
+The dedicated `internal/api/security_setup_settings_preservation_test.go` is an
+explicit backend-payload verification artifact. It exercises authenticated force
+setup and checks persisted non-auth preferences, rather than substituting a
+status-only or unrelated test for the setup contract. The registry accepts this
+narrow file alongside existing API proof files; no runtime paths or required
+contract updates are exempted.

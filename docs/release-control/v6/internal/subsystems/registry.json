@@ -3271,7 +3271,8 @@
               "internal/api/metadata_handlers_test.go",
               "internal/api/patrol_autopilot_test.go",
               "internal/api/runtime_inventory_sources_test.go",
-              "pulse-enterprise:test/extensions_contract_test.go"
+              "pulse-enterprise:test/extensions_contract_test.go",
+              "internal/api/security_setup_settings_preservation_test.go"
             ]
           },
           {
