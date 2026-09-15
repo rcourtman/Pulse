@@ -179,13 +179,23 @@ func (rm *ReloadableMonitor) doReload() error {
 	// Wait a moment for cleanup
 	time.Sleep(1 * time.Second)
 
+	// Authentication middleware and API handlers retain the original runtime
+	// configuration. Refresh that object so the replacement default monitor also
+	// sees later token creation, rotation and revocation through the same owner.
+	config.Mu.Lock()
+	if rm.config == nil {
+		rm.config = cfg
+	} else {
+		*rm.config = *cfg
+	}
+	config.Mu.Unlock()
+
 	// Create new multi-tenant monitor
 	// Note: We lose existing instances state here, which is expected on full reload.
-	newMTMonitor := NewMultiTenantMonitor(cfg, rm.persistence, rm.wsHub)
+	newMTMonitor := NewMultiTenantMonitor(rm.config, rm.persistence, rm.wsHub)
 
 	// Replace monitor
 	rm.mtMonitor = newMTMonitor
-	rm.config = cfg
 
 	// Start new monitor context (individual monitors are lazy loaded/started)
 	rm.ctx, rm.cancel = context.WithCancel(rm.parentCtx)
