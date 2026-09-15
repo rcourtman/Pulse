@@ -4417,6 +4417,14 @@ auto-register mutation boundary.
 
 ## Current State
 
+Cold-tenant request cancellation: the tenant monitor guard rechecks the request
+context after synchronous initialization, before dispatching downstream handlers.
+A disconnected caller must not start a token mutation after that boundary. Live
+requests retain normal tenant isolation and availability checks. Regression
+`TestTenantMonitorGuardHonorsCancellationDuringInitialization` covers both paths.
+This does not bound initialization latency, interrupt monitor construction, or
+claim the hosted mobile Safari timeout is resolved.
+
 ### Resource-list facets preserve scoped navigation evidence
 
 `GET /api/resources` returns a compact `facets` object beside the paged row

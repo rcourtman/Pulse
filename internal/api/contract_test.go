@@ -24855,3 +24855,37 @@ func TestJourneyGeneralAPIBudgetIsolation(t *testing.T) {
 		})
 	}
 }
+
+func TestTenantMonitorGuardHonorsCancellationDuringInitialization(t *testing.T) {
+	for _, cancelDuringInit := range []bool{false, true} {
+		name := "live"
+		if cancelDuringInit {
+			name = "cancelled"
+		}
+		t.Run(name, func(t *testing.T) {
+			cfg := &config.Config{DataPath: t.TempDir()}
+			router := newMultiTenantRouter(t, cfg)
+			if err := router.multiTenant.SaveOrganization(&models.Organization{ID: "cancel-test", DisplayName: "Cancellation test"}); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(context.WithValue(context.Background(), OrgIDContextKey, "cancel-test"))
+			defer cancel()
+			initialized := false
+			router.mtMonitor.SetMonitorInitializer(func(_ *monitoring.Monitor) {
+				initialized = true
+				if cancelDuringInit {
+					cancel()
+				}
+			})
+			called := false
+			handler := router.tenantMonitorGuardMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true }))
+			handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/security/tokens", nil).WithContext(ctx))
+			if !initialized {
+				t.Fatal("cold tenant was not initialized")
+			}
+			if called == cancelDuringInit {
+				t.Fatalf("handler called=%v, cancelled=%v", called, cancelDuringInit)
+			}
+		})
+	}
+}

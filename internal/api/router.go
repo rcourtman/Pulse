@@ -370,6 +370,11 @@ func (r *Router) tenantMonitorGuardMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		monitor, err := r.mtMonitor.GetMonitor(orgID)
+		// Cold tenant initialization can outlive the caller. Do not dispatch a
+		// mutation after the client has already cancelled its request.
+		if req.Context().Err() != nil {
+			return
+		}
 		if err != nil || monitor == nil {
 			writeErrorResponse(w, http.StatusServiceUnavailable, "tenant_unavailable", "Tenant monitor is not available", nil)
 			return

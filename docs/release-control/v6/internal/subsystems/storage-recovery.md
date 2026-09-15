@@ -2517,6 +2517,14 @@ vdev layout is reported` in
 
 ## Current State
 
+Cold-tenant request cancellation: the tenant monitor guard rechecks the request
+context after synchronous initialization, before dispatching downstream handlers.
+A disconnected caller must not start a token mutation after that boundary. Live
+requests retain normal tenant isolation and availability checks. Regression
+`TestTenantMonitorGuardHonorsCancellationDuringInitialization` covers both paths.
+This does not bound initialization latency, interrupt monitor construction, or
+claim the hosted mobile Safari timeout is resolved.
+
 ### TrueNAS workflows hydrate only their owning inventory
 
 The TrueNAS Protection tab is a first-class workflow once a TrueNAS system is

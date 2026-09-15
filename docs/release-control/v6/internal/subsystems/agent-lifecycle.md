@@ -3280,6 +3280,14 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+Cold-tenant request cancellation: the tenant monitor guard rechecks the request
+context after synchronous initialization, before dispatching downstream handlers.
+A disconnected caller must not start a token mutation after that boundary. Live
+requests retain normal tenant isolation and availability checks. Regression
+`TestTenantMonitorGuardHonorsCancellationDuringInitialization` covers both paths.
+This does not bound initialization latency, interrupt monitor construction, or
+claim the hosted mobile Safari timeout is resolved.
+
 ### Privileged helper framing and identities are architecture-safe
 
 The no-network helper rejects a framed allocation size that cannot include its
