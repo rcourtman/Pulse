@@ -932,7 +932,8 @@ Exact `POST /api/security/tokens` is a tenant control-plane operation: it checks
 persisted organization availability/lifecycle without constructing monitoring
 inventory. Outer authentication, feature/license, membership and CSRF checks
 remain in force, as do token owner/scope restrictions. Missing tenant storage
-fails closed; suspended/deleting organizations are denied. All other routes
+fails closed, including absent organization records or unavailable persistence;
+suspended/deleting organizations are denied. All other routes
 retain the monitor-availability guard. A client deadline is still not a promise
 that an already-started server mutation was cancelled.
 

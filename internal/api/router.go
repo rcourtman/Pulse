@@ -344,7 +344,8 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	if r.tenantRateLimiter != nil {
 		handler = TenantRateLimitMiddleware(r.tenantRateLimiter)(handler)
 	}
-	// Security: fail closed for non-default org requests when tenant monitor resolution fails.
+	// Security: fail closed on tenant availability; token creation checks persisted
+	// control-plane state while inventory routes also require a tenant monitor.
 	// Wrapped before TenantMiddleware so TenantMiddleware executes first and sets org context.
 	handler = r.tenantMonitorGuardMiddleware(handler)
 	handler = tenantMiddleware.Middleware(handler)

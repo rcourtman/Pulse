@@ -24919,15 +24919,20 @@ func TestConfigureTenantMonitorFillsAllProvidersOnce(t *testing.T) {
 }
 
 func TestTokenCreationTenantGuardDoesNotRequireInventory(t *testing.T) {
-	for _, status := range []string{"active", "suspended", "pending_deletion"} {
+	for _, status := range []string{"active", "suspended", "pending_deletion", "missing", "unavailable"} {
 		t.Run(status, func(t *testing.T) {
 			persistence := config.NewMultiTenantPersistence(t.TempDir())
 			org := &models.Organization{ID: "control-org", DisplayName: "Control org"}
 			org.Status = models.OrgStatus(status)
-			if err := persistence.SaveOrganization(org); err != nil {
-				t.Fatal(err)
+			if status != "missing" {
+				if err := persistence.SaveOrganization(org); err != nil {
+					t.Fatal(err)
+				}
 			}
 			r := &Router{multiTenant: persistence}
+			if status == "unavailable" {
+				r.multiTenant = nil
+			}
 			called := false
 			h := r.tenantMonitorGuardMiddleware(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) { called = true; w.WriteHeader(http.StatusCreated) }))
 			req := httptest.NewRequest(http.MethodPost, "/api/security/tokens", nil)
@@ -24937,7 +24942,11 @@ func TestTokenCreationTenantGuardDoesNotRequireInventory(t *testing.T) {
 			if called != (status == "active") {
 				t.Fatalf("handler called=%v for %s", called, status)
 			}
-			if status != "active" && rec.Code != http.StatusForbidden {
+			want := http.StatusForbidden
+			if status == "missing" || status == "unavailable" {
+				want = http.StatusServiceUnavailable
+			}
+			if status != "active" && rec.Code != want {
 				t.Fatalf("status=%d", rec.Code)
 			}
 			// Inventory still fails closed without a tenant monitor.
