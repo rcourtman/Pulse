@@ -1790,7 +1790,8 @@ func (r *Router) unifiedResourceProviderForMonitor(m *monitoring.Monitor) ai.Uni
 		}
 	}
 
-	if adapter := r.monitorAdapterForMonitor(m); adapter != nil {
+	adapter := r.monitorAdapterForMonitor(m)
+	if adapter != nil {
 		return adapter
 	}
 	if r.monitorResourceAdapter != nil {
@@ -1853,7 +1854,7 @@ func (r *Router) configureMonitorDependencies(m *monitoring.Monitor) {
 
 	if adapter := r.monitorAdapterForMonitor(m); adapter != nil {
 		log.Debug().Msg("[Router] Injecting unified resource adapter into monitor")
-		m.SetResourceStore(adapter)
+		m.SetResourceStoreWithSupplementalProviders(adapter, r.monitorSupplementalRecords)
 	}
 
 	// Tenant monitors must inherit the persisted instance-wide notification
@@ -1879,7 +1880,7 @@ func (r *Router) configureMonitorDependencies(m *monitoring.Monitor) {
 		}
 	}
 
-	if len(r.monitorSupplementalRecords) == 0 {
+	if adapter != nil || len(r.monitorSupplementalRecords) == 0 {
 		return
 	}
 

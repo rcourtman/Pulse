@@ -24889,3 +24889,28 @@ func TestTenantMonitorGuardHonorsCancellationDuringInitialization(t *testing.T) 
 		})
 	}
 }
+
+type initializationCountingProvider struct {
+	calls int
+	org   string
+}
+
+func (p *initializationCountingProvider) SupplementalRecords(_ *monitoring.Monitor, org string) []unifiedresources.IngestRecord {
+	p.calls++
+	p.org = org
+	return nil
+}
+func TestConfigureTenantMonitorFillsAllProvidersOnce(t *testing.T) {
+	m, err := monitoring.New(&config.Config{DataPath: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(m.Stop)
+	m.SetOrgID("batch-org")
+	a, b := &initializationCountingProvider{}, &initializationCountingProvider{}
+	r := &Router{monitorSupplementalRecords: map[unifiedresources.DataSource]monitoring.MonitorSupplementalRecordsProvider{unifiedresources.SourceTrueNAS: a, unifiedresources.SourceVMware: b}}
+	r.configureMonitorDependencies(m)
+	if a.calls != 1 || b.calls != 1 || a.org != "batch-org" || b.org != "batch-org" {
+		t.Fatalf("provider calls/tenants: %+v %+v", a, b)
+	}
+}

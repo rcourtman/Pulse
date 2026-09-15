@@ -5784,3 +5784,41 @@ func TestApplyHostReportDoesNotLinkUnrelatedDockerBridge(t *testing.T) {
 		}
 	}
 }
+
+func TestResourceStoreInitializationBatchesProviders(t *testing.T) {
+	for _, org := range []string{"org-a", "org-b"} {
+		t.Run(org, func(t *testing.T) {
+			store := &testAtomicResourceStore{}
+			providers := map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{}
+			for _, source := range []unifiedresources.DataSource{unifiedresources.SourceTrueNAS, unifiedresources.SourceVMware} {
+				providers[source] = &testMonitorSupplementalProvider{recordsByOrg: map[string][]unifiedresources.IngestRecord{
+					org:     {{SourceID: org + string(source), Resource: unifiedresources.Resource{Name: org, Type: unifiedresources.ResourceTypeAgent, Status: unifiedresources.StatusOnline}}},
+					"other": {{SourceID: "must-not-leak"}},
+				}}
+			}
+			m := &Monitor{state: models.NewState()}
+			m.SetOrgID(org)
+			m.SetResourceStoreWithSupplementalProviders(store, providers)
+			if store.atomicCalls != 1 {
+				t.Fatalf("initial inventory fills=%d, want1", store.atomicCalls)
+			}
+			for source, provider := range providers {
+				if provider.(*testMonitorSupplementalProvider).lastRequestedOrg != org {
+					t.Fatal("wrong provider tenant")
+				}
+				records := store.lastRecordsBySrc[source]
+				if len(records) != 1 || records[0].SourceID != org+string(source) {
+					t.Fatalf("wrong initial records: %+v", records)
+				}
+			}
+			// Legacy live updates still refresh synchronously and remove nil providers.
+			m.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, nil)
+			if store.atomicCalls != 2 {
+				t.Fatalf("live update fills=%d, want2", store.atomicCalls)
+			}
+			if _, exists := m.supplementalProviders[unifiedresources.SourceTrueNAS]; exists {
+				t.Fatal("provider was not removed")
+			}
+		})
+	}
+}

@@ -4417,6 +4417,12 @@ auto-register mutation boundary.
 
 ## Current State
 
+Tenant initialization installs the adapter and all supplied supplemental providers
+before one synchronous inventory fill. Provider reads keep their tenant identity;
+initial inventory remains ready on return. Existing single-provider live updates
+retain immediate refresh and removal semantics. This avoids repeated startup
+fills; it does not claim to resolve client cancellation or waive timeout proof.
+
 Cold-tenant request cancellation: the tenant monitor guard rechecks the request
 context after synchronous initialization, before dispatching downstream handlers.
 An already-cancelled server request context does not reach a token mutation
