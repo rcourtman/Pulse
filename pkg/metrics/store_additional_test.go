@@ -661,8 +661,17 @@ func TestNewStoreDefersStartupMaintenance(t *testing.T) {
 			// whether construction returns independently of that phase.
 			select {
 			case <-started:
-			case <-time.After(5 * time.Second):
-				t.Fatal("startup maintenance was not scheduled")
+			case <-done:
+				if err != nil {
+					t.Fatalf("NewStore returned error: %v", err)
+				}
+				// If construction wins the race, retain the original one-second
+				// scheduling watchdog after construction, not before initialization.
+				select {
+				case <-started:
+				case <-time.After(time.Second):
+					t.Fatal("startup maintenance was not scheduled")
+				}
 			}
 			select {
 			case <-done:
