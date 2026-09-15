@@ -521,16 +521,16 @@ def resolve_metadata(
             promoted_tag_ts = release_published_unix_fn(promoted_from_tag)
             soak_hours_value = int((now_unix_fn() - promoted_tag_ts) / 3600)
             soak_hours = str(soak_hours_value)
-            # The release train governs v6.5.0 and later. Earlier lines shipped
-            # under the previous regime and their recorded exceptions stand.
+            # The seven-day minor-release cadence starts at v6.5.0.
+            # Source binding below applies independently to every future stable.
             train_governed = bool(stable_version and stable_version >= RELEASE_TRAIN_MIN_VERSION)
-            candidate_content_drift: list[str] = []
-            if train_governed:
-                candidate_content_drift = [
-                    path
-                    for path in changed_paths_fn(promoted_from_tag)
-                    if not RELEASE_METADATA_PATH_RE.match(path)
-                ]
+            # Every new stable promotion must ship its observed source, including
+            # maintenance lines predating the minor-release train cadence.
+            candidate_content_drift = [
+                path
+                for path in changed_paths_fn(promoted_from_tag)
+                if not RELEASE_METADATA_PATH_RE.match(path)
+            ]
 
             if hotfix_exception:
                 if not hotfix_reason:

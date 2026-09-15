@@ -268,6 +268,7 @@ class ResolveReleasePromotionTest(unittest.TestCase):
 
     def test_stable_requires_matching_promoted_rc_and_soak(self) -> None:
         metadata = resolver.resolve_metadata(
+            changed_paths_fn=lambda tag: ["VERSION"],
             version="6.0.0",
             promoted_from_tag_input="6.0.0-rc.2",
             rollback_version_input="5.1.14",
@@ -289,6 +290,7 @@ class ResolveReleasePromotionTest(unittest.TestCase):
 
     def test_v610_owner_exception_allows_disclosed_unsigned_windows_candidate(self) -> None:
         metadata = resolver.resolve_metadata(
+            changed_paths_fn=lambda tag: ["VERSION"],
             version="6.1.0",
             promoted_from_tag_input="v6.1.0-rc.4",
             rollback_version_input="v6.0.5",
@@ -378,6 +380,7 @@ class ResolveReleasePromotionTest(unittest.TestCase):
 
     def test_v620_owner_exception_allows_disclosed_stable_promotion(self) -> None:
         metadata = resolver.resolve_metadata(
+            changed_paths_fn=lambda tag: ["VERSION"],
             version="6.2.0",
             promoted_from_tag_input="v6.2.0-rc.11",
             rollback_version_input="v6.1.2",
@@ -437,6 +440,7 @@ class ResolveReleasePromotionTest(unittest.TestCase):
 
     def test_v630_owner_exception_allows_disclosed_stable_promotion(self) -> None:
         metadata = resolver.resolve_metadata(
+            changed_paths_fn=lambda tag: ["VERSION"],
             version="6.3.0",
             promoted_from_tag_input="v6.3.0-rc.6",
             rollback_version_input="v6.2.1",
@@ -526,6 +530,7 @@ class ResolveReleasePromotionTest(unittest.TestCase):
 
     def test_future_stable_release_stays_unsigned_until_authenticode_is_restored(self) -> None:
         metadata = resolver.resolve_metadata(
+            changed_paths_fn=lambda tag: ["VERSION"],
             version="6.4.0",
             promoted_from_tag_input="v6.4.0-rc.1",
             rollback_version_input="v6.3.2",
@@ -553,6 +558,7 @@ class ResolveReleasePromotionTest(unittest.TestCase):
             "approved only for stable v6.1.0, v6.1.1, v6.1.2, v6.2.0, v6.2.1, v6.3.0, v6.3.1, or v6.3.2",
         ):
             resolver.resolve_metadata(
+                changed_paths_fn=lambda tag: ["VERSION"],
                 version="6.4.0",
                 promoted_from_tag_input="",
                 rollback_version_input="v6.3.2",
@@ -602,6 +608,7 @@ class ResolveReleasePromotionTest(unittest.TestCase):
             "release_notes must include the Pulse v5 maintenance-only support notice",
         ):
             resolver.resolve_metadata(
+                changed_paths_fn=lambda tag: ["VERSION"],
                 version="6.0.0",
                 promoted_from_tag_input="6.0.0-rc.2",
                 rollback_version_input="5.1.14",
@@ -620,6 +627,7 @@ class ResolveReleasePromotionTest(unittest.TestCase):
     def test_current_stable_v6_packet_resolves_with_publish_dates(self) -> None:
         release_notes = (REPO_ROOT / "docs/releases/RELEASE_NOTES_v6.md").read_text(encoding="utf-8")
         metadata = resolver.resolve_metadata(
+            changed_paths_fn=lambda tag: ["VERSION"],
             version="6.0.0",
             promoted_from_tag_input="v6.0.0-rc.7",
             rollback_version_input="v5.1.35",
@@ -784,6 +792,7 @@ class ResolveReleasePromotionTest(unittest.TestCase):
     def test_stable_hotfix_requires_reason(self) -> None:
         with self.assertRaisesRegex(ValueError, "hotfix_reason is required"):
             resolver.resolve_metadata(
+                changed_paths_fn=lambda tag: ["VERSION"],
                 version="6.0.2",
                 promoted_from_tag_input="6.0.2-rc.1",
                 rollback_version_input="6.0.1",
@@ -802,6 +811,7 @@ class ResolveReleasePromotionTest(unittest.TestCase):
     def test_stable_rejects_short_soak_without_hotfix(self) -> None:
         with self.assertRaisesRegex(ValueError, "hours of prerelease soak"):
             resolver.resolve_metadata(
+                changed_paths_fn=lambda tag: ["VERSION"],
                 version="6.0.2",
                 promoted_from_tag_input="6.0.2-rc.1",
                 rollback_version_input="6.0.1",
@@ -888,8 +898,10 @@ class ReleaseTrainPromotionTest(unittest.TestCase):
         ]
         with self.assertRaisesRegex(ValueError, "never soaked.*2 paths beyond release metadata"):
             self.promote("6.5.0", changed_paths_fn=lambda base_tag: drift)
-        with self.assertRaisesRegex(ValueError, "never soaked"):
-            self.promote("6.5.1", changed_paths_fn=lambda base_tag: drift)
+        for version in ("6.5.1", "6.4.5", "6.3.2"):
+            with self.subTest(version=version):
+                with self.assertRaisesRegex(ValueError, "never soaked"):
+                    self.promote(version, changed_paths_fn=lambda base_tag: drift)
 
     def test_hotfix_exception_still_requires_a_reason_for_drift(self) -> None:
         drift = ["VERSION", "internal/api/router.go"]
@@ -905,7 +917,7 @@ class ReleaseTrainPromotionTest(unittest.TestCase):
         self.assertEqual(metadata["hotfix_exception"], "true")
 
     def test_repaired_candidate_restarts_full_publication_soak(self) -> None:
-        for version, hours in (("6.5.0", 168), ("6.5.1", 72)):
+        for version, hours in (("6.5.0", 168), ("6.5.1", 72), ("6.4.5", 72)):
             tag = f"v{version}-rc.2"
             observed = []
             def publication(candidate):

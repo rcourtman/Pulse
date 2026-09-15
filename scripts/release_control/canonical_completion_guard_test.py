@@ -1307,6 +1307,17 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
+    def test_quick_setup_preservation_proof_is_scoped_to_setup_runtime(self):
+        proof = "internal/api/security_setup_settings_preservation_test.go"
+        setup = infer_impacted_subsystems(["internal/api/security_setup_fix.go"])["api-contracts"]
+        requirements = setup["verification_requirements"]
+        self.assertEqual(len(requirements), 1)
+        self.assertEqual(requirements[0]["id"], "quick-security-setup-contract")
+        self.assertIn(proof, requirements[0]["exact_files"])
+        self.assertFalse(requirements[0]["allow_same_subsystem_tests"])
+        other = infer_impacted_subsystems(["internal/api/access_control_handlers.go"])["api-contracts"]
+        self.assertNotIn(proof, other["verification_requirements"][0]["exact_files"])
+
     def test_organization_rbac_backend_change_requires_organization_settings_and_api_contracts(self):
         required = infer_impacted_subsystems(["internal/api/access_control_handlers.go"])
         self.assertEqual(set(required), {"api-contracts", "organization-settings"})

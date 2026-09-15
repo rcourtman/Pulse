@@ -5136,11 +5136,16 @@
       "name": "Self-hosted release confidence",
       "target_score": 9,
       "current_score": 9,
-      "status": "target-met",
+      "status": "partial",
       "completion": {
-        "state": "complete",
-        "summary": "Self-hosted release confidence reached its target and was re-proved for v6.3.1 with exact-SHA dry-run, stable activation, published-asset integrity, installer, demo, container, Helm, private paid-runtime convergence, and bounded recovery from GitHub activation-marker propagation.",
-        "tracking": []
+        "state": "bounded-residual",
+        "summary": "Self-hosted release confidence reached its target and was re-proved for v6.3.1 with exact-SHA dry-run, stable activation, published-asset integrity, installer, demo, container, Helm, private paid-runtime convergence, and bounded recovery from GitHub activation-marker propagation. Current maintenance residual: f04c230 source-binding repair is proposed as PR2091, not landed or released; its WebSocket/benchmark CI failures remain owned. Exact RC scope, qualification and required observation coverage remain outstanding.",
+        "tracking": [
+          {
+            "kind": "lane-followup",
+            "id": "maintenance-release-delivery-and-observation"
+          }
+        ]
       },
       "blockers": [],
       "subsystems": [
@@ -9726,6 +9731,19 @@
         "pulse-pro"
       ],
       "subsystem_ids": []
+    },
+    {
+      "id": "maintenance-release-delivery-and-observation",
+      "summary": "Land the stable source-binding repair, diagnose retained CI failures, qualify a coherent maintenance RC, verify installed upgrade/recovery, and reconcile exact-candidate observation coverage without changing stable services.",
+      "owner": "pulse-maintainer",
+      "status": "planned",
+      "recorded_at": "2026-09-15",
+      "lane_ids": [
+        "L1"
+      ],
+      "subsystem_ids": [
+        "deployment-installability"
+      ]
     }
   ],
   "coverage_gaps": [
@@ -10401,7 +10419,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "pulse-maintainer-lane-l6",
+      "agent_id": "pulse-maintainer",
+      "summary": "Preserve non-auth system settings during quick security setup; retain authentication authorization and reviewed source identities",
+      "target_id": "v6-release-reliability",
+      "claimed_at": "2026-09-15T01:10:15Z",
+      "heartbeat_at": "2026-09-15T01:10:15Z",
+      "expires_at": "2026-09-15T03:10:15Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L6"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

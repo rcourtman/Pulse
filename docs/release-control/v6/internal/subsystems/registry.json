@@ -3240,6 +3240,21 @@
             ]
           },
           {
+            "id": "quick-security-setup-contract",
+            "label": "local security setup and preference preservation proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/security_setup_fix.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/contract_test.go",
+              "internal/api/security_setup_fix_test.go",
+              "internal/api/security_setup_settings_preservation_test.go"
+            ]
+          },
+          {
             "id": "backend-payload-contracts",
             "label": "backend API payload proof",
             "match_prefixes": [
