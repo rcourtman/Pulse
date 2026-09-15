@@ -1338,7 +1338,10 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 			}
 		}
 
-		if mtm != nil {
+		// Session-only requests have no tenant token to validate. Do not start
+		// monitoring merely to discover that no explicit credential was sent.
+		// Explicit tokens still take precedence over a valid session below.
+		if mtm != nil && explicitTokenProvided {
 			// Check for Tenant ID in header or cookie
 			orgID := "default"
 			if headerOrgID := r.Header.Get("X-Pulse-Org-ID"); headerOrgID != "" {

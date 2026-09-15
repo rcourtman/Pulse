@@ -2517,6 +2517,8 @@ vdev layout is reported` in
 
 ## Current State
 
+- Session-only authentication skips tenant-monitor resolution when no explicit API token is supplied. Proxy authentication and explicit global/tenant token precedence remain unchanged; an invalid explicit token does not fall back to a session. The cold token-creation regression constructs the router with a non-nil multi-tenant manager, matching the server authentication wiring, and asserts no tenant initialization during creation. This avoids inventory startup on that control-plane path, not a general guarantee that client disconnects cancel mutations.
+
 Exact `POST /api/security/tokens` is a tenant control-plane operation: it checks
 persisted organization existence before metadata loading (which may synthesize
 legacy metadata), and lifecycle without constructing monitoring
