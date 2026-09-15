@@ -365,6 +365,31 @@ func (r *Router) tenantMonitorGuardMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Token creation is a tenant control-plane operation, not an inventory
+		// read. The outer tenant/auth middleware still enforces feature access,
+		// membership and lifecycle; fail closed on persisted tenant availability
+		// here without constructing a monitoring runtime.
+		if req.Method == http.MethodPost && req.URL.Path == "/api/security/tokens" {
+			if r.multiTenant == nil {
+				writeErrorResponse(w, http.StatusServiceUnavailable, "tenant_unavailable", "Tenant configuration is not available", nil)
+				return
+			}
+			org, err := r.multiTenant.LoadOrganization(orgID)
+			if err != nil || org == nil {
+				writeErrorResponse(w, http.StatusServiceUnavailable, "tenant_unavailable", "Tenant configuration is not available", nil)
+				return
+			}
+			status := models.NormalizeOrgStatus(org.Status)
+			if status == models.OrgStatusSuspended || status == models.OrgStatusPendingDeletion {
+				writeErrorResponse(w, http.StatusForbidden, "org_suspended", "Organization is suspended", nil)
+				return
+			}
+			if req.Context().Err() == nil {
+				next.ServeHTTP(w, req)
+			}
+			return
+		}
+
 		if r.mtMonitor == nil {
 			writeErrorResponse(w, http.StatusServiceUnavailable, "tenant_unavailable", "Tenant monitor is not configured", nil)
 			return

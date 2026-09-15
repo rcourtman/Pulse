@@ -24879,7 +24879,7 @@ func TestTenantMonitorGuardHonorsCancellationDuringInitialization(t *testing.T) 
 			})
 			called := false
 			handler := router.tenantMonitorGuardMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true }))
-			handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/security/tokens", nil).WithContext(ctx))
+			handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/resources", nil).WithContext(ctx))
 			if !initialized {
 				t.Fatal("cold tenant was not initialized")
 			}
@@ -24915,5 +24915,40 @@ func TestConfigureTenantMonitorFillsAllProvidersOnce(t *testing.T) {
 	}
 	if a.calls != 1 || b.calls != 1 || a.org != "batch-org" || b.org != "batch-org" {
 		t.Fatalf("provider calls/tenants: %+v %+v", a, b)
+	}
+}
+
+func TestTokenCreationTenantGuardDoesNotRequireInventory(t *testing.T) {
+	for _, status := range []string{"active", "suspended", "pending_deletion"} {
+		t.Run(status, func(t *testing.T) {
+			persistence := config.NewMultiTenantPersistence(t.TempDir())
+			org := &models.Organization{ID: "control-org", DisplayName: "Control org"}
+			org.Status = models.OrgStatus(status)
+			if err := persistence.SaveOrganization(org); err != nil {
+				t.Fatal(err)
+			}
+			r := &Router{multiTenant: persistence}
+			called := false
+			h := r.tenantMonitorGuardMiddleware(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) { called = true; w.WriteHeader(http.StatusCreated) }))
+			req := httptest.NewRequest(http.MethodPost, "/api/security/tokens", nil)
+			req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "control-org"))
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if called != (status == "active") {
+				t.Fatalf("handler called=%v for %s", called, status)
+			}
+			if status != "active" && rec.Code != http.StatusForbidden {
+				t.Fatalf("status=%d", rec.Code)
+			}
+			// Inventory still fails closed without a tenant monitor.
+			req.Method = http.MethodGet
+			req.URL.Path = "/api/resources"
+			called = false
+			rec = httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if called || rec.Code != http.StatusServiceUnavailable {
+				t.Fatal("inventory guard bypassed")
+			}
+		})
 	}
 }
