@@ -31,7 +31,7 @@ on:
 # collapse to the newest pending one, so intermediate pushes skip.
 concurrency:
   group: e2e-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

@@ -2101,6 +2101,16 @@ func (v PhysicalDiskView) ID() string {
 	return v.r.ID
 }
 
+// SourceID returns the Proxmox-native inventory key, not the canonical
+// resource ID. Polling adapters must preserve this key when writing views back
+// into provider state; hashing a canonical ID again creates a new resource.
+func (v PhysicalDiskView) SourceID() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.SourceID)
+}
+
 func (v PhysicalDiskView) Name() string {
 	if v.r == nil {
 		return ""

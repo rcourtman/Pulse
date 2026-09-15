@@ -433,6 +433,24 @@ func (r *RegistryChecker) fetchManifest(ctx context.Context, manifestURL, author
 	if err != nil {
 		return "", "", nil, fmt.Errorf("read manifest body: %w", err)
 	}
+	if len(body) == 0 {
+		return "", "", nil, fmt.Errorf("no digest in response")
+	}
+
+	// Only hash or trust digest metadata for an actual image manifest. A
+	// proxy/login/error page with HTTP 200 otherwise becomes a plausible but
+	// unrelated sha256 value, shared by every reference receiving that page.
+	var manifest struct {
+		SchemaVersion int `json:"schemaVersion"`
+		Config        struct {
+			Digest string `json:"digest"`
+		} `json:"config"`
+		Manifests []json.RawMessage `json:"manifests"`
+	}
+	if err := json.Unmarshal(body, &manifest); err != nil || manifest.SchemaVersion != 2 ||
+		(manifest.Config.Digest == "" && manifest.Manifests == nil) {
+		return "", "", nil, fmt.Errorf("registry returned a non-manifest response")
+	}
 	digest := strings.Trim(resp.Header.Get("Docker-Content-Digest"), `"`)
 	if digest == "" {
 		digest = strings.Trim(resp.Header.Get("Etag"), `"`)

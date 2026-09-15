@@ -20,6 +20,8 @@
 
 ## Purpose
 
+Mount lists stay in the parent scroll flow so overlay scrollbars cannot hide additional mounts. The maintenance backport preserves the reviewed DisksCard layout repair; two and twenty-four mount cases retain keyboard access to the final mount.
+
 Overview delivery diagnoses use latest-started refresh ownership. Older bulk
 responses cannot overwrite newer card notification status, and an empty active
 alert set invalidates outstanding reads. Disposal also prevents updates. Failed

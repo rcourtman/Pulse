@@ -15,6 +15,13 @@
 
 ## Purpose
 
+### Superseded pull-request validation
+
+Build and Test and Core E2E cancel prior validation only for pull_request events.
+Branch pushes and manual runs retain their verdicts. This backports reviewed
+main092e98823903aa90149268d8f851aad46ea72060; triggers, jobs, permissions and
+concurrency group identities are unchanged, verified by semantic YAML comparison.
+
 ### Immutable release source
 
 The committed release-note visual plan must pass the same validator as the

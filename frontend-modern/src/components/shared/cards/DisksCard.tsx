@@ -47,7 +47,8 @@ export const DisksCard: Component<DisksCardProps> = (props) => {
           </div>
         )}
       </Show>
-      <div class="max-h-[140px] overflow-y-auto custom-scrollbar space-y-2">
+      {/* Keep mounts in the parent scroll flow: overlay scrollbars can hide a nested list. */}
+      <div class="space-y-2" data-testid="disks-card-mounts">
         <For each={props.disks}>
           {(disk) => {
             const total = disk.total ?? 0;
