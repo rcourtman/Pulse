@@ -279,13 +279,44 @@ without the other lanes changing the candidate underneath it.
 4. A minor release (`X.Y.0`) requires a seven day soak of the promoted
    candidate; patch releases keep the 72 hour minimum. Patch releases are for
    a named regression or security issue only.
-5. "Soaked clean" means all of: the soak has elapsed since the candidate's
-   release was published; no open issue labelled `affects-<candidate
-   version>` is at high or critical severity; the maintainer's dogfood
-   instance and the demo server ran the candidate for the whole soak without
-   an incident; and preview-channel telemetry, where it exists, shows no
-   elevated failure rate. The release steward names this evidence in the
-   packet.
+5. "Soaked clean" requires the full interval since the exact candidate's
+   release was published, not tag creation or a previous candidate's age;
+   no open high or critical candidate-affecting issue; an incident-free
+   candidate observation interval; and no elevated failure rate in available
+   preview-channel telemetry. The maintainer records the actual evidence and
+   unresolved coverage limits in the existing release packet for independent
+   assessment. A successful health probe or elapsed wall time alone is not soak.
+
+   Keep the established stable dogfood instance and public demo on stable
+   unless their separately authorized deployment policy permits a candidate.
+   They remain operational references, not evidence that the candidate ran.
+   Where those services cannot run previews, the persistent isolated candidate
+   installation must provide both dogfood workload and demo-style interactive
+   coverage for the whole interval. Do not relabel an idle guest as either.
+   The packet must identify the observation target and demonstrate:
+
+   - the exact published candidate, admitted public/private source pair and
+     verified signed installed binary identities, with retained start/end
+     observations and service/restart/incident history throughout the interval;
+   - continuously exercised representative workload and real agent reporting,
+     retained freshness/resource history, and authenticated interactive UI/API
+     checks for the selected release scope, including alert behavior;
+   - preservation of saved application settings and agent identity through the
+     actual prior-stable-to-candidate upgrade and restart, plus verified
+     rollback and persistent-data recovery using retained immutable artifacts;
+   - explicit assessment of incidents, telemetry and integration coverage.
+     Synthetic provider snapshots and source tests are distinguished from live
+     provider acceptance; an offline target does not establish external
+     provider behavior. Material missing coverage prevents a clean-soak claim.
+
+   Candidate replacement, unassessed observation gaps or a candidate-affecting
+   incident cannot be covered by time from the old baseline. A corrected RC
+   starts its full interval again; recovery intervals do not count as running
+   the candidate. Retain original failures and the recovery decision. These
+   target responsibilities do not waive source binding, qualification,
+   immutable publication, independent review or the 72-hour patch/seven-day
+   minor minimums above, and grant no new host or provider access.
+
 6. Version-bound owner exceptions waived the soak for v6.0.0, v6.1.0,
    v6.2.0, v6.3.0, and v6.4.0. They remain recorded and bounded; the train
    does not continue the practice. An exception requires active customer

@@ -10046,11 +10046,11 @@
     {
       "id": "pulse-maintainer-lane-l13",
       "agent_id": "pulse-maintainer",
-      "summary": "Backport bounded correlated VM agent memory fallback for issue 1962 to maintenance release line.",
+      "summary": "Complete maintenance source binding and exact candidate observation contract alongside correlated memory release acceptance.",
       "target_id": "v6-product-lane-expansion",
       "claimed_at": "2026-09-15T01:45:37Z",
-      "heartbeat_at": "2026-09-15T01:45:37Z",
-      "expires_at": "2026-09-15T03:45:37Z",
+      "heartbeat_at": "2026-09-15T01:56:13Z",
+      "expires_at": "2026-09-15T03:56:13Z",
       "work_item": {
         "kind": "lane",
         "id": "L13"

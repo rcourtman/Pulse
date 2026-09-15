@@ -177,19 +177,26 @@ def head_descends_from(commit: str) -> bool:
     return result.returncode == 0
 
 
-def tag_created_unix(tag: str) -> int:
+def release_published_unix(tag: str) -> int:
+    # A tag may predate publication (lightweight tags even use commit time).
+    # Never fall back to Git timestamps when release evidence is unavailable.
     result = subprocess.run(
-        ["git", "for-each-ref", "--format=%(creatordate:unix)", f"refs/tags/{tag}"],
+        ["gh", "release", "view", tag, "--json",
+         "tagName,isDraft,isPrerelease,publishedAt"],
         cwd=REPO_ROOT,
-        env=git_env(),
         check=True,
         capture_output=True,
         text=True,
     )
-    value = result.stdout.strip().splitlines()
-    if not value or not value[0].strip():
-        raise ValueError(f"Could not determine creation time for promoted prerelease tag {tag}.")
-    return int(value[0].strip())
+    release = json.loads(result.stdout)
+    if (release.get("tagName") != tag or release.get("isDraft") is not False
+            or release.get("isPrerelease") is not True
+            or not release.get("publishedAt")):
+        raise ValueError(f"Promoted candidate {tag} must be a published prerelease.")
+    published = datetime.fromisoformat(release["publishedAt"].replace("Z", "+00:00"))
+    if published.tzinfo is None:
+        raise ValueError(f"Publication time for promoted candidate {tag} must include a timezone.")
+    return int(published.timestamp())
 
 
 def normalize_whitespace(value: str) -> str:
@@ -339,7 +346,7 @@ def resolve_metadata(
     tag_exists_fn: Callable[[str], bool] = tag_exists,
     tag_commit_fn: Callable[[str], str] = tag_commit,
     head_descends_from_fn: Callable[[str], bool] = head_descends_from,
-    tag_created_unix_fn: Callable[[str], int] = tag_created_unix,
+    release_published_unix_fn: Callable[[str], int] = release_published_unix,
     now_unix_fn: Callable[[], int] = lambda: int(time.time()),
 ) -> dict[str, str]:
     stage = release_stage(version)
@@ -511,19 +518,19 @@ def resolve_metadata(
                     f"Stable promotion {tag} must descend from promoted prerelease tag {promoted_from_tag}."
                 )
 
-            promoted_tag_ts = tag_created_unix_fn(promoted_from_tag)
+            promoted_tag_ts = release_published_unix_fn(promoted_from_tag)
             soak_hours_value = int((now_unix_fn() - promoted_tag_ts) / 3600)
             soak_hours = str(soak_hours_value)
-            # The release train governs v6.5.0 and later. Earlier lines shipped
-            # under the previous regime and their recorded exceptions stand.
+            # The seven-day minor-release cadence starts at v6.5.0.
+            # Source binding below applies independently to every future stable.
             train_governed = bool(stable_version and stable_version >= RELEASE_TRAIN_MIN_VERSION)
-            candidate_content_drift: list[str] = []
-            if train_governed:
-                candidate_content_drift = [
-                    path
-                    for path in changed_paths_fn(promoted_from_tag)
-                    if not RELEASE_METADATA_PATH_RE.match(path)
-                ]
+            # Every new stable promotion must ship its observed source, including
+            # maintenance lines predating the minor-release train cadence.
+            candidate_content_drift = [
+                path
+                for path in changed_paths_fn(promoted_from_tag)
+                if not RELEASE_METADATA_PATH_RE.match(path)
+            ]
 
             if hotfix_exception:
                 if not hotfix_reason:
