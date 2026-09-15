@@ -5140,7 +5140,9 @@
       "completion": {
         "state": "bounded-residual",
         "summary": "Self-hosted release confidence reached its target and was re-proved for v6.3.1 with exact-SHA dry-run, stable activation, published-asset integrity, installer, demo, container, Helm, private paid-runtime convergence, and bounded recovery from GitHub activation-marker propagation. Current maintenance residual: f04c230 source-binding repair is proposed as PR2091, not landed or released; its WebSocket/benchmark CI failures remain owned. Exact RC scope, qualification and required observation coverage remain outstanding.",
-        "tracking": []
+        "tracking": [
+          "lane-followup:maintenance-release-delivery-and-observation"
+        ]
       },
       "blockers": [],
       "subsystems": [
@@ -9726,6 +9728,19 @@
         "pulse-pro"
       ],
       "subsystem_ids": []
+    },
+    {
+      "id": "maintenance-release-delivery-and-observation",
+      "summary": "Land the stable source-binding repair, diagnose retained CI failures, qualify a coherent maintenance RC, verify installed upgrade/recovery, and reconcile exact-candidate observation coverage without changing stable services.",
+      "owner": "pulse-maintainer",
+      "status": "planned",
+      "recorded_at": "2026-09-15",
+      "lane_ids": [
+        "L1"
+      ],
+      "subsystem_ids": [
+        "deployment-installability"
+      ]
     }
   ],
   "coverage_gaps": [
