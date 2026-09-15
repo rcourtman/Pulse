@@ -371,7 +371,7 @@ func (r *Router) tenantMonitorGuardMiddleware(next http.Handler) http.Handler {
 		// membership and lifecycle; fail closed on persisted tenant availability
 		// here without constructing a monitoring runtime.
 		if req.Method == http.MethodPost && req.URL.Path == "/api/security/tokens" {
-			if r.multiTenant == nil {
+			if r.multiTenant == nil || !r.multiTenant.OrgExists(orgID) {
 				writeErrorResponse(w, http.StatusServiceUnavailable, "tenant_unavailable", "Tenant configuration is not available", nil)
 				return
 			}

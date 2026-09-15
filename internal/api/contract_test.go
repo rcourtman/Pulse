@@ -24924,6 +24924,9 @@ func TestTokenCreationTenantGuardDoesNotRequireInventory(t *testing.T) {
 			persistence := config.NewMultiTenantPersistence(t.TempDir())
 			org := &models.Organization{ID: "control-org", DisplayName: "Control org"}
 			org.Status = models.OrgStatus(status)
+			if status == "missing" && persistence.OrgExists("control-org") {
+				t.Fatal("missing tenant fixture unexpectedly exists")
+			}
 			if status != "missing" {
 				if err := persistence.SaveOrganization(org); err != nil {
 					t.Fatal(err)
