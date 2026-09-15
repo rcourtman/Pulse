@@ -619,50 +619,61 @@ func TestStoreFlushMakesQueuedWritesVisible(t *testing.T) {
 }
 
 func TestNewStoreDefersStartupMaintenance(t *testing.T) {
-	previousHook := startupMaintenanceHook
-	defer func() {
-		startupMaintenanceHook = previousHook
-	}()
+	for _, initializationDelay := range []time.Duration{0, 250 * time.Millisecond} {
+		t.Run(initializationDelay.String(), func(t *testing.T) {
+			previousHook := startupMaintenanceHook
+			started := make(chan struct{})
+			release := make(chan struct{})
+			startupMaintenanceHook = func() {
+				close(started)
+				<-release
+			}
 
-	started := make(chan struct{})
-	release := make(chan struct{})
-	startupMaintenanceHook = func() {
-		close(started)
-		<-release
+			cfg := DefaultConfig(t.TempDir())
+			cfg.FlushInterval = time.Hour
+			done := make(chan struct{})
+			var (
+				store *Store
+				err   error
+			)
+			go func() {
+				// Model slow pre-maintenance initialization without changing
+				// database internals or the non-blocking assertion's deadline.
+				time.Sleep(initializationDelay)
+				store, err = NewStore(cfg)
+				close(done)
+			}()
+			defer func() {
+				// Release and join even on assertion failure, before restoring
+				// the package hook or allowing TempDir cleanup to run.
+				close(release)
+				<-done
+				if store != nil {
+					if closeErr := store.Close(); closeErr != nil {
+						t.Errorf("close store: %v", closeErr)
+					}
+				}
+				startupMaintenanceHook = previousHook
+			}()
+
+			// This is a scheduling contract, not an end-to-end startup SLO.
+			// Observe entry into the blocked maintenance phase before timing
+			// whether construction returns independently of that phase.
+			select {
+			case <-started:
+			case <-time.After(5 * time.Second):
+				t.Fatal("startup maintenance was not scheduled")
+			}
+			select {
+			case <-done:
+			case <-time.After(200 * time.Millisecond):
+				t.Fatal("NewStore blocked on startup maintenance")
+			}
+			if err != nil {
+				t.Fatalf("NewStore returned error: %v", err)
+			}
+		})
 	}
-
-	dir := t.TempDir()
-	cfg := DefaultConfig(dir)
-	cfg.FlushInterval = time.Hour
-
-	done := make(chan struct{})
-	var (
-		store *Store
-		err   error
-	)
-	go func() {
-		store, err = NewStore(cfg)
-		close(done)
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatal("NewStore blocked on startup maintenance")
-	}
-
-	if err != nil {
-		t.Fatalf("NewStore returned error: %v", err)
-	}
-
-	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("startup maintenance was not scheduled")
-	}
-
-	close(release)
-	defer store.Close()
 }
 
 func TestStoreWaitForMaintenanceWaitsForQueuedStartupWork(t *testing.T) {

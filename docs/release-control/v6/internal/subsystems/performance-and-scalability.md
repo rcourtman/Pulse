@@ -1327,6 +1327,14 @@ without contention or cross-delivery.
 
 ## Current State
 
+The deferred-startup maintenance scheduling proof starts its unchanged 200 ms
+non-blocking assertion only after the maintenance hook has entered its blocked
+phase. A separate scheduling watchdog bounds initialization, and both ordinary
+and deliberately delayed pre-maintenance construction are covered. Failure
+cleanup releases the hook and joins construction and store workers before
+restoring shared test state. This is not a relaxation of any product startup
+latency SLO and changes no database runtime behavior.
+
 ### Large API responses negotiate gzip without corrupting edge cases
 
 The main listener compresses eligible JSON and frontend text assets for
