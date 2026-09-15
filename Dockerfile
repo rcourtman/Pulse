@@ -4,7 +4,7 @@ ARG APPRISE_VERSION=1.12.0
 
 # Build stage for frontend (must be built first for embedding)
 # Force amd64 platform to avoid slow QEMU emulation during multi-arch builds
-FROM --platform=linux/amd64 node:24-alpine@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS frontend-builder
+FROM --platform=linux/amd64 node:24-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81 AS frontend-builder
 
 WORKDIR /app/frontend-modern
 
