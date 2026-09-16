@@ -12,7 +12,7 @@
     "esbuild": "^0.28.1",
     "jsdom": "^24.1.0",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.6"
+    "vitest": "^4.1.11"
   },
   "overrides": {
     "esbuild": "$esbuild",
