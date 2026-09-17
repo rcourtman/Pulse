@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -1346,6 +1347,17 @@ func TestAdminBypassEnabled_DeclinedOutsideDevMode(t *testing.T) {
 	}
 }
 
+func initCSRFStoreForSecurityTest(t *testing.T) {
+	t.Helper()
+	defaultDataPath := os.Getenv("PULSE_DATA_DIR")
+	resetCSRFStoreForTests()
+	InitCSRFStore(t.TempDir())
+	t.Cleanup(func() {
+		resetCSRFStoreForTests()
+		InitCSRFStore(defaultDataPath)
+	})
+}
+
 func TestCheckCSRF_SafeMethods(t *testing.T) {
 	tests := []struct {
 		method string
@@ -1408,6 +1420,7 @@ func TestCheckCSRF_BearerAuth_NoSessionCookie(t *testing.T) {
 }
 
 func TestCheckCSRF_UnknownAuthorizationSchemeDoesNotBypass(t *testing.T) {
+	initCSRFStoreForSecurityTest(t)
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/test", nil)
 	req.Header.Set("Authorization", "Digest abc123")
@@ -1435,6 +1448,7 @@ func TestCheckCSRF_NoSessionCookie(t *testing.T) {
 }
 
 func TestCheckCSRF_MissingCSRFToken(t *testing.T) {
+	initCSRFStoreForSecurityTest(t)
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/test", nil)
 	req.AddCookie(&http.Cookie{
@@ -1457,6 +1471,7 @@ func TestCheckCSRF_MissingCSRFToken(t *testing.T) {
 }
 
 func TestCheckCSRF_InvalidCSRFToken(t *testing.T) {
+	initCSRFStoreForSecurityTest(t)
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/test", nil)
 	req.AddCookie(&http.Cookie{
@@ -1479,9 +1494,7 @@ func TestCheckCSRF_InvalidCSRFToken(t *testing.T) {
 }
 
 func TestCheckCSRF_ValidCSRFToken(t *testing.T) {
-	// Initialize stores with temp directory
-	dir := t.TempDir()
-	InitCSRFStore(dir)
+	initCSRFStoreForSecurityTest(t)
 
 	// Create a session ID
 	sessionID := "valid-session-id-12345678"
@@ -1505,6 +1518,7 @@ func TestCheckCSRF_ValidCSRFToken(t *testing.T) {
 }
 
 func TestCheckCSRF_CSRFTokenFromFormValue(t *testing.T) {
+	initCSRFStoreForSecurityTest(t)
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/test?csrf_token=form-token-value", nil)
 	req.AddCookie(&http.Cookie{
@@ -1522,6 +1536,7 @@ func TestCheckCSRF_CSRFTokenFromFormValue(t *testing.T) {
 }
 
 func TestCheckCSRF_UnsafeMethods(t *testing.T) {
+	initCSRFStoreForSecurityTest(t)
 	methods := []string{"POST", "PUT", "DELETE", "PATCH"}
 
 	for _, method := range methods {
