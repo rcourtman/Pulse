@@ -5272,6 +5272,7 @@ func TestSSHConfigRejectsSetupTokenQueryParam(t *testing.T) {
 // session cookie is present, CSRF must be valid regardless of any other
 // auth-style header.
 func TestCheckCSRF_HeaderDoesNotBypassWhenSessionCookiePresent(t *testing.T) {
+	initCSRFStoreForSecurityTest(t)
 	cases := []struct {
 		name        string
 		setHeader   func(*http.Request)
