@@ -1,33 +1,37 @@
 {
   "version": 1,
-  "base_sha": "ea4c4a71475629e45dd053dc024532443c293809",
-  "verified_at": "2026-09-14T23:30:14.962745Z",
+  "base_sha": "c8857686dd9dd65f1ec31e4b73550ea056acaef3",
+  "verified_at": "2026-09-19T22:55:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/cards/DisksCard.tsx"
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/cards/DisksCard.tsx": "cdda554f93b7aecb925d803b0192260ef1a445065c501468a0412b824dc08028"
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "bcfebc202c33466d321297bb32ad75a923cc35a7d76c0c376a65a5c172d68955"
   },
   "routes": [
-    "/qualification/disks/"
+    "/browser-tests/guest-drawer-overview.html"
   ],
   "viewports": [
     {
-      "width": 600,
-      "height": 500
+      "width": 2010,
+      "height": 1072
     },
     {
-      "width": 1200,
-      "height": 500
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "2 and 24 mounts, light and dark themes, in parent scroll flow"
+    "Guest overview with a VM carrying three filesystem mount points, three tags, memory, and no network-interface section",
+    "Filesystems section present with per-mount usage text and threshold progress bars",
+    "Tags section present with the short tag value list"
   ],
   "interactions": [
-    "Focus Before disks, End then Tab; final mount visible and After disks focused"
+    "Render the production GuestDrawerOverview component with synthetic props at 2010x1072 and measure every section panel bounding width",
+    "Confirm Filesystems renders 1305.33px wide and Tags renders 648.66px wide, i.e. the filesystem list takes the two-tile column and the tag list the one-tile column",
+    "Resize to 390x844 and confirm every section stacks full width (340px) with document scrollWidth 390 equal to clientWidth 390"
   ],
-  "command": "pulse-worker-browser mount-proof.cjs",
-  "notes": "Production DisksCard fixture with project CSS; eight styled Chromium cases verified at the original recorded observation time. Source content unchanged by recovery. Earlier warning-severity evidence belongs to already published PR2090 and is retained there, not claimed as a new observation here. Screenshots 600px dark with 24 mounts and 1200px light with 2 mounts inspected. Firefox and reporter attachments not verified. This is synthetic component proof, not installed reporter acceptance. Initial module-path and unstyled runs not counted."
+  "command": "pulse-worker-browser guest-drawer-visual.cjs",
+  "notes": "Offline Playwright Chromium 141.0.7390.37 run of the production GuestDrawerOverview component with a synthetic guest and the project CSS; no live backend, API or WebSocket path. Desktop 2010x1072 panel widths: Operator context 648.66, System 648.66, Memory 648.66, Filesystems 1305.33, Tags 648.66 (Filesystems spans the 66.667% column, Tags the 33.333% column). Narrow 390x844: all five panels 340px, no horizontal overflow. No page errors and no failed responses. Desktop and narrow screenshots inspected. Build toolchain: vite 6.4.3, vite-plugin-solid 2.11.12, solid-js 1.9.14, tailwindcss 3.4.19, esbuild 0.28.1, matching frontend-modern/package-lock.json; the dependency tree was copied from a readable offline checkout because the lane's canonical tree under /srv/pulse is ACL-restricted from this identity, and the render-relevant versions match exactly. This release-line backport carries the same content-addressed proof: the GuestDrawerOverview.tsx blob is byte-identical (sha256 bcfebc20…) to the browser-verified content, so the receipt remains valid for the same source."
 }
