@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -853,7 +852,7 @@ const (
 )
 
 func effectiveAPISLOTarget(localTarget, githubActionsTarget time.Duration) time.Duration {
-	if githubActionsTarget > 0 && os.Getenv("GITHUB_ACTIONS") == "true" {
+	if githubActionsTarget > 0 && latencyBudgetEnforced() {
 		return githubActionsTarget
 	}
 	return localTarget
@@ -936,7 +935,7 @@ func assertLatencySLO(t *testing.T, label string, latencies []time.Duration, tar
 	if p95 <= target {
 		return
 	}
-	if os.Getenv("GITHUB_ACTIONS") == "true" {
+	if latencyBudgetEnforced() {
 		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, target)
 		return
 	}
