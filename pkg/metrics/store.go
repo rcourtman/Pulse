@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
-	_ "modernc.org/sqlite"
+	sqlite "modernc.org/sqlite"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
@@ -27,6 +27,52 @@ const (
 	privateDirPerm  = 0o700
 	privateFilePerm = 0o600
 )
+
+// SQLite result codes for transient lock conditions. The modernc driver
+// surfaces these as *sqlite.Error, and its message text is e.g.
+// "database is locked (5) (SQLITE_BUSY)", so callers must match the code
+// rather than a bare "database is locked" string.
+const (
+	sqliteCodeBusy              = 5
+	sqliteCodeLocked            = 6
+	sqliteCodeBusyRecovery      = sqliteCodeBusy | (1 << 8)
+	sqliteCodeBusySnapshot      = sqliteCodeBusy | (2 << 8)
+	sqliteCodeBusyTimeout       = sqliteCodeBusy | (3 << 8)
+	sqliteCodeLockedSharedCache = sqliteCodeLocked | (1 << 8)
+	sqliteCodeLockedVTab        = sqliteCodeLocked | (2 << 8)
+)
+
+// isRetryableWriteError reports whether err is a transient SQLite lock or a
+// closed pool connection that should be retried rather than dropped. The
+// previous exact string comparison against "database is locked" never matched
+// the modernc driver's actual message, so a busy writer dropped its batch
+// immediately instead of backing off.
+func isRetryableWriteError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var sqliteErr *sqlite.Error
+	if errors.As(err, &sqliteErr) {
+		switch sqliteErr.Code() {
+		case sqliteCodeBusy,
+			sqliteCodeLocked,
+			sqliteCodeBusyRecovery,
+			sqliteCodeBusySnapshot,
+			sqliteCodeBusyTimeout,
+			sqliteCodeLockedSharedCache,
+			sqliteCodeLockedVTab:
+			return true
+		}
+	}
+
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "database is locked") ||
+		strings.Contains(message, "sqlite_busy") ||
+		strings.Contains(message, "sqlite_locked") ||
+		strings.Contains(message, "database table is locked") ||
+		message == "sql: database is closed"
+}
 
 // Tier represents the granularity of stored metrics
 type Tier string
@@ -630,8 +676,22 @@ func (s *Store) metricsIndexMatches(name string, wantUnique bool, wantColumns []
 // SQLite cannot switch from NONE to INCREMENTAL without a full VACUUM to
 // restructure the file, so we detect and convert on first run after upgrade.
 func (s *Store) migrateAutoVacuum() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+
+	// auto_vacuum is only a per-connection setting until a VACUUM on that same
+	// connection rewrites the file header. Running the pragma and the VACUUM on
+	// separate pool connections could leave the file at NONE, so pin both to one
+	// connection and verify the mode actually persisted.
+	conn, err := s.db.DB.Conn(ctx)
+	if err != nil {
+		log.Debug().Err(err).Msg("Failed to acquire connection for auto_vacuum check")
+		return
+	}
+	defer conn.Close()
+
 	var mode int
-	if err := s.db.QueryRow("PRAGMA auto_vacuum").Scan(&mode); err != nil {
+	if err := conn.QueryRowContext(ctx, "PRAGMA auto_vacuum").Scan(&mode); err != nil {
 		log.Debug().Err(err).Msg("Failed to check auto_vacuum mode")
 		return
 	}
@@ -643,12 +703,17 @@ func (s *Store) migrateAutoVacuum() {
 	start := time.Now()
 
 	// Set the desired mode then VACUUM to restructure the file.
-	if _, err := s.db.Exec("PRAGMA auto_vacuum = INCREMENTAL"); err != nil {
+	if _, err := conn.ExecContext(ctx, "PRAGMA auto_vacuum = INCREMENTAL"); err != nil {
 		log.Warn().Err(err).Msg("Failed to set auto_vacuum mode")
 		return
 	}
-	if _, err := s.db.Exec("VACUUM"); err != nil {
+	if _, err := conn.ExecContext(ctx, "VACUUM"); err != nil {
 		log.Warn().Err(err).Msg("Auto-vacuum migration VACUUM failed (will retry next restart)")
+		return
+	}
+
+	if err := conn.QueryRowContext(ctx, "PRAGMA auto_vacuum").Scan(&mode); err != nil || mode != 2 {
+		log.Warn().Err(err).Int("mode", mode).Msg("Auto-vacuum migration did not persist incremental mode")
 		return
 	}
 
@@ -1140,7 +1205,7 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 		if err == nil {
 			break
 		}
-		if i < 4 && (err.Error() == "database is locked" || err.Error() == "sql: database is closed") {
+		if i < 4 && isRetryableWriteError(err) {
 			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
 			continue
 		}
@@ -1158,8 +1223,8 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 		ON CONFLICT(resource_type, resource_id, metric_type, tier, timestamp)
 		DO UPDATE SET
 			value = excluded.value,
-			min_value = excluded.min_value,
-			max_value = excluded.max_value
+			min_value = COALESCE(excluded.min_value, min_value),
+			max_value = COALESCE(excluded.max_value, max_value)
 	`)
 	if err != nil {
 		_ = tx.Rollback()
@@ -1662,7 +1727,7 @@ func (s *Store) queryRetainedChunk(resourceType string, resourceIDs []string, me
 		if err == nil {
 			break
 		}
-		if i < 4 && (err.Error() == "database is locked" || err.Error() == "sql: database is closed") {
+		if i < 4 && isRetryableWriteError(err) {
 			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
 			continue
 		}
@@ -1971,15 +2036,21 @@ func (s *Store) rollupTier(fromTier, toTier Tier, bucketSize, minAge time.Durati
 	for windowStart < cutoffBucket {
 		nextBucket, hasSource := s.nextSourceRollupBucket(fromTier, windowStart, cutoffBucket, bucketSecs)
 		if !hasSource {
-			if processedAny {
-				if err := s.setMetaInt(metaKey, cutoffBucket); err != nil {
-					log.Warn().Err(err).Str("tier", string(fromTier)).Msg("Failed to persist rollup checkpoint")
-				}
-			}
+			// No source remains at or after the checkpoint. Leave the checkpoint
+			// where it is so a late backfill into the trailing gap is still rolled
+			// up on a later run; do not leap it to the cutoff.
 			return
 		}
 
 		if nextBucket > windowStart {
+			if processedAny {
+				// A gap sits between already-processed source and the next source.
+				// Stop and leave the checkpoint at the gap start so the gap can
+				// still be rolled up if the lower tier backfills it later. The next
+				// run skips the gap once it is known to be empty.
+				return
+			}
+			// Skip the empty prefix before the first source in this run.
 			windowStart = nextBucket
 		}
 		windowEnd := windowStart + chunkSecs

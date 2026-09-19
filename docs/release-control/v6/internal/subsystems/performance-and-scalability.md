@@ -3179,3 +3179,42 @@ and panics the process during shutdown. The worker instead drains already-queued
 requests without closing the channel; a late write lands in the buffered channel
 and is discarded with the store. `pkg/metrics/store_additional_test.go` pins the
 post-shutdown enqueue and the concurrent-close race.
+
+### Metrics-store rollup checkpoints never leap source gaps
+
+A tier rollup must not advance its checkpoint past a window that has no source
+rows. The previous implementation jumped the checkpoint to the rollup cutoff
+whenever a source gap followed already-processed windows, so a lower tier that
+backfilled the gap later (for example after a transient raw-to-minute failure)
+had its rows stranded below the upper tier's checkpoint and eventually purged by
+retention. `rollupTier` now stops at the gap, leaving the checkpoint at the gap
+start; the next invocation skips the gap once it is confirmed empty. The
+`nextSourceRollupBucket` prefix skip still runs only before the first source
+window of an invocation, preserving bounded catch-up. `pkg/metrics/store_test.go`
+pins the interspersed-gap backfill in
+`TestStoreRollupTierBackfillsInterspersedGap` and keeps
+`TestStoreRollupTierEmptyWindowPreservesCheckpoint`.
+
+### Metrics-store retries match the SQLite driver error code
+
+Transient write and read retries must classify SQLite lock errors by the
+`modernc.org/sqlite` result code rather than by an exact message. The driver
+reports `database is locked (5) (SQLITE_BUSY)`, which an equality check against
+`database is locked` never matched, so a busy writer dropped its batch without
+retrying. `isRetryableWriteError` matches the BUSY/LOCKED code family with a
+substring fallback for closed-pool errors. A direct aggregate-tier write also
+preserves an existing rollup row's `min_value`/`max_value` via `COALESCE` rather
+than nulling the stored spread. `pkg/metrics/store_test.go` pins both in
+`TestIsRetryableWriteErrorMatchesDriverBusyCode` and
+`TestStoreWriteBatchPreservesRollupSpread`.
+
+### One-time auto-vacuum conversion runs on one connection
+
+`migrateAutoVacuum` must run `PRAGMA auto_vacuum = INCREMENTAL` and the
+follow-up `VACUUM` on the same SQLite connection, because the pragma is only a
+per-connection setting until that connection's `VACUUM` rewrites the file
+header. Running them on separate pool connections could leave the file at NONE
+and repeat the full-file VACUUM on every restart. The migration now pins a
+connection, verifies the persisted mode, and leaves the conversion for a later
+restart if verification fails. `pkg/metrics/store_test.go` pins the persisted
+mode in `TestStoreAutoVacuumPersistsAcrossRestart`.
