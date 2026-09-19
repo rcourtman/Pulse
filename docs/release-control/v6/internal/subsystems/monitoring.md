@@ -4116,7 +4116,7 @@ now takes the agent value when the Proxmox value is unreported (`-1`) or when
 the agent value is lower (more pessimistic); it never raises a reported
 remaining-life value. `PercentageUsed` and the other merged SMART attributes are
 still recorded. Focused proof lives in
-`internal/monitoring/monitor_integration_test.go`
+`internal/monitoring/physical_disk_roundtrip_test.go`
 (`TestMergeHostAgentSMARTIntoDisks_AgentWearoutDoesNotHideLowPVELife` and
 `TestMergeHostAgentSMARTIntoDisks_AgentWearoutFillsUnreportedPVELife`). This is
 synthetic merge evidence, not reporter acceptance or hardware confirmation.

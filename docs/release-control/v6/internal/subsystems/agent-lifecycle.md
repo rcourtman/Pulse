@@ -8105,3 +8105,19 @@ install token clears the block and heals to the base identity, while a token
 already bound to its own derived identity (an established distinct host sharing
 a hostname or machine ID, #1753) is left untouched. Focused proof lives in
 `internal/monitoring/monitor_host_agents_test.go`.
+
+### Agent endurance evidence cannot raise a disk's remaining life
+
+The physical-disk SMART merge treats a linked host agent's `PercentageUsed` as
+more precise than the Proxmox inventory, but it must not make a disk look
+healthier than Proxmox already reports. An intermittent NVMe endurance reading
+of `PercentageUsed` 0 previously raised the merged remaining life to 100, which
+resolved a genuine low-life disk-wearout alert and let it re-fire on the next
+physical-disk poll with a fresh resolved notification every poll interval
+(#2112). The merge now takes the agent value only when the Proxmox value is
+unreported or more pessimistic, never raising a reported remaining-life value,
+while still recording the agent's SMART attributes. This does not change agent
+admission, token binding or removal-block behaviour. Focused proof lives in
+`internal/monitoring/physical_disk_roundtrip_test.go`
+(`TestMergeHostAgentSMARTIntoDisks_AgentWearoutDoesNotHideLowPVELife` and
+`TestMergeHostAgentSMARTIntoDisks_AgentWearoutFillsUnreportedPVELife`).
