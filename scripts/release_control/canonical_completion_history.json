@@ -15,6 +15,11 @@
       "incomplete_commit": "d0f138cf267184260ad01fe517f7610c7769255c",
       "completion_commit": "0f9f33777c4a717a82d2fefee6c30f79d5b405e2",
       "reason": "Evaluate the rehearsal backend package-timeout runtime change together with the follow-up commit that records its deployment-installability contract section as one completion unit. The completion tree passes the canonical completion guard for the combined changed files."
+    },
+    {
+      "incomplete_commit": "248ada3cc662bf0529bbf9586bdfaee6aee2467c",
+      "completion_commit": "f08b96b968444be221204e6bb062fecb7a9b3cc4",
+      "reason": "Evaluate the Anthropic stable-system-prefix prompt-cache repair together with the follow-up commit that records its transport contract in docs/release-control/v6/internal/subsystems/ai-runtime.md, as one reviewed completion unit."
     }
   ]
 }

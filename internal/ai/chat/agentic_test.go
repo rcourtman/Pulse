@@ -461,6 +461,30 @@ func TestAgenticLoop_SystemPromptIncludesCurrentTime(t *testing.T) {
 	}
 }
 
+func TestAgenticLoop_SystemPromptPartsSeparateStablePrefix(t *testing.T) {
+	mockProvider := &MockProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	loop := NewAgenticLoop(mockProvider, executor, "BASE PROMPT BODY")
+
+	stable, full := loop.systemPromptParts()
+
+	if !strings.HasPrefix(full, stable) {
+		t.Fatalf("stable prefix must lead the full prompt, stable=%q full=%q", stable, full)
+	}
+	if !strings.Contains(stable, "BASE PROMPT BODY") || !strings.Contains(stable, "EXECUTION MODE:") {
+		t.Fatalf("stable prefix must carry the frozen base and mode text, got %q", stable)
+	}
+	if strings.Contains(stable, "CURRENT TIME:") {
+		t.Fatalf("per-turn time must stay outside the cacheable prefix, got %q", stable)
+	}
+	if !strings.Contains(full, "CURRENT TIME:") {
+		t.Fatalf("full prompt must still carry CURRENT TIME, got %q", full)
+	}
+	if loop.getSystemPrompt() != full {
+		t.Fatal("getSystemPrompt must return the full prompt from systemPromptParts")
+	}
+}
+
 func TestAgenticLoop_AnswerQuestion(t *testing.T) {
 	mockProvider := &MockProvider{}
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
