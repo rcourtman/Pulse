@@ -77,6 +77,42 @@ func TestAgent_getImageRepoDigest_FallbackToFirst(t *testing.T) {
 	}
 }
 
+func TestAgent_getImageRepoDigests_MultipleDigestsForOneImage(t *testing.T) {
+	agent := &Agent{
+		docker: &fakeDockerClient{
+			imageInspectWithRawFn: func(ctx context.Context, imageID string) (image.InspectResponse, []byte, error) {
+				return image.InspectResponse{
+					RepoDigests: []string{
+						"docker.io/library/postgres@sha256:44c4",
+						"docker.io/library/postgres@sha256:cf78",
+						"docker.io/other/postgres@sha256:beef",
+					},
+					Architecture: "amd64",
+					Os:           "linux",
+				}, nil, nil
+			},
+		},
+		logger: zerolog.New(io.Discard),
+	}
+
+	digests, arch, os, variant := agent.getImageRepoDigests(context.Background(), "image-id", "postgres:16.15-alpine3.24")
+	want := []string{"sha256:44c4", "sha256:cf78", "sha256:beef"}
+	if len(digests) != len(want) {
+		t.Fatalf("digests = %v, want %v", digests, want)
+	}
+	for i := range want {
+		if digests[i] != want[i] {
+			t.Fatalf("digests = %v, want %v", digests, want)
+		}
+	}
+	if arch != "amd64" || os != "linux" || variant != "" {
+		t.Fatalf("platform = %q/%q/%q, want amd64/linux/", arch, os, variant)
+	}
+	if got, _, _, _ := agent.getImageRepoDigest(context.Background(), "image-id", "postgres:16.15-alpine3.24"); got != "sha256:44c4" {
+		t.Fatalf("primary digest = %q, want sha256:44c4", got)
+	}
+}
+
 func TestAgent_getImageRepoDigest_InvalidRepoDigest(t *testing.T) {
 	agent := &Agent{
 		docker: &fakeDockerClient{
