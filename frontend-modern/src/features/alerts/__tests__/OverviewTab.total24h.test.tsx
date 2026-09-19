@@ -163,6 +163,25 @@ describe('OverviewTab Last 24 Hours stat', () => {
     expect(statValue?.textContent).toBe('3');
   });
 
+  it('keeps the critical annotation in its own cell so counts stay right-aligned', () => {
+    const recentTime = new Date(Date.now() - 1_800_000).toISOString();
+
+    const activeAlerts: Record<string, Alert> = {
+      critical: { ...makeAlert('critical', recentTime), level: 'critical' },
+    };
+
+    render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
+
+    const label = screen.getByText('Triggered (24h)');
+    const cells = Array.from(label.closest('tr')!.querySelectorAll('td'));
+    const valueIndex = cells.findIndex(
+      (cell) => cell.getAttribute('data-testid') === 'alert-overview-stat-value',
+    );
+    expect(valueIndex).toBeGreaterThanOrEqual(0);
+    expect(cells[valueIndex].textContent).toBe('1');
+    expect(cells[valueIndex + 1]?.textContent).toContain('1 critical');
+  });
+
   it('excludes future-dated alerts (clock skew)', () => {
     const futureTime = new Date(Date.now() + 3_600_000).toISOString();
 

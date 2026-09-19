@@ -1,25 +1,21 @@
 {
   "version": 1,
-  "base_sha": "ce1e99ba4e37b735d22158ac74a93afa26d7611f",
-  "verified_at": "2026-09-14T21:45:40.182293Z",
+  "base_sha": "1778f7d16c80c2ac9911a6fd8a11db7f967f3a99",
+  "verified_at": "2026-09-19T13:50:38Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/notifications.ts",
-    "frontend-modern/src/components/Alerts/WebhookConfigList.tsx",
-    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts"
+    "frontend-modern/src/features/alerts/AlertOverviewStatsCards.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/notifications.ts": "ed4d7dd4946ed2295dff919134f394d0139d270bb446d069f4ddc8a9784b1667",
-    "frontend-modern/src/components/Alerts/WebhookConfigList.tsx": "0830ab5c9f7e0173dbdf3e92ed0e0c9cbf0a34942edb58001a3220d43b39d6c3",
-    "frontend-modern/src/components/Alerts/useWebhookConfigState.ts": "b641c911baeda41adfbf82621ede005db2bdc032f25786d4533c422b59b64047"
+    "frontend-modern/src/features/alerts/AlertOverviewStatsCards.tsx": "90f0b5102f2362c05a70c374afe5a386a679a1ebed3ab69580eb17278c38df05"
   },
   "routes": [
-    "/browser-tests/severity.html"
+    "/browser-tests/alerts-overview.html"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 1000
+      "width": 2010,
+      "height": 1072
     },
     {
       "width": 390,
@@ -27,18 +23,15 @@
     }
   ],
   "states": [
-    "Existing warning email and webhook",
-    "All, critical and warning severity saved and reloaded",
-    "Cancelled webhook edit",
-    "New warning webhook persisted"
+    "Alerts overview stats with three active alerts including one critical",
+    "Triggered (24h) row carrying the small critical annotation",
+    "Acknowledged and Workload Overrides rows without the annotation"
   ],
   "interactions": [
-    "Change production email severity selector, save through NotificationsAPI to synthetic backend, reload page and assert each supported value",
-    "Edit production webhook, save and reload each supported severity",
-    "Cancel changed webhook severity and verify original warning preserved",
-    "Create warning webhook and reload synthetic persisted store",
-    "Inspect desktop edit and narrow saved screenshots"
+    "Render the production AlertOverviewStatsCards component with a synthetic overview state at 2010x1072",
+    "Measure the text right edge of all three numeric value cells and confirm they are identical (359.41px)",
+    "Resize to 390x844 and confirm the numeric column stays aligned with no horizontal overflow"
   ],
-  "command": "pulse-worker-browser severity-browser.cjs",
-  "notes": "Production-component fixture built with Vite esnext and project CSS. Synthetic email HTTP responses and webhook localStorage persistence; no live backend, notification delivery or whole-application navigation proof. Runtime source hashes match the verified implementation. Desktop edit and narrow saved screenshots inspected."
+  "command": "pulse-worker-browser frontend-modern/alerts-visual.cjs",
+  "notes": "Offline Playwright Chromium 1.56.1 run of the production Alerts overview stats component with a synthetic state and project CSS; no live backend, API or WebSocket path. Value text right edges measured equal for all three rows (desktop 359.41px; narrow 266.27px); the Triggered (24h) row keeps its 1 critical annotation in its own right-aligned cell; narrow document scrollWidth 390 = clientWidth 390; no page errors. Desktop and narrow screenshots inspected."
 }
