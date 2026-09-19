@@ -304,6 +304,7 @@ echo CONTINUED
 PROFILE=rehearsal
 TEST_DATA_DIR=unused
 ACTUAL_GO=fixture
+REHEARSAL_BACKEND_TIMEOUT=30m
 rm() {{ :; }}
 mkdir() {{ :; }}
 python3() {{
@@ -314,7 +315,7 @@ python3() {{
   fi
 }}
 env() {{
-  [ "$*" = 'PULSE_DATA_DIR=unused go test -json -p 1 ./...' ] || return 42
+  [ "$*" = 'PULSE_DATA_DIR=unused go test -json -p 1 -timeout 30m ./...' ] || return 42
   printf '%s\\n' '{{"Action":"output","Output":"synthetic verdict\\n"}}'
   return {code}
 }}
