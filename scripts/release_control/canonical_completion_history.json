@@ -10,6 +10,11 @@
       "incomplete_commit": "e1d97b361edfac311dd57b6695ab3ad9bef613bc",
       "completion_commit": "087bbf8c20db8ffec1c24037e78a1a88ea4ff69e",
       "reason": "Evaluate the metrics-store rollup, retry, upsert and auto-vacuum repair together with the follow-up commit that moves its regression proof into the registry-accepted pkg/metrics/store_additional_test.go proof file, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "d0f138cf267184260ad01fe517f7610c7769255c",
+      "completion_commit": "0f9f33777c4a717a82d2fefee6c30f79d5b405e2",
+      "reason": "Evaluate the rehearsal backend package-timeout runtime change together with the follow-up commit that records its deployment-installability contract section as one completion unit. The completion tree passes the canonical completion guard for the combined changed files."
     }
   ]
 }
