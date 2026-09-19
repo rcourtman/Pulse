@@ -665,6 +665,31 @@ outcome requires from current evidence, and explicitly grants no tool choice,
 mutation, approval, or policy authority. This is the retained-intent seam from
 cheap local detection into model-owned diagnosis and governed action.
 
+### Anthropic prompt-cache reuse of the stable system prefix (19 September 2026)
+
+Provider-neutral `ChatRequest.System` stays the full system prompt. The optional
+`SystemCacheablePrefix` marks its stable leading portion; the agentic loop
+(`internal/ai/chat/agentic_prompt.go`) supplies the frozen base plus execution
+mode text there and keeps the per-turn clock and accumulated knowledge after it,
+so multi-turn runs can reuse the prompt instead of repaying it every turn
+(#2118). When the prefix is an exact prefix of `System`, the Anthropic transport
+(`internal/ai/providers/anthropic.go`) serializes `system` as content blocks with
+an `ephemeral` cache breakpoint on the stable block and the volatile remainder as
+an uncached block; otherwise it sends the plain string form. Anthropic caches in
+tools then system then messages order, so the system breakpoint already covers
+the tool definitions and the per-tool breakpoint is omitted when the block form
+is used; providers without prompt caching ignore the field and send `System`
+unchanged. The prefix is applied only when it is an exact prefix of the possibly
+sanitized `System`, so a redacted secret cannot be reintroduced through the block
+form; a mismatch falls back to the plain string. Cache creation/read counters are
+logged at Info for production visibility. Proof: `TestBuildAnthropicSystem`,
+`TestAnthropicClient_Chat_CacheableSystemPrefix`,
+`TestAnthropicClient_ChatStream_CacheableSystemPrefix`,
+`TestAnthropicClient_Chat_KeepsToolBreakpointWithoutCacheableSystem`, and
+`TestAgenticLoop_SystemPromptPartsSeparateStablePrefix`. This does not change
+model-facing content, tool exposure, or approval authority, and it does not claim
+a measured cost reduction or installed-deployment cache-read rate.
+
 ## Canonical Files
 
 1. `internal/ai/`

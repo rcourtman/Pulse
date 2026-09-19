@@ -13,6 +13,16 @@ import (
 // service start, so anything that must stay fresh per turn (mode, current time)
 // is appended here rather than baked into baseSystemPrompt.
 func (a *AgenticLoop) getSystemPrompt() string {
+	_, prompt := a.systemPromptParts()
+	return prompt
+}
+
+// systemPromptParts returns the full system prompt together with its stable
+// leading prefix. The prefix (frozen base plus mode text) is identical across
+// the turns of a run, so a provider with prompt caching can reuse it; the
+// per-turn time and accumulated knowledge that follow it change every turn and
+// must stay outside the cached block.
+func (a *AgenticLoop) systemPromptParts() (stablePrefix, full string) {
 	a.mu.Lock()
 	isAutonomous := a.autonomousMode
 	profile := a.executionProfile
@@ -84,12 +94,13 @@ Treat this as the current date and time. Answer "what time is it" / "what's the 
 questions directly from this value — do not run a command or ask for a target host just to
 report the current time.`, time.Now().Format("Mon, 02 Jan 2006 15:04:05 MST"))
 
-	prompt := a.baseSystemPrompt + modeContext + currentTime
+	stablePrefix = a.baseSystemPrompt + modeContext
+	prompt := stablePrefix + currentTime
 
 	// Append accumulated knowledge facts to system prompt
 	if ka := a.knowledgeAccumulator; ka != nil && ka.Len() > 0 {
 		prompt += "\n\n" + ka.Render()
 	}
 
-	return prompt
+	return stablePrefix, prompt
 }
