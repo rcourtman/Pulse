@@ -5,7 +5,7 @@
 > This file remains the detailed pricing evidence/spec and must stay aligned with the release-control source.
 
 > **Status:** APPROVED — Current commercial contract.
-> **Date:** 2026-07-14
+> **Date:** 2026-09-19
 > **Replaces:** All previous pricing documents and v5 pricing structure.
 
 This document is the single source of truth for Pulse v6 pricing, tiering, feature
@@ -188,16 +188,33 @@ are bundled, but they are supporting entitlements rather than evidence of a prod
 
 ### Self-hosted license and support scope
 
-- One Relay or Pro subscription covers one owner-operated Pulse environment.
+- One Relay or Pro subscription covers one customer-owned Pulse environment.
+  Customer-owned environments remain owner-operated when administered by an
+  appointed IT contractor or MSP.
 - Monitored systems and child resources are not metered.
 - The subscription permits three concurrent activations inside that environment
-  for primary, migration, and recovery use. Independently operated client
-  environments require MSP.
+  for primary, migration, and recovery use. These slots do not license unrelated
+  customer environments.
+- Each customer may own a separate Relay or Pro subscription and independent
+  installation. An IT contractor or MSP may install, configure, monitor, and
+  maintain it without changing license ownership or requiring an MSP agreement.
+- A provider-owned entitlement across client workspaces requires MSP. One
+  standard subscription must not be pooled, resold, or shared across unrelated
+  customers.
+- Community remains MIT-licensed. Independent customer installations and paid
+  administration of the open-source core do not require a commercial or MSP license.
 - Verified administrative ownership transfer is supported; resale, sharing,
   and unverified third-party assignment are prohibited.
 - Relay and Pro include verified commercial support for billing, activation,
   transfer, configuration, and diagnostics, typically within two business
   days. This is not a contractual SLA or priority-support commitment.
+
+**Readiness assertion `customer-owned-contractor-administration`, adopted
+2026-09-19:** Public terms, pricing copy, and support answers must preserve the
+distinction between independent customer-owned installations administered by a
+contractor and a provider-owned MSP service. Outside IT support alone must never
+trigger an MSP requirement. This clarification adds no new plan, price,
+activation slot, seat allowance, or entitlement.
 
 ### Pro+ — Legacy continuity tier only
 
@@ -256,6 +273,11 @@ pass the governed Cloud reopening gate.
 ---
 
 ## MSP Tiers (Provider-hosted, request-assisted)
+
+MSP provides a provider-owned entitlement across client workspaces, central
+management, and one commercial relationship. It is not required merely because
+the same contractor administers several independently customer-owned Community,
+Relay, or Pro installations.
 
 Pulse MSP is not the shared-process organization model. The default MSP route is provider-hosted: the MSP runs a Stripe-free control plane that creates one isolated Pulse runtime/container per client workspace. A signed MSP license sets the plan version and client workspace cap. Pulse-hosted MSP is an optional request-assisted path where Pulse operates that provider stack.
 
@@ -581,6 +603,7 @@ explain monitored-system identity:
 
 | Date | Change | Author |
 |---|---|---|
+| 2026-09-19 | Clarified that independent customer-owned installations may be administered by contractors without an MSP agreement. Reserved MSP for provider-owned entitlements across client workspaces and preserved the prohibition on pooling standard subscriptions. | Richard |
 | 2026-07-10 | Made public marketing product-led rather than release-led. Version identifiers remain available for version-sensitive lifecycle tasks and technical contracts, but no longer frame homepage, product, pricing, or acquisition copy. | Richard |
 | 2026-07-10 | Reframed Community, Relay, and Pro as distinct job-based product choices rather than a good/better/best ladder. Removed product recommendations from public pricing while preserving Relay connectivity as a bundled Pro entitlement. | Richard |
 | 2026-06-02 | Reconciled MSP pricing evidence with the provider-operated architecture: signed MSP license, Stripe-free provider control plane, isolated Pulse runtime per client, 5/15/40 client workspace caps, and request-assisted access until launch approval. | Richard |
