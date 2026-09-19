@@ -5,6 +5,11 @@
       "incomplete_commit": "a2dbb27a68463adb02b614e9927174543f5b7799",
       "completion_commit": "5f99f5c13fcc547e5e34286dfe873415a4876cfa",
       "reason": "Preserve the reviewed diagnostic-redaction commit while evaluating its separately reviewed contracts and API proof as one historical completion unit."
+    },
+    {
+      "incomplete_commit": "e1d97b361edfac311dd57b6695ab3ad9bef613bc",
+      "completion_commit": "087bbf8c20db8ffec1c24037e78a1a88ea4ff69e",
+      "reason": "Evaluate the metrics-store rollup, retry, upsert and auto-vacuum repair together with the follow-up commit that moves its regression proof into the registry-accepted pkg/metrics/store_additional_test.go proof file, as one reviewed completion unit."
     }
   ]
 }
