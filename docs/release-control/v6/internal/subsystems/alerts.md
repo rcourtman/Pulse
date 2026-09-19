@@ -2685,3 +2685,15 @@ widths despite the longer labels. The presentation and Overview delivery-status
 tests cover the evidence boundary; `scripts/check-alert-dispatch-copy.mjs`
 qualifies the real Overview with scripted API data in Chromium, not installed
 notification delivery.
+
+### Alerts overview stat counts stay in one numeric column
+
+The Alerts overview stats table right-aligned its value cell, but a row carrying
+the small critical annotation rendered that annotation inline after the count,
+pushing the Triggered (24h) count left of the Acknowledged and Workload
+Overrides rows. The annotation now has its own right-aligned cell, so the
+numeric column lines up across all three rows; the count cell itself stays
+numeric. `OverviewTab.total24h.test.tsx` pins the separate annotation cell and
+the numeric count, and `frontend-modern/browser-verification.json` records the
+offline Chromium pass. This is a presentation alignment fix; no API field,
+notification policy or shared primitive changes.

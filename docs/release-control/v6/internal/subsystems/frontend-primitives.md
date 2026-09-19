@@ -7074,3 +7074,12 @@ notification delivery.
 Node History prefers a valid canonical node/agent metricsTarget before display identity. Backups reuses deduplicated Overview resources and includes standalone PBS agents; PBS drawer correlation accepts uniquely matching agent-bearing VM/container resources while rejecting ambiguous identities.
 
 Bounded adaptations of reviewed main 3a189f31d447 (identity only) and 605643b01722. No metrics-store/storage-tier implementation or release metadata changes. Focused regressions and release-line browser proof are recorded in docs/qualification/release-v6.4-history/README.md. This is source qualification, not installed or published acceptance.
+
+### Alerts overview stat annotation keeps its own cell
+
+Within the shared table primitives, the Alerts overview stats table must keep
+the Triggered (24h) count in the same numeric column as the Acknowledged and
+Workload Overrides counts even when the small critical annotation renders. The
+annotation occupies its own right-aligned cell rather than trailing the count
+inline. The layout is verified at desktop and phone widths in
+`frontend-modern/browser-verification.json`; no shared primitive API changes.
