@@ -87,29 +87,35 @@ def validate_completion(incomplete: str, head: str) -> bool:
     files = sorted(set(changed_files(incomplete) + changed_files(completion)))
     with tempfile.TemporaryDirectory(prefix="pulse-canonical-completion-") as temp:
         worktree = Path(temp) / "pulse"
-        git("worktree", "add", "--detach", str(worktree), completion)
-        try:
-            guard = worktree / "scripts/release_control/canonical_completion_guard.py"
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    str(guard),
-                    "--files-from-stdin",
-                    "--diff-base",
-                    f"{incomplete}^",
-                    "--commit",
-                    completion,
-                ],
-                cwd=worktree,
-                input="".join(f"{path}\n" for path in files),
-                text=True,
+        # Materialise the completion tree with a shared clone rather than a
+        # linked worktree. A linked worktree writes its administrative files
+        # into the reviewed repository's git directory, which is read-only
+        # inside the maintainer proof sandbox. A shared clone reads the
+        # reviewed objects through alternates and writes only inside the
+        # disposable temporary directory, so CI and the maintainer preflight
+        # validate the pair identically without relaxing that boundary.
+        git("clone", "--quiet", "--shared", "--no-checkout", "--local",
+            str(REPO_ROOT), str(worktree))
+        git("-C", str(worktree), "checkout", "--quiet", "--detach", completion)
+        guard = worktree / "scripts/release_control/canonical_completion_guard.py"
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(guard),
+                "--files-from-stdin",
+                "--diff-base",
+                f"{incomplete}^",
+                "--commit",
+                completion,
+            ],
+            cwd=worktree,
+            input="".join(f"{path}\n" for path in files),
+            text=True,
+        )
+        if result.returncode != 0:
+            raise ValueError(
+                f"registered completion {completion} does not complete {incomplete}"
             )
-            if result.returncode != 0:
-                raise ValueError(
-                    f"registered completion {completion} does not complete {incomplete}"
-                )
-        finally:
-            git("worktree", "remove", "--force", str(worktree))
 
     print(
         "Canonical completion history passed "
