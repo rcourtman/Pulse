@@ -125,3 +125,29 @@ func TestTypedContainerUpdateDelegatesToProductionRecreatePath(t *testing.T) {
 	}
 	<-cleanupDone
 }
+
+func TestTypedContainerUpdatePreflightAcceptsAnyLocalRepoDigest(t *testing.T) {
+	agent := &Agent{
+		runtime: RuntimeDocker,
+		docker: &fakeDockerClient{
+			containerInspectFn: func(context.Context, string) (containertypes.InspectResponse, error) {
+				return baseInspect(), nil
+			},
+			imageInspectWithRawFn: func(context.Context, string) (image.InspectResponse, []byte, error) {
+				return image.InspectResponse{
+					RepoDigests: []string{
+						"docker.io/library/nginx@sha256:registry-old",
+						"docker.io/library/nginx@sha256:registry-new",
+					},
+				}, nil, nil
+			},
+		},
+		logger: zerolog.Nop(),
+	}
+
+	// The planned digest is the second local RepoDigest; the preflight must
+	// still admit the update rather than refuse on a first-entry mismatch.
+	if err := agent.TypedContainerUpdatePreflight(context.Background(), string(RuntimeDocker), "container-id", "sha256:registry-new"); err != nil {
+		t.Fatalf("preflight refused a planned digest that matches a local RepoDigest: %v", err)
+	}
+}

@@ -63,9 +63,24 @@ func (a *Agent) TypedContainerUpdatePreflight(ctx context.Context, runtime, cont
 			if inspect.Config != nil {
 				imageName = inspect.Config.Image
 			}
-			repoDigest, _, _, _ = a.getImageRepoDigest(ctx, localImageID, imageName)
-			repoDigest = strings.TrimSpace(repoDigest)
-			matchesRepoDigest = strings.EqualFold(repoDigest, expectedImageDigest)
+			// An image can carry several RepoDigests (#2110), so accept the
+			// planned digest when it matches any of them rather than only the
+			// first entry.
+			repoDigests, _, _, _ := a.getImageRepoDigests(ctx, localImageID, imageName)
+			for _, candidate := range repoDigests {
+				candidate = strings.TrimSpace(candidate)
+				if candidate == "" {
+					continue
+				}
+				if repoDigest == "" {
+					repoDigest = candidate
+				}
+				if strings.EqualFold(candidate, expectedImageDigest) {
+					repoDigest = candidate
+					matchesRepoDigest = true
+					break
+				}
+			}
 		}
 		if !matchesLocalID && !matchesRepoDigest {
 			if repoDigest == "" {
