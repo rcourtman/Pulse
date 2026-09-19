@@ -42,6 +42,13 @@ RUN_DIR="${WORKER_ROOT}/tmp/${RUN_ID}"
 # argument". Set PULSE_RELEASE_PREFLIGHT_GO_TMP_DIR only for a deliberately
 # isolated, equally short directory.
 GO_TMP_DIR="${PULSE_RELEASE_PREFLIGHT_GO_TMP_DIR:-}"
+# The rehearsal runs the backend as one serial `go test` process so its streamed
+# events stay readable. Go's default per-package timeout is 10m, which the
+# shared worker exceeded on internal/api under ordinary concurrent load (606.9s
+# on 2026-09-19), killing an otherwise green package with "panic: test timed
+# out". Match the release profile's per-package budget so host contention cannot
+# turn a healthy candidate into a release-gate failure.
+REHEARSAL_BACKEND_TIMEOUT="${PULSE_RELEASE_PREFLIGHT_REHEARSAL_TIMEOUT:-30m}"
 TIMINGS_FILE="${RUN_DIR}/timings.tsv"
 TEST_DATA_DIR="${WORKER_ROOT}/test-data/${PROFILE}"
 # The smoke stacks publish the Pulse server and agent ports on the host. A
@@ -227,7 +234,7 @@ run_backend() (
     # Keep readable Output and the original verdict via pipefail; instrument
     # only the known stress-test window, without changing tests or thresholds.
     backend_serial() {
-      env PULSE_DATA_DIR="$TEST_DATA_DIR" go test -json -p 1 ./... |
+      env PULSE_DATA_DIR="$TEST_DATA_DIR" go test -json -p 1 -timeout "$REHEARSAL_BACKEND_TIMEOUT" ./... |
         python3 ./scripts/release-go-test-events.py
     }
     phase backend-serial backend_serial
