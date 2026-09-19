@@ -10,6 +10,11 @@
       "incomplete_commit": "e1d97b361edfac311dd57b6695ab3ad9bef613bc",
       "completion_commit": "087bbf8c20db8ffec1c24037e78a1a88ea4ff69e",
       "reason": "Evaluate the metrics-store rollup, retry, upsert and auto-vacuum repair together with the follow-up commit that moves its regression proof into the registry-accepted pkg/metrics/store_additional_test.go proof file, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "248ada3cc662bf0529bbf9586bdfaee6aee2467c",
+      "completion_commit": "f08b96b968444be221204e6bb062fecb7a9b3cc4",
+      "reason": "Evaluate the Anthropic stable-system-prefix prompt-cache repair together with the follow-up commit that records its transport contract in docs/release-control/v6/internal/subsystems/ai-runtime.md, as one reviewed completion unit."
     }
   ]
 }
