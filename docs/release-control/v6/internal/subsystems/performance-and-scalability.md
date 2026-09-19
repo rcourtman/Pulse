@@ -3168,3 +3168,14 @@ The existing 500-node mixed-endpoint workload and latency budgets remain intact.
 `pkg/metrics/store_additional_test.go` holds every history connection to
 prove availability without relying on favourable scheduling, and covers
 committed-data visibility, write rejection, clear and pool shutdown.
+
+### Metrics-store shutdown never closes the ingestion channel
+
+The metrics store's ingestion worker must not close its write channel on
+shutdown. A concurrent writer that passed the `stopping` check before `Close`,
+and the `WriteBatchSync`/`WriteBatchBounded` paths that do not consult
+`stopping` at all, may still send to that channel. Closing it races those sends
+and panics the process during shutdown. The worker instead drains already-queued
+requests without closing the channel; a late write lands in the buffered channel
+and is discarded with the store. `pkg/metrics/store_additional_test.go` pins the
+post-shutdown enqueue and the concurrent-close race.
