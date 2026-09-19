@@ -4091,3 +4091,13 @@ reported as outdated. `TestRegistryChecker_MultipleLocalRepoDigestsSuppressFalse
 `TestAgent_getImageRepoDigests_MultipleDigestsForOneImage` and the multi-digest
 `TestRegistryChecker_DigestsDiffer` cases pin the comparison. This is synthetic
 registry-transport evidence, not reporter acceptance.
+
+### Forked host reports cannot bypass a base-identity removal block
+
+Host report admission resolves identity before consulting removal blocks, so a
+report that forked onto a derived `<base>-<hex>` identity could bypass a block
+keyed on the base machine identity and be silently admitted. Monitoring now
+consults the base identity as well when the presenting token had no prior
+binding: a fresh install token clears the block and heals to the base identity,
+and a token already bound to its own derived identity is left alone (#1753).
+Focused proof lives in `internal/monitoring/monitor_host_agents_test.go`.
