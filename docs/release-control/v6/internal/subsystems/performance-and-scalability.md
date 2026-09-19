@@ -3218,3 +3218,36 @@ and repeat the full-file VACUUM on every restart. The migration now pins a
 connection, verifies the persisted mode, and leaves the conversion for a later
 restart if verification fails. `pkg/metrics/store_additional_test.go` pins the persisted
 mode in `TestStoreAutoVacuumPersistsAcrossRestart`.
+
+### Metrics-store writes survive the one-time startup write-lock hold
+
+The deferred identity-index rebuild and the auto-vacuum VACUUM can hold the
+SQLite write lock for minutes on a large legacy database. `BEGIN` is deferred,
+so the lock is contended at the first `INSERT` or at `COMMIT`, not at `Begin`;
+a retry loop around `Begin` alone skipped rows and committed an empty
+transaction. `writeBatch` now retries the whole transaction on a retryable lock
+error, and while startup maintenance is active it uses an extended budget
+(`startupMaintenanceBeginAttempts`) instead of the steady-state
+`writeBatchBeginAttempts`, so an upgrade does not silently discard history. The
+`startupMaintenanceActive` signal is set for the duration of
+`runStartupMaintenance` and cleared on completion; the `stopping` check still
+bounds shutdown. `pkg/metrics/store_additional_test.go` pins the signal in
+`TestStoreStartupMaintenanceSignalsWriteRetryBudget` and the extended retry in
+`TestStoreWriteBatchExtendsRetryDuringStartupMaintenance`.
+
+### Metrics-store legacy host migration is probed before it writes
+
+`migrateLegacyHostResourceType` must not open a write transaction on every boot
+when there are no legacy rows. It probes with an indexed
+`SELECT EXISTS(... WHERE resource_type = 'host' LIMIT 1)` and returns without
+writing when the table has no legacy rows, so an already-migrated store does
+not dirty the WAL on startup.
+
+### Metrics-store QueryAll preallocation is capped
+
+`QueryAll` must not reserve a `MetricPoint` slice sized by the caller's
+requested step when the selected tier returns far fewer rows. A 90-day range at
+a 5-second step previously reserved over a million slots per series; the
+preallocation is now capped at `maxQueryAllSeriesCapacity` and append still
+grows the slice for genuinely dense series. `pkg/metrics/store_additional_test.go`
+pins the cap in `TestEstimateQueryAllBatchSeriesCapacityCapsPreallocation`.
