@@ -3830,3 +3830,23 @@ still recorded. Focused proof lives in
 (`TestMergeHostAgentSMARTIntoDisks_AgentWearoutDoesNotHideLowPVELife` and
 `TestMergeHostAgentSMARTIntoDisks_AgentWearoutFillsUnreportedPVELife`). This is
 synthetic merge evidence, not reporter acceptance or hardware confirmation.
+
+### TrueNAS system temperature rejects a synthesised CPU aggregate
+
+TrueNAS reports the `cputemp` series through a bare `cpu` legend entry, which
+`canonicalSystemTemperatureKey` maps to the canonical `cpu_package` key. On
+SCALE 25.10.7 running AMD hardware that aggregate has been observed at roughly
+1.5x the hottest per-core reading (for example an 88C aggregate against a 59C
+core max, with the cores matching `k10temp`/`Tctl`). Monitoring previously
+trusted `cpu_package` unconditionally in `maxTrueNASSystemTemperature`, so the
+false-high value reached the host temperature and fired a configured 80C
+threshold alert at a real ~60C. The selector now compares `cpu_package` with
+the hottest `cpu*` per-core entry and falls back to the per-core max only when
+the package value exceeds it by more than 20%. A real package sensor stays
+within a few degrees of the hottest core, so the margin retains genuine
+package readings while discarding the synthesised aggregate. Package-only
+payloads and per-core-only payloads keep their existing behaviour. Focused
+proof lives in `internal/truenas/provider_test.go`
+(`TestMaxTrueNASSystemTemperaturePrefersCoresOverSynthesisedAggregate`). This
+is source-level proof, not reporter acceptance or appliance confirmation
+(#2122).
