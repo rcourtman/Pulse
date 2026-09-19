@@ -3800,3 +3800,14 @@ consults the base identity as well when the presenting token had no prior
 binding: a fresh install token clears the block and heals to the base identity,
 and a token already bound to its own derived identity is left alone (#1753).
 Focused proof lives in `internal/monitoring/monitor_host_agents_test.go`.
+
+### Docker image update comparison accepts every local RepoDigest
+
+Docker records every RepoDigest an image is known by, and the digest for a
+tag's manifest is not always the first entry. Update detection now compares the
+whole local RepoDigest set against the registry's resolved and index digests,
+so a current image whose manifest appears under a later RepoDigest is not
+reported as outdated. `TestRegistryChecker_MultipleLocalRepoDigestsSuppressFalseUpdate`,
+`TestAgent_getImageRepoDigests_MultipleDigestsForOneImage` and the multi-digest
+`TestRegistryChecker_DigestsDiffer` cases pin the comparison. This is synthetic
+registry-transport evidence, not reporter acceptance.

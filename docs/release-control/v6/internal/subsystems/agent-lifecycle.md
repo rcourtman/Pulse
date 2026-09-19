@@ -7827,3 +7827,13 @@ install token clears the block and heals to the base identity, while a token
 already bound to its own derived identity (an established distinct host sharing
 a hostname or machine ID, #1753) is left untouched. Focused proof lives in
 `internal/monitoring/monitor_host_agents_test.go`.
+
+### Docker update preflight accepts any local RepoDigest for the planned image
+
+The typed container-update preflight resolves the container image's full
+RepoDigest set and admits the planned digest when it matches any entry rather
+than only the first. A correctly planned update therefore stays actionable when
+the local image carries more than one valid RepoDigest. The shared resolution
+path is covered by `TestAgent_getImageRepoDigests_MultipleDigestsForOneImage`
+and `TestRegistryChecker_MultipleLocalRepoDigestsSuppressFalseUpdate`; this is
+source-level proof, not installed acceptance.
