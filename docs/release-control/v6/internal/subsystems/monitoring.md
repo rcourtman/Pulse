@@ -3811,3 +3811,22 @@ reported as outdated. `TestRegistryChecker_MultipleLocalRepoDigestsSuppressFalse
 `TestAgent_getImageRepoDigests_MultipleDigestsForOneImage` and the multi-digest
 `TestRegistryChecker_DigestsDiffer` cases pin the comparison. This is synthetic
 registry-transport evidence, not reporter acceptance.
+
+### Host-agent endurance evidence cannot raise a disk's remaining life
+
+The physical-disk merge lets the linked host agent's SMART endurance counter
+correct the Proxmox inventory, because the agent's `PercentageUsed` is more
+precise than the provider's coarse `wearout`. It must not, however, make a disk
+look healthier than Proxmox already reports. An intermittent agent reading
+(for example an NVMe endurance log that briefly reports `PercentageUsed` 0)
+previously raised the merged remaining life to 100, which resolved a genuine
+low-life alert and let it re-fire on the next physical-disk poll with a fresh
+resolved notification, repeating roughly every poll interval (#2112). The merge
+now takes the agent value when the Proxmox value is unreported (`-1`) or when
+the agent value is lower (more pessimistic); it never raises a reported
+remaining-life value. `PercentageUsed` and the other merged SMART attributes are
+still recorded. Focused proof lives in
+`internal/monitoring/physical_disk_roundtrip_test.go`
+(`TestMergeHostAgentSMARTIntoDisks_AgentWearoutDoesNotHideLowPVELife` and
+`TestMergeHostAgentSMARTIntoDisks_AgentWearoutFillsUnreportedPVELife`). This is
+synthetic merge evidence, not reporter acceptance or hardware confirmation.
