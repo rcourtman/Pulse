@@ -3,6 +3,7 @@
 package metrics
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
