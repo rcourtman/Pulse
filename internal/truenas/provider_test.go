@@ -1434,3 +1434,74 @@ func TestProviderSystemMetricHistoryUsesCanonicalAgentMetricIDs(t *testing.T) {
 		t.Fatalf("expected netin history points, got %+v", history)
 	}
 }
+
+func TestMaxTrueNASSystemTemperaturePrefersCoresOverSynthesisedAggregate(t *testing.T) {
+	cases := []struct {
+		name  string
+		temps map[string]float64
+		want  *float64
+	}{
+		{
+			name: "synthesised cpu aggregate is ignored in favour of per-core max",
+			temps: map[string]float64{
+				"cpu0": 59, "cpu1": 58, "cpu2": 57, "cpu3": 56,
+				"cpu4": 55, "cpu5": 54, "cpu6": 53, "cpu7": 52,
+				"cpu_package": 88,
+			},
+			want: floatPtr(59),
+		},
+		{
+			name:  "real package reading near the hottest core is retained",
+			temps: map[string]float64{"cpu_package": 61.5, "cpu_core_0": 58.0, "cpu_core_1": 59.0},
+			want:  floatPtr(61.5),
+		},
+		{
+			name:  "package within the margin is retained even with one core present",
+			temps: map[string]float64{"cpu_package": 60, "cpu0": 55},
+			want:  floatPtr(60),
+		},
+		{
+			name:  "package exactly at the margin is retained",
+			temps: map[string]float64{"cpu_package": 66, "cpu0": 55},
+			want:  floatPtr(66),
+		},
+		{
+			name:  "package-only payload is unchanged",
+			temps: map[string]float64{"cpu_package": 55},
+			want:  floatPtr(55),
+		},
+		{
+			name:  "per-core-only payload still reports the hottest core",
+			temps: map[string]float64{"cpu0": 41, "cpu1": 47, "cpu2": 44},
+			want:  floatPtr(47),
+		},
+		{
+			name:  "empty payload has no temperature",
+			temps: nil,
+			want:  nil,
+		},
+		{
+			name:  "non-positive readings are ignored",
+			temps: map[string]float64{"cpu_package": 0, "cpu0": 0},
+			want:  nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := maxTrueNASSystemTemperature(SystemInfo{TemperatureCelsius: tc.temps})
+			switch {
+			case tc.want == nil && got != nil:
+				t.Fatalf("temperature = %v, want nil", *got)
+			case tc.want != nil && got == nil:
+				t.Fatalf("temperature = nil, want %v", *tc.want)
+			case tc.want != nil && got != nil && *got != *tc.want:
+				t.Fatalf("temperature = %v, want %v", *got, *tc.want)
+			}
+		})
+	}
+}
+
+func floatPtr(value float64) *float64 {
+	return &value
+}

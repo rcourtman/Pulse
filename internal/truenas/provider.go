@@ -1032,31 +1032,49 @@ func agentDataFromTrueNASSystem(connectionID string, system SystemInfo, disks []
 	return agent
 }
 
+// trueNASCPUPackageOutlierRatio bounds how far the aggregated `cpu_package`
+// reading may exceed the hottest individual core before Pulse treats it as a
+// synthesised appliance aggregate. TrueNAS SCALE on AMD has been observed to
+// report a bare `cpu` legend series roughly 1.5x the per-core values, while a
+// real package sensor (for example Intel "Package id 0") stays within a few
+// degrees of the hottest core. See #2122.
+const trueNASCPUPackageOutlierRatio = 1.2
+
 func maxTrueNASSystemTemperature(system SystemInfo) *float64 {
 	if len(system.TemperatureCelsius) == 0 {
 		return nil
 	}
+
+	packageValue := 0.0
+	hasPackage := false
 	if value, ok := system.TemperatureCelsius["cpu_package"]; ok && value > 0 {
-		canonical := value
-		return &canonical
+		packageValue = value
+		hasPackage = true
 	}
 
-	var best float64
-	found := false
+	var coreMax float64
+	hasCore := false
 	for key, value := range system.TemperatureCelsius {
 		key = strings.TrimSpace(strings.ToLower(key))
-		if value <= 0 || !strings.HasPrefix(key, "cpu") {
+		if value <= 0 || key == "cpu_package" || !strings.HasPrefix(key, "cpu") {
 			continue
 		}
-		if !found || value > best {
-			best = value
-			found = true
+		if !hasCore || value > coreMax {
+			coreMax = value
+			hasCore = true
 		}
 	}
-	if !found {
+
+	if hasPackage {
+		if hasCore && packageValue > coreMax*trueNASCPUPackageOutlierRatio {
+			return &coreMax
+		}
+		return &packageValue
+	}
+	if !hasCore {
 		return nil
 	}
-	return &best
+	return &coreMax
 }
 
 func sensorMetaFromTrueNASSystem(system SystemInfo, disks []Disk) *unifiedresources.HostSensorMeta {
