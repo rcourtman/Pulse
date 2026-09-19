@@ -5,6 +5,11 @@
       "incomplete_commit": "29db6030a26d9bca86f5dd77bb563508a1300e01",
       "completion_commit": "32155e95198db9e9e2fd44443fe1e7508a809518",
       "reason": "Evaluate the rehearsal backend package-timeout runtime change together with the follow-up commit that records its deployment-installability contract section as one completion unit. The completion tree passes the canonical completion guard for the combined changed files."
+    },
+    {
+      "incomplete_commit": "82421c3d2fa8c9922360947bf75ead661f0e8bfc",
+      "completion_commit": "1216a32fd504195933ea5bf496112f1033460461",
+      "reason": "Evaluate the #2119 alerts overview stat alignment frontend change together with the follow-up commit that records its alerts and frontend-primitives contract sections as one completion unit. The completion tree passes the canonical completion guard for the combined changed files."
     }
   ]
 }
