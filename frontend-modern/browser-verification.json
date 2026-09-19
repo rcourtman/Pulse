@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "base_sha": "1778f7d16c80c2ac9911a6fd8a11db7f967f3a99",
-  "verified_at": "2026-09-19T13:50:38Z",
+  "base_sha": "22fd851e72ec22d4ff10e20ae22d4a44ff02b03a",
+  "verified_at": "2026-09-19T20:31:21Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/AlertOverviewStatsCards.tsx"
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/AlertOverviewStatsCards.tsx": "90f0b5102f2362c05a70c374afe5a386a679a1ebed3ab69580eb17278c38df05"
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "bcfebc202c33466d321297bb32ad75a923cc35a7d76c0c376a65a5c172d68955"
   },
   "routes": [
-    "/browser-tests/alerts-overview.html"
+    "/browser-tests/guest-drawer-overview.html"
   ],
   "viewports": [
     {
@@ -23,15 +23,15 @@
     }
   ],
   "states": [
-    "Alerts overview stats with three active alerts including one critical",
-    "Triggered (24h) row carrying the small critical annotation",
-    "Acknowledged and Workload Overrides rows without the annotation"
+    "Guest overview with a VM carrying three filesystem mount points, three tags, memory, and no network-interface section",
+    "Filesystems section present with per-mount usage text and threshold progress bars",
+    "Tags section present with the short tag value list"
   ],
   "interactions": [
-    "Render the production AlertOverviewStatsCards component with a synthetic overview state at 2010x1072",
-    "Measure the text right edge of all three numeric value cells and confirm they are identical (359.41px)",
-    "Resize to 390x844 and confirm the numeric column stays aligned with no horizontal overflow"
+    "Render the production GuestDrawerOverview component with synthetic props at 2010x1072 and measure every section panel bounding width",
+    "Confirm Filesystems renders 1305.33px wide and Tags renders 648.66px wide, i.e. the filesystem list takes the two-tile column and the tag list the one-tile column",
+    "Resize to 390x844 and confirm every section stacks full width (340px) with document scrollWidth 390 equal to clientWidth 390"
   ],
-  "command": "pulse-worker-browser frontend-modern/alerts-visual.cjs",
-  "notes": "Offline Playwright Chromium 1.56.1 run of the production Alerts overview stats component with a synthetic state and project CSS; no live backend, API or WebSocket path. Value text right edges measured equal for all three rows (desktop 359.41px; narrow 266.27px); the Triggered (24h) row keeps its 1 critical annotation in its own right-aligned cell; narrow document scrollWidth 390 = clientWidth 390; no page errors. Desktop and narrow screenshots inspected."
+  "command": "pulse-worker-browser guest-drawer-visual.cjs",
+  "notes": "Offline Playwright Chromium 141.0.7390.37 run of the production GuestDrawerOverview component with a synthetic guest and the project CSS; no live backend, API or WebSocket path. Desktop 2010x1072 panel widths: Operator context 648.66, System 648.66, Memory 648.66, Filesystems 1305.33, Tags 648.66 (Filesystems spans the 66.667% column, Tags the 33.333% column). Narrow 390x844: all five panels 340px, no horizontal overflow. No page errors and no failed responses. Desktop and narrow screenshots inspected. Build toolchain: vite 6.4.3, vite-plugin-solid 2.11.12, solid-js 1.9.14, tailwindcss 3.4.19, esbuild 0.28.1, matching frontend-modern/package-lock.json; the dependency tree was copied from a readable offline checkout because the lane's canonical tree under /srv/pulse is ACL-restricted from this identity, and the render-relevant versions match exactly. This receipt is content-addressed to GuestDrawerOverview.tsx sha256 bcfebc20…, verified at 20:31Z; the commit carrying it was recomposed this turn onto a later base so the per-commit browser guard accepts the source change and its proof in one commit."
 }

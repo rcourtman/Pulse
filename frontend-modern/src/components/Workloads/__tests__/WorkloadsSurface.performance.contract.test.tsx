@@ -1645,6 +1645,14 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerManageSource).toContain('ResourceOperatorStateSection');
       expect(guestDrawerOverviewSource).toContain('buildWorkloadsDiskPresentation');
       expect(guestDrawerOverviewSource).toContain('Filesystems');
+      // The shared DetailSectionTable gives the earlier of the last two sections
+      // the wider span, so the longer filesystem list must be declared before the
+      // short tag list for mount points to get the readable panel width.
+      const filesystemsSectionIndex = guestDrawerOverviewSource.indexOf("label: 'Filesystems'");
+      const tagsSectionIndex = guestDrawerOverviewSource.indexOf("label: 'Tags'");
+      expect(filesystemsSectionIndex).toBeGreaterThan(-1);
+      expect(tagsSectionIndex).toBeGreaterThan(-1);
+      expect(filesystemsSectionIndex).toBeLessThan(tagsSectionIndex);
       expect(guestDrawerOverviewSource).toContain('TechnicalDetailsSection');
       expect(nodeDrawerOverviewSource).toContain('TechnicalDetailsSection');
       const retiredInfoCardFrameClass = [

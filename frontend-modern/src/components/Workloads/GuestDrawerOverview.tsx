@@ -185,14 +185,6 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
             .map((row) => makeDetailRow(row.label, row.value)),
         ),
       },
-      props.normalizedTags.length > 0
-        ? {
-            label: 'Tags',
-            rows: compactDetailRows([
-              makeDetailRow('Values', props.normalizedTags.join(', '), { wrap: true }),
-            ]),
-          }
-        : null,
       props.hasFilesystemDetails && diskRows.length > 0
         ? {
             label: 'Filesystems',
@@ -222,6 +214,14 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                 isGuestDrawerVM(props.guest) ? props.guest.diskStatusReason : null,
                 { wrap: true },
               ),
+            ]),
+          }
+        : null,
+      props.normalizedTags.length > 0
+        ? {
+            label: 'Tags',
+            rows: compactDetailRows([
+              makeDetailRow('Values', props.normalizedTags.join(', '), { wrap: true }),
             ]),
           }
         : null,

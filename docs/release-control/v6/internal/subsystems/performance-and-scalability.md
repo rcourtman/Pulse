@@ -2289,6 +2289,12 @@ and supplement known utilization with the threshold-colored progress metadata
 derived by `diskListModel.ts`. `GuestDrawerOverview.tsx` passes that metadata
 to the shared detail-row primitive; it does not parse display strings, create
 local bar geometry, or render a bar for the negative unknown-usage sentinel.
+Within that compact technical layout, `GuestDrawerOverview.tsx` declares the
+`Filesystems` section before the `Tags` section, so the shared
+`DetailSectionTable` span algorithm gives the longer mount-point list the wider
+panel and keeps the short tag list in the narrower slot. Future section-order
+changes in that overview must preserve the filesystem-first ordering rather
+than letting the shorter tag list take the wide column.
 Guest, node, and Docker-host drawer headers follow the same frontend-primitives dependency
 boundary for collapse: Workloads owns which inline row is selected and the
 close handler, while
