@@ -5154,6 +5154,23 @@ synthetic Go pass/skip/fail output, producer exit retention, malformed input,
 allowlisted targeting and unavailable resource evidence. This is not product
 qualification; see `docs/RELEASE_RESOURCE_EVIDENCE.md`.
 
+### Rehearsal backend package timeout
+
+The accelerated rehearsal profile runs the backend as one serial
+`go test -json -p 1` process so its events stay streamed for
+`scripts/release-go-test-events.py`. Go's default per-package timeout is 10m,
+which the shared preflight worker exceeded on `internal/api` under ordinary
+concurrent load, failing an otherwise green package with `panic: test timed
+out` and no failing assertion. The worker must therefore pass an explicit
+package timeout no lower than the release profile's 30m budget, overridable
+through `PULSE_RELEASE_PREFLIGHT_REHEARSAL_TIMEOUT` for a deliberately
+different host. Host contention must not turn a healthy candidate into a
+release-gate failure, and the explicit budget must not raise any test threshold
+or mask a real source failure.
+`scripts/release_control/internal/release_preflight_test.py` pins the rehearsal
+command and its timeout. This is a harness reliability control, not product
+qualification.
+
 ### Quarantined release identity after tag deletion
 
 Draft preparation retains the existing release's target_commitish. A historical
