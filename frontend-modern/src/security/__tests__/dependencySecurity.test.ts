@@ -20,6 +20,13 @@ const lock = JSON.parse(
   readFileSync(new URL('../../../package-lock.json', import.meta.url), 'utf8'),
 ) as PackageLock;
 
+const tsconfig = readFileSync(new URL('../../../tsconfig.json', import.meta.url), 'utf8');
+const libMatch = /"lib"\s*:\s*\[([^\]]*)\]/.exec(tsconfig);
+const declaredLib = (libMatch?.[1] ?? '')
+  .split(',')
+  .map((entry) => entry.trim().replace(/^"|"$/g, ''))
+  .filter(Boolean);
+
 const parseVersion = (version: string): [number, number, number] => {
   const [major = 0, minor = 0, patch = 0] = version
     .split('-', 1)[0]
@@ -138,5 +145,30 @@ describe('frontend dependency security floors', () => {
     for (const version of versions) {
       expect(atLeast(version, [4, 28, 7]), `browserslist ${version} is vulnerable`).toBe(true);
     }
+  });
+
+  it('keeps @types/node and its undici-types companion aligned with the declared ES2022 lib', () => {
+    // @types/node 20 shipped an .at() compatibility polyfill that masked the
+    // missing ES2022 lib; 26 drops it, so tsconfig must declare ES2022 itself
+    // (Dependabot #2099). Keep the manifest range, the lock and the lib in step.
+    const range = manifest.devDependencies['@types/node'];
+    expect(/^\^26\.\d+\.\d+$/.test(range), `unexpected @types/node range ${range}`).toBe(true);
+    expect(atLeast(range.slice(1), [26, 5, 1])).toBe(true);
+    const nodeTypes = lockedVersions('@types/node');
+    expect(nodeTypes).toHaveLength(1);
+    expect(nodeTypes[0]).not.toContain('-');
+    expect(
+      atLeast(nodeTypes[0], [26, 5, 1]),
+      `@types/node ${nodeTypes[0]} is below the reviewed floor`,
+    ).toBe(true);
+    const undici = lockedVersions('undici-types');
+    expect(undici).not.toHaveLength(0);
+    for (const version of undici) {
+      expect(
+        atLeast(version, [8, 9, 0]),
+        `undici-types ${version} must satisfy @types/node 26`,
+      ).toBe(true);
+    }
+    expect(declaredLib).toContain('ES2022');
   });
 });

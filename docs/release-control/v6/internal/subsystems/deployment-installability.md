@@ -2366,6 +2366,17 @@ artifact-selection behaviour.
    `scripts/trigger-release.sh` and `scripts/trigger-stable-patch.sh` must send
    the exact remote candidate SHA they already verified; branch ancestry or a
    later branch tip is not equivalent release admission.
+18. Keep the frontend type-surface dependency and its compiler lib aligned.
+   `frontend-modern/package.json` and `frontend-modern/package-lock.json` must
+   pin a single `@types/node` line at or above the reviewed floor with its
+   `undici-types` companion resolved consistently, and
+   `frontend-modern/tsconfig.json` must declare the `ES2022` lib whenever the
+   source uses `Array.prototype.at()`/`String.prototype.at()`. `@types/node`
+   before 26 shipped an `.at()` compatibility polyfill that masked the missing
+   lib; a bump that removes it must keep
+   `frontend-modern/src/security/__tests__/dependencySecurity.test.ts` proving
+   the manifest range, the locked `@types/node`/`undici-types` versions and the
+   `ES2022` lib declaration stay in step.
 
 ## Current State
 
