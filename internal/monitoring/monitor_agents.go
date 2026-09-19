@@ -3079,6 +3079,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 	reportMachineID := strings.TrimSpace(report.Host.MachineID)
 	identifier := baseIdentifier
+	hadPriorHostBinding := false
 	if tokenRecord != nil && strings.TrimSpace(tokenRecord.ID) != "" {
 		tokenID := strings.TrimSpace(tokenRecord.ID)
 		bindingKey := hostTokenMachineBindingKey(tokenID, hostname, reportMachineID)
@@ -3095,6 +3096,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			// the unbound path so this machine gets its own identity slot.
 			boundID = ""
 		}
+		hadPriorHostBinding = boundID != ""
 		if boundID != "" {
 			m.hostTokenBindings[bindingKey] = boundID
 		}
@@ -3192,6 +3194,22 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		tokenID = strings.TrimSpace(tokenRecord.ID)
 	}
 	blocked, wasRemoved := m.lookupRemovedHostAgent(identifier, hostname, report.Host.MachineID, tokenID)
+	if !wasRemoved && identifier != baseIdentifier && !hadPriorHostBinding {
+		// Identity resolution can fork a re-enrolling machine onto a derived
+		// suffix before the removal block is consulted: the fork keys off a
+		// colliding live record with the same base ID and an older token, and
+		// the block is keyed on the identity the operator removed (the base
+		// machine identity). Consult the base identity too, so the block is
+		// honoured (rejected, or cleared for a fresh install token) instead of
+		// silently admitting the machine under a derived identity (#2113).
+		//
+		// A token that already had its own binding was forked previously and is
+		// an established distinct host sharing a hostname/machine ID, so the
+		// removed host's block must not capture it (#1753).
+		if baseBlocked, baseRemoved := m.lookupRemovedHostAgent(baseIdentifier, hostname, report.Host.MachineID, tokenID); baseRemoved {
+			blocked, wasRemoved = baseBlocked, true
+		}
+	}
 	if wasRemoved && removedHostAgentAllowsFreshReenroll(blocked, identifier, report, tokenRecord) {
 		// A token minted after the host was removed means the user generated a
 		// fresh install command for this machine: that is explicit re-enroll
