@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "completions": [
+    {
+      "incomplete_commit": "29db6030a26d9bca86f5dd77bb563508a1300e01",
+      "completion_commit": "32155e95198db9e9e2fd44443fe1e7508a809518",
+      "reason": "Evaluate the rehearsal backend package-timeout runtime change together with the follow-up commit that records its deployment-installability contract section as one completion unit. The completion tree passes the canonical completion guard for the combined changed files."
+    }
+  ]
+}
