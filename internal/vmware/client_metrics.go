@@ -320,12 +320,9 @@ func (c *Client) postVIJSONJSON(ctx context.Context, sessionID, path, label stri
 	switch resp.StatusCode {
 	case http.StatusOK:
 	default:
-		return classifyReadStatusCode(label, resp.StatusCode)
+		return classifyReadStatusCodeWithBody(label, resp.StatusCode, responseBody)
 	}
-	if err := json.Unmarshal(responseBody, target); err != nil {
-		return &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware %s response was not valid JSON", label)}
-	}
-	return nil
+	return decodeVIJSONBody(responseBody, label, target)
 }
 
 func perfMetricIDsForEntity(
