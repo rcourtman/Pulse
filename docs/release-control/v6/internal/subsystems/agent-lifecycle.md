@@ -8071,3 +8071,37 @@ This does not change token scopes, agent admission, or existing agent cleanup.
 Regression coverage: `TestQuickSecuritySetupForcePreservesSystemSettings` and
 `TestInitializeSystemSettingsPreservesExistingBytes`, `TestInitializeSystemSettingsMissing`,
 `TestInitializeSystemSettingsReadError`.
+
+### Unified metric replay guard does not change agent admission
+
+The unified metric sync runs on host-agent ingest boundaries and on read-side
+registry rebuilds. A per-series replay guard now drops exact timestamp+value
+repeats before the metrics batch is enqueued, reducing WAL churn without
+changing host admission, token binding or removal-block behaviour. Focused proof
+lives in `internal/monitoring/monitor_host_agents_test.go`
+(`TestDedupeUnifiedMetricWritesDropsExactReplays`).
+
+### Docker update preflight accepts any local RepoDigest for the planned image
+
+The typed container-update preflight resolves the container image's full
+RepoDigest set and admits the planned digest when it matches any entry rather
+than only the first. A correctly planned update therefore stays actionable when
+the local image carries more than one valid RepoDigest. The shared resolution
+path is covered by `TestAgent_getImageRepoDigests_MultipleDigestsForOneImage`
+and `TestRegistryChecker_MultipleLocalRepoDigestsSuppressFalseUpdate`; this is
+source-level proof, not installed acceptance.
+
+### Forked re-enrollment consults the base-identity removal block
+
+Host report admission resolves the reporting identity before it consults the
+removal block. When a colliding live record with the same base ID and an older
+token is still present in the unified read model, identity resolution forks the
+report onto a derived `<base>-<hex>` identity. The removal block is keyed on the
+base machine identity, so the derived ID bypassed it and the removed machine
+was silently re-admitted under a new identity; each remove/reinstall cycle added
+another derived record. `ApplyHostReport` now also consults the removal block on
+the base identity when the presenting token had no prior binding, so a fresh
+install token clears the block and heals to the base identity, while a token
+already bound to its own derived identity (an established distinct host sharing
+a hostname or machine ID, #1753) is left untouched. Focused proof lives in
+`internal/monitoring/monitor_host_agents_test.go`.

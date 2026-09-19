@@ -1842,12 +1842,21 @@ func (s *Store) backgroundWorker() {
 			if batch := s.drainBuffer(); len(batch) > 0 {
 				remaining = append(remaining, writeRequest{metrics: batch})
 			}
-			close(s.writeCh)
-			for req := range s.writeCh {
-				remaining = append(remaining, req)
+			// Do NOT close writeCh. Concurrent writers (WriteWithTier after
+			// its stopping check, and WriteBatchSync/WriteBatchBounded which
+			// never check stopping) may still be sending; closing the channel
+			// races those sends and panics the process on shutdown. Drain what
+			// is already queued instead, and let any late write land in the
+			// buffered channel to be discarded with the store.
+			for {
+				select {
+				case req := <-s.writeCh:
+					remaining = append(remaining, req)
+				default:
+					s.processWriteRequests(remaining)
+					return
+				}
 			}
-			s.processWriteRequests(remaining)
-			return
 
 		case req, ok := <-s.writeCh:
 			if !ok {

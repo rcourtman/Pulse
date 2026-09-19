@@ -5884,3 +5884,134 @@ func TestAgentReportsPreserveExplicitDiskIncludes(t *testing.T) {
 		check(t, host.Disks)
 	})
 }
+
+// Issue #1966: read-side registry rebuilds re-run the unified metric sync as
+// often as every two seconds, so one poll observation was re-written many
+// times between polls. The store upserts on (resource, metric, tier,
+// timestamp), so each replay committed a fresh transaction for no new data and
+// churned the SQLite WAL. The replay guard drops exact timestamp+value repeats
+// before the batch is enqueued while still writing a corrected value.
+func TestDedupeUnifiedMetricWritesDropsExactReplays(t *testing.T) {
+	monitor := &Monitor{}
+	observedAt := time.Date(2026, time.September, 19, 12, 0, 0, 0, time.UTC)
+	write := metrics.WriteMetric{
+		ResourceType: "storage",
+		ResourceID:   "pool:tank",
+		MetricType:   "usage",
+		Value:        62,
+		Timestamp:    observedAt,
+		Tier:         metrics.TierRaw,
+	}
+
+	first := monitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{write})
+	if len(first) != 1 {
+		t.Fatalf("first write count = %d, want 1", len(first))
+	}
+	// The same observation replayed by a read-side registry rebuild must not
+	// reach the store again: that UPDATE is the write amplification in #1966.
+	replay := monitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{write})
+	if len(replay) != 0 {
+		t.Fatalf("replayed write count = %d, want 0", len(replay))
+	}
+
+	// A corrected value at the same observation time is still written.
+	corrected := write
+	corrected.Value = 63
+	if got := monitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{corrected}); len(got) != 1 {
+		t.Fatalf("corrected write count = %d, want 1", len(got))
+	}
+
+	// A newer observation for the same series is written.
+	advanced := write
+	advanced.Value = 63
+	advanced.Timestamp = observedAt.Add(time.Minute)
+	if got := monitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{advanced}); len(got) != 1 {
+		t.Fatalf("advanced write count = %d, want 1", len(got))
+	}
+}
+
+// Issue #2113: a removed host agent re-enrolls under a derived suffixed
+// identity because identity resolution forks the machine before the removal
+// block is consulted. The block is keyed on the base machine identity, so the
+// forked ID bypasses it and the machine is silently admitted instead of being
+// rejected or cleared. This reproduces the fork trigger (a live base-identity
+// record still present in the unified read model with an older token) and
+// asserts a fresh install token heals to the base identity.
+func TestApplyHostReportHonoursRemovalBlockWhenIdentityWouldFork(t *testing.T) {
+	now := time.Now().UTC()
+	const (
+		baseID    = "bf3f9ff3273346d9944c49160dc57288"
+		hostname  = "truenas-iscsi.local"
+		machineID = "bf3f9ff3273346d9944c49160dc57288"
+	)
+
+	live := models.Host{
+		ID:              baseID,
+		MachineID:       machineID,
+		Hostname:        hostname,
+		Platform:        "linux",
+		Status:          "online",
+		LastSeen:        now,
+		IntervalSeconds: 30,
+		TokenID:         "token-old",
+	}
+	state := models.NewState()
+	state.Hosts = []models.Host{live}
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(state.GetSnapshot())
+	adapter := unifiedresources.NewMonitorAdapter(registry)
+
+	monitor := &Monitor{
+		state:             state,
+		resourceStore:     adapter,
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: map[string]string{"token-old": baseID},
+		removedHostAgents: make(map[string]time.Time),
+		rateTracker:       NewRateTracker(),
+		config:            &config.Config{},
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	// The operator removed the host while the live record was still present in
+	// the read model: the tombstone is keyed on the base identity.
+	removedAt := now.Add(-2 * time.Hour)
+	monitor.state.AddRemovedHostAgent(models.RemovedHostAgent{
+		ID:        baseID,
+		Hostname:  hostname,
+		MachineID: machineID,
+		TokenID:   "token-old",
+		RemovedAt: removedAt,
+	})
+	monitor.removedHostAgents[baseID] = removedAt
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: baseID, Type: "unified", IntervalSeconds: 30},
+		Host: agentshost.HostInfo{
+			ID:        baseID,
+			Hostname:  hostname,
+			MachineID: machineID,
+			Platform:  "linux",
+		},
+		Timestamp: now,
+	}
+	// The fresh token post-dates the removal, but the colliding live record is
+	// still reporting, so the stale-identity reuse path declines and identity
+	// resolution forks.
+	freshToken := &config.APITokenRecord{
+		ID:        "token-new",
+		Name:      "reinstall",
+		CreatedAt: now.Add(-time.Hour),
+	}
+
+	host, err := monitor.ApplyHostReport(report, freshToken)
+	if err != nil {
+		t.Fatalf("fresh re-enroll should clear the block, got %v", err)
+	}
+	if host.ID != baseID {
+		t.Fatalf("expected re-enroll to heal to base identity %q, got derived %q", baseID, host.ID)
+	}
+	if len(monitor.state.GetRemovedHostAgents()) != 0 {
+		t.Fatalf("expected removal block to be cleared, still have %+v", monitor.state.GetRemovedHostAgents())
+	}
+}

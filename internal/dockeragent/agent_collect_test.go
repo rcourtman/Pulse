@@ -802,3 +802,29 @@ func TestAgentClose(t *testing.T) {
 		t.Fatal("expected docker Close to be called")
 	}
 }
+
+func TestAgentCollectImageRepoDigestsIncludesEveryLocalDigest(t *testing.T) {
+	agent := &Agent{
+		docker: &fakeDockerClient{
+			imageInspectWithRawFn: func(context.Context, string) (imagetypes.InspectResponse, []byte, error) {
+				return imagetypes.InspectResponse{
+					RepoDigests: []string{
+						"docker.io/library/postgres@sha256:44c4",
+						"docker.io/library/postgres@sha256:cf78",
+					},
+					Architecture: "amd64",
+					Os:           "linux",
+				}, nil, nil
+			},
+		},
+		logger: zerolog.New(io.Discard),
+	}
+
+	digests, arch, os, _ := agent.getImageRepoDigests(context.Background(), "image-id", "postgres:16.15-alpine3.24")
+	if len(digests) != 2 || digests[0] != "sha256:44c4" || digests[1] != "sha256:cf78" {
+		t.Fatalf("digests = %v, want both local RepoDigests", digests)
+	}
+	if arch != "amd64" || os != "linux" {
+		t.Fatalf("platform = %q/%q, want amd64/linux", arch, os)
+	}
+}

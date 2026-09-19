@@ -1455,3 +1455,90 @@ func TestStoreStatsReaderObservesCommittedDataAndCloses(t *testing.T) {
 		t.Fatal("main pool remained open after store shutdown")
 	}
 }
+
+// Regression coverage for the shutdown send-on-closed-channel review of
+// pkg/metrics/store.go. The ingestion worker used to close writeCh on
+// <-stopCh. A writer that passed the stopping check just before Close, or a
+// WriteBatchSync/WriteBatchBounded caller (which never checks stopping), could
+// then send on the closed channel and panic the process during shutdown.
+
+func newShutdownRaceStore(t *testing.T) *Store {
+	t.Helper()
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-shutdown-race.db")
+	cfg.FlushInterval = time.Hour
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	return store
+}
+
+func shutdownRaceMetric() bufferedMetric {
+	return bufferedMetric{
+		resourceType: "vm",
+		resourceID:   "shutdown-race",
+		metricType:   "cpu",
+		value:        1,
+		timestamp:    time.Unix(1_700_000_000, 0),
+		tier:         TierRaw,
+	}
+}
+
+// A send that reaches the ingestion channel after the worker has finished
+// shutdown must not panic. Before the fix the worker closed writeCh, so this
+// deterministic post-Close enqueue hit a closed channel.
+func TestEnqueueWriteAfterShutdownDoesNotPanic(t *testing.T) {
+	store := newShutdownRaceStore(t)
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close returned error: %v", err)
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("enqueueWrite panicked after shutdown: %v", r)
+		}
+	}()
+	store.enqueueWrite(writeRequest{metrics: []bufferedMetric{shutdownRaceMetric()}})
+}
+
+// Concurrent writers racing a Close exercise the real window: WriteBatchSync
+// and WriteBatchBounded do not consult stopping, and WriteWithTier checks it
+// before releasing bufferMu. None of them may panic.
+func TestConcurrentWritesDuringShutdownDoNotPanic(t *testing.T) {
+	store := newShutdownRaceStore(t)
+
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				store.WriteWithTier("vm", "shutdown-race", "cpu", 1, time.Unix(1_700_000_000, 0), TierRaw)
+				store.WriteBatchBounded([]WriteMetric{{
+					ResourceType: "vm",
+					ResourceID:   "shutdown-race",
+					MetricType:   "cpu",
+					Value:        1,
+					Timestamp:    time.Unix(1_700_000_000, 0),
+					Tier:         TierRaw,
+				}})
+			}
+		}()
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close returned error: %v", err)
+	}
+	close(stop)
+	wg.Wait()
+}
