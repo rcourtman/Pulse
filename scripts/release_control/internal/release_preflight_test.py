@@ -556,19 +556,25 @@ echo CONTINUED
         ]:
             self.assertIsNone(compiled.fullmatch(excluded))
 
-    def test_release_workflow_uses_independent_pve_bundle_and_backend_lanes(self) -> None:
+    def test_release_workflow_uses_independent_bundle_and_backend_lanes(self) -> None:
         workflow = (ROOT / ".github/workflows/create-release.yml").read_text()
         backend = (ROOT / "scripts/run-release-backend-tests.sh").read_text()
         self.assertIn("frontend_bundle:", workflow)
         bundle_job = workflow[
             workflow.index("  frontend_bundle:") : workflow.index("  frontend_checks:")
         ]
-        self.assertIn('"pulse-pve-build"', bundle_job)
+        # Every release channel qualifies on a fresh GitHub-hosted VM, so the
+        # bundle and backend lanes must not depend on the retired PVE runners.
+        self.assertIn("runs-on: ubuntu-24.04", bundle_job)
+        self.assertNotIn("self-hosted", bundle_job)
+        self.assertNotIn("pulse-pve-", bundle_job)
         self.assertIn("./scripts/run-release-backend-tests.sh", workflow)
         backend_job = workflow[
             workflow.index("  backend_tests:") : workflow.index("  integration_tests:")
         ]
-        self.assertIn('"pulse-pve-tests"', backend_job)
+        self.assertIn("runs-on: ubuntu-24.04", backend_job)
+        self.assertNotIn("self-hosted", backend_job)
+        self.assertNotIn("pulse-pve-", backend_job)
         self.assertNotIn("      - frontend_checks\n    if:", backend_job)
         self.assertIn("go test -c -race", backend)
         self.assertIn("python3 scripts/shard_go_tests.py", backend)
