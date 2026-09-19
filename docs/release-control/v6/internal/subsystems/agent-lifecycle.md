@@ -7853,3 +7853,12 @@ admission, token binding or removal-block behaviour. Focused proof lives in
 `internal/monitoring/physical_disk_roundtrip_test.go`
 (`TestMergeHostAgentSMARTIntoDisks_AgentWearoutDoesNotHideLowPVELife` and
 `TestMergeHostAgentSMARTIntoDisks_AgentWearoutFillsUnreportedPVELife`).
+
+### Unified metric replay guard does not change agent admission
+
+The unified metric sync runs on host-agent ingest boundaries and on read-side
+registry rebuilds. A per-series replay guard now drops exact timestamp+value
+repeats before the metrics batch is enqueued, reducing WAL churn without
+changing host admission, token binding or removal-block behaviour. Focused proof
+lives in `internal/monitoring/monitor_host_agents_test.go`
+(`TestDedupeUnifiedMetricWritesDropsExactReplays`).

@@ -5908,3 +5908,48 @@ func TestApplyHostReportHonoursRemovalBlockWhenIdentityWouldFork(t *testing.T) {
 		t.Fatalf("expected removal block to be cleared, still have %+v", monitor.state.GetRemovedHostAgents())
 	}
 }
+
+// Issue #1966: read-side registry rebuilds re-run the unified metric sync as
+// often as every two seconds, so one poll observation was re-written many
+// times between polls. The store upserts on (resource, metric, tier,
+// timestamp), so each replay committed a fresh transaction for no new data and
+// churned the SQLite WAL. The replay guard drops exact timestamp+value repeats
+// before the batch is enqueued while still writing a corrected value.
+func TestDedupeUnifiedMetricWritesDropsExactReplays(t *testing.T) {
+	monitor := &Monitor{}
+	observedAt := time.Date(2026, time.September, 19, 12, 0, 0, 0, time.UTC)
+	write := metrics.WriteMetric{
+		ResourceType: "storage",
+		ResourceID:   "pool:tank",
+		MetricType:   "usage",
+		Value:        62,
+		Timestamp:    observedAt,
+		Tier:         metrics.TierRaw,
+	}
+
+	first := monitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{write})
+	if len(first) != 1 {
+		t.Fatalf("first write count = %d, want 1", len(first))
+	}
+	// The same observation replayed by a read-side registry rebuild must not
+	// reach the store again: that UPDATE is the write amplification in #1966.
+	replay := monitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{write})
+	if len(replay) != 0 {
+		t.Fatalf("replayed write count = %d, want 0", len(replay))
+	}
+
+	// A corrected value at the same observation time is still written.
+	corrected := write
+	corrected.Value = 63
+	if got := monitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{corrected}); len(got) != 1 {
+		t.Fatalf("corrected write count = %d, want 1", len(got))
+	}
+
+	// A newer observation for the same series is written.
+	advanced := write
+	advanced.Value = 63
+	advanced.Timestamp = observedAt.Add(time.Minute)
+	if got := monitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{advanced}); len(got) != 1 {
+		t.Fatalf("advanced write count = %d, want 1", len(got))
+	}
+}
