@@ -627,11 +627,20 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 				Msg("Matched host agent SMART temperature")
 		}
 
-		// Always merge SMART attributes from host agent
+		// Always merge SMART attributes from host agent. The agent's endurance
+		// counter is more precise than the Proxmox inventory, so it may correct
+		// a coarse value downward or fill an unreported one. It must not,
+		// however, make a disk look healthier than the Proxmox inventory already
+		// reports: an intermittent agent reading (for example an NVMe log page
+		// that briefly reports PercentageUsed 0) used to raise the remaining
+		// life, resolve a genuine low-life alert, and let it re-fire on the next
+		// poll with a fresh resolved notification (#2112).
 		if matched.Attributes != nil {
 			updated[i].SmartAttributes = smartAttributesCopy(matched.Attributes)
 			if derivedWearout := deriveWearoutFromSMARTAttributes(matched.Attributes); derivedWearout >= 0 {
-				updated[i].Wearout = derivedWearout
+				if updated[i].Wearout < 0 || derivedWearout < updated[i].Wearout {
+					updated[i].Wearout = derivedWearout
+				}
 			}
 		}
 		if matched.IO != nil {
