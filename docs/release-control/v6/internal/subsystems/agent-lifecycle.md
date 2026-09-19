@@ -8071,3 +8071,12 @@ This does not change token scopes, agent admission, or existing agent cleanup.
 Regression coverage: `TestQuickSecuritySetupForcePreservesSystemSettings` and
 `TestInitializeSystemSettingsPreservesExistingBytes`, `TestInitializeSystemSettingsMissing`,
 `TestInitializeSystemSettingsReadError`.
+
+### Unified metric replay guard does not change agent admission
+
+The unified metric sync runs on host-agent ingest boundaries and on read-side
+registry rebuilds. A per-series replay guard now drops exact timestamp+value
+repeats before the metrics batch is enqueued, reducing WAL churn without
+changing host admission, token binding or removal-block behaviour. Focused proof
+lives in `internal/monitoring/monitor_host_agents_test.go`
+(`TestDedupeUnifiedMetricWritesDropsExactReplays`).

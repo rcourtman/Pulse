@@ -4065,3 +4065,18 @@ provider keys, canonical IDs, JSON projection, temperature/size/cadence, separat
 nodes/controller members, and confirmed inventory removal.
 `TestPhysicalDiskReadbackSourceIDFallback` covers missing source metadata.
 This is synthetic runtime evidence, not USB hardware or reporter acceptance.
+
+### Unified metric replay guard bounds registry-rebuild writes
+
+Read-side registry rebuilds (/api/state, websocket hydrate) re-run the unified
+metric sync as often as every two seconds, and storage observations are anchored
+to the provider's LastSeen. Before this change each rebuild re-issued the same
+rows as SQLite UPDATEs and committed a fresh transaction for no new data,
+churning the WAL and driving the disk-write amplification in #1966. Monitoring
+now tracks the last sample handed to the store per (resource type, resource id,
+metric type) series and drops exact timestamp+value repeats before the batch is
+enqueued; a corrected value at the same observation time is still written, so a
+real change is never masked. The guard is bounded so a long-lived monitor with
+churning resource IDs cannot pin memory. Focused proof lives in
+`internal/monitoring/monitor_host_agents_test.go`
+(`TestDedupeUnifiedMetricWritesDropsExactReplays`).
