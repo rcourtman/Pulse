@@ -7884,11 +7884,17 @@ admission, token binding or removal-block behaviour. Focused proof lives in
 ### Unified metric replay guard does not change agent admission
 
 The unified metric sync runs on host-agent ingest boundaries and on read-side
-registry rebuilds. A per-series replay guard now drops exact timestamp+value
-repeats before the metrics batch is enqueued, reducing WAL churn without
-changing host admission, token binding or removal-block behaviour. Focused proof
-lives in `internal/monitoring/monitor_host_agents_test.go`
-(`TestDedupeUnifiedMetricWritesDropsExactReplays`).
+registry rebuilds. Agent and VM history samples are now anchored to the source
+observation time (`unifiedResourceObservedAt`) instead of the rebuild wall
+clock, so a registry rebuild re-issuing the same observation maps to one
+timestamp rather than a fresh sample. A per-series replay guard then drops exact
+timestamp+value repeats before the metrics batch is enqueued, reducing WAL churn
+without changing host admission, token binding or removal-block behaviour.
+Proxmox and libvirt VMs have native history writers and are excluded from the
+unified VM sync. Focused proof lives in
+`internal/monitoring/monitor_host_agents_test.go`
+(`TestDedupeUnifiedMetricWritesDropsExactReplays`,
+`TestSyncUnifiedAgentMetricsUsesSourceObservationTimeAcrossRegistryRebuilds`).
 
 ### Windows braced MachineGuid does not abort agent startup
 

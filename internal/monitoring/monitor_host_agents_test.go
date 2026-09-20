@@ -18,6 +18,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
@@ -5951,6 +5952,76 @@ func TestDedupeUnifiedMetricWritesDropsExactReplays(t *testing.T) {
 	advanced.Timestamp = observedAt.Add(time.Minute)
 	if got := monitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{advanced}); len(got) != 1 {
 		t.Fatalf("advanced write count = %d, want 1", len(got))
+	}
+}
+
+func TestSyncUnifiedAgentMetricsUsesSourceObservationTimeAcrossRegistryRebuilds(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		truenas.SetFeatureEnabled(previous)
+	})
+
+	fixtures := truenas.DefaultFixtures()
+	fixtures.CollectedAt = time.Now().UTC().Truncate(time.Second)
+	fixtures.System.CollectedAt = fixtures.CollectedAt
+	observedAt := fixtures.CollectedAt
+
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceTrueNAS: truenas.NewProvider(fixtures).Records(),
+	})
+
+	var targetID string
+	for _, resource := range resourceStore.GetAll() {
+		if resource.Type != unifiedresources.ResourceTypeAgent || resource.Name != "truenas-main" {
+			continue
+		}
+		target := resourceStore.MetricsTargetForResource(resource.ID)
+		if target == nil || target.ResourceType != "agent" {
+			t.Fatalf("unexpected agent metrics target: %+v", target)
+		}
+		targetID = target.ResourceID
+		break
+	}
+	if targetID == "" {
+		t.Fatal("expected a TrueNAS agent resource in the unified resource store")
+	}
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	persistentStore, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = persistentStore.Close() }()
+
+	monitor := &Monitor{
+		metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+		metricsStore:   persistentStore,
+	}
+
+	// Read-side registry rebuilds must not invent a fresh sample for the same
+	// source observation (the write amplification in #1966).
+	monitor.syncUnifiedAgentMetrics(resourceStore)
+	monitor.syncUnifiedAgentMetrics(resourceStore)
+
+	inMemory := monitor.GetGuestMetrics("agent:"+targetID, time.Hour)["cpu"]
+	if len(inMemory) != 1 {
+		t.Fatalf("in-memory agent cpu points = %d, want one per source observation: %+v", len(inMemory), inMemory)
+	}
+	if !inMemory[0].Timestamp.Equal(observedAt) {
+		t.Fatalf("in-memory agent cpu timestamp = %s, want source observation %s", inMemory[0].Timestamp, observedAt)
+	}
+
+	persisted, err := persistentStore.Query("agent", targetID, "cpu", observedAt.Add(-time.Second), observedAt.Add(time.Second), 0)
+	if err != nil {
+		t.Fatalf("query persisted agent cpu: %v", err)
+	}
+	if len(persisted) != 1 {
+		t.Fatalf("persisted agent cpu points = %d, want one per source observation: %+v", len(persisted), persisted)
+	}
+	if !persisted[0].Timestamp.Equal(observedAt) {
+		t.Fatalf("persisted agent cpu timestamp = %s, want source observation %s", persisted[0].Timestamp, observedAt)
 	}
 }
 
