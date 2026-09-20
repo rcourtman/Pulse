@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "base_sha": "1c8fee0119772d57ace10cbdfd5a2746a45af202",
+  "base_sha": "788936b72d3360a54ad801387c96c6b444d2fc27",
   "verified_at": "2026-09-20T22:48:14Z",
   "result": "passed",
   "changed_paths": [
@@ -34,5 +34,5 @@
     "Scroll to the bottom and confirm the last guest renders; inspect desktop and narrow screenshots"
   ],
   "command": "pulse-worker-browser scripts/check-thresholds-windowed-list.cjs",
-  "notes": "Offline Playwright Chromium run of the production Alert Thresholds card list (the narrow-layout renderer that virtualises via PlatformWindowedList) with synthetic props and the project CSS; no backend, API or WebSocket path. Before the fix the same run failed with bottom spacer 288px (8 x the 36px leading group header), so the item-height estimate collapsed to the header and the mounted window desynchronised from the scroll position, dropping a host's rows (#2130). After the fix the estimate follows the 315px card, the window holds through a 70px scroll, and the last guest is reachable. No page errors and no failed responses. Chromium 141.0.7390.37, matching the offline runtime. This receipt is content-addressed to usePlatformWindowedItems.ts sha256 e1cc0cb0…, verified at 22:48Z on base 1c8fee01…."
+  "notes": "Offline Playwright Chromium run of the production Alert Thresholds card list (the narrow-layout renderer that virtualises via PlatformWindowedList) with synthetic props and the project CSS; no backend, API or WebSocket path. Before the fix the same run failed with bottom spacer 288px (8 x the 36px leading group header), so the item-height estimate collapsed to the header and the mounted window desynchronised from the scroll position, dropping a host's rows (#2130). After the fix the estimate follows the 315px card, the window holds through a 70px scroll, and the last guest is reachable. No page errors and no failed responses. Chromium 141.0.7390.37, matching the offline runtime. This receipt is content-addressed to usePlatformWindowedItems.ts sha256 e1cc0cb0…, verified at 22:48Z, and refreshed at the candidate tip so the cumulative browser guard can match the tip parent."
 }
