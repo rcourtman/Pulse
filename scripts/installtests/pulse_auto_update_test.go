@@ -525,3 +525,81 @@ echo "SERVICE:$SERVICE_UP"
 		}
 	}
 }
+
+// TestPerformUpdateReturnTrapDoesNotLeak asserts the #2128 fix: perform_update
+// installs a shell-global RETURN trap that references its own locals. Once the
+// function returns the trap must clear itself, otherwise it fires again when a
+// later function returns, expands the now out-of-scope locals under `set -u`
+// and fails an otherwise successful update with "installer_tmp: unbound
+// variable".
+func TestPerformUpdateReturnTrapDoesNotLeak(t *testing.T) {
+	script := `
+set -uo pipefail
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+GITHUB_REPO="rcourtman/Pulse"
+INSTALL_DIR="$TMP/opt/pulse"
+CONFIG_DIR="$TMP/etc/pulse"
+mkdir -p "$INSTALL_DIR/bin" "$CONFIG_DIR"
+printf 'v5.1.24\n' > "$INSTALL_DIR/VERSION"
+printf '#!/usr/bin/env bash\necho v5.1.24\n' > "$INSTALL_DIR/bin/pulse"
+chmod +x "$INSTALL_DIR/bin/pulse"
+export INSTALL_DIR
+export FAKE_NEW_VERSION="v5.1.25"
+
+log() { echo "[$1] ${*:2}"; }
+detect_service_name() { echo pulse; }
+get_current_version() { tr -d '\r\n' < "$INSTALL_DIR/VERSION"; }
+verify_release_signature() { return 0; }
+sleep() { :; }
+systemctl() { return 0; }
+
+# The fake installer bumps VERSION, simulating a successful install.
+curl() {
+  local out="" prev="" arg
+  for arg in "$@"; do
+    if [[ "$prev" == "-o" ]]; then out="$arg"; fi
+    prev="$arg"
+  done
+  if [[ -n "$out" ]]; then
+    case "$out" in
+      *.sig.*) printf 'dummy-signature\n' > "$out" ;;
+      *)
+        cat > "$out" <<'INSTALLER'
+#!/usr/bin/env bash
+printf '%s\n' "${FAKE_NEW_VERSION}" > "${PULSE_INSTALL_DIR}/VERSION"
+exit 0
+INSTALLER
+        ;;
+    esac
+  fi
+  return 0
+}
+` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
+` + extractAutoUpdateFunction(t, "resolve_install_script_url") + `
+` + extractAutoUpdateFunction(t, "wait_for_service_active") + `
+` + extractAutoUpdateFunction(t, "ensure_service_restarted") + `
+` + extractAutoUpdateFunction(t, "perform_update") + `
+# Call perform_update from an enclosing function so a leaked RETURN trap fires
+# again when that function returns with perform_update's locals out of scope,
+# exactly as it did when main returned in the field.
+run_update() { perform_update v5.1.25; }
+if run_update; then echo "RESULT:succeeded"; else echo "RESULT:failed"; fi
+echo "DONE"
+`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	if !strings.Contains(got, "RESULT:succeeded") {
+		t.Fatalf("perform_update did not report success on a successful install:\n%s", got)
+	}
+	if !strings.Contains(got, "DONE") {
+		t.Fatalf("a later function return did not complete:\n%s", got)
+	}
+	if strings.Contains(got, "unbound variable") {
+		t.Fatalf("RETURN trap leaked out of perform_update and expanded out-of-scope locals:\n%s", got)
+	}
+}

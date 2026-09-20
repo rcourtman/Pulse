@@ -5546,3 +5546,40 @@ models workflow cancellation independently of successful needs, covers all six
 boundaries and retains the final `always()` evidence/verdict join. Evidence
 uploads and cleanup remain unchanged. This is source-policy regression proof,
 not hosted cancellation acceptance or authorization to retry a frozen workflow.
+
+### Unattended update resilience on successful installs and low-space aborts
+
+The unattended updater and the installer it downloads must leave the host in a
+consistent state on every exit path, including failure.
+
+`scripts/pulse-auto-update.sh`'s `perform_update` installs a shell-global
+`trap ... RETURN` that references its own local installer temp-file names. A
+RETURN trap is not function-scoped: after `perform_update` returned it fired
+again when a later function returned, expanding the now out-of-scope locals
+under `set -u` and exiting non-zero. A completed, version-verified install was
+therefore reported by `pulse-update.service` as failed with
+`installer_tmp: unbound variable`. The trap now clears itself (`trap - RETURN`)
+as it runs, so only the returning `perform_update` triggers it.
+
+`install.sh backup_existing` snapshots the configuration before the update
+reaches its staging disk-headroom check. When that check failed, the freshly
+created snapshot remained under the backup parent (or the hardened-unit
+fallback `$INSTALL_DIR/config-backups`), so every automatic retry added another
+full copy and a low-space root filesystem became progressively worse. The
+installer now records the snapshot it created and removes it when
+`download_pulse` aborts at the headroom check, because nothing was staged or
+replaced.
+
+Neither change alters the update channel, signature verification, disk-headroom
+thresholds, snapshot retention (`CONFIG_BACKUP_KEEP_COUNT`), rollback or
+service-restart guarantees. No release or installed-host acceptance is claimed.
+
+Verification: `scripts/tests/test-pulse-auto-update.sh` gains a case that fails
+without the trap fix with `installer_tmp: unbound variable` and passes with it.
+`scripts/installtests/pulse_auto_update_test.go` executes the extracted
+`perform_update` and then a later function return, asserting no
+unbound-variable error, and `scripts/installtests/root_install_sh_test.go`
+covers the recorded snapshot and its removal. Local shell suites
+(`test-pulse-auto-update.sh`, `test-install-update-resilience.sh`,
+`test-script-reference-integrity.sh`) pass; hosted Go installtest execution
+remains required and is not claimed here.
