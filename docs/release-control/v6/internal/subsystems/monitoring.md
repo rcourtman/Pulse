@@ -47,6 +47,27 @@ regressions cover serial-less disks, node/controller separation, JSON identity,
 metadata and confirmed removal. This carries main01742e2279/c9e71eac86 for #2076
 without main-only interval fields or unrelated main metrics changes.
 
+**TrueNAS legacy-REST memory telemetry — issue #2077 (20 September 2026)**
+
+A connection proven to run a recognized legacy CORE/FreeNAS release has no
+`reporting.realtime` JSON-RPC subscription, so live system telemetry and
+host-chart history are reconstructed from the REST reporting API
+(`reporting.get_data`, served as a POST endpoint keyed by its `graphs` and
+`query` parameters). The reporting `memory` and `arcsize` graphs supply the
+available and ARC readings that the JSON-RPC realtime subscription otherwise
+provides. When no available-memory reading can be established, the provider
+must not derive usage from a zero available value: the system memory metric is
+omitted and agent memory is projected as usage-unavailable with its known total,
+so a CORE appliance is never reported as 100% used. This is a behavioral
+correctness repair with no public API or schema delta.
+`TestRESTSystemTelemetryReadsReportingMemory`,
+`TestRESTSystemMetricHistoryUsesReporting` and
+`TestTrueNASMemoryWithoutAvailableIsNotReportedAsUsed` in
+`internal/truenas/client_test.go` cover the REST reporting fallback, the REST
+history query and the unavailable-usage guard. These are synthetic transport
+and projection proofs, not native CORE appliance acceptance or reporter
+confirmation.
+
 **Availability backfill preserves concurrent discovery changes (7 September 2026)**
 
 The backfill List snapshot is a work list, not an authoritative record to save.
