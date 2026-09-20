@@ -1163,6 +1163,11 @@ update, profile rollout, command reachability, or fleet-control authority.
     success. `scripts/installtests/install_sh_test.go` owns the static teardown
     contract, and native FreeBSD rehearsal must prove clean install, update,
     reboot persistence, and complete uninstall.
+    The installer's download verification is part of that FreeBSD lifecycle.
+    FreeBSD base provides `sha256(1)` but neither GNU `sha256sum` nor Perl
+    `shasum`, so checksum verification must fall back through the digest tools
+    actually present on the target platform rather than failing a valid agent
+    download when coreutils is absent.
 
 Server update planning is part of the same lifecycle contract. The System
 Updates plan must surface a structured upgrade-readiness verdict before an
