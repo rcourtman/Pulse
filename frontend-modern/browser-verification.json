@@ -1,37 +1,38 @@
 {
   "version": 1,
-  "base_sha": "22fd851e72ec22d4ff10e20ae22d4a44ff02b03a",
-  "verified_at": "2026-09-19T20:31:21Z",
+  "base_sha": "1c8fee0119772d57ace10cbdfd5a2746a45af202",
+  "verified_at": "2026-09-20T22:48:14Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx"
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "bcfebc202c33466d321297bb32ad75a923cc35a7d76c0c376a65a5c172d68955"
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts": "e1cc0cb0f4087c5c66014d254421aeea6b02842795c41978e1b9847dcfcb5c77"
   },
   "routes": [
-    "/browser-tests/guest-drawer-overview.html"
+    "/browser-tests/thresholds-windowed-list.html"
   ],
   "viewports": [
     {
-      "width": 2010,
-      "height": 1072
+      "width": 1280,
+      "height": 900
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 480,
+      "height": 800
     }
   ],
   "states": [
-    "Guest overview with a VM carrying three filesystem mount points, three tags, memory, and no network-interface section",
-    "Filesystems section present with per-mount usage text and threshold progress bars",
-    "Tags section present with the short tag value list"
+    "Alert Thresholds card list with two Proxmox hosts and 30 guests, both hosts exposing a guest named gateway01",
+    "The virtual window mounts 24 of 32 items with the leading item a 36px group header and each guest card 315px tall",
+    "After a 70px scroll the first group header is still within the mounted window; the final guest is reachable at the bottom"
   ],
   "interactions": [
-    "Render the production GuestDrawerOverview component with synthetic props at 2010x1072 and measure every section panel bounding width",
-    "Confirm Filesystems renders 1305.33px wide and Tags renders 648.66px wide, i.e. the filesystem list takes the two-tile column and the tag list the one-tile column",
-    "Resize to 390x844 and confirm every section stacks full width (340px) with document scrollWidth 390 equal to clientWidth 390"
+    "Mount the production AlertResourceTableMobile renderer with synthetic grouped resources in a 600px native scroll container",
+    "Confirm the bottom spacer is 2520px, i.e. eight unmounted rows at the measured 315px card height rather than the 36px group-header height (which previously produced 288px)",
+    "Scroll the container 70px and confirm the top spacer stays 0, so the window does not jump past the first group",
+    "Scroll to the bottom and confirm the last guest renders; inspect desktop and narrow screenshots"
   ],
-  "command": "pulse-worker-browser guest-drawer-visual.cjs",
-  "notes": "Offline Playwright Chromium 141.0.7390.37 run of the production GuestDrawerOverview component with a synthetic guest and the project CSS; no live backend, API or WebSocket path. Desktop 2010x1072 panel widths: Operator context 648.66, System 648.66, Memory 648.66, Filesystems 1305.33, Tags 648.66 (Filesystems spans the 66.667% column, Tags the 33.333% column). Narrow 390x844: all five panels 340px, no horizontal overflow. No page errors and no failed responses. Desktop and narrow screenshots inspected. Build toolchain: vite 6.4.3, vite-plugin-solid 2.11.12, solid-js 1.9.14, tailwindcss 3.4.19, esbuild 0.28.1, matching frontend-modern/package-lock.json; the dependency tree was copied from a readable offline checkout because the lane's canonical tree under /srv/pulse is ACL-restricted from this identity, and the render-relevant versions match exactly. This receipt is content-addressed to GuestDrawerOverview.tsx sha256 bcfebc20…, verified at 20:31Z; the commit carrying it was recomposed this turn onto a later base so the per-commit browser guard accepts the source change and its proof in one commit."
+  "command": "pulse-worker-browser scripts/check-thresholds-windowed-list.cjs",
+  "notes": "Offline Playwright Chromium run of the production Alert Thresholds card list (the narrow-layout renderer that virtualises via PlatformWindowedList) with synthetic props and the project CSS; no backend, API or WebSocket path. Before the fix the same run failed with bottom spacer 288px (8 x the 36px leading group header), so the item-height estimate collapsed to the header and the mounted window desynchronised from the scroll position, dropping a host's rows (#2130). After the fix the estimate follows the 315px card, the window holds through a 70px scroll, and the last guest is reachable. No page errors and no failed responses. Chromium 141.0.7390.37, matching the offline runtime. This receipt is content-addressed to usePlatformWindowedItems.ts sha256 e1cc0cb0…, verified at 22:48Z on base 1c8fee01…."
 }
