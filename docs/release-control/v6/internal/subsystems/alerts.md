@@ -1200,6 +1200,16 @@ synchronous durability for this authority, and the recovery mirror fsyncs its
 temporary file plus a platform-native durable rename barrier (parent-directory
 sync on Unix and write-through replacement on Windows), so the contract covers
 host power loss rather than only orderly process restart.
+An unchanged JSON recovery checkpoint preserves already-correct directory
+permissions without issuing chmod, avoiding redundant Linux directory metadata
+mutation. It still repairs unsafe access permissions and special mode bits;
+permission repair must not replace identical JSON. Directory sync and atomic
+file replacement durability remain unchanged. This is not a guarantee of zero
+aggregate process writes. `TestActiveMirrorUnchangedRepairsDirectoryPermissions`
+in `internal/alerts/alerts_test.go` pins permission repair and inode retention;
+`TestActiveMirrorUnchangedPreservesDirectoryMetadata` in
+`internal/alerts/active_mirror_metadata_linux_test.go` pins stable Linux ctime.
+
 `active-alerts.json` remains an atomic recovery mirror, not a competing healthy
 read authority. A new or recreated database imports the readable mirror. A
 failed SQLite checkpoint writes a durable degraded marker, and the next startup
@@ -2697,3 +2707,21 @@ numeric. `OverviewTab.total24h.test.tsx` pins the separate annotation cell and
 the numeric count, and `frontend-modern/browser-verification.json` records the
 offline Chromium pass. This is a presentation alignment fix; no API field,
 notification policy or shared primitive changes.
+
+### Unchanged active-alert JSON recovery checkpoints
+
+The recovery-mirror writer canonicalises complete records before comparing
+bounded existing bytes. An identical regular file with mode 0600 is not
+replaced; acknowledgement, metadata and resolved/empty state changes still use
+the atomic synced replacement path. Missing, corrupt, insecure or symlink
+destinations are not accepted as unchanged. Failed writes remain retryable and
+the unchanged path retains directory sync so a prior post-rename sync failure
+is not silently accepted. Windows retains replacement when its reported mode
+does not match POSIX 0600.
+
+`TestActiveMirror*` isolates this JSON path without database workers and covers
+ordering, fresh-manager checkpoints, state changes, file loss/corruption, failed
+rename retry and Unix destination hardening. This addresses one write source
+in #1966, not total installed write amplification: directory metadata handling,
+intent snapshots, changing alert histories and database writes remain separate.
+It changes neither alert latency nor the selected release candidate.

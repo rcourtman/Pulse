@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -21231,5 +21232,156 @@ func TestIntentCheckpointRetriesFailedWrite(t *testing.T) {
 	}
 	if string(got) != "[]" {
 		t.Fatalf("retry wrote %q", got)
+	}
+}
+
+// Exercise only the JSON recovery writer: no database or background workers.
+func TestActiveMirrorUnchangedCheckpoint(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unchanged fast path requires POSIX 0600 mode; Windows retains write-through replacement")
+	}
+	dir := t.TempDir()
+	m := &Manager{alertsDir: dir}
+	a := &Alert{ID: "a", ResourceID: "host-a", Message: "offline", StartTime: time.Now().UTC()}
+	b := &Alert{ID: "b", ResourceID: "host-b", Message: "offline", StartTime: a.StartTime}
+	path := filepath.Join(dir, "active-alerts.json")
+	save := func(alerts []*Alert) os.FileInfo {
+		t.Helper()
+		if err := m.writeActiveAlertsRecoveryMirror(alerts); err != nil {
+			t.Fatal(err)
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return info
+	}
+	first := save([]*Alert{a, b})
+	for i := 0; i < 20; i++ {
+		after := save([]*Alert{b, a})
+		if !os.SameFile(first, after) {
+			t.Fatal("unchanged snapshot replaced JSON recovery file")
+		}
+	}
+	// A fresh manager must also recognise the existing checkpoint.
+	m = &Manager{alertsDir: dir}
+	if !os.SameFile(first, save([]*Alert{a, b})) {
+		t.Fatal("fresh manager rewrote unchanged mirror")
+	}
+	a.Acknowledged, a.AckUser = true, "operator"
+	save([]*Alert{a, b})
+	check := func(want int, ack bool) {
+		t.Helper()
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []*Alert
+		if err := json.Unmarshal(data, &got); err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != want {
+			t.Fatalf("alerts = %d, want %d", len(got), want)
+		}
+		for _, alert := range got {
+			if alert.ID == "a" && (alert.Acknowledged != ack || (ack && alert.AckUser != "operator")) {
+				t.Fatal("acknowledgement not persisted")
+			}
+		}
+	}
+	check(2, true)
+	save([]*Alert{a})
+	check(1, true)
+	// File loss and corruption cannot be hidden by an in-memory cache.
+	if err := os.Rename(path, path+".previous"); err != nil {
+		t.Fatal(err)
+	}
+	save([]*Alert{a})
+	check(1, true)
+	if err := os.WriteFile(path, []byte("corrupt"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	save([]*Alert{a})
+	check(1, true)
+	empty := save([]*Alert{})
+	check(0, false)
+	if !os.SameFile(empty, save([]*Alert{})) {
+		t.Fatal("empty checkpoint rewritten")
+	}
+}
+
+func TestActiveMirrorFailedWriteRetries(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "active-alerts.json")
+	if err := os.Mkdir(path, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(path, "sentinel"), []byte("preserve"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	m := &Manager{alertsDir: dir}
+	alerts := []*Alert{{ID: "a"}}
+	if err := m.writeActiveAlertsRecoveryMirror(alerts); err == nil {
+		t.Fatal("expected obstructed rename failure")
+	}
+	if err := os.Rename(path, path+".obstruction"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.writeActiveAlertsRecoveryMirror(alerts); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []*Alert
+	if err := json.Unmarshal(data, &got); err != nil || len(got) != 1 || got[0].ID != "a" {
+		t.Fatalf("retry lost state: %s, %v", data, err)
+	}
+	temps, err := filepath.Glob(filepath.Join(dir, "active-alerts-*.json.tmp"))
+	if err != nil || len(temps) != 0 {
+		t.Fatalf("temporary files: %v, %v", temps, err)
+	}
+}
+
+// The unchanged-content fast path must not accept unsafe directory permissions.
+func TestActiveMirrorUnchangedRepairsDirectoryPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX directory permissions")
+	}
+	for _, mode := range []os.FileMode{0755, 0700 | os.ModeSticky, 0700 | os.ModeSetgid} {
+		t.Run(mode.String(), func(t *testing.T) {
+			dir := t.TempDir()
+			m := &Manager{alertsDir: dir}
+			alerts := []*Alert{{ID: "a"}}
+			if err := m.writeActiveAlertsRecoveryMirror(alerts); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(dir, "active-alerts.json")
+			before, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(dir, mode); err != nil {
+				t.Fatal(err)
+			}
+			if err := m.writeActiveAlertsRecoveryMirror(alerts); err != nil {
+				t.Fatal(err)
+			}
+			info, err := os.Stat(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Mode().Perm() != alertsDirPerm || info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 {
+				t.Fatalf("unsafe directory mode survived: %v", info.Mode())
+			}
+			after, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !os.SameFile(before, after) {
+				t.Fatal("directory permission repair replaced unchanged JSON")
+			}
+		})
 	}
 }
