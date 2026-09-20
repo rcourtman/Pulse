@@ -35,6 +35,11 @@
       "incomplete_commit": "f43a7a3e62956fa066c8417a8b67b04e7e435cda",
       "completion_commit": "a23ba2f5dc575da4ece2ddb6a46261c594a5f968",
       "reason": "Evaluate the create-release private Pro source-pair preflight together with the follow-up commit that records its deployment-installability contract section and the release-promotion policy proof guarding the step and its ordering ahead of create_release, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "abaca8f9c00439cbb5aa51a4449dfae443adbce8",
+      "completion_commit": "33260be25bda0edb5c3c3f3196192a32560303b4",
+      "reason": "Evaluate the unified physical-disk SMART observation-time and replay-guard repair together with the follow-up commit that records its monitoring and agent-lifecycle contract sections and places the two-rebuild regression proof in the registry-accepted internal/monitoring/monitor_host_agents_test.go proof file, as one reviewed completion unit."
     }
   ]
 }
