@@ -2070,11 +2070,29 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 	return &config, nil
 }
 
-// SaveSystemSettings saves system settings to file
-func (c *ConfigPersistence) SaveSystemSettings(settings SystemSettings) error {
+// InitializeSystemSettings creates first-run settings without replacing existing
+// bytes, including unknown fields or malformed data that needs recovery. The
+// shared lock makes the existence check atomic with ordinary settings saves.
+func (c *ConfigPersistence) InitializeSystemSettings(settings SystemSettings) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if _, err := c.fs.ReadFile(c.systemFile); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect existing system settings: %w", err)
+	}
+	return c.saveSystemSettingsLocked(settings)
+}
+
+// SaveSystemSettings saves system settings to file.
+func (c *ConfigPersistence) SaveSystemSettings(settings SystemSettings) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.saveSystemSettingsLocked(settings)
+}
+
+func (c *ConfigPersistence) saveSystemSettingsLocked(settings SystemSettings) error {
 	data, err := json.Marshal(settings)
 	if err != nil {
 		return fmt.Errorf("marshal system settings: %w", err)

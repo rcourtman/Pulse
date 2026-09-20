@@ -536,11 +536,12 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			}
 		}
 
-		// Save system settings to system.json
+		// Initialize first-run defaults only; rotating authentication must not
+		// reset unrelated preferences or overwrite settings needing recovery.
 		systemSettings := config.DefaultSystemSettings()
 		systemSettings.ConnectionTimeout = 10    // Default seconds
 		systemSettings.AutoUpdateEnabled = false // Default disabled
-		if err := r.persistence.SaveSystemSettings(*systemSettings); err != nil {
+		if err := r.persistence.InitializeSystemSettings(*systemSettings); err != nil {
 			log.Error().Err(err).Msg("Failed to save system settings")
 			// Continue anyway - not critical for auth setup
 		}
