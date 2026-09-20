@@ -916,6 +916,14 @@ func trueNASReclaimableARC(system SystemInfo) int64 {
 	return arc
 }
 
+// trueNASMemoryUsageKnown reports whether the appliance supplied an available
+// memory reading. Without it the ARC-aware used figure cannot be derived, and
+// treating the zero value as a measurement reports total capacity as 100% used
+// (#2077, legacy REST transport on TrueNAS CORE).
+func trueNASMemoryUsageKnown(system SystemInfo) bool {
+	return system.MemoryAvailableBytes > 0
+}
+
 // trueNASEffectiveMemoryUsed treats the ZFS ARC as reclaimable cache, the
 // same way node memory accounting treats buffers and page cache: the
 // kernel's MemAvailable does not count ARC even though it shrinks under
@@ -944,7 +952,7 @@ func metricsFromTrueNASSystem(system SystemInfo, totalCapacity, totalUsed int64)
 		}
 	}
 
-	if system.MemoryTotalBytes > 0 {
+	if system.MemoryTotalBytes > 0 && trueNASMemoryUsageKnown(system) {
 		used := trueNASEffectiveMemoryUsed(system)
 		memory := &unifiedresources.MetricValue{
 			Used:   &used,
@@ -952,10 +960,8 @@ func metricsFromTrueNASSystem(system SystemInfo, totalCapacity, totalUsed int64)
 			Unit:   "bytes",
 			Source: unifiedresources.SourceTrueNAS,
 		}
-		if system.MemoryTotalBytes > 0 {
-			memory.Percent = (float64(used) / float64(system.MemoryTotalBytes)) * 100
-			memory.Value = memory.Percent
-		}
+		memory.Percent = (float64(used) / float64(system.MemoryTotalBytes)) * 100
+		memory.Value = memory.Percent
 		metrics.Memory = memory
 	}
 
@@ -1010,16 +1016,26 @@ func agentDataFromTrueNASSystem(connectionID string, system SystemInfo, disks []
 	}
 
 	if system.MemoryTotalBytes > 0 {
-		used := trueNASEffectiveMemoryUsed(system)
-		free := system.MemoryAvailableBytes
-		if free < 0 {
-			free = 0
-		}
-		agent.Memory = &unifiedresources.AgentMemoryMeta{
-			Total: system.MemoryTotalBytes,
-			Used:  used,
-			Free:  free,
-			Cache: trueNASReclaimableARC(system),
+		if trueNASMemoryUsageKnown(system) {
+			used := trueNASEffectiveMemoryUsed(system)
+			free := system.MemoryAvailableBytes
+			if free < 0 {
+				free = 0
+			}
+			agent.Memory = &unifiedresources.AgentMemoryMeta{
+				Total: system.MemoryTotalBytes,
+				Used:  used,
+				Free:  free,
+				Cache: trueNASReclaimableARC(system),
+			}
+		} else {
+			// Total capacity is known but the appliance did not report an
+			// available reading; preserve the capacity without inventing usage
+			// from total-0 (#2077).
+			agent.Memory = &unifiedresources.AgentMemoryMeta{
+				Total:            system.MemoryTotalBytes,
+				UsageUnavailable: true,
+			}
 		}
 	}
 	if temperature := maxTrueNASSystemTemperature(system); temperature != nil {
