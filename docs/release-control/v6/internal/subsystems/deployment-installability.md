@@ -1420,7 +1420,13 @@ artifact-selection behaviour.
    by `scripts/installtests/pulse_auto_update_test.go`
    (`TestPerformUpdateRestartsServiceWhenInstallerFails`,
    `TestEnsureServiceRestartedHonorsPriorServiceState`) and
-   `scripts/tests/test-pulse-auto-update.sh`. For the same reason, root
+   `scripts/tests/test-pulse-auto-update.sh`. The RETURN trap must clear itself
+   before running (`trap - RETURN; …`): a RETURN trap is not scoped to the
+   function that set it, so an armed trap fires again on the next function
+   return and expands `perform_update`'s out-of-scope `installer_tmp` /
+   `signature_tmp` locals under `set -u`, failing an otherwise successful
+   update (#2128). This is pinned by
+   `TestPerformUpdateClearsReturnTrapAfterSuccess`. For the same reason, root
    `install.sh` writes outside the hardened update unit's writable set
    (`ProtectSystem=strict` with `ReadWritePaths` covering the install dir,
    config dir, `/tmp`, the auto-update helper's directory and the unit
