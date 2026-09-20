@@ -40,6 +40,11 @@
       "incomplete_commit": "abaca8f9c00439cbb5aa51a4449dfae443adbce8",
       "completion_commit": "33260be25bda0edb5c3c3f3196192a32560303b4",
       "reason": "Evaluate the unified physical-disk SMART observation-time and replay-guard repair together with the follow-up commit that records its monitoring and agent-lifecycle contract sections and places the two-rebuild regression proof in the registry-accepted internal/monitoring/monitor_host_agents_test.go proof file, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "564c235e3200a80d8781a187cf6f84a91557ab38",
+      "completion_commit": "bb25e3ec03a49cb821ef2ee310878bd2743ed850",
+      "reason": "Evaluate the auto-update RETURN-trap disarm runtime change together with the follow-up commit that records its deployment-installability contract section and the registry-accepted deployment-script-runtime proof in scripts/installtests/pulse_auto_update_test.go, as one reviewed completion unit."
     }
   ]
 }
