@@ -311,15 +311,18 @@ type MemoryMetric struct {
 
 // Disk represents disk utilisation metrics.
 type Disk struct {
-	Device      string       `json:"device,omitempty"`
-	Mountpoint  string       `json:"mountpoint,omitempty"`
-	Filesystem  string       `json:"filesystem,omitempty"`
-	Type        string       `json:"type,omitempty"`
-	TotalBytes  int64        `json:"totalBytes,omitempty"`
-	UsedBytes   int64        `json:"usedBytes,omitempty"`
-	FreeBytes   int64        `json:"freeBytes,omitempty"`
-	Usage       float64      `json:"usage,omitempty"`
-	ZFSDatasets []ZFSDataset `json:"zfsDatasets,omitempty"`
+	// ExplicitlyIncluded carries the operator disk-include override through server filtering.
+	// Absent on older agents, which retain the default filesystem policy.
+	ExplicitlyIncluded bool         `json:"explicitlyIncluded,omitempty"`
+	Device             string       `json:"device,omitempty"`
+	Mountpoint         string       `json:"mountpoint,omitempty"`
+	Filesystem         string       `json:"filesystem,omitempty"`
+	Type               string       `json:"type,omitempty"`
+	TotalBytes         int64        `json:"totalBytes,omitempty"`
+	UsedBytes          int64        `json:"usedBytes,omitempty"`
+	FreeBytes          int64        `json:"freeBytes,omitempty"`
+	Usage              float64      `json:"usage,omitempty"`
+	ZFSDatasets        []ZFSDataset `json:"zfsDatasets,omitempty"`
 }
 
 // ZFSDataset is a bounded, read-only projection of `zfs list` for one pool.

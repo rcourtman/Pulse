@@ -15,6 +15,28 @@
 
 ## Purpose
 
+### Explicit filesystem selections survive the report boundary
+
+Disk reports carry optional `explicitlyIncluded` evidence when the collector
+matches the operator's disk-include setting. Explicit exclusions still win
+before usage collection; inclusion does not fabricate capacity when usage fails
+or reports zero total. Host and Docker snapshot copies preserve this field.
+It changes metric selection only, not enrollment, token scopes, identity or
+command authority.
+
+The flag is omitted when false. Older agents therefore retain default server
+filtering; older servers ignore the additive field. Preserving selected tmpfs
+through ingestion requires both agent and server support, not a server-only
+upgrade. `TestDiskExplicitIncludeWireCompatibility` pins omission and round
+trip; `TestCollectDisksIncludesExplicitTmpfsMount` and
+`TestCollectDisksKeepsDistinctExplicitTmpfsMountsWithEqualCapacity` pin
+include/exclude selection and marker production;
+`TestBuildReportForwardsExplicitDiskIncludesAndExcludes` pins report forwarding.
+These are synthetic proofs, not estate acceptance.
+
+Release-line adaptation of reviewed main c8cead7d (fix for #1875). No release
+metadata changes.
+
 ### Physical disk skipped-poll identity
 
 Read-state round trips preserve the provider SourceID rather than rehashing a

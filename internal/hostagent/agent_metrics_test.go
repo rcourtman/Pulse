@@ -491,7 +491,7 @@ func TestBuildReportForwardsExplicitDiskIncludesAndExcludes(t *testing.T) {
 		metricsWithDiskFiltersFn: func(_ context.Context, exclude, include []string) (hostmetrics.Snapshot, error) {
 			gotExclude = append([]string(nil), exclude...)
 			gotInclude = append([]string(nil), include...)
-			return hostmetrics.Snapshot{}, nil
+			return hostmetrics.Snapshot{Disks: []agentshost.Disk{{Mountpoint: "/mnt/containers", Type: "tmpfs", TotalBytes: 1024, ExplicitlyIncluded: true}}}, nil
 		},
 	}
 	agent, err := New(Config{
@@ -506,8 +506,12 @@ func TestBuildReportForwardsExplicitDiskIncludesAndExcludes(t *testing.T) {
 		t.Fatalf("New() failed: %v", err)
 	}
 
-	if _, err := agent.buildReport(context.Background()); err != nil {
+	report, err := agent.buildReport(context.Background())
+	if err != nil {
 		t.Fatalf("buildReport() failed: %v", err)
+	}
+	if len(report.Disks) != 1 || !report.Disks[0].ExplicitlyIncluded || report.Disks[0].Mountpoint != "/mnt/containers" {
+		t.Fatalf("explicit disk lost in report: %+v", report.Disks)
 	}
 	if got := strings.Join(gotExclude, ","); got != "/mnt/private" {
 		t.Fatalf("disk excludes = %q, want /mnt/private", got)

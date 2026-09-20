@@ -220,7 +220,7 @@ func TestCollectDisksIncludesExplicitTmpfsMount(t *testing.T) {
 	}
 
 	disks := collectDisksWithIncludes(context.Background(), nil, []string{"/var/log"})
-	if len(disks) != 1 || disks[0].Mountpoint != "/var/log" || disks[0].Filesystem != "tmpfs" {
+	if len(disks) != 1 || !disks[0].ExplicitlyIncluded || disks[0].Mountpoint != "/var/log" || disks[0].Filesystem != "tmpfs" {
 		t.Fatalf("explicit tmpfs include was not reported correctly: %+v", disks)
 	}
 }
@@ -258,6 +258,9 @@ func TestCollectDisksKeepsDistinctExplicitTmpfsMountsWithEqualCapacity(t *testin
 	}
 	if disks[0].Mountpoint != "/mnt/ramdisk/plex-transcode" || disks[1].Mountpoint != "/var/log" {
 		t.Fatalf("explicit tmpfs mounts = %+v", disks)
+	}
+	if !disks[0].ExplicitlyIncluded || !disks[1].ExplicitlyIncluded {
+		t.Fatalf("explicit tmpfs include marker was lost: %+v", disks)
 	}
 }
 
