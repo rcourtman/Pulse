@@ -11,9 +11,14 @@ import (
 
 const vmwareSignalEnrichmentConcurrency = 8
 
+// viJSONReference is a ManagedObjectReference. TypeName carries the VI JSON
+// API _typeName discriminator; the documented request schema includes it, and
+// the API rejects a composite data object that omits its discriminator while
+// accepting a bare moref without one.
 type viJSONReference struct {
-	Type  string `json:"type"`
-	Value string `json:"value"`
+	TypeName string `json:"_typeName,omitempty"`
+	Type     string `json:"type"`
+	Value    string `json:"value"`
 }
 
 type viJSONLocalizedMessage struct {
@@ -39,11 +44,13 @@ type viJSONTaskInfo struct {
 }
 
 type viJSONEventFilterSpec struct {
+	TypeName string                   `json:"_typeName,omitempty"`
 	Entity   *viJSONEventFilterEntity `json:"entity,omitempty"`
 	MaxCount int                      `json:"maxCount,omitempty"`
 }
 
 type viJSONEventFilterEntity struct {
+	TypeName  string          `json:"_typeName,omitempty"`
 	Entity    viJSONReference `json:"entity"`
 	Recursion string          `json:"recursion,omitempty"`
 }
@@ -530,8 +537,10 @@ func (c *Client) collectRecentEvents(ctx context.Context, release, sessionID, ev
 	path := fmt.Sprintf("/sdk/vim25/%s/EventManager/%s/QueryEvents", release, eventManagerMoID)
 	body := map[string]any{
 		"filter": viJSONEventFilterSpec{
+			TypeName: "EventFilterSpec",
 			Entity: &viJSONEventFilterEntity{
-				Entity:    viJSONReference{Type: strings.TrimSpace(managedType), Value: strings.TrimSpace(managedObjectID)},
+				TypeName:  "EventFilterSpecByEntity",
+				Entity:    viJSONReference{TypeName: "ManagedObjectReference", Type: strings.TrimSpace(managedType), Value: strings.TrimSpace(managedObjectID)},
 				Recursion: "self",
 			},
 			MaxCount: 3,
