@@ -939,6 +939,15 @@ tokens, and path-normalization variants.
     closure plus replacement-deployment or verified-retirement evidence at the
     required tier. Keep optional history rewriting separate and nonblocking
     after containment.
+16. Keep startup-stall diagnostics inside the local process boundary. A stalled
+    startup may write the last completed startup phase and a full goroutine
+    stack to the local process log so a bound-but-not-serving listener is
+    diagnosable in the field. Goroutine stacks are local log output only: they
+    must never enter the outbound telemetry payload, a service-health event, or
+    any provider-bound request, and the diagnostic must not expose request
+    bodies, credentials, or governed resource detail beyond what the local
+    operator already holds. Regression coverage:
+    `TestStartupWatchdogLogsPhaseAndStack` in `pkg/server/service_health_test.go`.
 
 ## Current State
 

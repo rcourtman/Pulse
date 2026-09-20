@@ -1,13 +1,16 @@
 package server
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
+	"github.com/rs/zerolog"
 )
 
 func TestServiceHealthProbeCoversAPIUIAndFrontendAssets(t *testing.T) {
@@ -112,5 +115,34 @@ func TestFrontendAssetPathsStayLocalAndBounded(t *testing.T) {
 	got := frontendAssetPaths(index)
 	if len(got) != 2 || got[0] != "/assets/app.css?v=1" || got[1] != "/assets/app.js" {
 		t.Fatalf("frontend asset paths = %#v", got)
+	}
+}
+
+// A bound-but-not-serving listener is otherwise undiagnosable: nothing accepts
+// connections and no startup log line is emitted while a synchronous step
+// stalls. The watchdog must name the last completed phase and dump the local
+// goroutine stacks so a recurrence can be read from the field log.
+func TestStartupWatchdogLogsPhaseAndStack(t *testing.T) {
+	var buf bytes.Buffer
+	phase := &startupPhase{}
+	phase.mark("config watcher started")
+
+	stop := startStartupWatchdog(zerolog.New(&buf), phase, 20*time.Millisecond)
+	defer stop()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && !strings.Contains(buf.String(), "startup is stalled") {
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	logged := buf.String()
+	if !strings.Contains(logged, "startup is stalled") {
+		t.Fatalf("startup watchdog did not fire: %q", logged)
+	}
+	if !strings.Contains(logged, "config watcher started") {
+		t.Fatalf("startup watchdog did not name the last completed phase: %q", logged)
+	}
+	if !strings.Contains(logged, "goroutine") {
+		t.Fatalf("startup watchdog did not include a local goroutine stack: %q", logged)
 	}
 }
