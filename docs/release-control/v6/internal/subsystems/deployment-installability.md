@@ -1426,7 +1426,17 @@ artifact-selection behaviour.
    return and expands `perform_update`'s out-of-scope `installer_tmp` /
    `signature_tmp` locals under `set -u`, failing an otherwise successful
    update (#2128). This is pinned by
-   `TestPerformUpdateClearsReturnTrapAfterSuccess`. For the same reason, root
+   `TestPerformUpdateClearsReturnTrapAfterSuccess`. The installer's
+   configuration snapshot must not outlive an update that never began:
+   `install.sh` `backup_existing` records the snapshot it creates and
+   `download_pulse` discards it when the staging disk-headroom check fails,
+   because nothing was staged or replaced and the leftover copy makes a
+   low-space root filesystem progressively worse on every automatic retry
+   (#2127). Snapshot retention (`CONFIG_BACKUP_KEEP_COUNT`) and the headroom
+   thresholds are unchanged; this is pinned by
+   `TestRootInstallScriptDiscardsUnneededConfigBackup` and
+   `TestRootInstallScriptDiscardsBackupWhenStagingHeadroomFails`. For the same
+   reason, root
    `install.sh` writes outside the hardened update unit's writable set
    (`ProtectSystem=strict` with `ReadWritePaths` covering the install dir,
    config dir, `/tmp`, the auto-update helper's directory and the unit
