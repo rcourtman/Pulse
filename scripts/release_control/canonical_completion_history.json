@@ -40,6 +40,16 @@
       "incomplete_commit": "abaca8f9c00439cbb5aa51a4449dfae443adbce8",
       "completion_commit": "33260be25bda0edb5c3c3f3196192a32560303b4",
       "reason": "Evaluate the unified physical-disk SMART observation-time and replay-guard repair together with the follow-up commit that records its monitoring and agent-lifecycle contract sections and places the two-rebuild regression proof in the registry-accepted internal/monitoring/monitor_host_agents_test.go proof file, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "9b004cc787aaa1b68b9caa7832aa013235bd1700",
+      "completion_commit": "ccfd22da7f5a7b181807642c76e2177ba15a6418",
+      "reason": "Evaluate the auto-update RETURN-trap repair together with the follow-up commit that records its deployment-installability contract section and adds the extracted-perform_update proof in the registry-accepted scripts/installtests/pulse_auto_update_test.go proof file, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "07d54cd345d58f04de23fa58ea785fc6580a0fbd",
+      "completion_commit": "ccfd22da7f5a7b181807642c76e2177ba15a6418",
+      "reason": "Evaluate the failed-staging configuration-backup discard repair together with the follow-up commit that records its deployment-installability contract section and supplies the registry-accepted installtest proof, as one reviewed completion unit."
     }
   ]
 }
