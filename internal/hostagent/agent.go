@@ -2576,6 +2576,15 @@ func GetReliableMachineID(c SystemCollector, gopsutilHostID string, logger zerol
 		}
 	}
 
+	// Windows reports MachineGuid with or without surrounding braces depending
+	// on the source; canonicalise it so a braced GUID resolves to the same
+	// stable identity as its bare form (issue #2125).
+	if c.GOOS() == "windows" {
+		if normalized := normalizeMachineGUID(gopsutilID); normalized != "" {
+			return normalized
+		}
+	}
+
 	return gopsutilID
 }
 

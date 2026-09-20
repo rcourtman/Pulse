@@ -64,8 +64,22 @@ type defaultCollector struct {
 	metrics hostmetrics.Collector
 }
 
+// hostInfoWithContext and recoverHostInfo are seams so the Windows host-ID
+// recovery can be exercised from a non-Windows test binary.
+var (
+	hostInfoWithContext = gohost.InfoWithContext
+	recoverHostInfo     = recoverWindowsHostInfo
+)
+
 func (c *defaultCollector) HostInfo(ctx context.Context) (*gohost.InfoStat, error) {
-	return gohost.InfoWithContext(ctx)
+	info, err := hostInfoWithContext(ctx)
+	if err == nil {
+		return info, nil
+	}
+	if recovered := recoverHostInfo(ctx); recovered != nil {
+		return recovered, nil
+	}
+	return nil, err
 }
 
 func (c *defaultCollector) HostUptime(ctx context.Context) (uint64, error) {
