@@ -10,6 +10,11 @@
       "incomplete_commit": "82421c3d2fa8c9922360947bf75ead661f0e8bfc",
       "completion_commit": "1216a32fd504195933ea5bf496112f1033460461",
       "reason": "Evaluate the #2119 alerts overview stat alignment frontend change together with the follow-up commit that records its alerts and frontend-primitives contract sections as one completion unit. The completion tree passes the canonical completion guard for the combined changed files."
+    },
+    {
+      "incomplete_commit": "3caa3fb9b9f2b86f4ffba4d4960b4f2789ad60c0",
+      "completion_commit": "4aa40b98289ca8fa74646c88f33f34e1f83c6277",
+      "reason": "Evaluate the TrueNAS legacy-REST memory telemetry runtime change together with the follow-up commit that records its monitoring contract section and moves the regression proof into the registry-accepted internal/truenas/client_test.go proof file, as one reviewed completion unit."
     }
   ]
 }
