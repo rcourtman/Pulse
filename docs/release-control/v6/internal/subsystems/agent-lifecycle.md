@@ -7889,3 +7889,25 @@ repeats before the metrics batch is enqueued, reducing WAL churn without
 changing host admission, token binding or removal-block behaviour. Focused proof
 lives in `internal/monitoring/monitor_host_agents_test.go`
 (`TestDedupeUnifiedMetricWritesDropsExactReplays`).
+
+### Windows braced MachineGuid does not abort agent startup
+
+The Windows unified agent resolves host information through gopsutil's combined
+`InfoWithContext`, which is fatal if any single field fails. gopsutil v4.26.6
+reads `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid` through a fixed 74-byte
+registry buffer and rejects any value that is not exactly 36 characters, so a
+braced 38-character GUID returns `ERROR_MORE_DATA` ("More data is available")
+and the whole call fails. Pulse propagated that error from `newAgent` and the
+agent exited at startup (#2125). Host collection now retries through a Windows
+recovery path when the host-ID read itself fails: it reads `MachineGuid`
+directly with a correctly sized buffer, strips the optional braces, and fills
+the remaining fields from gopsutil's individual accessors. A failure of any
+other field remains fatal so unrelated faults are not hidden. Machine
+identities are canonicalised by removing surrounding braces and lower-casing,
+so a braced GUID and its bare form resolve to the same stable agent ID; the
+change does not alter enrollment, token binding, removal or command authority.
+Focused proof lives in `internal/hostagent/agent_new_test.go`
+(`TestNormalizeMachineGUID`, `TestDefaultCollectorHostInfoRecoversWindowsHostIDFailure`,
+`TestDefaultCollectorHostInfoKeepsErrorWhenUnrecovered` and
+`TestGetReliableMachineIDNormalizesWindowsBraces`); the Windows recovery file is
+cross-compiled with `GOOS=windows go build ./internal/hostagent/`.

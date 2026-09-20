@@ -81,6 +81,52 @@ func TestReloadableMonitor_Lifecycle_Coverage(t *testing.T) {
 	rm.Stop()
 }
 
+func TestReloadPreservesLiveAgentCredentialInventory(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	runtimeConfig, err := config.LoadWithoutLoggingInit()
+	require.NoError(t, err)
+	rm, err := NewReloadableMonitor(runtimeConfig, config.NewMultiTenantPersistence(runtimeConfig.DataPath), nil)
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	rm.Start(ctx)
+	t.Cleanup(rm.Stop)
+
+	// The server and authentication handlers retain runtimeConfig across reloads.
+	// Token creation and revocation replace its slice after the monitor restarts.
+	for generation := 0; generation < 2; generation++ {
+		require.NoError(t, rm.Reload())
+		monitor := rm.GetMonitor()
+		require.NotNil(t, monitor)
+		now := time.Now().UTC()
+		config.Mu.Lock()
+		runtimeConfig.APITokens = []config.APITokenRecord{{
+			ID: "reload-agent-token", CreatedAt: now, LastUsedAt: &now,
+			Scopes: []string{config.ScopeAgentExec},
+		}}
+		config.Mu.Unlock()
+		monitor.state.UpsertHost(models.Host{
+			ID: "reload-agent", Hostname: "reload-host", Status: "online",
+			LastSeen: now, AgentVersion: "6.4.1", TokenID: "reload-agent-token",
+			TokenLastUsedAt: &now, CommandsEnabled: true,
+		})
+		agent := requireAgentDiagnostic(t, monitor.GetAgentFleetDiagnostics("6.4.1", now), "agent-reload-agent")
+		require.False(t, diagnosticHasAnyReason(agent.Reasons,
+			AgentFleetReasonCredentialMissing, AgentFleetReasonCredentialUnlisted, AgentFleetReasonExecScopeMissing),
+			"live credential is absent from diagnostics after reload: %+v", agent.Reasons)
+		require.Same(t, runtimeConfig, rm.GetConfig())
+		require.Same(t, runtimeConfig, monitor.GetConfig())
+
+		// Revocation must also reach diagnostics. Recent usage still produces the
+		// existing contradiction warning, rather than hiding a missing credential.
+		config.Mu.Lock()
+		runtimeConfig.APITokens = nil
+		config.Mu.Unlock()
+		agent = requireAgentDiagnostic(t, monitor.GetAgentFleetDiagnostics("6.4.1", now), "agent-reload-agent")
+		requireReasonCode(t, agent, AgentFleetReasonCredentialUnlisted)
+	}
+}
+
 func TestReloadableMonitorAggregateInstallSnapshotCountsIncludesProvisionedTenants(t *testing.T) {
 	baseDir := t.TempDir()
 	cfg := &config.Config{DataPath: baseDir}
