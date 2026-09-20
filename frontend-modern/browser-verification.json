@@ -1,46 +1,38 @@
 {
   "version": 1,
-  "base_sha": "22c8e95a3a35bbd91e9f85544118e4f1ea7a3d94",
-  "verified_at": "2026-09-20T19:52:00Z",
+  "base_sha": "e359e2b2dd4ec37ba58b8638bf417f1f3334ecc3",
+  "verified_at": "2026-09-20T23:24:19Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx",
-    "frontend-modern/src/components/Settings/aiSettingsModel.ts",
-    "frontend-modern/src/components/Settings/useAISettingsState.ts",
-    "frontend-modern/src/types/ai.ts"
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx": "76f3ed93e95cbe9f24f5cd55d49aeae7397f739e6520665f1b8de074ccaeaa96",
-    "frontend-modern/src/components/Settings/aiSettingsModel.ts": "9dee0d8b8bd013e870732c3893fa4742e40914ec4931a044b1698bc90f598c22",
-    "frontend-modern/src/components/Settings/useAISettingsState.ts": "fd074af7ae5137aa2b8a5634439c34df5339faab1ff0d44067bb5b39157cad04",
-    "frontend-modern/src/types/ai.ts": "2b597c1bf8b08ad532dcd48a138ccabf21a6a5e85c11ba04b557403a7570b71a"
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts": "e1cc0cb0f4087c5c66014d254421aeea6b02842795c41978e1b9847dcfcb5c77"
   },
   "routes": [
-    "/ (isolated AIProviderConfigurationSection harness)"
+    "/browser-tests/thresholds-windowed-list.html"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 900
+      "width": 480,
+      "height": 800
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 1280,
+      "height": 900
     }
   ],
   "states": [
-    "Ollama provider expanded with a saved password: 'Ollama password is saved.' presence text",
-    "Username field pre-filled and password input masked and empty (write-only saved secret)",
-    "Clear saved Ollama password checkbox unchecked before interaction",
-    "Saved-password presence toggled off: 'No Ollama password saved.'"
+    "Alert Thresholds card list with two Proxmox hosts and 30 guests, both hosts exposing a guest named gateway01",
+    "The virtual window mounts 24 of 32 items with the leading item a 36px group header and each guest card 315px tall",
+    "After a 70px scroll the first group header is still within the mounted window; the final guest is reachable at the bottom"
   ],
   "interactions": [
-    "Render the production AIProviderConfigurationSection with the Ollama provider expanded, an authenticated settings snapshot and an initialised credentials store at 1280x900",
-    "Fill the Ollama Username field and type into the password input; confirm the password input type is 'password' and its initial value is empty",
-    "Click the 'Clear saved Ollama password' checkbox and confirm it reports checked",
-    "Toggle the saved-password presence control and confirm the panel switches to 'No Ollama password saved.'",
-    "Repeat the full sequence at 390x844 and confirm identical field state with no horizontal overflow or page errors"
+    "Mount the production AlertResourceTableMobile renderer with synthetic grouped resources in a 600px native scroll container",
+    "Confirm the bottom spacer is 2520px, i.e. eight unmounted rows at the measured 315px card height rather than the 36px group-header height (which previously produced 288px)",
+    "Scroll the container 70px and confirm the top spacer stays 0, so the window does not jump past the first group",
+    "Scroll to the bottom and confirm the last guest renders; inspect narrow and desktop screenshots"
   ],
-  "command": "pulse-worker-browser .browser-build/ollama-proof.cjs",
-  "notes": "Offline Playwright Chromium 141.0.7390.37 run of the production AIProviderConfigurationSection (built from the staged source) with a synthetic authenticated Ollama settings snapshot and an initialised credentials store; no live backend, API or WebSocket path. Desktop and narrow runs both report password input type 'password' with an empty initial value, a visible write-only presence string, a working 'Clear saved Ollama password' checkbox, and the presence string switching to 'No Ollama password saved.'. The only console entry is a benign /favicon.ico 404. Desktop and narrow screenshots inspected. Release-line adaptation: this receipt covers the staged release-line blobs (AIProviderConfigurationSection.tsx and aiSettingsModel.ts are byte-identical to the reviewed main content; useAISettingsState.ts and types/ai.ts carry release-line context)."
+  "command": "pulse-worker-browser scripts/check-thresholds-windowed-list.cjs",
+  "notes": "Offline Playwright Chromium run of the production Alert Thresholds card list (the narrow-layout renderer that virtualises via PlatformWindowedList) with synthetic props and the project CSS; no backend, API or WebSocket path. Before the fix the same run failed with bottom spacer 288px (8 x the 36px leading group header), so the item-height estimate collapsed to the header and the mounted window desynchronised from the scroll position, dropping a host's rows (#2130). After the fix the estimate follows the 315px card, the window holds through a 70px scroll, and the last guest is reachable. No page errors and no failed responses. Chromium 141.0.7390.37, matching the offline runtime. Release-line adaptation of the reviewed main fix 6f0dc177c8: usePlatformWindowedItems.ts is byte-identical to the reviewed main content (sha256 e1cc0cb0...), and the proof was re-run here at 23:24Z against this release-line blob on base e359e2b2dd with the identical pass result (bottom spacer 2520px, top spacer 0 after a 70px scroll, no HTTP errors)."
 }
