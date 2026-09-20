@@ -5056,3 +5056,24 @@ organisation URL state reset. The global no-op store reports false.
 Proxmox-only infrastructure metricsTarget uses node storage coordinates; Resource-to-Node preserves that target and only explicit agent identity supplies linkedAgentId. Discovery routing alone does not establish agent telemetry.
 
 Bounded adaptations of reviewed main 3a189f31d447 (identity only) and 605643b01722. No metrics-store/storage-tier implementation or release metadata changes. Focused regressions and release-line browser proof are recorded in docs/qualification/release-v6.4-history/README.md. This is source qualification, not installed or published acceptance.
+
+### Provider link network corroboration
+
+An existing reciprocal host/provider link remains authoritative, including a
+manual link whose provider name differs from the agent hostname. Lending that
+agent identity to another configured provider, or accepting a one-way link,
+must not use loopback, link-local, Docker interfaces or generated Docker bridge
+addresses as machine corroboration. These addresses recur independently on
+unrelated hosts. Ordinary private management addresses, vmbr0/custom management
+bridges and explicit global-unicast report-IP hints remain eligible; this rule
+must not erase retained link intent or change the public resource schema.
+
+Validation: `TestProxmoxInferenceRejectsSharedHostLocalNetworks` covers the
+inference and presentation path, including preservation of the reciprocal link;
+`TestProxmoxInferencePreservesManagementNetworkCorroboration` and
+`TestProxmoxOneWayLinkRejectsHostLocalEndpointCorroboration` protect management
+network and explicit report-IP compatibility. These synthetic cases do not
+establish the cause of a particular installation's association.
+
+Release-line adaptation of reviewed main 63c9c0e495 (backport of PR #2007) for
+issue #1930. No release metadata changes.
