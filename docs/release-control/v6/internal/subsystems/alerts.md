@@ -1314,7 +1314,12 @@ evidence. Failed asynchronous batches do not advance the successful-write
 counter, and `Flush` must report the failure or timeout rather than falsely
 claiming the batch landed. An unavailable or failed lifecycle store degrades
 history reads to the recovery model without hiding live active-alert truth.
-Events retain for 90 days and prune hourly. Fired and
+Events retain for 90 days and prune hourly. Retention alone does not bound disk
+use: one flapping alert can write thousands of full alert-state snapshots inside
+the window, so the hourly prune also enforces a total stored snapshot-payload
+cap and removes the oldest events first when it is exceeded. A volume prune
+raises the retention revision so the history projection rebuilds from the
+remaining log rather than reusing a stale fold. Fired and
 refired lifecycle events come only from the reducer core's explicit activation
 events: canonical lifecycle reactivation maps `EventRefired` separately, while
 shared metric activation records one fired event when its pending incident
