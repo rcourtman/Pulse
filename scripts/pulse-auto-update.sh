@@ -391,8 +391,11 @@ perform_update() {
 
     # Whatever way this function exits, never leave Pulse stopped when it was
     # running before the update (#1630). Extended below once the installer
-    # tempfiles exist.
-    trap 'ensure_service_restarted "$service_name" "$service_was_active"' RETURN
+    # tempfiles exist. The trap clears itself as it runs: a RETURN trap is
+    # shell-global and would otherwise fire again when a later function returns,
+    # expanding these now out-of-scope locals under `set -u` and failing an
+    # otherwise successful update (#2128).
+    trap 'ensure_service_restarted "$service_name" "$service_was_active"; trap - RETURN' RETURN
 
     # Refuse to install a prerelease via the unattended updater. The stable
     # channel must never cross onto a tag like v6.0.0-rc.2, even if every
@@ -440,7 +443,7 @@ perform_update() {
 
     installer_tmp=$(mktemp /tmp/pulse-update-installer.XXXXXX)
     signature_tmp=$(mktemp /tmp/pulse-update-installer.sig.XXXXXX)
-    trap 'rm -f "$installer_tmp" "$signature_tmp"; ensure_service_restarted "$service_name" "$service_was_active"' RETURN
+    trap 'rm -f "$installer_tmp" "$signature_tmp"; ensure_service_restarted "$service_name" "$service_was_active"; trap - RETURN' RETURN
 
     if ! curl -fsSL "$install_script_url" -o "$installer_tmp"; then
         log error "Failed to download installer from $install_script_url"

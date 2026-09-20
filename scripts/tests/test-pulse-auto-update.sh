@@ -354,6 +354,77 @@ INSTALLER
   return "${status}"
 }
 
+test_perform_update_return_trap_does_not_leak() {
+  # Regression for #2128: the RETURN trap installed inside perform_update is
+  # shell-global. If it is not cleared when perform_update returns, it fires
+  # again when a later function returns, expanding the now out-of-scope locals
+  # under `set -u`. That aborts an otherwise successful update with
+  # "installer_tmp: unbound variable" and marks pulse-update.service failed.
+  local tmpdir
+  tmpdir="$(mktemp -d)"
+  local status=0
+
+  INSTALL_DIR="${tmpdir}/opt/pulse"
+  CONFIG_DIR="${tmpdir}/etc/pulse"
+  mkdir -p "${INSTALL_DIR}/bin" "${CONFIG_DIR}"
+  printf 'v5.1.24\n' > "${INSTALL_DIR}/VERSION"
+  cat > "${INSTALL_DIR}/bin/pulse" <<'EOF'
+#!/usr/bin/env bash
+echo "v5.1.24"
+EOF
+  chmod +x "${INSTALL_DIR}/bin/pulse"
+
+  export INSTALL_DIR
+  export FAKE_NEW_VERSION="v5.1.25"
+
+  is_prerelease_tag() { return 1; }
+  detect_service_name() { echo "pulse"; }
+  resolve_install_script_url() { echo "http://localhost/install.sh"; }
+  verify_release_signature() { return 0; }
+  get_current_version() { tr -d '\r\n' < "${INSTALL_DIR}/VERSION"; }
+
+  # The fake installer bumps VERSION, simulating a successful install.
+  curl() {
+    local out="" prev=""
+    local arg
+    for arg in "$@"; do
+      if [[ "$prev" == "-o" ]]; then out="$arg"; fi
+      prev="$arg"
+    done
+    if [[ -n "$out" ]]; then
+      case "$out" in
+        *.sig.*) printf 'dummy-signature\n' > "$out" ;;
+        *)
+          cat > "$out" <<'INSTALLER'
+#!/usr/bin/env bash
+printf '%s\n' "${FAKE_NEW_VERSION}" > "${PULSE_INSTALL_DIR}/VERSION"
+exit 0
+INSTALLER
+          ;;
+      esac
+    fi
+    return 0
+  }
+
+  systemctl() { return 0; }
+  sleep() { :; }
+
+  if ! perform_update "v5.1.25"; then
+    echo "perform_update unexpectedly failed on a successful install" >&2
+    status=1
+  fi
+
+  # Deliberately do NOT clear the RETURN trap here. The fix must clear it as it
+  # runs; this subsequent function return must not re-trigger it.
+  trap_leak_probe() { :; }
+  if ! trap_leak_probe; then
+    status=1
+  fi
+
+  rm -rf "${tmpdir}"
+  return "${status}"
+}
+
 main() {
   assert_success "wait_for_service_active retries until active" test_wait_for_service_active_succeeds_after_retry
   assert_success "wait_for_service_active times out when never active" test_wait_for_service_active_times_out_when_never_active
@@ -363,6 +434,7 @@ main() {
   assert_success "ensure_service_restarted no-ops when service was inactive" test_ensure_service_restarted_noops_when_service_was_inactive
   assert_success "ensure_service_restarted starts a stopped service" test_ensure_service_restarted_starts_stopped_service
   assert_success "perform_update restarts service when installer fails" test_perform_update_restarts_service_when_installer_fails
+  assert_success "perform_update RETURN trap does not leak into later returns" test_perform_update_return_trap_does_not_leak
 
   if (( failures > 0 )); then
     echo "Total failures: ${failures}" >&2
