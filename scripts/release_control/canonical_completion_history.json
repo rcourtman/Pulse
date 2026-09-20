@@ -20,6 +20,11 @@
       "incomplete_commit": "1c935c3a2d55544cf90161015a62f48a400c3c18",
       "completion_commit": "980ad4bab851979580c68a7ab523bce7f6bf73f9",
       "reason": "Evaluate the create-release private Pro source-pair preflight together with the follow-up commit that records its deployment-installability contract section and the release-promotion policy proof guarding the step and its ordering ahead of create_release, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "fb3c6ec1c081ce07e5cf1d2cde22cda135918cd6",
+      "completion_commit": "b71aa6de0fb91034685a4a0e16df34010f883827",
+      "reason": "Evaluate the backported server startup-stall watchdog runtime change together with the follow-up commit that records its security-privacy contract obligation and places the watchdog proof in the registry-accepted pkg/server/service_health_test.go proof file, as one reviewed completion unit."
     }
   ]
 }
