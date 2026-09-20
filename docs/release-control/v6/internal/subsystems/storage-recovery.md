@@ -254,6 +254,8 @@ command-capable profile.
 
 ## Shared Boundaries
 
+- After password configuration has been persisted and the runtime local-admin identity changes, authorizer synchronisation must also occur if subsequent API-token persistence fails. Development first-run reset must clear the configured-admin bypass only on successful auth reset, not on its persistence-failure rollback path. No role-store deletion or migration is part of this recovery.
+
 ### Development harness rate-budget isolation
 
 Recovery API extensions retain their dedicated endpoint-category budget when

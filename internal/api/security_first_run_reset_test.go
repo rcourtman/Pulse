@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestResetFirstRunSecurityRequiresDevMode(t *testing.T) {
@@ -45,6 +46,13 @@ func TestResetFirstRunSecurityClearsAuthAndReturnsBootstrapToken(t *testing.T) {
 	}
 
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	manager, err := auth.NewFileManager(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorizer := auth.NewRBACAuthorizer(manager)
+	authorizer.SetAdminUser(cfg.AuthUser)
+	router.authorizer = authorizer
 	req := httptest.NewRequest(http.MethodPost, "/api/security/dev/reset-first-run", nil)
 	req.Header.Set("X-API-Token", "reset-first-run-token-234.12345678")
 	rec := httptest.NewRecorder()
@@ -53,6 +61,9 @@ func TestResetFirstRunSecurityClearsAuthAndReturnsBootstrapToken(t *testing.T) {
 		t.Fatalf("expected 200, got %d (%s)", rec.Code, rec.Body.String())
 	}
 
+	if allowed, err := authorizer.Authorize(auth.WithUser(req.Context(), "admin"), auth.ActionAdmin, auth.ResourceUsers); allowed || err != nil {
+		t.Fatalf("reset retained configured-admin permission: allowed=%v err=%v", allowed, err)
+	}
 	var payload firstRunResetResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode response: %v", err)

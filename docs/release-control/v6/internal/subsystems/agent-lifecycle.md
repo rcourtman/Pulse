@@ -671,6 +671,8 @@ installer download and the agent's subsequent Pulse TLS connection.
 
 ## Shared Boundaries
 
+- Local administrator setup synchronises the router authorizer before returning a browser session, so API Access remains available to manage agent credentials. This changes neither agent token scopes nor command-policy intent, and must not grant an unrelated identity access to credential management.
+
 ### Development harness rate-budget isolation
 
 Agent lifecycle API extensions share the router's endpoint-category limiter;
