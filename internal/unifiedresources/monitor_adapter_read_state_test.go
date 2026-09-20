@@ -380,6 +380,59 @@ func TestReadStateWithRecordsPreservesConfiguredStaleThresholds(t *testing.T) {
 	}
 }
 
+func TestHostContinuityCannotOverwriteCurrentResource(t *testing.T) {
+	now := time.Now().UTC()
+	for _, mode := range []string{"machine-identity", "source-identity", "future-timestamp", "provider-only"} {
+		t.Run(mode, func(t *testing.T) {
+			registry := NewRegistry(nil)
+			current := models.Host{ID: "live-agent", MachineID: "machine", Hostname: "pve", Status: "online", LastSeen: now, CPUUsage: 23}
+			if mode == "provider-only" {
+				registry.IngestSnapshot(models.StateSnapshot{Nodes: []models.Node{{
+					ID: "pve-node", Name: "pve", Status: "online", LastSeen: now, LinkedAgentID: "saved-agent",
+				}}})
+			} else {
+				registry.IngestRecords(SourceAgent, []IngestRecord{HostIngestRecord(current)})
+			}
+			saved := models.Host{ID: "saved-agent", MachineID: "machine", Hostname: "pve", Status: "offline", LastSeen: now.Add(-time.Minute)}
+			if mode == "source-identity" {
+				saved.ID = current.ID
+			}
+			if mode == "future-timestamp" {
+				saved.LastSeen = now.Add(time.Hour)
+			}
+			if mode == "provider-only" {
+				saved.LinkedNodeID = "pve-node"
+			}
+			base := NewMonitorAdapter(registry)
+			before := base.GetAll()
+			record := HostIngestRecord(saved)
+			record.SupersededCanonicalIDs = []string{"agent:do-not-adopt-this-history"}
+			overlay := ReadStateWithHostContinuity(base, []IngestRecord{record})
+			after := overlay.(*MonitorAdapter).GetAll()
+			if !reflect.DeepEqual(before, after) {
+				t.Fatalf("saved enrollment changed canonical observation:\nbefore=%+v\nafter=%+v", before, after)
+			}
+			if !reflect.DeepEqual(before, base.GetAll()) {
+				t.Fatal("saved enrollment changed original registry")
+			}
+		})
+	}
+}
+
+func TestHostContinuityRetainsDistinctMachinesWithSameHostname(t *testing.T) {
+	now := time.Now().UTC()
+	registry := NewRegistry(nil)
+	registry.IngestRecords(SourceAgent, []IngestRecord{HostIngestRecord(models.Host{
+		ID: "site-a-agent", Hostname: "pve", MachineID: "site-a-machine", Status: "online", LastSeen: now,
+	})})
+	view := ReadStateWithHostContinuity(NewMonitorAdapter(registry), []IngestRecord{HostIngestRecord(models.Host{
+		ID: "site-b-agent", Hostname: "pve", MachineID: "site-b-machine", Status: "offline", LastSeen: now.Add(-time.Minute),
+	})})
+	if len(view.Hosts()) != 2 {
+		t.Fatalf("hostname alone hid a separate machine: %d hosts", len(view.Hosts()))
+	}
+}
+
 func TestMonitorAdapterRecordsSupplementalChangeTimeline(t *testing.T) {
 	store := NewMemoryStore()
 	adapter := NewMonitorAdapter(NewRegistry(store))

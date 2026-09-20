@@ -118,7 +118,7 @@ func (m *Monitor) readStateWithStandaloneHostContinuity(
 	if len(records) == 0 {
 		return readState
 	}
-	return unifiedresources.ReadStateWithRecords(readState, unifiedresources.SourceAgent, records)
+	return unifiedresources.ReadStateWithHostContinuity(readState, records)
 }
 
 func normalizedMonitorUsageOrgID(m *Monitor) string {
