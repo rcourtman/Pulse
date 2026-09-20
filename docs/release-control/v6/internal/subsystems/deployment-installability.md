@@ -2234,15 +2234,15 @@ artifact-selection behaviour.
 
 ## Current State
 
-The active prerelease `v6.4.5-beta.2` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `6.4.5-beta.2` release version.
-It follows `v6.4.5-beta.1` on the published `v6.4.5` candidate line.
+The active prerelease `v6.4.5-beta.3` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `6.4.5-beta.3` release version.
+It follows `v6.4.5-beta.2` on the published `v6.4.5` candidate line.
 This prerelease keeps `rollback_version=v6.4.1`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.
-For the active prerelease `v6.4.5-beta.2` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `6.4.5-beta.2` until the next governed stable cut moves them forward.
+For the active prerelease `v6.4.5-beta.3` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `6.4.5-beta.3` until the next governed stable cut moves them forward.
 No governed mobile-facing path changed from `v6.4.1`, so the release decision is `no-mobile-impact`; no companion upload or public mobile-store rollout is part of this candidate.
 The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode. Stable `v6.4.5` also skips SignPath under the standing unavailable policy.
 These are the selected publication requirements, not a claim that this preparation has been qualified or published. Stable remains subject to actual readiness and promotion evidence.
 
-- The 6.4.5-beta.2 preparation binds version, Compose/installer defaults, Helm metadata and upgrade pointers to the landed release/v6.4 correction. Rollback remains published stable 6.4.1. The candidate retains the known mobile-Safari cold-organization transition risk and requires exact qualification, private pairing, installed delivery/recovery and actual published-candidate observation before stable promotion. Preparation metadata and source CI are not publication or soak evidence.
+- The 6.4.5-beta.3 preparation binds version, Compose/installer defaults, Helm metadata and upgrade pointers to the landed release/v6.4 correction. Rollback remains published stable 6.4.1. The candidate retains the known mobile-Safari cold-organization transition risk and requires exact qualification, private pairing, installed delivery/recovery and actual published-candidate observation before stable promotion. Preparation metadata and source CI are not publication or soak evidence.
 
 Stable rehearsal metadata resolves candidate publication through GitHub using
 only the existing job contents-read token, bound to the resolver step as
