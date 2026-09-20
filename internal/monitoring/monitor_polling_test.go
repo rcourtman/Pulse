@@ -1137,7 +1137,10 @@ func TestSyncUnifiedPhysicalDiskMetricsRecordsTrueNASDiskHistory(t *testing.T) {
 	defer func() { _ = store.Close() }()
 
 	resourceStore := unifiedresources.NewMonitorAdapter(nil)
-	records := truenas.NewProvider(truenas.DefaultFixtures()).Records()
+	fixtures := truenas.DefaultFixtures()
+	fixtures.CollectedAt = time.Now().UTC().Truncate(time.Second)
+	fixtures.System.CollectedAt = fixtures.CollectedAt
+	records := truenas.NewProvider(fixtures).Records()
 	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
 		unifiedresources.SourceTrueNAS: records,
 	})

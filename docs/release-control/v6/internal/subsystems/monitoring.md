@@ -3945,9 +3945,31 @@ corrected value at the same observation time is still written, so a real change
 is never masked. The guard is bounded so a long-lived monitor with churning
 resource IDs cannot pin memory. Proxmox and libvirt VMs have native history
 writers and are excluded from the unified VM sync so the same series is not
-written twice. Focused proof lives in
+written twice. Physical-disk SMART history follows the same rule: the unified
+physical-disk sync anchors both the in-memory chart point and the persisted
+SMART batch to the resource's source observation time and drops exact replays
+through the same guard, so a TrueNAS/Unraid disk without a native SMART writer
+does not re-commit its attributes on every registry rebuild. Focused proof lives
+in
 `internal/monitoring/monitor_host_agents_test.go`
-(`TestDedupeUnifiedMetricWritesDropsExactReplays`) and
-`internal/monitoring/monitor_polling_test.go`
+(`TestDedupeUnifiedMetricWritesDropsExactReplays`,
+`TestSyncUnifiedPhysicalDiskMetricsUsesSourceObservationTimeAcrossRegistryRebuilds`)
+and `internal/monitoring/monitor_polling_test.go`
 (`TestSyncUnifiedAppContainerMetricsUsesSourceObservationTimeAcrossRegistryRebuilds`,
 `TestSyncUnifiedVMMetricsUsesSourceObservationTimeAcrossRegistryRebuilds`).
+
+### Unified metric sync commits one batch per pass
+
+The five unified syncs run serially and each previously waited for its own
+SQLite commit, so one registry rebuild that carried new data for several
+resource types opened one transaction per type and committed the same WAL
+repeatedly. `syncAllUnifiedMetrics` now collects the surviving writes of the
+agent, VM, storage and app-container syncs through a batch sink and commits them
+in a single `WriteBatchBounded` transaction. Each sync still runs its own
+per-series replay guard first, so the change only moves the transaction
+boundary: the same series, values and source observation times are written.
+Standalone callers and tests still pass no sink and keep the immediate,
+read-your-writes write. The physical-disk SMART path keeps its own transaction
+because it writes directly. Focused proof lives in
+`internal/monitoring/monitor_host_agents_test.go`
+(`TestSyncUnifiedStorageMetricsDefersWritesToBatchSink`).
