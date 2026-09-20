@@ -103,6 +103,14 @@ const (
 	defaultRetention = 90 * 24 * time.Hour
 	pruneInterval    = time.Hour
 	eventLogFileName = "events.db"
+	// maxRetainedSnapshotBytes bounds the total lifecycle-snapshot payload the
+	// log keeps. Retention bounds how long an event lives; a single flapping
+	// alert can still write hundreds of megabytes of full state snapshots
+	// inside that window and fill the host disk. When the stored payload
+	// exceeds this cap the oldest events are removed first, exactly as age
+	// pruning removes them, so the history projection rebuilds from what
+	// remains.
+	maxRetainedSnapshotBytes = 256 << 20
 )
 
 // Store is the SQLite-backed event log. A nil *Store is valid: Append and
@@ -612,10 +620,91 @@ func (s *Store) forgetFailedDeliveryEpisodes(events []Event) {
 }
 
 func (s *Store) pruneOld() {
-	if s.retention <= 0 {
+	if s.retention > 0 {
+		s.pruneEventsBefore(time.Now().Add(-s.retention))
+	}
+	s.pruneSnapshotVolume(maxRetainedSnapshotBytes)
+}
+
+// pruneSnapshotVolume removes the oldest events until the total stored snapshot
+// payload is within maxBytes. Age retention alone cannot bound disk use: one
+// flapping alert can write thousands of full state snapshots inside the
+// retention window. Deleting the oldest rows raises the retention revision so
+// the history projection rebuilds from the remaining log.
+func (s *Store) pruneSnapshotVolume(maxBytes int64) {
+	if s == nil || maxBytes <= 0 {
 		return
 	}
-	s.pruneEventsBefore(time.Now().Add(-s.retention))
+	var total int64
+	if err := s.db.QueryRow(`SELECT COALESCE(SUM(length(snapshot)), 0) FROM alert_events`).Scan(&total); err != nil {
+		log.Error().Err(err).Msg("alert event log volume check failed")
+		return
+	}
+	if total <= maxBytes {
+		return
+	}
+	// Read only ids and payload lengths, oldest first, until enough bytes are
+	// scheduled for removal. The cursor must be closed before deleting because
+	// the store serializes writes on a single connection.
+	rows, err := s.db.Query(`SELECT id, length(snapshot) FROM alert_events ORDER BY occurred_at ASC, id ASC`)
+	if err != nil {
+		log.Error().Err(err).Msg("alert event log volume scan failed")
+		return
+	}
+	ids := make([]int64, 0)
+	for total > maxBytes && rows.Next() {
+		var id, size int64
+		if scanErr := rows.Scan(&id, &size); scanErr != nil {
+			rows.Close()
+			log.Error().Err(scanErr).Msg("alert event log volume scan failed")
+			return
+		}
+		ids = append(ids, id)
+		total -= size
+	}
+	scanErr := rows.Err()
+	rows.Close()
+	if scanErr != nil {
+		log.Error().Err(scanErr).Msg("alert event log volume scan failed")
+		return
+	}
+	if len(ids) == 0 {
+		return
+	}
+	s.deleteEventsByID(ids)
+}
+
+func (s *Store) deleteEventsByID(ids []int64) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		log.Error().Err(err).Msg("alert event log volume prune failed")
+		return
+	}
+	defer tx.Rollback()
+	for start := 0; start < len(ids); start += 500 {
+		end := start + 500
+		if end > len(ids) {
+			end = len(ids)
+		}
+		placeholders := make([]string, 0, end-start)
+		args := make([]any, 0, end-start)
+		for _, id := range ids[start:end] {
+			placeholders = append(placeholders, "?")
+			args = append(args, id)
+		}
+		if _, err = tx.Exec("DELETE FROM alert_events WHERE id IN ("+strings.Join(placeholders, ",")+")", args...); err != nil {
+			log.Error().Err(err).Msg("alert event log volume prune failed")
+			return
+		}
+	}
+	if _, err = tx.Exec(`INSERT INTO alert_store_meta (key, value) VALUES ('retention_revision', '1')
+		ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1`); err != nil {
+		log.Error().Err(err).Msg("alert event log volume prune failed")
+		return
+	}
+	if err = tx.Commit(); err != nil {
+		log.Error().Err(err).Msg("alert event log volume prune failed")
+	}
 }
 
 func (s *Store) pruneEventsBefore(cutoff time.Time) {
