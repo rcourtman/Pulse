@@ -548,8 +548,12 @@ func TestSyncUnifiedAppContainerMetricsRecordsTrueNASHistory(t *testing.T) {
 	}
 	defer func() { _ = store.Close() }()
 
+	fixtures := truenas.DefaultFixtures()
+	fixtures.CollectedAt = time.Now().UTC().Truncate(time.Second)
+	fixtures.System.CollectedAt = fixtures.CollectedAt
+
 	resourceStore := unifiedresources.NewMonitorAdapter(nil)
-	records := truenas.NewProvider(truenas.DefaultFixtures()).Records()
+	records := truenas.NewProvider(fixtures).Records()
 	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
 		unifiedresources.SourceTrueNAS: records,
 	})
@@ -672,10 +676,14 @@ func TestSyncUnifiedAppContainerMetricsUsesSourceObservationTimeAcrossRegistryRe
 		truenas.SetFeatureEnabled(previous)
 	})
 
-	observedAt := truenas.DefaultFixtures().CollectedAt
+	fixtures := truenas.DefaultFixtures()
+	fixtures.CollectedAt = time.Now().UTC().Truncate(time.Second)
+	fixtures.System.CollectedAt = fixtures.CollectedAt
+	observedAt := fixtures.CollectedAt
+
 	resourceStore := unifiedresources.NewMonitorAdapter(nil)
 	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
-		unifiedresources.SourceTrueNAS: truenas.NewProvider(truenas.DefaultFixtures()).Records(),
+		unifiedresources.SourceTrueNAS: truenas.NewProvider(fixtures).Records(),
 	})
 
 	var targetID string
@@ -738,7 +746,7 @@ func TestSyncUnifiedVMMetricsUsesSourceObservationTimeAcrossRegistryRebuilds(t *
 		vmware.SetFeatureEnabled(previous)
 	})
 
-	observedAt := time.Date(2026, time.March, 30, 18, 15, 0, 0, time.UTC)
+	observedAt := time.Now().UTC().Truncate(time.Second)
 	resourceStore := unifiedresources.NewMonitorAdapter(nil)
 	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
 		unifiedresources.SourceVMware: vmware.NewProvider(vmware.InventorySnapshot{
@@ -869,8 +877,12 @@ func TestSyncUnifiedAgentMetricsRecordsTrueNASHostHistory(t *testing.T) {
 	}
 	defer func() { _ = store.Close() }()
 
+	fixtures := truenas.DefaultFixtures()
+	fixtures.CollectedAt = time.Now().UTC().Truncate(time.Second)
+	fixtures.System.CollectedAt = fixtures.CollectedAt
+
 	resourceStore := unifiedresources.NewMonitorAdapter(nil)
-	records := truenas.NewProvider(truenas.DefaultFixtures()).Records()
+	records := truenas.NewProvider(fixtures).Records()
 	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
 		unifiedresources.SourceTrueNAS: records,
 	})
@@ -970,7 +982,7 @@ func TestSyncUnifiedAgentMetricsRecordsVMwareHostHistory(t *testing.T) {
 		ConnectionID:   "vc-1",
 		ConnectionName: "Lab VC",
 		VCenterHost:    "vc.lab.local",
-		CollectedAt:    time.Date(2026, time.March, 30, 18, 15, 0, 0, time.UTC),
+		CollectedAt:    time.Now().UTC().Truncate(time.Second),
 		Hosts: []vmware.InventoryHost{{
 			Host:            "host-101",
 			Name:            "esxi-01.lab.local",
@@ -1050,7 +1062,7 @@ func TestSyncUnifiedVMMetricsRecordsVMwareVMHistory(t *testing.T) {
 		ConnectionID:   "vc-1",
 		ConnectionName: "Lab VC",
 		VCenterHost:    "vc.lab.local",
-		CollectedAt:    time.Date(2026, time.March, 30, 18, 15, 0, 0, time.UTC),
+		CollectedAt:    time.Now().UTC().Truncate(time.Second),
 		VMs: []vmware.InventoryVM{{
 			VM:            "vm-201",
 			Name:          "app-01",

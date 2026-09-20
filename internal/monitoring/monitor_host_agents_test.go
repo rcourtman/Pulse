@@ -5938,10 +5938,14 @@ func TestSyncUnifiedAgentMetricsUsesSourceObservationTimeAcrossRegistryRebuilds(
 		truenas.SetFeatureEnabled(previous)
 	})
 
-	observedAt := truenas.DefaultFixtures().CollectedAt
+	fixtures := truenas.DefaultFixtures()
+	fixtures.CollectedAt = time.Now().UTC().Truncate(time.Second)
+	fixtures.System.CollectedAt = fixtures.CollectedAt
+	observedAt := fixtures.CollectedAt
+
 	resourceStore := unifiedresources.NewMonitorAdapter(nil)
 	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
-		unifiedresources.SourceTrueNAS: truenas.NewProvider(truenas.DefaultFixtures()).Records(),
+		unifiedresources.SourceTrueNAS: truenas.NewProvider(fixtures).Records(),
 	})
 
 	var targetID string
