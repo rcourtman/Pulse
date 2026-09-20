@@ -45,6 +45,16 @@
       "incomplete_commit": "564c235e3200a80d8781a187cf6f84a91557ab38",
       "completion_commit": "bb25e3ec03a49cb821ef2ee310878bd2743ed850",
       "reason": "Evaluate the auto-update RETURN-trap disarm runtime change together with the follow-up commit that records its deployment-installability contract section and the registry-accepted deployment-script-runtime proof in scripts/installtests/pulse_auto_update_test.go, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "9b004cc787aaa1b68b9caa7832aa013235bd1700",
+      "completion_commit": "ccfd22da7f5a7b181807642c76e2177ba15a6418",
+      "reason": "Evaluate the auto-update RETURN-trap repair together with the follow-up commit that records its deployment-installability contract section and adds the extracted-perform_update proof in the registry-accepted scripts/installtests/pulse_auto_update_test.go proof file, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "07d54cd345d58f04de23fa58ea785fc6580a0fbd",
+      "completion_commit": "ccfd22da7f5a7b181807642c76e2177ba15a6418",
+      "reason": "Evaluate the failed-staging configuration-backup discard repair together with the follow-up commit that records its deployment-installability contract section and supplies the registry-accepted installtest proof, as one reviewed completion unit."
     }
   ]
 }
