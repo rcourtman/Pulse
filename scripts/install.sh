@@ -3075,8 +3075,20 @@ trusted_private_lifecycle_regular_file() {
 }
 
 installer_file_sha256() {
-    sha256sum "$1" 2>/dev/null | awk '{print $1}' ||
-        shasum -a 256 "$1" 2>/dev/null | awk '{print $1}'
+    # FreeBSD base ships neither GNU sha256sum nor Perl's shasum; it provides
+    # sha256(1) instead, which prints only the digest with -q. macOS and Linux
+    # provide sha256sum or shasum. Fall back through whichever exists so a
+    # pfSense/FreeBSD install without coreutils can still verify downloads.
+    local file="$1"
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$file" 2>/dev/null | awk '{print $1}'
+    elif command -v sha256 >/dev/null 2>&1; then
+        sha256 -q "$file" 2>/dev/null | awk '{print $1}'
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$file" 2>/dev/null | awk '{print $1}'
+    elif command -v openssl >/dev/null 2>&1; then
+        openssl dgst -sha256 "$file" 2>/dev/null | awk '{print $NF}'
+    fi
 }
 
 sync_lifecycle_path() {
@@ -6216,7 +6228,7 @@ download_verified_privileged_helper() {
     if has_pinned_installer_signature_key && [[ -z "$helper_signature" ]]; then
         fail "Typed privileged helper download omitted its signature; refusing install." "$EXIT_SIGNATURE_FAILED"
     fi
-    helper_actual_sha=$(sha256sum "$TMP_HELPER_BIN" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$TMP_HELPER_BIN" 2>/dev/null | awk '{print $1}')
+    helper_actual_sha=$(installer_file_sha256 "$TMP_HELPER_BIN")
     if [[ -z "$helper_actual_sha" ]]; then
         fail "Could not compute typed privileged helper checksum." "$EXIT_CHECKSUM_FAILED"
     fi
@@ -6262,7 +6274,7 @@ download_verified_action_runner() {
     if has_pinned_installer_signature_key && [[ -z "$runner_signature" ]]; then
         fail "Typed action runner download omitted its signature; refusing install." "$EXIT_SIGNATURE_FAILED"
     fi
-    runner_actual_sha=$(sha256sum "$TMP_ACTION_RUNNER_BIN" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$TMP_ACTION_RUNNER_BIN" 2>/dev/null | awk '{print $1}')
+    runner_actual_sha=$(installer_file_sha256 "$TMP_ACTION_RUNNER_BIN")
     if [[ -z "$runner_actual_sha" || "$runner_actual_sha" != "$runner_expected_sha" ]]; then
         fail "Typed action runner checksum verification failed." "$EXIT_CHECKSUM_FAILED"
     fi
@@ -6300,7 +6312,7 @@ if has_pinned_installer_signature_key && [[ -z "$SSH_SIGNATURE_HEADER" ]]; then
     fail "Server did not provide SSH signature header; refusing signed install." "$EXIT_SIGNATURE_FAILED"
 fi
 
-ACTUAL_SHA=$(sha256sum "$TMP_BIN" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$TMP_BIN" 2>/dev/null | awk '{print $1}')
+ACTUAL_SHA=$(installer_file_sha256 "$TMP_BIN")
 if [[ -z "$ACTUAL_SHA" ]]; then
     fail "Could not compute binary checksum." "$EXIT_CHECKSUM_FAILED"
 fi
