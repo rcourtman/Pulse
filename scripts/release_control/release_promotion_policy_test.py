@@ -1632,7 +1632,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             workflow,
         )
         self.assertIn(
-            "signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2",
+            "signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0",
             workflow,
         )
         self.assertIn("signedArtifactsPublished = $false", workflow)
@@ -2008,7 +2008,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("windows_signing_backend: signpath", content)
         self.assertIn('if [[ "$REQUIRE_WINDOWS_SIGNING" == "true" ]]', candidate_workflow)
         self.assertIn("inputs.require_windows_signing", candidate_workflow)
-        self.assertIn("signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2", candidate_workflow)
+        self.assertIn("signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0", candidate_workflow)
         self.assertIn("github-artifact-id: ${{ steps.upload-unsigned-windows.outputs.artifact-id }}", candidate_workflow)
         self.assertIn("windows-signing-evidence.json", candidate_workflow)
         for signpath_setting in (

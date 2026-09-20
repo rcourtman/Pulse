@@ -165,8 +165,8 @@
     }
   },
   "signpath/github-action-submit-signing-request": {
-    "sha": "c92b958760219087e01f8d67a1669ed57afe2627",
-    "manifest_sha256": "d0b52fdfa234d87c1ff4d21c06a91d2b6e0dd45e1a8866ad3b58cbdeb9aef326",
+    "sha": "f6d04783b4569d051e0c80105fe66e82819d0092",
+    "manifest_sha256": "9afe14756752bb0b43421bf94e7cebdc3fead29765be4f07fbc60d82421ebc23",
     "inputs": [
       "api-token",
       "artifact-configuration-slug",
