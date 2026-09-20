@@ -3319,6 +3319,16 @@ of that current inventory immediately and cannot produce a false
 `agent_credential_missing` diagnosis. `MultiTenantMonitor` deep-copies only
 non-default tenant configuration; those tenant copies remain isolated from the
 primary runtime's mutable token state.
+
+That ownership survives a full monitor reload. `ReloadableMonitor` loads and
+validates replacement settings, stops the old monitors, and refreshes the
+original configuration under `config.Mu` before creating the replacement
+manager. It must not split the retained API/authentication configuration from
+the default monitor. `TestReloadPreservesLiveAgentCredentialInventory` exercises
+two reloads followed by token creation and revocation, including the diagnostic
+for a recently used credential. It preserves the registry-stale warning for a
+credential that is actually absent, while preventing it for a live token.
+
 `internal/fleethealth/agent_test.go` and
 `internal/monitoring/agent_fleet_doctor_test.go` are the focused runtime proofs.
 
