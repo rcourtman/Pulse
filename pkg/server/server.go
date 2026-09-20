@@ -228,6 +228,15 @@ func Run(ctx context.Context, version string) (runErr error) {
 	}
 	defer mainListener.Close()
 
+	// The listener is bound here but srv.Serve only starts near the end of Run.
+	// Track the last completed phase and arm a watchdog so a stall in the
+	// synchronous initialization window is diagnosable from the field log
+	// (issue #2129). The watchdog is stopped when serving begins or Run exits.
+	startup := &startupPhase{}
+	startup.mark("listener bound")
+	stopStartupWatchdog := startStartupWatchdog(log.Logger, startup, startupWatchdogBudget)
+	defer stopStartupWatchdog()
+
 	// Optional dedicated agent-control listener. Reports, command admission,
 	// version checks, and bootstrap downloads share this network boundary;
 	// the web UI and management API are not exposed on it.
@@ -446,6 +455,7 @@ func Run(ctx context.Context, version string) (runErr error) {
 
 	// Start monitoring
 	reloadableMonitor.Start(ctx)
+	startup.mark("monitoring started")
 
 	// Initialize API server with reload function
 	var router *api.Router
@@ -473,6 +483,7 @@ func Run(ctx context.Context, version string) (runErr error) {
 	router = api.NewRouter(cfg, reloadableMonitor.GetMonitor(), reloadableMonitor.GetMultiTenantMonitor(), wsHub, reloadFunc, version)
 	router.SetLicenseRuntimeIdentity(runtimeIdentity)
 	router.StartBackgroundWorkers()
+	startup.mark("API router initialized")
 
 	// Inject resource store into monitor for WebSocket broadcasts
 	router.SetMonitor(reloadableMonitor.GetMonitor())
@@ -484,6 +495,7 @@ func Run(ctx context.Context, version string) (runErr error) {
 
 	// Start AI chat service
 	router.StartAIChat(ctx)
+	startup.mark("AI services started")
 
 	// Start hosted tenant reaper for automatic soft-delete cleanup
 	if os.Getenv("PULSE_HOSTED_MODE") == "true" {
@@ -504,6 +516,7 @@ func Run(ctx context.Context, version string) (runErr error) {
 
 	// Wire alert-triggered AI analysis
 	router.WireAlertTriggeredAI()
+	startup.mark("relay and alert AI wired")
 
 	// Start pseudonymous telemetry (enabled by default; opt out via PULSE_TELEMETRY=false or Settings toggle).
 	// Persistence is created once here (outside the closure) to avoid NewConfigPersistence's
@@ -687,6 +700,7 @@ func Run(ctx context.Context, version string) (runErr error) {
 	failureTelemetryCfg = telemetryCfg
 	telemetry.Start(ctx, telemetryCfg)
 	defer telemetry.Stop()
+	startup.mark("telemetry started")
 
 	// Wire live telemetry toggle so Settings changes take effect immediately.
 	router.SetTelemetryToggleFunc(func(enabled bool) {
@@ -765,6 +779,7 @@ func Run(ctx context.Context, version string) (runErr error) {
 		}
 		defer configWatcher.Stop()
 	}
+	startup.mark("config watcher started")
 
 	// Start HTTP→HTTPS redirect server when HTTPS is active and redirect port is configured.
 	var redirectSrv *http.Server
@@ -825,6 +840,8 @@ func Run(ctx context.Context, version string) (runErr error) {
 	serverErr := make(chan error, 2)
 	go func() {
 		var err error
+		startup.mark("listener serving")
+		stopStartupWatchdog()
 		if cfg.HTTPSEnabled && cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
 			log.Info().
 				Str("host", cfg.BindAddress).
