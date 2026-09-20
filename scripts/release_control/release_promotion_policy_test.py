@@ -2895,6 +2895,26 @@ class CandidatePublicationBoundaryTest(unittest.TestCase):
     def setUp(self) -> None:
         self.jobs = yaml.load(read(".github/workflows/create-release.yml"), Loader=UniqueKeyLoader)["jobs"]
 
+    def test_private_pro_pair_is_verified_before_any_draft_exists(self) -> None:
+        prepare_steps = self.jobs["prepare"]["steps"]
+        step = next(
+            (candidate for candidate in prepare_steps
+             if candidate.get("name") == "Verify the private Pro source pair is declared"),
+            None,
+        )
+        self.assertIsNotNone(step, "prepare must verify the private Pro source pair before dispatch")
+        condition = step["if"]
+        self.assertIn("startsWith(github.event.inputs.version, '6.')", condition)
+        self.assertIn("historical_asset_backfill_only != 'true'", condition)
+        self.assertIn("draft_only != 'true'", condition)
+        self.assertEqual(step["env"]["PRIVATE_PAIR_REPOSITORY"], "rcourtman/pulse-enterprise")
+        script = step["run"]
+        self.assertIn("docs/release-source-pairs/${EXPECTED_SOURCE_SHA}.json", script)
+        self.assertIn("pulse_sha", script)
+        self.assertIn("exit 1", script)
+        # The draft is created only after the prepare gate can refuse the run.
+        self.assertIn("prepare", self.jobs["create_release"]["needs"])
+
     def condition(self, job: str, results: dict[str, str], *, draft: bool = False, cancelled: bool = False) -> bool:
         # Execute the workflow's Boolean condition with explicit job outcomes.
         # This intentionally fails if the workflow adds an unsupported expression.

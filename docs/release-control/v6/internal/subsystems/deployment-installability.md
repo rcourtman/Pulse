@@ -1932,6 +1932,14 @@ artifact-selection behaviour.
    workflow-run details from GitHub and poll the exact returned run ID; it must
    never infer its child from the newest matching workflow/branch/timestamp,
    because version-scoped release concurrency and manual dispatches can overlap.
+   Before it creates the unpublished draft, `create-release.yml` must prove the
+   private payload can resolve its source: the `prepare` job must read
+   `docs/release-source-pairs/<expected_source_sha>.json` from
+   `rcourtman/pulse-enterprise` and fail unless that file exists and declares
+   `pulse_sha` equal to the frozen public commit. A missing or mismatched
+   declaration must stop the run before any draft release object exists, so a
+   private build that cannot resolve its pair never orphans another draft. The
+   check is a fact check only; the release steward still selects the pair.
    Only after public release asset validation, staged install smoke, exact
    public Docker publication, exact Helm OCI publication, durable convergence
    dispatch, and the publicly readable activation-commit marker may the
