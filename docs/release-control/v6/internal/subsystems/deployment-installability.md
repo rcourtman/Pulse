@@ -1532,12 +1532,24 @@ artifact-selection behaviour.
    including the installer-exits-nonzero rollback branch. The generated
    `pulse-update.service` gates on `ExecCondition=systemctl is-active`, so a
    service left stopped also silently disables every future unattended run.
-   This is enforced by a `service_was_active`-guarded restart in each rollback
-   branch plus the `ensure_service_restarted` RETURN-trap backstop, and pinned
-   by `scripts/installtests/pulse_auto_update_test.go`
-   (`TestPerformUpdateRestartsServiceWhenInstallerFails`,
-   `TestEnsureServiceRestartedHonorsPriorServiceState`) and
-   `scripts/tests/test-pulse-auto-update.sh`. For the same reason, root
+    This is enforced by a `service_was_active`-guarded restart in each rollback
+    branch plus the `ensure_service_restarted` RETURN-trap backstop, and pinned
+    by `scripts/installtests/pulse_auto_update_test.go`
+    (`TestPerformUpdateRestartsServiceWhenInstallerFails`,
+    `TestEnsureServiceRestartedHonorsPriorServiceState`) and
+    `scripts/tests/test-pulse-auto-update.sh`. The `ensure_service_restarted`
+    RETURN-trap backstop must disarm itself with `trap - RETURN` on its first
+    invocation (#2128): a RETURN trap is not scoped to `perform_update`, so
+    leaving it installed re-runs it when a later function returns, and the
+    function-local `installer_tmp`/`signature_tmp` are gone by then — under
+    `set -u` the updater then aborts with `installer_tmp: unbound variable`
+    after a successful update, failing `pulse-update.service` even though the
+    install and version verification succeeded. Both trap installs (the early
+    service-only trap and the tempfile trap) must disarm, and the tempfile trap
+    must expand `${installer_tmp:-}`/`${signature_tmp:-}` so a stray invocation
+    cannot abort the script. Pinned by
+    `scripts/installtests/pulse_auto_update_test.go`
+    (`TestPerformUpdateDoesNotLeakReturnTrap`). For the same reason, root
    `install.sh` writes outside the hardened update unit's writable set
    (`ProtectSystem=strict` with `ReadWritePaths` covering the install dir,
    config dir, `/tmp`, the auto-update helper's directory and the unit
