@@ -279,3 +279,47 @@ func TestStoragePolicyAliasesLegacyIdentity(t *testing.T) {
 		})
 	}
 }
+
+// The shared assessment path also owns ZFS health, not only custom sensors.
+func TestHealthAssessmentEscalationDelivery(t *testing.T) {
+	m := newTestManager(t)
+	cfg := m.GetConfig()
+	cfg.Enabled = true
+	cfg.ActivationState = ActivationActive
+	cfg.FlappingEnabled = false
+	cfg.Schedule.MaxAlertsHour = 2
+	m.UpdateConfig(cfg)
+	var delivered []AlertLevel
+	m.SetAlertCallback(func(a *Alert) { delivered = append(delivered, a.Level) })
+	resourceID := "storage-1/zfs-pool:tank"
+	params := canonicalHealthAssessmentAlertParams{
+		SpecID: resourceID + "-health", Signal: "zfs_pool", Codes: zfsPoolAssessmentCodes,
+		AlertID:   buildCanonicalStateID(resourceID, resourceID+"-health"),
+		AlertType: "zfs-pool-state", SpecResourceID: resourceID, ResourceID: resourceID,
+		ResourceName: "tank", ResourceType: unifiedresources.ResourceTypeStorage,
+	}
+	observe := func(severity storagehealth.RiskLevel) {
+		t.Helper()
+		params.Reasons = []storagehealth.Reason{{Code: "zfs_pool_state", Severity: severity, Summary: "pool health"}}
+		if _, ok := m.syncCanonicalHealthAssessmentAlert(params); !ok {
+			t.Fatal("assessment rejected")
+		}
+	}
+	observe(storagehealth.RiskWarning)
+	observe(storagehealth.RiskWarning)
+	observe(storagehealth.RiskCritical)
+	observe(storagehealth.RiskCritical)
+	observe(storagehealth.RiskWarning)
+	if len(delivered) != 2 || delivered[0] != AlertLevelWarning || delivered[1] != AlertLevelCritical {
+		t.Fatalf("initial/escalated deliveries = %v", delivered)
+	}
+	// The two admitted notifications exhaust the configured hourly budget;
+	// oscillating back to critical must not bypass it.
+	observe(storagehealth.RiskCritical)
+	if len(delivered) != 2 {
+		t.Fatalf("rate limit bypassed: %v", delivered)
+	}
+	if a := testRequireActiveAlert(t, m, params.AlertID); a.Level != AlertLevelCritical {
+		t.Fatalf("rate-limited incident failed to update: %v", a.Level)
+	}
+}

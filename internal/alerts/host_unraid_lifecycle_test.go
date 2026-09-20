@@ -207,3 +207,101 @@ func hasAlertType(alerts []Alert, alertType string) bool {
 	}
 	return false
 }
+
+func TestHostCustomSensorEscalationDelivery(t *testing.T) {
+	for _, policy := range []string{"ready", "acknowledged", "snoozed", "rate-limited", "flapping", "inactive"} {
+		t.Run(policy, func(t *testing.T) {
+			m := newTestManager(t)
+			cfg := m.GetConfig()
+			cfg.Enabled = true
+			cfg.ActivationState = ActivationActive
+			cfg.FlappingEnabled = false
+			cfg.Schedule.MaxAlertsHour = 0
+			m.UpdateConfig(cfg)
+			var delivered []AlertLevel
+			m.SetAlertCallback(func(a *Alert) {
+				if a.Type == "custom-sensor" {
+					delivered = append(delivered, a.Level)
+				}
+			})
+			host := models.Host{ID: "sensor-host", Hostname: "sensor-host", Sensors: models.HostSensorSummary{
+				Custom: []models.HostCustomSensorMetric{{ID: "probe", Name: "Probe", Status: "warning", ObservedAt: time.Now()}},
+			}}
+			m.CheckHost(host)
+			if len(delivered) != 1 || delivered[0] != AlertLevelWarning {
+				t.Fatalf("initial delivery = %v", delivered)
+			}
+			var id string
+			for _, a := range m.GetActiveAlerts() {
+				if a.Type == "custom-sensor" {
+					id = a.ID
+				}
+			}
+			if id == "" {
+				t.Fatal("missing custom sensor incident")
+			}
+			switch policy {
+			case "acknowledged":
+				if err := m.AcknowledgeAlert(id, "tester"); err != nil {
+					t.Fatal(err)
+				}
+			case "snoozed":
+				if err := m.SnoozeAlert(id, "tester", time.Now().Add(time.Hour)); err != nil {
+					t.Fatal(err)
+				}
+			case "rate-limited":
+				a := testRequireActiveAlert(t, m, id)
+				m.mu.Lock()
+				m.config.Schedule.MaxAlertsHour = 1
+				m.alertRateLimit[canonicalTrackingKeyForAlert(a)] = []time.Time{time.Now()}
+				m.mu.Unlock()
+			case "flapping":
+				a := testRequireActiveAlert(t, m, id)
+				m.mu.Lock()
+				m.config.FlappingEnabled = true
+				m.suppressedUntil[canonicalTrackingKeyForAlert(a)] = time.Now().Add(time.Hour)
+				m.mu.Unlock()
+			case "inactive":
+				cfg.ActivationState = ActivationPending
+				m.UpdateConfig(cfg)
+			}
+			// Repeated warning observations must not resend.
+			m.CheckHost(host)
+			host.Sensors.Custom[0].Status = "critical"
+			m.CheckHost(host)
+			want := 1
+			if policy == "ready" {
+				want = 2
+			}
+			if len(delivered) != want {
+				t.Fatalf("warning->critical deliveries = %v, want %d callbacks", delivered, want)
+			}
+			if policy == "ready" && delivered[1] != AlertLevelCritical {
+				t.Fatalf("escalation = %v", delivered)
+			}
+			active := m.GetActiveAlerts()
+			found := false
+			for _, a := range active {
+				if a.Type == "custom-sensor" {
+					found = true
+					if a.ID != id || a.Level != AlertLevelCritical {
+						t.Fatalf("updated incident = %+v", a)
+					}
+					if policy == "acknowledged" && !a.Acknowledged {
+						t.Fatal("acknowledgement lost")
+					}
+				}
+			}
+			if !found {
+				t.Fatal("critical incident missing")
+			}
+			m.CheckHost(host)
+			host.Sensors.Custom[0].Status = "warning"
+			m.CheckHost(host)
+			m.CheckHost(host)
+			if len(delivered) != want {
+				t.Fatalf("unchanged/downgrade noise: %v", delivered)
+			}
+		})
+	}
+}
