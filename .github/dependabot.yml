@@ -76,6 +76,26 @@ updates:
         applies-to: "security-updates"
         patterns:
           - "*"
+    # The offline browser-verification runtime is pinned to Playwright 1.56.1,
+    # so frontend browser proofs require lockfile parity. Keep Playwright on the
+    # governed 1.56.1 line; review upgrades as explicit work alongside a runtime
+    # change, matching the docker governed-tag policy.
+    ignore:
+      - dependency-name: "playwright"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+      - dependency-name: "playwright-core"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+      - dependency-name: "@playwright/test"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
 
   - package-ecosystem: "docker"
     directories:

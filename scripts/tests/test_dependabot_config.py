@@ -136,6 +136,22 @@ class DependabotConfigTest(unittest.TestCase):
             ],
         )
 
+    def test_npm_updates_preserve_browser_runtime_parity(self) -> None:
+        all_semver = {
+            "version-update:semver-major",
+            "version-update:semver-minor",
+            "version-update:semver-patch",
+        }
+        ignored = {
+            item["dependency-name"]: set(item["update-types"])
+            for item in self.updates["npm"]["ignore"]
+        }
+        self.assertEqual(
+            set(ignored),
+            {"playwright", "playwright-core", "@playwright/test"},
+        )
+        self.assertTrue(all(types == all_semver for types in ignored.values()))
+
     def test_weekly_scan_covers_the_same_lockfiles(self) -> None:
         workflow = yaml.safe_load(SECURITY_SCAN.read_text(encoding="utf-8"))
         jobs = workflow["jobs"]
