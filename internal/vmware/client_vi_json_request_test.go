@@ -2,6 +2,7 @@ package vmware
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,11 @@ import (
 	"testing"
 	"time"
 )
+
+func writeVIJSONResponse(w http.ResponseWriter, payload any) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(payload)
+}
 
 // The vSphere VI JSON API documents a `_typeName` discriminator on request data
 // objects. A bare ManagedObjectReference is accepted without one, but the
@@ -39,7 +45,7 @@ func TestQueryPerfRequestCarriesTypeNameDiscriminators(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/sdk/vim25/9.0.0.0/PerformanceManager/PerformanceManager/QueryPerf", func(w http.ResponseWriter, r *http.Request) {
 		raw, _ = io.ReadAll(r.Body)
-		writeJSON(w, []map[string]any{})
+		writeVIJSONResponse(w, []map[string]any{})
 	})
 	client, closeServer := newVIJSONRequestClient(t, mux)
 	defer closeServer()
@@ -75,7 +81,7 @@ func TestQueryEventsRequestCarriesTypeNameDiscriminators(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/sdk/vim25/9.0.0.0/EventManager/EventManager/QueryEvents", func(w http.ResponseWriter, r *http.Request) {
 		raw, _ = io.ReadAll(r.Body)
-		writeJSON(w, []map[string]any{})
+		writeVIJSONResponse(w, []map[string]any{})
 	})
 	client, closeServer := newVIJSONRequestClient(t, mux)
 	defer closeServer()
