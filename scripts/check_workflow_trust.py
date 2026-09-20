@@ -155,7 +155,7 @@ GENERATED_CODE_ACTION_INPUTS = {
 SAFE_PULL_REQUEST_TARGET_WORKFLOW = "reclaim-closed-pr-capacity.yml"
 SAFE_PULL_REQUEST_TARGET_ACTIONS = (
     "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-    "actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd",
+    "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
 )
 # v7.0.1 includes checkout's fail-closed fork-PR protection for privileged
 # pull_request_target and workflow_run events. Keep this exact-pin allowlist
@@ -172,7 +172,7 @@ REVIEWED_NODE24_ACTION_PINS = {
         {"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"}
     ),
     "actions/github-script@": frozenset(
-        {"ed597411d8f924073f98dfc5c65a23a2325f34cd"}
+        {"3a2844b7e9c422d3c10d287c895573f7108da1b3"}
     ),
 }
 WRITE_CREDENTIAL_RATIONALE = "# required: authenticated git writes"
