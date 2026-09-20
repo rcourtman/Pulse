@@ -8087,10 +8087,13 @@ timestamp rather than a fresh sample. A per-series replay guard then drops exact
 timestamp+value repeats before the metrics batch is enqueued, reducing WAL churn
 without changing host admission, token binding or removal-block behaviour.
 Proxmox and libvirt VMs have native history writers and are excluded from the
-unified VM sync. Focused proof lives in
+unified VM sync. Physical-disk SMART history uses the same anchoring and replay
+guard, including the agent-less disks the unified sync owns, so disk history
+sampling does not alter agent admission either. Focused proof lives in
 `internal/monitoring/monitor_host_agents_test.go`
 (`TestDedupeUnifiedMetricWritesDropsExactReplays`,
-`TestSyncUnifiedAgentMetricsUsesSourceObservationTimeAcrossRegistryRebuilds`).
+`TestSyncUnifiedAgentMetricsUsesSourceObservationTimeAcrossRegistryRebuilds`,
+`TestSyncUnifiedPhysicalDiskMetricsUsesSourceObservationTimeAcrossRegistryRebuilds`).
 
 ### Docker update preflight accepts any local RepoDigest for the planned image
 

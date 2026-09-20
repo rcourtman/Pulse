@@ -4103,10 +4103,16 @@ corrected value at the same observation time is still written, so a real change
 is never masked. The guard is bounded so a long-lived monitor with churning
 resource IDs cannot pin memory. Proxmox and libvirt VMs have native history
 writers and are excluded from the unified VM sync so the same series is not
-written twice. Focused proof lives in
+written twice. Physical-disk SMART history follows the same rule: the unified
+physical-disk sync anchors both the in-memory chart point and the persisted
+SMART batch to the resource's source observation time and drops exact replays
+through the same guard, so a TrueNAS/Unraid disk without a native SMART writer
+does not re-commit its attributes on every registry rebuild. Focused proof lives
+in
 `internal/monitoring/monitor_host_agents_test.go`
-(`TestDedupeUnifiedMetricWritesDropsExactReplays`) and
-`internal/monitoring/monitor_polling_test.go`
+(`TestDedupeUnifiedMetricWritesDropsExactReplays`,
+`TestSyncUnifiedPhysicalDiskMetricsUsesSourceObservationTimeAcrossRegistryRebuilds`)
+and `internal/monitoring/monitor_polling_test.go`
 (`TestSyncUnifiedAppContainerMetricsUsesSourceObservationTimeAcrossRegistryRebuilds`,
 `TestSyncUnifiedVMMetricsUsesSourceObservationTimeAcrossRegistryRebuilds`).
 
