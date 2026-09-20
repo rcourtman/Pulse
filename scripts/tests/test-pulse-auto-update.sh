@@ -354,6 +354,89 @@ INSTALLER
   return "${status}"
 }
 
+test_perform_update_does_not_leak_return_trap() {
+  # Regression for #2128: perform_update installed a RETURN trap referencing
+  # function-local tempfiles without disarming it. A RETURN trap is not scoped
+  # to the function that set it, so it re-ran when a later function returned;
+  # with the locals gone, `set -u` aborted the updater with
+  # "installer_tmp: unbound variable" even though the update had succeeded.
+  local tmpdir
+  tmpdir="$(mktemp -d)"
+  local status=0
+
+  INSTALL_DIR="${tmpdir}/opt/pulse"
+  CONFIG_DIR="${tmpdir}/etc/pulse"
+  mkdir -p "${INSTALL_DIR}/bin" "${CONFIG_DIR}"
+
+  printf 'v5.1.24\n' > "${INSTALL_DIR}/VERSION"
+  cat > "${INSTALL_DIR}/bin/pulse" <<'EOF'
+#!/usr/bin/env bash
+echo "v5.1.24"
+EOF
+  chmod +x "${INSTALL_DIR}/bin/pulse"
+
+  export INSTALL_DIR
+  export FAKE_NEW_VERSION="v5.1.25"
+
+  is_prerelease_tag() { return 1; }
+  detect_service_name() { echo "pulse"; }
+  resolve_install_script_url() { echo "http://localhost/install.sh"; }
+  verify_release_signature() { return 0; }
+  get_current_version() { tr -d '\r\n' < "${INSTALL_DIR}/VERSION"; }
+
+  curl() {
+    local out="" prev="" arg
+    for arg in "$@"; do
+      if [[ "$prev" == "-o" ]]; then out="$arg"; fi
+      prev="$arg"
+    done
+    if [[ -n "$out" ]]; then
+      case "$out" in
+        *.sig.*) printf 'dummy-signature\n' > "$out" ;;
+        *)
+          cat > "$out" <<'INSTALLER'
+#!/usr/bin/env bash
+printf '%s\n' "${FAKE_NEW_VERSION}" > "${PULSE_INSTALL_DIR}/VERSION"
+exit 0
+INSTALLER
+          ;;
+      esac
+    fi
+    return 0
+  }
+
+  # Pulse was running and stays running, so perform_update succeeds.
+  systemctl() {
+    if [[ "$1" == "is-active" ]]; then return 0; fi
+    return 0
+  }
+  sleep() { :; }
+
+  trap - RETURN 2>/dev/null || true
+  perform_update "v5.1.25" || status=1
+
+  local leaked
+  leaked="$(trap -p RETURN)"
+  if [[ -n "$leaked" ]]; then
+    echo "perform_update leaked a RETURN trap after a successful update: ${leaked}" >&2
+    status=1
+  fi
+
+  # The early trap must disarm too: a prerelease refusal returns before the
+  # tempfile trap replaces it.
+  is_prerelease_tag() { return 0; }
+  perform_update "v5.1.26" >/dev/null 2>&1 || true
+  leaked="$(trap -p RETURN)"
+  if [[ -n "$leaked" ]]; then
+    echo "perform_update leaked a RETURN trap on the prerelease refusal path: ${leaked}" >&2
+    status=1
+  fi
+
+  trap - RETURN 2>/dev/null || true
+  rm -rf "${tmpdir}"
+  return "${status}"
+}
+
 main() {
   assert_success "wait_for_service_active retries until active" test_wait_for_service_active_succeeds_after_retry
   assert_success "wait_for_service_active times out when never active" test_wait_for_service_active_times_out_when_never_active
@@ -363,6 +446,7 @@ main() {
   assert_success "ensure_service_restarted no-ops when service was inactive" test_ensure_service_restarted_noops_when_service_was_inactive
   assert_success "ensure_service_restarted starts a stopped service" test_ensure_service_restarted_starts_stopped_service
   assert_success "perform_update restarts service when installer fails" test_perform_update_restarts_service_when_installer_fails
+  assert_success "perform_update does not leak its RETURN trap" test_perform_update_does_not_leak_return_trap
 
   if (( failures > 0 )); then
     echo "Total failures: ${failures}" >&2
