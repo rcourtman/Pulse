@@ -2197,7 +2197,7 @@ func TestUnifiedPhysicalDiskMetricsUseCanonicalDiskHistoryPath(t *testing.T) {
 		"m.syncUnifiedPhysicalDiskMetrics(store)",
 		`if target == nil || target.ResourceType != "disk" || strings.TrimSpace(target.ResourceID) == "" {`,
 		`if source == unifiedresources.SourceProxmox || source == unifiedresources.SourceAgent {`,
-		`m.writeSMARTMetrics(disk, now)`,
+		`m.writeSMARTMetrics(disk, unifiedResourceObservedAt(resource, now))`,
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {

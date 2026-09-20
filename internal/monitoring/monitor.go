@@ -891,6 +891,11 @@ func hostsFromReadState(readState unifiedresources.ReadState) []models.Host {
 
 // writeSMARTMetrics writes SMART temperature history to the in-memory chart
 // buffer and persists SMART attributes when the metrics store is enabled.
+//
+// now is the source observation time, not the rebuild wall clock: a read-side
+// registry rebuild that re-issues one unchanged observation must map to a
+// single sample. The store writes go through the unified replay guard so the
+// same observation is not re-committed on every rebuild (#1966).
 func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {
 	if shouldSkipNativeMockStateMetricWrites() {
 		return
@@ -902,55 +907,87 @@ func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {
 	}
 
 	// Temperature (always write if > 0)
+	if disk.Temperature > 0 && m.metricsHistory != nil {
+		m.metricsHistory.AddDiskMetric(resourceID, "smart_temp", float64(disk.Temperature), now)
+	}
+
+	writes := m.smartMetricStoreWrites(disk, resourceID, now)
+	if len(writes) == 0 {
+		return
+	}
+	writes = m.dedupeUnifiedMetricWrites(writes)
+	if len(writes) > 0 {
+		m.metricsStore.WriteBatchBounded(writes)
+	}
+}
+
+// smartMetricStoreWrites builds the persisted SMART writes for one physical
+// disk observation. The caller owns batching so the unified sync can anchor the
+// observation time and drop exact replays (#1966).
+func (m *Monitor) smartMetricStoreWrites(disk models.PhysicalDisk, resourceID string, observedAt time.Time) []metrics.WriteMetric {
+	if m.metricsStore == nil {
+		return nil
+	}
+
+	writes := make([]metrics.WriteMetric, 0, 12)
+	appendWrite := func(metricType string, value float64) {
+		writes = append(writes, metrics.WriteMetric{
+			ResourceType: "disk",
+			ResourceID:   resourceID,
+			MetricType:   metricType,
+			Value:        value,
+			Timestamp:    observedAt,
+			Tier:         metrics.TierRaw,
+		})
+	}
+
+	// Temperature (always write if > 0)
 	if disk.Temperature > 0 {
-		if m.metricsHistory != nil {
-			m.metricsHistory.AddDiskMetric(resourceID, "smart_temp", float64(disk.Temperature), now)
-		}
-		if m.metricsStore != nil {
-			m.metricsStore.Write("disk", resourceID, "smart_temp", float64(disk.Temperature), now)
-		}
+		appendWrite("smart_temp", float64(disk.Temperature))
 	}
 
 	attrs := disk.SmartAttributes
-	if attrs == nil || m.metricsStore == nil {
-		return
+	if attrs == nil {
+		return writes
 	}
 
 	// Common
 	if attrs.PowerOnHours != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_power_on_hours", float64(*attrs.PowerOnHours), now)
+		appendWrite("smart_power_on_hours", float64(*attrs.PowerOnHours))
 	}
 	if attrs.PowerCycles != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_power_cycles", float64(*attrs.PowerCycles), now)
+		appendWrite("smart_power_cycles", float64(*attrs.PowerCycles))
 	}
 
 	// SATA-specific
 	if attrs.ReallocatedSectors != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_reallocated_sectors", float64(*attrs.ReallocatedSectors), now)
+		appendWrite("smart_reallocated_sectors", float64(*attrs.ReallocatedSectors))
 	}
 	if attrs.PendingSectors != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_pending_sectors", float64(*attrs.PendingSectors), now)
+		appendWrite("smart_pending_sectors", float64(*attrs.PendingSectors))
 	}
 	if attrs.OfflineUncorrectable != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_offline_uncorrectable", float64(*attrs.OfflineUncorrectable), now)
+		appendWrite("smart_offline_uncorrectable", float64(*attrs.OfflineUncorrectable))
 	}
 	if attrs.UDMACRCErrors != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_crc_errors", float64(*attrs.UDMACRCErrors), now)
+		appendWrite("smart_crc_errors", float64(*attrs.UDMACRCErrors))
 	}
 
 	// NVMe-specific
 	if attrs.PercentageUsed != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_percentage_used", float64(*attrs.PercentageUsed), now)
+		appendWrite("smart_percentage_used", float64(*attrs.PercentageUsed))
 	}
 	if attrs.AvailableSpare != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_available_spare", float64(*attrs.AvailableSpare), now)
+		appendWrite("smart_available_spare", float64(*attrs.AvailableSpare))
 	}
 	if attrs.MediaErrors != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_media_errors", float64(*attrs.MediaErrors), now)
+		appendWrite("smart_media_errors", float64(*attrs.MediaErrors))
 	}
 	if attrs.UnsafeShutdowns != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_unsafe_shutdowns", float64(*attrs.UnsafeShutdowns), now)
+		appendWrite("smart_unsafe_shutdowns", float64(*attrs.UnsafeShutdowns))
 	}
+
+	return writes
 }
 
 // PollExecutor defines the contract for executing polling tasks.
@@ -5687,7 +5724,10 @@ func (m *Monitor) syncUnifiedPhysicalDiskMetrics(store ResourceStoreInterface) {
 		if disk.Serial == "" {
 			disk.ID = targetID
 		}
-		m.writeSMARTMetrics(disk, now)
+		// Anchor to the source observation time so a read-side registry rebuild
+		// re-issuing the same snapshot maps to one sample instead of a fresh
+		// wall-clock row (#1966).
+		m.writeSMARTMetrics(disk, unifiedResourceObservedAt(resource, now))
 	}
 }
 
