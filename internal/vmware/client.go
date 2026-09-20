@@ -28,7 +28,9 @@ const (
 	inventoryResponseLimitByte = 8 << 20
 )
 
-var supportedVIJSONReleases = []string{"9.0.0.0", "8.0.3", "8.0.2.0", "8.0.1.0"}
+// Prefer the canonical four-component release; retain the legacy spelling
+// for endpoints that already accept it before falling back to older schemas.
+var supportedVIJSONReleases = []string{"9.0.0.0", "8.0.3.0", "8.0.3", "8.0.2.0", "8.0.1.0"}
 
 var featureVMwareEnabled atomic.Bool
 
