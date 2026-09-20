@@ -2242,6 +2242,12 @@ also reconciles unique string/number resource IDs into stable row proxies, so
 sparse live snapshots update fields without remounting an open inline drawer
 or discarding its tab and form state. Rows without a unique logical ID retain
 reference-keyed rendering rather than paying for guessed index identity.
+Spacer geometry and the inverse scroll-to-index mapping must share one
+representative item height. The controller samples several leading siblings and
+keeps the tallest, because a short leading group header sampled alone collapses
+the estimate and lets the mounted window outrun the real scroll position,
+turning a small scroll into many rows of unmounting and making an estate appear
+to lose rows.
 The workload guest-row path now follows the same pattern: the render shell
 stays in `frontend-modern/src/components/Workloads/GuestRow.tsx`, tooltip-backed
 cell presentation lives in `frontend-modern/src/components/Workloads/GuestRowCells.tsx`,

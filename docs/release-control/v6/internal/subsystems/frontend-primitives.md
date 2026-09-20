@@ -288,6 +288,14 @@ drawer state, and must never reconcile one row's nested value through another
 row or duplicate rows after sorting. Missing or duplicate keys retain the
 reference-keyed fallback.
 
+The window's item-height estimate is measured from representative content, not
+the leading sibling alone. Grouped surfaces render a short group header before
+their first content row, and sampling only that header collapses the estimate so
+the mounted window advances far faster than the real scroll position and drops a
+group's rows mid-scroll. The controller samples several leading siblings and
+keeps the tallest, so uniform tables still measure their real row height while
+mixed group/content lists keep a content-scale estimate.
+
 Shared workload, node, Docker-host, and resource-drawer history presentation
 keeps current readings separate from stored samples. A current metric may
 populate the legend while history is still being collected, but it must never
