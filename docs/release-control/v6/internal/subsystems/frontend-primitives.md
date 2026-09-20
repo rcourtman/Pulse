@@ -20,6 +20,16 @@
 
 ## Purpose
 
+### Ollama credential editing
+The provider panel exposes the existing Basic Auth configuration. Saved passwords
+are represented by presence text, never a placeholder secret or input value.
+Blank password input preserves the saved value; explicit clearing takes precedence
+over a draft replacement. Successful saves discard the password draft. Username
+clearing is independent. Password bytes are not trimmed. Tests exercise preservation,
+replacement and clearing through the Settings save action. Connection testing uses
+saved settings; the panel tells users to save before testing and use HTTPS remotely.
+
+
 Mount lists stay in the parent scroll flow so overlay scrollbars cannot hide additional mounts. The maintenance backport preserves the reviewed DisksCard layout repair; two and twenty-four mount cases retain keyboard access to the final mount.
 
 Overview delivery diagnoses use latest-started refresh ownership. Older bulk

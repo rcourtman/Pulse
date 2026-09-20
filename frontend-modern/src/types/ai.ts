@@ -113,6 +113,8 @@ export interface AISettings {
   codex_subscription_enabled?: boolean; // local Codex CLI signed in with ChatGPT
   claude_subscription_enabled?: boolean; // local Claude CLI signed in with a Claude plan
   ollama_configured: boolean; // true (always available for attempt)
+  ollama_username?: string;
+  ollama_password_set?: boolean;
   ollama_base_url: string; // Ollama server URL
   ollama_keep_alive: string; // Ollama keep_alive value; empty uses the server default
   openai_base_url?: string; // Custom OpenAI base URL
@@ -254,6 +256,9 @@ export interface AISettingsUpdateRequest {
   cerebras_api_key?: string; // Set Cerebras API key
   together_api_key?: string; // Set Together AI API key
   fireworks_api_key?: string; // Set Fireworks AI API key
+  ollama_username?: string;
+  ollama_password?: string;
+  clear_ollama_password?: boolean;
   ollama_base_url?: string; // Set Ollama server URL
   ollama_keep_alive?: string; // Set Ollama keep_alive; empty uses the server default
   openai_base_url?: string; // Set custom OpenAI base URL
