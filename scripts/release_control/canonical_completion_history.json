@@ -30,6 +30,11 @@
       "incomplete_commit": "a4c53b511de70d50492b8efda19853780a9f4215",
       "completion_commit": "601c383c505771b330507d9c1ae8ae5f53262d84",
       "reason": "Evaluate the TrueNAS legacy-REST memory telemetry runtime change together with the follow-up commit that records its monitoring contract section and moves the regression proof into the registry-accepted internal/truenas/client_test.go proof file, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "f43a7a3e62956fa066c8417a8b67b04e7e435cda",
+      "completion_commit": "a23ba2f5dc575da4ece2ddb6a46261c594a5f968",
+      "reason": "Evaluate the create-release private Pro source-pair preflight together with the follow-up commit that records its deployment-installability contract section and the release-promotion policy proof guarding the step and its ordering ahead of create_release, as one reviewed completion unit."
     }
   ]
 }
