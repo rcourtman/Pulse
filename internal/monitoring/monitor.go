@@ -5097,11 +5097,7 @@ func (m *Monitor) updateResourceStoreForRead(state models.StateSnapshot) {
 		return
 	}
 	recordSupplementalResourceChanges(store, m.collectSupplementalChanges())
-	m.syncUnifiedAgentMetrics(store)
-	m.syncUnifiedVMMetrics(store)
-	m.syncUnifiedStorageMetrics(store)
-	m.syncUnifiedPhysicalDiskMetrics(store)
-	m.syncUnifiedAppContainerMetrics(store)
+	m.syncAllUnifiedMetrics(store)
 	m.syncUnifiedResourceAlertsToState(store.GetAll())
 }
 
@@ -5148,11 +5144,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	if atomicStore, ok := store.(AtomicSnapshotResourceStore); ok {
 		atomicStore.PopulateSnapshotAndSupplemental(snapshotForStore, recordsBySource)
 		recordSupplementalResourceChanges(store, supplementalChanges)
-		m.syncUnifiedAgentMetrics(store)
-		m.syncUnifiedVMMetrics(store)
-		m.syncUnifiedStorageMetrics(store)
-		m.syncUnifiedPhysicalDiskMetrics(store)
-		m.syncUnifiedAppContainerMetrics(store)
+		m.syncAllUnifiedMetrics(store)
 		for source, records := range recordsBySource {
 			if len(records) == 0 {
 				continue
@@ -5183,11 +5175,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	}
 
 	recordSupplementalResourceChanges(store, supplementalChanges)
-	m.syncUnifiedAgentMetrics(store)
-	m.syncUnifiedVMMetrics(store)
-	m.syncUnifiedStorageMetrics(store)
-	m.syncUnifiedPhysicalDiskMetrics(store)
-	m.syncUnifiedAppContainerMetrics(store)
+	m.syncAllUnifiedMetrics(store)
 	m.syncUnifiedResourceAlertsToState(store.GetAll())
 }
 
@@ -5282,7 +5270,41 @@ func (m *Monitor) dedupeUnifiedMetricWrites(writes []metrics.WriteMetric) []metr
 	return out
 }
 
-func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface) {
+// syncAllUnifiedMetrics runs the per-resource-type unified syncs and commits
+// the surviving store writes of the batched syncs as one transaction. Each sync
+// still runs the per-series replay guard, so this only changes the transaction
+// boundary, not the series written, their values or their observation times.
+// The syncs run serially and each previously waited for its own commit, so a
+// rebuild that carried new data for several resource types opened one SQLite
+// transaction per type; batching collapses that to one (#1966). The physical
+// disk sync keeps its own transaction because its SMART path writes directly.
+func (m *Monitor) syncAllUnifiedMetrics(store ResourceStoreInterface) {
+	if m == nil {
+		return
+	}
+	if m.metricsStore == nil {
+		// The in-memory history path still needs to run; there is no store
+		// batch to collect.
+		m.syncUnifiedAgentMetrics(store)
+		m.syncUnifiedVMMetrics(store)
+		m.syncUnifiedStorageMetrics(store)
+		m.syncUnifiedPhysicalDiskMetrics(store)
+		m.syncUnifiedAppContainerMetrics(store)
+		return
+	}
+	var batch []metrics.WriteMetric
+	sink := &batch
+	m.syncUnifiedAgentMetrics(store, sink)
+	m.syncUnifiedVMMetrics(store, sink)
+	m.syncUnifiedStorageMetrics(store, sink)
+	m.syncUnifiedAppContainerMetrics(store, sink)
+	m.syncUnifiedPhysicalDiskMetrics(store)
+	if len(batch) > 0 {
+		m.metricsStore.WriteBatchBounded(batch)
+	}
+}
+
+func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface, sinks ...*[]metrics.WriteMetric) {
 	if store == nil || (m.metricsHistory == nil && m.metricsStore == nil) {
 		return
 	}
@@ -5389,12 +5411,14 @@ func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface) {
 		}
 	}
 	storeWrites = m.dedupeUnifiedMetricWrites(storeWrites)
-	if len(storeWrites) > 0 {
+	if len(sinks) > 0 && sinks[0] != nil {
+		*sinks[0] = append(*sinks[0], storeWrites...)
+	} else if len(storeWrites) > 0 {
 		m.metricsStore.WriteBatchBounded(storeWrites)
 	}
 }
 
-func (m *Monitor) syncUnifiedVMMetrics(store ResourceStoreInterface) {
+func (m *Monitor) syncUnifiedVMMetrics(store ResourceStoreInterface, sinks ...*[]metrics.WriteMetric) {
 	if store == nil || (m.metricsHistory == nil && m.metricsStore == nil) {
 		return
 	}
@@ -5509,12 +5533,14 @@ func (m *Monitor) syncUnifiedVMMetrics(store ResourceStoreInterface) {
 		}
 	}
 	storeWrites = m.dedupeUnifiedMetricWrites(storeWrites)
-	if len(storeWrites) > 0 {
+	if len(sinks) > 0 && sinks[0] != nil {
+		*sinks[0] = append(*sinks[0], storeWrites...)
+	} else if len(storeWrites) > 0 {
 		m.metricsStore.WriteBatchBounded(storeWrites)
 	}
 }
 
-func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface) {
+func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface, sinks ...*[]metrics.WriteMetric) {
 	if store == nil || (m.metricsHistory == nil && m.metricsStore == nil) {
 		return
 	}
@@ -5609,7 +5635,9 @@ func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface) {
 		}
 	}
 	storeWrites = m.dedupeUnifiedMetricWrites(storeWrites)
-	if len(storeWrites) > 0 {
+	if len(sinks) > 0 && sinks[0] != nil {
+		*sinks[0] = append(*sinks[0], storeWrites...)
+	} else if len(storeWrites) > 0 {
 		m.metricsStore.WriteBatchBounded(storeWrites)
 	}
 }
@@ -5731,7 +5759,7 @@ func (m *Monitor) syncUnifiedPhysicalDiskMetrics(store ResourceStoreInterface) {
 	}
 }
 
-func (m *Monitor) syncUnifiedAppContainerMetrics(store ResourceStoreInterface) {
+func (m *Monitor) syncUnifiedAppContainerMetrics(store ResourceStoreInterface, sinks ...*[]metrics.WriteMetric) {
 	if store == nil || (m.metricsHistory == nil && m.metricsStore == nil) {
 		return
 	}
@@ -5843,7 +5871,9 @@ func (m *Monitor) syncUnifiedAppContainerMetrics(store ResourceStoreInterface) {
 		}
 	}
 	storeWrites = m.dedupeUnifiedMetricWrites(storeWrites)
-	if len(storeWrites) > 0 {
+	if len(sinks) > 0 && sinks[0] != nil {
+		*sinks[0] = append(*sinks[0], storeWrites...)
+	} else if len(storeWrites) > 0 {
 		m.metricsStore.WriteBatchBounded(storeWrites)
 	}
 }

@@ -8094,6 +8094,10 @@ sampling does not alter agent admission either. Focused proof lives in
 (`TestDedupeUnifiedMetricWritesDropsExactReplays`,
 `TestSyncUnifiedAgentMetricsUsesSourceObservationTimeAcrossRegistryRebuilds`,
 `TestSyncUnifiedPhysicalDiskMetricsUsesSourceObservationTimeAcrossRegistryRebuilds`).
+The batched sync path (`syncAllUnifiedMetrics`) collects the agent, VM, storage
+and app-container writes into one SQLite transaction without changing the
+series, values or observation times, so agent admission, token binding and
+removal-block behaviour are unchanged.
 
 ### Docker update preflight accepts any local RepoDigest for the planned image
 

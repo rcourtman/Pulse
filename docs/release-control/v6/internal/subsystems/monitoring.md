@@ -4116,6 +4116,22 @@ and `internal/monitoring/monitor_polling_test.go`
 (`TestSyncUnifiedAppContainerMetricsUsesSourceObservationTimeAcrossRegistryRebuilds`,
 `TestSyncUnifiedVMMetricsUsesSourceObservationTimeAcrossRegistryRebuilds`).
 
+### Unified metric sync commits one batch per pass
+
+The five unified syncs run serially and each previously waited for its own
+SQLite commit, so one registry rebuild that carried new data for several
+resource types opened one transaction per type and committed the same WAL
+repeatedly. `syncAllUnifiedMetrics` now collects the surviving writes of the
+agent, VM, storage and app-container syncs through a batch sink and commits them
+in a single `WriteBatchBounded` transaction. Each sync still runs its own
+per-series replay guard first, so the change only moves the transaction
+boundary: the same series, values and source observation times are written.
+Standalone callers and tests still pass no sink and keep the immediate,
+read-your-writes write. The physical-disk SMART path keeps its own transaction
+because it writes directly. Focused proof lives in
+`internal/monitoring/monitor_polling_test.go`
+(`TestSyncUnifiedStorageMetricsDefersWritesToBatchSink`).
+
 ### Docker image update comparison accepts every local RepoDigest
 
 Docker records every RepoDigest an image is known by, and the digest for a

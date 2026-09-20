@@ -5931,6 +5931,84 @@ func TestDedupeUnifiedMetricWritesDropsExactReplays(t *testing.T) {
 	}
 }
 
+func TestSyncUnifiedStorageMetricsDefersWritesToBatchSink(t *testing.T) {
+	observedAt := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	resourceStore.PopulateFromSnapshot(models.StateSnapshot{
+		PBSInstances: []models.PBSInstance{{
+			ID:       "pbs-main",
+			Name:     "pbs-main",
+			Status:   "online",
+			LastSeen: observedAt,
+			Datastores: []models.PBSDatastore{{
+				Name:   "backups",
+				Status: "available",
+				Total:  1000,
+				Used:   400,
+				Free:   600,
+				Usage:  40,
+			}},
+		}},
+	})
+
+	var targetID string
+	for _, resource := range resourceStore.GetAll() {
+		if resource.Type != unifiedresources.ResourceTypeStorage || resource.Storage == nil || resource.Storage.Platform != "pbs" {
+			continue
+		}
+		target := resourceStore.MetricsTargetForResource(resource.ID)
+		if target == nil || target.ResourceType != "storage" {
+			t.Fatalf("unexpected PBS datastore metrics target: %+v", target)
+		}
+		targetID = target.ResourceID
+		break
+	}
+	if targetID == "" {
+		t.Fatal("expected a PBS datastore in the unified resource store")
+	}
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	persistentStore, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = persistentStore.Close() }()
+
+	monitor := &Monitor{
+		metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+		metricsStore:   persistentStore,
+	}
+
+	// A sink collects the batch so the unified syncs can share one transaction.
+	// The sink path must not write through to the store itself.
+	var sink []metrics.WriteMetric
+	monitor.syncUnifiedStorageMetrics(resourceStore, &sink)
+	if len(sink) == 0 {
+		t.Fatal("expected storage writes to be collected in the batch sink")
+	}
+
+	before, err := persistentStore.Query("storage", targetID, "usage", observedAt.Add(-time.Second), observedAt.Add(time.Second), 0)
+	if err != nil {
+		t.Fatalf("query persisted PBS usage: %v", err)
+	}
+	if len(before) != 0 {
+		t.Fatalf("sink path must not write to the store directly, got %+v", before)
+	}
+
+	persistentStore.WriteBatchBounded(sink)
+
+	after, err := persistentStore.Query("storage", targetID, "usage", observedAt.Add(-time.Second), observedAt.Add(time.Second), 0)
+	if err != nil {
+		t.Fatalf("query persisted PBS usage: %v", err)
+	}
+	if len(after) != 1 {
+		t.Fatalf("persisted PBS usage points = %d, want one after the batch flush: %+v", len(after), after)
+	}
+	if !after[0].Timestamp.Equal(observedAt) {
+		t.Fatalf("persisted PBS usage timestamp = %s, want source observation %s", after[0].Timestamp, observedAt)
+	}
+}
+
 func TestSyncUnifiedAgentMetricsUsesSourceObservationTimeAcrossRegistryRebuilds(t *testing.T) {
 	previous := truenas.IsFeatureEnabled()
 	truenas.SetFeatureEnabled(true)
