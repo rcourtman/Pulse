@@ -20,6 +20,11 @@
       "incomplete_commit": "248ada3cc662bf0529bbf9586bdfaee6aee2467c",
       "completion_commit": "f08b96b968444be221204e6bb062fecb7a9b3cc4",
       "reason": "Evaluate the Anthropic stable-system-prefix prompt-cache repair together with the follow-up commit that records its transport contract in docs/release-control/v6/internal/subsystems/ai-runtime.md, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "84b2787ba6122f7221740cf75051858ce79681e5",
+      "completion_commit": "a6a15a64ea3c2fc04cd0c0be358ea35bad19c9f4",
+      "reason": "Evaluate the FreeBSD checksum-tool fallback runtime change together with the follow-up commit that records its agent-lifecycle and deployment-installability contract sections and the MCP installer proof, as one reviewed completion unit."
     }
   ]
 }

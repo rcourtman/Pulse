@@ -1069,6 +1069,12 @@ artifact-selection behaviour.
    report success. A checksum-verified native rehearsal must cover install,
    update, reboot persistence, and clean uninstall rather than treating a
    cross-build as complete lifecycle proof.
+   Download verification must use a SHA-256 tool that exists on the target
+   platform. FreeBSD base ships `sha256(1)` and neither GNU `sha256sum` nor
+   Perl `shasum`, so the unified installer and the MCP installer must fall back
+   through the available digest tool instead of refusing an otherwise correct
+   download. The shared installer helper owns that fallback so every download
+   (agent, typed helper, action runner) is verified consistently.
    The shell installer must disclose `--enable-commands` as Pulse command
    execution, disabled by default, and must name both Patrol actions and
    Proxmox LXC Docker inventory as the operator-visible reasons to enable it.

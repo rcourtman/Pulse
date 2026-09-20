@@ -4412,3 +4412,23 @@ func TestReleaseNodeSetupKeepsExplicitCacheIsolation(t *testing.T) {
 		})
 	}
 }
+
+func TestInstallMCPFreeBSDSHA256Fallback(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install-mcp.sh"))
+	if err != nil {
+		t.Fatalf("read install-mcp.sh: %v", err)
+	}
+	script := string(content)
+	// FreeBSD base provides sha256(1) but neither GNU sha256sum nor Perl's
+	// shasum, so the MCP installer must select the available digest tool.
+	for _, want := range []string{
+		"command -v sha256sum",
+		"command -v sha256 >/dev/null 2>&1",
+		`sha_cmd="sha256 -q"`,
+		"command -v shasum",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("install-mcp.sh lost FreeBSD sha256 fallback %q", want)
+		}
+	}
+}
