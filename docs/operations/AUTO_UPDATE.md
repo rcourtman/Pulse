@@ -49,3 +49,5 @@ If an update fails:
     sudo /bin/update --version vX.Y.Z
     ```
     `/bin/update` is installed by the supported Pulse server installer. If your host does not have it yet, use the signed server-installer flow in [INSTALL.md](../INSTALL.md). Agent updates still use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
+
+    On a Proxmox community-scripts (helper-scripts) LXC, `/bin/update` is the community-scripts updater, not Pulse's helper. It ignores `--version` and resolves the newest GitHub release, which can be a `helm-chart-*` tag, so the pinned version is not applied. Use the signed server-installer flow in [INSTALL.md](../INSTALL.md) there instead.
