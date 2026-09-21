@@ -2529,8 +2529,11 @@ monitoring path used for backup and recovery evidence. New nodes still take the
 captured registration value. The same preference is preserved when automatic
 PVE consolidation folds a duplicate cluster or an overlapping standalone into
 the canonical connection on save, load or monitor reconciliation; a merged
-certificate fingerprint still pins the peer. See the agent-lifecycle contract
-for the runtime mechanism.
+certificate fingerprint still pins the peer. An explicitly enabled setting on a
+CA-signed PBS node is likewise preserved across re-registration even when no
+fingerprint is captured, so backup and recovery evidence polling is not broken
+by a silent downgrade. See the agent-lifecycle contract for the runtime
+mechanism.
 
 - Session-only authentication skips tenant-monitor resolution when no explicit API token is supplied. Proxy authentication and explicit global/tenant token precedence remain unchanged; an invalid explicit token does not fall back to a session. The cold token-creation regression constructs the router with a non-nil multi-tenant manager, matching the server authentication wiring, and asserts no tenant initialization during creation. This avoids inventory startup on that control-plane path, not a general guarantee that client disconnects cancel mutations.
 

@@ -4437,12 +4437,15 @@ replaced by the registration's capture state. New nodes continue to take the
 captured value. This is a behavioural clarification of the existing endpoint,
 not a new field or contract delta.
 
-The node add and update payloads keep `verifySSL` as an optional pointer, so an
-explicit `false` remains distinguishable from an omitted field. An explicit
-choice is recorded as operator-owned and is not overridden by automatic PVE
-consolidation, which runs on save, load and monitor reconciliation. The response
-shape is unchanged: the persisted explicit marker is internal and is not exposed
-through the node API.
+The node add and update payloads keep `verifySSL` as an optional pointer for
+both PVE and PBS nodes, so an explicit `false` remains distinguishable from an
+omitted field. An explicit choice is recorded as operator-owned, is not
+overridden by automatic PVE consolidation (which runs on save, load and monitor
+reconciliation) and is not downgraded by the PBS re-registration heal that
+clears strict verification with no pin. The response shape is unchanged: the
+persisted explicit marker is internal and is not exposed through the node API.
+`TestContract_PBSVerifySSLExplicitChoiceIsRecorded` in `internal/api/contract_test.go`
+pins the PBS recording and heal guard.
 
 - Session-only authentication skips tenant-monitor resolution when no explicit API token is supplied. Proxy authentication and explicit global/tenant token precedence remain unchanged; an invalid explicit token does not fall back to a session. The cold token-creation regression constructs the router with a non-nil multi-tenant manager, matching the server authentication wiring, and asserts no tenant initialization during creation. This avoids inventory startup on that control-plane path, not a general guarantee that client disconnects cancel mutations.
 

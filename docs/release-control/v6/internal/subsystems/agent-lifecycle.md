@@ -3315,13 +3315,17 @@ Re-registering an existing Proxmox node through the canonical auto-register
 path preserves the stored `VerifySSL` value instead of replacing it with the
 fingerprint-capture result. This keeps a disabled "Verify SSL certificate"
 setting disabled across an agent health-check re-registration after a
-disconnect, while the legacy heal (`VerifySSL` true with no stored fingerprint)
-still downgrades to an insecure, parseable-certificate connection. The
-fingerprint pin may still refresh from the registration. New nodes continue to
-take the captured value. Regression tests
-`TestHandleCanonicalAutoRegister_PVEPreservesDisabledVerifySSL` and
-`TestHandleCanonicalAutoRegister_PBSReservesDisabledVerifySSL` pin the existing
-node branch.
+disconnect, while the legacy heal (`VerifySSL` true with no stored fingerprint
+and no recorded operator choice) still downgrades to an insecure,
+parseable-certificate connection. An explicit choice is not healed: a
+CA-signed PBS or PVE endpoint verifies without a pin, so the heal is skipped
+for `VerifySSLExplicit` records. The fingerprint pin may still refresh from the
+registration. New nodes continue to take the captured value. Regression tests
+`TestHandleCanonicalAutoRegister_PVEPreservesDisabledVerifySSL`,
+`TestHandleCanonicalAutoRegister_PBSReservesDisabledVerifySSL`,
+`TestHandleCanonicalAutoRegister_PBSReservesExplicitVerifySSLWithoutFingerprint`
+and `TestHandleCanonicalAutoRegister_PBSHealsLegacyStrictTLSWithoutPin` pin the
+existing node branch.
 
 `ConsolidatePVEInstances` respects an operator's explicit `VerifySSL` choice
 when it folds a duplicate cluster or an overlapping standalone into the

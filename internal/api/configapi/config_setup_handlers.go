@@ -2334,9 +2334,10 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			// captured a fingerprint; applying it unconditionally re-enabled a
 			// disabled "Verify SSL certificate" setting on every agent
 			// health-check re-registration (#2140). Heal only the legacy state
-			// where strict verification is on with no pin, which can never
-			// connect to a self-signed endpoint (#1303).
-			if instance.VerifySSL && instance.Fingerprint == "" {
+			// where strict verification is on with no pin and no recorded
+			// operator choice; an explicit choice must survive because a
+			// CA-signed endpoint can verify without a pin (#1303).
+			if !instance.VerifySSLExplicit && instance.VerifySSL && instance.Fingerprint == "" {
 				instance.VerifySSL = false
 			}
 			log.Info().Str("host", host).Str("type", "pbs").Msg(canonicalAutoRegisterMatchMessage("host; updated token in-place"))
