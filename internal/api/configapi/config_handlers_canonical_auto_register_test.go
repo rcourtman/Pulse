@@ -1656,3 +1656,124 @@ func TestHandleCanonicalAutoRegister_PBSReservesDisabledVerifySSL(t *testing.T) 
 		t.Fatalf("re-registration re-enabled VerifySSL on an existing node that disabled it (#2140)")
 	}
 }
+
+// TestHandleCanonicalAutoRegister_PBSReservesExplicitVerifySSLWithoutFingerprint
+// covers the PBS half of #2140: an operator who explicitly enables "Verify SSL
+// certificate" on a CA-signed PBS endpoint has no fingerprint to pin. A later
+// re-registration that captures no fingerprint must not silently downgrade the
+// explicit choice to false.
+func TestHandleCanonicalAutoRegister_PBSReservesExplicitVerifySSLWithoutFingerprint(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	tokenID := "pulse-monitor@pbs!" + buildPulseMonitorTokenName("pulse.example.com")
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PBSInstances: []config.PBSInstance{
+			{
+				Name:              "pbs01",
+				Host:              "https://pbs.local:8007",
+				TokenName:         tokenID,
+				TokenValue:        "existing-token",
+				VerifySSL:         true,
+				VerifySSLExplicit: true,
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	originalFingerprint := fetchTLSFingerprint
+	fetchTLSFingerprint = func(string) (string, error) {
+		return "", nil
+	}
+	t.Cleanup(func() {
+		fetchTLSFingerprint = originalFingerprint
+	})
+
+	reqBody := AutoRegisterRequest{
+		Type:           "pbs",
+		Host:           "https://pbs.local:8007",
+		CandidateHosts: []string{"https://pbs.local:8007"},
+		ServerName:     "pbs01",
+		TokenID:        tokenID,
+		TokenValue:     "rotated-token",
+		Source:         "agent",
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", nil)
+	rec := httptest.NewRecorder()
+
+	handler.handleCanonicalAutoRegister(rec, req, &reqBody, "127.0.0.1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if len(handler.defaultConfig.PBSInstances) != 1 {
+		t.Fatalf("instances = %d, want the existing PBS node updated in place", len(handler.defaultConfig.PBSInstances))
+	}
+	instance := handler.defaultConfig.PBSInstances[0]
+	if !instance.VerifySSL {
+		t.Fatalf("re-registration downgraded an explicitly enabled VerifySSL on a PBS node (#2140)")
+	}
+	if !instance.VerifySSLExplicit {
+		t.Fatalf("explicit PBS VerifySSL choice was not preserved as operator-owned (#2140)")
+	}
+	if instance.TokenValue != "rotated-token" {
+		t.Fatalf("token value = %q, want the existing node updated in place", instance.TokenValue)
+	}
+}
+
+// TestHandleCanonicalAutoRegister_PBSHealsLegacyStrictTLSWithoutPin pins the
+// retained #1303 heal for PBS: a record written before the explicit-choice
+// marker existed, with strict verification on and no pin, is still downgraded
+// because it cannot connect to a self-signed endpoint.
+func TestHandleCanonicalAutoRegister_PBSHealsLegacyStrictTLSWithoutPin(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	tokenID := "pulse-monitor@pbs!" + buildPulseMonitorTokenName("pulse.example.com")
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PBSInstances: []config.PBSInstance{
+			{
+				Name:       "pbs01",
+				Host:       "https://pbs.local:8007",
+				TokenName:  tokenID,
+				TokenValue: "existing-token",
+				VerifySSL:  true,
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	originalFingerprint := fetchTLSFingerprint
+	fetchTLSFingerprint = func(string) (string, error) {
+		return "", nil
+	}
+	t.Cleanup(func() {
+		fetchTLSFingerprint = originalFingerprint
+	})
+
+	reqBody := AutoRegisterRequest{
+		Type:           "pbs",
+		Host:           "https://pbs.local:8007",
+		CandidateHosts: []string{"https://pbs.local:8007"},
+		ServerName:     "pbs01",
+		TokenID:        tokenID,
+		TokenValue:     "rotated-token",
+		Source:         "agent",
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", nil)
+	rec := httptest.NewRecorder()
+
+	handler.handleCanonicalAutoRegister(rec, req, &reqBody, "127.0.0.1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	instance := handler.defaultConfig.PBSInstances[0]
+	if instance.VerifySSL {
+		t.Fatalf("legacy strict TLS with no pin and no explicit choice should still heal to false (#1303)")
+	}
+}

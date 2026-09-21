@@ -1597,6 +1597,36 @@ func TestContract_NodeConfigUpdateVerifySSLIsOptionalExplicitField(t *testing.T)
 	}
 }
 
+// TestContract_PBSVerifySSLExplicitChoiceIsRecorded pins the PBS half of #2140:
+// the persisted operator-choice marker exists on PBSInstance, the add and
+// update handlers record it, and the canonical re-registration heal respects
+// it, so a PBS operator's explicit Verify SSL choice cannot be downgraded.
+func TestContract_PBSVerifySSLExplicitChoiceIsRecorded(t *testing.T) {
+	configSource, err := os.ReadFile(filepath.Clean("../config/config.go"))
+	if err != nil {
+		t.Fatalf("read config.go: %v", err)
+	}
+	if !strings.Contains(string(configSource), "verifySSLExplicit,omitempty") {
+		t.Fatal("PBSInstance must persist the explicit VerifySSL choice marker")
+	}
+
+	handlersSource, err := os.ReadFile(filepath.Clean("configapi/config_node_handlers.go"))
+	if err != nil {
+		t.Fatalf("read config_node_handlers.go: %v", err)
+	}
+	if count := strings.Count(string(handlersSource), "VerifySSLExplicit"); count < 4 {
+		t.Fatalf("PVE and PBS add/update handlers must each record the explicit VerifySSL choice, found %d references", count)
+	}
+
+	setupSource, err := os.ReadFile(filepath.Clean("configapi/config_setup_handlers.go"))
+	if err != nil {
+		t.Fatalf("read config_setup_handlers.go: %v", err)
+	}
+	if !strings.Contains(string(setupSource), "!instance.VerifySSLExplicit && instance.VerifySSL && instance.Fingerprint") {
+		t.Fatal("the canonical re-registration heal must respect an explicit VerifySSL choice")
+	}
+}
+
 func TestContract_HostedMagicLinkStablePrincipalProof(t *testing.T) {
 	source, err := os.ReadFile(filepath.Clean("magic_link_handlers.go"))
 	if err != nil {

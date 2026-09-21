@@ -690,3 +690,28 @@ func TestPVEInstanceVerifySSLExplicitRoundTrips(t *testing.T) {
 	assert.False(t, legacy.VerifySSL)
 	assert.False(t, legacy.VerifySSLExplicit, "a record without the field is not an explicit choice")
 }
+
+// TestPBSInstanceVerifySSLExplicitRoundTrips is the PBS twin of
+// TestPVEInstanceVerifySSLExplicitRoundTrips. A PBS operator's explicit
+// verification choice must survive serialization so the canonical
+// re-registration heal can distinguish it from the zero value (#2140).
+func TestPBSInstanceVerifySSLExplicitRoundTrips(t *testing.T) {
+	original := PBSInstance{
+		Name:              "backup",
+		Host:              "https://pbs.local:8007",
+		VerifySSL:         true,
+		VerifySSLExplicit: true,
+	}
+	encoded, err := json.Marshal(original)
+	require.NoError(t, err)
+
+	var decoded PBSInstance
+	require.NoError(t, json.Unmarshal(encoded, &decoded))
+	assert.True(t, decoded.VerifySSL)
+	assert.True(t, decoded.VerifySSLExplicit, "an explicit PBS TLS choice must survive persistence")
+
+	var legacy PBSInstance
+	require.NoError(t, json.Unmarshal([]byte(`{"Name":"legacy","Host":"https://pbs.local:8007"}`), &legacy))
+	assert.False(t, legacy.VerifySSL)
+	assert.False(t, legacy.VerifySSLExplicit, "a record without the field is not an explicit choice")
+}

@@ -598,3 +598,40 @@ func TestHandleUpdateNodePreservesDisabledVerifySSLThroughConsolidation(t *testi
 		t.Fatalf("GET projection VerifySSL = true, want false after disabling (#2140)")
 	}
 }
+
+// TestHandleUpdateNodePBSRecordsExplicitVerifySSLChoice covers the PBS half of
+// #2140: the update handler must record a caller-supplied verifySSL as an
+// operator-owned choice so a later automatic re-registration cannot downgrade
+// it. An explicit enable on a CA-signed endpoint has no fingerprint to pin.
+func TestHandleUpdateNodePBSRecordsExplicitVerifySSLChoice(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath: tempDir,
+		PBSInstances: []config.PBSInstance{
+			{
+				Name:       "pbs01",
+				Host:       "https://pbs.local:8007",
+				TokenName:  "pulse-monitor@pbs!pulse",
+				TokenValue: "secret",
+				VerifySSL:  false,
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	body, _ := json.Marshal(map[string]any{"verifySSL": true})
+	req := httptest.NewRequest(http.MethodPut, "/api/config/nodes/pbs-0", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateNode(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update status = %d: %s", rec.Code, rec.Body.String())
+	}
+	stored := cfg.PBSInstances[0]
+	if !stored.VerifySSL {
+		t.Fatalf("stored VerifySSL = false, want true after enabling")
+	}
+	if !stored.VerifySSLExplicit {
+		t.Fatalf("explicit PBS VerifySSL choice was not recorded as operator-owned (#2140)")
+	}
+}
