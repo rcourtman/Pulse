@@ -634,6 +634,18 @@ trigger kinds, version, state transitions, and machine failure code are
 validated and persisted by core. Observer authority never includes an
 infrastructure mutation capability.
 
+Active retained objectives with a missing observer, or an observer disabled by
+an intent edit, remain durable setup requests. The observer reconciliation loop
+redelivers them through the existing objective-planning trigger after restart,
+queue rejection, or a busy worker. It respects disabled or blocked Patrol and
+never schedules a paused or archived objective. Admission rechecks the exact
+stored revision after acquiring the run slot and atomically persists
+`last_planning_attempt_at` before a provider call. Unfinished attempts retry at
+the configured Patrol interval, independently of run-history retention. This
+timestamp does not change the operator revision, edit time, or coverage, and an
+operator edit clears it. A proposal, including a rejected or proxy proposal,
+is an explicit model handoff and is not automatically replaced by recovery.
+
 During the first-party Patrol detection profile only, the core may attach the
 objective store through the narrow `patrol_propose_observer` tool adapter. The
 model must address an active objective at its current optimistic revision and
