@@ -859,6 +859,16 @@ func (m *Manager) CheckBackupsWithInventory(
 		}
 		ageDaysRounded := math.Round(ageDays*10) / 10
 
+		// A PBS subject without a guest VMID is a host/config backup
+		// (PBS backup-type "host", keyed by the node name), not a guest
+		// workload. The Backups overview already keeps these out of guest
+		// coverage, so do not raise a guest backup-age alert for them: a
+		// stale host config backup otherwise notifies forever under a
+		// node-named subject while the node's guests are backed up (#2136).
+		if record.source == "PBS" && strings.TrimSpace(record.vmID) == "" {
+			continue
+		}
+
 		// Determine thresholds for this backup
 		currentBackupCfg := backupCfg
 		guestContext := guestSnapshotFromLookup(record.lookup, record.fallbackName)

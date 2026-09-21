@@ -2322,6 +2322,96 @@ func TestCheckBackupsHandlesPmgBackups(t *testing.T) {
 	}
 }
 
+// TestCheckBackupsIgnoresPBSHostBackupSubject covers #2136: a PBS host config
+// backup (backup-type "host") is keyed by the node name, not a VMID, and must
+// not raise a guest backup-age alert. The node name subject ("nas backup")
+// otherwise looks like a stale guest and notifies forever even though the
+// node's guests are backed up.
+func TestCheckBackupsIgnoresPBSHostBackupSubject(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:      true,
+		WarningDays:  7,
+		CriticalDays: 14,
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+	rollups := []recovery.ProtectionRollup{
+		{
+			RollupID: "ext:pbs-host-nas",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-guest",
+				Namespace: "pbs",
+				Name:      "nas",
+				ID:        "nas",
+			},
+			LastSuccessAt: ptrTime(now.Add(-43.5 * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPBS},
+		},
+	}
+
+	m.CheckBackups(rollups, map[string]GuestLookup{}, map[string][]GuestLookup{})
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for storageKey, alert := range m.activeAlerts {
+		if alert != nil && alert.Type == "backup-age" {
+			t.Fatalf("expected PBS host config backup to be excluded from guest backup-age alerts, found %s", effectiveAlertID(alert, storageKey))
+		}
+	}
+}
+
+// TestCheckBackupsStillAlertsOnOrphanedGuestPBSBackup is the companion guard:
+// a genuinely orphaned PBS guest backup (numeric VMID, no live guest) must keep
+// alerting, so the host-backup exclusion above does not silence real staleness.
+func TestCheckBackupsStillAlertsOnOrphanedGuestPBSBackup(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:      true,
+		WarningDays:  7,
+		CriticalDays: 14,
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+	rollups := []recovery.ProtectionRollup{
+		{
+			RollupID: "ext:pbs-orphan-102",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-vm",
+				Namespace: "pbs",
+				Name:      "102",
+				ID:        "102",
+			},
+			LastSuccessAt: ptrTime(now.Add(-43.5 * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPBS},
+		},
+	}
+
+	m.CheckBackups(rollups, map[string]GuestLookup{}, map[string][]GuestLookup{})
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if !testHasActiveAlert(t, m, buildCanonicalStateID("backup-subject:ext-pbs-orphan-102", "backup-subject:ext-pbs-orphan-102-backup-age")) {
+		var keys []string
+		for storageKey, active := range m.activeAlerts {
+			keys = append(keys, effectiveAlertID(active, storageKey))
+		}
+		t.Fatalf("expected orphaned PBS guest backup alert, found keys: %v", keys)
+	}
+}
+
 func TestCheckBackupsSkipsOrphanedWhenDisabled(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
