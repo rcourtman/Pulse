@@ -952,6 +952,9 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 	start := runStart.startedAt
 	runID := runStart.id
 	executionID := uuid.NewString()
+	if scope.Reason == TriggerReasonObjectiveChanged && !p.beginObjectivePlanning(scope, start) {
+		return
+	}
 	GetPatrolMetrics().RecordRun(string(scope.Reason), "scoped")
 	var runStats struct {
 		resourceCount     int
