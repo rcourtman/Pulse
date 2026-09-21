@@ -982,6 +982,45 @@ func TestCorrelatedGuestMemoryReleaseNextPoll(t *testing.T) {
 	}
 }
 
+// Issue #2148: a correlated agent merged into a system-container resource must
+// surface through the previous-guest context so the LXC builder prefers it over
+// the cache-inclusive cluster/resources fallback.
+func TestCorrelatedContainerMemoryNextPoll(t *testing.T) {
+	now := time.Now()
+	const gib = int64(1024 * 1024 * 1024)
+	guestID := makeGuestID("pve-a", "node1", 100)
+	store := unifiedresources.NewMemoryStore()
+	if err := store.AddLink(unifiedresources.ResourceLink{ResourceA: "ct-test", ResourceB: "agent-test", PrimaryID: "agent-test"}); err != nil {
+		t.Fatal(err)
+	}
+	registry := unifiedresources.NewRegistry(store)
+	total, used := int64(24)*gib, int64(11)*gib
+	resources := []unifiedresources.Resource{
+		{ID: "ct-test", Type: unifiedresources.ResourceTypeSystemContainer, Name: "npu-ct", Status: unifiedresources.StatusOnline, LastSeen: now,
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+			Proxmox: &unifiedresources.ProxmoxData{SourceID: guestID, Instance: "pve-a", NodeName: "node1", VMID: 100, RuntimeStatus: "running"},
+			Metrics: &unifiedresources.ResourceMetrics{Memory: &unifiedresources.MetricValue{Total: &total, Used: &used, Percent: 45, Source: unifiedresources.SourceProxmox}}},
+		{ID: "agent-test", Type: unifiedresources.ResourceTypeAgent, Name: "npu-ct-agent", Status: unifiedresources.StatusOnline, LastSeen: now,
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceAgent},
+			Agent:   &unifiedresources.AgentData{AgentID: "agent-test", Memory: &unifiedresources.AgentMemoryMeta{Total: total, Used: used, Free: total - used}}},
+	}
+	registry.IngestResources(resources)
+	if len(registry.Containers()) != 1 || len(registry.Hosts()) != 0 {
+		t.Fatalf("expected one merged container and no standalone hosts, got %d/%d", len(registry.Containers()), len(registry.Hosts()))
+	}
+	mon := &Monitor{state: models.NewState(), rateTracker: NewRateTracker(), config: &config.Config{}, resourceStore: unifiedresources.NewMonitorAdapter(registry)}
+	prev := mon.previousGuestContextForInstance("pve-a")
+	if _, ok := prev.hostAgentsByVMID[guestID]; !ok {
+		t.Fatalf("linked container agent missing from previous context: %+v", prev.hostAgentsByVMID)
+	}
+	container, _, source, _, ok := mon.buildContainerFromClusterResource(context.Background(), "pve-a",
+		proxmox.ClusterResource{Type: "lxc", Status: "running", Node: "node1", VMID: 100, Name: "npu-ct", MaxMem: uint64(total), Mem: 3459743744},
+		&stubPVEClient{}, map[int]bool{}, prev.hostAgentsByVMID)
+	if !ok || source != "agent" || container.Memory.Used != used {
+		t.Fatalf("container memory not agent-backed: ok=%v source=%s mem=%+v", ok, source, container.Memory)
+	}
+}
+
 type correlatedMemoryClient struct{ stubPVEClient }
 
 func (*correlatedMemoryClient) GetVMStatus(context.Context, string, int) (*proxmox.VMStatus, error) {

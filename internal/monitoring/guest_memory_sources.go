@@ -382,3 +382,49 @@ func (m *Monitor) resolveGuestStatusMemory(
 
 	return memTotal, memUsed, memorySource
 }
+
+// preferLinkedAgentLXCMemory replaces a low-trust Proxmox LXC memory reading
+// with the linked Pulse agent's own sample when one is available. The agent runs
+// inside the container, so its sample reflects the workload's real footprint,
+// while cluster/resources is a cache-inclusive cgroup fallback that can badly
+// under- or over-report shared-memory workloads (#2148, mirroring #1962).
+//
+// An agent inside a container without lxcfs sees the host's /proc/meminfo, so a
+// sample is only trusted when its total matches the container's configured
+// limit. Preferred provider sources are never overridden.
+func preferLinkedAgentLXCMemory(
+	status string,
+	memTotal uint64,
+	memUsed uint64,
+	memorySource string,
+	guestRaw *VMMemoryRaw,
+	agentHost models.Host,
+	hasAgent bool,
+) (uint64, uint64, string) {
+	if !hasAgent || status != "running" || memTotal == 0 {
+		return memTotal, memUsed, memorySource
+	}
+	switch CanonicalMemorySource(memorySource) {
+	case "cluster-resources", "unavailable":
+	default:
+		return memTotal, memUsed, memorySource
+	}
+	if !agentHost.Memory.HasKnownUsage() || agentHost.Memory.Total <= 0 || agentHost.Memory.Used < 0 {
+		return memTotal, memUsed, memorySource
+	}
+	agentTotal := uint64(agentHost.Memory.Total)
+	agentUsed := uint64(agentHost.Memory.Used)
+	if agentTotal != memTotal || agentUsed > memTotal {
+		return memTotal, memUsed, memorySource
+	}
+	if guestRaw != nil {
+		guestRaw.HostAgentTotal = agentTotal
+		guestRaw.HostAgentUsed = agentUsed
+	}
+	log.Debug().
+		Uint64("total", memTotal).
+		Uint64("used", agentUsed).
+		Str("previousSource", memorySource).
+		Msg("LXC memory: using linked Pulse agent memory over cluster-resources fallback")
+	return memTotal, agentUsed, "agent"
+}
