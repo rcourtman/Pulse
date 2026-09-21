@@ -334,28 +334,21 @@ func TestSnapshotVolumeBoundPrunesOldestAndAdvancesRetention(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// The release line has no ReplayBoundary reader, so read the durable append
-	// tail and the retention revision directly from the store.
-	boundary := func() (int64, int64) {
-		t.Helper()
-		var lastID, revision int64
-		if err := store.db.QueryRow(`SELECT
-			COALESCE((SELECT MAX(id) FROM alert_events), 0),
-			COALESCE((SELECT CAST(value AS INTEGER) FROM alert_store_meta WHERE key = 'retention_revision'), 0)`).
-			Scan(&lastID, &revision); err != nil {
-			t.Fatal(err)
-		}
-		return lastID, revision
+	before, err := store.ReplayBoundary()
+	if err != nil {
+		t.Fatal(err)
 	}
-	beforeID, beforeRevision := boundary()
 	// Keep roughly three events' payload; the older rows must be removed.
 	store.pruneSnapshotVolume(3 * 1200)
-	afterID, afterRevision := boundary()
-	if afterRevision <= beforeRevision {
-		t.Fatalf("volume prune did not advance retention revision: before=%d after=%d", beforeRevision, afterRevision)
+	after, err := store.ReplayBoundary()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if afterID != beforeID {
-		t.Fatalf("volume prune changed the newest id: before=%d after=%d", beforeID, afterID)
+	if after.RetentionRevision <= before.RetentionRevision {
+		t.Fatalf("volume prune did not advance retention revision: before=%+v after=%+v", before, after)
+	}
+	if after.LastID != before.LastID {
+		t.Fatalf("volume prune changed the newest id: before=%+v after=%+v", before, after)
 	}
 	remaining, err := store.Query(Filter{})
 	if err != nil {
@@ -371,8 +364,11 @@ func TestSnapshotVolumeBoundPrunesOldestAndAdvancesRetention(t *testing.T) {
 	}
 	// A second prune already within the cap must not change the boundary.
 	store.pruneSnapshotVolume(3 * 1200)
-	againID, againRevision := boundary()
-	if againID != afterID || againRevision != afterRevision {
-		t.Fatalf("prune within the cap changed the boundary: (%d,%d) -> (%d,%d)", afterID, afterRevision, againID, againRevision)
+	again, err := store.ReplayBoundary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again != after {
+		t.Fatalf("prune within the cap changed the boundary: %+v -> %+v", after, again)
 	}
 }
