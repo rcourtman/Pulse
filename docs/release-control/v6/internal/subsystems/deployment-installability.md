@@ -2406,6 +2406,20 @@ artifact-selection behaviour.
 
 ## Current State
 
+### Reviewed frontend dependency security floors
+
+The 2026-09-21 npm-minor-patch group raises the reviewed floors of the
+`frontend-modern` build tooling and runtime libraries without changing the
+installer, artifact, signing, promotion or rollback boundary. `dompurify`
+moves to 3.4.15, `highlight.js` to 11.12.0, `solid-js` to 1.9.15,
+`@types/node` to 26.6.1, the `@typescript-eslint/*`/`typescript-eslint` set to
+8.70.0, `autoprefixer` to 10.6.1, `eslint-plugin-solid` to 0.18.0, `postcss` to
+8.5.28, `prettier` to 3.9.8, and `vite-plugin-solid`/`vite-plugin-sri-gen` to
+2.11.14/1.7.4. `@playwright/test` stays pinned at 1.56.1, so browser-test
+parity is unchanged.
+`frontend-modern/src/security/__tests__/dependencySecurity.test.ts` pins the
+manifest ranges and locked floors so a later downgrade is rejected.
+
 ### Manual update freshness
 
 Manual update checks carry explicit freshness to the update manager. They bypass

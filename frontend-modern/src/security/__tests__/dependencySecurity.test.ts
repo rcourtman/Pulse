@@ -171,4 +171,37 @@ describe('frontend dependency security floors', () => {
     }
     expect(declaredLib).toContain('ES2022');
   });
+
+  it('keeps the reviewed npm-minor-patch floors', () => {
+    // Dependabot npm-minor-patch group, reviewed 2026-09-21. Each floor is the
+    // lowest version this review accepted, so a later downgrade is rejected.
+    const floors: Array<[string, [number, number, number]]> = [
+      ['dompurify', [3, 4, 15]],
+      ['highlight.js', [11, 12, 0]],
+      ['solid-js', [1, 9, 15]],
+      ['@types/node', [26, 6, 1]],
+      ['typescript-eslint', [8, 70, 0]],
+      ['@typescript-eslint/eslint-plugin', [8, 70, 0]],
+      ['@typescript-eslint/parser', [8, 70, 0]],
+      ['autoprefixer', [10, 6, 1]],
+      ['eslint-plugin-solid', [0, 18, 0]],
+      ['postcss', [8, 5, 28]],
+      ['vite-plugin-solid', [2, 11, 14]],
+      ['vite-plugin-sri-gen', [1, 7, 4]],
+    ];
+    for (const [name, floor] of floors) {
+      const versions = lockedVersions(name);
+      expect(versions, `${name} must be locked`).not.toHaveLength(0);
+      for (const version of versions) {
+        expect(version).not.toContain('-');
+        expect(atLeast(version, floor), `${name} ${version} is below the reviewed floor`).toBe(
+          true,
+        );
+      }
+    }
+    expect(manifest.devDependencies.prettier).toBe('3.9.8');
+    const prettier = lockedVersions('prettier');
+    expect(prettier).toHaveLength(1);
+    expect(atLeast(prettier[0], [3, 9, 8])).toBe(true);
+  });
 });
