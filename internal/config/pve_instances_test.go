@@ -88,8 +88,8 @@ func TestConsolidatePVEInstancesRemovesStandaloneCoveredByClusterEndpoint(t *tes
 	if got := instances[0].TokenValue; got != "secret" {
 		t.Fatalf("TokenValue = %q, want secret", got)
 	}
-	if instances[0].VerifySSL {
-		t.Fatalf("expected the canonical cluster's disabled VerifySSL to survive the standalone merge (#2140)")
+	if !instances[0].VerifySSL {
+		t.Fatalf("expected VerifySSL to be promoted")
 	}
 	if got := instances[0].Source; got != "agent" {
 		t.Fatalf("Source = %q, want agent", got)
@@ -196,8 +196,8 @@ func TestConsolidatePVEInstancesMergesDuplicateClusterAuthIntoPrimary(t *testing
 	if got := instances[0].Fingerprint; got != "fp-1" {
 		t.Fatalf("Fingerprint = %q, want fp-1", got)
 	}
-	if instances[0].VerifySSL {
-		t.Fatalf("expected the primary cluster's disabled VerifySSL to survive the duplicate merge (#2140)")
+	if !instances[0].VerifySSL {
+		t.Fatalf("expected VerifySSL to be promoted")
 	}
 	if len(instances[0].ClusterEndpoints) != 2 {
 		t.Fatalf("expected 2 endpoints after consolidation, got %d", len(instances[0].ClusterEndpoints))
@@ -296,10 +296,11 @@ func TestConsolidatePVEInstancesKeepsStandaloneWithContradictingFingerprint(t *t
 func TestConsolidatePVEInstancesPreservesDisabledVerifySSLOnStandaloneMerge(t *testing.T) {
 	instances, changed := ConsolidatePVEInstances([]PVEInstance{
 		{
-			Name:        "homelab",
-			ClusterName: "cluster-A",
-			IsCluster:   true,
-			VerifySSL:   false,
+			Name:              "homelab",
+			ClusterName:       "cluster-A",
+			IsCluster:         true,
+			VerifySSL:         false,
+			VerifySSLExplicit: true,
 			ClusterEndpoints: []ClusterEndpoint{
 				{NodeName: "minipc", Host: "https://10.0.0.5:8006"},
 			},
@@ -334,10 +335,11 @@ func TestConsolidatePVEInstancesPreservesDisabledVerifySSLOnStandaloneMerge(t *t
 func TestConsolidatePVEInstancesPreservesDisabledVerifySSLOnDuplicateClusterMerge(t *testing.T) {
 	instances, changed := ConsolidatePVEInstances([]PVEInstance{
 		{
-			Name:        "c1",
-			ClusterName: "cluster-A",
-			IsCluster:   true,
-			VerifySSL:   false,
+			Name:              "c1",
+			ClusterName:       "cluster-A",
+			IsCluster:         true,
+			VerifySSL:         false,
+			VerifySSLExplicit: true,
 			ClusterEndpoints: []ClusterEndpoint{
 				{NodeName: "n1", Host: "https://10.0.0.5:8006"},
 			},
