@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"strings"
 	"testing"
 	"time"
@@ -27,7 +26,7 @@ func TestStartupPhaseMarkAndCurrent(t *testing.T) {
 }
 
 func TestStartupWatchdogFiresAndNamesLastPhase(t *testing.T) {
-	var buf bytes.Buffer
+	var buf syncBuffer
 	logger := zerolog.New(&buf)
 
 	phase := &startupPhase{}
@@ -54,7 +53,7 @@ func TestStartupWatchdogFiresAndNamesLastPhase(t *testing.T) {
 }
 
 func TestStartupWatchdogStopIsIdempotentAndPreventsFire(t *testing.T) {
-	var buf bytes.Buffer
+	var buf syncBuffer
 	logger := zerolog.New(&buf)
 
 	stop := startStartupWatchdog(logger, &startupPhase{}, 15*time.Millisecond)
