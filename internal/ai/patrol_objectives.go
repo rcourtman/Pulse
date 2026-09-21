@@ -163,18 +163,19 @@ type PatrolObjectiveCoverage struct {
 }
 
 type PatrolObjective struct {
-	ID              string                  `json:"id"`
-	Brief           string                  `json:"brief"`
-	OptionalContext string                  `json:"optional_context,omitempty"`
-	Scope           PatrolObjectiveScope    `json:"scope"`
-	Status          PatrolObjectiveStatus   `json:"status"`
-	Coverage        PatrolObjectiveCoverage `json:"coverage"`
-	Observer        *PatrolObserverRecord   `json:"observer,omitempty"`
-	Revision        uint64                  `json:"revision"`
-	CreatedBy       string                  `json:"created_by,omitempty"`
-	UpdatedBy       string                  `json:"updated_by,omitempty"`
-	CreatedAt       time.Time               `json:"created_at"`
-	UpdatedAt       time.Time               `json:"updated_at"`
+	ID                    string                  `json:"id"`
+	Brief                 string                  `json:"brief"`
+	OptionalContext       string                  `json:"optional_context,omitempty"`
+	Scope                 PatrolObjectiveScope    `json:"scope"`
+	Status                PatrolObjectiveStatus   `json:"status"`
+	Coverage              PatrolObjectiveCoverage `json:"coverage"`
+	Observer              *PatrolObserverRecord   `json:"observer,omitempty"`
+	Revision              uint64                  `json:"revision"`
+	CreatedBy             string                  `json:"created_by,omitempty"`
+	UpdatedBy             string                  `json:"updated_by,omitempty"`
+	CreatedAt             time.Time               `json:"created_at"`
+	UpdatedAt             time.Time               `json:"updated_at"`
+	LastPlanningAttemptAt *time.Time              `json:"last_planning_attempt_at,omitempty"`
 }
 
 type CreatePatrolObjectiveInput struct {
@@ -423,6 +424,7 @@ func (s *PatrolObjectiveStore) Update(id string, input UpdatePatrolObjectiveInpu
 	}
 	updated.UpdatedBy = normalizePatrolObjectiveActor(input.Actor)
 	updated.UpdatedAt = now
+	updated.LastPlanningAttemptAt = nil
 	updated.Revision++
 	next := clonePatrolObjectiveMap(s.objectives)
 	next[id] = updated
@@ -1149,6 +1151,7 @@ func clonePatrolObjective(objective *PatrolObjective) *PatrolObjective {
 	copy := *objective
 	copy.Scope.ResourceIDs = append([]string{}, objective.Scope.ResourceIDs...)
 	copy.Observer = clonePatrolObserver(objective.Observer)
+	copy.LastPlanningAttemptAt = clonePatrolTime(objective.LastPlanningAttemptAt)
 	copy.Coverage.ValidUntil = clonePatrolTime(objective.Coverage.ValidUntil)
 	copy.Coverage.LastEvidenceAt = clonePatrolTime(objective.Coverage.LastEvidenceAt)
 	return &copy
