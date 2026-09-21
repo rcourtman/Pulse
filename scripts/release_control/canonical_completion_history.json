@@ -65,6 +65,16 @@
       "incomplete_commit": "6f0dc177c8ab3cd4174e53d0774f6e278299a299",
       "completion_commit": "8738eb1bffbaab4c1d6cc3c23890dbbbc4888a69",
       "reason": "Evaluate the windowed item-height estimate repair together with the follow-up commit that records its frontend-primitives and performance-and-scalability contract sections, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "529e8155253c4536696986e2993bb3b2f75eb71c",
+      "completion_commit": "9fa81dee8fba760b980d821d6e10560589c110f2",
+      "reason": "Evaluate the canonical auto-register VerifySSL preservation runtime change together with the follow-up commit that records its agent-lifecycle, api-contracts and dependent storage-recovery contract sections and the node API payload proof, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "919009d7677318c071f888eb28c252d2d79d2728",
+      "completion_commit": "9fa81dee8fba760b980d821d6e10560589c110f2",
+      "reason": "Evaluate the PVE consolidation explicit-VerifySSL runtime change together with the follow-up commit that records its agent-lifecycle, api-contracts, security-privacy and dependent storage-recovery contract sections and the node API payload and persisted-field proofs, as one reviewed completion unit."
     }
   ]
 }

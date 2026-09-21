@@ -570,6 +570,7 @@ type PVEInstance struct {
 	TokenValue                   string
 	Fingerprint                  string
 	VerifySSL                    bool
+	VerifySSLExplicit            bool `json:"verifySSLExplicit,omitempty"` // operator-chosen VerifySSL; survives automatic consolidation (#2140)
 	MonitorVMs                   bool
 	MonitorContainers            bool
 	MonitorStorage               bool

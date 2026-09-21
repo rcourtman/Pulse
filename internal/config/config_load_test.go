@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -662,4 +663,30 @@ func TestLoadSystemSettingsWithRetry(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 1, calls)
 	})
+}
+
+// TestPVEInstanceVerifySSLExplicitRoundTrips pins the persisted TLS-choice
+// field: an operator's explicit selection must survive serialization so
+// automatic consolidation can distinguish it from the zero value, while a
+// record written before the field existed loads as the non-explicit default
+// (#2140).
+func TestPVEInstanceVerifySSLExplicitRoundTrips(t *testing.T) {
+	original := PVEInstance{
+		Name:              "homelab",
+		Host:              "https://pve.local:8006",
+		VerifySSL:         false,
+		VerifySSLExplicit: true,
+	}
+	encoded, err := json.Marshal(original)
+	require.NoError(t, err)
+
+	var decoded PVEInstance
+	require.NoError(t, json.Unmarshal(encoded, &decoded))
+	assert.False(t, decoded.VerifySSL)
+	assert.True(t, decoded.VerifySSLExplicit, "an explicit TLS choice must survive persistence")
+
+	var legacy PVEInstance
+	require.NoError(t, json.Unmarshal([]byte(`{"Name":"legacy","Host":"https://pve.local:8006"}`), &legacy))
+	assert.False(t, legacy.VerifySSL)
+	assert.False(t, legacy.VerifySSLExplicit, "a record without the field is not an explicit choice")
 }
