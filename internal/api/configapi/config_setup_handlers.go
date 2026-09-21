@@ -2265,7 +2265,17 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			if pveNode.Fingerprint != "" {
 				instance.Fingerprint = pveNode.Fingerprint
 			}
-			instance.VerifySSL = pveNode.VerifySSL
+			// Preserve the operator's TLS choice on an existing connection.
+			// The incoming value records only whether this registration
+			// captured a fingerprint; applying it unconditionally re-enabled a
+			// disabled "Verify SSL certificate" setting on every agent
+			// health-check re-registration (#2140). Heal only the legacy state
+			// where strict verification is on with no pin and no recorded
+			// operator choice, which can never connect to a self-signed
+			// endpoint (#1303).
+			if !instance.VerifySSLExplicit && instance.VerifySSL && instance.Fingerprint == "" {
+				instance.VerifySSL = false
+			}
 			log.Info().Str("host", host).Str("type", "pve").Msg(canonicalAutoRegisterMatchMessage("host; updated token in-place"))
 		} else if h.adoptCanonicalAutoRegisterClusterMember(r.Context(), serverName, host, fingerprint, fullTokenID, tokenValue, candidateHosts, registrationSource) {
 			// A non-primary cluster member: the cluster connection already
@@ -2319,7 +2329,16 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			if pbsNode.Fingerprint != "" {
 				instance.Fingerprint = pbsNode.Fingerprint
 			}
-			instance.VerifySSL = pbsNode.VerifySSL
+			// Preserve the operator's TLS choice on an existing connection.
+			// The incoming value records only whether this registration
+			// captured a fingerprint; applying it unconditionally re-enabled a
+			// disabled "Verify SSL certificate" setting on every agent
+			// health-check re-registration (#2140). Heal only the legacy state
+			// where strict verification is on with no pin, which can never
+			// connect to a self-signed endpoint (#1303).
+			if instance.VerifySSL && instance.Fingerprint == "" {
+				instance.VerifySSL = false
+			}
 			log.Info().Str("host", host).Str("type", "pbs").Msg(canonicalAutoRegisterMatchMessage("host; updated token in-place"))
 		} else {
 			// Agent-token auth is restricted to updating existing nodes only.

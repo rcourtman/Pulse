@@ -1557,3 +1557,102 @@ func TestHandleCanonicalAutoRegister_PBSKeepsDistinctSameNameTokenWhenFingerprin
 		t.Fatalf("new site name = %q, want disambiguation from existing %q", registered.Name, existing.Name)
 	}
 }
+
+// TestHandleCanonicalAutoRegister_PVEPreservesDisabledVerifySSL covers #2140:
+// an operator who disables "Verify SSL certificate" on an existing node must
+// not have it silently re-enabled by an agent health-check re-registration.
+func TestHandleCanonicalAutoRegister_PVEPreservesDisabledVerifySSL(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	server := newIPv4TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	tokenID := "pulse-monitor@pve!" + buildPulseMonitorTokenName("pulse.example.com")
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:       "pve01",
+				Host:       server.URL,
+				TokenName:  tokenID,
+				TokenValue: "existing-token",
+				VerifySSL:  false,
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       server.URL,
+		ServerName: "pve01",
+		TokenID:    tokenID,
+		TokenValue: "rotated-token",
+		Source:     "agent",
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", nil)
+	rec := httptest.NewRecorder()
+
+	handler.handleCanonicalAutoRegister(rec, req, &reqBody, "127.0.0.1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	instance := handler.defaultConfig.PVEInstances[0]
+	if instance.VerifySSL {
+		t.Fatalf("re-registration re-enabled VerifySSL on an existing node that disabled it (#2140)")
+	}
+}
+
+// TestHandleCanonicalAutoRegister_PBSReservesDisabledVerifySSL is the PBS twin
+// of TestHandleCanonicalAutoRegister_PVEPreservesDisabledVerifySSL.
+func TestHandleCanonicalAutoRegister_PBSReservesDisabledVerifySSL(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	server := newIPv4TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	tokenID := "pulse-monitor@pbs!" + buildPulseMonitorTokenName("pulse.example.com")
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PBSInstances: []config.PBSInstance{
+			{
+				Name:       "pbs01",
+				Host:       server.URL,
+				TokenName:  tokenID,
+				TokenValue: "existing-token",
+				VerifySSL:  false,
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pbs",
+		Host:       server.URL,
+		ServerName: "pbs01",
+		TokenID:    tokenID,
+		TokenValue: "rotated-token",
+		Source:     "agent",
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", nil)
+	rec := httptest.NewRecorder()
+
+	handler.handleCanonicalAutoRegister(rec, req, &reqBody, "127.0.0.1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	instance := handler.defaultConfig.PBSInstances[0]
+	if instance.VerifySSL {
+		t.Fatalf("re-registration re-enabled VerifySSL on an existing node that disabled it (#2140)")
+	}
+}

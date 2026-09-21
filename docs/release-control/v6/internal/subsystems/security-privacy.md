@@ -939,6 +939,20 @@ tokens, and path-normalization variants.
 
 ## Current State
 
+### Node TLS verification preference is operator-owned
+
+A PVE connection's `VerifySSL` value is security-relevant, so the stored
+operator choice must not be changed by automatic reconciliation. The persisted
+`VerifySSLExplicit` field records that a caller supplied `verifySSL` through the
+node add or update API, distinguishing a deliberate opt-out from the zero
+value. Automatic PVE consolidation (`ConsolidatePVEInstances`) and canonical
+auto-registration never override an explicit choice; the historical promotion
+is retained only when neither side recorded one, and a merged certificate
+fingerprint still pins the peer. A record written before the field existed
+loads as non-explicit and is unchanged until the operator saves a choice.
+`TestPVEInstanceVerifySSLExplicitRoundTrips` in
+`internal/config/config_load_test.go` pins the persisted default and round-trip.
+
 Exact `POST /api/security/tokens` is a tenant control-plane operation: it checks
 persisted organization existence before metadata loading (which may synthesize
 legacy metadata), and lifecycle without constructing monitoring
