@@ -1,5 +1,5 @@
-import { useNavigate, useParams } from '@solidjs/router';
-import { Show, createMemo, createResource } from 'solid-js';
+import { useLocation, useNavigate, useParams } from '@solidjs/router';
+import { Show, createEffect, createMemo, createResource, onCleanup } from 'solid-js';
 import { PageHeader } from '@/components/shared/PageHeader';
 import {
   docAssetUrlForPath,
@@ -7,6 +7,7 @@ import {
   extractDocTitle,
   normalizeDocPath,
   renderDocMarkdown,
+  scrollToDocFragment,
   stripLeadingTitle,
 } from '@/features/docs/docMarkdown';
 
@@ -37,6 +38,8 @@ export function isHtmlResponse(response: Pick<Response, 'headers'>): boolean {
 export default function Docs() {
   const params = useParams<{ docPath?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  let article: HTMLElement | undefined;
 
   const docPath = createMemo(() => normalizeDocPath(params.docPath ?? '') || DOCS_INDEX_PATH);
   const [document] = createResource(docPath, fetchDoc);
@@ -56,6 +59,19 @@ export default function Docs() {
     const source = markdown();
     // The leading heading is promoted into the page header above.
     return source ? renderDocMarkdown(stripLeadingTitle(source), docPath()) : '';
+  });
+
+  // A direct link or cross-document navigation can arrive before fetchDoc
+  // finishes. Retry once the rendered content exists, without timers or
+  // observers that could later pull the reader away from their position.
+  createEffect(() => {
+    const content = html();
+    const hash = location.hash;
+    if (!content || !hash) return;
+    const frame = requestAnimationFrame(() => {
+      if (article) scrollToDocFragment(article, hash);
+    });
+    onCleanup(() => cancelAnimationFrame(frame));
   });
 
   // Intra-documentation links are rewritten to viewer routes by the renderer.
@@ -112,13 +128,14 @@ export default function Docs() {
           }
         >
           <article
+            ref={article}
             // Typography renders inline code wrapped in literal backticks by
             // default, which reads as unrendered markdown. Tables get their
             // scroll container from wrapTables rather than prose utilities.
             // Inline code must be able to break, because a long unbreakable
             // URL in one otherwise pushes the whole page into horizontal
             // scrolling on a phone; code inside pre keeps its own scrollbar.
-            class="prose prose-sm max-w-none dark:prose-invert prose-pre:overflow-x-auto prose-code:before:content-none prose-code:after:content-none [&_:not(pre)>code]:break-words"
+            class="prose prose-sm max-w-none dark:prose-invert prose-headings:scroll-mt-20 prose-pre:overflow-x-auto prose-code:before:content-none prose-code:after:content-none [&_:not(pre)>code]:break-words"
             onClick={handleClick}
             // eslint-disable-next-line solid/no-innerhtml -- renderDocMarkdown sanitises with DOMPurify
             innerHTML={html()}

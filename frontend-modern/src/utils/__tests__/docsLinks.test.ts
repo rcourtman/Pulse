@@ -131,6 +131,21 @@ describe('docsLinks', () => {
     }
   });
 
+  it('ships a bounded maintenance example separately from incident snoozing', () => {
+    const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const maintenance = apiReference
+      .split('### Resource Maintenance and Operator State')[1]
+      .split('### Fleet Connections')[0];
+    const example = JSON.parse(/```json\s*([\s\S]*?)```/.exec(maintenance)![1]);
+    expect(Date.parse(example.maintenanceEndAt)).toBeGreaterThan(
+      Date.parse(example.maintenanceStartAt),
+    );
+    expect(example.maintenanceScope).toBe('resource_and_descendants');
+    expect(maintenance).toContain('PUT replaces the whole record');
+    expect(maintenance).toContain('Do not DELETE the record unless you also intend');
+    expect(apiReference).toContain('](#resource-maintenance-and-operator-state)');
+  });
+
   it('ships the per-alert snooze and resume API contract', () => {
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     const shippedAPIReference = readFileSync(

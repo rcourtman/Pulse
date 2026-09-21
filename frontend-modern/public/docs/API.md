@@ -41,6 +41,7 @@ Public endpoints include:
 
 Some endpoints require admin privileges and/or scopes. Common scopes include:
 - `monitoring:read`
+- `monitoring:write`
 - `settings:read`
 - `settings:write`
 - `agent:config:read`
@@ -196,6 +197,66 @@ Report an incorrect merge (creates exclusions).
 ```json
 { "sources": ["proxmox", "agent"], "notes": "optional note" }
 ```
+
+### Resource Maintenance and Operator State
+
+Use a timed maintenance window to suppress alerts during planned work on a
+resource. This API, including descendant scope, is available in stable v6.4.1.
+Choose the resource's `id` from `GET /api/resources` and URL-encode it in the
+request path. Do not substitute a display name or a Proxmox VM number.
+
+| Endpoint | Required scope | Result |
+| --- | --- | --- |
+| `GET /api/resources/{id}/operator-state` | `monitoring:read` | Returns the saved state, or HTTP 404 with `operator_state_not_set` when no state is saved. |
+| `PUT /api/resources/{id}/operator-state` | `monitoring:write` | Replaces the entire state and returns the saved record. |
+| `DELETE /api/resources/{id}/operator-state` | `monitoring:write` | Removes the entire state, returning HTTP 204 even if it was already absent. |
+
+**PUT replaces the whole record, not just the fields supplied.** Read the current
+state first and preserve unrelated settings, such as monitoring mode, lifecycle,
+remediation policy, criticality and notes. Treat only `operator_state_not_set`
+as an empty record, and stop on other read errors. Coordinate concurrent writers
+so a read followed by a PUT does not overwrite someone else's changes.
+
+For a one-time window, merge these fields into that record, replacing the example
+times with your intended start and end:
+
+```json
+{
+  "maintenanceStartAt": "2026-10-15T20:00:00Z",
+  "maintenanceEndAt": "2026-10-15T20:30:00Z",
+  "maintenanceScope": "resource_and_descendants",
+  "maintenanceReason": "Proxmox node maintenance"
+}
+```
+
+This is a set of fields to merge, not a complete replacement for an existing
+record. Remove any `maintenanceRecurrence` when replacing a recurring schedule
+with this one-time window. The API rejects a record containing both.
+
+| Field | Meaning |
+| --- | --- |
+| `maintenanceStartAt`, `maintenanceEndAt` | RFC3339 timestamps. Supply both, with the end strictly after the start. The window is active from the start, inclusive, until the end, exclusive. |
+| `maintenanceScope` | `resource` applies only to this resource and is the default. `resource_and_descendants` also covers descendants in Pulse's resource hierarchy, such as a node's guests. |
+| `maintenanceReason` | Optional explanation of the planned work. |
+
+The response includes `maintenanceWindowActive` and, while active,
+`maintenanceActiveStartAt` and `maintenanceActiveEndAt`. The server sets the
+record's `setAt` and `setBy` fields from the request, ignoring client values.
+
+During an active window, matching new alerts and firing/recovery notifications
+are suppressed. Applying an active window also clears matching existing alerts
+from the active list, retaining history. This is broader than pausing delivery
+for an existing incident. Resources outside the scope remain monitored normally.
+
+The window expires automatically, with no re-enable request needed. Subsequent
+observations can raise alerts again, subject to normal alert policy and any other
+active maintenance window. Previously cleared alerts are not automatically
+restored, and expiry does not replay a backlog of maintenance notifications.
+
+To end maintenance early, read the latest record, remove its maintenance fields
+and PUT the remaining state back. Do not DELETE the record unless you also intend
+to remove its other operator settings. An inherited window must be changed on
+the ancestor that owns it.
 
 ### Fleet Connections
 `GET /api/connections`
@@ -648,6 +709,10 @@ Common reporting error codes:
 
 Alert configuration and history (requires `monitoring:read`/`monitoring:write`).
 
+For planned downtime, use [Resource Maintenance and Operator State](#resource-maintenance-and-operator-state).
+For an existing incident whose notifications should be paused without clearing
+it, use the snooze and unsnooze endpoints below.
+
 - `GET /api/alerts/config`
 - `PUT /api/alerts/config`
 - `GET /api/alerts/deadman/config` — returns only whether an external watchdog
@@ -659,7 +724,7 @@ Alert configuration and history (requires `monitoring:read`/`monitoring:write`).
 - `GET /api/alerts/deadman/status` — live watchdog health, monitor-loop
   progress, sanitized delivery failure state, and the most recent restart
   interruption; never includes the URL or endpoint fingerprint
-- `POST /api/alerts/activate`
+- `POST /api/alerts/activate` enables notification delivery and can notify about existing unacknowledged critical alerts. It is not a maintenance toggle, and there is no matching `/api/alerts/deactivate` endpoint.
 - `GET /api/alerts/active`
 - `GET /api/alerts/delivery-diagnosis?alertIdentifier=<alert-id>` (omit `alertIdentifier` to get the diagnosis array for every active alert)
 - `GET /api/alerts/events?alertIdentifier=<alert-id>&type=<event-type,...>&since=<RFC3339>&limit=<n>` — append-only alert event log: lifecycle transitions and notification decisions, including suppressions with reasons; all parameters optional, newest first
