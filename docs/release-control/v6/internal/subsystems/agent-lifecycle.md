@@ -3409,6 +3409,17 @@ take the captured value. Regression tests
 `TestHandleCanonicalAutoRegister_PBSReservesDisabledVerifySSL` pin the existing
 node branch.
 
+`ConsolidatePVEInstances` keeps the canonical (destination) instance's
+`VerifySSL` when it folds a duplicate cluster or an overlapping standalone into
+it. A merge no longer promotes `VerifySSL` from `false` to `true` on the
+surviving instance, so a disabled setting is not silently re-enabled on every
+save, load and monitor reconciliation. Certificate pinning is carried separately
+by the merged `Fingerprint`, so a pin still verifies the peer. Regression tests
+`TestConsolidatePVEInstancesPreservesDisabledVerifySSLOnStandaloneMerge`,
+`TestConsolidatePVEInstancesPreservesDisabledVerifySSLOnDuplicateClusterMerge`
+and `TestHandleUpdateNodePreservesDisabledVerifySSLThroughConsolidation` cover
+the merge and save paths.
+
 ### Manual update freshness
 
 Server update-check freshness is owned by internal/updates and its API adapter.

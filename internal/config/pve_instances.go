@@ -318,9 +318,13 @@ func mergePVEInstanceData(dst *PVEInstance, src PVEInstance) {
 	if dst.Source == "" && strings.TrimSpace(src.Source) != "" {
 		dst.Source = strings.TrimSpace(src.Source)
 	}
-	if !dst.VerifySSL && src.VerifySSL {
-		dst.VerifySSL = true
-	}
+	// The canonical (destination) instance owns the TLS verification
+	// preference. Merging a duplicate or standalone must not flip a disabled
+	// "Verify SSL certificate" setting back on: doing so silently re-enabled
+	// the option on every save, load and monitor reconciliation, and broke
+	// endpoints whose operator had deliberately opted out (#2140). Certificate
+	// pinning is carried separately by the Fingerprint copy above, so a merged
+	// pin still verifies the peer even when VerifySSL stays false.
 	if dst.TemperatureMonitoringEnabled == nil && src.TemperatureMonitoringEnabled != nil {
 		enabled := *src.TemperatureMonitoringEnabled
 		dst.TemperatureMonitoringEnabled = &enabled
