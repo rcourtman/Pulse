@@ -3423,6 +3423,10 @@ merged `Fingerprint`, so a pin still verifies the peer. Regression tests
 and `TestHandleUpdateNodePreservesDisabledVerifySSLThroughConsolidation` cover
 the merge and save paths.
 
+The persisted `VerifySSLExplicit` marker is internal node configuration. It is
+not added to the auto-register request or response, nor to the node API
+response, so existing clients see no payload change.
+
 ### Manual update freshness
 
 Server update-check freshness is owned by internal/updates and its API adapter.

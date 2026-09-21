@@ -2618,8 +2618,11 @@ preference when the host agent re-registers the node after a disconnect,
 including when the stored fingerprint was cleared. This prevents a rotating or
 self-signed certificate from silently re-enabling verification and breaking the
 monitoring path used for backup and recovery evidence. New nodes still take the
-captured registration value. See the agent-lifecycle contract for the runtime
-mechanism.
+captured registration value. The same preference is preserved when automatic
+PVE consolidation folds a duplicate cluster or an overlapping standalone into
+the canonical connection on save, load or monitor reconciliation; a merged
+certificate fingerprint still pins the peer. See the agent-lifecycle contract
+for the runtime mechanism.
 
 ### Manual update freshness
 

@@ -1616,6 +1616,32 @@ func TestContract_NodeConfigUpdateTracksOptionalConnectionFieldsAndRedactedSecre
 	}
 }
 
+// TestContract_NodeConfigUpdateVerifySSLIsOptionalExplicitField pins the node
+// config update payload contract the TLS-preference fix relies on: verifySSL is
+// an optional pointer, so an explicit false is distinguishable from an omitted
+// value. The update handler records an explicit choice from the non-nil pointer
+// and must never treat an omitted field as an opt-out (#2140).
+func TestContract_NodeConfigUpdateVerifySSLIsOptionalExplicitField(t *testing.T) {
+	var disabled NodeConfigRequest
+	if err := json.Unmarshal([]byte(`{"verifySSL":false}`), &disabled); err != nil {
+		t.Fatalf("decode explicit disable request: %v", err)
+	}
+	if disabled.VerifySSL == nil {
+		t.Fatal("explicit verifySSL:false must decode to a non-nil pointer")
+	}
+	if *disabled.VerifySSL {
+		t.Fatal("explicit verifySSL:false must decode to false")
+	}
+
+	var omitted NodeConfigRequest
+	if err := json.Unmarshal([]byte(`{"name":"cluster"}`), &omitted); err != nil {
+		t.Fatalf("decode request without verifySSL: %v", err)
+	}
+	if omitted.VerifySSL != nil {
+		t.Fatal("omitted verifySSL must stay nil so an existing TLS choice is preserved")
+	}
+}
+
 func TestContract_HostedMagicLinkStablePrincipalProof(t *testing.T) {
 	source, err := os.ReadFile(filepath.Clean("magic_link_handlers.go"))
 	if err != nil {
