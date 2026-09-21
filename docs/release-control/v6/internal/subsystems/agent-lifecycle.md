@@ -3395,6 +3395,20 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Auto-register preserves the operator's stored TLS choice
+
+Re-registering an existing Proxmox node through the canonical auto-register
+path preserves the stored `VerifySSL` value instead of replacing it with the
+fingerprint-capture result. This keeps a disabled "Verify SSL certificate"
+setting disabled across an agent health-check re-registration after a
+disconnect, while the legacy heal (`VerifySSL` true with no stored fingerprint)
+still downgrades to an insecure, parseable-certificate connection. The
+fingerprint pin may still refresh from the registration. New nodes continue to
+take the captured value. Regression tests
+`TestHandleCanonicalAutoRegister_PVEPreservesDisabledVerifySSL` and
+`TestHandleCanonicalAutoRegister_PBSReservesDisabledVerifySSL` pin the existing
+node branch.
+
 ### Manual update freshness
 
 Server update-check freshness is owned by internal/updates and its API adapter.

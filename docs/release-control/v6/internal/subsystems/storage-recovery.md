@@ -2611,6 +2611,16 @@ vdev layout is reported` in
 
 ## Current State
 
+### TLS verification preference survives node re-registration
+
+A PVE or PBS node whose operator disabled certificate verification keeps that
+preference when the host agent re-registers the node after a disconnect,
+including when the stored fingerprint was cleared. This prevents a rotating or
+self-signed certificate from silently re-enabling verification and breaking the
+monitoring path used for backup and recovery evidence. New nodes still take the
+captured registration value. See the agent-lifecycle contract for the runtime
+mechanism.
+
 ### Manual update freshness
 
 Server update-check freshness changes observation only. A refreshed availability
