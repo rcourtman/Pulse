@@ -3395,6 +3395,38 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Auto-register preserves the operator's stored TLS choice
+
+Re-registering an existing Proxmox node through the canonical auto-register
+path preserves the stored `VerifySSL` value instead of replacing it with the
+fingerprint-capture result. This keeps a disabled "Verify SSL certificate"
+setting disabled across an agent health-check re-registration after a
+disconnect, while the legacy heal (`VerifySSL` true with no stored fingerprint)
+still downgrades to an insecure, parseable-certificate connection. The
+fingerprint pin may still refresh from the registration. New nodes continue to
+take the captured value. Regression tests
+`TestHandleCanonicalAutoRegister_PVEPreservesDisabledVerifySSL` and
+`TestHandleCanonicalAutoRegister_PBSReservesDisabledVerifySSL` pin the existing
+node branch.
+
+`ConsolidatePVEInstances` respects an operator's explicit `VerifySSL` choice
+when it folds a duplicate cluster or an overlapping standalone into the
+canonical instance. An explicit choice is recorded as `VerifySSLExplicit` when
+the update or add handler applies a caller-supplied `verifySSL`, and a merge
+never overrides it, so a disabled setting is not silently re-enabled on every
+save, load and monitor reconciliation. When neither side recorded an explicit
+choice the historical promotion is kept, so an existing secure connection is
+not silently downgraded. Certificate pinning is carried separately by the
+merged `Fingerprint`, so a pin still verifies the peer. Regression tests
+`TestConsolidatePVEInstancesPreservesDisabledVerifySSLOnStandaloneMerge`,
+`TestConsolidatePVEInstancesPreservesDisabledVerifySSLOnDuplicateClusterMerge`
+and `TestHandleUpdateNodePreservesDisabledVerifySSLThroughConsolidation` cover
+the merge and save paths.
+
+The persisted `VerifySSLExplicit` marker is internal node configuration. It is
+not added to the auto-register request or response, nor to the node API
+response, so existing clients see no payload change.
+
 ### Manual update freshness
 
 Server update-check freshness is owned by internal/updates and its API adapter.
