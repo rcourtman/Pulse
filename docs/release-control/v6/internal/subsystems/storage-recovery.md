@@ -2519,6 +2519,19 @@ vdev layout is reported` in
 
 ## Current State
 
+### TLS verification preference survives node re-registration
+
+A PVE or PBS node whose operator disabled certificate verification keeps that
+preference when the host agent re-registers the node after a disconnect,
+including when the stored fingerprint was cleared. This prevents a rotating or
+self-signed certificate from silently re-enabling verification and breaking the
+monitoring path used for backup and recovery evidence. New nodes still take the
+captured registration value. The same preference is preserved when automatic
+PVE consolidation folds a duplicate cluster or an overlapping standalone into
+the canonical connection on save, load or monitor reconciliation; a merged
+certificate fingerprint still pins the peer. See the agent-lifecycle contract
+for the runtime mechanism.
+
 - Session-only authentication skips tenant-monitor resolution when no explicit API token is supplied. Proxy authentication and explicit global/tenant token precedence remain unchanged; an invalid explicit token does not fall back to a session. The cold token-creation regression constructs the router with a non-nil multi-tenant manager, matching the server authentication wiring, and asserts no tenant initialization during creation. This avoids inventory startup on that control-plane path, not a general guarantee that client disconnects cancel mutations.
 
 Exact `POST /api/security/tokens` is a tenant control-plane operation: it checks

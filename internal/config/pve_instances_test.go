@@ -286,3 +286,87 @@ func TestConsolidatePVEInstancesKeepsStandaloneWithContradictingFingerprint(t *t
 		t.Fatalf("expected both instances to remain, got %d", len(instances))
 	}
 }
+
+// TestConsolidatePVEInstancesPreservesDisabledVerifySSLOnStandaloneMerge covers
+// #2140: a standalone/auto-registered entry that captured a fingerprint is
+// created with VerifySSL true. Folding it into a cluster whose operator
+// disabled "Verify SSL certificate" must not re-enable the setting. The
+// captured pin still moves onto the cluster endpoint, so verification is not
+// silently downgraded.
+func TestConsolidatePVEInstancesPreservesDisabledVerifySSLOnStandaloneMerge(t *testing.T) {
+	instances, changed := ConsolidatePVEInstances([]PVEInstance{
+		{
+			Name:              "homelab",
+			ClusterName:       "cluster-A",
+			IsCluster:         true,
+			VerifySSL:         false,
+			VerifySSLExplicit: true,
+			ClusterEndpoints: []ClusterEndpoint{
+				{NodeName: "minipc", Host: "https://10.0.0.5:8006"},
+			},
+		},
+		{
+			Name:        "minipc-standalone",
+			Host:        "10.0.0.5",
+			Fingerprint: "fp-standalone",
+			TokenName:   "pulse@pve!token",
+			TokenValue:  "secret",
+			VerifySSL:   true,
+			Source:      "agent",
+		},
+	})
+
+	if !changed {
+		t.Fatalf("expected consolidation change")
+	}
+	if len(instances) != 1 {
+		t.Fatalf("expected 1 instance after consolidation, got %d", len(instances))
+	}
+	if instances[0].VerifySSL {
+		t.Fatalf("standalone merge re-enabled a disabled VerifySSL (#2140)")
+	}
+	if got := instances[0].ClusterEndpoints[0].Fingerprint; got != "fp-standalone" {
+		t.Fatalf("ClusterEndpoint Fingerprint = %q, want fp-standalone (pin must survive)", got)
+	}
+}
+
+// TestConsolidatePVEInstancesPreservesDisabledVerifySSLOnDuplicateClusterMerge
+// is the duplicate-cluster twin of the #2140 regression above.
+func TestConsolidatePVEInstancesPreservesDisabledVerifySSLOnDuplicateClusterMerge(t *testing.T) {
+	instances, changed := ConsolidatePVEInstances([]PVEInstance{
+		{
+			Name:              "c1",
+			ClusterName:       "cluster-A",
+			IsCluster:         true,
+			VerifySSL:         false,
+			VerifySSLExplicit: true,
+			ClusterEndpoints: []ClusterEndpoint{
+				{NodeName: "n1", Host: "https://10.0.0.5:8006"},
+			},
+		},
+		{
+			Name:        "c2",
+			ClusterName: "cluster-A",
+			IsCluster:   true,
+			VerifySSL:   true,
+			Fingerprint: "fp-1",
+			ClusterEndpoints: []ClusterEndpoint{
+				{NodeName: "n1", Host: "https://10.0.0.5:8006"},
+				{NodeName: "n2", Host: "https://10.0.0.6:8006"},
+			},
+		},
+	})
+
+	if !changed {
+		t.Fatalf("expected consolidation change")
+	}
+	if len(instances) != 1 {
+		t.Fatalf("expected 1 instance after consolidation, got %d", len(instances))
+	}
+	if instances[0].VerifySSL {
+		t.Fatalf("duplicate-cluster merge re-enabled a disabled VerifySSL (#2140)")
+	}
+	if got := instances[0].Fingerprint; got != "fp-1" {
+		t.Fatalf("Fingerprint = %q, want fp-1 (pin must survive)", got)
+	}
+}

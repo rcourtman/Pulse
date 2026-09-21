@@ -318,7 +318,20 @@ func mergePVEInstanceData(dst *PVEInstance, src PVEInstance) {
 	if dst.Source == "" && strings.TrimSpace(src.Source) != "" {
 		dst.Source = strings.TrimSpace(src.Source)
 	}
-	if !dst.VerifySSL && src.VerifySSL {
+	// TLS verification preference: an explicit operator choice wins over an
+	// inferred one. When neither side recorded a choice, keep the historical
+	// promotion of a strict source so an existing secure connection is not
+	// silently downgraded. A disabled setting that the operator saved through
+	// the API is explicit and is never re-enabled by a merge (#2140).
+	// Certificate pinning is carried separately by the Fingerprint copy above,
+	// so a merged pin still verifies the peer even when VerifySSL stays false.
+	switch {
+	case dst.VerifySSLExplicit:
+		// The canonical instance's explicit choice is authoritative.
+	case src.VerifySSLExplicit:
+		dst.VerifySSL = src.VerifySSL
+		dst.VerifySSLExplicit = true
+	case !dst.VerifySSL && src.VerifySSL:
 		dst.VerifySSL = true
 	}
 	if dst.TemperatureMonitoringEnabled == nil && src.TemperatureMonitoringEnabled != nil {

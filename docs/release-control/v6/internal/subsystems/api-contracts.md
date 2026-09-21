@@ -4428,6 +4428,22 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Node auto-register TLS fields are operator-owned on update
+
+The `/api/auto-register` completion request and response shapes are unchanged.
+When a registration matches an existing node, the captured fingerprint may
+still refresh the stored pin, but the stored `verifySSL` preference is not
+replaced by the registration's capture state. New nodes continue to take the
+captured value. This is a behavioural clarification of the existing endpoint,
+not a new field or contract delta.
+
+The node add and update payloads keep `verifySSL` as an optional pointer, so an
+explicit `false` remains distinguishable from an omitted field. An explicit
+choice is recorded as operator-owned and is not overridden by automatic PVE
+consolidation, which runs on save, load and monitor reconciliation. The response
+shape is unchanged: the persisted explicit marker is internal and is not exposed
+through the node API.
+
 - Session-only authentication skips tenant-monitor resolution when no explicit API token is supplied. Proxy authentication and explicit global/tenant token precedence remain unchanged; an invalid explicit token does not fall back to a session. The cold token-creation regression constructs the router with a non-nil multi-tenant manager, matching the server authentication wiring, and asserts no tenant initialization during creation. This avoids inventory startup on that control-plane path, not a general guarantee that client disconnects cancel mutations.
 
 Exact `POST /api/security/tokens` is a tenant control-plane operation: it checks

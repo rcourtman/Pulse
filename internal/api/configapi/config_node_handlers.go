@@ -516,6 +516,7 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 			TokenValue:                   req.TokenValue,
 			Fingerprint:                  req.Fingerprint,
 			VerifySSL:                    verifySSL,
+			VerifySSLExplicit:            req.VerifySSL != nil,
 			MonitorVMs:                   monitorVMs,
 			MonitorContainers:            monitorContainers,
 			MonitorStorage:               monitorStorage,
@@ -1493,6 +1494,7 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 		}
 		if req.VerifySSL != nil {
 			updated.VerifySSL = *req.VerifySSL
+			updated.VerifySSLExplicit = true
 		}
 		if req.MonitorVMs != nil {
 			updated.MonitorVMs = *req.MonitorVMs

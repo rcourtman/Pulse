@@ -541,3 +541,60 @@ func TestHandleUpdateNode_UserOnlyEditDoesNotClearProxmoxTokenAuth(t *testing.T)
 		t.Fatalf("PMG monitor mail stats should preserve false when omitted")
 	}
 }
+
+// TestHandleUpdateNodePreservesDisabledVerifySSLThroughConsolidation covers
+// #2140 end to end through the reported save path: an operator disables
+// "Verify SSL certificate" on a cluster that also has an overlapping
+// auto-registered standalone entry, saves, and reopens Manage. The save runs
+// normalizePVEConfigState, which folds the standalone into the cluster; the
+// disabled setting must survive that consolidation.
+func TestHandleUpdateNodePreservesDisabledVerifySSLThroughConsolidation(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:        "homelab",
+				ClusterName: "cluster-A",
+				IsCluster:   true,
+				VerifySSL:   true,
+				ClusterEndpoints: []config.ClusterEndpoint{
+					{NodeName: "minipc", Host: "https://10.0.0.5:8006"},
+				},
+			},
+			{
+				Name:        "minipc-standalone",
+				Host:        "10.0.0.5",
+				Fingerprint: "fp-standalone",
+				TokenName:   "pulse@pve!token",
+				TokenValue:  "secret",
+				VerifySSL:   true,
+				Source:      "agent",
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	body, _ := json.Marshal(map[string]any{"verifySSL": false})
+	req := httptest.NewRequest(http.MethodPut, "/api/config/nodes/pve-0", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateNode(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update status = %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("instances = %d, want 1 after consolidation", len(cfg.PVEInstances))
+	}
+	if cfg.PVEInstances[0].VerifySSL {
+		t.Fatalf("save re-enabled the disabled VerifySSL through consolidation (#2140)")
+	}
+
+	nodes := handler.GetAllNodesForAPI(req.Context())
+	if len(nodes) != 1 {
+		t.Fatalf("nodes = %d, want 1", len(nodes))
+	}
+	if nodes[0].VerifySSL {
+		t.Fatalf("GET projection VerifySSL = true, want false after disabling (#2140)")
+	}
+}
