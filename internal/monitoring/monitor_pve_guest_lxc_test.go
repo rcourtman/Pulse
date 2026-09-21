@@ -140,7 +140,7 @@ func TestIssue1613LXCStatusLagDoesNotEraseNewerListingDiskWrite(t *testing.T) {
 	}
 
 	if _, _, _, _, ok := monitor.buildContainerFromClusterResource(
-		context.Background(), "cluster-a", resource, client, map[int]bool{},
+		context.Background(), "cluster-a", resource, client, map[int]bool{}, nil,
 	); !ok {
 		t.Fatal("expected first LXC sample")
 	}
@@ -150,7 +150,7 @@ func TestIssue1613LXCStatusLagDoesNotEraseNewerListingDiskWrite(t *testing.T) {
 	client.containerStatus.ObservedAt = resource.ObservedAt.Add(time.Second)
 
 	container, _, _, _, ok := monitor.buildContainerFromClusterResource(
-		context.Background(), "cluster-a", resource, client, map[int]bool{},
+		context.Background(), "cluster-a", resource, client, map[int]bool{}, nil,
 	)
 	if !ok {
 		t.Fatal("expected second LXC sample")
@@ -199,6 +199,7 @@ func TestBuildContainerFromClusterResource_UsesContainerStatusCountersForRates(t
 		resource,
 		client,
 		map[int]bool{},
+		nil,
 	); !ok {
 		t.Fatal("expected first container sample to be built")
 	}
@@ -219,6 +220,7 @@ func TestBuildContainerFromClusterResource_UsesContainerStatusCountersForRates(t
 		resource,
 		client,
 		map[int]bool{},
+		nil,
 	)
 	if !ok {
 		t.Fatal("expected second container sample to be built")
@@ -282,6 +284,7 @@ func TestIssue1634LXCMemoryFallsBackToClusterResourcesOnRealRRDShape(t *testing.
 		resource,
 		client,
 		map[int]bool{},
+		nil,
 	)
 	if !ok {
 		t.Fatal("expected container sample to be built")
@@ -327,6 +330,7 @@ func TestIssue1634LXCMemoryStaysUnavailableWithoutListingValue(t *testing.T) {
 		resource,
 		client,
 		map[int]bool{},
+		nil,
 	)
 	if !ok {
 		t.Fatal("expected container sample to be built")
@@ -443,6 +447,7 @@ func TestBuildContainerFromClusterResource_AppliesAgentLXCFilesystems(t *testing
 		resource,
 		client,
 		map[int]bool{},
+		nil,
 	)
 	if !ok {
 		t.Fatal("expected container to be built")
@@ -458,5 +463,107 @@ func TestBuildContainerFromClusterResource_AppliesAgentLXCFilesystems(t *testing
 	}
 	if dataMount == nil || dataMount.Total != 100<<30 || dataMount.Used != 50<<30 {
 		t.Fatalf("expected /data mount with real usage from agent data, got %+v", container.Disks)
+	}
+}
+
+// Issue #2148: a Proxmox LXC with a correlated, online Pulse agent must report
+// the agent's own memory sample instead of the cache-inclusive
+// cluster/resources fallback, which can badly under-report shared-memory
+// workloads (mirrors the #1962 VM behaviour).
+func TestIssue2148LXCPrefersLinkedAgentMemoryOverClusterResources(t *testing.T) {
+	t.Parallel()
+
+	const gib = 1024 * 1024 * 1024
+
+	client := &stubPVEClientLXCRRD{}
+	monitor := &Monitor{rateTracker: NewRateTracker()}
+	resource := proxmox.ClusterResource{
+		Type:   "lxc",
+		Node:   "pve-a",
+		Name:   "npu-ct",
+		Status: "running",
+		VMID:   100,
+		MaxMem: 24 * gib,
+		Mem:    3459743744,
+	}
+	guestID := makeGuestID("cluster-a", "pve-a", 100)
+	agentHost := models.Host{
+		LinkedVMID: guestID,
+		Status:     "online",
+		Memory: models.Memory{
+			Total: 24 * gib,
+			Used:  11025571200,
+			Free:  24*gib - 11025571200,
+		},
+	}
+
+	container, _, memorySource, _, ok := monitor.buildContainerFromClusterResource(
+		context.Background(),
+		"cluster-a",
+		resource,
+		client,
+		map[int]bool{},
+		map[string]models.Host{guestID: agentHost},
+	)
+	if !ok {
+		t.Fatal("expected container sample to be built")
+	}
+	if memorySource != "agent" {
+		t.Fatalf("memory source = %q, want agent", memorySource)
+	}
+	if container.Memory.Used != agentHost.Memory.Used {
+		t.Fatalf("memory used = %d, want linked agent value %d", container.Memory.Used, agentHost.Memory.Used)
+	}
+	if container.Memory.UsageUnavailable || !container.Memory.HasKnownUsage() {
+		t.Fatalf("expected usable agent-backed memory, got %+v", container.Memory)
+	}
+}
+
+// An agent inside a container without lxcfs sees the host's /proc/meminfo, so a
+// sample whose total does not match the container's configured limit must not
+// replace the provider reading.
+func TestIssue2148LXCRejectsAgentMemoryWithMismatchedTotal(t *testing.T) {
+	t.Parallel()
+
+	const gib = 1024 * 1024 * 1024
+
+	client := &stubPVEClientLXCRRD{}
+	monitor := &Monitor{rateTracker: NewRateTracker()}
+	resource := proxmox.ClusterResource{
+		Type:   "lxc",
+		Node:   "pve-a",
+		Name:   "host-memory-leak-ct",
+		Status: "running",
+		VMID:   101,
+		MaxMem: 24 * gib,
+		Mem:    3459743744,
+	}
+	guestID := makeGuestID("cluster-a", "pve-a", 101)
+	agentHost := models.Host{
+		LinkedVMID: guestID,
+		Status:     "online",
+		Memory: models.Memory{
+			Total: 128 * gib,
+			Used:  40 * gib,
+			Free:  88 * gib,
+		},
+	}
+
+	container, _, memorySource, _, ok := monitor.buildContainerFromClusterResource(
+		context.Background(),
+		"cluster-a",
+		resource,
+		client,
+		map[int]bool{},
+		map[string]models.Host{guestID: agentHost},
+	)
+	if !ok {
+		t.Fatal("expected container sample to be built")
+	}
+	if CanonicalMemorySource(memorySource) != "cluster-resources" {
+		t.Fatalf("memory source = %q, want cluster-resources fallback", memorySource)
+	}
+	if container.Memory.Used != int64(resource.Mem) {
+		t.Fatalf("memory used = %d, want provider value %d", container.Memory.Used, resource.Mem)
 	}
 }

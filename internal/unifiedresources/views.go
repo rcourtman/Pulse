@@ -78,13 +78,20 @@ func NewVMView(r *Resource) VMView { return VMView{r: r} }
 // LinkedAgentMemory returns the agent's own sample, not the platform-priority
 // merged metric. Freshness belongs to the agent source, not the VM row.
 func (v VMView) LinkedAgentMemory() (models.Memory, bool) {
-	if v.r == nil || v.r.Agent == nil || v.r.Agent.Stale || v.r.Agent.Memory == nil {
+	return linkedAgentMemoryFromResource(v.r)
+}
+
+// linkedAgentMemoryFromResource reads the agent-owned memory sample attached to
+// a merged guest resource. Correlation removes the standalone host row, so the
+// guest view is the only place the agent sample survives (#1962, #2148).
+func linkedAgentMemoryFromResource(r *Resource) (models.Memory, bool) {
+	if r == nil || r.Agent == nil || r.Agent.Stale || r.Agent.Memory == nil {
 		return models.Memory{}, false
 	}
-	if status, ok := v.r.SourceStatus[SourceAgent]; !ok || status.Status != "online" {
+	if status, ok := r.SourceStatus[SourceAgent]; !ok || status.Status != "online" {
 		return models.Memory{}, false
 	}
-	m := v.r.Agent.Memory
+	m := r.Agent.Memory
 	memory := models.Memory{Total: m.Total, Used: m.Used, Free: m.Free, Cache: m.Cache, UsageUnavailable: m.UsageUnavailable}
 	if m.Total <= 0 {
 		return models.Memory{}, false
@@ -396,6 +403,14 @@ func (v VMView) IPAddresses() []string {
 type ContainerView struct{ r *Resource }
 
 func NewContainerView(r *Resource) ContainerView { return ContainerView{r: r} }
+
+// LinkedAgentMemory returns the agent's own sample for a system container whose
+// merged resource also carries an online Pulse agent source. Proxmox
+// cluster/resources memory is a low-trust fallback that can badly misreport a
+// container's real footprint, so the linked agent sample is preferred (#2148).
+func (v ContainerView) LinkedAgentMemory() (models.Memory, bool) {
+	return linkedAgentMemoryFromResource(v.r)
+}
 
 func (v ContainerView) String() string { return fmt.Sprintf("ContainerView(%s, %q)", v.ID(), v.Name()) }
 

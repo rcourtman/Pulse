@@ -2267,3 +2267,34 @@ func TestVMViewLinkedAgentMemory(t *testing.T) {
 		t.Fatal("nil view has memory")
 	}
 }
+
+func TestContainerViewLinkedAgentMemory(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		status      string
+		stale       bool
+		total, used int64
+		unavailable bool
+		want        bool
+	}{
+		{name: "live", status: "online", total: 24 << 30, used: 11 << 30, want: true},
+		{name: "offline", status: "offline", total: 24 << 30, used: 11 << 30},
+		{name: "stale agent", status: "online", stale: true, total: 24 << 30, used: 11 << 30},
+		{name: "over capacity", status: "online", total: 24 << 30, used: 25 << 30},
+		{name: "unavailable", status: "online", total: 24 << 30, used: 11 << 30, unavailable: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &Resource{Status: StatusOnline, Agent: &AgentData{Stale: tc.stale, Memory: &AgentMemoryMeta{Total: tc.total, Used: tc.used, UsageUnavailable: tc.unavailable}}, SourceStatus: map[DataSource]SourceStatus{SourceAgent: {Status: tc.status}}, Metrics: &ResourceMetrics{Memory: &MetricValue{Percent: 100}}}
+			memory, ok := NewContainerView(r).LinkedAgentMemory()
+			if ok != tc.want {
+				t.Fatalf("valid=%v want=%v memory=%+v", ok, tc.want, memory)
+			}
+			if ok && memory.Used != tc.used {
+				t.Fatalf("not agent memory: %+v", memory)
+			}
+		})
+	}
+	if _, ok := (ContainerView{}).LinkedAgentMemory(); ok {
+		t.Fatal("nil view has memory")
+	}
+}

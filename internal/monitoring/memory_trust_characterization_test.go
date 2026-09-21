@@ -1004,6 +1004,7 @@ func TestHandleClusterContainerResourceMemoryTrustCharacterization(t *testing.T)
 				makeGuestID("test", "node1", tt.res.VMID),
 				client,
 				nil,
+				nil,
 			)
 			if !ok {
 				t.Fatal("handleClusterContainerResource() returned ok=false")
