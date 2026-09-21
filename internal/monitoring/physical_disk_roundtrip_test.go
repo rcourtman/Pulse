@@ -119,3 +119,72 @@ func TestPhysicalDiskReadbackSourceIDFallback(t *testing.T) {
 		t.Fatal("nil resource has a source ID")
 	}
 }
+
+// TestMergeHostAgentSMARTIntoDisks_AgentWearoutDoesNotHideLowPVELife pins the
+// #2112 regression: a worn drive whose NVMe endurance log intermittently reads
+// PercentageUsed 0 must not have its Proxmox-reported remaining life raised to
+// 100, which resolved the low-life alert and let it re-fire on the next poll.
+func TestMergeHostAgentSMARTIntoDisks_AgentWearoutDoesNotHideLowPVELife(t *testing.T) {
+	disks := []models.PhysicalDisk{{
+		ID:      "d1",
+		Node:    "pve1",
+		Serial:  "SER1",
+		Type:    "nvme",
+		Health:  "PASSED",
+		Wearout: 0,
+	}}
+	nodes := []models.Node{{Name: "pve1", LinkedAgentID: "host-1"}}
+	used := 0
+	hosts := []models.Host{{
+		ID: "host-1",
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{{
+				Device: "/dev/nvme0n1",
+				Serial: "SER1",
+				Health: "PASSED",
+				Attributes: &models.SMARTAttributes{
+					PercentageUsed: &used,
+				},
+			}},
+		},
+	}}
+
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	if result[0].Wearout != 0 {
+		t.Fatalf("agent endurance reading raised the remaining life of a worn disk: wearout=%d", result[0].Wearout)
+	}
+	if result[0].SmartAttributes == nil || result[0].SmartAttributes.PercentageUsed == nil || *result[0].SmartAttributes.PercentageUsed != 0 {
+		t.Fatalf("agent SMART attributes were not merged: %+v", result[0].SmartAttributes)
+	}
+}
+
+// TestMergeHostAgentSMARTIntoDisks_AgentWearoutFillsUnreportedPVELife confirms
+// the agent still supplies endurance when the Proxmox inventory reports none.
+func TestMergeHostAgentSMARTIntoDisks_AgentWearoutFillsUnreportedPVELife(t *testing.T) {
+	disks := []models.PhysicalDisk{{
+		ID:      "d1",
+		Node:    "pve1",
+		Serial:  "SER1",
+		Type:    "nvme",
+		Wearout: -1,
+	}}
+	nodes := []models.Node{{Name: "pve1", LinkedAgentID: "host-1"}}
+	used := 40
+	hosts := []models.Host{{
+		ID: "host-1",
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{{
+				Device: "/dev/nvme0n1",
+				Serial: "SER1",
+				Attributes: &models.SMARTAttributes{
+					PercentageUsed: &used,
+				},
+			}},
+		},
+	}}
+
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	if result[0].Wearout != 60 {
+		t.Fatalf("agent endurance did not fill unreported PVE life: wearout=%d", result[0].Wearout)
+	}
+}

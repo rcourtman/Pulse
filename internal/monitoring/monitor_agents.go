@@ -2436,8 +2436,8 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	disks := make([]models.Disk, 0, len(report.Host.Disks))
 	for _, disk := range report.Host.Disks {
 		// Filter virtual/system filesystems (same as ApplyHostReport) to avoid
-		// inflated disk totals from tmpfs, overlayfs, etc.
-		if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(disk.Type, disk.Mountpoint, uint64(disk.TotalBytes), uint64(disk.UsedBytes)); shouldSkip {
+		// inflated disk totals from tmpfs, overlayfs, etc., unless explicitly selected.
+		if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(disk.Type, disk.Mountpoint, uint64(disk.TotalBytes), uint64(disk.UsedBytes)); shouldSkip && !disk.ExplicitlyIncluded {
 			continue
 		}
 		disks = append(disks, models.Disk{
@@ -3079,6 +3079,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 	reportMachineID := strings.TrimSpace(report.Host.MachineID)
 	identifier := baseIdentifier
+	hadPriorHostBinding := false
 	if tokenRecord != nil && strings.TrimSpace(tokenRecord.ID) != "" {
 		tokenID := strings.TrimSpace(tokenRecord.ID)
 		bindingKey := hostTokenMachineBindingKey(tokenID, hostname, reportMachineID)
@@ -3095,6 +3096,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			// the unbound path so this machine gets its own identity slot.
 			boundID = ""
 		}
+		hadPriorHostBinding = boundID != ""
 		if boundID != "" {
 			m.hostTokenBindings[bindingKey] = boundID
 		}
@@ -3192,6 +3194,22 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		tokenID = strings.TrimSpace(tokenRecord.ID)
 	}
 	blocked, wasRemoved := m.lookupRemovedHostAgent(identifier, hostname, report.Host.MachineID, tokenID)
+	if !wasRemoved && identifier != baseIdentifier && !hadPriorHostBinding {
+		// Identity resolution can fork a re-enrolling machine onto a derived
+		// suffix before the removal block is consulted: the fork keys off a
+		// colliding live record with the same base ID and an older token, and
+		// the block is keyed on the identity the operator removed (the base
+		// machine identity). Consult the base identity too, so the block is
+		// honoured (rejected, or cleared for a fresh install token) instead of
+		// silently admitting the machine under a derived identity (#2113).
+		//
+		// A token that already had its own binding was forked previously and is
+		// an established distinct host sharing a hostname/machine ID, so the
+		// removed host's block must not capture it (#1753).
+		if baseBlocked, baseRemoved := m.lookupRemovedHostAgent(baseIdentifier, hostname, report.Host.MachineID, tokenID); baseRemoved {
+			blocked, wasRemoved = baseBlocked, true
+		}
+	}
 	if wasRemoved && removedHostAgentAllowsFreshReenroll(blocked, identifier, report, tokenRecord) {
 		// A token minted after the host was removed means the user generated a
 		// fresh install command for this machine: that is explicit re-enroll
@@ -3283,8 +3301,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	for _, disk := range report.Disks {
 		// Filter virtual/system filesystems and read-only filesystems to avoid cluttering
 		// the UI with tmpfs, devtmpfs, /dev, /run, /sys, docker overlay mounts, snap mounts,
-		// immutable OS images, etc. (issues #505, #690, #790).
-		if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(disk.Type, disk.Mountpoint, uint64(disk.TotalBytes), uint64(disk.UsedBytes)); shouldSkip {
+		// immutable OS images, etc. (issues #505, #690, #790). Preserve the
+		// agent operator's explicit include override rather than filtering it again.
+		if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(disk.Type, disk.Mountpoint, uint64(disk.TotalBytes), uint64(disk.UsedBytes)); shouldSkip && !disk.ExplicitlyIncluded {
 			continue
 		}
 

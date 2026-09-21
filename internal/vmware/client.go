@@ -28,7 +28,9 @@ const (
 	inventoryResponseLimitByte = 8 << 20
 )
 
-var supportedVIJSONReleases = []string{"9.0.0.0", "8.0.3", "8.0.2.0", "8.0.1.0"}
+// Prefer the canonical four-component release; retain the legacy spelling
+// for endpoints that already accept it before falling back to older schemas.
+var supportedVIJSONReleases = []string{"9.0.0.0", "8.0.3.0", "8.0.3", "8.0.2.0", "8.0.1.0"}
 
 var featureVMwareEnabled atomic.Bool
 
@@ -411,12 +413,9 @@ func (c *Client) getSessionScopedJSON(
 	switch resp.StatusCode {
 	case http.StatusOK:
 	default:
-		return classifyReadStatusCode(label, resp.StatusCode)
+		return classifyReadStatusCodeWithBody(label, resp.StatusCode, body)
 	}
-	if err := json.Unmarshal(body, target); err != nil {
-		return &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware %s response was not valid JSON", label)}
-	}
-	return nil
+	return decodeVIJSONBody(body, label, target)
 }
 
 // postSessionScopedJSON posts a JSON body to a session-authenticated vCenter
@@ -452,12 +451,9 @@ func (c *Client) postSessionScopedJSON(
 		return fmt.Errorf("read %s response: %w", label, readErr)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return classifyReadStatusCode(label, resp.StatusCode)
+		return classifyReadStatusCodeWithBody(label, resp.StatusCode, responseBody)
 	}
-	if err := json.Unmarshal(responseBody, target); err != nil {
-		return &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware %s response was not valid JSON", label)}
-	}
-	return nil
+	return decodeVIJSONBody(responseBody, label, target)
 }
 
 func (c *Client) getAutomationJSON(
@@ -605,6 +601,16 @@ func (c *Client) loginVIJSON(ctx context.Context, release string, sessionManager
 }
 
 func classifyReadStatusCode(label string, statusCode int) error {
+	return classifyReadStatusCodeWithBody(label, statusCode, nil)
+}
+
+// classifyReadStatusCodeWithBody classifies a non-2xx read and, when the body is
+// present, appends the vSphere JSON API fault detail. The JSON API answers
+// client-side argument problems (an unknown argument name or shape) with an
+// HTTP 5xx plus a JSON fault body, so the faultstring/invalidProperty is the only
+// actionable part of the response; discarding it leaves the operator with an
+// opaque "HTTP 500".
+func classifyReadStatusCodeWithBody(label string, statusCode int, body []byte) error {
 	switch statusCode {
 	case http.StatusUnauthorized:
 		return &ConnectionError{Category: "auth", Message: fmt.Sprintf("VMware authentication failed while reading %s", label)}
@@ -615,8 +621,75 @@ func classifyReadStatusCode(label string, statusCode int) error {
 	case http.StatusServiceUnavailable:
 		return &ConnectionError{Category: "unavailable", Message: fmt.Sprintf("VMware %s is temporarily unavailable", label)}
 	default:
-		return &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware %s request failed with HTTP %d", label, statusCode)}
+		message := fmt.Sprintf("VMware %s request failed with HTTP %d", label, statusCode)
+		if detail := viJSONFaultDetail(body); detail != "" {
+			message = fmt.Sprintf("%s (%s)", message, detail)
+		}
+		return &ConnectionError{Category: "endpoint", Message: message}
 	}
+}
+
+// viJSONFault models the fault envelope the vSphere JSON API returns in the body
+// of a rejected request.
+type viJSONFault struct {
+	TypeName        string `json:"_typeName"`
+	FaultString     string `json:"faultstring"`
+	InvalidProperty string `json:"invalidProperty"`
+}
+
+const viJSONFaultDetailLimit = 200
+
+// viJSONFaultDetail extracts a bounded, single-line summary of a vSphere JSON
+// API fault body. It returns "" when the body is not a recognisable fault so the
+// caller falls back to the plain status line. The text is server-controlled, so
+// it is collapsed to one line and length-bounded before it reaches logs or the
+// connection status surface.
+func viJSONFaultDetail(body []byte) string {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return ""
+	}
+	var fault viJSONFault
+	if err := json.Unmarshal(trimmed, &fault); err != nil {
+		return ""
+	}
+	parts := make([]string, 0, 3)
+	if value := viJSONFaultFieldText(fault.FaultString); value != "" {
+		parts = append(parts, value)
+	}
+	if value := viJSONFaultFieldText(fault.InvalidProperty); value != "" {
+		parts = append(parts, "invalidProperty="+value)
+	}
+	if value := viJSONFaultFieldText(fault.TypeName); value != "" {
+		parts = append(parts, "type="+value)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, ", ")
+}
+
+func viJSONFaultFieldText(raw string) string {
+	raw = strings.Join(strings.Fields(raw), " ")
+	if len(raw) > viJSONFaultDetailLimit {
+		raw = raw[:viJSONFaultDetailLimit]
+	}
+	return raw
+}
+
+// decodeVIJSONBody decodes a vSphere JSON API response body into target. A
+// successful response with an empty body represents an absent/null value (for
+// example the parent of a top-level folder), not a malformed response, so it
+// leaves target at its zero value instead of raising a spurious "not valid JSON"
+// enrichment error.
+func decodeVIJSONBody(body []byte, label string, target any) error {
+	if len(bytes.TrimSpace(body)) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(body, target); err != nil {
+		return &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware %s response was not valid JSON", label)}
+	}
+	return nil
 }
 
 func classifyTransportError(stage string, err error) error {

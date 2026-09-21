@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "completions": [
+    {
+      "incomplete_commit": "29db6030a26d9bca86f5dd77bb563508a1300e01",
+      "completion_commit": "32155e95198db9e9e2fd44443fe1e7508a809518",
+      "reason": "Evaluate the rehearsal backend package-timeout runtime change together with the follow-up commit that records its deployment-installability contract section as one completion unit. The completion tree passes the canonical completion guard for the combined changed files."
+    },
+    {
+      "incomplete_commit": "82421c3d2fa8c9922360947bf75ead661f0e8bfc",
+      "completion_commit": "1216a32fd504195933ea5bf496112f1033460461",
+      "reason": "Evaluate the #2119 alerts overview stat alignment frontend change together with the follow-up commit that records its alerts and frontend-primitives contract sections as one completion unit. The completion tree passes the canonical completion guard for the combined changed files."
+    },
+    {
+      "incomplete_commit": "3caa3fb9b9f2b86f4ffba4d4960b4f2789ad60c0",
+      "completion_commit": "4aa40b98289ca8fa74646c88f33f34e1f83c6277",
+      "reason": "Evaluate the TrueNAS legacy-REST memory telemetry runtime change together with the follow-up commit that records its monitoring contract section and moves the regression proof into the registry-accepted internal/truenas/client_test.go proof file, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "1c935c3a2d55544cf90161015a62f48a400c3c18",
+      "completion_commit": "980ad4bab851979580c68a7ab523bce7f6bf73f9",
+      "reason": "Evaluate the create-release private Pro source-pair preflight together with the follow-up commit that records its deployment-installability contract section and the release-promotion policy proof guarding the step and its ordering ahead of create_release, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "fb3c6ec1c081ce07e5cf1d2cde22cda135918cd6",
+      "completion_commit": "b71aa6de0fb91034685a4a0e16df34010f883827",
+      "reason": "Evaluate the backported server startup-stall watchdog runtime change together with the follow-up commit that records its security-privacy contract obligation and places the watchdog proof in the registry-accepted pkg/server/service_health_test.go proof file, as one reviewed completion unit."
+    }
+  ]
+}

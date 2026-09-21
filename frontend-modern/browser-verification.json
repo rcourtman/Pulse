@@ -1,33 +1,38 @@
 {
   "version": 1,
-  "base_sha": "ea4c4a71475629e45dd053dc024532443c293809",
-  "verified_at": "2026-09-14T23:30:14.962745Z",
+  "base_sha": "e359e2b2dd4ec37ba58b8638bf417f1f3334ecc3",
+  "verified_at": "2026-09-20T23:24:19Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/cards/DisksCard.tsx"
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/cards/DisksCard.tsx": "cdda554f93b7aecb925d803b0192260ef1a445065c501468a0412b824dc08028"
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts": "e1cc0cb0f4087c5c66014d254421aeea6b02842795c41978e1b9847dcfcb5c77"
   },
   "routes": [
-    "/qualification/disks/"
+    "/browser-tests/thresholds-windowed-list.html"
   ],
   "viewports": [
     {
-      "width": 600,
-      "height": 500
+      "width": 480,
+      "height": 800
     },
     {
-      "width": 1200,
-      "height": 500
+      "width": 1280,
+      "height": 900
     }
   ],
   "states": [
-    "2 and 24 mounts, light and dark themes, in parent scroll flow"
+    "Alert Thresholds card list with two Proxmox hosts and 30 guests, both hosts exposing a guest named gateway01",
+    "The virtual window mounts 24 of 32 items with the leading item a 36px group header and each guest card 315px tall",
+    "After a 70px scroll the first group header is still within the mounted window; the final guest is reachable at the bottom"
   ],
   "interactions": [
-    "Focus Before disks, End then Tab; final mount visible and After disks focused"
+    "Mount the production AlertResourceTableMobile renderer with synthetic grouped resources in a 600px native scroll container",
+    "Confirm the bottom spacer is 2520px, i.e. eight unmounted rows at the measured 315px card height rather than the 36px group-header height (which previously produced 288px)",
+    "Scroll the container 70px and confirm the top spacer stays 0, so the window does not jump past the first group",
+    "Scroll to the bottom and confirm the last guest renders; inspect narrow and desktop screenshots"
   ],
-  "command": "pulse-worker-browser mount-proof.cjs",
-  "notes": "Production DisksCard fixture with project CSS; eight styled Chromium cases verified at the original recorded observation time. Source content unchanged by recovery. Earlier warning-severity evidence belongs to already published PR2090 and is retained there, not claimed as a new observation here. Screenshots 600px dark with 24 mounts and 1200px light with 2 mounts inspected. Firefox and reporter attachments not verified. This is synthetic component proof, not installed reporter acceptance. Initial module-path and unstyled runs not counted."
+  "command": "pulse-worker-browser scripts/check-thresholds-windowed-list.cjs",
+  "notes": "Offline Playwright Chromium run of the production Alert Thresholds card list (the narrow-layout renderer that virtualises via PlatformWindowedList) with synthetic props and the project CSS; no backend, API or WebSocket path. Before the fix the same run failed with bottom spacer 288px (8 x the 36px leading group header), so the item-height estimate collapsed to the header and the mounted window desynchronised from the scroll position, dropping a host's rows (#2130). After the fix the estimate follows the 315px card, the window holds through a 70px scroll, and the last guest is reachable. No page errors and no failed responses. Chromium 141.0.7390.37, matching the offline runtime. Release-line adaptation of the reviewed main fix 6f0dc177c8: usePlatformWindowedItems.ts is byte-identical to the reviewed main content (sha256 e1cc0cb0...), and the proof was re-run here at 23:24Z against this release-line blob on base e359e2b2dd with the identical pass result (bottom spacer 2520px, top spacer 0 after a 70px scroll, no HTTP errors)."
 }

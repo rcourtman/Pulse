@@ -261,7 +261,7 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                             }
                             placeholder={extraField.placeholder}
                             aria-label={`${getAIProviderDisplayName(config.provider)} ${extraField.label}`}
-                            autocomplete="off"
+                            autocomplete={extraField.type === 'password' ? 'new-password' : 'off'}
                             class={controlClass()}
                             disabled={props.saving()}
                           />
@@ -272,6 +272,24 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                       )}
                     </For>
 
+                    <Show when={config.provider === 'ollama'}>
+                      <p class="text-xs text-muted">
+                        {props.settings()?.ollama_password_set
+                          ? 'Ollama password is saved.'
+                          : 'No Ollama password saved.'}
+                      </p>
+                      <label class="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={props.form.clearOllamaPassword}
+                          onChange={(event) =>
+                            props.setForm('clearOllamaPassword', event.currentTarget.checked)
+                          }
+                          disabled={props.saving()}
+                        />
+                        Clear saved Ollama password
+                      </label>
+                    </Show>
                     <Show when={config.provider === 'ollama' && suggestedModel()}>
                       <div class="space-y-1">
                         <p class="text-xs text-muted">

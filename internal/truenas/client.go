@@ -29,6 +29,11 @@ const maxResponseBodyBytes int64 = 4 * 1024 * 1024
 
 const defaultRealtimeIntervalSeconds = 2
 
+// legacyRESTTelemetryWindowSeconds bounds the reporting.get_data window used
+// to reconstruct live system telemetry on the legacy REST transport, where the
+// reporting.realtime JSON-RPC subscription does not exist (#2077).
+const legacyRESTTelemetryWindowSeconds = 300
+
 const defaultAppStatsIntervalSeconds = defaultRealtimeIntervalSeconds
 
 const defaultDiskTemperatureAggregateWindowDays = 7
@@ -235,9 +240,17 @@ func systemInfoFromResponse(response systemInfoResponse) *SystemInfo {
 // transport or endpoint failure as "telemetry unavailable" rather than a
 // system identity failure.
 func (c *Client) GetSystemTelemetry(ctx context.Context) (*SystemInfo, error) {
+	legacy, err := c.useLegacyREST(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if legacy {
+		return c.getSystemTelemetryREST(ctx)
+	}
+
 	var telemetry *SystemInfo
 	var temperatures map[string]float64
-	err := c.withRPC(ctx, func(rpc *trueNASRPCClient) error {
+	err = c.withRPC(ctx, func(rpc *trueNASRPCClient) error {
 		temperatures, _ = rpc.getSystemTemperatures(ctx)
 		subscriptionName := fmt.Sprintf("reporting.realtime:{\"interval\":%d}", defaultRealtimeIntervalSeconds)
 		subscriptionID, err := rpc.subscribe(ctx, subscriptionName)
@@ -259,16 +272,149 @@ func (c *Client) GetSystemTelemetry(ctx context.Context) (*SystemInfo, error) {
 	return telemetry, nil
 }
 
+// getSystemTelemetryREST reconstructs live system telemetry from the legacy
+// REST reporting API. TrueNAS CORE 13 has no reporting.realtime JSON-RPC
+// subscription, so reporting.get_data is the only live memory and ARC source
+// there; without it the total-available derivation reports every CORE install
+// as 100% used (#2077).
+func (c *Client) getSystemTelemetryREST(ctx context.Context) (*SystemInfo, error) {
+	end := time.Now().Unix()
+	start := end - int64(legacyRESTTelemetryWindowSeconds)
+	if start <= 0 {
+		start = end
+	}
+	response, err := c.getReportingDataREST(ctx, legacyRESTReportingGraphs(), map[string]any{
+		"aggregate": false,
+		"start":     start,
+		"end":       end,
+	})
+	if err != nil {
+		return nil, err
+	}
+	history := parseSystemMetricHistory(response)
+	if history == nil {
+		return nil, fmt.Errorf("truenas legacy REST reporting returned no system telemetry")
+	}
+	return systemInfoFromMetricHistory(history), nil
+}
+
+// systemInfoFromMetricHistory maps the latest reporting sample onto live system
+// telemetry. Series that the appliance did not report stay zero so callers can
+// distinguish "absent" from a genuine zero.
+func systemInfoFromMetricHistory(history *SystemMetricHistory) *SystemInfo {
+	if history == nil {
+		return nil
+	}
+	system := &SystemInfo{CollectedAt: time.Now().UTC()}
+	if value, ok := latestTimeSeriesValue(history.CPUPercent); ok {
+		system.CPUPercent = value
+	}
+	if value, ok := latestTimeSeriesValue(history.MemoryTotalBytes); ok {
+		system.MemoryTotalBytes = int64(value)
+	}
+	if value, ok := latestTimeSeriesValue(history.MemoryAvailableBytes); ok {
+		system.MemoryAvailableBytes = int64(value)
+	}
+	if value, ok := latestTimeSeriesValue(history.ARCSizeBytes); ok {
+		system.ARCSizeBytes = int64(value)
+	}
+	if value, ok := latestTimeSeriesValue(history.NetInRate); ok {
+		system.NetInRate = value
+	}
+	if value, ok := latestTimeSeriesValue(history.NetOutRate); ok {
+		system.NetOutRate = value
+	}
+	if value, ok := latestTimeSeriesValue(history.DiskReadRate); ok {
+		system.DiskReadRate = value
+	}
+	if value, ok := latestTimeSeriesValue(history.DiskWriteRate); ok {
+		system.DiskWriteRate = value
+	}
+	return system
+}
+
+// latestTimeSeriesValue returns the most recent sample in a series by
+// timestamp, so an unordered reporting payload cannot select a stale point.
+func latestTimeSeriesValue(series []TimeSeriesPoint) (float64, bool) {
+	if len(series) == 0 {
+		return 0, false
+	}
+	latest := series[0]
+	for _, point := range series[1:] {
+		if point.Timestamp.After(latest.Timestamp) {
+			latest = point
+		}
+	}
+	return latest.Value, true
+}
+
+// legacyRESTReportingGraphs is the reporting.get_data graph set used to
+// reconstruct live telemetry and history over the legacy REST transport.
+func legacyRESTReportingGraphs() []map[string]any {
+	return []map[string]any{
+		{"name": "cpu", "identifier": nil},
+		{"name": "memory", "identifier": nil},
+		{"name": "arcsize", "identifier": nil},
+		{"name": "interface", "identifier": nil},
+		{"name": "disk", "identifier": nil},
+	}
+}
+
+// getReportingDataREST issues reporting.get_data over the REST v2.0 transport.
+// The middleware method takes positional parameters (graphs, query); REST
+// serves it as a POST body keyed by parameter name.
+func (c *Client) getReportingDataREST(ctx context.Context, graphs []map[string]any, query map[string]any) ([]trueNASReportingGetDataResponse, error) {
+	var response []trueNASReportingGetDataResponse
+	err := c.postJSON(ctx, "/reporting/get_data", map[string]any{
+		"graphs": graphs,
+		"query":  query,
+	}, &response)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 // GetSystemMetricHistory retrieves historical system metrics from the native
 // TrueNAS reporting API for the canonical host-chart fallback path.
 func (c *Client) GetSystemMetricHistory(ctx context.Context, duration time.Duration) (*SystemMetricHistory, error) {
+	legacy, err := c.useLegacyREST(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if legacy {
+		return c.getSystemMetricHistoryREST(ctx, duration)
+	}
+
 	var history *SystemMetricHistory
-	err := c.withRPC(ctx, func(rpc *trueNASRPCClient) error {
+	err = c.withRPC(ctx, func(rpc *trueNASRPCClient) error {
 		var err error
 		history, err = rpc.getSystemMetricHistory(ctx, duration)
 		return err
 	})
 	return history, err
+}
+
+// getSystemMetricHistoryREST serves the host-chart history from the legacy REST
+// reporting API, mirroring the JSON-RPC query for CORE appliances.
+func (c *Client) getSystemMetricHistoryREST(ctx context.Context, duration time.Duration) (*SystemMetricHistory, error) {
+	if duration <= 0 {
+		duration = 24 * time.Hour
+	}
+	end := time.Now().Unix()
+	start := end - int64(duration.Seconds())
+	if start <= 0 {
+		start = end
+	}
+	response, err := c.getReportingDataREST(ctx, legacyRESTReportingGraphs(), map[string]any{
+		"aggregate": false,
+		"start":     start,
+		"end":       end,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return parseSystemMetricHistory(response), nil
 }
 
 // GetPools returns storage pools.
@@ -2064,8 +2210,10 @@ func appendDiskTemperature(out map[string]int, diskName string, value any) {
 }
 
 type trueNASRPCClient struct {
-	conn   *websocket.Conn
-	nextID int64
+	conn          *websocket.Conn
+	nextID        int64
+	keepaliveStop chan struct{}
+	keepaliveDone chan struct{}
 }
 
 func (c *trueNASRPCClient) subscribe(ctx context.Context, event string) (string, error) {

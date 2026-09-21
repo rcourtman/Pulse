@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"net"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -262,16 +263,9 @@ func proxmoxProviderNodesProveSameMachine(left, right models.Node, host *models.
 }
 
 func proxmoxNodeStronglyCorroboratesHost(node models.Node, host models.Host) bool {
-	hostIPs := make(map[string]struct{})
-	if ip := NormalizeIP(host.ReportIP); ip != "" {
+	hostIPs := providerLinkNetworkIPs(host.NetworkInterfaces)
+	if ip := providerLinkIP(host.ReportIP); ip != "" {
 		hostIPs[ip] = struct{}{}
-	}
-	for _, network := range host.NetworkInterfaces {
-		for _, address := range network.Addresses {
-			if ip := NormalizeIP(address); ip != "" {
-				hostIPs[ip] = struct{}{}
-			}
-		}
 	}
 
 	endpoint := strings.TrimSpace(strings.ToLower(extractHostname(node.Host)))
@@ -286,13 +280,9 @@ func proxmoxNodeStronglyCorroboratesHost(node models.Node, host models.Host) boo
 	if nodeName := NormalizeFullHostname(node.Name); strings.Contains(nodeName, ".") && nodeName == hostname {
 		return true
 	}
-	for _, network := range node.NetworkInterfaces {
-		for _, address := range network.Addresses {
-			if ip := NormalizeIP(address); ip != "" {
-				if _, ok := hostIPs[ip]; ok {
-					return true
-				}
-			}
+	for ip := range providerLinkNetworkIPs(node.NetworkInterfaces) {
+		if _, ok := hostIPs[ip]; ok {
+			return true
 		}
 	}
 	return false
@@ -364,19 +354,45 @@ func proxmoxNodeCorroboratesHost(node models.Node, host models.Host) bool {
 	}
 
 	if ip := NormalizeIP(endpoint); ip != "" {
-		if NormalizeIP(host.ReportIP) == ip {
+		if providerLinkIP(host.ReportIP) == ip {
 			return true
 		}
-		for _, iface := range host.NetworkInterfaces {
-			for _, address := range iface.Addresses {
-				if NormalizeIP(address) == ip {
-					return true
-				}
-			}
+		if _, ok := providerLinkNetworkIPs(host.NetworkInterfaces)[ip]; ok {
+			return true
 		}
 		return false
 	}
 
 	endpointHost := NormalizeHostname(endpoint)
 	return endpointHost != "" && endpointHost == hostName
+}
+
+// Provider inference must not treat addresses repeated independently on each
+// host as corroboration. Keep management bridges and private management IPs;
+// reject only non-unicast addresses and recognisable host-local interfaces.
+func providerLinkIP(address string) string {
+	normalized := NormalizeIP(address)
+	if ip := net.ParseIP(normalized); ip != nil && ip.IsGlobalUnicast() {
+		return normalized
+	}
+	return ""
+}
+
+func providerLinkNetworkIPs(network []models.HostNetworkInterface) map[string]struct{} {
+	ips := make(map[string]struct{})
+	for _, nic := range network {
+		name := strings.ToLower(strings.TrimSpace(nic.Name))
+		if name == "lo" || strings.HasPrefix(name, "docker") {
+			continue
+		}
+		if id, ok := strings.CutPrefix(name, "br-"); ok && len(id) == 12 && strings.Trim(id, "0123456789abcdef") == "" {
+			continue
+		}
+		for _, address := range nic.Addresses {
+			if ip := providerLinkIP(address); ip != "" {
+				ips[ip] = struct{}{}
+			}
+		}
+	}
+	return ips
 }

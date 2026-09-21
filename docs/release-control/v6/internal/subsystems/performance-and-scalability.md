@@ -2179,6 +2179,12 @@ also reconciles unique string/number resource IDs into stable row proxies, so
 sparse live snapshots update fields without remounting an open inline drawer
 or discarding its tab and form state. Rows without a unique logical ID retain
 reference-keyed rendering rather than paying for guessed index identity.
+Spacer geometry and the inverse scroll-to-index mapping must share one
+representative item height. The controller samples several leading siblings and
+keeps the tallest, because a short leading group header sampled alone collapses
+the estimate and lets the mounted window outrun the real scroll position,
+turning a small scroll into many rows of unmounting and making an estate appear
+to lose rows.
 The workload guest-row path now follows the same pattern: the render shell
 stays in `frontend-modern/src/components/Workloads/GuestRow.tsx`, tooltip-backed
 cell presentation lives in `frontend-modern/src/components/Workloads/GuestRowCells.tsx`,
@@ -2226,6 +2232,12 @@ and supplement known utilization with the threshold-colored progress metadata
 derived by `diskListModel.ts`. `GuestDrawerOverview.tsx` passes that metadata
 to the shared detail-row primitive; it does not parse display strings, create
 local bar geometry, or render a bar for the negative unknown-usage sentinel.
+Within that compact technical layout, `GuestDrawerOverview.tsx` declares the
+`Filesystems` section before the `Tags` section, so the shared
+`DetailSectionTable` span algorithm gives the longer mount-point list the wider
+panel and keeps the short tag list in the narrower slot. Future section-order
+changes in that overview must preserve the filesystem-first ordering rather
+than letting the shorter tag list take the wide column.
 Guest, node, and Docker-host drawer headers follow the same frontend-primitives dependency
 boundary for collapse: Workloads owns which inline row is selected and the
 close handler, while
@@ -3087,3 +3099,86 @@ The existing 500-node mixed-endpoint workload and latency budgets remain intact.
 `pkg/metrics/store_additional_test.go` holds every history connection to
 prove availability without relying on favourable scheduling, and covers
 committed-data visibility, write rejection, clear and pool shutdown.
+
+### Metrics-store shutdown never closes the ingestion channel
+
+The metrics store's ingestion worker must not close its write channel on
+shutdown. A concurrent writer that passed the `stopping` check before `Close`,
+and the `WriteBatchSync`/`WriteBatchBounded` paths that do not consult
+`stopping` at all, may still send to that channel. Closing it races those sends
+and panics the process during shutdown. The worker instead drains already-queued
+requests without closing the channel; a late write lands in the buffered channel
+and is discarded with the store. `pkg/metrics/store_additional_test.go` pins the
+post-shutdown enqueue and the concurrent-close race.
+
+### Metrics-store rollup checkpoints never leap source gaps
+
+A tier rollup must not advance its checkpoint past a window that has no source
+rows. The previous implementation jumped the checkpoint to the rollup cutoff
+whenever a source gap followed already-processed windows, so a lower tier that
+backfilled the gap later (for example after a transient raw-to-minute failure)
+had its rows stranded below the upper tier's checkpoint and eventually purged by
+retention. `rollupTier` now stops at the gap, leaving the checkpoint at the gap
+start; the next invocation skips the gap once it is confirmed empty. The
+`nextSourceRollupBucket` prefix skip still runs only before the first source
+window of an invocation, preserving bounded catch-up. `pkg/metrics/store_test.go`
+pins the interspersed-gap backfill in
+`TestStoreRollupTierBackfillsInterspersedGap` and keeps
+`TestStoreRollupTierEmptyWindowPreservesCheckpoint`.
+
+### Metrics-store retries match the SQLite driver error code
+
+Transient write and read retries must classify SQLite lock errors by the
+`modernc.org/sqlite` result code rather than by an exact message. The driver
+reports `database is locked (5) (SQLITE_BUSY)`, which an equality check against
+`database is locked` never matched, so a busy writer dropped its batch without
+retrying. `isRetryableWriteError` matches the BUSY/LOCKED code family with a
+substring fallback for closed-pool errors. A direct aggregate-tier write also
+preserves an existing rollup row's `min_value`/`max_value` via `COALESCE` rather
+than nulling the stored spread. `pkg/metrics/store_test.go` pins both in
+`TestIsRetryableWriteErrorMatchesDriverBusyCode` and
+`TestStoreWriteBatchPreservesRollupSpread`.
+
+### One-time auto-vacuum conversion runs on one connection
+
+`migrateAutoVacuum` must run `PRAGMA auto_vacuum = INCREMENTAL` and the
+follow-up `VACUUM` on the same SQLite connection, because the pragma is only a
+per-connection setting until that connection's `VACUUM` rewrites the file
+header. Running them on separate pool connections could leave the file at NONE
+and repeat the full-file VACUUM on every restart. The migration now pins a
+connection, verifies the persisted mode, and leaves the conversion for a later
+restart if verification fails. `pkg/metrics/store_test.go` pins the persisted
+mode in `TestStoreAutoVacuumPersistsAcrossRestart`.
+
+### Metrics-store writes survive the one-time startup write-lock hold
+
+The deferred identity-index rebuild and the auto-vacuum VACUUM can hold the
+SQLite write lock for minutes on a large legacy database. `BEGIN` is deferred,
+so the lock is contended at the first `INSERT` or at `COMMIT`, not at `Begin`;
+a retry loop around `Begin` alone skipped rows and committed an empty
+transaction. `writeBatch` now retries the whole transaction on a retryable lock
+error, and while startup maintenance is active it uses an extended budget
+(`startupMaintenanceBeginAttempts`) instead of the steady-state
+`writeBatchBeginAttempts`, so an upgrade does not silently discard history. The
+`startupMaintenanceActive` signal is set for the duration of
+`runStartupMaintenance` and cleared on completion; the `stopping` check still
+bounds shutdown. `pkg/metrics/store_additional_test.go` pins the signal in
+`TestStoreStartupMaintenanceSignalsWriteRetryBudget` and the extended retry in
+`TestStoreWriteBatchExtendsRetryDuringStartupMaintenance`.
+
+### Metrics-store legacy host migration is probed before it writes
+
+`migrateLegacyHostResourceType` must not open a write transaction on every boot
+when there are no legacy rows. It probes with an indexed
+`SELECT EXISTS(... WHERE resource_type = 'host' LIMIT 1)` and returns without
+writing when the table has no legacy rows, so an already-migrated store does
+not dirty the WAL on startup.
+
+### Metrics-store QueryAll preallocation is capped
+
+`QueryAll` must not reserve a `MetricPoint` slice sized by the caller's
+requested step when the selected tier returns far fewer rows. A 90-day range at
+a 5-second step previously reserved over a million slots per series; the
+preallocation is now capped at `maxQueryAllSeriesCapacity` and append still
+grows the slice for genuinely dense series. `pkg/metrics/store_additional_test.go`
+pins the cap in `TestEstimateQueryAllBatchSeriesCapacityCapsPreallocation`.

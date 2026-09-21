@@ -719,6 +719,23 @@ local command or REST URL. `TestHostCustomSensorAlertLifecycle` and
 `internal/alerts/host_unraid_lifecycle_test.go` pin creation, recovery,
 opt-out, and cleanup.
 
+Health-assessment warning→critical transitions dispatch the updated incident
+through the normal acknowledgement, snooze, activation and flapping policy;
+unchanged severity and critical→warning transitions do not dispatch. The shared
+health-assessment caller opts into the configured per-incident hourly limit for
+initial, refired and escalation notifications, so repeated severity oscillations
+cannot bypass that budget. Incident severity still updates when delivery is
+suppressed. This applies to all callers of the shared assessment adapter
+(custom sensors, host storage/RAID and storage ZFS pool/device health), not other
+stateful alert families. No delivery-policy bypass or separate sensor callback
+is introduced.
+`TestHostCustomSensorEscalationDelivery` in
+`internal/alerts/host_unraid_lifecycle_test.go` pins the running-host callback,
+stable incident identity and suppression/no-noise cases;
+`TestHealthAssessmentEscalationDelivery` in
+`internal/alerts/canonical_stateful_test.go` pins shared ZFS escalation and
+hourly-budget exhaustion across warning/critical oscillation.
+
 The alert resource-incident panel
 (`frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`)
 dropped its "Open in Infrastructure / Workloads / Storage / Recovery"
@@ -1200,6 +1217,16 @@ synchronous durability for this authority, and the recovery mirror fsyncs its
 temporary file plus a platform-native durable rename barrier (parent-directory
 sync on Unix and write-through replacement on Windows), so the contract covers
 host power loss rather than only orderly process restart.
+An unchanged JSON recovery checkpoint preserves already-correct directory
+permissions without issuing chmod, avoiding redundant Linux directory metadata
+mutation. It still repairs unsafe access permissions and special mode bits;
+permission repair must not replace identical JSON. Directory sync and atomic
+file replacement durability remain unchanged. This is not a guarantee of zero
+aggregate process writes. `TestActiveMirrorUnchangedRepairsDirectoryPermissions`
+in `internal/alerts/alerts_test.go` pins permission repair and inode retention;
+`TestActiveMirrorUnchangedPreservesDirectoryMetadata` in
+`internal/alerts/active_mirror_metadata_linux_test.go` pins stable Linux ctime.
+
 `active-alerts.json` remains an atomic recovery mirror, not a competing healthy
 read authority. A new or recreated database imports the readable mirror. A
 failed SQLite checkpoint writes a durable degraded marker, and the next startup
@@ -1287,7 +1314,12 @@ evidence. Failed asynchronous batches do not advance the successful-write
 counter, and `Flush` must report the failure or timeout rather than falsely
 claiming the batch landed. An unavailable or failed lifecycle store degrades
 history reads to the recovery model without hiding live active-alert truth.
-Events retain for 90 days and prune hourly. Fired and
+Events retain for 90 days and prune hourly. Retention alone does not bound disk
+use: one flapping alert can write thousands of full alert-state snapshots inside
+the window, so the hourly prune also enforces a total stored snapshot-payload
+cap and removes the oldest events first when it is exceeded. A volume prune
+raises the retention revision so the history projection rebuilds from the
+remaining log rather than reusing a stale fold. Fired and
 refired lifecycle events come only from the reducer core's explicit activation
 events: canonical lifecycle reactivation maps `EventRefired` separately, while
 shared metric activation records one fired event when its pending incident
@@ -2685,3 +2717,33 @@ widths despite the longer labels. The presentation and Overview delivery-status
 tests cover the evidence boundary; `scripts/check-alert-dispatch-copy.mjs`
 qualifies the real Overview with scripted API data in Chromium, not installed
 notification delivery.
+
+### Alerts overview stat counts stay in one numeric column
+
+The Alerts overview stats table right-aligned its value cell, but a row carrying
+the small critical annotation rendered that annotation inline after the count,
+pushing the Triggered (24h) count left of the Acknowledged and Workload
+Overrides rows. The annotation now has its own right-aligned cell, so the
+numeric column lines up across all three rows; the count cell itself stays
+numeric. `OverviewTab.total24h.test.tsx` pins the separate annotation cell and
+the numeric count, and `frontend-modern/browser-verification.json` records the
+offline Chromium pass. This is a presentation alignment fix; no API field,
+notification policy or shared primitive changes.
+
+### Unchanged active-alert JSON recovery checkpoints
+
+The recovery-mirror writer canonicalises complete records before comparing
+bounded existing bytes. An identical regular file with mode 0600 is not
+replaced; acknowledgement, metadata and resolved/empty state changes still use
+the atomic synced replacement path. Missing, corrupt, insecure or symlink
+destinations are not accepted as unchanged. Failed writes remain retryable and
+the unchanged path retains directory sync so a prior post-rename sync failure
+is not silently accepted. Windows retains replacement when its reported mode
+does not match POSIX 0600.
+
+`TestActiveMirror*` isolates this JSON path without database workers and covers
+ordering, fresh-manager checkpoints, state changes, file loss/corruption, failed
+rename retry and Unix destination hardening. This addresses one write source
+in #1966, not total installed write amplification: directory metadata handling,
+intent snapshots, changing alert histories and database writes remain separate.
+It changes neither alert latency nor the selected release candidate.

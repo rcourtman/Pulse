@@ -69,6 +69,8 @@ func SetAuthorizer(auth Authorizer) {
 }
 
 // AdminConfigurable is an optional interface for authorizers that can have an admin user set.
+// SetAdminUser must be safe alongside Authorize calls; an empty username clears
+// the previously configured identity.
 type AdminConfigurable interface {
 	SetAdminUser(username string)
 }

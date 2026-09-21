@@ -22,6 +22,9 @@ export type AIProviderCredentialsFormState = {
   geminiApiKey: string;
   ollamaBaseUrl: string;
   ollamaKeepAlive: string;
+  ollamaUsername: string;
+  ollamaPassword: string;
+  clearOllamaPassword: boolean;
   openaiBaseUrl: string;
   zaiBaseUrl: string;
   codexSubscriptionEnabled: boolean;
@@ -46,7 +49,7 @@ export type AIProviderConfig = {
     helpContentId?: string;
     inputField: keyof AIProviderCredentialsFormState;
     placeholder: string;
-    type?: 'url' | 'text';
+    type?: 'url' | 'text' | 'password';
     helperText?: string;
   }>;
   clearTitle: string;
@@ -299,6 +302,20 @@ export const AI_PROVIDER_CONFIGS: AIProviderConfig[] = [
     actionLinkHref: 'https://ollama.ai',
     actionLinkSuffix: ' · Free & local',
     extraFields: [
+      {
+        label: 'Username',
+        inputField: 'ollamaUsername',
+        placeholder: 'Optional Basic Auth username',
+        type: 'text',
+      },
+      {
+        label: 'Password',
+        inputField: 'ollamaPassword',
+        placeholder: 'Leave blank to keep saved password',
+        type: 'password',
+        helperText:
+          'Save provider settings before testing. Use HTTPS for remote authenticated servers.',
+      },
       {
         label: 'Keep Alive',
         helpContentId: 'ai.ollama.keepAlive',

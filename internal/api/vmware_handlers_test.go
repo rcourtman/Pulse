@@ -1050,7 +1050,7 @@ func TestVMwareHandlers_HandleTestConnection_PreservesUnsupportedVersionCategory
 			testConnection: func(context.Context) (*vmware.InventorySummary, error) {
 				return nil, &vmware.ConnectionError{
 					Category: "unsupported_version",
-					Message:  "VMware vCenter version is outside the implemented VI JSON probe floor; Pulse currently probes 9.0.0.0, 8.0.3, 8.0.2.0, 8.0.1.0",
+					Message:  "VMware vCenter version is outside the implemented VI JSON probe floor; Pulse currently probes 9.0.0.0, 8.0.3.0, 8.0.3, 8.0.2.0, 8.0.1.0",
 				}
 			},
 		}, nil
@@ -1806,7 +1806,7 @@ func TestVMwareHandlers_HandleTestSavedConnection_ReportsOptionalVIJSONFailureAs
 		payload.Issues[0].Message != "VMware HostSystem recent events request failed with HTTP 500" {
 		t.Fatalf("expected preserved recent-events diagnostic, got %+v", payload.Issues)
 	}
-	if got, want := strings.Join(serviceContentProbes, ","), "9.0.0.0,8.0.3,8.0.2.0"; got != want {
+	if got, want := strings.Join(serviceContentProbes, ","), "9.0.0.0,8.0.3.0,8.0.3,8.0.2.0"; got != want {
 		t.Fatalf("expected VI JSON release negotiation through %s, got %s", want, got)
 	}
 }

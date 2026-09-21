@@ -254,6 +254,8 @@ command-capable profile.
 
 ## Shared Boundaries
 
+- After password configuration has been persisted and the runtime local-admin identity changes, authorizer synchronisation must also occur if subsequent API-token persistence fails. Development first-run reset must clear the configured-admin bypass only on successful auth reset, not on its persistence-failure rollback path. No role-store deletion or migration is part of this recovery.
+
 ### Development harness rate-budget isolation
 
 Recovery API extensions retain their dedicated endpoint-category budget when
@@ -5977,3 +5979,18 @@ container-action authority.
 PBS History keeps the PBS drawer identity while reading the uniquely correlated host metrics target. Missing disk telemetry does not prevent CPU/memory history. Guests without agent evidence and ambiguous host matches remain excluded.
 
 Bounded adaptations of reviewed main 3a189f31d447 (identity only) and 605643b01722. No metrics-store/storage-tier implementation or release metadata changes. Focused regressions and release-line browser proof are recorded in docs/qualification/release-v6.4-history/README.md. This is source qualification, not installed or published acceptance.
+
+### Quick security setup preserves unrelated settings
+
+Authenticated force setup in `internal/api/security_setup_fix.go` retains the
+existing authentication and settings-write authorization checks. Rotating local
+credentials does not reset non-auth system preferences.
+`ConfigPersistence.InitializeSystemSettings` in `internal/config/persistence.go`
+creates defaults only when system settings are absent, under the same instance
+mutex as ordinary saves; existing bytes (including unknown fields and malformed
+data requiring recovery) are not rewritten. A read error prevents initialization,
+while authentication setup retains its existing nonfatal settings-error behavior.
+This does not change token scopes, agent admission, or existing agent cleanup.
+Regression coverage: `TestQuickSecuritySetupForcePreservesSystemSettings` and
+`TestInitializeSystemSettingsPreservesExistingBytes`, `TestInitializeSystemSettingsMissing`,
+`TestInitializeSystemSettingsReadError`.

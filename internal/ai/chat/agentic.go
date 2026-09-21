@@ -1067,14 +1067,18 @@ agenticLoop:
 			Str("session_id", sessionID).
 			Msg("[AgenticLoop] Starting turn")
 
-		// Build the request with dynamic system prompt (includes current mode)
-		systemPrompt := a.getSystemPrompt()
+		// Build the request with dynamic system prompt (includes current mode).
+		// Mark the frozen base plus mode text as cacheable so a prompt-caching
+		// provider reuses it across turns without caching the per-turn time or
+		// accumulated knowledge that follow it.
+		stablePrompt, systemPrompt := a.systemPromptParts()
 		req := providers.ChatRequest{
-			Messages:          providerMessages,
-			System:            systemPrompt,
-			Tools:             tools,
-			ExecutionID:       a.executionID,
-			StreamIdleTimeout: streamIdleTimeout,
+			Messages:              providerMessages,
+			System:                systemPrompt,
+			SystemCacheablePrefix: stablePrompt,
+			Tools:                 tools,
+			ExecutionID:           a.executionID,
+			StreamIdleTimeout:     streamIdleTimeout,
 		}
 		if isPatrolDetectionExecution(a.currentExecutionProfile()) && patrolFindingsReadCompleted {
 			req.Tools = withoutProviderTool(req.Tools, agentcapabilities.PatrolGetFindingsToolName)

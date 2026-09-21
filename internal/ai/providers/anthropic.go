@@ -67,7 +67,7 @@ type anthropicRequest struct {
 	Model       string               `json:"model"`
 	Messages    []anthropicMessage   `json:"messages"`
 	MaxTokens   int                  `json:"max_tokens"`
-	System      string               `json:"system,omitempty"`
+	System      interface{}          `json:"system,omitempty"`
 	Temperature float64              `json:"temperature,omitempty"`
 	Tools       []anthropicTool      `json:"tools,omitempty"`
 	ToolChoice  *anthropicToolChoice `json:"tool_choice,omitempty"`
@@ -112,6 +112,48 @@ type anthropicTool struct {
 // Everything up to and including the tool with this marker is cached.
 type anthropicCacheControl struct {
 	Type string `json:"type"` // "ephemeral"
+}
+
+// anthropicSystemBlock is a system-prompt content block. Anthropic accepts the
+// system prompt as either a plain string or an array of content blocks; the
+// array form is required to place a prompt-caching breakpoint on the stable
+// leading portion of the prompt.
+type anthropicSystemBlock struct {
+	Type         string                 `json:"type"` // "text"
+	Text         string                 `json:"text"`
+	CacheControl *anthropicCacheControl `json:"cache_control,omitempty"`
+}
+
+// buildAnthropicSystem serializes the system prompt for an Anthropic request.
+// When cacheablePrefix is a non-empty exact prefix of system, the stable prefix
+// is returned as a content block with a cache breakpoint and the volatile
+// remainder as a second block. Anthropic caches content in tools -> system ->
+// messages order, so this breakpoint also covers the tool definitions and the
+// redundant per-tool breakpoint can be dropped. Otherwise the plain string form
+// is returned unchanged.
+func buildAnthropicSystem(system, cacheablePrefix string) interface{} {
+	if system == "" {
+		return nil
+	}
+	if cacheablePrefix == "" || !strings.HasPrefix(system, cacheablePrefix) {
+		return system
+	}
+	blocks := []anthropicSystemBlock{{
+		Type:         "text",
+		Text:         cacheablePrefix,
+		CacheControl: &anthropicCacheControl{Type: "ephemeral"},
+	}}
+	if remainder := system[len(cacheablePrefix):]; remainder != "" {
+		blocks = append(blocks, anthropicSystemBlock{Type: "text", Text: remainder})
+	}
+	return blocks
+}
+
+// anthropicSystemIsCached reports whether buildAnthropicSystem returned the
+// block form, meaning a system breakpoint already covers the tool definitions.
+func anthropicSystemIsCached(system interface{}) bool {
+	_, ok := system.([]anthropicSystemBlock)
+	return ok
 }
 
 // anthropicResponse is the response from the Anthropic API
@@ -245,11 +287,12 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 		maxTokens = 4096
 	}
 
+	systemValue := buildAnthropicSystem(req.System, req.SystemCacheablePrefix)
 	anthropicReq := anthropicRequest{
 		Model:     model,
 		Messages:  messages,
 		MaxTokens: maxTokens,
-		System:    req.System,
+		System:    systemValue,
 	}
 
 	if req.Temperature > 0 {
@@ -279,8 +322,12 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 			}
 		}
 		// Mark the last tool with cache_control so Anthropic caches all tool
-		// definitions (and everything before them) on subsequent turns.
-		anthropicReq.Tools[len(anthropicReq.Tools)-1].CacheControl = &anthropicCacheControl{Type: "ephemeral"}
+		// definitions (and everything before them) on subsequent turns. A
+		// system cache breakpoint already covers the tool definitions, so it is
+		// omitted then to avoid a redundant cache write.
+		if !anthropicSystemIsCached(systemValue) {
+			anthropicReq.Tools[len(anthropicReq.Tools)-1].CacheControl = &anthropicCacheControl{Type: "ephemeral"}
+		}
 	}
 
 	// Add tool_choice only for explicit overrides. Nil keeps Anthropic's default
@@ -417,6 +464,15 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 		logEvent = logEvent.
 			Int("cache_creation_tokens", anthropicResp.Usage.CacheCreationInputTokens).
 			Int("cache_read_tokens", anthropicResp.Usage.CacheReadInputTokens)
+		// Prompt-cache effectiveness is otherwise invisible in production
+		// because the parsed-response event is Debug. Surface the counters at
+		// Info so operators can confirm cache reads and writes from real runs.
+		log.Info().
+			Int("input_tokens", anthropicResp.Usage.InputTokens).
+			Int("cache_creation_tokens", anthropicResp.Usage.CacheCreationInputTokens).
+			Int("cache_read_tokens", anthropicResp.Usage.CacheReadInputTokens).
+			Str("model", anthropicResp.Model).
+			Msg("anthropic prompt cache usage")
 	}
 	logEvent.Msg("anthropic response parsed")
 
@@ -542,7 +598,7 @@ type anthropicStreamRequest struct {
 	Model       string               `json:"model"`
 	Messages    []anthropicMessage   `json:"messages"`
 	MaxTokens   int                  `json:"max_tokens"`
-	System      string               `json:"system,omitempty"`
+	System      interface{}          `json:"system,omitempty"`
 	Temperature float64              `json:"temperature,omitempty"`
 	Tools       []anthropicTool      `json:"tools,omitempty"`
 	ToolChoice  *anthropicToolChoice `json:"tool_choice,omitempty"`
@@ -587,11 +643,12 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 		maxTokens = 4096
 	}
 
+	systemValue := buildAnthropicSystem(req.System, req.SystemCacheablePrefix)
 	anthropicReq := anthropicStreamRequest{
 		Model:     model,
 		Messages:  messages,
 		MaxTokens: maxTokens,
-		System:    req.System,
+		System:    systemValue,
 		Stream:    true,
 	}
 
@@ -620,8 +677,11 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 				}
 			}
 		}
-		// Mark the last tool with cache_control for prompt caching (same as non-streaming).
-		anthropicReq.Tools[len(anthropicReq.Tools)-1].CacheControl = &anthropicCacheControl{Type: "ephemeral"}
+		// Mark the last tool with cache_control for prompt caching (same as
+		// non-streaming), unless a system breakpoint already covers the tools.
+		if !anthropicSystemIsCached(systemValue) {
+			anthropicReq.Tools[len(anthropicReq.Tools)-1].CacheControl = &anthropicCacheControl{Type: "ephemeral"}
+		}
 	}
 
 	// Add tool_choice only for explicit overrides, same as non-streaming.

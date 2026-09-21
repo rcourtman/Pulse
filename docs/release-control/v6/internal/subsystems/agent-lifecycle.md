@@ -15,6 +15,28 @@
 
 ## Purpose
 
+### Explicit filesystem selections survive the report boundary
+
+Disk reports carry optional `explicitlyIncluded` evidence when the collector
+matches the operator's disk-include setting. Explicit exclusions still win
+before usage collection; inclusion does not fabricate capacity when usage fails
+or reports zero total. Host and Docker snapshot copies preserve this field.
+It changes metric selection only, not enrollment, token scopes, identity or
+command authority.
+
+The flag is omitted when false. Older agents therefore retain default server
+filtering; older servers ignore the additive field. Preserving selected tmpfs
+through ingestion requires both agent and server support, not a server-only
+upgrade. `TestDiskExplicitIncludeWireCompatibility` pins omission and round
+trip; `TestCollectDisksIncludesExplicitTmpfsMount` and
+`TestCollectDisksKeepsDistinctExplicitTmpfsMountsWithEqualCapacity` pin
+include/exclude selection and marker production;
+`TestBuildReportForwardsExplicitDiskIncludesAndExcludes` pins report forwarding.
+These are synthetic proofs, not estate acceptance.
+
+Release-line adaptation of reviewed main c8cead7d (fix for #1875). No release
+metadata changes.
+
 ### Physical disk skipped-poll identity
 
 Read-state round trips preserve the provider SourceID rather than rehashing a
@@ -649,6 +671,8 @@ installer download and the agent's subsequent Pulse TLS connection.
 
 ## Shared Boundaries
 
+- Local administrator setup synchronises the router authorizer before returning a browser session, so API Access remains available to manage agent credentials. This changes neither agent token scopes nor command-policy intent, and must not grant an unrelated identity access to credential management.
+
 ### Development harness rate-budget isolation
 
 Agent lifecycle API extensions share the router's endpoint-category limiter;
@@ -1088,6 +1112,11 @@ update, profile rollout, command reachability, or fleet-control authority.
     success. `scripts/installtests/install_sh_test.go` owns the static teardown
     contract, and native FreeBSD rehearsal must prove clean install, update,
     reboot persistence, and complete uninstall.
+    The installer's download verification is part of that FreeBSD lifecycle.
+    FreeBSD base provides `sha256(1)` but neither GNU `sha256sum` nor Perl
+    `shasum`, so checksum verification must fall back through the digest tools
+    actually present on the target platform rather than failing a valid agent
+    download when coreutils is absent.
 
 Server update planning is part of the same lifecycle contract. The System
 Updates plan must surface a structured upgrade-readiness verdict before an
@@ -7812,3 +7841,103 @@ against interleaved Linux procfs counters.
 `internal/hostmetrics/issue1894_interleaved_collectors_test.go` independently
 pins isolated collector deltas and startup fallback. This changes telemetry
 sampling only, not report schemas, identity, enrollment or command authority.
+
+### Forked re-enrollment consults the base-identity removal block
+
+Host report admission resolves the reporting identity before it consults the
+removal block. When a colliding live record with the same base ID and an older
+token is still present in the unified read model, identity resolution forks the
+report onto a derived `<base>-<hex>` identity. The removal block is keyed on the
+base machine identity, so the derived ID bypassed it and the removed machine
+was silently re-admitted under a new identity; each remove/reinstall cycle added
+another derived record. `ApplyHostReport` now also consults the removal block on
+the base identity when the presenting token had no prior binding, so a fresh
+install token clears the block and heals to the base identity, while a token
+already bound to its own derived identity (an established distinct host sharing
+a hostname or machine ID, #1753) is left untouched. Focused proof lives in
+`internal/monitoring/monitor_host_agents_test.go`.
+
+### Docker update preflight accepts any local RepoDigest for the planned image
+
+The typed container-update preflight resolves the container image's full
+RepoDigest set and admits the planned digest when it matches any entry rather
+than only the first. A correctly planned update therefore stays actionable when
+the local image carries more than one valid RepoDigest. The shared resolution
+path is covered by `TestAgent_getImageRepoDigests_MultipleDigestsForOneImage`
+and `TestRegistryChecker_MultipleLocalRepoDigestsSuppressFalseUpdate`; this is
+source-level proof, not installed acceptance.
+
+### Agent endurance evidence cannot raise a disk's remaining life
+
+The physical-disk SMART merge treats a linked host agent's `PercentageUsed` as
+more precise than the Proxmox inventory, but it must not make a disk look
+healthier than Proxmox already reports. An intermittent NVMe endurance reading
+of `PercentageUsed` 0 previously raised the merged remaining life to 100, which
+resolved a genuine low-life disk-wearout alert and let it re-fire on the next
+physical-disk poll with a fresh resolved notification every poll interval
+(#2112). The merge now takes the agent value only when the Proxmox value is
+unreported or more pessimistic, never raising a reported remaining-life value,
+while still recording the agent's SMART attributes. This does not change agent
+admission, token binding or removal-block behaviour. Focused proof lives in
+`internal/monitoring/physical_disk_roundtrip_test.go`
+(`TestMergeHostAgentSMARTIntoDisks_AgentWearoutDoesNotHideLowPVELife` and
+`TestMergeHostAgentSMARTIntoDisks_AgentWearoutFillsUnreportedPVELife`).
+
+### Unified metric replay guard does not change agent admission
+
+The unified metric sync runs on host-agent ingest boundaries and on read-side
+registry rebuilds. Agent and VM history samples are now anchored to the source
+observation time (`unifiedResourceObservedAt`) instead of the rebuild wall
+clock, so a registry rebuild re-issuing the same observation maps to one
+timestamp rather than a fresh sample. A per-series replay guard then drops exact
+timestamp+value repeats before the metrics batch is enqueued, reducing WAL churn
+without changing host admission, token binding or removal-block behaviour.
+Proxmox and libvirt VMs have native history writers and are excluded from the
+unified VM sync. Physical-disk SMART history uses the same anchoring and replay
+guard, including the agent-less disks the unified sync owns, so disk history
+sampling does not alter agent admission either. Focused proof lives in
+`internal/monitoring/monitor_host_agents_test.go`
+(`TestDedupeUnifiedMetricWritesDropsExactReplays`,
+`TestSyncUnifiedAgentMetricsUsesSourceObservationTimeAcrossRegistryRebuilds`,
+`TestSyncUnifiedPhysicalDiskMetricsUsesSourceObservationTimeAcrossRegistryRebuilds`).
+The batched sync path (`syncAllUnifiedMetrics`) collects the agent, VM, storage
+and app-container writes into one SQLite transaction without changing the
+series, values or observation times, so agent admission, token binding and
+removal-block behaviour are unchanged.
+
+### Windows braced MachineGuid does not abort agent startup
+
+The Windows unified agent resolves host information through gopsutil's combined
+`InfoWithContext`, which is fatal if any single field fails. gopsutil v4.26.6
+reads `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid` through a fixed 74-byte
+registry buffer and rejects any value that is not exactly 36 characters, so a
+braced 38-character GUID returns `ERROR_MORE_DATA` ("More data is available")
+and the whole call fails. Pulse propagated that error from `newAgent` and the
+agent exited at startup (#2125). Host collection now retries through a Windows
+recovery path when the host-ID read itself fails: it reads `MachineGuid`
+directly with a correctly sized buffer, strips the optional braces, and fills
+the remaining fields from gopsutil's individual accessors. A failure of any
+other field remains fatal so unrelated faults are not hidden. Machine
+identities are canonicalised by removing surrounding braces and lower-casing,
+so a braced GUID and its bare form resolve to the same stable agent ID; the
+change does not alter enrollment, token binding, removal or command authority.
+Focused proof lives in `internal/hostagent/agent_new_test.go`
+(`TestNormalizeMachineGUID`, `TestDefaultCollectorHostInfoRecoversWindowsHostIDFailure`,
+`TestDefaultCollectorHostInfoKeepsErrorWhenUnrecovered` and
+`TestGetReliableMachineIDNormalizesWindowsBraces`); the Windows recovery file is
+cross-compiled with `GOOS=windows go build ./internal/hostagent/`.
+
+### Quick security setup preserves unrelated settings
+
+Authenticated force setup in `internal/api/security_setup_fix.go` retains the
+existing authentication and settings-write authorization checks. Rotating local
+credentials does not reset non-auth system preferences.
+`ConfigPersistence.InitializeSystemSettings` in `internal/config/persistence.go`
+creates defaults only when system settings are absent, under the same instance
+mutex as ordinary saves; existing bytes (including unknown fields and malformed
+data requiring recovery) are not rewritten. A read error prevents initialization,
+while authentication setup retains its existing nonfatal settings-error behavior.
+This does not change token scopes, agent admission, or existing agent cleanup.
+Regression coverage: `TestQuickSecuritySetupForcePreservesSystemSettings` and
+`TestInitializeSystemSettingsPreservesExistingBytes`, `TestInitializeSystemSettingsMissing`,
+`TestInitializeSystemSettingsReadError`.

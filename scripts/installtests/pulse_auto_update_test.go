@@ -483,6 +483,91 @@ echo "VERSION:$(tr -d '\r\n' < "$INSTALL_DIR/VERSION")"
 	}
 }
 
+// TestPerformUpdateClearsReturnTrapAfterSuccess asserts the #2128 regression:
+// perform_update arms a RETURN trap that references its function-local
+// tempfile paths. A RETURN trap is not scoped to the function that set it, so
+// after perform_update returns the trap stays armed and fires on the next
+// function return, expanding an out-of-scope variable under `set -u`
+// ("installer_tmp: unbound variable"). The update itself succeeds, but
+// pulse-update.service then exits non-zero and is reported failed. The
+// function must clear its own trap on every exit path.
+func TestPerformUpdateClearsReturnTrapAfterSuccess(t *testing.T) {
+	script := `
+set -uo pipefail
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+GITHUB_REPO="rcourtman/Pulse"
+INSTALL_DIR="$TMP/opt/pulse"
+CONFIG_DIR="$TMP/etc/pulse"
+mkdir -p "$INSTALL_DIR/bin" "$CONFIG_DIR"
+printf 'v5.1.24\n' > "$INSTALL_DIR/VERSION"
+printf '#!/usr/bin/env bash\necho v5.1.24\n' > "$INSTALL_DIR/bin/pulse"
+chmod +x "$INSTALL_DIR/bin/pulse"
+export INSTALL_DIR
+
+log() { echo "[$1] ${*:2}"; }
+detect_service_name() { echo pulse; }
+get_current_version() { tr -d '\r\n' < "$INSTALL_DIR/VERSION"; }
+verify_release_signature() { return 0; }
+sleep() { :; }
+
+# The fake installer records the requested version, like the real one does.
+curl() {
+  local out="" prev="" arg
+  for arg in "$@"; do
+    if [[ "$prev" == "-o" ]]; then out="$arg"; fi
+    prev="$arg"
+  done
+  if [[ -n "$out" ]]; then
+    case "$out" in
+      *.sig.*) printf 'dummy-signature\n' > "$out" ;;
+      *) printf '#!/usr/bin/env bash\nprintf "v5.1.25\\n" > "$INSTALL_DIR/VERSION"\n' > "$out" ;;
+    esac
+  fi
+  return 0
+}
+
+systemctl() {
+  case "$1" in
+    is-active|start|restart) return 0 ;;
+  esac
+  return 0
+}
+` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
+` + extractAutoUpdateFunction(t, "resolve_install_script_url") + `
+` + extractAutoUpdateFunction(t, "wait_for_service_active") + `
+` + extractAutoUpdateFunction(t, "ensure_service_restarted") + `
+` + extractAutoUpdateFunction(t, "perform_update") + `
+# main() calls perform_update, so model the real nesting: a RETURN trap set
+# inside perform_update must not fire when the enclosing function returns.
+driver() {
+  if perform_update v5.1.25; then
+    echo "RESULT:succeeded"
+  else
+    echo "RESULT:failed"
+  fi
+}
+driver
+# An ordinary function return after the driver must not re-run a stale RETURN
+# trap against variables that are no longer in scope.
+later() { :; }
+later
+echo "AFTER_LATER"
+`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("perform_update left a stale RETURN trap that aborted the script (exit %v):\n%s", err, out)
+	}
+	got := string(out)
+	if !strings.Contains(got, "RESULT:succeeded") {
+		t.Fatalf("perform_update did not succeed:\n%s", got)
+	}
+	if !strings.Contains(got, "AFTER_LATER") {
+		t.Fatalf("script did not reach the end after perform_update returned:\n%s", got)
+	}
+}
+
 // TestEnsureServiceRestartedHonorsPriorServiceState asserts the RETURN-trap
 // backstop behind the #1630 fix: a service that was inactive before the
 // update is left alone, and a service that was active is started again.

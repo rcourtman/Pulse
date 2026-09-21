@@ -970,6 +970,12 @@ artifact-selection behaviour.
    report success. A checksum-verified native rehearsal must cover install,
    update, reboot persistence, and clean uninstall rather than treating a
    cross-build as complete lifecycle proof.
+   Download verification must use a SHA-256 tool that exists on the target
+   platform. FreeBSD base ships `sha256(1)` and neither GNU `sha256sum` nor
+   Perl `shasum`, so the unified installer and the MCP installer must fall back
+   through the available digest tool instead of refusing an otherwise correct
+   download. The shared installer helper owns that fallback so every download
+   (agent, typed helper, action runner) is verified consistently.
    The shell installer must disclose `--enable-commands` as Pulse command
    execution, disabled by default, and must name both Patrol actions and
    Proxmox LXC Docker inventory as the operator-visible reasons to enable it.
@@ -1414,7 +1420,23 @@ artifact-selection behaviour.
    by `scripts/installtests/pulse_auto_update_test.go`
    (`TestPerformUpdateRestartsServiceWhenInstallerFails`,
    `TestEnsureServiceRestartedHonorsPriorServiceState`) and
-   `scripts/tests/test-pulse-auto-update.sh`. For the same reason, root
+   `scripts/tests/test-pulse-auto-update.sh`. The RETURN trap must clear itself
+   before running (`trap - RETURN; …`): a RETURN trap is not scoped to the
+   function that set it, so an armed trap fires again on the next function
+   return and expands `perform_update`'s out-of-scope `installer_tmp` /
+   `signature_tmp` locals under `set -u`, failing an otherwise successful
+   update (#2128). This is pinned by
+   `TestPerformUpdateClearsReturnTrapAfterSuccess`. The installer's
+   configuration snapshot must not outlive an update that never began:
+   `install.sh` `backup_existing` records the snapshot it creates and
+   `download_pulse` discards it when the staging disk-headroom check fails,
+   because nothing was staged or replaced and the leftover copy makes a
+   low-space root filesystem progressively worse on every automatic retry
+   (#2127). Snapshot retention (`CONFIG_BACKUP_KEEP_COUNT`) and the headroom
+   thresholds are unchanged; this is pinned by
+   `TestRootInstallScriptDiscardsUnneededConfigBackup` and
+   `TestRootInstallScriptDiscardsBackupWhenStagingHeadroomFails`. For the same
+   reason, root
    `install.sh` writes outside the hardened update unit's writable set
    (`ProtectSystem=strict` with `ReadWritePaths` covering the install dir,
    config dir, `/tmp`, the auto-update helper's directory and the unit
@@ -1811,6 +1833,14 @@ artifact-selection behaviour.
    workflow-run details from GitHub and poll the exact returned run ID; it must
    never infer its child from the newest matching workflow/branch/timestamp,
    because version-scoped release concurrency and manual dispatches can overlap.
+   Before it creates the unpublished draft, `create-release.yml` must prove the
+   private payload can resolve its source: the `prepare` job must read
+   `docs/release-source-pairs/<expected_source_sha>.json` from
+   `rcourtman/pulse-enterprise` and fail unless that file exists and declares
+   `pulse_sha` equal to the frozen public commit. A missing or mismatched
+   declaration must stop the run before any draft release object exists, so a
+   private build that cannot resolve its pair never orphans another draft. The
+   check is a fact check only; the release steward still selects the pair.
    Only after public release asset validation, staged install smoke, exact
    public Docker publication, exact Helm OCI publication, durable convergence
    dispatch, and the publicly readable activation-commit marker may the
@@ -5163,6 +5193,23 @@ are distinct. Cached events and collection overhead limit timing inference.
 synthetic Go pass/skip/fail output, producer exit retention, malformed input,
 allowlisted targeting and unavailable resource evidence. This is not product
 qualification; see `docs/RELEASE_RESOURCE_EVIDENCE.md`.
+
+### Rehearsal backend package timeout
+
+The accelerated rehearsal profile runs the backend as one serial
+`go test -json -p 1` process so its events stay streamed for
+`scripts/release-go-test-events.py`. Go's default per-package timeout is 10m,
+which the shared preflight worker exceeded on `internal/api` under ordinary
+concurrent load, failing an otherwise green package with `panic: test timed
+out` and no failing assertion. The worker must therefore pass an explicit
+package timeout no lower than the release profile's 30m budget, overridable
+through `PULSE_RELEASE_PREFLIGHT_REHEARSAL_TIMEOUT` for a deliberately
+different host. Host contention must not turn a healthy candidate into a
+release-gate failure, and the explicit budget must not raise any test threshold
+or mask a real source failure.
+`scripts/release_control/internal/release_preflight_test.py` pins the rehearsal
+command and its timeout. This is a harness reliability control, not product
+qualification.
 
 ### Quarantined release identity after tag deletion
 

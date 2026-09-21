@@ -116,7 +116,11 @@ Phase-1 rule:
 3. saved-connection tests must reuse stored secrets server-side and may accept
    an edit overlay payload without requiring masked-secret re-entry
 4. exhausting the implemented VI JSON release probe floor should classify as
-   `unsupported_version`, not as a generic endpoint error
+   `unsupported_version`, not as a generic endpoint error. Probe canonical
+   `8.0.3.0` before the legacy `8.0.3` spelling and older schemas; retain
+   compatibility fallback on endpoint failures, but stop on authentication,
+   permission, TLS and network failures. Successful negotiation alone does not
+   establish optional enrichment compatibility
 5. connection-test failures must preserve canonical backend `code` plus
    string-valued `details` such as `details.category` and `details.error`
    through the shared browser client so the settings workflow can distinguish

@@ -278,6 +278,8 @@ invisible to operators reviewing exactly what Pulse sends.
 
 ## Shared Boundaries
 
+- Configured local-admin synchronisation is a runtime identity replacement, not an additive role grant: changing the configured identity removes the previous bypass, and clearing it during first-run reset clears that bypass. Configurable authorizers must synchronise identity updates with concurrent authorization reads; other users still require their own policy grants.
+
 ### Notification recovery reload ownership
 
 Refreshing the notification queue handler on reload changes only its default
@@ -925,6 +927,15 @@ tokens, and path-normalization variants.
     closure plus replacement-deployment or verified-retirement evidence at the
     required tier. Keep optional history rewriting separate and nonblocking
     after containment.
+16. Keep startup-stall diagnostics inside the local process boundary. A stalled
+    startup may write the last completed startup phase and a full goroutine
+    stack to the local process log so a bound-but-not-serving listener is
+    diagnosable in the field. Goroutine stacks are local log output only: they
+    must never enter the outbound telemetry payload, a service-health event, or
+    any provider-bound request, and the diagnostic must not expose request
+    bodies, credentials, or governed resource detail beyond what the local
+    operator already holds. Regression coverage:
+    `TestStartupWatchdogLogsPhaseAndStack` in `pkg/server/service_health_test.go`.
 
 ## Current State
 

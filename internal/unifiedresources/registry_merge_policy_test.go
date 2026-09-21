@@ -488,3 +488,72 @@ func TestRegistryMemoryUnavailableClearsOnlySameSourceMetric(t *testing.T) {
 		t.Fatalf("cross-source memory = %+v, want trusted agent metric preserved", merged.Memory)
 	}
 }
+
+func TestProxmoxInferenceRejectsSharedHostLocalNetworks(t *testing.T) {
+	for _, tc := range []struct{ name, nic, address string }{
+		{"loopback", "lo", "127.0.0.1/8"},
+		{"link-local", "eth0", "fe80::1/64"},
+		{"docker", "docker0", "172.17.0.1/16"},
+		{"generated-bridge", "br-0123456789ab", "192.0.2.1/24"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			networks := []models.HostNetworkInterface{{Name: tc.nic, Addresses: []string{tc.address}}}
+			host := &models.Host{ID: "agent", Hostname: "pve", LinkedNodeID: "site-a", NetworkInterfaces: networks}
+			left := models.Node{ID: "site-a", Name: "pve", Instance: "a", Host: "https://a.example:8006", LinkedAgentID: host.ID, NetworkInterfaces: networks}
+			right := models.Node{ID: "site-b", Name: "pve", Instance: "b", Host: "https://b.example:8006", NetworkInterfaces: networks}
+			got := inferLinkedHostsForProxmoxNodes([]models.Node{left, right}, map[string]*models.Host{host.ID: host})
+			if got[left.ID] != host {
+				t.Fatal("lost explicit reciprocal link")
+			}
+			registry := NewRegistry(NewMemoryStore())
+			registry.IngestSnapshot(models.StateSnapshot{Nodes: []models.Node{left, right}, Hosts: []models.Host{*host}})
+			seenUnrelatedProvider := false
+			for _, resource := range registry.ListForPresentation() {
+				if resource.Proxmox != nil && resource.Proxmox.SourceID == right.ID {
+					seenUnrelatedProvider = true
+				}
+				if resource.Proxmox != nil && resource.Proxmox.SourceID == right.ID && resource.Agent != nil && resource.Agent.AgentID == host.ID {
+					t.Fatal("presentation attached linked agent to unrelated provider")
+				}
+			}
+			if !seenUnrelatedProvider {
+				t.Fatal("unrelated provider disappeared from presentation")
+			}
+			if got[right.ID] != nil {
+				t.Fatal("shared host-local network lent agent identity to another provider")
+			}
+		})
+	}
+}
+
+func TestProxmoxInferencePreservesManagementNetworkCorroboration(t *testing.T) {
+	for _, nic := range []string{"eth0", "vmbr0", "br-mgmt", ""} {
+		t.Run(nic, func(t *testing.T) {
+			networks := []models.HostNetworkInterface{{Name: nic, Addresses: []string{"172.17.1.2/24"}}}
+			host := &models.Host{ID: "agent", Hostname: "pve", LinkedNodeID: "a", NetworkInterfaces: networks}
+			left := models.Node{ID: "a", Name: "pve", Instance: "a", Host: "https://a.example:8006", LinkedAgentID: host.ID, NetworkInterfaces: networks}
+			right := models.Node{ID: "b", Name: "pve", Instance: "b", Host: "https://b.example:8006", NetworkInterfaces: networks}
+			got := inferLinkedHostsForProxmoxNodes([]models.Node{left, right}, map[string]*models.Host{host.ID: host})
+			if got[left.ID] != host || got[right.ID] != host {
+				t.Fatal("lost corroborated duplicate provider")
+			}
+		})
+	}
+}
+
+func TestProxmoxOneWayLinkRejectsHostLocalEndpointCorroboration(t *testing.T) {
+	host := models.Host{ID: "agent", Hostname: "nas", NetworkInterfaces: []models.HostNetworkInterface{{Name: "docker0", Addresses: []string{"172.17.0.1/16"}}}}
+	node := models.Node{ID: "node", Name: "pve", Host: "https://172.17.0.1:8006", LinkedAgentID: host.ID}
+	if trustedProxmoxNodeHostLink(node, host) {
+		t.Fatal("uncorroborated one-way link trusted via Docker bridge")
+	}
+	host.LinkedNodeID = node.ID
+	if !trustedProxmoxNodeHostLink(node, host) {
+		t.Fatal("reciprocal explicit link lost")
+	}
+	host.LinkedNodeID = ""
+	host.ReportIP = "172.17.0.1"
+	if !trustedProxmoxNodeHostLink(node, host) {
+		t.Fatal("explicit private report-IP corroboration lost")
+	}
+}

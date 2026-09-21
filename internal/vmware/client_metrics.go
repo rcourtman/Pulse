@@ -38,6 +38,7 @@ type viJSONPerfProviderSummary struct {
 }
 
 type viJSONPerfMetricID struct {
+	TypeName  string `json:"_typeName,omitempty"`
 	CounterID int    `json:"counterId"`
 	Instance  string `json:"instance"`
 }
@@ -232,9 +233,10 @@ func (c *Client) queryPerfProviderSummary(
 	var summary viJSONPerfProviderSummary
 	path := fmt.Sprintf("/sdk/vim25/%s/PerformanceManager/%s/QueryPerfProviderSummary", release, perfManagerMoID)
 	body := map[string]any{
-		"entity": map[string]string{
-			"type":  strings.TrimSpace(entityType),
-			"value": strings.TrimSpace(entityMoID),
+		"entity": viJSONReference{
+			TypeName: "ManagedObjectReference",
+			Type:     strings.TrimSpace(entityType),
+			Value:    strings.TrimSpace(entityMoID),
 		},
 	}
 	if err := c.postVIJSONJSON(ctx, sessionID, path, "vmware performance provider summary", body, &summary); err != nil {
@@ -254,9 +256,10 @@ func (c *Client) queryAvailablePerfMetrics(
 ) ([]viJSONPerfMetricID, error) {
 	path := fmt.Sprintf("/sdk/vim25/%s/PerformanceManager/%s/QueryAvailablePerfMetric", release, perfManagerMoID)
 	body := map[string]any{
-		"entity": map[string]string{
-			"type":  strings.TrimSpace(entityType),
-			"value": strings.TrimSpace(entityMoID),
+		"entity": viJSONReference{
+			TypeName: "ManagedObjectReference",
+			Type:     strings.TrimSpace(entityType),
+			Value:    strings.TrimSpace(entityMoID),
 		},
 		"intervalId": intervalID,
 	}
@@ -278,15 +281,22 @@ func (c *Client) queryPerfMetrics(
 	metricIDs []viJSONPerfMetricID,
 ) ([]viJSONPerfEntityMetric, error) {
 	path := fmt.Sprintf("/sdk/vim25/%s/PerformanceManager/%s/QueryPerf", release, perfManagerMoID)
+	metricRequests := make([]viJSONPerfMetricID, len(metricIDs))
+	for i, metricID := range metricIDs {
+		metricID.TypeName = "PerfMetricId"
+		metricRequests[i] = metricID
+	}
 	body := map[string]any{
 		"querySpec": []map[string]any{{
-			"entity": map[string]string{
-				"type":  strings.TrimSpace(entityType),
-				"value": strings.TrimSpace(entityMoID),
+			"_typeName": "PerfQuerySpec",
+			"entity": viJSONReference{
+				TypeName: "ManagedObjectReference",
+				Type:     strings.TrimSpace(entityType),
+				Value:    strings.TrimSpace(entityMoID),
 			},
 			"intervalId": intervalID,
 			"maxSample":  1,
-			"metricId":   metricIDs,
+			"metricId":   metricRequests,
 		}},
 	}
 	var result []viJSONPerfEntityMetric
@@ -320,12 +330,9 @@ func (c *Client) postVIJSONJSON(ctx context.Context, sessionID, path, label stri
 	switch resp.StatusCode {
 	case http.StatusOK:
 	default:
-		return classifyReadStatusCode(label, resp.StatusCode)
+		return classifyReadStatusCodeWithBody(label, resp.StatusCode, responseBody)
 	}
-	if err := json.Unmarshal(responseBody, target); err != nil {
-		return &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware %s response was not valid JSON", label)}
-	}
-	return nil
+	return decodeVIJSONBody(responseBody, label, target)
 }
 
 func perfMetricIDsForEntity(

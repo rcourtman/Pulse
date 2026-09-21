@@ -20,6 +20,15 @@
 
 ## Purpose
 
+### Ollama credential lifecycle
+Settings return only `ollama_username` and `ollama_password_set`, never the
+password. An omitted password preserves it, a supplied password replaces it
+verbatim, and `clear_ollama_password: true` removes it. An empty username clears
+the username independently. `TestAISettingsOllamaPasswordLifecycle` proves these
+existing wire semantics against persistence; the connection and provider tests
+verify authenticated requests to synthetic Ollama endpoints.
+
+
 ### Warning severity maintenance backport
 
 Issue #2069: preserve `warning` alongside `critical` through email API load/save
@@ -442,6 +451,8 @@ single TypeScript projection rather than recreating lifecycle or evidence
 enums locally.
 
 ## Shared Boundaries
+
+- Quick security setup must synchronise the router-captured configurable authorizer when committing the local administrator identity, before establishing its session. The resulting Settings capabilities must grant both administrator-session surfaces and API Access/Pulse Intelligence permission surfaces without requiring a process restart. Permission checks and token scopes remain enforced for other identities.
 
 ### Development-only general API budget
 
@@ -10576,3 +10587,18 @@ ID; an explicitly installed agent retains agent coordinates. Display identity
 and discovery routing are not substitutes for telemetry identity. The focused
 BuildMetricsTarget and Node adapter/drawer regressions in
 docs/qualification/release-v6.4-history/README.md validate this bounded backport.
+
+### Quick security setup preserves unrelated settings
+
+Authenticated force setup in `internal/api/security_setup_fix.go` retains the
+existing authentication and settings-write authorization checks. Rotating local
+credentials does not reset non-auth system preferences.
+`ConfigPersistence.InitializeSystemSettings` in `internal/config/persistence.go`
+creates defaults only when system settings are absent, under the same instance
+mutex as ordinary saves; existing bytes (including unknown fields and malformed
+data requiring recovery) are not rewritten. A read error prevents initialization,
+while authentication setup retains its existing nonfatal settings-error behavior.
+This does not change token scopes, agent admission, or existing agent cleanup.
+Regression coverage: `TestQuickSecuritySetupForcePreservesSystemSettings` and
+`TestInitializeSystemSettingsPreservesExistingBytes`, `TestInitializeSystemSettingsMissing`,
+`TestInitializeSystemSettingsReadError`.

@@ -123,3 +123,43 @@ func TestRegistryChecker_MultiArchDigestLayersStayConsistentAcrossCache(t *testi
 		t.Fatalf("expected one HEAD and one GET before the cache hit, got %d requests", requestCount)
 	}
 }
+
+// Issue #2110: a local image can carry several RepoDigests, for example the
+// tag's manifest digest and a platform manifest digest. The update check must
+// treat any of them as the current image rather than reporting a false update
+// just because the first entry differs from the registry digest.
+func TestRegistryChecker_MultipleLocalRepoDigestsSuppressFalseUpdate(t *testing.T) {
+	checker := NewRegistryChecker(zerolog.Nop())
+	checker.httpClient = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.Method == http.MethodHead {
+				return newStringResponse(http.StatusOK, map[string]string{
+					"Content-Type":          "application/vnd.docker.distribution.manifest.v2+json",
+					"Docker-Content-Digest": "sha256:cf78",
+				}, ""), nil
+			}
+			return newStringResponse(http.StatusOK, nil, "{}"), nil
+		}),
+	}
+
+	result := checker.CheckImageUpdate(
+		context.Background(),
+		"example.test/postgres:16.15-alpine3.24",
+		"sha256:44c4,sha256:cf78",
+		"amd64",
+		"linux",
+		"",
+	)
+	if result == nil {
+		t.Fatal("expected an update result")
+	}
+	if result.UpdateAvailable {
+		t.Fatalf("a local RepoDigest matching the registry digest must suppress the update: %#v", result)
+	}
+	if result.CurrentDigest != "sha256:44c4" {
+		t.Fatalf("primary current digest = %q, want %q", result.CurrentDigest, "sha256:44c4")
+	}
+	if result.LatestDigest != "sha256:cf78" {
+		t.Fatalf("latest digest = %q, want %q", result.LatestDigest, "sha256:cf78")
+	}
+}

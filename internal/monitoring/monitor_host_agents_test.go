@@ -18,6 +18,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
@@ -5821,4 +5822,404 @@ func TestResourceStoreInitializationBatchesProviders(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Issue #2113: a removed host agent re-enrolls under a derived suffixed
+// identity because identity resolution forks the machine before the removal
+// block is consulted. The block is keyed on the base machine identity, so the
+// forked ID bypasses it and the machine is silently admitted instead of being
+// rejected or cleared. This reproduces the fork trigger (a live base-identity
+// record still present in the unified read model with an older token) and
+// asserts a fresh install token heals to the base identity.
+func TestApplyHostReportHonoursRemovalBlockWhenIdentityWouldFork(t *testing.T) {
+	now := time.Now().UTC()
+	const (
+		baseID    = "bf3f9ff3273346d9944c49160dc57288"
+		hostname  = "truenas-iscsi.local"
+		machineID = "bf3f9ff3273346d9944c49160dc57288"
+	)
+
+	live := models.Host{
+		ID:              baseID,
+		MachineID:       machineID,
+		Hostname:        hostname,
+		Platform:        "linux",
+		Status:          "online",
+		LastSeen:        now,
+		IntervalSeconds: 30,
+		TokenID:         "token-old",
+	}
+	state := models.NewState()
+	state.Hosts = []models.Host{live}
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(state.GetSnapshot())
+	adapter := unifiedresources.NewMonitorAdapter(registry)
+
+	monitor := &Monitor{
+		state:             state,
+		resourceStore:     adapter,
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: map[string]string{"token-old": baseID},
+		removedHostAgents: make(map[string]time.Time),
+		rateTracker:       NewRateTracker(),
+		config:            &config.Config{},
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	// The operator removed the host while the live record was still present in
+	// the read model: the tombstone is keyed on the base identity.
+	removedAt := now.Add(-2 * time.Hour)
+	monitor.state.AddRemovedHostAgent(models.RemovedHostAgent{
+		ID:        baseID,
+		Hostname:  hostname,
+		MachineID: machineID,
+		TokenID:   "token-old",
+		RemovedAt: removedAt,
+	})
+	monitor.removedHostAgents[baseID] = removedAt
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: baseID, Type: "unified", IntervalSeconds: 30},
+		Host: agentshost.HostInfo{
+			ID:        baseID,
+			Hostname:  hostname,
+			MachineID: machineID,
+			Platform:  "linux",
+		},
+		Timestamp: now,
+	}
+	// The fresh token post-dates the removal, but the colliding live record is
+	// still reporting, so the stale-identity reuse path declines and identity
+	// resolution forks.
+	freshToken := &config.APITokenRecord{
+		ID:        "token-new",
+		Name:      "reinstall",
+		CreatedAt: now.Add(-time.Hour),
+	}
+
+	host, err := monitor.ApplyHostReport(report, freshToken)
+	if err != nil {
+		t.Fatalf("fresh re-enroll should clear the block, got %v", err)
+	}
+	if host.ID != baseID {
+		t.Fatalf("expected re-enroll to heal to base identity %q, got derived %q", baseID, host.ID)
+	}
+	if len(monitor.state.GetRemovedHostAgents()) != 0 {
+		t.Fatalf("expected removal block to be cleared, still have %+v", monitor.state.GetRemovedHostAgents())
+	}
+}
+
+// Issue #1966: read-side registry rebuilds re-run the unified metric sync as
+// often as every two seconds, so one poll observation was re-written many
+// times between polls. The store upserts on (resource, metric, tier,
+// timestamp), so each replay committed a fresh transaction for no new data and
+// churned the SQLite WAL. The replay guard drops exact timestamp+value repeats
+// before the batch is enqueued while still writing a corrected value.
+func TestDedupeUnifiedMetricWritesDropsExactReplays(t *testing.T) {
+	monitor := &Monitor{}
+	observedAt := time.Date(2026, time.September, 19, 12, 0, 0, 0, time.UTC)
+	write := metrics.WriteMetric{
+		ResourceType: "storage",
+		ResourceID:   "pool:tank",
+		MetricType:   "usage",
+		Value:        62,
+		Timestamp:    observedAt,
+		Tier:         metrics.TierRaw,
+	}
+
+	first := monitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{write})
+	if len(first) != 1 {
+		t.Fatalf("first write count = %d, want 1", len(first))
+	}
+	// The same observation replayed by a read-side registry rebuild must not
+	// reach the store again: that UPDATE is the write amplification in #1966.
+	replay := monitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{write})
+	if len(replay) != 0 {
+		t.Fatalf("replayed write count = %d, want 0", len(replay))
+	}
+
+	// A corrected value at the same observation time is still written.
+	corrected := write
+	corrected.Value = 63
+	if got := monitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{corrected}); len(got) != 1 {
+		t.Fatalf("corrected write count = %d, want 1", len(got))
+	}
+
+	// A newer observation for the same series is written.
+	advanced := write
+	advanced.Value = 63
+	advanced.Timestamp = observedAt.Add(time.Minute)
+	if got := monitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{advanced}); len(got) != 1 {
+		t.Fatalf("advanced write count = %d, want 1", len(got))
+	}
+}
+
+func TestSyncUnifiedStorageMetricsDefersWritesToBatchSink(t *testing.T) {
+	observedAt := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	resourceStore.PopulateFromSnapshot(models.StateSnapshot{
+		PBSInstances: []models.PBSInstance{{
+			ID:       "pbs-main",
+			Name:     "pbs-main",
+			Status:   "online",
+			LastSeen: observedAt,
+			Datastores: []models.PBSDatastore{{
+				Name:   "backups",
+				Status: "available",
+				Total:  1000,
+				Used:   400,
+				Free:   600,
+				Usage:  40,
+			}},
+		}},
+	})
+
+	var targetID string
+	for _, resource := range resourceStore.GetAll() {
+		if resource.Type != unifiedresources.ResourceTypeStorage || resource.Storage == nil || resource.Storage.Platform != "pbs" {
+			continue
+		}
+		target := resourceStore.MetricsTargetForResource(resource.ID)
+		if target == nil || target.ResourceType != "storage" {
+			t.Fatalf("unexpected PBS datastore metrics target: %+v", target)
+		}
+		targetID = target.ResourceID
+		break
+	}
+	if targetID == "" {
+		t.Fatal("expected a PBS datastore in the unified resource store")
+	}
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	persistentStore, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = persistentStore.Close() }()
+
+	monitor := &Monitor{
+		metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+		metricsStore:   persistentStore,
+	}
+
+	// A sink collects the batch so the unified syncs can share one transaction.
+	// The sink path must not write through to the store itself.
+	var sink []metrics.WriteMetric
+	monitor.syncUnifiedStorageMetrics(resourceStore, &sink)
+	if len(sink) == 0 {
+		t.Fatal("expected storage writes to be collected in the batch sink")
+	}
+
+	before, err := persistentStore.Query("storage", targetID, "usage", observedAt.Add(-time.Second), observedAt.Add(time.Second), 0)
+	if err != nil {
+		t.Fatalf("query persisted PBS usage: %v", err)
+	}
+	if len(before) != 0 {
+		t.Fatalf("sink path must not write to the store directly, got %+v", before)
+	}
+
+	persistentStore.WriteBatchBounded(sink)
+
+	after, err := persistentStore.Query("storage", targetID, "usage", observedAt.Add(-time.Second), observedAt.Add(time.Second), 0)
+	if err != nil {
+		t.Fatalf("query persisted PBS usage: %v", err)
+	}
+	if len(after) != 1 {
+		t.Fatalf("persisted PBS usage points = %d, want one after the batch flush: %+v", len(after), after)
+	}
+	if !after[0].Timestamp.Equal(observedAt) {
+		t.Fatalf("persisted PBS usage timestamp = %s, want source observation %s", after[0].Timestamp, observedAt)
+	}
+}
+
+func TestSyncUnifiedPhysicalDiskMetricsUsesSourceObservationTimeAcrossRegistryRebuilds(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		truenas.SetFeatureEnabled(previous)
+	})
+
+	fixtures := truenas.DefaultFixtures()
+	fixtures.CollectedAt = time.Now().UTC().Truncate(time.Second)
+	fixtures.System.CollectedAt = fixtures.CollectedAt
+	observedAt := fixtures.CollectedAt
+
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceTrueNAS: truenas.NewProvider(fixtures).Records(),
+	})
+
+	var diskResourceID string
+	for _, resource := range resourceStore.GetAll() {
+		if resource.Type != unifiedresources.ResourceTypePhysicalDisk || resource.PhysicalDisk == nil {
+			continue
+		}
+		if strings.TrimSpace(resource.PhysicalDisk.DevPath) == "/dev/sdc" {
+			diskResourceID = resource.ID
+			break
+		}
+	}
+	if diskResourceID == "" {
+		t.Fatal("expected TrueNAS sdc disk resource in unified store")
+	}
+
+	target := resourceStore.MetricsTargetForResource(diskResourceID)
+	if target == nil || target.ResourceType != "disk" || target.ResourceID != "WD-WX12A3456" {
+		t.Fatalf("unexpected physical-disk metrics target %+v", target)
+	}
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	persistentStore, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = persistentStore.Close() }()
+
+	monitor := &Monitor{
+		metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+		metricsStore:   persistentStore,
+	}
+
+	// Read-side registry rebuilds must not invent a fresh sample for the same
+	// source observation (the write amplification in #1966).
+	monitor.syncUnifiedPhysicalDiskMetrics(resourceStore)
+	monitor.syncUnifiedPhysicalDiskMetrics(resourceStore)
+
+	inMemory := monitor.GetDiskMetrics(target.ResourceID, "smart_temp", time.Hour)
+	if len(inMemory) != 1 {
+		t.Fatalf("in-memory disk smart_temp points = %d, want one per source observation: %+v", len(inMemory), inMemory)
+	}
+	if !inMemory[0].Timestamp.Equal(observedAt) {
+		t.Fatalf("in-memory disk smart_temp timestamp = %s, want source observation %s", inMemory[0].Timestamp, observedAt)
+	}
+
+	persisted, err := persistentStore.Query("disk", target.ResourceID, "smart_temp", observedAt.Add(-time.Second), observedAt.Add(time.Second), 0)
+	if err != nil {
+		t.Fatalf("query persisted disk smart_temp: %v", err)
+	}
+	if len(persisted) != 1 {
+		t.Fatalf("persisted disk smart_temp points = %d, want one per source observation: %+v", len(persisted), persisted)
+	}
+	if !persisted[0].Timestamp.Equal(observedAt) {
+		t.Fatalf("persisted disk smart_temp timestamp = %s, want source observation %s", persisted[0].Timestamp, observedAt)
+	}
+}
+
+func TestSyncUnifiedAgentMetricsUsesSourceObservationTimeAcrossRegistryRebuilds(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		truenas.SetFeatureEnabled(previous)
+	})
+
+	fixtures := truenas.DefaultFixtures()
+	fixtures.CollectedAt = time.Now().UTC().Truncate(time.Second)
+	fixtures.System.CollectedAt = fixtures.CollectedAt
+	observedAt := fixtures.CollectedAt
+
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceTrueNAS: truenas.NewProvider(fixtures).Records(),
+	})
+
+	var targetID string
+	for _, resource := range resourceStore.GetAll() {
+		if resource.Type != unifiedresources.ResourceTypeAgent || resource.Name != "truenas-main" {
+			continue
+		}
+		target := resourceStore.MetricsTargetForResource(resource.ID)
+		if target == nil || target.ResourceType != "agent" {
+			t.Fatalf("unexpected agent metrics target: %+v", target)
+		}
+		targetID = target.ResourceID
+		break
+	}
+	if targetID == "" {
+		t.Fatal("expected a TrueNAS agent resource in the unified resource store")
+	}
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	persistentStore, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = persistentStore.Close() }()
+
+	monitor := &Monitor{
+		metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+		metricsStore:   persistentStore,
+	}
+
+	// Read-side registry rebuilds must not invent a fresh sample for the same
+	// source observation (the write amplification in #1966).
+	monitor.syncUnifiedAgentMetrics(resourceStore)
+	monitor.syncUnifiedAgentMetrics(resourceStore)
+
+	inMemory := monitor.GetGuestMetrics("agent:"+targetID, time.Hour)["cpu"]
+	if len(inMemory) != 1 {
+		t.Fatalf("in-memory agent cpu points = %d, want one per source observation: %+v", len(inMemory), inMemory)
+	}
+	if !inMemory[0].Timestamp.Equal(observedAt) {
+		t.Fatalf("in-memory agent cpu timestamp = %s, want source observation %s", inMemory[0].Timestamp, observedAt)
+	}
+
+	persisted, err := persistentStore.Query("agent", targetID, "cpu", observedAt.Add(-time.Second), observedAt.Add(time.Second), 0)
+	if err != nil {
+		t.Fatalf("query persisted agent cpu: %v", err)
+	}
+	if len(persisted) != 1 {
+		t.Fatalf("persisted agent cpu points = %d, want one per source observation: %+v", len(persisted), persisted)
+	}
+	if !persisted[0].Timestamp.Equal(observedAt) {
+		t.Fatalf("persisted agent cpu timestamp = %s, want source observation %s", persisted[0].Timestamp, observedAt)
+	}
+}
+
+// Explicit includes must survive the wire and both server report paths.
+func TestAgentReportsPreserveExplicitDiskIncludes(t *testing.T) {
+	var disks []agentshost.Disk
+	if err := json.Unmarshal([]byte(`[
+ {"device":"log2ram","mountpoint":"/var/log","type":"tmpfs","totalBytes":1024,"usedBytes":768,"explicitlyIncluded":true},
+ {"device":"tmpfs","mountpoint":"/mnt/ramdisk/plex-transcode","type":"tmpfs","totalBytes":1024,"usedBytes":256,"explicitlyIncluded":true},
+ {"device":"tmpfs","mountpoint":"/run","type":"tmpfs","totalBytes":1024},
+ {"device":"/dev/sda","mountpoint":"/","type":"ext4","totalBytes":4096,"usedBytes":1024}
+ ]`), &disks); err != nil {
+		t.Fatal(err)
+	}
+	check := func(t *testing.T, got []models.Disk) {
+		t.Helper()
+		if len(got) != 3 {
+			t.Fatalf("accepted disks = %+v, want both selected tmpfs and root only", got)
+		}
+		for i, want := range []string{"/var/log", "/mnt/ramdisk/plex-transcode", "/"} {
+			if got[i].Mountpoint != want || got[i].Total != []int64{1024, 1024, 4096}[i] {
+				t.Fatalf("disk %d = %+v", i, got[i])
+			}
+		}
+	}
+	t.Run("host", func(t *testing.T) {
+		m := newTestMonitor(t)
+		host, err := m.ApplyHostReport(agentshost.Report{
+			Agent: agentshost.AgentInfo{ID: "include-host", IntervalSeconds: 30},
+			Host:  agentshost.HostInfo{ID: "include-machine", Hostname: "include-host"},
+			Disks: disks, Timestamp: time.Now().UTC(),
+		}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, host.Disks)
+	})
+	t.Run("docker", func(t *testing.T) {
+		m := newTestMonitor(t)
+		host, err := m.ApplyDockerReport(agentsdocker.Report{
+			Agent:     agentsdocker.AgentInfo{ID: "include-docker", IntervalSeconds: 30},
+			Host:      agentsdocker.HostInfo{MachineID: "include-docker-machine", Hostname: "include-docker", Disks: disks},
+			Timestamp: time.Now().UTC(),
+		}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, host.Disks)
+	})
 }

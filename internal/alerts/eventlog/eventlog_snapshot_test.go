@@ -1,8 +1,10 @@
 package eventlog
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -310,5 +312,67 @@ func TestConcurrentUnchangedDeliveryDecisionAdmitsOneEpisode(t *testing.T) {
 	}
 	if len(events) != 1 {
 		t.Fatalf("concurrent reevaluations wrote %d episodes, want one", len(events))
+	}
+}
+
+func TestSnapshotVolumeBoundPrunesOldestAndAdvancesRetention(t *testing.T) {
+	store := newTestStore(t)
+	base := time.Now().Add(-time.Hour).UTC()
+	const eventCount = 8
+	payload := bytes.Repeat([]byte("x"), 1024)
+	for i := 0; i < eventCount; i++ {
+		snapshot, err := json.Marshal(map[string]any{"id": fmt.Sprintf("a%d", i), "blob": string(payload)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.AppendDurable(Event{
+			OccurredAt: base.Add(time.Duration(i) * time.Minute),
+			Type:       TypeFired,
+			AlertID:    fmt.Sprintf("a%d", i),
+			Snapshot:   snapshot,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The release line has no ReplayBoundary reader, so read the durable append
+	// tail and the retention revision directly from the store.
+	boundary := func() (int64, int64) {
+		t.Helper()
+		var lastID, revision int64
+		if err := store.db.QueryRow(`SELECT
+			COALESCE((SELECT MAX(id) FROM alert_events), 0),
+			COALESCE((SELECT CAST(value AS INTEGER) FROM alert_store_meta WHERE key = 'retention_revision'), 0)`).
+			Scan(&lastID, &revision); err != nil {
+			t.Fatal(err)
+		}
+		return lastID, revision
+	}
+	beforeID, beforeRevision := boundary()
+	// Keep roughly three events' payload; the older rows must be removed.
+	store.pruneSnapshotVolume(3 * 1200)
+	afterID, afterRevision := boundary()
+	if afterRevision <= beforeRevision {
+		t.Fatalf("volume prune did not advance retention revision: before=%d after=%d", beforeRevision, afterRevision)
+	}
+	if afterID != beforeID {
+		t.Fatalf("volume prune changed the newest id: before=%d after=%d", beforeID, afterID)
+	}
+	remaining, err := store.Query(Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(remaining) == 0 || len(remaining) >= eventCount {
+		t.Fatalf("volume prune left %d of %d events", len(remaining), eventCount)
+	}
+	for _, event := range remaining {
+		if event.AlertID == "a0" {
+			t.Fatalf("oldest event survived volume prune: %+v", remaining)
+		}
+	}
+	// A second prune already within the cap must not change the boundary.
+	store.pruneSnapshotVolume(3 * 1200)
+	againID, againRevision := boundary()
+	if againID != afterID || againRevision != afterRevision {
+		t.Fatalf("prune within the cap changed the boundary: (%d,%d) -> (%d,%d)", afterID, afterRevision, againID, againRevision)
 	}
 }

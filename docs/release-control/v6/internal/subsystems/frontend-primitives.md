@@ -20,6 +20,16 @@
 
 ## Purpose
 
+### Ollama credential editing
+The provider panel exposes the existing Basic Auth configuration. Saved passwords
+are represented by presence text, never a placeholder secret or input value.
+Blank password input preserves the saved value; explicit clearing takes precedence
+over a draft replacement. Successful saves discard the password draft. Username
+clearing is independent. Password bytes are not trimmed. Tests exercise preservation,
+replacement and clearing through the Settings save action. Connection testing uses
+saved settings; the panel tells users to save before testing and use HTTPS remotely.
+
+
 Mount lists stay in the parent scroll flow so overlay scrollbars cannot hide additional mounts. The maintenance backport preserves the reviewed DisksCard layout repair; two and twenty-four mount cases retain keyboard access to the final mount.
 
 Overview delivery diagnoses use latest-started refresh ownership. Older bulk
@@ -183,6 +193,14 @@ snapshot may reorder those wrappers without remounting row-local input or
 drawer state, and must never reconcile one row's nested value through another
 row or duplicate rows after sorting. Missing or duplicate keys retain the
 reference-keyed fallback.
+
+The window's item-height estimate is measured from representative content, not
+the leading sibling alone. Grouped surfaces render a short group header before
+their first content row, and sampling only that header collapses the estimate so
+the mounted window advances far faster than the real scroll position and drops a
+group's rows mid-scroll. The controller samples several leading siblings and
+keeps the tallest, so uniform tables still measure their real row height while
+mixed group/content lists keep a content-scale estimate.
 
 Shared workload, node, Docker-host, and resource-drawer history presentation
 keeps current readings separate from stored samples. A current metric may
@@ -7074,3 +7092,12 @@ notification delivery.
 Node History prefers a valid canonical node/agent metricsTarget before display identity. Backups reuses deduplicated Overview resources and includes standalone PBS agents; PBS drawer correlation accepts uniquely matching agent-bearing VM/container resources while rejecting ambiguous identities.
 
 Bounded adaptations of reviewed main 3a189f31d447 (identity only) and 605643b01722. No metrics-store/storage-tier implementation or release metadata changes. Focused regressions and release-line browser proof are recorded in docs/qualification/release-v6.4-history/README.md. This is source qualification, not installed or published acceptance.
+
+### Alerts overview stat annotation keeps its own cell
+
+Within the shared table primitives, the Alerts overview stats table must keep
+the Triggered (24h) count in the same numeric column as the Acknowledged and
+Workload Overrides counts even when the small critical annotation renders. The
+annotation occupies its own right-aligned cell rather than trailing the count
+inline. The layout is verified at desktop and phone widths in
+`frontend-modern/browser-verification.json`; no shared primitive API changes.

@@ -1393,3 +1393,75 @@ func TestNormaliseRuntimePlatformUsesBuildTarget(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeMachineGUID(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{"bare lowercase", "9f2f0c1a-1b2c-3d4e-5f60-1234567890ab", "9f2f0c1a-1b2c-3d4e-5f60-1234567890ab"},
+		{"braced", "{9f2f0c1a-1b2c-3d4e-5f60-1234567890ab}", "9f2f0c1a-1b2c-3d4e-5f60-1234567890ab"},
+		{"uppercase and spaces", "  {9F2F0C1A-1B2C-3D4E-5F60-1234567890AB}  ", "9f2f0c1a-1b2c-3d4e-5f60-1234567890ab"},
+		{"empty", "", ""},
+		{"braces only", "{}", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := normalizeMachineGUID(tc.raw); got != tc.want {
+				t.Fatalf("normalizeMachineGUID(%q) = %q, want %q", tc.raw, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDefaultCollectorHostInfoRecoversWindowsHostIDFailure(t *testing.T) {
+	originalInfo := hostInfoWithContext
+	originalRecover := recoverHostInfo
+	defer func() {
+		hostInfoWithContext = originalInfo
+		recoverHostInfo = originalRecover
+	}()
+
+	hostInfoWithContext = func(context.Context) (*gohost.InfoStat, error) {
+		return nil, errors.New("getting host ID: More data is available.")
+	}
+	recoverHostInfo = func(context.Context) *gohost.InfoStat {
+		return &gohost.InfoStat{Hostname: "win-host", HostID: "9f2f0c1a-1b2c-3d4e-5f60-1234567890ab"}
+	}
+
+	got, err := (&defaultCollector{}).HostInfo(context.Background())
+	if err != nil {
+		t.Fatalf("HostInfo() error = %v, want recovered info", err)
+	}
+	if got.Hostname != "win-host" || got.HostID != "9f2f0c1a-1b2c-3d4e-5f60-1234567890ab" {
+		t.Fatalf("HostInfo() = %+v, want recovered Windows host info", got)
+	}
+}
+
+func TestDefaultCollectorHostInfoKeepsErrorWhenUnrecovered(t *testing.T) {
+	originalInfo := hostInfoWithContext
+	originalRecover := recoverHostInfo
+	defer func() {
+		hostInfoWithContext = originalInfo
+		recoverHostInfo = originalRecover
+	}()
+
+	wantErr := errors.New("getting hostname: unavailable")
+	hostInfoWithContext = func(context.Context) (*gohost.InfoStat, error) {
+		return nil, wantErr
+	}
+	recoverHostInfo = func(context.Context) *gohost.InfoStat { return nil }
+
+	if _, err := (&defaultCollector{}).HostInfo(context.Background()); !errors.Is(err, wantErr) {
+		t.Fatalf("HostInfo() error = %v, want %v", err, wantErr)
+	}
+}
+
+func TestGetReliableMachineIDNormalizesWindowsBraces(t *testing.T) {
+	collector := &mockCollector{goos: "windows"}
+	got := GetReliableMachineID(collector, "{9F2F0C1A-1B2C-3D4E-5F60-1234567890AB}", zerolog.Nop())
+	if want := "9f2f0c1a-1b2c-3d4e-5f60-1234567890ab"; got != want {
+		t.Fatalf("GetReliableMachineID() = %q, want %q", got, want)
+	}
+}

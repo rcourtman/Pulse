@@ -107,11 +107,18 @@ type ChatRequest struct {
 	// tokens. Ollama otherwise loads models at its server default (typically
 	// 4096) regardless of the model's trained window and silently truncates
 	// large prompts (#1624). Providers without such a control ignore it.
-	MinContextTokens  int           `json:"-"`
-	System            string        `json:"system,omitempty"`      // System prompt (Anthropic style)
-	Tools             []Tool        `json:"tools,omitempty"`       // Available tools
-	ToolChoice        *ToolChoice   `json:"tool_choice,omitempty"` // nil = model-owned automatic selection; none = text-only safety brake; required = provider-native forced tool use where supported
-	StreamIdleTimeout time.Duration `json:"-"`                     // Optional use-case-specific inter-chunk stall allowance; provider request payloads must not serialize it.
+	MinContextTokens int    `json:"-"`
+	System           string `json:"system,omitempty"` // System prompt (Anthropic style)
+	// SystemCacheablePrefix marks the stable leading portion of System. When
+	// set and it is an exact prefix of System, providers with prompt-caching
+	// support (Anthropic) place a cache breakpoint after this prefix so the
+	// frozen base plus mode text is reused across turns while per-turn content
+	// appended after it stays outside the cached block. Providers without that
+	// control ignore it and send System unchanged.
+	SystemCacheablePrefix string        `json:"-"`
+	Tools                 []Tool        `json:"tools,omitempty"`       // Available tools
+	ToolChoice            *ToolChoice   `json:"tool_choice,omitempty"` // nil = model-owned automatic selection; none = text-only safety brake; required = provider-native forced tool use where supported
+	StreamIdleTimeout     time.Duration `json:"-"`                     // Optional use-case-specific inter-chunk stall allowance; provider request payloads must not serialize it.
 }
 
 func (r ChatRequest) NormalizeCollections() ChatRequest {
