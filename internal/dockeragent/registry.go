@@ -182,11 +182,18 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 		return nil
 	}
 
+	// currentDigest may be a comma-separated set of the local image's
+	// RepoDigests; report the primary one while comparing against all of them.
+	primaryCurrentDigest := currentDigest
+	if idx := strings.Index(currentDigest, ","); idx >= 0 {
+		primaryCurrentDigest = strings.TrimSpace(currentDigest[:idx])
+	}
+
 	// Skip digest-pinned images (image@sha256:...)
 	if registry == "" {
 		return &ImageUpdateResult{
 			Image:           image,
-			CurrentDigest:   currentDigest,
+			CurrentDigest:   primaryCurrentDigest,
 			UpdateAvailable: false,
 			CheckedAt:       time.Now(),
 			Error:           "digest-pinned image",
@@ -202,7 +209,7 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 		if cached.err != "" {
 			return &ImageUpdateResult{
 				Image:           image,
-				CurrentDigest:   currentDigest,
+				CurrentDigest:   primaryCurrentDigest,
 				UpdateAvailable: false,
 				CheckedAt:       time.Now(),
 				Error:           cached.err,
@@ -210,7 +217,7 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 		}
 		return &ImageUpdateResult{
 			Image:           image,
-			CurrentDigest:   currentDigest,
+			CurrentDigest:   primaryCurrentDigest,
 			LatestDigest:    cached.latestDigest,
 			UpdateAvailable: r.digestsDiffer(currentDigest, cached.comparisonDigests),
 			CheckedAt:       time.Now(),
@@ -231,7 +238,7 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 
 		return &ImageUpdateResult{
 			Image:           image,
-			CurrentDigest:   currentDigest,
+			CurrentDigest:   primaryCurrentDigest,
 			UpdateAvailable: false,
 			CheckedAt:       time.Now(),
 			Error:           err.Error(),
@@ -268,7 +275,7 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 
 	return &ImageUpdateResult{
 		Image:           image,
-		CurrentDigest:   currentDigest,
+		CurrentDigest:   primaryCurrentDigest,
 		LatestDigest:    publicLatestDigest,
 		UpdateAvailable: updateAvailable,
 		CheckedAt:       time.Now(),
@@ -281,18 +288,40 @@ func (r *RegistryChecker) digestsDiffer(current, latest string) bool {
 		return false
 	}
 
-	// Normalize digests - lowercase and remove "sha256:" prefix
-	normCurrent := strings.ToLower(strings.TrimPrefix(current, "sha256:"))
-
-	// latest may contain multiple comma-separated digests (resolved + head)
+	// latest may contain multiple comma-separated digests (resolved + head).
+	// current may also hold several local RepoDigests for one image (#2110).
+	latestSet := make(map[string]struct{})
 	for _, l := range strings.Split(latest, ",") {
-		normLatest := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(l), "sha256:"))
-		if normCurrent == normLatest {
+		if normalized := normalizeComparisonDigest(l); normalized != "" {
+			latestSet[normalized] = struct{}{}
+		}
+	}
+	if len(latestSet) == 0 {
+		return false
+	}
+
+	compared := false
+	for _, c := range strings.Split(current, ",") {
+		normalized := normalizeComparisonDigest(c)
+		if normalized == "" {
+			continue
+		}
+		compared = true
+		if _, ok := latestSet[normalized]; ok {
 			return false // Match found
 		}
 	}
+	if !compared {
+		return false
+	}
 
 	return true // No match found
+}
+
+// normalizeComparisonDigest lowercases a digest and removes the "sha256:"
+// prefix so registry and RepoDigest spellings compare equal.
+func normalizeComparisonDigest(digest string) string {
+	return strings.ToLower(strings.TrimPrefix(strings.TrimSpace(digest), "sha256:"))
 }
 
 // fetchDigest retrieves the digest for an image from the registry.

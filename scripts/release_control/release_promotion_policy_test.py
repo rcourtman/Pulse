@@ -1632,7 +1632,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             workflow,
         )
         self.assertIn(
-            "signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2",
+            "signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0",
             workflow,
         )
         self.assertIn("signedArtifactsPublished = $false", workflow)
@@ -2008,7 +2008,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("windows_signing_backend: signpath", content)
         self.assertIn('if [[ "$REQUIRE_WINDOWS_SIGNING" == "true" ]]', candidate_workflow)
         self.assertIn("inputs.require_windows_signing", candidate_workflow)
-        self.assertIn("signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2", candidate_workflow)
+        self.assertIn("signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0", candidate_workflow)
         self.assertIn("github-artifact-id: ${{ steps.upload-unsigned-windows.outputs.artifact-id }}", candidate_workflow)
         self.assertIn("windows-signing-evidence.json", candidate_workflow)
         for signpath_setting in (
@@ -2894,6 +2894,26 @@ The product owner explicitly approved this change after a cohort reached 7.9%.
 class CandidatePublicationBoundaryTest(unittest.TestCase):
     def setUp(self) -> None:
         self.jobs = yaml.load(read(".github/workflows/create-release.yml"), Loader=UniqueKeyLoader)["jobs"]
+
+    def test_private_pro_pair_is_verified_before_any_draft_exists(self) -> None:
+        prepare_steps = self.jobs["prepare"]["steps"]
+        step = next(
+            (candidate for candidate in prepare_steps
+             if candidate.get("name") == "Verify the private Pro source pair is declared"),
+            None,
+        )
+        self.assertIsNotNone(step, "prepare must verify the private Pro source pair before dispatch")
+        condition = step["if"]
+        self.assertIn("startsWith(github.event.inputs.version, '6.')", condition)
+        self.assertIn("historical_asset_backfill_only != 'true'", condition)
+        self.assertIn("draft_only != 'true'", condition)
+        self.assertEqual(step["env"]["PRIVATE_PAIR_REPOSITORY"], "rcourtman/pulse-enterprise")
+        script = step["run"]
+        self.assertIn("docs/release-source-pairs/${EXPECTED_SOURCE_SHA}.json", script)
+        self.assertIn("pulse_sha", script)
+        self.assertIn("exit 1", script)
+        # The draft is created only after the prepare gate can refuse the run.
+        self.assertIn("prepare", self.jobs["create_release"]["needs"])
 
     def condition(self, job: str, results: dict[str, str], *, draft: bool = False, cancelled: bool = False) -> bool:
         # Execute the workflow's Boolean condition with explicit job outcomes.

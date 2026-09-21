@@ -1,8 +1,10 @@
 package eventlog
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -310,5 +312,63 @@ func TestConcurrentUnchangedDeliveryDecisionAdmitsOneEpisode(t *testing.T) {
 	}
 	if len(events) != 1 {
 		t.Fatalf("concurrent reevaluations wrote %d episodes, want one", len(events))
+	}
+}
+
+func TestSnapshotVolumeBoundPrunesOldestAndAdvancesRetention(t *testing.T) {
+	store := newTestStore(t)
+	base := time.Now().Add(-time.Hour).UTC()
+	const eventCount = 8
+	payload := bytes.Repeat([]byte("x"), 1024)
+	for i := 0; i < eventCount; i++ {
+		snapshot, err := json.Marshal(map[string]any{"id": fmt.Sprintf("a%d", i), "blob": string(payload)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.AppendDurable(Event{
+			OccurredAt: base.Add(time.Duration(i) * time.Minute),
+			Type:       TypeFired,
+			AlertID:    fmt.Sprintf("a%d", i),
+			Snapshot:   snapshot,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before, err := store.ReplayBoundary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Keep roughly three events' payload; the older rows must be removed.
+	store.pruneSnapshotVolume(3 * 1200)
+	after, err := store.ReplayBoundary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.RetentionRevision <= before.RetentionRevision {
+		t.Fatalf("volume prune did not advance retention revision: before=%+v after=%+v", before, after)
+	}
+	if after.LastID != before.LastID {
+		t.Fatalf("volume prune changed the newest id: before=%+v after=%+v", before, after)
+	}
+	remaining, err := store.Query(Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(remaining) == 0 || len(remaining) >= eventCount {
+		t.Fatalf("volume prune left %d of %d events", len(remaining), eventCount)
+	}
+	for _, event := range remaining {
+		if event.AlertID == "a0" {
+			t.Fatalf("oldest event survived volume prune: %+v", remaining)
+		}
+	}
+	// A second prune already within the cap must not change the boundary.
+	store.pruneSnapshotVolume(3 * 1200)
+	again, err := store.ReplayBoundary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again != after {
+		t.Fatalf("prune within the cap changed the boundary: %+v -> %+v", after, again)
 	}
 }

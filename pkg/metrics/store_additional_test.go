@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -1453,5 +1454,401 @@ func TestStoreStatsReaderObservesCommittedDataAndCloses(t *testing.T) {
 	}
 	if err := store.db.DB.Ping(); err == nil {
 		t.Fatal("main pool remained open after store shutdown")
+	}
+}
+
+// Regression coverage for the shutdown send-on-closed-channel review of
+// pkg/metrics/store.go. The ingestion worker used to close writeCh on
+// <-stopCh. A writer that passed the stopping check just before Close, or a
+// WriteBatchSync/WriteBatchBounded caller (which never checks stopping), could
+// then send on the closed channel and panic the process during shutdown.
+
+func newShutdownRaceStore(t *testing.T) *Store {
+	t.Helper()
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-shutdown-race.db")
+	cfg.FlushInterval = time.Hour
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	return store
+}
+
+func shutdownRaceMetric() bufferedMetric {
+	return bufferedMetric{
+		resourceType: "vm",
+		resourceID:   "shutdown-race",
+		metricType:   "cpu",
+		value:        1,
+		timestamp:    time.Unix(1_700_000_000, 0),
+		tier:         TierRaw,
+	}
+}
+
+// A send that reaches the ingestion channel after the worker has finished
+// shutdown must not panic. Before the fix the worker closed writeCh, so this
+// deterministic post-Close enqueue hit a closed channel.
+func TestEnqueueWriteAfterShutdownDoesNotPanic(t *testing.T) {
+	store := newShutdownRaceStore(t)
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close returned error: %v", err)
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("enqueueWrite panicked after shutdown: %v", r)
+		}
+	}()
+	store.enqueueWrite(writeRequest{metrics: []bufferedMetric{shutdownRaceMetric()}})
+}
+
+// Concurrent writers racing a Close exercise the real window: WriteBatchSync
+// and WriteBatchBounded do not consult stopping, and WriteWithTier checks it
+// before releasing bufferMu. None of them may panic.
+func TestConcurrentWritesDuringShutdownDoNotPanic(t *testing.T) {
+	store := newShutdownRaceStore(t)
+
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				store.WriteWithTier("vm", "shutdown-race", "cpu", 1, time.Unix(1_700_000_000, 0), TierRaw)
+				store.WriteBatchBounded([]WriteMetric{{
+					ResourceType: "vm",
+					ResourceID:   "shutdown-race",
+					MetricType:   "cpu",
+					Value:        1,
+					Timestamp:    time.Unix(1_700_000_000, 0),
+					Tier:         TierRaw,
+				}})
+			}
+		}()
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close returned error: %v", err)
+	}
+	close(stop)
+	wg.Wait()
+}
+
+// TestStoreRollupTierBackfillsInterspersedGap verifies that a rollup checkpoint
+// does not leap over a gap between already-processed source windows. A late
+// backfill into that gap must still be aggregated on a later run instead of
+// being stranded below the checkpoint and eventually purged.
+func TestStoreRollupTierBackfillsInterspersedGap(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-rollup-gap.db")
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	base := time.Now().UTC().Add(-4 * time.Hour).Truncate(time.Hour)
+	firstHour := base.Unix()
+	thirdHour := base.Add(2 * time.Hour).Unix()
+	gapHour := base.Add(time.Hour).Unix()
+
+	if _, err := store.db.Exec(
+		`INSERT INTO metrics (resource_type, resource_id, metric_type, value, min_value, max_value, timestamp, tier) VALUES
+		('vm','vm-gap','cpu',1.0,1.0,1.0,?, 'minute'),
+		('vm','vm-gap','cpu',3.0,3.0,3.0,?, 'minute')`, firstHour, thirdHour); err != nil {
+		t.Fatalf("insert source rows: %v", err)
+	}
+
+	store.rollupTier(TierMinute, TierHourly, time.Hour, time.Hour)
+
+	// Backfill the interspersed gap after the first rollup ran.
+	if _, err := store.db.Exec(
+		`INSERT INTO metrics (resource_type, resource_id, metric_type, value, min_value, max_value, timestamp, tier) VALUES
+		('vm','vm-gap','cpu',2.0,2.0,2.0,?, 'minute')`, gapHour); err != nil {
+		t.Fatalf("backfill gap row: %v", err)
+	}
+
+	store.rollupTier(TierMinute, TierHourly, time.Hour, time.Hour)
+
+	var count int
+	if err := store.db.QueryRow(
+		`SELECT COUNT(*) FROM metrics WHERE tier='hourly' AND resource_id='vm-gap' AND timestamp=?`, gapHour).Scan(&count); err != nil {
+		t.Fatalf("query hourly gap: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected backfilled gap hour %d to roll up to hourly, got %d rows", gapHour, count)
+	}
+}
+
+// TestStoreWriteBatchPreservesRollupSpread verifies that a direct write to an
+// aggregate tier does not erase an existing rollup row's min/max spread. The
+// write statement omits min/max, so excluded.* are NULL and a naive upsert
+// would null the stored spread.
+func TestStoreWriteBatchPreservesRollupSpread(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-spread.db")
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	ts := time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Minute)
+	if _, err := store.db.Exec(
+		`INSERT INTO metrics (resource_type, resource_id, metric_type, value, min_value, max_value, timestamp, tier) VALUES
+		('vm','vm-spread','cpu',5.0,1.0,9.0,?, 'minute')`, ts.Unix()); err != nil {
+		t.Fatalf("insert rollup row: %v", err)
+	}
+
+	store.writeBatch([]bufferedMetric{
+		{resourceType: "vm", resourceID: "vm-spread", metricType: "cpu", value: 7.0, timestamp: ts, tier: TierMinute},
+	})
+
+	var minValue, maxValue sql.NullFloat64
+	if err := store.db.QueryRow(
+		`SELECT min_value, max_value FROM metrics WHERE tier='minute' AND resource_id='vm-spread' AND timestamp=?`, ts.Unix()).Scan(&minValue, &maxValue); err != nil {
+		t.Fatalf("query spread: %v", err)
+	}
+	if !minValue.Valid || !maxValue.Valid {
+		t.Fatalf("direct write erased rollup spread: min=%+v max=%+v", minValue, maxValue)
+	}
+	if minValue.Float64 != 1.0 || maxValue.Float64 != 9.0 {
+		t.Fatalf("unexpected spread after direct write: min=%v max=%v", minValue.Float64, maxValue.Float64)
+	}
+}
+
+func TestIsRetryableWriteError(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"driver busy", fmt.Errorf("database is locked (5) (SQLITE_BUSY)"), true},
+		{"legacy busy", fmt.Errorf("database is locked"), true},
+		{"closed pool", fmt.Errorf("sql: database is closed"), true},
+		{"unrelated", fmt.Errorf("no such table: metrics"), false},
+	}
+	for _, tc := range cases {
+		if got := isRetryableWriteError(tc.err); got != tc.want {
+			t.Fatalf("%s: isRetryableWriteError(%v) = %v, want %v", tc.name, tc.err, got, tc.want)
+		}
+	}
+}
+
+// TestIsRetryableWriteErrorMatchesDriverBusyCode proves the classifier matches
+// a real SQLITE_BUSY error returned by the modernc driver, not just its message.
+func TestIsRetryableWriteErrorMatchesDriverBusyCode(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "busy.db")
+
+	holder, err := sql.Open("sqlite", "file:"+path+"?_pragma=busy_timeout(0)")
+	if err != nil {
+		t.Fatalf("open holder: %v", err)
+	}
+	defer holder.Close()
+	holder.SetMaxOpenConns(1)
+	if _, err := holder.Exec("CREATE TABLE t (x INTEGER)"); err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+	if _, err := holder.Exec("BEGIN IMMEDIATE"); err != nil {
+		t.Fatalf("begin immediate: %v", err)
+	}
+	defer holder.Exec("ROLLBACK")
+
+	waiter, err := sql.Open("sqlite", "file:"+path+"?_pragma=busy_timeout(0)")
+	if err != nil {
+		t.Fatalf("open waiter: %v", err)
+	}
+	defer waiter.Close()
+
+	_, err = waiter.Exec("BEGIN IMMEDIATE")
+	if err == nil {
+		waiter.Exec("ROLLBACK")
+		t.Skip("driver did not report SQLITE_BUSY on a contended write lock")
+	}
+	if !isRetryableWriteError(err) {
+		t.Fatalf("real driver busy error not classified retryable: %v", err)
+	}
+}
+
+// TestStoreAutoVacuumPersistsAcrossRestart verifies that the one-time
+// auto-vacuum conversion is committed to the database file and remains in
+// effect after reopening the store, rather than being re-run every restart.
+func TestStoreAutoVacuumPersistsAcrossRestart(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-autovacuum.db")
+	cfg.FlushInterval = time.Hour
+
+	for i := 0; i < 2; i++ {
+		store, err := NewStore(cfg)
+		if err != nil {
+			t.Fatalf("open %d: %v", i, err)
+		}
+		if err := store.WaitForMaintenance(10 * time.Second); err != nil {
+			store.Close()
+			t.Fatalf("maintenance %d: %v", i, err)
+		}
+		var mode int
+		if err := store.db.QueryRow("PRAGMA auto_vacuum").Scan(&mode); err != nil {
+			store.Close()
+			t.Fatalf("pragma %d: %v", i, err)
+		}
+		if mode != 2 {
+			store.Close()
+			t.Fatalf("open %d: auto_vacuum = %d, want 2 (INCREMENTAL)", i, mode)
+		}
+		if err := store.Close(); err != nil {
+			t.Fatalf("close %d: %v", i, err)
+		}
+	}
+}
+
+// TestStoreStartupMaintenanceSignalsWriteRetryBudget verifies the ingestion
+// worker can tell when the one-time startup maintenance holds the write lock,
+// and that the signal is cleared once maintenance completes.
+func TestStoreStartupMaintenanceSignalsWriteRetryBudget(t *testing.T) {
+	previousHook := startupMaintenanceHook
+	defer func() { startupMaintenanceHook = previousHook }()
+
+	// The automatic startup run may begin before NewStore returns, so the hook
+	// reads the store through an atomic pointer rather than a captured local.
+	var storePtr atomic.Pointer[Store]
+	var observedDuringHook atomic.Bool
+	startupMaintenanceHook = func() {
+		if s := storePtr.Load(); s != nil {
+			observedDuringHook.Store(s.startupMaintenanceActive.Load())
+		}
+	}
+
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "startup-signal.db")
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	defer store.Close()
+	storePtr.Store(store)
+
+	if err := store.WaitForMaintenance(10 * time.Second); err != nil {
+		t.Fatalf("maintenance did not complete: %v", err)
+	}
+
+	// Re-run synchronously so the hook is guaranteed to observe the flag while
+	// it is active.
+	observedDuringHook.Store(false)
+	store.runStartupMaintenance()
+
+	if !observedDuringHook.Load() {
+		t.Fatalf("startup maintenance did not signal an active write-retry budget")
+	}
+	if store.startupMaintenanceActive.Load() {
+		t.Fatalf("startup maintenance left the extended write-retry budget active")
+	}
+}
+
+// TestStoreWriteBatchExtendsRetryDuringStartupMaintenance proves that a batch
+// enqueued while the startup maintenance holds the write lock survives past
+// the steady-state retry budget. Without the extension it is dropped after
+// five fast attempts (#2079 finding 5).
+func TestStoreWriteBatchExtendsRetryDuringStartupMaintenance(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "retry.db")
+
+	holder, err := sql.Open("sqlite", "file:"+path+"?_pragma=busy_timeout(0)")
+	if err != nil {
+		t.Fatalf("open holder: %v", err)
+	}
+	defer holder.Close()
+	holder.SetMaxOpenConns(1)
+	schema := `
+		CREATE TABLE metrics (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			resource_type TEXT NOT NULL,
+			resource_id TEXT NOT NULL,
+			metric_type TEXT NOT NULL,
+			value REAL NOT NULL,
+			min_value REAL,
+			max_value REAL,
+			timestamp INTEGER NOT NULL,
+			tier TEXT NOT NULL DEFAULT 'raw'
+		);
+		CREATE UNIQUE INDEX idx_metrics_lookup
+		ON metrics(resource_type, resource_id, metric_type, tier, timestamp);
+	`
+	if _, err := holder.Exec(schema); err != nil {
+		t.Fatalf("create schema: %v", err)
+	}
+	if _, err := holder.Exec("BEGIN IMMEDIATE"); err != nil {
+		t.Fatalf("begin immediate: %v", err)
+	}
+
+	rawDB, err := sql.Open("sqlite", "file:"+path+"?_pragma=busy_timeout(0)")
+	if err != nil {
+		t.Fatalf("open writer: %v", err)
+	}
+	defer rawDB.Close()
+	store := &Store{db: pdb.Wrap(rawDB, "metrics")}
+	store.startupMaintenanceActive.Store(true)
+
+	// Hold the write lock for longer than the steady-state budget
+	// (5 attempts, ~1s of backoff) but within the extended budget.
+	released := make(chan struct{})
+	go func() {
+		time.Sleep(2 * time.Second)
+		_, _ = holder.Exec("ROLLBACK")
+		close(released)
+	}()
+
+	store.writeBatch([]bufferedMetric{{
+		resourceType: "vm",
+		resourceID:   "vm-1",
+		metricType:   "cpu",
+		value:        1,
+		timestamp:    time.Now().UTC().Truncate(time.Second),
+		tier:         TierRaw,
+	}})
+	<-released
+
+	var count int
+	if err := store.db.QueryRow("SELECT COUNT(*) FROM metrics").Scan(&count); err != nil {
+		t.Fatalf("count metrics: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected the batch to survive the startup lock window, got %d rows", count)
+	}
+}
+
+// TestEstimateQueryAllBatchSeriesCapacityCapsPreallocation verifies a fine
+// requested step over a long range cannot reserve hundreds of thousands of
+// MetricPoint slots per series when the tier fallback returns far fewer rows.
+func TestEstimateQueryAllBatchSeriesCapacityCapsPreallocation(t *testing.T) {
+	start := time.Unix(0, 0)
+	end := start.Add(90 * 24 * time.Hour)
+	if got := estimateQueryAllBatchSeriesCapacity(start, end, 5); got != maxQueryAllSeriesCapacity {
+		t.Fatalf("90 days at 5s step: capacity = %d, want cap %d", got, maxQueryAllSeriesCapacity)
+	}
+	if got := estimateQueryAllBatchSeriesCapacity(start, start.Add(10*time.Minute), 5); got != 122 {
+		t.Fatalf("10 minutes at 5s step: capacity = %d, want 122", got)
 	}
 }

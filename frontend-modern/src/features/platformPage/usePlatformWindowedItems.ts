@@ -18,6 +18,11 @@ import {
 const DEFAULT_ESTIMATED_ITEM_HEIGHT = 40;
 const DESKTOP_WINDOW_SIZE = 140;
 const PHONE_WINDOW_SIZE = 36;
+// Grouped surfaces render a short group header before their first content row.
+// Sampling a few siblings and keeping the tallest keeps that header from
+// collapsing the estimate and desynchronising the window from the scroll
+// position, while uniform tables still measure their real row height.
+const MEASUREMENT_SAMPLE_SIZE = 3;
 export interface PlatformWindowedItemsOptions<Item> {
   items: Accessor<readonly Item[]>;
   estimatedItemHeight?: number;
@@ -68,8 +73,14 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
     if (!anchor || isWindowedSurfaceHidden(anchor)) return;
 
     if (measureItems) {
-      const measuredHeight = anchor.nextElementSibling?.getBoundingClientRect().height;
-      if (measuredHeight && measuredHeight > 0) setEstimatedItemHeight(measuredHeight);
+      let measuredHeight = 0;
+      let sibling = anchor.nextElementSibling;
+      for (let sampled = 0; sampled < MEASUREMENT_SAMPLE_SIZE && sibling; sampled += 1) {
+        const height = sibling.getBoundingClientRect().height;
+        if (height > measuredHeight) measuredHeight = height;
+        sibling = sibling.nextElementSibling;
+      }
+      if (measuredHeight > 0) setEstimatedItemHeight(measuredHeight);
     }
 
     const segmentRect = anchor.getBoundingClientRect();

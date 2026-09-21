@@ -20,6 +20,19 @@
 
 ## Purpose
 
+### Resource maintenance API reference
+
+The canonical and shipped API references document the existing authenticated
+GET/PUT/DELETE `/api/resources/{id}/operator-state` contract. Read access requires
+`monitoring:read`, and replacement or deletion requires `monitoring:write`.
+Maintenance examples preserve unrelated operator settings and distinguish
+resource-only scope from inherited descendant maintenance. Bounded expiry ends
+maintenance suppression without a separate activation call. Applying active
+maintenance clears matching active alerts while retaining history, rather than
+promising incident-preserving snooze semantics. This documentation change adds
+no route, permission or lifecycle behavior. The existing `docsLinks` checks keep
+the shipped reference synchronized with `docs/API.md`.
+
 ### Ollama credential lifecycle
 Settings return only `ollama_username` and `ollama_password_set`, never the
 password. An omitted password preserves it, a supplied password replaces it

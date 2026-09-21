@@ -2893,8 +2893,23 @@ backup_existing() {
             rm -rf "$backup_dir"
             return 1
         fi
+        LAST_CONFIG_BACKUP_DIR="$backup_dir"
         prune_config_backups "$backup_parent" "$(basename "$CONFIG_DIR").backup."
     fi
+}
+
+# Drop the configuration snapshot most recently taken by backup_existing when
+# the update aborts before it stages or replaces anything. That snapshot was a
+# safety copy for an install that never began; leaving it behind makes the
+# low-space condition that caused the failure progressively worse on every
+# automatic retry until the filesystem fills (#2127).
+discard_last_config_backup() {
+    if [[ -n "${LAST_CONFIG_BACKUP_DIR:-}" && -e "$LAST_CONFIG_BACKUP_DIR" ]]; then
+        if ! rm -rf -- "$LAST_CONFIG_BACKUP_DIR"; then
+            print_warn "Could not remove unneeded configuration backup ${LAST_CONFIG_BACKUP_DIR}"
+        fi
+    fi
+    LAST_CONFIG_BACKUP_DIR=""
 }
 
 resolve_archive_override() {
@@ -3395,6 +3410,11 @@ download_pulse() {
         rm -f "$BUILD_FROM_SOURCE_MARKER"
 
         if ! ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"; then
+            # The configuration snapshot taken earlier is not needed: the update
+            # never reached staging. Remove it so a retry loop on a low-space
+            # filesystem does not accumulate backups and worsen the shortage
+            # (#2127).
+            discard_last_config_backup
             exit 1
         fi
 

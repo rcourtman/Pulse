@@ -207,6 +207,24 @@ func TestRegistryChecker_DigestsDiffer(t *testing.T) {
 			latest:  "def456,abc123",
 			want:    true, // No match found
 		},
+		{
+			name:    "multiple current digests match second latest",
+			current: "sha256:44c4,sha256:cf78",
+			latest:  "sha256:cf78",
+			want:    false, // One local RepoDigest is current
+		},
+		{
+			name:    "multiple current digests no match",
+			current: "sha256:44c4,sha256:aaaa",
+			latest:  "sha256:cf78",
+			want:    true, // No local RepoDigest is current
+		},
+		{
+			name:    "empty entries in current set are ignored",
+			current: " ,sha256:cf78",
+			latest:  "sha256:cf78",
+			want:    false,
+		},
 	}
 
 	for _, tt := range tests {

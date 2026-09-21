@@ -775,7 +775,11 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		// Get the actual manifest digest (RepoDigest) from the image for accurate comparison.
 		// The ImageID is a local content-addressable ID that differs from the registry manifest digest.
 		// We also get the architecture details to correctly resolve manifest lists from the registry.
-		digestForComparison, arch, os, variant := a.getImageRepoDigest(containerCtx, summary.ImageID, summary.Image)
+		currentDigests, arch, os, variant := a.getImageRepoDigests(containerCtx, summary.ImageID, summary.Image)
+		digestForComparison := ""
+		if len(currentDigests) > 0 {
+			digestForComparison = currentDigests[0]
+		}
 
 		var imageToCheck string
 		// Always prefer the image name from inspect config as it's the authoritative source
@@ -808,7 +812,11 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 				Str("variant", variant).
 				Msg("Checking update for container")
 
-			result := a.registryChecker.CheckImageUpdate(ctx, imageToCheck, digestForComparison, arch, os, variant)
+			// Pass the whole local digest set. Docker records every RepoDigest
+			// the image is known by, and a tag's manifest digest is often not
+			// the first entry, so comparing only one digest reports a current
+			// image as outdated (#2110).
+			result := a.registryChecker.CheckImageUpdate(ctx, imageToCheck, strings.Join(currentDigests, ","), arch, os, variant)
 			if result != nil {
 				container.UpdateStatus = &agentsdocker.UpdateStatus{
 					UpdateAvailable: result.UpdateAvailable,
@@ -956,6 +964,20 @@ func extractHealthcheckTargets(test []string) []string {
 // getImageRepoDigest retrieves the RepoDigest for an image and its platform details.
 // It returns the digest, architecture, OS, and variant.
 func (a *Agent) getImageRepoDigest(ctx context.Context, imageID, imageName string) (string, string, string, string) {
+	digests, arch, os, variant := a.getImageRepoDigests(ctx, imageID, imageName)
+	if len(digests) == 0 {
+		return "", arch, os, variant
+	}
+	return digests[0], arch, os, variant
+}
+
+// getImageRepoDigests returns every manifest digest the local image is known
+// by, with digests whose repository matches the requested image reference
+// first, plus the platform details. A single image can carry several
+// RepoDigests when it was pulled under more than one reference (for example a
+// tag and a platform manifest), so an update check must treat the whole set as
+// the local identity rather than trusting one arbitrary entry (#2110).
+func (a *Agent) getImageRepoDigests(ctx context.Context, imageID, imageName string) ([]string, string, string, string) {
 	imageInspect, _, err := a.docker.ImageInspectWithRaw(ctx, imageID)
 	if err != nil {
 		a.logger.Debug().
@@ -963,7 +985,7 @@ func (a *Agent) getImageRepoDigest(ctx context.Context, imageID, imageName strin
 			Str("imageID", imageID).
 			Str("imageName", imageName).
 			Msg("Failed to inspect image for RepoDigest")
-		return "", "", "", ""
+		return nil, "", "", ""
 	}
 
 	arch := imageInspect.Architecture
@@ -972,32 +994,29 @@ func (a *Agent) getImageRepoDigest(ctx context.Context, imageID, imageName strin
 
 	if len(imageInspect.RepoDigests) == 0 {
 		// Locally built images won't have RepoDigests
-		return "", arch, os, variant
+		return nil, arch, os, variant
 	}
 
-	// Try to find a RepoDigest that matches the image reference
+	matched := make([]string, 0, len(imageInspect.RepoDigests))
+	unmatched := make([]string, 0, len(imageInspect.RepoDigests))
 	// RepoDigests format: "registry/repo@sha256:..."
 	for _, repoDigest := range imageInspect.RepoDigests {
-		// Extract just the digest part (after @)
-		if idx := strings.LastIndex(repoDigest, "@"); idx >= 0 {
-			repoRef := repoDigest[:idx]  // e.g., "docker.io/library/nginx"
-			digest := repoDigest[idx+1:] // e.g., "sha256:abc..."
-
-			// Check if this RepoDigest matches our image reference
-			// Normalize both for comparison
-			if matchesImageReference(imageName, repoRef) {
-				return digest, arch, os, variant
-			}
+		idx := strings.LastIndex(repoDigest, "@")
+		if idx < 0 {
+			continue
+		}
+		digest := strings.TrimSpace(repoDigest[idx+1:])
+		if digest == "" {
+			continue
+		}
+		if matchesImageReference(imageName, repoDigest[:idx]) {
+			matched = append(matched, digest)
+		} else {
+			unmatched = append(unmatched, digest)
 		}
 	}
 
-	// If no exact match, return the first RepoDigest's digest
-	// This handles cases where the image was pulled with a different tag
-	if idx := strings.LastIndex(imageInspect.RepoDigests[0], "@"); idx >= 0 {
-		return imageInspect.RepoDigests[0][idx+1:], arch, os, variant
-	}
-
-	return "", arch, os, variant
+	return append(matched, unmatched...), arch, os, variant
 }
 
 func addrString(addr netip.Addr) string {

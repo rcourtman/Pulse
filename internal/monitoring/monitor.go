@@ -627,11 +627,20 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 				Msg("Matched host agent SMART temperature")
 		}
 
-		// Always merge SMART attributes from host agent
+		// Always merge SMART attributes from host agent. The agent's endurance
+		// counter is more precise than the Proxmox inventory, so it may correct
+		// a coarse value downward or fill an unreported one. It must not,
+		// however, make a disk look healthier than the Proxmox inventory already
+		// reports: an intermittent agent reading (for example an NVMe log page
+		// that briefly reports PercentageUsed 0) used to raise the remaining
+		// life, resolve a genuine low-life alert, and let it re-fire on the next
+		// poll with a fresh resolved notification (#2112).
 		if matched.Attributes != nil {
 			updated[i].SmartAttributes = smartAttributesCopy(matched.Attributes)
 			if derivedWearout := deriveWearoutFromSMARTAttributes(matched.Attributes); derivedWearout >= 0 {
-				updated[i].Wearout = derivedWearout
+				if updated[i].Wearout < 0 || derivedWearout < updated[i].Wearout {
+					updated[i].Wearout = derivedWearout
+				}
 			}
 		}
 		if matched.IO != nil {
@@ -882,6 +891,11 @@ func hostsFromReadState(readState unifiedresources.ReadState) []models.Host {
 
 // writeSMARTMetrics writes SMART temperature history to the in-memory chart
 // buffer and persists SMART attributes when the metrics store is enabled.
+//
+// now is the source observation time, not the rebuild wall clock: a read-side
+// registry rebuild that re-issues one unchanged observation must map to a
+// single sample. The store writes go through the unified replay guard so the
+// same observation is not re-committed on every rebuild (#1966).
 func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {
 	if shouldSkipNativeMockStateMetricWrites() {
 		return
@@ -893,55 +907,87 @@ func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {
 	}
 
 	// Temperature (always write if > 0)
+	if disk.Temperature > 0 && m.metricsHistory != nil {
+		m.metricsHistory.AddDiskMetric(resourceID, "smart_temp", float64(disk.Temperature), now)
+	}
+
+	writes := m.smartMetricStoreWrites(disk, resourceID, now)
+	if len(writes) == 0 {
+		return
+	}
+	writes = m.dedupeUnifiedMetricWrites(writes)
+	if len(writes) > 0 {
+		m.metricsStore.WriteBatchBounded(writes)
+	}
+}
+
+// smartMetricStoreWrites builds the persisted SMART writes for one physical
+// disk observation. The caller owns batching so the unified sync can anchor the
+// observation time and drop exact replays (#1966).
+func (m *Monitor) smartMetricStoreWrites(disk models.PhysicalDisk, resourceID string, observedAt time.Time) []metrics.WriteMetric {
+	if m.metricsStore == nil {
+		return nil
+	}
+
+	writes := make([]metrics.WriteMetric, 0, 12)
+	appendWrite := func(metricType string, value float64) {
+		writes = append(writes, metrics.WriteMetric{
+			ResourceType: "disk",
+			ResourceID:   resourceID,
+			MetricType:   metricType,
+			Value:        value,
+			Timestamp:    observedAt,
+			Tier:         metrics.TierRaw,
+		})
+	}
+
+	// Temperature (always write if > 0)
 	if disk.Temperature > 0 {
-		if m.metricsHistory != nil {
-			m.metricsHistory.AddDiskMetric(resourceID, "smart_temp", float64(disk.Temperature), now)
-		}
-		if m.metricsStore != nil {
-			m.metricsStore.Write("disk", resourceID, "smart_temp", float64(disk.Temperature), now)
-		}
+		appendWrite("smart_temp", float64(disk.Temperature))
 	}
 
 	attrs := disk.SmartAttributes
-	if attrs == nil || m.metricsStore == nil {
-		return
+	if attrs == nil {
+		return writes
 	}
 
 	// Common
 	if attrs.PowerOnHours != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_power_on_hours", float64(*attrs.PowerOnHours), now)
+		appendWrite("smart_power_on_hours", float64(*attrs.PowerOnHours))
 	}
 	if attrs.PowerCycles != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_power_cycles", float64(*attrs.PowerCycles), now)
+		appendWrite("smart_power_cycles", float64(*attrs.PowerCycles))
 	}
 
 	// SATA-specific
 	if attrs.ReallocatedSectors != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_reallocated_sectors", float64(*attrs.ReallocatedSectors), now)
+		appendWrite("smart_reallocated_sectors", float64(*attrs.ReallocatedSectors))
 	}
 	if attrs.PendingSectors != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_pending_sectors", float64(*attrs.PendingSectors), now)
+		appendWrite("smart_pending_sectors", float64(*attrs.PendingSectors))
 	}
 	if attrs.OfflineUncorrectable != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_offline_uncorrectable", float64(*attrs.OfflineUncorrectable), now)
+		appendWrite("smart_offline_uncorrectable", float64(*attrs.OfflineUncorrectable))
 	}
 	if attrs.UDMACRCErrors != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_crc_errors", float64(*attrs.UDMACRCErrors), now)
+		appendWrite("smart_crc_errors", float64(*attrs.UDMACRCErrors))
 	}
 
 	// NVMe-specific
 	if attrs.PercentageUsed != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_percentage_used", float64(*attrs.PercentageUsed), now)
+		appendWrite("smart_percentage_used", float64(*attrs.PercentageUsed))
 	}
 	if attrs.AvailableSpare != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_available_spare", float64(*attrs.AvailableSpare), now)
+		appendWrite("smart_available_spare", float64(*attrs.AvailableSpare))
 	}
 	if attrs.MediaErrors != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_media_errors", float64(*attrs.MediaErrors), now)
+		appendWrite("smart_media_errors", float64(*attrs.MediaErrors))
 	}
 	if attrs.UnsafeShutdowns != nil {
-		m.metricsStore.Write("disk", resourceID, "smart_unsafe_shutdowns", float64(*attrs.UnsafeShutdowns), now)
+		appendWrite("smart_unsafe_shutdowns", float64(*attrs.UnsafeShutdowns))
 	}
+
+	return writes
 }
 
 // PollExecutor defines the contract for executing polling tasks.
@@ -1247,6 +1293,14 @@ type Monitor struct {
 	// that already hold m.mu can consult it without lock re-entrancy.
 	licenseCheckerMu sync.RWMutex
 	licenseChecker   func(feature string) bool
+
+	// Unified metric sync replay guard. The sync runs on both ingest
+	// boundaries and read-side registry rebuilds, so one observation is often
+	// replayed many times between polls. Without this every replay re-writes
+	// the same metrics row (an UPDATE in SQLite) and churns the WAL for no new
+	// data, which is the dominant write amplification in #1966.
+	unifiedMetricSyncMu   sync.Mutex
+	unifiedMetricSyncLast map[unifiedMetricSampleKey]unifiedMetricSample
 }
 
 func (m *Monitor) setRuntimeContext(ctx context.Context, hub *websocket.Hub) {
@@ -5043,11 +5097,7 @@ func (m *Monitor) updateResourceStoreForRead(state models.StateSnapshot) {
 		return
 	}
 	recordSupplementalResourceChanges(store, m.collectSupplementalChanges())
-	m.syncUnifiedAgentMetrics(store)
-	m.syncUnifiedVMMetrics(store)
-	m.syncUnifiedStorageMetrics(store)
-	m.syncUnifiedPhysicalDiskMetrics(store)
-	m.syncUnifiedAppContainerMetrics(store)
+	m.syncAllUnifiedMetrics(store)
 	m.syncUnifiedResourceAlertsToState(store.GetAll())
 }
 
@@ -5094,11 +5144,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	if atomicStore, ok := store.(AtomicSnapshotResourceStore); ok {
 		atomicStore.PopulateSnapshotAndSupplemental(snapshotForStore, recordsBySource)
 		recordSupplementalResourceChanges(store, supplementalChanges)
-		m.syncUnifiedAgentMetrics(store)
-		m.syncUnifiedVMMetrics(store)
-		m.syncUnifiedStorageMetrics(store)
-		m.syncUnifiedPhysicalDiskMetrics(store)
-		m.syncUnifiedAppContainerMetrics(store)
+		m.syncAllUnifiedMetrics(store)
 		for source, records := range recordsBySource {
 			if len(records) == 0 {
 				continue
@@ -5129,11 +5175,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	}
 
 	recordSupplementalResourceChanges(store, supplementalChanges)
-	m.syncUnifiedAgentMetrics(store)
-	m.syncUnifiedVMMetrics(store)
-	m.syncUnifiedStorageMetrics(store)
-	m.syncUnifiedPhysicalDiskMetrics(store)
-	m.syncUnifiedAppContainerMetrics(store)
+	m.syncAllUnifiedMetrics(store)
 	m.syncUnifiedResourceAlertsToState(store.GetAll())
 }
 
@@ -5171,7 +5213,98 @@ func recordSupplementalResourceChanges(store ResourceStoreInterface, changes []u
 	}
 }
 
-func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface) {
+// unifiedMetricSampleKey identifies one persisted unified-metric series. The
+// metrics store keys rows by (resource type, resource id, metric type, tier,
+// timestamp), so the replay guard must match at least those coordinates.
+type unifiedMetricSampleKey struct {
+	resourceType string
+	resourceID   string
+	metricType   string
+}
+
+// unifiedMetricSample is the last sample handed to the metrics store for a
+// series. Timestamps are compared at the store's second resolution so a
+// sub-second replay of the same observation is still recognised as redundant.
+type unifiedMetricSample struct {
+	timestampUnix int64
+	value         float64
+}
+
+// unifiedMetricSyncMaxSeries bounds the replay guard so long-lived monitors
+// with churning resource IDs cannot pin memory. The map is reset wholesale
+// when the cap is crossed; the worst case is one extra write per series.
+const unifiedMetricSyncMaxSeries = 100000
+
+// dedupeUnifiedMetricWrites drops exact repeats of a sample already handed to
+// the metrics store. The unified sync runs on ingest boundaries and on
+// read-side registry rebuilds (which fire as often as every two seconds), so
+// the same observation is replayed many times between polls. Each replay would
+// otherwise UPDATE the same row and commit a fresh transaction, churning the
+// SQLite WAL with no new data (#1966). A changed value at the same timestamp is
+// still written so corrections are not lost.
+func (m *Monitor) dedupeUnifiedMetricWrites(writes []metrics.WriteMetric) []metrics.WriteMetric {
+	if len(writes) == 0 {
+		return writes
+	}
+
+	m.unifiedMetricSyncMu.Lock()
+	defer m.unifiedMetricSyncMu.Unlock()
+	if m.unifiedMetricSyncLast == nil || len(m.unifiedMetricSyncLast) > unifiedMetricSyncMaxSeries {
+		m.unifiedMetricSyncLast = make(map[unifiedMetricSampleKey]unifiedMetricSample, len(writes))
+	}
+
+	out := writes[:0]
+	for _, write := range writes {
+		key := unifiedMetricSampleKey{
+			resourceType: write.ResourceType,
+			resourceID:   write.ResourceID,
+			metricType:   write.MetricType,
+		}
+		sample := unifiedMetricSample{timestampUnix: write.Timestamp.Unix(), value: write.Value}
+		if previous, ok := m.unifiedMetricSyncLast[key]; ok && previous == sample {
+			continue
+		}
+		m.unifiedMetricSyncLast[key] = sample
+		out = append(out, write)
+	}
+	return out
+}
+
+// syncAllUnifiedMetrics runs the per-resource-type unified syncs and commits
+// the surviving store writes of the batched syncs as one transaction. Each sync
+// still runs the per-series replay guard, so this only changes the transaction
+// boundary, not the series written, their values or their observation times.
+// The syncs run serially and each previously waited for its own commit, so a
+// rebuild that carried new data for several resource types opened one SQLite
+// transaction per type; batching collapses that to one (#1966). The physical
+// disk sync keeps its own transaction because its SMART path writes directly.
+func (m *Monitor) syncAllUnifiedMetrics(store ResourceStoreInterface) {
+	if m == nil {
+		return
+	}
+	if m.metricsStore == nil {
+		// The in-memory history path still needs to run; there is no store
+		// batch to collect.
+		m.syncUnifiedAgentMetrics(store)
+		m.syncUnifiedVMMetrics(store)
+		m.syncUnifiedStorageMetrics(store)
+		m.syncUnifiedPhysicalDiskMetrics(store)
+		m.syncUnifiedAppContainerMetrics(store)
+		return
+	}
+	var batch []metrics.WriteMetric
+	sink := &batch
+	m.syncUnifiedAgentMetrics(store, sink)
+	m.syncUnifiedVMMetrics(store, sink)
+	m.syncUnifiedStorageMetrics(store, sink)
+	m.syncUnifiedAppContainerMetrics(store, sink)
+	m.syncUnifiedPhysicalDiskMetrics(store)
+	if len(batch) > 0 {
+		m.metricsStore.WriteBatchBounded(batch)
+	}
+}
+
+func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface, sinks ...*[]metrics.WriteMetric) {
 	if store == nil || (m.metricsHistory == nil && m.metricsStore == nil) {
 		return
 	}
@@ -5183,7 +5316,7 @@ func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface) {
 
 	now := time.Now()
 	storeWrites := make([]metrics.WriteMetric, 0)
-	appendStoreWrite := func(resourceType, resourceID, metricType string, value float64) {
+	appendStoreWrite := func(resourceType, resourceID, metricType string, value float64, observedAt time.Time) {
 		if m.metricsStore == nil {
 			return
 		}
@@ -5192,7 +5325,7 @@ func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface) {
 			ResourceID:   resourceID,
 			MetricType:   metricType,
 			Value:        value,
-			Timestamp:    now,
+			Timestamp:    observedAt,
 			Tier:         metrics.TierRaw,
 		})
 	}
@@ -5220,6 +5353,7 @@ func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface) {
 		}
 		seenTargets[targetID] = struct{}{}
 		metricKey := fmt.Sprintf("agent:%s", targetID)
+		observedAt := unifiedResourceObservedAt(resource, now)
 
 		if metric := resource.Metrics.CPU; metric != nil {
 			value := metric.Percent
@@ -5227,61 +5361,64 @@ func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface) {
 				value = metric.Value
 			}
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(metricKey, "cpu", value, now)
+				m.metricsHistory.AddGuestMetric(metricKey, "cpu", value, observedAt)
 			}
-			appendStoreWrite("agent", targetID, "cpu", value)
+			appendStoreWrite("agent", targetID, "cpu", value, observedAt)
 		}
 
 		if metric := resource.Metrics.Memory; metric != nil && (metric.Total != nil || metric.Percent > 0 || metric.Used != nil) {
 			value := metric.Percent
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(metricKey, "memory", value, now)
+				m.metricsHistory.AddGuestMetric(metricKey, "memory", value, observedAt)
 			}
-			appendStoreWrite("agent", targetID, "memory", value)
+			appendStoreWrite("agent", targetID, "memory", value, observedAt)
 		}
 
 		if metric := resource.Metrics.Disk; metric != nil && (metric.Total != nil || metric.Percent > 0 || metric.Used != nil) {
 			value := metric.Percent
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(metricKey, "disk", value, now)
+				m.metricsHistory.AddGuestMetric(metricKey, "disk", value, observedAt)
 			}
-			appendStoreWrite("agent", targetID, "disk", value)
+			appendStoreWrite("agent", targetID, "disk", value, observedAt)
 		}
 
 		if metric := resource.Metrics.NetIn; metric != nil {
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(metricKey, "netin", metric.Value, now)
+				m.metricsHistory.AddGuestMetric(metricKey, "netin", metric.Value, observedAt)
 			}
-			appendStoreWrite("agent", targetID, "netin", metric.Value)
+			appendStoreWrite("agent", targetID, "netin", metric.Value, observedAt)
 		}
 
 		if metric := resource.Metrics.NetOut; metric != nil {
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(metricKey, "netout", metric.Value, now)
+				m.metricsHistory.AddGuestMetric(metricKey, "netout", metric.Value, observedAt)
 			}
-			appendStoreWrite("agent", targetID, "netout", metric.Value)
+			appendStoreWrite("agent", targetID, "netout", metric.Value, observedAt)
 		}
 
 		if metric := resource.Metrics.DiskRead; metric != nil {
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(metricKey, "diskread", metric.Value, now)
+				m.metricsHistory.AddGuestMetric(metricKey, "diskread", metric.Value, observedAt)
 			}
-			appendStoreWrite("agent", targetID, "diskread", metric.Value)
+			appendStoreWrite("agent", targetID, "diskread", metric.Value, observedAt)
 		}
 
 		if metric := resource.Metrics.DiskWrite; metric != nil {
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(metricKey, "diskwrite", metric.Value, now)
+				m.metricsHistory.AddGuestMetric(metricKey, "diskwrite", metric.Value, observedAt)
 			}
-			appendStoreWrite("agent", targetID, "diskwrite", metric.Value)
+			appendStoreWrite("agent", targetID, "diskwrite", metric.Value, observedAt)
 		}
 	}
-	if len(storeWrites) > 0 {
+	storeWrites = m.dedupeUnifiedMetricWrites(storeWrites)
+	if len(sinks) > 0 && sinks[0] != nil {
+		*sinks[0] = append(*sinks[0], storeWrites...)
+	} else if len(storeWrites) > 0 {
 		m.metricsStore.WriteBatchBounded(storeWrites)
 	}
 }
 
-func (m *Monitor) syncUnifiedVMMetrics(store ResourceStoreInterface) {
+func (m *Monitor) syncUnifiedVMMetrics(store ResourceStoreInterface, sinks ...*[]metrics.WriteMetric) {
 	if store == nil || (m.metricsHistory == nil && m.metricsStore == nil) {
 		return
 	}
@@ -5293,7 +5430,7 @@ func (m *Monitor) syncUnifiedVMMetrics(store ResourceStoreInterface) {
 
 	now := time.Now()
 	storeWrites := make([]metrics.WriteMetric, 0)
-	appendStoreWrite := func(resourceType, resourceID, metricType string, value float64) {
+	appendStoreWrite := func(resourceType, resourceID, metricType string, value float64, observedAt time.Time) {
 		if m.metricsStore == nil {
 			return
 		}
@@ -5302,7 +5439,7 @@ func (m *Monitor) syncUnifiedVMMetrics(store ResourceStoreInterface) {
 			ResourceID:   resourceID,
 			MetricType:   metricType,
 			Value:        value,
-			Timestamp:    now,
+			Timestamp:    observedAt,
 			Tier:         metrics.TierRaw,
 		})
 	}
@@ -5315,7 +5452,10 @@ func (m *Monitor) syncUnifiedVMMetrics(store ResourceStoreInterface) {
 			continue
 		}
 
-		hasNativeVMWriter := false
+		// Proxmox and libvirt both have a native history writer
+		// (monitor_pve_guest_helpers and monitor_libvirt), so the unified sync
+		// must not add a second timeline for the same series.
+		hasNativeVMWriter := strings.EqualFold(strings.TrimSpace(resource.Technology), "libvirt")
 		for _, source := range resource.Sources {
 			if source == unifiedresources.SourceProxmox {
 				hasNativeVMWriter = true
@@ -5335,6 +5475,7 @@ func (m *Monitor) syncUnifiedVMMetrics(store ResourceStoreInterface) {
 			continue
 		}
 		seenTargets[targetID] = struct{}{}
+		observedAt := unifiedResourceObservedAt(resource, now)
 
 		if metric := resource.Metrics.CPU; metric != nil {
 			value := metric.Percent
@@ -5342,61 +5483,64 @@ func (m *Monitor) syncUnifiedVMMetrics(store ResourceStoreInterface) {
 				value = metric.Value
 			}
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(targetID, "cpu", value, now)
+				m.metricsHistory.AddGuestMetric(targetID, "cpu", value, observedAt)
 			}
-			appendStoreWrite("vm", targetID, "cpu", value)
+			appendStoreWrite("vm", targetID, "cpu", value, observedAt)
 		}
 
 		if metric := resource.Metrics.Memory; metric != nil && (metric.Total != nil || metric.Percent > 0 || metric.Used != nil) {
 			value := metric.Percent
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(targetID, "memory", value, now)
+				m.metricsHistory.AddGuestMetric(targetID, "memory", value, observedAt)
 			}
-			appendStoreWrite("vm", targetID, "memory", value)
+			appendStoreWrite("vm", targetID, "memory", value, observedAt)
 		}
 
 		if metric := resource.Metrics.Disk; metric != nil && (metric.Total != nil || metric.Percent > 0 || metric.Used != nil) {
 			value := metric.Percent
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(targetID, "disk", value, now)
+				m.metricsHistory.AddGuestMetric(targetID, "disk", value, observedAt)
 			}
-			appendStoreWrite("vm", targetID, "disk", value)
+			appendStoreWrite("vm", targetID, "disk", value, observedAt)
 		}
 
 		if metric := resource.Metrics.NetIn; metric != nil {
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(targetID, "netin", metric.Value, now)
+				m.metricsHistory.AddGuestMetric(targetID, "netin", metric.Value, observedAt)
 			}
-			appendStoreWrite("vm", targetID, "netin", metric.Value)
+			appendStoreWrite("vm", targetID, "netin", metric.Value, observedAt)
 		}
 
 		if metric := resource.Metrics.NetOut; metric != nil {
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(targetID, "netout", metric.Value, now)
+				m.metricsHistory.AddGuestMetric(targetID, "netout", metric.Value, observedAt)
 			}
-			appendStoreWrite("vm", targetID, "netout", metric.Value)
+			appendStoreWrite("vm", targetID, "netout", metric.Value, observedAt)
 		}
 
 		if metric := resource.Metrics.DiskRead; metric != nil {
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(targetID, "diskread", metric.Value, now)
+				m.metricsHistory.AddGuestMetric(targetID, "diskread", metric.Value, observedAt)
 			}
-			appendStoreWrite("vm", targetID, "diskread", metric.Value)
+			appendStoreWrite("vm", targetID, "diskread", metric.Value, observedAt)
 		}
 
 		if metric := resource.Metrics.DiskWrite; metric != nil {
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(targetID, "diskwrite", metric.Value, now)
+				m.metricsHistory.AddGuestMetric(targetID, "diskwrite", metric.Value, observedAt)
 			}
-			appendStoreWrite("vm", targetID, "diskwrite", metric.Value)
+			appendStoreWrite("vm", targetID, "diskwrite", metric.Value, observedAt)
 		}
 	}
-	if len(storeWrites) > 0 {
+	storeWrites = m.dedupeUnifiedMetricWrites(storeWrites)
+	if len(sinks) > 0 && sinks[0] != nil {
+		*sinks[0] = append(*sinks[0], storeWrites...)
+	} else if len(storeWrites) > 0 {
 		m.metricsStore.WriteBatchBounded(storeWrites)
 	}
 }
 
-func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface) {
+func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface, sinks ...*[]metrics.WriteMetric) {
 	if store == nil || (m.metricsHistory == nil && m.metricsStore == nil) {
 		return
 	}
@@ -5490,7 +5634,10 @@ func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface) {
 			appendStoreWrite("storage", targetID, "avail", float64(free), observedAt)
 		}
 	}
-	if len(storeWrites) > 0 {
+	storeWrites = m.dedupeUnifiedMetricWrites(storeWrites)
+	if len(sinks) > 0 && sinks[0] != nil {
+		*sinks[0] = append(*sinks[0], storeWrites...)
+	} else if len(storeWrites) > 0 {
 		m.metricsStore.WriteBatchBounded(storeWrites)
 	}
 }
@@ -5509,6 +5656,28 @@ func unifiedMetricObservedAt(resource unifiedresources.Resource, metric *unified
 		return resource.LastSeen
 	}
 	return fallback
+}
+
+// unifiedResourceObservedAt resolves the source observation time for a
+// canonical resource from whichever metric carries a source attribution.
+// Unified syncs use it as the history timestamp so a read-side registry rebuild
+// re-issuing the same observation maps to one timestamp instead of inventing a
+// fresh sample each rebuild (see #1966).
+func unifiedResourceObservedAt(resource unifiedresources.Resource, fallback time.Time) time.Time {
+	if resource.Metrics != nil {
+		for _, metric := range []*unifiedresources.MetricValue{
+			resource.Metrics.CPU,
+			resource.Metrics.Memory,
+			resource.Metrics.Disk,
+			resource.Metrics.NetIn,
+			resource.Metrics.NetOut,
+		} {
+			if metric != nil && metric.Source != "" {
+				return unifiedMetricObservedAt(resource, metric, fallback)
+			}
+		}
+	}
+	return unifiedMetricObservedAt(resource, nil, fallback)
 }
 
 func (m *Monitor) syncUnifiedPhysicalDiskMetrics(store ResourceStoreInterface) {
@@ -5583,11 +5752,14 @@ func (m *Monitor) syncUnifiedPhysicalDiskMetrics(store ResourceStoreInterface) {
 		if disk.Serial == "" {
 			disk.ID = targetID
 		}
-		m.writeSMARTMetrics(disk, now)
+		// Anchor to the source observation time so a read-side registry rebuild
+		// re-issuing the same snapshot maps to one sample instead of a fresh
+		// wall-clock row (#1966).
+		m.writeSMARTMetrics(disk, unifiedResourceObservedAt(resource, now))
 	}
 }
 
-func (m *Monitor) syncUnifiedAppContainerMetrics(store ResourceStoreInterface) {
+func (m *Monitor) syncUnifiedAppContainerMetrics(store ResourceStoreInterface, sinks ...*[]metrics.WriteMetric) {
 	if store == nil || (m.metricsHistory == nil && m.metricsStore == nil) {
 		return
 	}
@@ -5599,7 +5771,7 @@ func (m *Monitor) syncUnifiedAppContainerMetrics(store ResourceStoreInterface) {
 
 	now := time.Now()
 	storeWrites := make([]metrics.WriteMetric, 0)
-	appendStoreWrite := func(resourceType, resourceID, metricType string, value float64) {
+	appendStoreWrite := func(resourceType, resourceID, metricType string, value float64, observedAt time.Time) {
 		if m.metricsStore == nil {
 			return
 		}
@@ -5608,7 +5780,7 @@ func (m *Monitor) syncUnifiedAppContainerMetrics(store ResourceStoreInterface) {
 			ResourceID:   resourceID,
 			MetricType:   metricType,
 			Value:        value,
-			Timestamp:    now,
+			Timestamp:    observedAt,
 			Tier:         metrics.TierRaw,
 		})
 	}
@@ -5641,6 +5813,7 @@ func (m *Monitor) syncUnifiedAppContainerMetrics(store ResourceStoreInterface) {
 		}
 		seenTargets[targetID] = struct{}{}
 		metricKey := fmt.Sprintf("docker:%s", targetID)
+		observedAt := unifiedResourceObservedAt(resource, now)
 
 		if metric := resource.Metrics.CPU; metric != nil {
 			value := metric.Percent
@@ -5648,56 +5821,59 @@ func (m *Monitor) syncUnifiedAppContainerMetrics(store ResourceStoreInterface) {
 				value = metric.Value
 			}
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(metricKey, "cpu", value, now)
+				m.metricsHistory.AddGuestMetric(metricKey, "cpu", value, observedAt)
 			}
-			appendStoreWrite("dockerContainer", targetID, "cpu", value)
+			appendStoreWrite("dockerContainer", targetID, "cpu", value, observedAt)
 		}
 
 		if metric := resource.Metrics.Memory; metric != nil && (metric.Total != nil || metric.Percent > 0) {
 			value := metric.Percent
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(metricKey, "memory", value, now)
+				m.metricsHistory.AddGuestMetric(metricKey, "memory", value, observedAt)
 			}
-			appendStoreWrite("dockerContainer", targetID, "memory", value)
+			appendStoreWrite("dockerContainer", targetID, "memory", value, observedAt)
 		}
 
 		if metric := resource.Metrics.Disk; metric != nil && (metric.Total != nil || metric.Percent > 0) {
 			value := metric.Percent
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(metricKey, "disk", value, now)
+				m.metricsHistory.AddGuestMetric(metricKey, "disk", value, observedAt)
 			}
-			appendStoreWrite("dockerContainer", targetID, "disk", value)
+			appendStoreWrite("dockerContainer", targetID, "disk", value, observedAt)
 		}
 
 		if metric := resource.Metrics.NetIn; metric != nil {
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(metricKey, "netin", metric.Value, now)
+				m.metricsHistory.AddGuestMetric(metricKey, "netin", metric.Value, observedAt)
 			}
-			appendStoreWrite("dockerContainer", targetID, "netin", metric.Value)
+			appendStoreWrite("dockerContainer", targetID, "netin", metric.Value, observedAt)
 		}
 
 		if metric := resource.Metrics.NetOut; metric != nil {
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(metricKey, "netout", metric.Value, now)
+				m.metricsHistory.AddGuestMetric(metricKey, "netout", metric.Value, observedAt)
 			}
-			appendStoreWrite("dockerContainer", targetID, "netout", metric.Value)
+			appendStoreWrite("dockerContainer", targetID, "netout", metric.Value, observedAt)
 		}
 
 		if metric := resource.Metrics.DiskRead; metric != nil {
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(metricKey, "diskread", metric.Value, now)
+				m.metricsHistory.AddGuestMetric(metricKey, "diskread", metric.Value, observedAt)
 			}
-			appendStoreWrite("dockerContainer", targetID, "diskread", metric.Value)
+			appendStoreWrite("dockerContainer", targetID, "diskread", metric.Value, observedAt)
 		}
 
 		if metric := resource.Metrics.DiskWrite; metric != nil {
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(metricKey, "diskwrite", metric.Value, now)
+				m.metricsHistory.AddGuestMetric(metricKey, "diskwrite", metric.Value, observedAt)
 			}
-			appendStoreWrite("dockerContainer", targetID, "diskwrite", metric.Value)
+			appendStoreWrite("dockerContainer", targetID, "diskwrite", metric.Value, observedAt)
 		}
 	}
-	if len(storeWrites) > 0 {
+	storeWrites = m.dedupeUnifiedMetricWrites(storeWrites)
+	if len(sinks) > 0 && sinks[0] != nil {
+		*sinks[0] = append(*sinks[0], storeWrites...)
+	} else if len(storeWrites) > 0 {
 		m.metricsStore.WriteBatchBounded(storeWrites)
 	}
 }

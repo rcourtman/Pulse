@@ -140,6 +140,44 @@ jobs:
           fi
           echo "[OK] Release dispatch is bound to ${EXPECTED_SOURCE_SHA}"
 
+      - name: Verify the private Pro source pair is declared
+        # A 6.x release stages a private Pro payload that the private build
+        # resolves by the exact frozen public commit. Verify that declaration
+        # before any draft release object exists, so a missing or mismatched
+        # pair cannot orphan another draft. This is a fact check: the release
+        # steward still owns choosing the pair.
+        if: ${{ startsWith(github.event.inputs.version, '6.') && github.event.inputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+          PRIVATE_PAIR_REPOSITORY: rcourtman/pulse-enterprise
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error::WORKFLOW_PAT is required to verify the private Pro source pair before dispatch."
+            exit 1
+          fi
+          pair_path="docs/release-source-pairs/${EXPECTED_SOURCE_SHA}.json"
+          pair_err="$(mktemp)"
+          if ! pair_content="$(gh api \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2026-03-10' \
+                "repos/${PRIVATE_PAIR_REPOSITORY}/contents/${pair_path}" \
+                --jq '.content' 2>"${pair_err}")"; then
+            if grep -qE 'HTTP 404|Not Found' "${pair_err}"; then
+              echo "::error::${PRIVATE_PAIR_REPOSITORY} has no ${pair_path} for the frozen public commit ${EXPECTED_SOURCE_SHA}. Record that pair, then dispatch again; refusing to create an orphaned draft."
+            else
+              echo "::error::Could not verify ${pair_path} in ${PRIVATE_PAIR_REPOSITORY}: $(tr '\n' ' ' <"${pair_err}")"
+            fi
+            exit 1
+          fi
+          declared_pulse_sha="$(printf '%s' "${pair_content}" | base64 -d | python3 -c 'import json, sys; print(json.load(sys.stdin).get("pulse_sha", ""))')"
+          if [[ "${declared_pulse_sha}" != "${EXPECTED_SOURCE_SHA}" ]]; then
+            echo "::error::${pair_path} declares pulse_sha '${declared_pulse_sha}', not the frozen public commit ${EXPECTED_SOURCE_SHA}."
+            exit 1
+          fi
+          echo "[OK] Private Pro source pair ${pair_path} declares pulse_sha ${declared_pulse_sha}."
+
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -536,7 +574,7 @@ jobs:
           cp -r frontend-modern/dist internal/api/frontend-modern/
 
       - name: Set up Go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: false
@@ -582,7 +620,7 @@ jobs:
           cp -r frontend-modern/dist internal/api/frontend-modern/
 
       - name: Set up Go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
@@ -1343,7 +1381,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: false

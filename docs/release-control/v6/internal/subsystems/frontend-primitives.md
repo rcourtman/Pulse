@@ -20,6 +20,17 @@
 
 ## Purpose
 
+### Shipped documentation fragment navigation
+
+The shared documentation renderer assigns GitHub-compatible, document-local
+heading IDs from sanitized text, retaining explicit anchors and avoiding
+duplicate IDs. The documentation viewer follows fragments after asynchronous
+content rendering as well as in-page navigation. Fragment targets receive
+keyboard focus without entering the normal tab order. Missing or malformed
+fragments do not throw or move focus. The renderer and fragment helper are
+covered by `frontend-modern/src/features/docs/__tests__/docMarkdown.test.ts`,
+with direct-link, reload and keyboard navigation verified in the live viewer.
+
 ### Disk mount scrolling
 
 DisksCard keeps every supplied mount in its parent's scrolling flow. It must not
@@ -287,6 +298,14 @@ snapshot may reorder those wrappers without remounting row-local input or
 drawer state, and must never reconcile one row's nested value through another
 row or duplicate rows after sorting. Missing or duplicate keys retain the
 reference-keyed fallback.
+
+The window's item-height estimate is measured from representative content, not
+the leading sibling alone. Grouped surfaces render a short group header before
+their first content row, and sampling only that header collapses the estimate so
+the mounted window advances far faster than the real scroll position and drops a
+group's rows mid-scroll. The controller samples several leading siblings and
+keeps the tallest, so uniform tables still measure their real row height while
+mixed group/content lists keep a content-scale estimate.
 
 Shared workload, node, Docker-host, and resource-drawer history presentation
 keeps current readings separate from stored samples. A current metric may

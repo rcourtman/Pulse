@@ -128,4 +128,64 @@ describe('PlatformWindowedRows', () => {
     expect(container.querySelectorAll('[data-card-id]')).toHaveLength(32);
     expect(container.querySelectorAll('[data-platform-window-spacer]')).toHaveLength(2);
   });
+
+  it('keeps the caller estimate when the leading row is a short group header', () => {
+    // Regression: a grouped card list renders a short group header first. The
+    // viewport measurement used to sample only that leading sibling, collapse
+    // the estimate to the header height and desynchronise the window from the
+    // real scroll position, so a host's rows vanished while scrolling (#2130).
+    const items = () => [
+      { kind: 'group' as const },
+      ...Array.from({ length: 40 }, (_, index) => ({ kind: 'resource' as const, index })),
+    ];
+    const originalRect = Element.prototype.getBoundingClientRect;
+    const originalVisibility = (Element.prototype as Element & { checkVisibility?: () => boolean })
+      .checkVisibility;
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      const raw = (this as HTMLElement).getAttribute?.('data-height');
+      const height = raw ? Number(raw) : 0;
+      return {
+        height,
+        width: 0,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: height,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      } as DOMRect;
+    };
+    (Element.prototype as Element & { checkVisibility?: () => boolean }).checkVisibility = () =>
+      true;
+
+    try {
+      const { container } = render(() => (
+        <PlatformWindowedList
+          items={items}
+          estimatedItemHeight={200}
+          enableThreshold={4}
+          windowSize={8}
+        >
+          {(item) => (
+            <article data-item-kind={item.kind} data-height={item.kind === 'group' ? 30 : 200} />
+          )}
+        </PlatformWindowedList>
+      ));
+
+      const bottomSpacer = container.querySelector(
+        '[data-platform-window-spacer="bottom"]',
+      ) as HTMLElement;
+      // 41 items, 8 mounted: 33 unmounted rows at the caller's 200px estimate.
+      expect(bottomSpacer.style.height).toBe('6600px');
+    } finally {
+      Element.prototype.getBoundingClientRect = originalRect;
+      if (originalVisibility) {
+        (Element.prototype as Element & { checkVisibility?: () => boolean }).checkVisibility =
+          originalVisibility;
+      } else {
+        Reflect.deleteProperty(Element.prototype, 'checkVisibility');
+      }
+    }
+  });
 });

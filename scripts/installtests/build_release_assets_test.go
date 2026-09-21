@@ -1427,7 +1427,7 @@ func TestBackfillReleaseWorkflowRepairsPublishedAssetsWithoutRebuilds(t *testing
 		`contents: write`,
 		`runs-on: ubuntu-24.04`,
 		`uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1`,
-		`uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0`,
+		`uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0`,
 		`SYFT_VERSION="1.42.4"`,
 		`SYFT_ARCHIVE="syft_${SYFT_VERSION}_linux_amd64.tar.gz"`,
 		`SYFT_SHA256="590650c2743b83f327d1bf9bec64f6f83b7fec504187bb84f500c862bf8f2a0f"`,
@@ -1747,7 +1747,7 @@ func TestReleaseCandidateRequiresPlatformNativeAgentSigning(t *testing.T) {
 		`sign-windows-agent:`,
 		`collect-windows-signing:`,
 		`windows_signing_backend:`,
-		`signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2`,
+		`signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0`,
 		`github-artifact-id: ${{ steps.upload-unsigned-windows.outputs.artifact-id }}`,
 		`wait-for-completion: false`,
 		`windows-signing-request.json`,
@@ -2279,7 +2279,7 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		`Waiting for activated release assets to be available`,
 		`bash /tmp/pulse-install.sh --version "$TAG"`,
 		`Refuse mutation during verification-only checks`,
-		`uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0`,
+		`uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0`,
 		`go run ./scripts/release_update_key.go public-key-ssh`,
 		`sed -i "s|^PINNED_RELEASE_SSH_PUBLIC_KEY=.*|PINNED_RELEASE_SSH_PUBLIC_KEY=\"${TRUSTED_SSH_PUBLIC_KEY}\"|" /tmp/pulse-install.sh`,
 		`Verify target host identity`,
@@ -4410,5 +4410,25 @@ func TestReleaseNodeSetupKeepsExplicitCacheIsolation(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestInstallMCPFreeBSDSHA256Fallback(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install-mcp.sh"))
+	if err != nil {
+		t.Fatalf("read install-mcp.sh: %v", err)
+	}
+	script := string(content)
+	// FreeBSD base provides sha256(1) but neither GNU sha256sum nor Perl's
+	// shasum, so the MCP installer must select the available digest tool.
+	for _, want := range []string{
+		"command -v sha256sum",
+		"command -v sha256 >/dev/null 2>&1",
+		`sha_cmd="sha256 -q"`,
+		"command -v shasum",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("install-mcp.sh lost FreeBSD sha256 fallback %q", want)
+		}
 	}
 }

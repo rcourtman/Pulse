@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
-	_ "modernc.org/sqlite"
+	sqlite "modernc.org/sqlite"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
@@ -27,6 +27,52 @@ const (
 	privateDirPerm  = 0o700
 	privateFilePerm = 0o600
 )
+
+// SQLite result codes for transient lock conditions. The modernc driver
+// surfaces these as *sqlite.Error, and its message text is e.g.
+// "database is locked (5) (SQLITE_BUSY)", so callers must match the code
+// rather than a bare "database is locked" string.
+const (
+	sqliteCodeBusy              = 5
+	sqliteCodeLocked            = 6
+	sqliteCodeBusyRecovery      = sqliteCodeBusy | (1 << 8)
+	sqliteCodeBusySnapshot      = sqliteCodeBusy | (2 << 8)
+	sqliteCodeBusyTimeout       = sqliteCodeBusy | (3 << 8)
+	sqliteCodeLockedSharedCache = sqliteCodeLocked | (1 << 8)
+	sqliteCodeLockedVTab        = sqliteCodeLocked | (2 << 8)
+)
+
+// isRetryableWriteError reports whether err is a transient SQLite lock or a
+// closed pool connection that should be retried rather than dropped. The
+// previous exact string comparison against "database is locked" never matched
+// the modernc driver's actual message, so a busy writer dropped its batch
+// immediately instead of backing off.
+func isRetryableWriteError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var sqliteErr *sqlite.Error
+	if errors.As(err, &sqliteErr) {
+		switch sqliteErr.Code() {
+		case sqliteCodeBusy,
+			sqliteCodeLocked,
+			sqliteCodeBusyRecovery,
+			sqliteCodeBusySnapshot,
+			sqliteCodeBusyTimeout,
+			sqliteCodeLockedSharedCache,
+			sqliteCodeLockedVTab:
+			return true
+		}
+	}
+
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "database is locked") ||
+		strings.Contains(message, "sqlite_busy") ||
+		strings.Contains(message, "sqlite_locked") ||
+		strings.Contains(message, "database table is locked") ||
+		message == "sql: database is closed"
+}
 
 // Tier represents the granularity of stored metrics
 type Tier string
@@ -63,6 +109,28 @@ const (
 	defaultRollupInterval = 15 * time.Minute
 	maxRollupChunkWindow  = 5 * time.Minute
 	maxRollupChunksPerRun = 128
+
+	// writeBatchBeginAttempts bounds how many times a metrics write batch
+	// retries a busy transaction before it is dropped. Five attempts is enough
+	// for the steady-state WAL writer.
+	writeBatchBeginAttempts = 5
+	// startupMaintenanceBeginAttempts extends that budget while the one-time
+	// startup maintenance holds the SQLite write lock. The deferred
+	// identity-index rebuild and the auto-vacuum VACUUM can hold the lock for
+	// minutes on a large legacy database; the steady-state budget would drop
+	// every batch enqueued during an upgrade. Each attempt may itself wait
+	// busy_timeout (30s), so this covers roughly half an hour, matching
+	// migrateAutoVacuum's context deadline.
+	startupMaintenanceBeginAttempts = 70
+	// maxWriteRetryBackoff caps the sleep between write attempts so a fast
+	// non-lock failure cannot spin.
+	maxWriteRetryBackoff = 2 * time.Second
+
+	// maxQueryAllSeriesCapacity caps the per-series preallocation in QueryAll.
+	// A caller can request a fine step over a long range (e.g. 5s over 90 days)
+	// while the tier fallback actually yields far fewer rows; without a cap
+	// every series reserves hundreds of thousands of MetricPoint slots.
+	maxQueryAllSeriesCapacity = 4096
 )
 
 // DefaultConfig returns sensible defaults for metrics storage
@@ -226,6 +294,7 @@ type Store struct {
 	stopping                   atomic.Bool
 	syncWaitWarnNano           atomic.Int64
 	identityMigrationPending   atomic.Bool
+	startupMaintenanceActive   atomic.Bool
 	commercialRetentionSeconds atomic.Int64
 	commercialPurgeEligibleAt  atomic.Int64
 
@@ -630,8 +699,22 @@ func (s *Store) metricsIndexMatches(name string, wantUnique bool, wantColumns []
 // SQLite cannot switch from NONE to INCREMENTAL without a full VACUUM to
 // restructure the file, so we detect and convert on first run after upgrade.
 func (s *Store) migrateAutoVacuum() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+
+	// auto_vacuum is only a per-connection setting until a VACUUM on that same
+	// connection rewrites the file header. Running the pragma and the VACUUM on
+	// separate pool connections could leave the file at NONE, so pin both to one
+	// connection and verify the mode actually persisted.
+	conn, err := s.db.DB.Conn(ctx)
+	if err != nil {
+		log.Debug().Err(err).Msg("Failed to acquire connection for auto_vacuum check")
+		return
+	}
+	defer conn.Close()
+
 	var mode int
-	if err := s.db.QueryRow("PRAGMA auto_vacuum").Scan(&mode); err != nil {
+	if err := conn.QueryRowContext(ctx, "PRAGMA auto_vacuum").Scan(&mode); err != nil {
 		log.Debug().Err(err).Msg("Failed to check auto_vacuum mode")
 		return
 	}
@@ -643,12 +726,17 @@ func (s *Store) migrateAutoVacuum() {
 	start := time.Now()
 
 	// Set the desired mode then VACUUM to restructure the file.
-	if _, err := s.db.Exec("PRAGMA auto_vacuum = INCREMENTAL"); err != nil {
+	if _, err := conn.ExecContext(ctx, "PRAGMA auto_vacuum = INCREMENTAL"); err != nil {
 		log.Warn().Err(err).Msg("Failed to set auto_vacuum mode")
 		return
 	}
-	if _, err := s.db.Exec("VACUUM"); err != nil {
+	if _, err := conn.ExecContext(ctx, "VACUUM"); err != nil {
 		log.Warn().Err(err).Msg("Auto-vacuum migration VACUUM failed (will retry next restart)")
+		return
+	}
+
+	if err := conn.QueryRowContext(ctx, "PRAGMA auto_vacuum").Scan(&mode); err != nil || mode != 2 {
+		log.Warn().Err(err).Int("mode", mode).Msg("Auto-vacuum migration did not persist incremental mode")
 		return
 	}
 
@@ -659,6 +747,21 @@ func (s *Store) migrateAutoVacuum() {
 // canonical v6 `resource_type=agent`. This keeps reads/writes agent-only while
 // preserving historical data.
 func (s *Store) migrateLegacyHostResourceType() {
+	// Probe with the resource_type prefix of idx_metrics_query_all before
+	// opening a write transaction. The migration is a no-op on every store
+	// that has already run it, and an unconditional write transaction dirties
+	// the WAL on every boot for nothing.
+	var legacyHostExists bool
+	if err := s.db.QueryRow(
+		`SELECT EXISTS(SELECT 1 FROM metrics WHERE resource_type = 'host' LIMIT 1)`,
+	).Scan(&legacyHostExists); err != nil {
+		log.Warn().Err(err).Msg("Failed to probe legacy host metrics rows")
+		return
+	}
+	if !legacyHostExists {
+		return
+	}
+
 	tx, err := s.db.Begin()
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to start legacy host->agent metrics migration")
@@ -927,6 +1030,14 @@ func (s *Store) WaitForMaintenance(timeout time.Duration) error {
 
 func (s *Store) runStartupMaintenance() {
 	start := time.Now()
+
+	// Signal the ingestion worker that the write lock may be held for a long
+	// time by the deferred identity-index rebuild and the auto-vacuum VACUUM.
+	// Without this a large legacy database drops every metric batch enqueued
+	// during the one-time upgrade (#2079 finding 5).
+	s.startupMaintenanceActive.Store(true)
+	defer s.startupMaintenanceActive.Store(false)
+
 	if s.startupHook != nil {
 		s.startupHook()
 	}
@@ -1131,26 +1242,49 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 			Msg("Coalesced duplicate metrics before write")
 	}
 
-	var tx *pdb.InstrumentedTx
-	var err error
-
-	// Retry on SQLITE_BUSY with exponential backoff
-	for i := 0; i < 5; i++ {
-		tx, err = s.db.Begin()
-		if err == nil {
-			break
-		}
-		if i < 4 && (err.Error() == "database is locked" || err.Error() == "sql: database is closed") {
-			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
-			continue
-		}
-		log.Error().Err(err).
-			Str("component", "metrics_store").
-			Str("action", "begin_write_tx").
-			Int("batch_size", len(metrics)).
-			Msg("Failed to begin metrics transaction")
-		return
+	// Retry the whole transaction on SQLITE_BUSY with exponential backoff.
+	// BEGIN is deferred, so the write lock is actually contended at the first
+	// INSERT or at COMMIT; retrying only Begin() would skip rows and commit an
+	// empty transaction. While the one-time startup maintenance holds the
+	// write lock, extend the budget rather than dropping durable history
+	// during an upgrade (#2079 finding 5). The stopping check keeps shutdown
+	// from waiting out the extended budget.
+	maxAttempts := writeBatchBeginAttempts
+	if s.startupMaintenanceActive.Load() {
+		maxAttempts = startupMaintenanceBeginAttempts
 	}
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		retryable, err := s.writeBatchOnce(metrics)
+		if err == nil {
+			log.Debug().Int("input_count", inputCount).Int("count", len(metrics)).Msg("Wrote metrics batch")
+			return
+		}
+		if !retryable || attempt == maxAttempts-1 || s.stopping.Load() {
+			log.Error().Err(err).
+				Str("component", "metrics_store").
+				Str("action", "write_batch").
+				Int("batch_size", len(metrics)).
+				Msg("Failed to write metrics batch")
+			return
+		}
+		backoff := time.Duration(100*(attempt+1)) * time.Millisecond
+		if backoff > maxWriteRetryBackoff {
+			backoff = maxWriteRetryBackoff
+		}
+		time.Sleep(backoff)
+	}
+}
+
+// writeBatchOnce commits one metrics transaction. It reports retryable=true
+// when the failure was a transient lock so the caller can retry the whole
+// batch instead of dropping it. A non-retryable per-row insert error is logged
+// and skipped, preserving the batch's other rows.
+func (s *Store) writeBatchOnce(metrics []bufferedMetric) (bool, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return isRetryableWriteError(err), fmt.Errorf("begin metrics transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO metrics (resource_type, resource_id, metric_type, value, timestamp, tier)
@@ -1158,44 +1292,36 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 		ON CONFLICT(resource_type, resource_id, metric_type, tier, timestamp)
 		DO UPDATE SET
 			value = excluded.value,
-			min_value = excluded.min_value,
-			max_value = excluded.max_value
+			min_value = COALESCE(excluded.min_value, min_value),
+			max_value = COALESCE(excluded.max_value, max_value)
 	`)
 	if err != nil {
-		_ = tx.Rollback()
-		log.Error().Err(err).
-			Str("component", "metrics_store").
-			Str("action", "prepare_write_stmt").
-			Int("batch_size", len(metrics)).
-			Msg("Failed to prepare metrics insert")
-		return
+		return false, fmt.Errorf("prepare metrics insert: %w", err)
 	}
 	defer stmt.Close()
 
 	for _, m := range metrics {
 		_, err := stmt.Exec(m.resourceType, m.resourceID, m.metricType, m.value, m.timestamp.Unix(), string(m.tier))
-		if err != nil {
-			log.Warn().Err(err).
-				Str("component", "metrics_store").
-				Str("action", "insert_metric").
-				Str("resource_type", m.resourceType).
-				Str("resource_id", m.resourceID).
-				Str("metric_type", m.metricType).
-				Str("tier", string(m.tier)).
-				Msg("Failed to insert metric")
+		if err == nil {
+			continue
 		}
+		if isRetryableWriteError(err) {
+			return true, fmt.Errorf("insert metric: %w", err)
+		}
+		log.Warn().Err(err).
+			Str("component", "metrics_store").
+			Str("action", "insert_metric").
+			Str("resource_type", m.resourceType).
+			Str("resource_id", m.resourceID).
+			Str("metric_type", m.metricType).
+			Str("tier", string(m.tier)).
+			Msg("Failed to insert metric")
 	}
 
 	if err := tx.Commit(); err != nil {
-		log.Error().Err(err).
-			Str("component", "metrics_store").
-			Str("action", "commit_write_tx").
-			Int("batch_size", len(metrics)).
-			Msg("Failed to commit metrics batch")
-		return
+		return isRetryableWriteError(err), fmt.Errorf("commit metrics batch: %w", err)
 	}
-
-	log.Debug().Int("input_count", inputCount).Int("count", len(metrics)).Msg("Wrote metrics batch")
+	return false, nil
 }
 
 func coalesceMetricBatch(metrics []bufferedMetric) []bufferedMetric {
@@ -1662,7 +1788,7 @@ func (s *Store) queryRetainedChunk(resourceType string, resourceIDs []string, me
 		if err == nil {
 			break
 		}
-		if i < 4 && (err.Error() == "database is locked" || err.Error() == "sql: database is closed") {
+		if i < 4 && isRetryableWriteError(err) {
 			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
 			continue
 		}
@@ -1781,6 +1907,13 @@ func estimateQueryAllBatchSeriesCapacity(start, end time.Time, stepSecs int64) i
 	if buckets < 1 {
 		return 1
 	}
+	// The selected tier's actual resolution is usually far coarser than the
+	// requested step, so the row count is much smaller than the bucket count.
+	// Cap the preallocation; append still grows the slice for genuinely dense
+	// series.
+	if buckets > maxQueryAllSeriesCapacity {
+		return maxQueryAllSeriesCapacity
+	}
 	return buckets
 }
 
@@ -1842,12 +1975,21 @@ func (s *Store) backgroundWorker() {
 			if batch := s.drainBuffer(); len(batch) > 0 {
 				remaining = append(remaining, writeRequest{metrics: batch})
 			}
-			close(s.writeCh)
-			for req := range s.writeCh {
-				remaining = append(remaining, req)
+			// Do NOT close writeCh. Concurrent writers (WriteWithTier after
+			// its stopping check, and WriteBatchSync/WriteBatchBounded which
+			// never check stopping) may still be sending; closing the channel
+			// races those sends and panics the process on shutdown. Drain what
+			// is already queued instead, and let any late write land in the
+			// buffered channel to be discarded with the store.
+			for {
+				select {
+				case req := <-s.writeCh:
+					remaining = append(remaining, req)
+				default:
+					s.processWriteRequests(remaining)
+					return
+				}
 			}
-			s.processWriteRequests(remaining)
-			return
 
 		case req, ok := <-s.writeCh:
 			if !ok {
@@ -1962,15 +2104,21 @@ func (s *Store) rollupTier(fromTier, toTier Tier, bucketSize, minAge time.Durati
 	for windowStart < cutoffBucket {
 		nextBucket, hasSource := s.nextSourceRollupBucket(fromTier, windowStart, cutoffBucket, bucketSecs)
 		if !hasSource {
-			if processedAny {
-				if err := s.setMetaInt(metaKey, cutoffBucket); err != nil {
-					log.Warn().Err(err).Str("tier", string(fromTier)).Msg("Failed to persist rollup checkpoint")
-				}
-			}
+			// No source remains at or after the checkpoint. Leave the checkpoint
+			// where it is so a late backfill into the trailing gap is still rolled
+			// up on a later run; do not leap it to the cutoff.
 			return
 		}
 
 		if nextBucket > windowStart {
+			if processedAny {
+				// A gap sits between already-processed source and the next source.
+				// Stop and leave the checkpoint at the gap start so the gap can
+				// still be rolled up if the lower tier backfills it later. The next
+				// run skips the gap once it is known to be empty.
+				return
+			}
+			// Skip the empty prefix before the first source in this run.
 			windowStart = nextBucket
 		}
 		windowEnd := windowStart + chunkSecs

@@ -525,3 +525,88 @@ echo "SERVICE:$SERVICE_UP"
 		}
 	}
 }
+
+// TestPerformUpdateDoesNotLeakReturnTrap asserts the #2128 regression: a
+// RETURN trap is not scoped to the function that installs it, so
+// perform_update's trap must disarm itself on its first invocation. If it
+// leaks, it re-runs when a later function returns; the function-local
+// installer_tmp/signature_tmp are gone by then, and under `set -u` the updater
+// aborts with "installer_tmp: unbound variable" after a *successful* update,
+// leaving pulse-update.service failed even though the install worked.
+func TestPerformUpdateDoesNotLeakReturnTrap(t *testing.T) {
+	script := `
+set -uo pipefail
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+GITHUB_REPO="rcourtman/Pulse"
+INSTALL_DIR="$TMP/opt/pulse"
+CONFIG_DIR="$TMP/etc/pulse"
+mkdir -p "$INSTALL_DIR/bin" "$CONFIG_DIR"
+printf 'v5.1.24\n' > "$INSTALL_DIR/VERSION"
+printf '#!/usr/bin/env bash\necho v5.1.24\n' > "$INSTALL_DIR/bin/pulse"
+chmod +x "$INSTALL_DIR/bin/pulse"
+export INSTALL_DIR
+export FAKE_NEW_VERSION="v5.1.25"
+
+log() { echo "[$1] ${*:2}"; }
+detect_service_name() { echo pulse; }
+get_current_version() { tr -d '\r\n' < "$INSTALL_DIR/VERSION"; }
+verify_release_signature() { return 0; }
+sleep() { :; }
+
+# curl writes the installer / signature to the -o target; the fake installer
+# bumps VERSION to the new version, simulating a successful install.
+curl() {
+  local out="" prev="" arg
+  for arg in "$@"; do
+    if [[ "$prev" == "-o" ]]; then out="$arg"; fi
+    prev="$arg"
+  done
+  if [[ -n "$out" ]]; then
+    case "$out" in
+      *.sig.*) printf 'dummy-signature\n' > "$out" ;;
+      *)
+        cat > "$out" <<'INSTALLER'
+#!/usr/bin/env bash
+printf '%s\n' "${FAKE_NEW_VERSION}" > "${PULSE_INSTALL_DIR}/VERSION"
+exit 0
+INSTALLER
+        ;;
+    esac
+  fi
+  return 0
+}
+
+# Pulse was running and stays running, so perform_update succeeds.
+systemctl() {
+  if [[ "$1" == "is-active" ]]; then return 0; fi
+  return 0
+}
+` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
+` + extractAutoUpdateFunction(t, "resolve_install_script_url") + `
+` + extractAutoUpdateFunction(t, "wait_for_service_active") + `
+` + extractAutoUpdateFunction(t, "ensure_service_restarted") + `
+` + extractAutoUpdateFunction(t, "perform_update") + `
+if perform_update v5.1.25; then echo "RESULT:succeeded"; else echo "RESULT:failed"; fi
+echo "LEAKED:$(trap -p RETURN)"
+# The real caller (main) returns after perform_update; a leaked trap would
+# re-run here with the locals gone.
+caller() { return 0; }
+caller
+echo "AFTER_CALLER"
+`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	for _, want := range []string{"RESULT:succeeded", "LEAKED:\n", "AFTER_CALLER"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in perform_update success output:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "unbound variable") {
+		t.Fatalf("perform_update leaked its RETURN trap; a later function return aborted under set -u:\n%s", got)
+	}
+}

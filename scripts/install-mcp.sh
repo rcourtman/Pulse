@@ -146,10 +146,13 @@ Build from source: go install github.com/rcourtman/pulse-go-rewrite/cmd/pulse-mc
     local sha_cmd
     if command -v sha256sum >/dev/null 2>&1; then
         sha_cmd="sha256sum"
+    elif command -v sha256 >/dev/null 2>&1; then
+        # FreeBSD base ships sha256(1) rather than GNU sha256sum.
+        sha_cmd="sha256 -q"
     elif command -v shasum >/dev/null 2>&1; then
         sha_cmd="shasum -a 256"
     else
-        err "no sha256 tool found (sha256sum or shasum); refusing unverified install"
+        err "no sha256 tool found (sha256sum, sha256 or shasum); refusing unverified install"
     fi
 
     checksums_url="${base}/checksums.txt"

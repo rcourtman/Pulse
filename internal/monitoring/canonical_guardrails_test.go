@@ -1944,8 +1944,8 @@ func TestUnifiedAppContainerMetricsUseCanonicalGuestHistoryPath(t *testing.T) {
 		`if target == nil || target.ResourceType != "app-container" || strings.TrimSpace(target.ResourceID) == "" {`,
 		`metricKey := fmt.Sprintf("docker:%s", targetID)`,
 		`storeWrites := make([]metrics.WriteMetric, 0)`,
-		`appendStoreWrite("dockerContainer", targetID, "cpu", value)`,
-		`appendStoreWrite("dockerContainer", targetID, "diskwrite", metric.Value)`,
+		`appendStoreWrite("dockerContainer", targetID, "cpu", value, observedAt)`,
+		`appendStoreWrite("dockerContainer", targetID, "diskwrite", metric.Value, observedAt)`,
 		`m.metricsStore.WriteBatchBounded(storeWrites)`,
 	}
 	for _, snippet := range requiredSnippets {
@@ -1988,8 +1988,8 @@ func TestUnifiedAgentMetricsUseCanonicalHostHistoryPath(t *testing.T) {
 		`if target == nil || target.ResourceType != "agent" || strings.TrimSpace(target.ResourceID) == "" {`,
 		`metricKey := fmt.Sprintf("agent:%s", targetID)`,
 		`storeWrites := make([]metrics.WriteMetric, 0)`,
-		`appendStoreWrite("agent", targetID, "cpu", value)`,
-		`appendStoreWrite("agent", targetID, "diskwrite", metric.Value)`,
+		`appendStoreWrite("agent", targetID, "cpu", value, observedAt)`,
+		`appendStoreWrite("agent", targetID, "diskwrite", metric.Value, observedAt)`,
 		`m.metricsStore.WriteBatchBounded(storeWrites)`,
 	}
 	for _, snippet := range requiredSnippets {
@@ -2010,8 +2010,8 @@ func TestUnifiedVMMetricsUseCanonicalVMHistoryPath(t *testing.T) {
 		`if target == nil || target.ResourceType != "vm" || strings.TrimSpace(target.ResourceID) == "" {`,
 		`if source == unifiedresources.SourceProxmox {`,
 		`storeWrites := make([]metrics.WriteMetric, 0)`,
-		`appendStoreWrite("vm", targetID, "cpu", value)`,
-		`appendStoreWrite("vm", targetID, "diskwrite", metric.Value)`,
+		`appendStoreWrite("vm", targetID, "cpu", value, observedAt)`,
+		`appendStoreWrite("vm", targetID, "diskwrite", metric.Value, observedAt)`,
 		`m.metricsStore.WriteBatchBounded(storeWrites)`,
 	}
 	for _, snippet := range requiredSnippets {
@@ -2197,7 +2197,7 @@ func TestUnifiedPhysicalDiskMetricsUseCanonicalDiskHistoryPath(t *testing.T) {
 		"m.syncUnifiedPhysicalDiskMetrics(store)",
 		`if target == nil || target.ResourceType != "disk" || strings.TrimSpace(target.ResourceID) == "" {`,
 		`if source == unifiedresources.SourceProxmox || source == unifiedresources.SourceAgent {`,
-		`m.writeSMARTMetrics(disk, now)`,
+		`m.writeSMARTMetrics(disk, unifiedResourceObservedAt(resource, now))`,
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {

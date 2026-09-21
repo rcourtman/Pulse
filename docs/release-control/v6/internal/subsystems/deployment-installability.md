@@ -1069,6 +1069,12 @@ artifact-selection behaviour.
    report success. A checksum-verified native rehearsal must cover install,
    update, reboot persistence, and clean uninstall rather than treating a
    cross-build as complete lifecycle proof.
+   Download verification must use a SHA-256 tool that exists on the target
+   platform. FreeBSD base ships `sha256(1)` and neither GNU `sha256sum` nor
+   Perl `shasum`, so the unified installer and the MCP installer must fall back
+   through the available digest tool instead of refusing an otherwise correct
+   download. The shared installer helper owns that fallback so every download
+   (agent, typed helper, action runner) is verified consistently.
    The shell installer must disclose `--enable-commands` as Pulse command
    execution, disabled by default, and must name both Patrol actions and
    Proxmox LXC Docker inventory as the operator-visible reasons to enable it.
@@ -1526,12 +1532,24 @@ artifact-selection behaviour.
    including the installer-exits-nonzero rollback branch. The generated
    `pulse-update.service` gates on `ExecCondition=systemctl is-active`, so a
    service left stopped also silently disables every future unattended run.
-   This is enforced by a `service_was_active`-guarded restart in each rollback
-   branch plus the `ensure_service_restarted` RETURN-trap backstop, and pinned
-   by `scripts/installtests/pulse_auto_update_test.go`
-   (`TestPerformUpdateRestartsServiceWhenInstallerFails`,
-   `TestEnsureServiceRestartedHonorsPriorServiceState`) and
-   `scripts/tests/test-pulse-auto-update.sh`. For the same reason, root
+    This is enforced by a `service_was_active`-guarded restart in each rollback
+    branch plus the `ensure_service_restarted` RETURN-trap backstop, and pinned
+    by `scripts/installtests/pulse_auto_update_test.go`
+    (`TestPerformUpdateRestartsServiceWhenInstallerFails`,
+    `TestEnsureServiceRestartedHonorsPriorServiceState`) and
+    `scripts/tests/test-pulse-auto-update.sh`. The `ensure_service_restarted`
+    RETURN-trap backstop must disarm itself with `trap - RETURN` on its first
+    invocation (#2128): a RETURN trap is not scoped to `perform_update`, so
+    leaving it installed re-runs it when a later function returns, and the
+    function-local `installer_tmp`/`signature_tmp` are gone by then — under
+    `set -u` the updater then aborts with `installer_tmp: unbound variable`
+    after a successful update, failing `pulse-update.service` even though the
+    install and version verification succeeded. Both trap installs (the early
+    service-only trap and the tempfile trap) must disarm, and the tempfile trap
+    must expand `${installer_tmp:-}`/`${signature_tmp:-}` so a stray invocation
+    cannot abort the script. Pinned by
+    `scripts/installtests/pulse_auto_update_test.go`
+    (`TestPerformUpdateDoesNotLeakReturnTrap`). For the same reason, root
    `install.sh` writes outside the hardened update unit's writable set
    (`ProtectSystem=strict` with `ReadWritePaths` covering the install dir,
    config dir, `/tmp`, the auto-update helper's directory and the unit
@@ -1926,6 +1944,14 @@ artifact-selection behaviour.
    workflow-run details from GitHub and poll the exact returned run ID; it must
    never infer its child from the newest matching workflow/branch/timestamp,
    because version-scoped release concurrency and manual dispatches can overlap.
+   Before it creates the unpublished draft, `create-release.yml` must prove the
+   private payload can resolve its source: the `prepare` job must read
+   `docs/release-source-pairs/<expected_source_sha>.json` from
+   `rcourtman/pulse-enterprise` and fail unless that file exists and declares
+   `pulse_sha` equal to the frozen public commit. A missing or mismatched
+   declaration must stop the run before any draft release object exists, so a
+   private build that cannot resolve its pair never orphans another draft. The
+   check is a fact check only; the release steward still selects the pair.
    Only after public release asset validation, staged install smoke, exact
    public Docker publication, exact Helm OCI publication, durable convergence
    dispatch, and the publicly readable activation-commit marker may the
@@ -2366,6 +2392,17 @@ artifact-selection behaviour.
    `scripts/trigger-release.sh` and `scripts/trigger-stable-patch.sh` must send
    the exact remote candidate SHA they already verified; branch ancestry or a
    later branch tip is not equivalent release admission.
+18. Keep the frontend type-surface dependency and its compiler lib aligned.
+   `frontend-modern/package.json` and `frontend-modern/package-lock.json` must
+   pin a single `@types/node` line at or above the reviewed floor with its
+   `undici-types` companion resolved consistently, and
+   `frontend-modern/tsconfig.json` must declare the `ES2022` lib whenever the
+   source uses `Array.prototype.at()`/`String.prototype.at()`. `@types/node`
+   before 26 shipped an `.at()` compatibility polyfill that masked the missing
+   lib; a bump that removes it must keep
+   `frontend-modern/src/security/__tests__/dependencySecurity.test.ts` proving
+   the manifest range, the locked `@types/node`/`undici-types` versions and the
+   `ES2022` lib declaration stay in step.
 
 ## Current State
 
@@ -5366,6 +5403,23 @@ synthetic Go pass/skip/fail output, producer exit retention, malformed input,
 allowlisted targeting and unavailable resource evidence. This is not product
 qualification; see `docs/RELEASE_RESOURCE_EVIDENCE.md`.
 
+### Rehearsal backend package timeout
+
+The accelerated rehearsal profile runs the backend as one serial
+`go test -json -p 1` process so its events stay streamed for
+`scripts/release-go-test-events.py`. Go's default per-package timeout is 10m,
+which the shared preflight worker exceeded on `internal/api` under ordinary
+concurrent load, failing an otherwise green package with `panic: test timed
+out` and no failing assertion. The worker must therefore pass an explicit
+package timeout no lower than the release profile's 30m budget, overridable
+through `PULSE_RELEASE_PREFLIGHT_REHEARSAL_TIMEOUT` for a deliberately
+different host. Host contention must not turn a healthy candidate into a
+release-gate failure, and the explicit budget must not raise any test threshold
+or mask a real source failure.
+`scripts/release_control/internal/release_preflight_test.py` pins the rehearsal
+command and its timeout. This is a harness reliability control, not product
+qualification.
+
 ### Offline signed Organization provisioning
 
 The isolated Community browser harness may provision signed entitlements only
@@ -5504,3 +5558,40 @@ models workflow cancellation independently of successful needs, covers all six
 boundaries and retains the final `always()` evidence/verdict join. Evidence
 uploads and cleanup remain unchanged. This is source-policy regression proof,
 not hosted cancellation acceptance or authorization to retry a frozen workflow.
+
+### Unattended update resilience on successful installs and low-space aborts
+
+The unattended updater and the installer it downloads must leave the host in a
+consistent state on every exit path, including failure.
+
+`scripts/pulse-auto-update.sh`'s `perform_update` installs a shell-global
+`trap ... RETURN` that references its own local installer temp-file names. A
+RETURN trap is not function-scoped: after `perform_update` returned it fired
+again when a later function returned, expanding the now out-of-scope locals
+under `set -u` and exiting non-zero. A completed, version-verified install was
+therefore reported by `pulse-update.service` as failed with
+`installer_tmp: unbound variable`. The trap now clears itself (`trap - RETURN`)
+as it runs, so only the returning `perform_update` triggers it.
+
+`install.sh backup_existing` snapshots the configuration before the update
+reaches its staging disk-headroom check. When that check failed, the freshly
+created snapshot remained under the backup parent (or the hardened-unit
+fallback `$INSTALL_DIR/config-backups`), so every automatic retry added another
+full copy and a low-space root filesystem became progressively worse. The
+installer now records the snapshot it created and removes it when
+`download_pulse` aborts at the headroom check, because nothing was staged or
+replaced.
+
+Neither change alters the update channel, signature verification, disk-headroom
+thresholds, snapshot retention (`CONFIG_BACKUP_KEEP_COUNT`), rollback or
+service-restart guarantees. No release or installed-host acceptance is claimed.
+
+Verification: `scripts/tests/test-pulse-auto-update.sh` gains a case that fails
+without the trap fix with `installer_tmp: unbound variable` and passes with it.
+`scripts/installtests/pulse_auto_update_test.go` executes the extracted
+`perform_update` and then a later function return, asserting no
+unbound-variable error, and `scripts/installtests/root_install_sh_test.go`
+covers the recorded snapshot and its removal. Local shell suites
+(`test-pulse-auto-update.sh`, `test-install-update-resilience.sh`,
+`test-script-reference-integrity.sh`) pass; hosted Go installtest execution
+remains required and is not claimed here.

@@ -62,6 +62,28 @@ cycles, completion timestamps and unchanged failure backoff. These are synthetic
 runtime proofs, not native firmware timeout or reporter-resolution evidence.
 
 
+**TrueNAS legacy-REST memory telemetry — issue #2077 (20 September 2026)**
+
+A connection proven to run a recognized legacy CORE/FreeNAS release has no
+`reporting.realtime` JSON-RPC subscription, so live system telemetry and
+host-chart history are reconstructed from the REST reporting API
+(`reporting.get_data`, served as a POST endpoint keyed by its `graphs` and
+`query` parameters). The reporting `memory` and `arcsize` graphs supply the
+available and ARC readings that the JSON-RPC realtime subscription otherwise
+provides. When no available-memory reading can be established, the provider
+must not derive usage from a zero available value: the system memory metric is
+omitted and agent memory is projected as usage-unavailable with its known total,
+so a CORE appliance is never reported as 100% used. This is a behavioral
+correctness repair with no public API or schema delta.
+`TestRESTSystemTelemetryReadsReportingMemory`,
+`TestRESTSystemMetricHistoryUsesReporting` and
+`TestTrueNASMemoryWithoutAvailableIsNotReportedAsUsed` in
+`internal/truenas/client_test.go` cover the REST reporting fallback, the REST
+history query and the unavailable-usage guard. These are synthetic transport
+and projection proofs, not native CORE appliance acceptance or reporter
+confirmation.
+
+
 **Availability backfill preserves concurrent discovery changes (7 September 2026)**
 
 The backfill List snapshot is a work list, not an authoritative record to save.
@@ -4065,3 +4087,107 @@ provider keys, canonical IDs, JSON projection, temperature/size/cadence, separat
 nodes/controller members, and confirmed inventory removal.
 `TestPhysicalDiskReadbackSourceIDFallback` covers missing source metadata.
 This is synthetic runtime evidence, not USB hardware or reporter acceptance.
+
+### Unified metric replay guard bounds registry-rebuild writes
+
+Read-side registry rebuilds (/api/state, websocket hydrate) re-run the unified
+metric sync as often as every two seconds. Every unified sync (agent, VM,
+storage, and app-container) now timestamps its samples with the source
+observation time (`unifiedResourceObservedAt`/`unifiedMetricObservedAt`), not the
+rebuild wall clock. Before this change each rebuild re-issued the same rows as
+SQLite UPDATEs and committed a fresh transaction for no new data, churning the
+WAL and driving the disk-write amplification in #1966. Monitoring tracks the
+last sample handed to the store per (resource type, resource id, metric type)
+series and drops exact timestamp+value repeats before the batch is enqueued; a
+corrected value at the same observation time is still written, so a real change
+is never masked. The guard is bounded so a long-lived monitor with churning
+resource IDs cannot pin memory. Proxmox and libvirt VMs have native history
+writers and are excluded from the unified VM sync so the same series is not
+written twice. Physical-disk SMART history follows the same rule: the unified
+physical-disk sync anchors both the in-memory chart point and the persisted
+SMART batch to the resource's source observation time and drops exact replays
+through the same guard, so a TrueNAS/Unraid disk without a native SMART writer
+does not re-commit its attributes on every registry rebuild. Focused proof lives
+in
+`internal/monitoring/monitor_host_agents_test.go`
+(`TestDedupeUnifiedMetricWritesDropsExactReplays`,
+`TestSyncUnifiedPhysicalDiskMetricsUsesSourceObservationTimeAcrossRegistryRebuilds`)
+and `internal/monitoring/monitor_polling_test.go`
+(`TestSyncUnifiedAppContainerMetricsUsesSourceObservationTimeAcrossRegistryRebuilds`,
+`TestSyncUnifiedVMMetricsUsesSourceObservationTimeAcrossRegistryRebuilds`).
+
+### Unified metric sync commits one batch per pass
+
+The five unified syncs run serially and each previously waited for its own
+SQLite commit, so one registry rebuild that carried new data for several
+resource types opened one transaction per type and committed the same WAL
+repeatedly. `syncAllUnifiedMetrics` now collects the surviving writes of the
+agent, VM, storage and app-container syncs through a batch sink and commits them
+in a single `WriteBatchBounded` transaction. Each sync still runs its own
+per-series replay guard first, so the change only moves the transaction
+boundary: the same series, values and source observation times are written.
+Standalone callers and tests still pass no sink and keep the immediate,
+read-your-writes write. The physical-disk SMART path keeps its own transaction
+because it writes directly. Focused proof lives in
+`internal/monitoring/monitor_polling_test.go`
+(`TestSyncUnifiedStorageMetricsDefersWritesToBatchSink`).
+
+### Docker image update comparison accepts every local RepoDigest
+
+Docker records every RepoDigest an image is known by, and the digest for a
+tag's manifest is not always the first entry. Update detection now compares the
+whole local RepoDigest set against the registry's resolved and index digests,
+so a current image whose manifest appears under a later RepoDigest is not
+reported as outdated. `TestRegistryChecker_MultipleLocalRepoDigestsSuppressFalseUpdate`,
+`TestAgent_getImageRepoDigests_MultipleDigestsForOneImage` and the multi-digest
+`TestRegistryChecker_DigestsDiffer` cases pin the comparison. This is synthetic
+registry-transport evidence, not reporter acceptance.
+
+### Forked host reports cannot bypass a base-identity removal block
+
+Host report admission resolves identity before consulting removal blocks, so a
+report that forked onto a derived `<base>-<hex>` identity could bypass a block
+keyed on the base machine identity and be silently admitted. Monitoring now
+consults the base identity as well when the presenting token had no prior
+binding: a fresh install token clears the block and heals to the base identity,
+and a token already bound to its own derived identity is left alone (#1753).
+Focused proof lives in `internal/monitoring/monitor_host_agents_test.go`.
+
+### Host-agent endurance evidence cannot raise a disk's remaining life
+
+The physical-disk merge lets the linked host agent's SMART endurance counter
+correct the Proxmox inventory, because the agent's `PercentageUsed` is more
+precise than the provider's coarse `wearout`. It must not, however, make a disk
+look healthier than Proxmox already reports. An intermittent agent reading
+(for example an NVMe endurance log that briefly reports `PercentageUsed` 0)
+previously raised the merged remaining life to 100, which resolved a genuine
+low-life alert and let it re-fire on the next physical-disk poll with a fresh
+resolved notification, repeating roughly every poll interval (#2112). The merge
+now takes the agent value when the Proxmox value is unreported (`-1`) or when
+the agent value is lower (more pessimistic); it never raises a reported
+remaining-life value. `PercentageUsed` and the other merged SMART attributes are
+still recorded. Focused proof lives in
+`internal/monitoring/physical_disk_roundtrip_test.go`
+(`TestMergeHostAgentSMARTIntoDisks_AgentWearoutDoesNotHideLowPVELife` and
+`TestMergeHostAgentSMARTIntoDisks_AgentWearoutFillsUnreportedPVELife`). This is
+synthetic merge evidence, not reporter acceptance or hardware confirmation.
+
+### TrueNAS system temperature rejects a synthesised CPU aggregate
+
+TrueNAS reports the `cputemp` series through a bare `cpu` legend entry, which
+`canonicalSystemTemperatureKey` maps to the canonical `cpu_package` key. On
+SCALE 25.10.7 running AMD hardware that aggregate has been observed at roughly
+1.5x the hottest per-core reading (for example an 88C aggregate against a 59C
+core max, with the cores matching `k10temp`/`Tctl`). Monitoring previously
+trusted `cpu_package` unconditionally in `maxTrueNASSystemTemperature`, so the
+false-high value reached the host temperature and fired a configured 80C
+threshold alert at a real ~60C. The selector now compares `cpu_package` with
+the hottest `cpu*` per-core entry and falls back to the per-core max only when
+the package value exceeds it by more than 20%. A real package sensor stays
+within a few degrees of the hottest core, so the margin retains genuine
+package readings while discarding the synthesised aggregate. Package-only
+payloads and per-core-only payloads keep their existing behaviour. Focused
+proof lives in `internal/truenas/provider_test.go`
+(`TestMaxTrueNASSystemTemperaturePrefersCoresOverSynthesisedAggregate`). This
+is source-level proof, not reporter acceptance or appliance confirmation
+(#2122).

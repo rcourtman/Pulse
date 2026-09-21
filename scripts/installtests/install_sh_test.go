@@ -4009,6 +4009,39 @@ func TestInstallSHSavedInstallerTamperAndUntrustedStateFailClosed(t *testing.T) 
 	}
 }
 
+func TestInstallSHInstallerFileSHA256FallsBackToFreeBSDsha256(t *testing.T) {
+	contents := []byte("pulse-freebsd-checksum-fixture")
+	file := filepath.Join(t.TempDir(), "payload.bin")
+	if err := os.WriteFile(file, contents, 0600); err != nil {
+		t.Fatal(err)
+	}
+	want := fmt.Sprintf("%x", sha256.Sum256(contents))
+
+	// FreeBSD base provides sha256(1) but neither GNU sha256sum nor Perl's
+	// shasum. Hide those two and confirm the helper still returns the digest.
+	script := `
+		set -euo pipefail
+		command() {
+			if [[ "$1" == "-v" && ( "$2" == "sha256sum" || "$2" == "shasum" ) ]]; then
+				return 1
+			fi
+			builtin command "$@"
+		}
+		sha256() {
+			printf '%s\n' "` + want + `"
+		}
+` + extractInstallShellFunction(t, "installer_file_sha256") + `
+		installer_file_sha256 "` + file + `"
+	`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	if got := strings.TrimSpace(string(out)); got != want {
+		t.Fatalf("FreeBSD sha256 fallback = %q, want %q", got, want)
+	}
+}
+
 func TestInstallSHPrivilegedHelperStateRemovalRequiresExactLifecycleAuthority(t *testing.T) {
 	for _, tc := range []struct {
 		name       string

@@ -14,7 +14,8 @@ interface AlertOverviewStatsCardsProps {
 
 const dotCellClass = 'w-6 pl-3 pr-0';
 const labelCellClass = 'text-base-content';
-const valueCellClass = 'pr-3 text-right font-semibold tabular-nums text-base-content';
+const valueCellClass = 'pr-1.5 text-right font-semibold tabular-nums text-base-content';
+const criticalCellClass = 'pr-3 text-right';
 
 const VARIANT_ACTIVE: Record<'triggered' | 'acknowledged', StatusIndicatorVariant> = {
   triggered: 'warning',
@@ -45,8 +46,10 @@ export function AlertOverviewStatsCards(props: AlertOverviewStatsCardsProps) {
             <TableCell class={labelCellClass}>{labels().last24Hours}</TableCell>
             <TableCell class={valueCellClass} data-testid="alert-overview-stat-value">
               {props.state.alertStats().total24h}
+            </TableCell>
+            <TableCell class={criticalCellClass}>
               <Show when={props.state.alertStats().critical24h > 0}>
-                <span class="ml-1.5 text-[10px] font-normal text-red-600 dark:text-red-400">
+                <span class="text-[10px] font-normal text-red-600 dark:text-red-400">
                   {props.state.alertStats().critical24h} critical
                 </span>
               </Show>
@@ -67,6 +70,7 @@ export function AlertOverviewStatsCards(props: AlertOverviewStatsCardsProps) {
             <TableCell class={valueCellClass} data-testid="alert-overview-stat-value">
               {props.state.alertStats().acknowledged}
             </TableCell>
+            <TableCell class={criticalCellClass} />
           </TableRow>
           <TableRow>
             <TableCell class={dotCellClass}>
@@ -76,6 +80,7 @@ export function AlertOverviewStatsCards(props: AlertOverviewStatsCardsProps) {
             <TableCell class={valueCellClass} data-testid="alert-overview-stat-value">
               {props.state.alertStats().overrides}
             </TableCell>
+            <TableCell class={criticalCellClass} />
           </TableRow>
         </TableBody>
       </Table>

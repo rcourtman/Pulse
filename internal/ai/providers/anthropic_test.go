@@ -734,3 +734,171 @@ func TestAnthropicClient_SupportsThinking(t *testing.T) {
 		t.Fatal("expected SupportsThinking to be false")
 	}
 }
+
+func TestBuildAnthropicSystem(t *testing.T) {
+	t.Run("plain string when no cacheable prefix", func(t *testing.T) {
+		got := buildAnthropicSystem("base+mode+time", "")
+		if s, ok := got.(string); !ok || s != "base+mode+time" {
+			t.Fatalf("buildAnthropicSystem = %#v, want plain string", got)
+		}
+		if anthropicSystemIsCached(got) {
+			t.Fatal("plain system must not be reported as cached")
+		}
+	})
+
+	t.Run("non-prefix falls back to plain string", func(t *testing.T) {
+		got := buildAnthropicSystem("base+mode+time", "different")
+		if _, ok := got.(string); !ok {
+			t.Fatalf("buildAnthropicSystem = %#v, want plain string fallback", got)
+		}
+	})
+
+	t.Run("splits stable prefix with a cache breakpoint", func(t *testing.T) {
+		got := buildAnthropicSystem("base+mode+time", "base+mode")
+		blocks, ok := got.([]anthropicSystemBlock)
+		if !ok || len(blocks) != 2 {
+			t.Fatalf("buildAnthropicSystem = %#v, want two blocks", got)
+		}
+		if blocks[0].Text != "base+mode" || blocks[0].CacheControl == nil || blocks[0].CacheControl.Type != "ephemeral" {
+			t.Fatalf("unexpected stable block: %+v", blocks[0])
+		}
+		if blocks[1].Text != "+time" || blocks[1].CacheControl != nil {
+			t.Fatalf("unexpected volatile block: %+v", blocks[1])
+		}
+		if !anthropicSystemIsCached(got) {
+			t.Fatal("block system must be reported as cached")
+		}
+	})
+}
+
+func TestAnthropicClient_Chat_CacheableSystemPrefix(t *testing.T) {
+	var got anthropicRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(anthropicResponse{
+			ID:         "msg_1",
+			Type:       "message",
+			Role:       "assistant",
+			Model:      "claude-3-5-sonnet",
+			StopReason: "end_turn",
+			Content:    []anthropicContent{{Type: "text", Text: "ok"}},
+			Usage:      anthropicUsage{InputTokens: 1, OutputTokens: 1},
+		})
+	}))
+	defer server.Close()
+
+	client := NewAnthropicClientWithBaseURL("test-key", "claude-3-5-sonnet", server.URL, 0)
+	if _, err := client.Chat(context.Background(), ChatRequest{
+		System:                "stable promptCURRENT TIME: now",
+		SystemCacheablePrefix: "stable prompt",
+		Messages:              []Message{{Role: "user", Content: "Hi"}},
+		Tools:                 []Tool{{Name: "get_time", Description: "d", InputSchema: map[string]any{"type": "object"}}},
+	}); err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+
+	blocks, ok := got.System.([]interface{})
+	if !ok || len(blocks) != 2 {
+		t.Fatalf("system = %#v, want two content blocks", got.System)
+	}
+	first, _ := blocks[0].(map[string]interface{})
+	if first["text"] != "stable prompt" {
+		t.Fatalf("first block = %#v", first)
+	}
+	cc, _ := first["cache_control"].(map[string]interface{})
+	if cc["type"] != "ephemeral" {
+		t.Fatalf("first block cache_control = %#v", first["cache_control"])
+	}
+	second, _ := blocks[1].(map[string]interface{})
+	if second["text"] != "CURRENT TIME: now" {
+		t.Fatalf("second block = %#v", second)
+	}
+	if _, present := second["cache_control"]; present {
+		t.Fatalf("volatile block must not carry a breakpoint: %#v", second)
+	}
+	if got.Tools[0].CacheControl != nil {
+		t.Fatalf("tool breakpoint must be dropped when the system block is cached: %+v", got.Tools[0])
+	}
+}
+
+func TestAnthropicClient_Chat_KeepsToolBreakpointWithoutCacheableSystem(t *testing.T) {
+	var got anthropicRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(anthropicResponse{
+			ID:         "msg_1",
+			Type:       "message",
+			Role:       "assistant",
+			Model:      "claude-3-5-sonnet",
+			StopReason: "end_turn",
+			Content:    []anthropicContent{{Type: "text", Text: "ok"}},
+			Usage:      anthropicUsage{InputTokens: 1, OutputTokens: 1},
+		})
+	}))
+	defer server.Close()
+
+	client := NewAnthropicClientWithBaseURL("test-key", "claude-3-5-sonnet", server.URL, 0)
+	if _, err := client.Chat(context.Background(), ChatRequest{
+		System:   "plain prompt",
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+		Tools:    []Tool{{Name: "get_time", Description: "d", InputSchema: map[string]any{"type": "object"}}},
+	}); err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if _, ok := got.System.(string); !ok {
+		t.Fatalf("system = %#v, want plain string", got.System)
+	}
+	if got.Tools[0].CacheControl == nil {
+		t.Fatal("tool breakpoint must remain when the system prompt is not cached")
+	}
+}
+
+func TestAnthropicClient_ChatStream_CacheableSystemPrefix(t *testing.T) {
+	var got anthropicStreamRequest
+	stream := []string{
+		`{"type":"message_start","message":{"usage":{"input_tokens":5}}}`,
+		`{"type":"content_block_start","content_block":{"type":"text"}}`,
+		`{"type":"content_block_delta","delta":{"type":"text_delta","text":"ok"}}`,
+		`{"type":"content_block_stop"}`,
+		`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":1}}`,
+		`{"type":"message_stop"}`,
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		for _, event := range stream {
+			_, _ = w.Write([]byte("data: " + event + "\n\n"))
+			w.(http.Flusher).Flush()
+		}
+	}))
+	defer server.Close()
+
+	client := NewAnthropicClientWithBaseURL("test-key", "claude-3-5-sonnet", server.URL, 0)
+	if err := client.ChatStream(context.Background(), ChatRequest{
+		System:                "stableCURRENT",
+		SystemCacheablePrefix: "stable",
+		Messages:              []Message{{Role: "user", Content: "Hi"}},
+		Tools:                 []Tool{{Name: "get_time", Description: "d", InputSchema: map[string]any{"type": "object"}}},
+	}, func(StreamEvent) {}); err != nil {
+		t.Fatalf("ChatStream: %v", err)
+	}
+
+	blocks, ok := got.System.([]interface{})
+	if !ok || len(blocks) != 2 {
+		t.Fatalf("system = %#v, want two content blocks", got.System)
+	}
+	first, _ := blocks[0].(map[string]interface{})
+	if cc, _ := first["cache_control"].(map[string]interface{}); cc["type"] != "ephemeral" {
+		t.Fatalf("first block cache_control = %#v", first["cache_control"])
+	}
+	if got.Tools[0].CacheControl != nil {
+		t.Fatalf("tool breakpoint must be dropped when the system block is cached: %+v", got.Tools[0])
+	}
+}

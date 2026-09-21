@@ -5,6 +5,66 @@
       "incomplete_commit": "a2dbb27a68463adb02b614e9927174543f5b7799",
       "completion_commit": "5f99f5c13fcc547e5e34286dfe873415a4876cfa",
       "reason": "Preserve the reviewed diagnostic-redaction commit while evaluating its separately reviewed contracts and API proof as one historical completion unit."
+    },
+    {
+      "incomplete_commit": "e1d97b361edfac311dd57b6695ab3ad9bef613bc",
+      "completion_commit": "087bbf8c20db8ffec1c24037e78a1a88ea4ff69e",
+      "reason": "Evaluate the metrics-store rollup, retry, upsert and auto-vacuum repair together with the follow-up commit that moves its regression proof into the registry-accepted pkg/metrics/store_additional_test.go proof file, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "d0f138cf267184260ad01fe517f7610c7769255c",
+      "completion_commit": "0f9f33777c4a717a82d2fefee6c30f79d5b405e2",
+      "reason": "Evaluate the rehearsal backend package-timeout runtime change together with the follow-up commit that records its deployment-installability contract section as one completion unit. The completion tree passes the canonical completion guard for the combined changed files."
+    },
+    {
+      "incomplete_commit": "248ada3cc662bf0529bbf9586bdfaee6aee2467c",
+      "completion_commit": "f08b96b968444be221204e6bb062fecb7a9b3cc4",
+      "reason": "Evaluate the Anthropic stable-system-prefix prompt-cache repair together with the follow-up commit that records its transport contract in docs/release-control/v6/internal/subsystems/ai-runtime.md, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "84b2787ba6122f7221740cf75051858ce79681e5",
+      "completion_commit": "a6a15a64ea3c2fc04cd0c0be358ea35bad19c9f4",
+      "reason": "Evaluate the FreeBSD checksum-tool fallback runtime change together with the follow-up commit that records its agent-lifecycle and deployment-installability contract sections and the MCP installer proof, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "a4c53b511de70d50492b8efda19853780a9f4215",
+      "completion_commit": "601c383c505771b330507d9c1ae8ae5f53262d84",
+      "reason": "Evaluate the TrueNAS legacy-REST memory telemetry runtime change together with the follow-up commit that records its monitoring contract section and moves the regression proof into the registry-accepted internal/truenas/client_test.go proof file, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "f43a7a3e62956fa066c8417a8b67b04e7e435cda",
+      "completion_commit": "a23ba2f5dc575da4ece2ddb6a46261c594a5f968",
+      "reason": "Evaluate the create-release private Pro source-pair preflight together with the follow-up commit that records its deployment-installability contract section and the release-promotion policy proof guarding the step and its ordering ahead of create_release, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "abaca8f9c00439cbb5aa51a4449dfae443adbce8",
+      "completion_commit": "33260be25bda0edb5c3c3f3196192a32560303b4",
+      "reason": "Evaluate the unified physical-disk SMART observation-time and replay-guard repair together with the follow-up commit that records its monitoring and agent-lifecycle contract sections and places the two-rebuild regression proof in the registry-accepted internal/monitoring/monitor_host_agents_test.go proof file, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "564c235e3200a80d8781a187cf6f84a91557ab38",
+      "completion_commit": "bb25e3ec03a49cb821ef2ee310878bd2743ed850",
+      "reason": "Evaluate the auto-update RETURN-trap disarm runtime change together with the follow-up commit that records its deployment-installability contract section and the registry-accepted deployment-script-runtime proof in scripts/installtests/pulse_auto_update_test.go, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "9b004cc787aaa1b68b9caa7832aa013235bd1700",
+      "completion_commit": "ccfd22da7f5a7b181807642c76e2177ba15a6418",
+      "reason": "Evaluate the auto-update RETURN-trap repair together with the follow-up commit that records its deployment-installability contract section and adds the extracted-perform_update proof in the registry-accepted scripts/installtests/pulse_auto_update_test.go proof file, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "07d54cd345d58f04de23fa58ea785fc6580a0fbd",
+      "completion_commit": "ccfd22da7f5a7b181807642c76e2177ba15a6418",
+      "reason": "Evaluate the failed-staging configuration-backup discard repair together with the follow-up commit that records its deployment-installability contract section and supplies the registry-accepted installtest proof, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "03db7487824737a7a22f63d39a2c0db39cf7c313",
+      "completion_commit": "1ba7f8bdcdef17473e38923494614afc198dbb65",
+      "reason": "Evaluate the server startup-stall watchdog runtime change together with the follow-up commit that records its security-privacy contract obligation and places the watchdog proof in the registry-accepted pkg/server/service_health_test.go proof file, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "6f0dc177c8ab3cd4174e53d0774f6e278299a299",
+      "completion_commit": "8738eb1bffbaab4c1d6cc3c23890dbbbc4888a69",
+      "reason": "Evaluate the windowed item-height estimate repair together with the follow-up commit that records its frontend-primitives and performance-and-scalability contract sections, as one reviewed completion unit."
     }
   ]
 }

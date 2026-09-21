@@ -141,6 +141,21 @@ export function wrapTables(container: HTMLElement): void {
 }
 
 /**
+ * GitHub-compatible heading slug: lower-cased, punctuation removed and spaces
+ * replaced with hyphens. This mirrors the anchors GitHub generates for
+ * repository headings so links such as `#resource-maintenance` resolve in the
+ * shipped viewer. It is implemented locally, without a runtime dependency, so
+ * the documentation route adds no bundle weight beyond the renderer it already
+ * ships.
+ */
+function githubHeadingSlug(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\p{M}\p{Pc} -]/gu, '')
+    .replace(/ /g, '-');
+}
+
+/**
  * Points intra-documentation links at the viewer instead of the raw asset, so
  * following one renders the next document rather than downloading its source.
  */
@@ -148,6 +163,29 @@ export function rewriteDocLinks(html: string, currentDocPath: string): string {
   if (typeof document === 'undefined') return html;
   const container = document.createElement('div');
   container.innerHTML = html;
+  // Repository links use GitHub heading fragments. Marked emits headings
+  // without IDs, so generate them from sanitized text and keep duplicate
+  // headings distinct without colliding with explicit document anchors. The
+  // occurrence counter is document-local, matching GitHub's per-document
+  // duplicate numbering.
+  const occurrences: Record<string, number> = Object.create(null);
+  const slug = (text: string): string => {
+    const base = githubHeadingSlug(text);
+    if (Object.prototype.hasOwnProperty.call(occurrences, base)) {
+      occurrences[base] += 1;
+      return `${base}-${occurrences[base]}`;
+    }
+    occurrences[base] = 0;
+    return base;
+  };
+  const ids = new Set(Array.from(container.querySelectorAll('[id]'), (element) => element.id));
+  container.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach((heading) => {
+    if (heading.id) return;
+    let id = slug(heading.textContent ?? '');
+    while (ids.has(id)) id = slug(heading.textContent ?? '');
+    heading.id = id;
+    ids.add(id);
+  });
   wrapTables(container);
 
   container.querySelectorAll('a[href]').forEach((anchor) => {
@@ -167,6 +205,24 @@ export function rewriteDocLinks(html: string, currentDocPath: string): string {
   });
 
   return container.innerHTML;
+}
+
+/** Follow a fragment after the asynchronously loaded document is rendered. */
+export function scrollToDocFragment(container: HTMLElement, hash: string): void {
+  if (!hash || hash === '#') return;
+  let id: string;
+  try {
+    id = decodeURIComponent(hash.replace(/^#/, ''));
+  } catch {
+    return;
+  }
+  const target = Array.from(container.querySelectorAll<HTMLElement>('[id]')).find(
+    (element) => element.id === id,
+  );
+  if (!target) return;
+  target.tabIndex = -1;
+  target.scrollIntoView({ block: 'start' });
+  target.focus({ preventScroll: true });
 }
 
 /** First level-one heading, used as the document title. */

@@ -424,6 +424,79 @@ func TestRootInstallScriptConfigBackupRotatesOldSnapshots(t *testing.T) {
 	}
 }
 
+// Issue #2127: when an update aborts at the staging disk-headroom check it has
+// not replaced anything, so the configuration snapshot taken for it is dead
+// weight. Leaving it behind makes the low-space condition worse on every
+// automatic retry. backup_existing records the snapshot and
+// discard_last_config_backup must remove it and clear the record.
+func TestRootInstallScriptDiscardsUnneededConfigBackup(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores write bits, so the read-only fallback path cannot be simulated")
+	}
+	configDir := t.TempDir()
+	installDir := t.TempDir()
+
+	script := `
+		set -euo pipefail
+		print_error() { :; }
+		print_info() { :; }
+		print_warn() { :; }
+		CONFIG_DIR="$CONFIG_DIR_UNDER_TEST"
+		INSTALL_DIR="$INSTALL_DIR_UNDER_TEST"
+		CONFIG_BACKUP_MIN_EXTRA_BYTES=0
+` + extractRootInstallShellFunction(t, "bytes_to_human") + `
+` + extractRootInstallShellFunction(t, "get_available_bytes_for_path") + `
+` + extractRootInstallShellFunction(t, "get_directory_size_bytes") + `
+` + extractRootInstallShellFunction(t, "ensure_config_backup_headroom") + `
+` + extractRootInstallShellFunction(t, "prune_config_backups") + `
+` + extractRootInstallShellFunction(t, "backup_existing") + `
+` + extractRootInstallShellFunction(t, "discard_last_config_backup") + `
+		date() { printf '20260920-160000\n'; }
+		chmod a-w "$(dirname "$CONFIG_DIR_UNDER_TEST")" 2>/dev/null || true
+		trap 'chmod u+w "$(dirname "$CONFIG_DIR_UNDER_TEST")" 2>/dev/null || true' EXIT
+		backup_existing
+		if [[ -z "${LAST_CONFIG_BACKUP_DIR:-}" || ! -d "$LAST_CONFIG_BACKUP_DIR" ]]; then
+			echo "backup_existing did not record the created snapshot" >&2
+			exit 1
+		fi
+		backup_path="$LAST_CONFIG_BACKUP_DIR"
+		discard_last_config_backup
+		if [[ -n "${LAST_CONFIG_BACKUP_DIR:-}" ]]; then
+			echo "discard_last_config_backup did not clear the recorded path" >&2
+			exit 1
+		fi
+		if [[ -e "$backup_path" ]]; then
+			echo "unneeded configuration backup was not removed" >&2
+			exit 1
+		fi
+	`
+
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(),
+		"CONFIG_DIR_UNDER_TEST="+configDir,
+		"INSTALL_DIR_UNDER_TEST="+installDir,
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+}
+
+// download_pulse must discard the earlier configuration snapshot when the
+// staging disk-headroom check fails, so the update path cannot accumulate
+// backups while the filesystem is short of space (#2127).
+func TestRootInstallScriptDiscardsBackupWhenStagingHeadroomFails(t *testing.T) {
+	downloadPulse := extractRootInstallShellFunction(t, "download_pulse")
+	headroom := strings.Index(downloadPulse, `ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"`)
+	discard := strings.Index(downloadPulse, `discard_last_config_backup`)
+	if headroom < 0 || discard < 0 {
+		t.Fatalf("download_pulse must check staging headroom and discard the unneeded config backup (headroom=%d discard=%d)", headroom, discard)
+	}
+	if discard < headroom {
+		t.Fatalf("download_pulse must discard the config backup after the headroom check, not before")
+	}
+}
+
 func TestRootInstallScriptV5ToV6PreflightWarnsWhenAgentScopeMissing(t *testing.T) {
 	configDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(configDir, "api_tokens.json"), []byte(`[{"id":"tok-1","name":"admin","hash":"hash","scopes":["settings:read"]}]`), 0600); err != nil {
