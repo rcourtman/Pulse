@@ -17,6 +17,25 @@
 
 ## Purpose
 
+### Linked Pulse agent memory for Proxmox LXC — issue #2148 (22 September 2026)
+
+Both LXC memory paths (the efficient `cluster/resources` builder and the
+per-node fallback) may substitute the linked Pulse agent's own memory sample for
+a Proxmox fallback listing value. The substitution applies only when the current
+memory source is a fallback (`cluster-resources` or `unavailable`), the guest is
+`running`, the linked agent sample has known usage, and the agent total matches
+the container's provisioned limit with used not exceeding it. A stopped
+container, a non-fallback source, a missing linked agent, and a total mismatch
+are left untouched; preferred or derived guest evidence is never replaced. The
+provisioned platform total is retained, and the previous-guest agent map is
+threaded through both builders.
+
+`TestIssue2148LXCPrefersLinkedAgentMemoryOverClusterResources` and
+`TestIssue2148LXCRejectsAgentMemoryWithMismatchedTotal` pin the substitution and
+the rejection boundary; `TestCorrelatedContainerMemoryNextPoll` pins the
+next-poll merged-row path. This is synthetic runtime proof, not a live Proxmox
+installation or browser receipt.
+
 ### Preserve explicit agent filesystem selection at ingestion
 
 Both `ApplyHostReport` and `ApplyDockerReport` honour a disk's optional
