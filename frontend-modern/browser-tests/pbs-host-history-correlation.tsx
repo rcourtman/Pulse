@@ -4,6 +4,7 @@
 // treated as ambiguous, so the PBS row kept its service metrics target and the
 // History tab showed "Collecting history" for a host that has history.
 // Synthetic props only; the check script intercepts the metrics-history request.
+import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 
 import { ProxmoxBackupServersTable } from '../src/features/proxmox/ProxmoxBackupServersTable';
@@ -30,13 +31,16 @@ const pbs = {
     hostname: 'proxback-vm',
     version: '3.2.1',
     connectionHealth: 'healthy',
-    datastores: [{ name: 'tank', total: 1000, used: 400, available: 600, usagePercent: 40 }],
+    datastores: [
+      { name: 'tank', total: 1000, used: 400, available: 600, usagePercent: 40 },
+      { name: 'archive', total: 2000, used: 600, available: 1400, usagePercent: 30 },
+    ],
   },
   // The PBS service target: correct for the service, but it has no host series.
   metricsTarget: { resourceType: 'agent', resourceId: 'pbs-1' },
   platformData: {
     sources: ['pbs'],
-    pbs: { instanceId: 'proxback', hostname: 'proxback-vm', datastoreCount: 1 },
+    pbs: { instanceId: 'proxback', hostname: 'proxback-vm', datastoreCount: 2 },
   },
 } as unknown as Resource;
 
@@ -74,7 +78,29 @@ const standalone = {
   platformData: { sources: ['agent', 'pbs'], agent: sharedAgent },
 } as unknown as Resource;
 
-render(
-  () => <ProxmoxBackupServersTable servers={[pbs, guest, standalone]} />,
-  document.getElementById('root') as HTMLElement,
-);
+const Fixture = () => {
+  const [servers, setServers] = createSignal(structuredClone([pbs, guest, standalone]));
+  let snapshot = 0;
+  return (
+    <>
+      <button
+        onClick={() => {
+          snapshot += 1;
+          const next = structuredClone([pbs, guest, standalone]);
+          next[1].cpu = { current: 15.4 + snapshot };
+          const tank = next[0].pbs!.datastores!.find((store) => store.name === 'tank')!;
+          tank.used = 400 + snapshot * 10;
+          tank.available = 600 - snapshot * 10;
+          tank.usagePercent = 40 + snapshot;
+          if (snapshot % 2 === 1) next[0].pbs!.datastores!.reverse();
+          setServers(next);
+        }}
+      >
+        Refresh resource snapshot
+      </button>
+      <ProxmoxBackupServersTable servers={servers()} />
+    </>
+  );
+};
+
+render(() => <Fixture />, document.getElementById('root') as HTMLElement);
