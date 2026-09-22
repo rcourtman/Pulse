@@ -75,6 +75,11 @@
       "incomplete_commit": "919009d7677318c071f888eb28c252d2d79d2728",
       "completion_commit": "9fa81dee8fba760b980d821d6e10560589c110f2",
       "reason": "Evaluate the PVE consolidation explicit-VerifySSL runtime change together with the follow-up commit that records its agent-lifecycle, api-contracts, security-privacy and dependent storage-recovery contract sections and the node API payload and persisted-field proofs, as one reviewed completion unit."
+    },
+    {
+      "incomplete_commit": "8b56fc72e4ee79f3c219cf51f4c002e2e9343286",
+      "completion_commit": "1026f5293b4c4e5a11651933e7ed36d398fd2f69",
+      "reason": "Evaluate the Proxmox LXC linked-agent memory preference runtime change together with the follow-up commit that records its monitoring and unified-resources contract sections, as one reviewed completion unit."
     }
   ]
 }
