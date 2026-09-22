@@ -589,7 +589,9 @@ describe('ProxmoxBackupsTable', () => {
     // collapse those by agent identity, and keep declining genuinely ambiguous
     // matches.
     expect(proxmoxBackupServersTableSource).toContain('correlatedAgentKey');
-    expect(proxmoxBackupServersTableSource).toContain('if (byAgentKey.size !== 1) return undefined;');
+    expect(proxmoxBackupServersTableSource).toContain(
+      'if (byAgentKey.size !== 1) return undefined;',
+    );
     expect(proxmoxBackupServersTableSource).toContain(
       'metricsTarget: agent.metricsTarget ?? server.metricsTarget',
     );
