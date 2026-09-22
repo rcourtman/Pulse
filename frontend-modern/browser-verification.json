@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "base_sha": "9fbc4e7b3a8d5ddff9886852c700d43b9b6322c7",
+  "base_sha": "4f3734630f76441047805a28dfadca4df2b6f9b1",
   "verified_at": "2026-09-22T16:26:06.944232Z",
   "result": "passed",
   "changed_paths": ["frontend-modern/src/utils/agentInstallCommand.ts"],
@@ -28,5 +28,5 @@
     "Inspect desktop-before and narrow-after screenshots"
   ],
   "command": "pulse-worker-browser .proof-install/browser.cjs",
-  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1. TypeScript-transpiled production utility, synthetic pulse.invalid and invented tokens. Generic text field, not pfSense DOM or installation. No backend/network/service proof. Full fixture and results retained with lane outcome."
+  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1. TypeScript-transpiled production utility, synthetic pulse.invalid and invented tokens. Generic text field, not pfSense DOM or installation. No backend/network/service proof. Full fixture and results retained with lane outcome. Rebound after test-only assertion correction; production utility hash is unchanged from the browser run."
 }
