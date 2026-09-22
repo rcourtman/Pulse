@@ -330,7 +330,7 @@ fi
     });
 
     expect(command).toContain('--token-file "$token_file"');
-    expect(command).toContain('--enable-docker \\\n    --disable-host \\\n    --enable-commands');
+    expect(command).toContain('--enable-docker --disable-host --enable-commands');
   });
 
   it('preserves extra env assignments for shared Windows install transport', () => {
