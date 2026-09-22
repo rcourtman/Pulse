@@ -113,17 +113,16 @@ func RefreshCanonicalMetadataSlice(resources []Resource) []Resource {
 }
 
 func classifyResourceSensitivity(resource Resource) ResourceSensitivity {
-	tagSet := normalizedTagSet(resource.Tags)
-
+	// A direct scan beats building a set: resources carry at most a handful
+	// of tags, and this runs on every resource clone across the registry.
 	switch {
-	case tagSet["public"]:
+	case hasNormalizedTag(resource.Tags, "public"):
 		return ResourceSensitivityPublic
-	case tagSet["restricted"] || tagSet["customer-data"] || tagSet["customer_data"] ||
-		tagSet["pii"] || tagSet["phi"] || tagSet["pci"] || tagSet["regulated"] ||
-		tagSet["secret"] || tagSet["secrets"]:
+	case hasNormalizedTag(resource.Tags, "restricted", "customer-data", "customer_data",
+		"pii", "phi", "pci", "regulated", "secret", "secrets"):
 		return ResourceSensitivityRestricted
-	case tagSet["sensitive"] || tagSet["backup"] || tagSet["mail"] ||
-		tagSet["storage"] || tagSet["database"] || tagSet["dataset"]:
+	case hasNormalizedTag(resource.Tags, "sensitive", "backup", "mail",
+		"storage", "database", "dataset"):
 		return ResourceSensitivitySensitive
 	}
 
@@ -367,16 +366,21 @@ func resourceSummaryType(resource Resource) string {
 	}
 }
 
-func normalizedTagSet(tags []string) map[string]bool {
-	out := make(map[string]bool, len(tags))
+// hasNormalizedTag reports whether tags contains any of wanted, comparing
+// case-insensitively and ignoring surrounding whitespace.
+func hasNormalizedTag(tags []string, wanted ...string) bool {
 	for _, tag := range tags {
 		trimmed := strings.ToLower(strings.TrimSpace(tag))
 		if trimmed == "" {
 			continue
 		}
-		out[trimmed] = true
+		for _, want := range wanted {
+			if trimmed == want {
+				return true
+			}
+		}
 	}
-	return out
+	return false
 }
 
 func resourceHasHostname(resource Resource) bool {
