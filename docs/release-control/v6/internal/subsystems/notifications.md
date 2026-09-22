@@ -763,3 +763,14 @@ Focused race-enabled retry/parser coverage passed on this release-line repair;
 the before/after receipt is in
 docs/qualification/release-v6.4-webhook-backoff/README.md. This establishes
 transport timing, not installed recipient delivery or release qualification.
+
+### Initial routing edits and previously queued firing work
+
+Changing the initial target affects new sends; it does not rewrite a previously
+queued email or revoke independent per-level escalation routing. Queue delivery
+uses the admitted destination configuration while checking current global and
+destination enablement. Resolution independently cancels obsolete firing work.
+`queue_policy_change_test.go` verifies retained email routing after a webhook
+initial-target edit with an in-memory SMTP acceptance, and prevents a previously
+fetched pending item from sending after cancellation. This does not establish
+recipient inbox timing or recall mail already accepted by a provider.

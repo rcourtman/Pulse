@@ -15,6 +15,18 @@
 
 ## Purpose
 
+### Automatic acknowledgement lifecycle
+
+Cleanup-triggered acknowledgement uses the same canonical retention records and
+reducer acknowledgement state as manual acknowledgement. It survives subsequent
+metric evaluation and a short recovery/refire within the existing retention
+window. Cleanup requests active-state persistence when it acknowledges alerts;
+callbacks remain outside the manager lock. No retention duration is extended.
+`TestAutoAcknowledgementSurvivesMetricEvaluation` in
+`internal/alerts/reducer_parity_ack_test.go` verifies cleanup, the next metric
+sample and a short recovery/refire. This is synthetic lifecycle proof, not
+installed notification-destination acceptance.
+
 ### Unchanged pending-intent checkpoints
 
 The JSON pending-intent checkpoint must not replace a regular private file when
@@ -2806,3 +2818,18 @@ include that evaluator rather than remove the topology alerts in isolation.
 `internal/monitoring/monitor_pbs_coverage_test.go` additionally exercises the
 97.9% policy transition through synthetic PBS HTTP polling, storage conversion
 and unified alert synchronisation, including absence of duplicate parent alerts.
+
+### Escalation callback admission uses current policy and occurrence
+
+`PrepareEscalationNotification` rejects asynchronous snapshots after escalation
+or global alert disablement, inactive activation, recovery, acknowledgement,
+snooze, or replacement by another occurrence of the same alert ID. It returns
+the current alert and detached current per-level routing, not mutable manager
+state. The monitoring callback must use this admission before enqueueing.
+This check does not recall provider-accepted messages or make the subsequent
+notification enqueue atomic with alert resolution.
+
+`escalation_policy_change_test.go` pins a short-lived alert and disabled policy
+before the former 180-minute deadline, plus current payload/routing selection,
+copy isolation, snooze and invalid-level rejection. These deterministic component tests
+establish neither installed delivery timing nor the cause of a delayed email.
