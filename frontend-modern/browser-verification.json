@@ -1,14 +1,16 @@
 {
   "version": 1,
-  "base_sha": "0d3fe52b066457861d4460b9ab01d9caa91e432d",
-  "verified_at": "2026-09-22T09:38:20Z",
+  "base_sha": "9acf6faebfccf43dc3061a4ee2919a4fdc4c5efe",
+  "verified_at": "2026-09-22T11:26:59.305030Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"],
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+  ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "940f58b977249b784294b39e10d1b4b8010e570d4d7a38edfa5341add6ba0fc1"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "73f1bd57e0bcec1136fc94b231aa065b024714d2d49f30576e590f914f2d7020"
   },
   "routes": [
-    "/proxmox/backups (production surface represented by the component fixture)",
+    "/proxmox/backups (production component fixture)",
     "/browser-tests/pbs-host-history-correlation.html"
   ],
   "viewports": [
@@ -22,19 +24,17 @@
     }
   ],
   "states": [
-    "The Backups PBS server row renders for a host whose agent is surfaced as both a PVE guest and a standalone source=pbs host row",
-    "Expanding the PBS row opens the canonical drawer; History is selectable and renders the host metric groups",
-    "The PBS drawer's merged header shows the guest's current CPU/memory (15.4% / 16.9%) rather than the PBS service values",
-    "The History request resolves to the guest series vm/proxmox:100; the PBS service target agent/pbs-1 is never requested",
-    "The same correlation holds at the narrow 390px layout"
+    "Two datastores on one PBS, with a single agent represented by guest and standalone rows",
+    "History on tank, archive, then tank again, with populated synthetic CPU/memory/disk/network history",
+    "Fresh resource snapshots with changing usage and alternating datastore array order"
   ],
   "interactions": [
-    "Mount the production ProxmoxBackupServersTable with synthetic PBS server, PVE guest and standalone agent resources sharing one agent identity",
-    "Focus the PBS row disclosure button and activate it with Enter, then select the History subtab",
-    "Intercept /api/metrics-store/history requests and assert the requested resourceType/resourceId pair",
-    "Repeat at 1280x900 and 390x844 and capture a screenshot of each rendered History tab",
-    "Record Chromium from the offline Playwright runtime with no uncaught page errors"
+    "Keyboard-expand each datastore row and select History",
+    "Check both datastore identities before each switch",
+    "Refresh three snapshots at each viewport; assert updated usage, retained drawer DOM, selected History tab and seven chart paths",
+    "Assert all six history requests use vm/proxmox:100, never the PBS service target",
+    "Inspect desktop and mobile screenshots; no uncaught page errors"
   ],
-  "command": "pulse-worker-browser scripts/check-pbs-host-history-correlation.cjs",
-  "notes": "Offline Playwright Chromium run of the production ProxmoxBackupServersTable component, not a live Pulse. The fixture feeds synthetic PBS/guest/agent resources only and the check script answers /api/metrics-store/history with empty points, so the panels correctly show the collecting-history state; the assertion is the requested history target, vm/proxmox:100 (the guest series), never agent/pbs-1, at 1280x900 and 390x844. No backend, WebSocket or credential path is exercised. Release-line adaptation of the reviewed main fix e9a426aeeb: ProxmoxBackupServersTable.tsx carries the identical correlation change, and the release-line file retains the required detailRowId aria-controls argument, so its content hash is 940f58b9.... This receipt is content-addressed to the single changed frontend source in this candidate range; the base already carries the #2119 alert-card-footer receipt. No page errors and no failed responses."
+  "command": "pulse-worker-browser .pbs-proof/check.cjs (wrapper runs scripts/check-pbs-host-history-correlation.cjs in an exact source copy with assigned release-line dependencies)",
+  "notes": "Release-line reproduction of #1723: before repair, reordered snapshots duplicate tank and lose archive in both Chromium and the new component test (9 passed, 1 failed). After repair, 54 focused tests and TypeScript checking pass. Chromium 141.0.7390.37 / Playwright 1.56.1 passes tank/archive/tank switching and three fresh reordered snapshots at both viewports; six requests target vm/proxmox:100 and all seven chart paths, History selection and drawer identity survive. Desktop and mobile screenshots visually inspected. The first post-fix browser attempt timed out during navigation at 30 seconds; retained as adverse evidence. The final script allows 120 seconds for navigation with all interaction assertions unchanged. No timing-cause diagnosis. Source and test files match the assigned tree. Release-line package-lock SHA-256 924fa21e5d81c577692af8dccad993680d41bb29a1531cea00e05fc309ecbdaa; offline dependency snapshot c82f3e505ccf93d12cf0ed4ebb5ff5185f6e683ae17c8f2b3d9ac4f0b2f1b9b1. Synthetic component props and metrics, not installed backend or reporter data. History reset to Summary was not reproduced; not whole-issue resolution or release qualification."
 }
