@@ -185,6 +185,34 @@ describe('DetailSectionTable', () => {
     expect(fill?.firstElementChild).toHaveClass('bg-emerald-500');
   });
 
+  it('opts long identifying labels into full-width wrapping rows without changing compact rows', () => {
+    const path = '/mnt/media/animation/series';
+    render(() => (
+      <DetailSectionTable
+        sections={[
+          {
+            label: 'Filesystems',
+            rows: compactDetailRows([
+              makeDetailRow(path, '50% · 5 GB/10 GB', { layout: 'stacked', wrap: true }),
+              makeDetailRow('Status', 'Available'),
+            ]),
+          },
+        ]}
+      />
+    ));
+
+    const label = screen.getByText(path);
+    expect(label).toHaveClass('whitespace-normal', '[overflow-wrap:anywhere]', 'text-left');
+    expect(label.closest('td')).toHaveAttribute('colspan', '2');
+    expect(label.closest('tr')?.querySelectorAll('td')).toHaveLength(1);
+    expect(label.closest('tr')).toHaveClass('lg:grid-cols-[minmax(0,1fr)]');
+    expect(screen.getByText('50% · 5 GB/10 GB').closest('td')).toBe(label.closest('td'));
+    expect(screen.getByText('Status').closest('tr')).toHaveClass(
+      'lg:grid-cols-[7rem_minmax(0,1fr)]',
+    );
+    expect(screen.getByText('Status').closest('tr')?.querySelectorAll('td')).toHaveLength(2);
+  });
+
   it('fills five desktop sections on the same three-column tracks', () => {
     const { container } = render(() => (
       <DetailSectionTable

@@ -2301,6 +2301,13 @@ Within that compact technical layout, `GuestDrawerOverview.tsx` declares the
 panel and keeps the short tag list in the narrower slot. Future section-order
 changes in that overview must preserve the filesystem-first ordering rather
 than letting the shorter tag list take the wide column.
+Panel width alone does not make mount paths readable. Filesystem disk rows must
+opt into the shared `layout: 'stacked'` presentation so their full mount path
+wraps above usage and progress at desktop and phone widths. Shared-prefix paths
+must remain distinguishable without hover. Workloads supplies this row metadata,
+not local table CSS or a duplicate renderer; non-filesystem rows keep the compact
+default. Verification covers the opt-in at this composition boundary and actual
+long-path wrapping in the shared renderer's browser proof.
 Guest, node, and Docker-host drawer headers follow the same frontend-primitives dependency
 boundary for collapse: Workloads owns which inline row is selected and the
 close handler, while

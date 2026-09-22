@@ -17,6 +17,8 @@ export type DetailRow = {
   title?: string;
   tone?: DetailValueTone;
   wrap?: boolean;
+  /** Put long identifying labels above the value instead of in the compact label column. */
+  layout?: 'stacked';
   progress?: DetailRowProgress;
 };
 
@@ -32,7 +34,7 @@ export const makeDetailRow = (
   value?: string | null,
   options: Pick<
     DetailRow,
-    'title' | 'tone' | 'wrap' | 'progress' | 'valueContent' | 'valueClass'
+    'title' | 'tone' | 'wrap' | 'layout' | 'progress' | 'valueContent' | 'valueClass'
   > = {},
 ): DetailRow | null => {
   const trimmed = value?.trim();
