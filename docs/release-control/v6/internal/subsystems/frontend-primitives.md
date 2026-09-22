@@ -627,8 +627,11 @@ that manual-channel consequence must stay visible at desktop and narrow widths.
 
 The Backups surface passes its complete deduplicated route inventory to the PBS table. Only PBS servers render as rows; other resources supply correlation inputs. Preserve PBS drawer identity and use the correlated canonical history target. Missing disk utilisation does not gate CPU/memory history.
 
+One agent can be surfaced twice for a single PBS host: folded into its PVE guest and as a standalone `source=pbs` host row. Those two rows are one machine, not an ambiguous pair. Correlation must collapse candidates that share an agent identity and prefer the guest representation, whose canonical metrics target carries the persisted host history; the PBS service target has no host series and renders the collecting-history state. Two candidates with distinct agent identities remain ambiguous, and a candidate with no agent identity must not be treated as proof of sameness.
+
 Verification: ProxmoxBackupServersTable.drawer.test.tsx covers standalone and
-merged guest targets, missing disks and ambiguous identities;
+merged guest targets, missing disks, duplicate guest/host representations of one
+agent, and genuinely ambiguous identities;
 ProxmoxPageSurface.contract.test.tsx covers hydration and deduplication.
 
 

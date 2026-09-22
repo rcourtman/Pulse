@@ -311,8 +311,11 @@ command-capable profile.
 
 Backups hydrates type=pbs,agent with source=pbs and reuses Overview guest inventory. Deduplicate combined snapshots by canonical ID before correlation, avoiding false ambiguity for agents in both queries. Standalone non-PVE PBS telemetry remains available without downloading the guest estate twice.
 
+The same agent can still arrive as two distinct resources: a PVE guest carrying its telemetry and the standalone `source=pbs` host row. Collapse those candidates by agent identity and resolve the Backups PBS row to the guest target, whose persisted host series the drawer charts; keeping the PBS service target leaves History on a key with no host data. Distinct agent identities stay ambiguous, and a missing agent identity is not sameness proof. Do not add a second guest-estate request to compensate.
+
 Verification: ProxmoxBackupServersTable.drawer.test.tsx covers standalone and
-merged guest targets, missing disks and ambiguous identities;
+merged guest targets, missing disks, duplicate guest/host representations of one
+agent, and genuinely ambiguous identities;
 ProxmoxPageSurface.contract.test.tsx covers hydration and deduplication.
 
 
