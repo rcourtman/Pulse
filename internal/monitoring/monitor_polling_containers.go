@@ -154,6 +154,16 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 					MaxMem: container.MaxMem,
 					Mem:    container.Mem,
 				})
+				agentHost, hasAgent := prevGuests.hostAgentsByVMID[guestID]
+				memTotal, memUsed, memorySource = preferLinkedAgentLXCMemory(
+					container.Status,
+					memTotal,
+					memUsed,
+					memorySource,
+					&guestRaw,
+					agentHost,
+					hasAgent,
+				)
 				memUsed, memorySource, _ = stabilizeGuestLowTrustMemory(
 					m.previousGuestSnapshot(instanceName, "lxc", n.Node, int(container.VMID)),
 					container.Status,

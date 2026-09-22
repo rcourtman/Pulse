@@ -37,6 +37,17 @@ policy remains authoritative; this accessor introduces no second timeout.
 `TestCorrelatedGuestMemoryNextPoll` verifies the manually merged row through the
 next-poll consumers. Existing host-list membership and metric priority are unchanged.
 
+**System-container linked agent memory read — issue #2148 (22 September 2026)**
+
+`ContainerView.LinkedAgentMemory` exposes the same value-copy of the linked
+agent's own memory sample for system containers, sharing the validity and
+freshness rules with `VMView.LinkedAgentMemory`: missing/non-online agent source
+status, explicit agent staleness, unavailable usage and invalid capacity or
+counters are rejected, and trusted zero usage remains valid. The monitoring
+layer consumes it only as a fallback replacement for Proxmox LXC memory, so
+platform metric priority for a healthy agent is unchanged.
+`TestContainerViewLinkedAgentMemory` pins those boundaries.
+
 ### Bounded incident-history selection
 
 Canonical history queries filter exact alert identifiers and observation windows

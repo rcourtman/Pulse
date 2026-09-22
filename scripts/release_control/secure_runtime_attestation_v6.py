@@ -32,6 +32,7 @@ ATTESTATION_TOOL_PATH = "scripts/release_control/secure_runtime_attestation_v6.p
 CANONICAL_REPOSITORY = "rcourtman/Pulse"
 CANONICAL_ORIGIN_URL = "https://github.com/rcourtman/Pulse.git"
 CANONICAL_MAIN_REF = "origin/main"
+CANONICAL_BRANCH_REF_RE = re.compile(r"^origin/(main|release/v[0-9]+\.[0-9]+)$")
 ASSEMBLY_SIGNER_WORKFLOW = "github.com/rcourtman/Pulse/.github/workflows/build-release-candidate.yml"
 COMPILER_SIGNER_WORKFLOW = "github.com/rcourtman/Pulse/.github/workflows/compile-release-payload.yml"
 RELEASE_TAG_RE = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$")
@@ -167,17 +168,23 @@ def parse_remote_refs(raw: bytes) -> dict[str, str]:
 
 
 def verify_canonical_main_identity(checkout: Path, main_ref: str) -> str:
-    if main_ref != CANONICAL_MAIN_REF:
-        raise v5.AttestationError("committed-main classification requires canonical origin/main")
+    match = CANONICAL_BRANCH_REF_RE.fullmatch(main_ref)
+    if match is None:
+        raise v5.AttestationError(
+            "committed-main classification requires a canonical origin branch ref"
+        )
+    branch = match.group(1)
     origin = v5.run_git(checkout, "remote", "get-url", "origin").stdout.decode().strip()
     if origin != CANONICAL_ORIGIN_URL:
         raise v5.AttestationError("origin remote URL is not the canonical Pulse repository URL")
-    local_main = v5.resolve_commit(checkout, CANONICAL_MAIN_REF, "canonical origin/main")
-    remote = v5.run_git(checkout, "ls-remote", "origin", "refs/heads/main")
+    local_branch = v5.resolve_commit(checkout, main_ref, f"canonical origin/{branch}")
+    remote = v5.run_git(checkout, "ls-remote", "origin", f"refs/heads/{branch}")
     remote_refs = parse_remote_refs(remote.stdout)
-    if remote_refs != {"refs/heads/main": local_main}:
-        raise v5.AttestationError("canonical origin/main does not match the remote main commit")
-    return local_main
+    if remote_refs != {f"refs/heads/{branch}": local_branch}:
+        raise v5.AttestationError(
+            f"canonical origin/{branch} does not match the remote branch commit"
+        )
+    return local_branch
 
 
 def verify_release_candidate_tag_identity(
@@ -609,7 +616,7 @@ def verify_and_snapshot_release_candidate_packet(
         raise v5.AttestationError("qualified commit must be the full canonical commit SHA")
     v5.require_detached_clean_checkout(checkout, resolved_commit)
     main_commit = verify_canonical_main_identity(checkout, main_ref)
-    v5.require_ancestor(checkout, resolved_commit, CANONICAL_MAIN_REF)
+    v5.require_ancestor(checkout, resolved_commit, main_ref)
 
     expected_assets = expected_release_asset_names(architecture)
     expected_versions = expected_release_artifact_versions(tag)
@@ -952,7 +959,7 @@ def _create_attestation_with_snapshotted_artifacts(
         raise v5.AttestationError("qualified commit must be the full canonical commit SHA")
     v5.require_detached_clean_checkout(checkout, qualified_commit)
     main_commit = verify_canonical_main_identity(checkout, main_ref)
-    v5.require_ancestor(checkout, qualified_commit, CANONICAL_MAIN_REF)
+    v5.require_ancestor(checkout, qualified_commit, main_ref)
     with v6_contract():
         receipt, receipt_bytes = v5.load_receipt(receipt_path)
         record_path = v5.canonical_repo_path(receipt_record_path, "receipt record path")
@@ -1018,7 +1025,7 @@ def _create_attestation_with_snapshotted_artifacts(
         "qualified_ref_at_run": release_candidate_tag or qualified_commit,
         "main_ref_verified": main_ref,
         "main_ref_commit_at_attestation": main_commit,
-        "qualified_commit_reachable_from_main": True,
+        "qualified_commit_reachable_from_main": main_ref == CANONICAL_MAIN_REF,
         "build_checkout": "detached-worktree",
         "build_checkout_clean_except_lab_artifacts": True,
         "disposable_vm_guard_receipt_claim_validated": True,

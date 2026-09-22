@@ -468,9 +468,9 @@ class SecureRuntimeAttestationV6Test(unittest.TestCase):
                 verify_canonical_main_identity(self.root, CANONICAL_MAIN_REF),
                 self.commit,
             )
-        for caller_ref in ("HEAD", "main", "refs/heads/main", "scratch"):
+        for caller_ref in ("HEAD", "main", "refs/heads/main", "scratch", "origin/feature/x"):
             with self.subTest(caller_ref=caller_ref), self.assertRaisesRegex(
-                v5.AttestationError, "canonical origin/main"
+                v5.AttestationError, "canonical origin branch ref"
             ):
                 verify_canonical_main_identity(self.root, caller_ref)
 
@@ -482,9 +482,44 @@ class SecureRuntimeAttestationV6Test(unittest.TestCase):
 
         with (
             mock.patch.object(v5, "run_git", side_effect=moved_remote),
-            self.assertRaisesRegex(v5.AttestationError, "does not match the remote main commit"),
+            self.assertRaisesRegex(v5.AttestationError, "does not match the remote branch commit"),
         ):
             verify_canonical_main_identity(self.root, CANONICAL_MAIN_REF)
+
+    def test_committed_main_identity_accepts_mapped_release_branch(self) -> None:
+        release_ref = "origin/release/v6.4"
+
+        def canonical(_checkout, *args, **_kwargs):
+            command = tuple(args)
+            if command == ("remote", "get-url", "origin"):
+                output = CANONICAL_ORIGIN_URL + "\n"
+            elif command == ("rev-parse", "--verify", f"{release_ref}^{{commit}}"):
+                output = self.commit + "\n"
+            elif command == ("ls-remote", "origin", "refs/heads/release/v6.4"):
+                output = f"{self.commit}\trefs/heads/release/v6.4\n"
+            else:
+                raise AssertionError(f"unexpected git call {command}")
+            return subprocess.CompletedProcess(args, 0, output.encode(), b"")
+
+        with mock.patch.object(v5, "run_git", side_effect=canonical):
+            self.assertEqual(
+                verify_canonical_main_identity(self.root, release_ref),
+                self.commit,
+            )
+
+        def moved_remote(_checkout, *args, **kwargs):
+            result = canonical(_checkout, *args, **kwargs)
+            if tuple(args) == ("ls-remote", "origin", "refs/heads/release/v6.4"):
+                return subprocess.CompletedProcess(
+                    args, 0, f"{'c' * 40}\trefs/heads/release/v6.4\n".encode(), b""
+                )
+            return result
+
+        with (
+            mock.patch.object(v5, "run_git", side_effect=moved_remote),
+            self.assertRaisesRegex(v5.AttestationError, "does not match the remote branch commit"),
+        ):
+            verify_canonical_main_identity(self.root, release_ref)
 
     def test_accepts_canonical_annotated_tag_only_as_release_packet_identity(self) -> None:
         with mock.patch.object(v5, "run_git", side_effect=lambda _checkout, *args, **_kwargs: self.git_result(*args)):

@@ -1620,6 +1620,18 @@ of a reporter installation or a migration that guesses operator intent.
 `TestMergeSnapshotOverrideInheritsZeroFields` in
 `internal/alerts/alerts_test.go` pin the merge, migration, and preservation
 behaviors.
+Backup-age alerts are guest-workload scoped. A PBS recovery rollup whose subject
+carries no guest VMID is a host/config backup (`backup-type host`, keyed by the
+node name), not a guest workload, and must not raise a guest backup-age alert:
+the Backups overview already excludes those entries from guest coverage, and a
+stale host config backup otherwise notified forever under a node-named subject
+while the node's guests were backed up. Evaluation skips PBS subjects with an
+empty VMID, retaining their recovery point and rollup so inventory and artifact
+display are unchanged. PVE host backups already produce no subject and no alert.
+Genuinely orphaned PBS guest backups (numeric VMID) and PMG node backups still
+alert. `TestCheckBackupsIgnoresPBSHostBackupSubject` and
+`TestCheckBackupsStillAlertsOnOrphanedGuestPBSBackup` in
+`internal/alerts/alerts_test.go` pin both sides of this boundary (#2136).
 Proxmox disk health alert evaluation now lives in
 `internal/alerts/disk_health.go`. That file owns Proxmox disk canonical
 identity, disk health assessment alerts, known-firmware health suppression, and
