@@ -2281,3 +2281,66 @@ func TestRESTReportingPartialAndMalformedResponses(t *testing.T) {
 		}
 	}
 }
+
+// nativeShapeReportingTransport models the request shape the TrueNAS 13
+// middleware accepts: a graph that carries an explicit identifier key (even a
+// null one) is rejected for the whole request, while a device-independent graph
+// that omits the key succeeds. This is a schema-faithful synthetic transport,
+// not an appliance capture; it encodes the native request shape the reporter
+// supplied in #2077.
+type nativeShapeReportingTransport struct {
+	routes alertArgsTransport
+	graphs []map[string]any
+}
+
+func (s *nativeShapeReportingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.URL.Path != "/api/v2.0/reporting/get_data" {
+		return s.routes.RoundTrip(r)
+	}
+	var request struct {
+		Graphs []map[string]any `json:"graphs"`
+		Query  map[string]any   `json:"query"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		return nil, err
+	}
+	s.graphs = append(s.graphs, request.Graphs...)
+	for _, graph := range request.Graphs {
+		if _, present := graph["identifier"]; present {
+			return (alertArgsTransport{r.URL.Path: apiResponse{
+				status: http.StatusUnprocessableEntity,
+				body:   `{"error":"identifier: Not a string"}`,
+			}}).RoundTrip(r)
+		}
+	}
+	body := `[
+		{"name":"cpu","legend":["user","idle"],"data":[[1789000060,12,88]]},
+		{"name":"memory","legend":["used","free","total"],"data":[[1789000060,6000000000,2000000000,16000000000]]},
+		{"name":"arcsize","legend":["size"],"data":[[1789000060,8000000000]]}
+	]`
+	return (alertArgsTransport{r.URL.Path: apiResponse{status: http.StatusOK, body: body}}).RoundTrip(r)
+}
+
+func TestRESTReportingRequestMatchesNativeGraphShape(t *testing.T) {
+	routes := alertArgsTransport(defaultAPIResponses())
+	routes["/api/v2.0/system/info"] = apiResponse{body: `{"hostname":"core","version":"TrueNAS-13.0-U6.1","physmem":16000000000}`}
+	transport := &nativeShapeReportingTransport{routes: routes}
+	client := newLegacyRESTReportingClient(t, routes)
+	client.httpClient.Transport = transport
+
+	telemetry, err := client.GetSystemTelemetry(context.Background())
+	if err != nil {
+		t.Fatalf("GetSystemTelemetry() error = %v", err)
+	}
+	if telemetry.CPUPercent != 12 || telemetry.MemoryAvailableBytes != 2000000000 || telemetry.ARCSizeBytes != 8000000000 {
+		t.Fatalf("native-shape telemetry lost: %+v", telemetry)
+	}
+	if len(transport.graphs) == 0 {
+		t.Fatal("no reporting graphs requested")
+	}
+	for _, graph := range transport.graphs {
+		if _, present := graph["identifier"]; present {
+			t.Fatalf("legacy REST graph %v sends an identifier key the native client omits", graph)
+		}
+	}
+}

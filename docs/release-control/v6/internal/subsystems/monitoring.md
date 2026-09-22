@@ -117,16 +117,28 @@ FreeBSD `active` pages are not a total-used-memory alias. Without an explicit
 used series, history derives usage from the known capacity and reported free
 memory, subtracting separately reported ARC as the live projection does.
 
+The legacy REST graph request also matches the request shape the native TrueNAS
+13 GUI itself sends (#2077): a graph that is not scoped to a device omits the
+`identifier` key instead of sending an explicit null. The reporter's CORE
+13.0-U6.1 WebSocket capture shows `reporting.get_data` graphs as
+`{"name":"cpu"}` (also memory, arcsize, load, swap, cputemp), with an
+`identifier` present only for parameterized graphs such as
+`{"name":"arcresult","identifier":"demand_data"}`. Sending `identifier: null`
+is not the native contract and is a plausible whole-batch rejection that would
+discard otherwise usable CPU and memory telemetry.
+
 `TestRESTReportingGraphFailurePreservesSnapshotTelemetry`,
 `TestRESTReportingGraphFailureBoundaries`,
-`TestRESTReportingPartialAndMalformedResponses` and
-`TestReportingActiveMemoryIsNotTotalUsed` in
+`TestRESTReportingPartialAndMalformedResponses`,
+`TestReportingActiveMemoryIsNotTotalUsed` and
+`TestRESTReportingRequestMatchesNativeGraphShape` in
 `internal/truenas/client_test.go` exercise request-validating synthetic REST
 responses, repeated full snapshots, CPU/free/ARC projections, matching history,
-partial data, bounded errors and cancellation. They do not establish the native
-CORE request schema, row timestamps/units, appliance acceptance or the reporter's
-exact failure. Native response evidence remains required before claiming that
-this repair resolves the reported telemetry journey.
+partial data, bounded errors, cancellation and the native identifier-less graph
+request shape. They do not establish the native CORE response schema, row
+timestamps/units, appliance acceptance or the reporter's exact failure. Native
+response evidence remains required before claiming that this repair resolves the
+reported telemetry journey.
 
 
 **Availability backfill preserves concurrent discovery changes (7 September 2026)**
