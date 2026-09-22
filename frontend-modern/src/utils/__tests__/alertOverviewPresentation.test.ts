@@ -324,7 +324,7 @@ describe('alertOverviewPresentation', () => {
     expect(getAlertOverviewAcknowledgedBadgeClass()).toBe(
       'px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded',
     );
-    expect(getAlertOverviewStartedAtClass()).toBe('mt-1 text-xs text-muted');
+    expect(getAlertOverviewStartedAtClass()).toBe('text-xs text-muted');
     expect(getAlertOverviewPrimaryActionClass(true)).toBe(
       'px-3 py-1.5 text-xs font-medium border rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed text-base-content border-border hover:bg-surface-hover',
     );
@@ -334,6 +334,16 @@ describe('alertOverviewPresentation', () => {
     expect(getAlertOverviewSecondaryActionClass()).toBe(
       'px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover',
     );
+  });
+
+  it('keeps the Started run on the footer baseline (#2119)', () => {
+    // The alert-card footer is an items-center flex row that already carries the
+    // top margin. A vertical margin on this child shifted the Started run below
+    // the adjacent delivery-status span, which the reporter underlined.
+    const startedClass = getAlertOverviewStartedAtClass();
+    expect(startedClass.split(/\s+/)).not.toContain('mt-1');
+    expect(startedClass).toContain('text-xs');
+    expect(startedClass).toContain('text-muted');
   });
 
   it('localizes alert overview helper copy through the active locale', () => {

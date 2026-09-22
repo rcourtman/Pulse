@@ -585,9 +585,11 @@ describe('ProxmoxBackupsTable', () => {
     expect(proxmoxBackupServersTableSource).toContain('resource={row.resource}');
     expect(proxmoxBackupServersTableSource).toContain('initialShowHostDetails');
     expect(proxmoxBackupServersTableSource).toContain('uniquelyCorrelatedAgent');
-    expect(proxmoxBackupServersTableSource).toContain(
-      'return matches.length === 1 ? matches[0] : undefined;',
-    );
+    // A single agent can surface as both a PVE guest and a standalone host row;
+    // collapse those by agent identity, and keep declining genuinely ambiguous
+    // matches.
+    expect(proxmoxBackupServersTableSource).toContain('correlatedAgentKey');
+    expect(proxmoxBackupServersTableSource).toContain('if (byAgentKey.size !== 1) return undefined;');
     expect(proxmoxBackupServersTableSource).toContain(
       'metricsTarget: agent.metricsTarget ?? server.metricsTarget',
     );
