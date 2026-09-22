@@ -24,6 +24,8 @@ sudo /bin/update --version vX.Y.Z
 
 `/bin/update` is installed by the supported systemd and Proxmox LXC server installer. If your host does not have it yet, follow the signed server-installer flow in [INSTALL.md](INSTALL.md). Agent updates still use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
 
+> **Proxmox community-scripts LXCs:** On a container created with the Proxmox community-scripts (helper-scripts) Pulse script, `/bin/update` is the community-scripts updater, not Pulse's helper. It ignores `--version` and resolves the newest GitHub release, which can be a `helm-chart-*` tag, so a version-pinned upgrade will appear to succeed without changing the installed version. Use the signed server-installer flow in [INSTALL.md](INSTALL.md) for those hosts: download `install.sh` and `install.sh.sshsig` from the target release tag, verify the signature, then run `bash install.sh --version vX.Y.Z`.
+
 ### Docker
 
 ```bash

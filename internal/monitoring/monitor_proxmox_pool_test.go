@@ -58,6 +58,7 @@ func TestBuildContainerFromClusterResource_PreservesProxmoxPool(t *testing.T) {
 		},
 		nil,
 		map[int]bool{},
+		nil,
 	)
 	if !ok {
 		t.Fatal("expected container to be built")

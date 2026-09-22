@@ -15,6 +15,17 @@
 
 ## Purpose
 
+### System-container linked agent memory read — issue #2148 (21 September 2026)
+
+`ContainerView.LinkedAgentMemory` exposes the linked agent's own memory sample
+for system containers, sharing the validity and freshness rules with
+`VMView.LinkedAgentMemory` through the shared `linkedAgentMemoryFromResource`:
+missing or non-online agent source status, explicit agent staleness, unavailable
+usage and invalid capacity are rejected, and trusted zero usage remains valid.
+The monitoring layer consumes it only as a fallback replacement for Proxmox LXC
+memory, so platform metric priority for a healthy agent is unchanged.
+`TestContainerViewLinkedAgentMemory` pins those boundaries.
+
 ### Physical disk skipped-poll identity
 
 Read-state round trips preserve the provider SourceID rather than rehashing a

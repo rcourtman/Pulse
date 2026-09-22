@@ -44,6 +44,7 @@ func (m *Monitor) buildContainerFromClusterResource(
 	res proxmox.ClusterResource,
 	client PVEClientInterface,
 	prevContainerIsOCI map[int]bool,
+	vmIDToHostAgent map[string]models.Host,
 ) (models.Container, VMMemoryRaw, string, time.Time, bool) {
 	// Skip templates if configured
 	if res.Template == 1 {
@@ -88,6 +89,16 @@ func (m *Monitor) buildContainerFromClusterResource(
 	)
 
 	memTotal, memUsed, memorySource, guestRaw := m.calculateLXCMemory(res)
+	agentHost, hasAgent := vmIDToHostAgent[guestID]
+	memTotal, memUsed, memorySource = preferLinkedAgentLXCMemory(
+		res.Status,
+		memTotal,
+		memUsed,
+		memorySource,
+		&guestRaw,
+		agentHost,
+		hasAgent,
+	)
 	memUsed, memorySource, _ = stabilizeGuestLowTrustMemory(
 		m.previousGuestSnapshot(instanceName, "lxc", res.Node, res.VMID),
 		res.Status,

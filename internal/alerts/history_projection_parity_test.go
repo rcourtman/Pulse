@@ -10,11 +10,92 @@ package alerts
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 )
+
+func TestHistoryProjectionIncrementalReadersPreserveChronologyAndIsolation(t *testing.T) {
+	m := newHistoryParityManager(t)
+	store := m.eventLogStore()
+	at := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+	appendEvent := func(kind, id string, occurred time.Time, value float64) {
+		t.Helper()
+		snapshot, err := json.Marshal(Alert{ID: id, ResourceID: "vm-" + id, StartTime: at, LastSeen: occurred, Value: value})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.AppendDurable(eventlog.Event{Type: kind, AlertID: id, OccurredAt: occurred, Snapshot: snapshot}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	read := func() []Alert {
+		t.Helper()
+		result, ok := m.AlertHistoryFromEvents(time.Time{}, 0)
+		if !ok {
+			t.Fatal("history unavailable")
+		}
+		return result
+	}
+	compareFresh := func() {
+		t.Helper()
+		incremental := read()
+		m.historyProjectionMu.Lock()
+		m.historyProjection = nil
+		m.historyProjectionMu.Unlock()
+		if fresh := read(); !reflect.DeepEqual(incremental, fresh) {
+			t.Fatalf("incremental history differs from a complete chronological replay:\n%+v\n%+v", incremental, fresh)
+		}
+	}
+	appendEvent(eventlog.TypeFired, "one", at, 90)
+	first := read()
+	first[0].Value = -1
+	if got := read(); got[0].Value != 90 {
+		t.Fatal("caller mutation contaminated the durable history fold")
+	}
+	appendEvent(eventlog.TypeResolved, "one", at.Add(2*time.Minute), 30)
+	compareFresh()
+	// A delayed earlier event must be placed before the resolution, not
+	// overwrite it just because its durable insertion ID is newer.
+	appendEvent(eventlog.TypeFired, "one", at.Add(time.Minute), 99)
+	compareFresh()
+	if got := read(); got[0].Value != 30 {
+		t.Fatalf("late event replaced the later resolution: %+v", got)
+	}
+	if err := store.AppendDurable(eventlog.Event{Type: eventlog.TypeHistoryCleared, OccurredAt: at.Add(3 * time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); len(got) != 0 {
+		t.Fatalf("clear left cached occurrences: %+v", got)
+	}
+	appendEvent(eventlog.TypeFired, "two", at.Add(4*time.Minute), 85)
+	compareFresh()
+	if _, ok := m.AlertHistoryFromEvents(at.Add(4*time.Minute), 5); !ok {
+		t.Fatal("windowed history unavailable")
+	}
+	want := read()
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got, ok := m.AlertHistoryFromEvents(time.Time{}, 5)
+			if !ok || !reflect.DeepEqual(got, want) {
+				t.Errorf("concurrent history: %+v, available=%v", got, ok)
+			}
+			if len(got) > 0 {
+				got[0].Value = -2
+			}
+		}()
+	}
+	wg.Wait()
+	if got := read(); !reflect.DeepEqual(got, want) {
+		t.Fatal("parallel callers contaminated the retained fold")
+	}
+}
 
 func newHistoryParityManager(t *testing.T) *Manager {
 	t.Helper()

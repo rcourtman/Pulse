@@ -17,6 +17,27 @@
 
 ## Purpose
 
+### Linked Pulse agent memory for Proxmox LXC — issue #2148 (21 September 2026)
+
+Both LXC memory paths — the efficient `cluster/resources` builder
+(`buildContainerFromClusterResource`) and the per-node fallback — may substitute
+the linked Pulse agent's own memory sample for a Proxmox fallback listing value.
+The substitution applies only when the current source is a fallback
+(`cluster-resources` or `unavailable`), the container is `running`, and the
+linked agent has a fresh online sample with known usage whose total equals the
+container's provisioned limit; an agent inside a container without `lxcfs` sees
+host memory and is rejected. The provisioned platform total is retained and
+preferred provider sources are never overridden. A stopped container and an
+agent sample without known usage are left untouched. The agent sample is the
+same linked-agent evidence already used for VM memory and the LXC filesystem
+inventory.
+
+`TestIssue2148LXCPrefersLinkedAgentMemoryOverClusterResources` and
+`TestIssue2148LXCRejectsAgentMemoryWithMismatchedTotal` pin the substitution and
+the rejection boundary, and `TestCorrelatedContainerMemoryNextPoll` pins the
+previous-guest wiring. These are synthetic runtime proofs, not a live Proxmox
+installation or browser receipt.
+
 ### TrueNAS persistent-session liveness and successful poll cadence
 
 Backport of main `19f564ddd9` for issue #1893. Authenticated JSON-RPC WebSocket

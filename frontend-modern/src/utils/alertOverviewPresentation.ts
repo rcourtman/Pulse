@@ -432,7 +432,9 @@ export function getAlertOverviewAcknowledgedBadgeClass(): string {
 }
 
 export function getAlertOverviewStartedAtClass(): string {
-  return 'mt-1 text-xs text-muted';
+  // The footer flex row already carries the top margin; a margin on this child
+  // shifts the Started run below its siblings under items-center (#2119).
+  return 'text-xs text-muted';
 }
 
 export function getAlertOverviewPrimaryActionClass(acknowledged: boolean): string {

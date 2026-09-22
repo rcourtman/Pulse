@@ -160,7 +160,9 @@ func (p *PatrolService) processObjectiveObservers(now time.Time) {
 	}
 	activeExecutions := make(map[string]struct{})
 	healthUpdates := make([]patrolObserverHealthUpdate, 0)
-	for _, objective := range store.List(false, now) {
+	objectives := store.List(false, now)
+	p.queueMissingObjectiveCoverage(objectives, now)
+	for _, objective := range objectives {
 		if objective.Status != PatrolObjectiveActive || objective.Observer == nil {
 			continue
 		}
