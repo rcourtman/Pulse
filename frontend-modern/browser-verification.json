@@ -1,40 +1,54 @@
 {
   "version": 1,
-  "base_sha": "014190ea4c630397e13088e3888bffb93012b8f3",
-  "verified_at": "2026-09-22T11:10:32.326040Z",
+  "base_sha": "4b1fb511d1f1d2d363ba732914e6678f1111a9b2",
+  "verified_at": "2026-09-22T13:31:09.864671Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/shared/DetailSectionTable.tsx",
+    "frontend-modern/src/components/shared/detailSectionModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "b463452e00e796a0d9ff3639f21ff7ac0d7219539cfacf50f6101282d829f78a"
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "713c26cde7852d7499138684a142e623b99f591d6b1f60c5eb639efef25376ff",
+    "frontend-modern/src/components/shared/DetailSectionTable.tsx": "f14935b93d3062e22215f55dcf8725589265b69a60a03dae10949b374a1e2cb8",
+    "frontend-modern/src/components/shared/detailSectionModel.ts": "0669d3afc5bc3d0809c3c2ee4204913c28aa87703c218ee3110b626e5792d086"
   },
   "routes": [
-    "/proxmox/backups (production component fixture)",
-    "/browser-tests/pbs-host-history-correlation.html"
+    "GuestDrawerOverview production-component fixture /proof.html"
   ],
   "viewports": [
     {
+      "width": 1600,
+      "height": 1100
+    },
+    {
       "width": 1280,
-      "height": 900
+      "height": 1100
+    },
+    {
+      "width": 768,
+      "height": 1100
     },
     {
       "width": 390,
-      "height": 844
+      "height": 1100
+    },
+    {
+      "width": 320,
+      "height": 1100
     }
   ],
   "states": [
-    "Two datastores on one PBS, with a single agent represented by guest and standalone rows",
-    "History on tank, archive, then tank again, with populated synthetic CPU/memory/disk/network history",
-    "Fresh resource snapshots with changing usage and alternating datastore array order"
+    "Guest with System, Memory, Filesystems and Tags sections",
+    "Shared-prefix mount paths ending in Films and Series",
+    "Long path with spaces and 140-character unbroken path segment",
+    "1280px desktop with a constrained 650px pane; tablet/phone touch emulation"
   ],
   "interactions": [
-    "Keyboard-expand each datastore row and select History",
-    "Check both datastore identities before each switch",
-    "Refresh three snapshots at each viewport; assert updated usage, retained drawer DOM, selected History tab and seven chart paths",
-    "Assert all six history requests use vm/proxmox:100, never the PBS service target",
-    "Inspect desktop and mobile screenshots; no uncaught page errors"
+    "Read all paths without hovering or scrolling horizontally",
+    "Assert text ranges fit all five label boxes at all five layouts, no page overflow or uncaught errors, and five progress bars",
+    "Inspect before/after desktop, constrained desktop and smallest-phone screenshots"
   ],
-  "command": "pulse-worker-browser .pbs-proof/check.cjs (assigned workspace root; invokes scripts/check-pbs-host-history-correlation.cjs in the disposable source copy)",
-  "notes": "Chromium 141.0.7390.37 / installed Playwright 1.56.1. Production source SHA-256 matched the assigned tree; package-lock SHA-256 87e579d28080ad1fb42992dd5b398c373aa08aff63bbf3f0ed63ac8b4a8f89a0, matching offline dependency snapshot dac6a9b347a1c76ad3bf0f5eadc17b84d468ce0d3878354e5d39e745101ccb53. Before the fix, a reversed datastore array overwrote the archive row to tank, reproduced in Chromium and the new component test. Isolating the row datastore object corrects it. Synthetic metrics/capability/AI responses, not live backend or reporter data. History reset to Summary was not reproduced, and this is not whole-issue resolution. Final screenshots visually inspected. Logs retained in web-product-h8pgc3la/pbs-browser-final.log; disposable copy retained in that output directory."
+  "command": "pulse-worker-browser .proof-filesystems/after.cjs",
+  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1. Synthetic guest, real GuestDrawerOverview, shared renderer and application CSS. Before repair, desktop labels are 112px with ellipsis; after repair complete paths wrap above usage. No live backend, published-build qualification or reporter confirmation. Other detail rows retain their compact layout."
 }

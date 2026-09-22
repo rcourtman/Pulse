@@ -197,6 +197,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                     .join(' · '),
                   {
                     title: disk.labelTitle,
+                    layout: 'stacked',
                     wrap: true,
                     progress:
                       disk.progressValue === null
