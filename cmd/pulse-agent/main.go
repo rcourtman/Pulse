@@ -590,38 +590,39 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			}
 		}
 		hostCfg := hostagent.Config{
-			PulseURL:                cfg.PulseURL,
-			APIToken:                cfg.APIToken,
-			Interval:                cfg.Interval,
-			HostnameOverride:        cfg.HostnameOverride,
-			AgentID:                 cfg.AgentID,
-			AgentType:               "unified",
-			AgentVersion:            Version,
-			Tags:                    cfg.Tags,
-			InsecureSkipVerify:      cfg.InsecureSkipVerify,
-			CACertPath:              cfg.CACertPath,
-			ServerFingerprint:       cfg.ServerFingerprint,
-			CustomSensorsFile:       cfg.CustomSensorsFile,
-			DeploySSHUser:           cfg.DeploySSHUser,
-			LogLevel:                cfg.LogLevel,
-			Logger:                  &logger,
-			EnableProxmox:           cfg.EnableProxmox,
-			ProxmoxType:             cfg.ProxmoxType,
-			EnableCommands:          cfg.EnableCommands,
-			CommandAuthorityProfile: cfg.CommandAuthorityProfile,
-			Enroll:                  cfg.Enroll,
-			DiskExclude:             cfg.DiskExclude,
-			DiskInclude:             cfg.DiskInclude,
-			StateDir:                cfg.StateDir,
-			ReportIP:                cfg.ReportIP,
-			DisableCeph:             cfg.DisableCeph,
-			AvailabilityTargets:     cfg.AvailabilityTargets,
-			AppliedConfig:           cfg.AppliedConfig,
-			ModuleStatus:            runtimeStatus.moduleStatuses,
-			PrivilegeHelperStatus:   privilegeHelperStatus,
-			Observers:               hostObserverTargets(cfg.Observers),
-			PrivilegedTelemetry:     privilegedTelemetry,
-			UpdatedFromVersion:      pendingUpdatePreviousVersion(pendingUpdate),
+			PulseURL:                  cfg.PulseURL,
+			APIToken:                  cfg.APIToken,
+			Interval:                  cfg.Interval,
+			HostnameOverride:          cfg.HostnameOverride,
+			AgentID:                   cfg.AgentID,
+			AgentType:                 "unified",
+			AgentVersion:              Version,
+			Tags:                      cfg.Tags,
+			InsecureSkipVerify:        cfg.InsecureSkipVerify,
+			CACertPath:                cfg.CACertPath,
+			ServerFingerprint:         cfg.ServerFingerprint,
+			CustomSensorsFile:         cfg.CustomSensorsFile,
+			DeploySSHUser:             cfg.DeploySSHUser,
+			LogLevel:                  cfg.LogLevel,
+			Logger:                    &logger,
+			EnableProxmox:             cfg.EnableProxmox,
+			ProxmoxType:               cfg.ProxmoxType,
+			EnableCommands:            cfg.EnableCommands,
+			CommandAuthorityProfile:   cfg.CommandAuthorityProfile,
+			Enroll:                    cfg.Enroll,
+			DiskExclude:               cfg.DiskExclude,
+			DiskInclude:               cfg.DiskInclude,
+			StateDir:                  cfg.StateDir,
+			ReportIP:                  cfg.ReportIP,
+			DisableCeph:               cfg.DisableCeph,
+			DisableClusterPeerSensors: cfg.DisableClusterPeerSensors,
+			AvailabilityTargets:       cfg.AvailabilityTargets,
+			AppliedConfig:             cfg.AppliedConfig,
+			ModuleStatus:              runtimeStatus.moduleStatuses,
+			PrivilegeHelperStatus:     privilegeHelperStatus,
+			Observers:                 hostObserverTargets(cfg.Observers),
+			PrivilegedTelemetry:       privilegedTelemetry,
+			UpdatedFromVersion:        pendingUpdatePreviousVersion(pendingUpdate),
 
 			DockerContainerUpdater:           dockerUpdaterBridge,
 			DockerContainerLifecycleOperator: dockerUpdaterBridge,
@@ -1106,9 +1107,10 @@ type Config struct {
 	DiskInclude []string // Devices or mount points to opt into monitoring despite automatic filtering
 
 	// Network configuration
-	ReportIP    string // IP address to report (for multi-NIC systems)
-	DisableCeph bool   // Disable local Ceph status polling
-	SelfTest    bool   // Perform self-test and exit
+	ReportIP                  string // IP address to report (for multi-NIC systems)
+	DisableCeph               bool   // Disable local Ceph status polling
+	DisableClusterPeerSensors bool   // Keep Proxmox monitoring local and skip SSH sensor collection from cluster peers
+	SelfTest                  bool   // Perform self-test and exit
 
 	// AvailabilityTargets are externally probed availability checks assigned to
 	// this agent by the server. Remote config is the only source.
@@ -1242,6 +1244,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	envDiskInclude := strings.TrimSpace(getenv("PULSE_DISK_INCLUDE"))
 	envReportIP := strings.TrimSpace(getenv("PULSE_REPORT_IP"))
 	envDisableCeph := strings.TrimSpace(getenv("PULSE_DISABLE_CEPH"))
+	envDisableClusterPeerSensors := strings.TrimSpace(getenv("PULSE_DISABLE_CLUSTER_PEER_SENSORS"))
 	envObserversFile := strings.TrimSpace(getenv("PULSE_OBSERVERS_FILE"))
 	envCustomSensorsFile := strings.TrimSpace(getenv("PULSE_CUSTOM_SENSORS_FILE"))
 
@@ -1325,6 +1328,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	stateDirFlag := fs.String("state-dir", envStateDir, "Persistent state directory (default: platform service state directory)")
 	reportIPFlag := fs.String("report-ip", envReportIP, "IP address to report (for multi-NIC systems)")
 	disableCephFlag := fs.Bool("disable-ceph", utils.ParseBool(envDisableCeph), "Disable local Ceph status polling")
+	disableClusterPeerSensorsFlag := fs.Bool("disable-cluster-peer-sensors", utils.ParseBool(envDisableClusterPeerSensors), "Skip SSH sensor collection from Proxmox cluster peers")
 	showVersion := fs.Bool("version", false, "Print the agent version and exit")
 	selfTest := fs.Bool("self-test", false, "Perform self-test and exit (used during auto-update)")
 
@@ -1496,6 +1500,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		DiskInclude:                diskInclude,
 		ReportIP:                   strings.TrimSpace(*reportIPFlag),
 		DisableCeph:                *disableCephFlag,
+		DisableClusterPeerSensors:  *disableClusterPeerSensorsFlag,
 		SelfTest:                   *selfTest,
 	}, nil
 }

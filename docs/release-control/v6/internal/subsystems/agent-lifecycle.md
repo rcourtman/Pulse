@@ -164,6 +164,15 @@ management, and fleet control surfaces. Pulse v6 has one host-installed
 infrastructure agent binary, `pulse-agent`; host, Docker / Podman,
 Kubernetes, Proxmox-local, and other node-local telemetry are modules inside
 that binary, not separate customer-facing agent products.
+
+In a Proxmox VE cluster, an enabled agent may collect peer temperature data
+through its existing SSH sensor path. `--disable-cluster-peer-sensors` and
+`PULSE_DISABLE_CLUSTER_PEER_SENSORS=true` are local, default-off operator
+controls that stop only that peer discovery and SSH collection path. They do
+not disable the local host, SMART, Ceph, or Proxmox reporting modules, alter
+agent enrollment or identity, or add remote command authority. The disabled
+path is pinned by `TestCollectClusterSensors_Disabled`; configuration parsing
+is pinned by `TestLoadConfigDisableClusterPeerSensorsFlag`.
 On supported Linux systemd hosts, the opt-in safe runtime is a root-owned,
 unprivileged monitoring collector plus the no-network typed helper, with
 remediation installed only as the separate root-owned `pulse-agent-runner`.

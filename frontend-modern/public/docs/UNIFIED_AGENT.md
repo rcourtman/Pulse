@@ -19,6 +19,12 @@ verification guidance.
 
 > Note: For agent-based temperature monitoring, use `pulse-agent --enable-proxmox` or SSH-based collection. The legacy sensor proxy has been removed. See `docs/TEMPERATURE_MONITORING.md`.
 
+When each Proxmox cluster node runs an agent, add
+`--disable-cluster-peer-sensors` (or set
+`PULSE_DISABLE_CLUSTER_PEER_SENSORS=true`) to keep temperature collection local
+to each node. This preserves local host telemetry and Proxmox integration while
+preventing duplicate root-SSH sensor polling between cluster peers.
+
 ## Quick Start
 
 Generate an installation command in the UI:

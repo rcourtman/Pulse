@@ -202,6 +202,11 @@ configuration. It may override Pulse's automatic filesystem suppression only;
 it must not override a matching operator exclusion or introduce remote
 authority to expand the reported filesystem set silently.
 
+The local `--disable-cluster-peer-sensors` control may suppress only the
+agent's outbound Proxmox peer sensor SSH probes. It neither accepts a remote
+command nor changes SSH credentials, target authority, agent scopes, token
+handling, enrollment, or the local host/SMART/Ceph/Proxmox reporting boundary.
+
 Retained Patrol objective briefs and optional context are operator-authored AI
 content. They are encrypted at rest in the organization-scoped Pulse data
 directory and loading fails closed if decryption fails. Audit and telemetry
