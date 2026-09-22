@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "decision": "The release owner declined the model-selected visual plan. The listed repairs are behavioural changes in alerting, telemetry, installation and upgrade handling that a static screenshot cannot establish, and the Patrol and PBS History identity journeys depend on live data and refresh transitions that are not deterministic in a static capture. This candidate publishes no screenshots.",
+  "captures": []
+}
