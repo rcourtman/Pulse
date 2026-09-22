@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "base_sha": "442f67327359f849ff179fb33b3b7d825f33a183",
+  "base_sha": "0d3fe52b066457861d4460b9ab01d9caa91e432d",
   "verified_at": "2026-09-22T09:38:20Z",
   "result": "passed",
   "changed_paths": ["frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"],
