@@ -39,6 +39,7 @@ const pbs = {
   },
   // The PBS service target: correct for the service, but it has no host series.
   metricsTarget: { resourceType: 'agent', resourceId: 'pbs-1' },
+  discoveryTarget: { resourceType: 'agent', resourceId: 'pbs-1' },
   platformData: {
     sources: ['pbs'],
     pbs: { instanceId: 'proxback', hostname: 'proxback-vm', datastoreCount: 2 },
@@ -60,6 +61,7 @@ const guest = {
   memory: { current: 16.9, total: 8000, used: 1352, free: 6648 },
   agent: sharedAgent,
   metricsTarget: { resourceType: 'vm', resourceId: 'proxmox:100' },
+  discoveryTarget: { resourceType: 'agent', resourceId: 'proxback-vm' },
   platformData: { sources: ['proxmox', 'agent'], agent: sharedAgent },
 } as unknown as Resource;
 
@@ -76,6 +78,7 @@ const standalone = {
   lastSeen: Date.now(),
   agent: sharedAgent,
   metricsTarget: { resourceType: 'agent', resourceId: 'agent-proxback' },
+  discoveryTarget: { resourceType: 'agent', resourceId: 'proxback-vm' },
   platformData: { sources: ['agent', 'pbs'], agent: sharedAgent },
 } as unknown as Resource;
 

@@ -38,6 +38,23 @@ const launchOptions = {
   const failures = [];
   const topologies = ['pbs-only', 'side-by-side', 'guest'];
   const wrong = 'agent/pbs-1';
+  // Reporter avsdev-cw sees the Identity card's "Discovery" and "Metrics
+  // Target" rows flick between a service id and the correlated host id while
+  // the table sits idle. Read the rendered rows so a snapshot-driven identity
+  // change fails the check instead of only being visible to a human.
+  const readIdentityRows = (detail) =>
+    detail
+      .locator('[data-testid="resource-identity-section"] tr')
+      .evaluateAll((rows) =>
+        rows
+          .map((row) => {
+            const cells = row.querySelectorAll('td');
+            return cells.length >= 2
+              ? [cells[0].textContent.trim(), cells[1].textContent.trim()]
+              : null;
+          })
+          .filter((row) => row && row[0]),
+      );
   try {
     await server.listen();
     browser = await chromium.launch(launchOptions);
@@ -170,6 +187,16 @@ const launchOptions = {
                 .locator('[data-testid="guest-history-plot"] path')
                 .count();
               assert.ok(pathsBefore > 0);
+              const identityBefore = await readIdentityRows(detail);
+              const identityLabels = identityBefore.map(([label]) => label);
+              assert.ok(
+                identityLabels.includes('Discovery'),
+                'Discovery identity row missing from the drawer',
+              );
+              assert.ok(
+                identityLabels.includes('Metrics Target'),
+                'Metrics Target identity row missing from the drawer',
+              );
               await page
                 .getByRole('button', { name: 'Schedule automatic snapshot' })
                 .click();
@@ -205,9 +232,16 @@ const launchOptions = {
                   .count(),
                 pathsBefore,
               );
+              const identityAfter = await readIdentityRows(detail);
+              assert.deepEqual(
+                identityAfter,
+                identityBefore,
+                'Identity rows changed after a refreshed snapshot',
+              );
               observations.push({
                 datastore,
                 paths: pathsBefore,
+                identity: identityAfter,
                 refreshPreservedHistory: true,
               });
             }
