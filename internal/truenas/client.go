@@ -283,7 +283,7 @@ func (c *Client) getSystemTelemetryREST(ctx context.Context) (*SystemInfo, error
 	if start <= 0 {
 		start = end
 	}
-	response, err := c.getLegacySystemReportingData(ctx, map[string]any{
+	response, err := c.getReportingDataREST(ctx, legacyRESTReportingGraphs(), map[string]any{
 		"aggregate": false,
 		"start":     start,
 		"end":       end,
@@ -360,47 +360,6 @@ func legacyRESTReportingGraphs() []map[string]any {
 	}
 }
 
-// getLegacySystemReportingData keeps a rejected optional graph from discarding
-// usable CPU/memory readings. Keep the successful batch fast path; only split
-// graph-validation/server errors, never authentication, rate-limit, endpoint,
-// transport or cancellation failures. The query and graph set remain unchanged.
-func (c *Client) getLegacySystemReportingData(ctx context.Context, query map[string]any) ([]trueNASReportingGetDataResponse, error) {
-	graphs := legacyRESTReportingGraphs()
-	response, err := c.getReportingDataREST(ctx, graphs, query)
-	if err == nil || !isReportingGraphFailure(err) {
-		return response, err
-	}
-	batchErr := err
-	var collected []trueNASReportingGetDataResponse
-	for _, graph := range graphs {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		response, err := c.getReportingDataREST(ctx, []map[string]any{graph}, query)
-		if err != nil {
-			if !isReportingGraphFailure(err) {
-				return nil, err
-			}
-			continue
-		}
-		collected = append(collected, response...)
-	}
-	if len(collected) == 0 {
-		return nil, batchErr
-	}
-	return collected, nil
-}
-
-func isReportingGraphFailure(err error) bool {
-	var apiErr *APIError
-	if !errors.As(err, &apiErr) {
-		return false
-	}
-	return apiErr.StatusCode == http.StatusBadRequest ||
-		apiErr.StatusCode == http.StatusUnprocessableEntity ||
-		apiErr.StatusCode == http.StatusInternalServerError
-}
-
 // getReportingDataREST issues reporting.get_data over the REST v2.0 transport.
 // The middleware method takes positional parameters (graphs, query); REST
 // serves it as a POST body keyed by parameter name.
@@ -447,7 +406,7 @@ func (c *Client) getSystemMetricHistoryREST(ctx context.Context, duration time.D
 	if start <= 0 {
 		start = end
 	}
-	response, err := c.getLegacySystemReportingData(ctx, map[string]any{
+	response, err := c.getReportingDataREST(ctx, legacyRESTReportingGraphs(), map[string]any{
 		"aggregate": false,
 		"start":     start,
 		"end":       end,
@@ -3212,13 +3171,10 @@ func parseSystemMetricHistory(responses []trueNASReportingGetDataResponse) *Syst
 					history.CPUPercent = appendTimeSeriesPoint(history.CPUPercent, timestamp, value)
 				}
 			case "memory":
-				// FreeBSD active pages are only one used-memory component, not
-				// total usage. Without an explicit used series, let the provider
-				// derive usage from system capacity, free memory and ARC.
 				if value, ok := parseSystemMemoryPercent(values); ok {
 					history.MemoryPercent = appendTimeSeriesPoint(history.MemoryPercent, timestamp, value)
 				}
-				if value, ok := pickReportingValue(values, "used", "memory_used", "used_bytes", "memory"); ok {
+				if value, ok := pickReportingValue(values, "used", "memory_used", "used_bytes", "active", "memory"); ok {
 					history.MemoryUsedBytes = appendTimeSeriesPoint(history.MemoryUsedBytes, timestamp, value)
 				}
 				if value, ok := pickReportingValue(values, "available", "free", "available_bytes", "free_bytes"); ok {
@@ -3486,7 +3442,7 @@ func parseSystemMemoryPercent(values map[string]float64) (float64, bool) {
 	if value, ok := pickReportingValue(values, "usage", "percent", "used_percent", "memory_percent"); ok {
 		return value, true
 	}
-	used, hasUsed := pickReportingValue(values, "used", "memory_used", "used_bytes", "memory")
+	used, hasUsed := pickReportingValue(values, "used", "memory_used", "used_bytes", "active", "memory")
 	total, hasTotal := pickReportingValue(values, "total", "memory_total", "total_bytes", "physical_memory_total")
 	if hasUsed && hasTotal && total > 0 {
 		return (used / total) * 100, true
