@@ -3,8 +3,9 @@
 // host row. Reproduces #1723: before the fix the two identity matches were
 // treated as ambiguous, so the PBS row kept its service metrics target and the
 // History tab showed "Collecting history" for a host that has history.
+// Also covers PBS-only and co-installed bare-metal PVE/PBS with no guest.
 // Synthetic props only; the check script intercepts the metrics-history request.
-import { createSignal } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
 
 import { ProxmoxBackupServersTable } from '../src/features/proxmox/ProxmoxBackupServersTable';
@@ -78,26 +79,59 @@ const standalone = {
   platformData: { sources: ['agent', 'pbs'], agent: sharedAgent },
 } as unknown as Resource;
 
+// Side-by-side services on one bare-metal host: the node is not a VM, and
+// host history belongs to the standalone agent rather than a guest series.
+const node = {
+  ...standalone,
+  id: 'node-proxback',
+  type: 'node',
+  platformId: 'proxmox/proxback',
+  platformType: 'proxmox-pve',
+  sources: ['proxmox', 'agent'],
+  metricsTarget: { resourceType: 'node', resourceId: 'proxmox/proxback' },
+  platformData: { sources: ['proxmox', 'agent'], agent: sharedAgent },
+} as Resource;
+
+const query = new URLSearchParams(window.location.search);
+const topology = query.get('topology') ?? 'guest';
+const resources =
+  topology === 'pbs-only'
+    ? [pbs, standalone]
+    : topology === 'side-by-side'
+      ? [pbs, node, standalone]
+      : [pbs, guest, standalone];
+
 const Fixture = () => {
-  const [servers, setServers] = createSignal(structuredClone([pbs, guest, standalone]));
-  let snapshot = 0;
+  const [servers, setServers] = createSignal(structuredClone(resources));
+  const [snapshot, setSnapshot] = createSignal(0);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(timer));
+  const refresh = () => {
+    const count = snapshot() + 1;
+    const next = structuredClone(resources);
+    next[1].cpu = { current: 15.4 + count };
+    const tank = next[0].pbs!.datastores!.find((store) => store.name === 'tank')!;
+    tank.used = 400 + count * 10;
+    tank.available = 600 - count * 10;
+    tank.usagePercent = 40 + count;
+    if (query.get('order') !== 'stable' && count % 2 === 1) {
+      next[0].pbs!.datastores!.reverse();
+    }
+    setServers(next);
+    setSnapshot(count);
+  };
   return (
     <>
+      <button onClick={refresh}>Refresh resource snapshot</button>
       <button
         onClick={() => {
-          snapshot += 1;
-          const next = structuredClone([pbs, guest, standalone]);
-          next[1].cpu = { current: 15.4 + snapshot };
-          const tank = next[0].pbs!.datastores!.find((store) => store.name === 'tank')!;
-          tank.used = 400 + snapshot * 10;
-          tank.available = 600 - snapshot * 10;
-          tank.usagePercent = 40 + snapshot;
-          if (snapshot % 2 === 1) next[0].pbs!.datastores!.reverse();
-          setServers(next);
+          clearTimeout(timer);
+          timer = setTimeout(refresh, 100);
         }}
       >
-        Refresh resource snapshot
+        Schedule automatic snapshot
       </button>
+      <output aria-label="Snapshot number">{snapshot()}</output>
       <ProxmoxBackupServersTable servers={servers()} />
     </>
   );
