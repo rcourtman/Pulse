@@ -61,6 +61,9 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 		guestID := makeGuestID(container.Instance, container.Node, container.VMID)
 		if guestID != "" {
 			ctx.containersByID[guestID] = container
+			if memory, ok := ct.LinkedAgentMemory(); ok {
+				ctx.hostAgentsByVMID[guestID] = models.Host{LinkedVMID: guestID, Status: "online", Memory: memory}
+			}
 		}
 		if container.VMID > 0 && (strings.EqualFold(strings.TrimSpace(container.Type), "oci") || container.IsOCI) {
 			ctx.containerOCIByVMID[container.VMID] = true
@@ -72,10 +75,15 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 			continue
 		}
 		modelHost := previousHostFromView(host)
-		if modelHost.LinkedVMID == "" || modelHost.Status != "online" {
+		if modelHost.Status != "online" {
 			continue
 		}
-		ctx.hostAgentsByVMID[modelHost.LinkedVMID] = modelHost
+		if modelHost.LinkedVMID != "" {
+			ctx.hostAgentsByVMID[modelHost.LinkedVMID] = modelHost
+		}
+		if modelHost.LinkedContainerID != "" {
+			ctx.hostAgentsByVMID[modelHost.LinkedContainerID] = modelHost
+		}
 	}
 
 	return ctx
@@ -172,12 +180,13 @@ func previousHostFromView(host *unifiedresources.HostView) models.Host {
 		return models.Host{}
 	}
 	return models.Host{
-		ID:         host.ID(),
-		Hostname:   host.Hostname(),
-		Status:     string(host.Status()),
-		LinkedVMID: host.LinkedVMID(),
-		LastSeen:   host.LastSeen(),
-		Disks:      guestDisksFromReadStateView(host.Disks()),
+		ID:                host.ID(),
+		Hostname:          host.Hostname(),
+		Status:            string(host.Status()),
+		LinkedVMID:        host.LinkedVMID(),
+		LinkedContainerID: host.LinkedContainerID(),
+		LastSeen:          host.LastSeen(),
+		Disks:             guestDisksFromReadStateView(host.Disks()),
 		Memory: models.Memory{
 			Used:  host.MemoryUsed(),
 			Total: host.MemoryTotal(),

@@ -147,7 +147,7 @@ func (m *Monitor) collectGuestsFromClusterResources(
 		collectionWG.Add(1)
 		go func() {
 			defer collectionWG.Done()
-			allContainers = m.collectClusterContainerResources(ctx, instanceName, containerResources, client, prevContainerIsOCI, prevContainerByID)
+			allContainers = m.collectClusterContainerResources(ctx, instanceName, containerResources, client, prevContainerIsOCI, prevContainerByID, vmIDToHostAgent)
 		}()
 	}
 	if len(vmResources) > 0 {
@@ -253,6 +253,7 @@ func (m *Monitor) collectClusterContainerResources(
 	client PVEClientInterface,
 	prevContainerIsOCI map[int]bool,
 	prevContainerByID map[string]models.Container,
+	vmIDToHostAgent map[string]models.Host,
 ) []models.Container {
 	orderedContainers := make([]models.Container, len(resources))
 	orderedOK := make([]bool, len(resources))
@@ -263,13 +264,13 @@ func (m *Monitor) collectClusterContainerResources(
 		var container models.Container
 		var ok bool
 		ran := m.runGuestAgentVMWork(ctx, func(workCtx context.Context) {
-			container, ok = m.handleClusterContainerResource(workCtx, instanceName, entry.resource, entry.guestID, client, prevContainerIsOCI)
+			container, ok = m.handleClusterContainerResource(workCtx, instanceName, entry.resource, entry.guestID, client, prevContainerIsOCI, vmIDToHostAgent)
 		})
 		if !ran {
 			// The enrichment budget is exhausted, but cluster/resources is still
 			// authoritative inventory. A canceled context makes remote detail
 			// calls fail immediately while the builder retains the base row.
-			container, ok = m.handleClusterContainerResource(ctx, instanceName, entry.resource, entry.guestID, client, prevContainerIsOCI)
+			container, ok = m.handleClusterContainerResource(ctx, instanceName, entry.resource, entry.guestID, client, prevContainerIsOCI, vmIDToHostAgent)
 		}
 		if ctx.Err() != nil {
 			previous := prevContainerByID[entry.guestID]
@@ -415,8 +416,9 @@ func (m *Monitor) handleClusterContainerResource(
 	guestID string,
 	client PVEClientInterface,
 	prevContainerIsOCI map[int]bool,
+	vmIDToHostAgent map[string]models.Host,
 ) (models.Container, bool) {
-	container, guestRaw, memorySource, sampleTime, ok := m.buildContainerFromClusterResource(ctx, instanceName, res, client, prevContainerIsOCI)
+	container, guestRaw, memorySource, sampleTime, ok := m.buildContainerFromClusterResource(ctx, instanceName, res, client, prevContainerIsOCI, vmIDToHostAgent)
 	if !ok {
 		return models.Container{}, false
 	}
