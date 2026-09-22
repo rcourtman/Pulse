@@ -245,6 +245,8 @@ type NotificationManager struct {
 	groupingEnabled    bool
 	pendingAlerts      []*alerts.Alert
 	groupTimer         *time.Timer
+	pendingResolved    []*alerts.Alert
+	resolvedGroupTimer *time.Timer
 	groupByNode        bool
 	publicURL          string // Full URL to access Pulse
 	groupByGuest       bool
@@ -887,6 +889,9 @@ func (n *NotificationManager) SetNotifyOnResolve(enabled bool) {
 	n.mu.Lock()
 	was := n.notifyOnResolve
 	n.notifyOnResolve = enabled
+	if !enabled {
+		n.takePendingResolvedLocked()
+	}
 	n.mu.Unlock()
 
 	if was != enabled {
@@ -949,12 +954,14 @@ func (n *NotificationManager) SetGroupingConfig(enabled bool, seconds int, byNod
 	n.groupByGuest = byGuest
 
 	var pending []*alerts.Alert
+	var resolved []*alerts.Alert
 	var emailConfig EmailConfig
 	var webhooks []WebhookConfig
 	var appriseConfig AppriseConfig
 	var initialTarget notificationDeliveryTarget
 	var queue *NotificationQueue
 	if !enabled || seconds == 0 {
+		resolved = n.takePendingResolvedLocked()
 		pending = append(pending, n.pendingAlerts...)
 		n.pendingAlerts = n.pendingAlerts[:0]
 		if n.groupTimer != nil {
@@ -969,6 +976,9 @@ func (n *NotificationManager) SetGroupingConfig(enabled bool, seconds int, byNod
 	}
 	n.mu.Unlock()
 
+	for _, alert := range resolved {
+		n.dispatchResolvedAlerts([]*alerts.Alert{alert})
+	}
 	for _, alert := range pending {
 		n.dispatchFiringAlerts(emailConfig, webhooks, appriseConfig, []*alerts.Alert{alert}, initialTarget, nil, queue)
 	}
@@ -1063,6 +1073,7 @@ func (n *NotificationManager) SetEnabled(enabled bool) {
 	changed = n.enabled != enabled
 	n.enabled = enabled
 	if !enabled {
+		n.takePendingResolvedLocked()
 		for i := range n.pendingAlerts {
 			n.pendingAlerts[i] = nil
 		}
@@ -1408,7 +1419,10 @@ func (n *NotificationManager) filterResolvedJobsByDeliveryReceipt(jobs []notific
 	return filtered
 }
 
-// SendResolvedAlert delivers notifications for a resolved alert immediately.
+// SendResolvedAlert applies the same grouping window to recoveries as firings.
+// The two event types have separate buffers; a recovery can never be rendered
+// as a firing alert. Normal operation persists the grouping window in the
+// delivery queue; the in-memory buffer is only the queue-unavailable fallback.
 func (n *NotificationManager) SendResolvedAlert(resolved *alerts.ResolvedAlert) {
 	if resolved == nil || resolved.Alert == nil {
 		return
@@ -1426,6 +1440,52 @@ func (n *NotificationManager) SendResolvedAlert(resolved *alerts.ResolvedAlert) 
 	}
 	annotateResolvedMetadata(alertCopy, resolvedAt)
 
+	n.mu.Lock()
+	if !n.enabled || !n.notifyOnResolve {
+		n.mu.Unlock()
+		return
+	}
+	if n.queue == nil && n.groupingEnabled && n.groupWindow > 0 {
+		// Repeated reconciliation of one occurrence must not duplicate batch rows.
+		for _, pending := range n.pendingResolved {
+			if pending.ID == alertCopy.ID && pending.StartTime.Equal(alertCopy.StartTime) {
+				n.mu.Unlock()
+				return
+			}
+		}
+		n.pendingResolved = append(n.pendingResolved, alertCopy)
+		if n.resolvedGroupTimer == nil {
+			n.resolvedGroupTimer = time.AfterFunc(n.groupWindow, n.sendGroupedResolvedAlerts)
+		}
+		n.mu.Unlock()
+		return
+	}
+	n.mu.Unlock()
+	n.dispatchResolvedAlerts([]*alerts.Alert{alertCopy})
+}
+
+// takePendingResolvedLocked drains only the recovery buffer. Call with mu held.
+func (n *NotificationManager) takePendingResolvedLocked() []*alerts.Alert {
+	pending := n.pendingResolved
+	n.pendingResolved = nil
+	if n.resolvedGroupTimer != nil {
+		n.resolvedGroupTimer.Stop()
+		n.resolvedGroupTimer = nil
+	}
+	return pending
+}
+
+func (n *NotificationManager) sendGroupedResolvedAlerts() {
+	n.mu.Lock()
+	pending := n.takePendingResolvedLocked()
+	n.mu.Unlock()
+	n.dispatchResolvedAlerts(pending)
+}
+
+func (n *NotificationManager) dispatchResolvedAlerts(alertList []*alerts.Alert) {
+	if len(alertList) == 0 {
+		return
+	}
 	n.mu.RLock()
 	enabled := n.enabled && n.notifyOnResolve
 	emailConfig := copyEmailConfig(n.emailConfig)
@@ -1433,18 +1493,13 @@ func (n *NotificationManager) SendResolvedAlert(resolved *alerts.ResolvedAlert) 
 	appriseConfig := copyAppriseConfig(n.appriseConfig)
 	queue := n.queue
 	n.mu.RUnlock()
-
 	if !enabled {
-		log.Debug().
-			Str("alertID", alertCopy.ID).
-			Msg("resolved notifications disabled, skipping")
 		return
 	}
-
-	alertsToSend := []*alerts.Alert{alertCopy}
-	jobs := buildNotificationDeliveryJobs(emailConfig, webhooks, appriseConfig, alertsToSend, eventResolved, resolvedAt)
+	jobs := buildNotificationDeliveryJobs(emailConfig, webhooks, appriseConfig, alertList, eventResolved, resolvedTimeFromAlerts(alertList))
+	// Filter each destination independently at dispatch, not merely when the
+	// alert enters the window. Never announce a recovery for an undelivered firing.
 	jobs = n.filterResolvedJobsByDeliveryReceipt(jobs)
-
 	if queue != nil {
 		n.enqueueNotificationJobs(queue, jobs)
 	} else {
@@ -1628,6 +1683,14 @@ func buildNotificationDeliveryJobsForSelection(
 			routedAlerts := routeNotificationAlerts(alertsToSend, webhook.TagFilter, webhook.TagMode, webhook.MinimumSeverity, event)
 			if len(routedAlerts) > 0 {
 				webhookCopy := webhook
+				// PagerDuty Events v2 resolves one dedup_key, not a list.
+				// Never consume other occurrences' receipts for that request.
+				if event == eventResolved && webhook.Service == "pagerduty" && strings.TrimSpace(webhook.Template) == "" {
+					for _, alert := range routedAlerts {
+						jobs = append(jobs, notificationDeliveryJob{Type: "webhook", Event: event, Alerts: []*alerts.Alert{alert}, ResolvedAt: resolvedAt, WebhookConfig: &webhookCopy})
+					}
+					continue
+				}
 				jobs = append(jobs, notificationDeliveryJob{
 					Type:          "webhook",
 					Event:         event,
@@ -1753,6 +1816,12 @@ func (n *NotificationManager) enqueueNotificationJobs(queue *NotificationQueue, 
 		return false
 	}
 
+	n.mu.RLock()
+	groupWindow := n.groupWindow
+	if !n.groupingEnabled {
+		groupWindow = 0
+	}
+	n.mu.RUnlock()
 	anyFailed := false
 	for _, job := range jobs {
 		configJSON, err := configJSONForNotificationDeliveryJob(job)
@@ -1770,7 +1839,13 @@ func (n *NotificationManager) enqueueNotificationJobs(queue *NotificationQueue, 
 				MaxAttempts:   3,
 				NextRetryAt:   bucket.nextRetryAt,
 			}
-			if err := queue.Enqueue(notif); err != nil {
+			var enqueueErr error
+			if job.Event == eventResolved && groupWindow > 0 && !(job.WebhookConfig != nil && job.WebhookConfig.Service == "pagerduty" && strings.TrimSpace(job.WebhookConfig.Template) == "") {
+				enqueueErr = queue.enqueueResolvedGroup(notif, groupWindow)
+			} else {
+				enqueueErr = queue.Enqueue(notif)
+			}
+			if err := enqueueErr; err != nil {
 				anyFailed = true
 				n.logNotificationJobError(bucket.job, err, "failed to enqueue notification - falling back to direct send")
 				n.dispatchNotificationJobAsync(bucket.job, "failed to send notification after queue enqueue failure")
@@ -2685,6 +2760,17 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 	data.ResolvedAtISO = resolvedAt.Format(time.RFC3339)
 	data.Duration = formatWebhookDuration(resolvedAt.Sub(alert.StartTime))
 	data.Message = fmt.Sprintf("%s on %s is now healthy", alert.ResourceName, alert.Node)
+	data.AlertCount = len(alertList)
+	data.Alerts = alertList
+	if len(alertList) > 1 {
+		names := make([]string, 0, len(alertList))
+		for _, a := range alertList {
+			if a != nil {
+				names = append(names, fmt.Sprintf("%s on %s", a.ResourceName, a.Node))
+			}
+		}
+		data.Message = fmt.Sprintf("%d alerts resolved: %s", len(alertList), strings.Join(names, "; "))
+	}
 
 	var err error
 	webhook, data, err = n.prepareWebhookDeliveryContext(webhook, data)
@@ -4013,6 +4099,7 @@ func (n *NotificationManager) Stop() {
 	n.stopOnce.Do(func() {
 		n.mu.Lock()
 		n.enabled = false
+		n.takePendingResolvedLocked()
 		queue := n.queue
 		cleanupDone := n.cleanupDone
 		client := n.webhookClient
