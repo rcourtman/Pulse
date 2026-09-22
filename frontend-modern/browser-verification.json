@@ -1,33 +1,20 @@
 {
   "version": 1,
-  "base_sha": "14c9c6e84f68536ba7f17eba42a931e242acda51",
-  "verified_at": "2026-09-22T09:24:33Z",
+  "base_sha": "442f67327359f849ff179fb33b3b7d825f33a183",
+  "verified_at": "2026-09-22T09:38:20Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
-    "frontend-modern/src/utils/alertOverviewPresentation.ts"
-  ],
+  "changed_paths": ["frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "940f58b977249b784294b39e10d1b4b8010e570d4d7a38edfa5341add6ba0fc1",
-    "frontend-modern/src/utils/alertOverviewPresentation.ts": "7f68a70800deb0cb8214d4fd25c7454c5b0fde1084e08365eb93bc361b80846a"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "940f58b977249b784294b39e10d1b4b8010e570d4d7a38edfa5341add6ba0fc1"
   },
   "routes": [
-    "/browser-tests/alert-card-footer.html",
     "/proxmox/backups (production surface represented by the component fixture)",
     "/browser-tests/pbs-host-history-correlation.html"
   ],
   "viewports": [
     {
-      "width": 2010,
-      "height": 1072
-    },
-    {
       "width": 1280,
       "height": 900
-    },
-    {
-      "width": 480,
-      "height": 800
     },
     {
       "width": 390,
@@ -35,23 +22,19 @@
     }
   ],
   "states": [
-    "Alerts overview alert-card footer with the Started timestamp and the adjacent delivery-status run",
-    "The Started run classed by getAlertOverviewStartedAtClass() inside the items-center footer flex row",
     "The Backups PBS server row renders for a host whose agent is surfaced as both a PVE guest and a standalone source=pbs host row",
     "Expanding the PBS row opens the canonical drawer; History is selectable and renders the host metric groups",
     "The PBS drawer's merged header shows the guest's current CPU/memory (15.4% / 16.9%) rather than the PBS service values",
     "The History request resolves to the guest series vm/proxmox:100; the PBS service target agent/pbs-1 is never requested",
-    "Desktop and narrow layouts for both surfaces"
+    "The same correlation holds at the narrow 390px layout"
   ],
   "interactions": [
-    "Mount the production footer markup from AlertOverviewAlertCard.tsx with the class returned by getAlertOverviewStartedAtClass() and the project CSS",
-    "Measure the text bounding rects of the Started run and the status run and assert their top and bottom edges match within 1px",
     "Mount the production ProxmoxBackupServersTable with synthetic PBS server, PVE guest and standalone agent resources sharing one agent identity",
     "Focus the PBS row disclosure button and activate it with Enter, then select the History subtab",
     "Intercept /api/metrics-store/history requests and assert the requested resourceType/resourceId pair",
-    "Repeat both surfaces at desktop and narrow widths and capture a screenshot of each rendered surface",
+    "Repeat at 1280x900 and 390x844 and capture a screenshot of each rendered History tab",
     "Record Chromium from the offline Playwright runtime with no uncaught page errors"
   ],
-  "command": "pulse-worker-browser scripts/check-alert-card-footer.cjs; pulse-worker-browser scripts/check-pbs-host-history-correlation.cjs",
-  "notes": "Two offline Playwright Chromium runs, each against the production component with the project CSS and synthetic props; no live Pulse, backend, WebSocket or credential path. #2119: the alert-card footer is an items-center flex row that already carries the top margin, so the child 'mt-1' pushed the Started run 2px below the delivery-status span; removing it aligns both runs (top 66 / bottom 82 at 2010x1072 and 480x800, delta 0). Release-line adaptation of the reviewed main fix 41fa79d52b: alertOverviewPresentation.ts is byte-identical to the reviewed main content (sha256 7f68a708...); the proof was re-run at 23:07Z, again at 08:44Z on the combined candidate that added the secure-runtime qualification backport, and again at 09:24Z on this combined candidate that adds the #1723 correlation backport, with delta 0 at both viewports and no page errors or HTTP errors each time. #1723: the fixture feeds synthetic PBS/guest/agent resources and answers /api/metrics-store/history with empty points, so the panels correctly show the collecting-history state; the assertion is the requested history target, vm/proxmox:100 (the guest series), never agent/pbs-1, at 1280x900 and 390x844. Release-line adaptation of the reviewed main fix e9a426aeeb: ProxmoxBackupServersTable.tsx carries the identical correlation change (the release-line file retains the required detailRowId aria-controls argument, so its content hash is 940f58b9...). This receipt is content-addressed to the two changed frontend sources at this candidate base."
+  "command": "pulse-worker-browser scripts/check-pbs-host-history-correlation.cjs",
+  "notes": "Offline Playwright Chromium run of the production ProxmoxBackupServersTable component, not a live Pulse. The fixture feeds synthetic PBS/guest/agent resources only and the check script answers /api/metrics-store/history with empty points, so the panels correctly show the collecting-history state; the assertion is the requested history target, vm/proxmox:100 (the guest series), never agent/pbs-1, at 1280x900 and 390x844. No backend, WebSocket or credential path is exercised. Release-line adaptation of the reviewed main fix e9a426aeeb: ProxmoxBackupServersTable.tsx carries the identical correlation change, and the release-line file retains the required detailRowId aria-controls argument, so its content hash is 940f58b9.... This receipt is content-addressed to the single changed frontend source in this candidate range; the base already carries the #2119 alert-card-footer receipt. No page errors and no failed responses."
 }
