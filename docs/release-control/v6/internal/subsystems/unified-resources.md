@@ -456,8 +456,11 @@ about the same disk cannot diverge.
 
 PBS presentation correlation accepts standalone agents and VM/system-container resources with an agent facet. Preserve unique identity matching and canonical metricsTarget type and ID. Guests without telemetry and mixed ambiguous agent/guest matches must not replace the PBS target.
 
+A single agent surfaced as both a VM/system-container guest and a standalone agent row is one identity, not an ambiguous pair. Collapse candidates that share an agent identity before deciding, and prefer the guest's canonical metricsTarget because it names the persisted host series; the PBS service target names the service key and has no host history. Only distinct agent identities, or candidates whose identity cannot be proven equal, decline to choose. Never use input order or a fallback that discards the PBS row id.
+
 Verification: ProxmoxBackupServersTable.drawer.test.tsx covers standalone and
-merged guest targets, missing disks and ambiguous identities;
+merged guest targets, missing disks, duplicate guest/host representations of one
+agent, and genuinely ambiguous identities;
 ProxmoxPageSurface.contract.test.tsx covers hydration and deduplication.
 
 

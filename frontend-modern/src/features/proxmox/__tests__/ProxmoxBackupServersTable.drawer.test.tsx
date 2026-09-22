@@ -194,4 +194,61 @@ describe('ProxmoxBackupServersTable details', () => {
       );
     },
   );
+
+  it('reuses the PVE guest when the same agent is listed as both guest and standalone host', () => {
+    const pbs = makePbsResource();
+    pbs.sources = ['pbs'];
+    pbs.agent = undefined;
+    pbs.name = 'proxback';
+    pbs.displayName = 'proxback';
+    pbs.platformId = 'pbs-1';
+    pbs.pbs = { ...pbs.pbs!, instanceId: 'proxback', hostname: 'proxback-vm' };
+    pbs.metricsTarget = { resourceType: 'agent', resourceId: 'pbs-1' };
+    pbs.platformData = {
+      sources: ['pbs'],
+      pbs: { instanceId: 'proxback', hostname: 'proxback-vm', datastoreCount: 1 },
+    };
+    const sharedAgent = { agentId: 'agent-proxback', hostname: 'proxback-vm' };
+    const guest = {
+      id: 'vm-100',
+      type: 'vm',
+      name: 'proxback-vm',
+      displayName: 'proxback-vm',
+      platformId: 'proxmox:100',
+      platformType: 'proxmox-pve',
+      sourceType: 'hybrid',
+      sources: ['proxmox', 'agent'],
+      status: 'online',
+      lastSeen: pbs.lastSeen,
+      agent: sharedAgent,
+      metricsTarget: { resourceType: 'vm', resourceId: 'proxmox:100' },
+      platformData: { sources: ['proxmox', 'agent'], agent: sharedAgent },
+    } as Resource;
+    const standalone = {
+      id: 'agent-proxback',
+      type: 'agent',
+      name: 'proxback-vm',
+      displayName: 'proxback-vm',
+      platformId: 'agent-proxback',
+      platformType: 'proxmox-pbs',
+      sourceType: 'hybrid',
+      sources: ['agent', 'pbs'],
+      status: 'online',
+      lastSeen: pbs.lastSeen,
+      agent: sharedAgent,
+      metricsTarget: { resourceType: 'agent', resourceId: 'agent-proxback' },
+    } as Resource;
+
+    render(() => <ProxmoxBackupServersTable servers={[pbs, guest, standalone]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Expand details for proxback' }));
+
+    expect(screen.getByTestId('pbs-resource-detail')).toHaveAttribute(
+      'data-metrics-resource-type',
+      'vm',
+    );
+    expect(screen.getByTestId('pbs-resource-detail')).toHaveAttribute(
+      'data-metrics-resource-id',
+      'proxmox:100',
+    );
+  });
 });

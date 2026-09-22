@@ -1,25 +1,33 @@
 {
   "version": 1,
-  "base_sha": "fdb2be15befb4fbcd34b4e0399b147bfa098b355",
-  "verified_at": "2026-09-21T05:50:47Z",
+  "base_sha": "76f96f990638652ed3d4af890bbcdaa8d47374aa",
+  "verified_at": "2026-09-22T09:47:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/docs/docMarkdown.ts",
-    "frontend-modern/src/pages/Docs.tsx"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/docs/docMarkdown.ts": "e114a4c2e49a8dc0f2549a704af6ceac54d4eca0cfcae28c8ab8cb6cc1b0718c",
-    "frontend-modern/src/pages/Docs.tsx": "c6c4b066c6af8a4eb8f01a9e03c2f939ee1592867dea2bf0f328bf111f99f2eb"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "18535683c37f5b5a481ac012a49b7dcdd6264ac992076381c74fdfbb037e31eb",
+    "frontend-modern/src/utils/alertOverviewPresentation.ts": "7f68a70800deb0cb8214d4fd25c7454c5b0fde1084e08365eb93bc361b80846a"
   },
   "routes": [
-    "/docs/API",
-    "/docs/API#resource-maintenance-and-operator-state",
-    "/docs/README"
+    "/browser-tests/alert-card-footer.html",
+    "/proxmox/backups (production surface represented by the component fixture)",
+    "/browser-tests/pbs-host-history-correlation.html"
   ],
   "viewports": [
     {
-      "width": 1440,
+      "width": 2010,
+      "height": 1072
+    },
+    {
+      "width": 1280,
       "height": 900
+    },
+    {
+      "width": 480,
+      "height": 800
     },
     {
       "width": 390,
@@ -27,22 +35,23 @@
     }
   ],
   "states": [
-    "API reference renders 149 headings, every one with a unique generated id; the maintenance section id is resource-maintenance-and-operator-state",
-    "The in-document link to #resource-maintenance-and-operator-state resolves to the generated heading",
-    "Direct fragment load focuses and scrolls the maintenance heading after the asynchronous Markdown fetch",
-    "Reload on the same fragment restores focus and target",
-    "Malformed (#%invalid) and missing (#does-not-exist) fragments leave the document rendered and do not move focus",
-    "Keyboard activation of the All documentation link routes to /docs/README inside the SPA shell",
-    "Wide API tables scroll inside their own container; neither viewport overflows horizontally"
+    "Alerts overview alert-card footer with the Started timestamp and the adjacent delivery-status run",
+    "The Started run classed by getAlertOverviewStartedAtClass() inside the items-center footer flex row",
+    "The Backups PBS server row renders for a host whose agent is surfaced as both a PVE guest and a standalone source=pbs host row",
+    "Expanding the PBS row opens the canonical drawer; History is selectable and renders the host metric groups",
+    "The PBS drawer's merged header shows the guest's current CPU/memory (15.4% / 16.9%) rather than the PBS service values",
+    "The History request resolves to the guest series vm/proxmox:100; the PBS service target agent/pbs-1 is never requested",
+    "Desktop and narrow layouts for both surfaces"
   ],
   "interactions": [
-    "Mount the production Docs page under the production router and serve the real public/docs/API.md asset from the Vite dev server",
-    "Load /docs/API, /docs/API#resource-maintenance-and-operator-state, a malformed fragment and a missing fragment, and reload the direct fragment",
-    "Assert document.activeElement, tabIndex, scrollIntoView position and window.location.hash",
-    "Focus the first documentation link and activate it with Enter, confirming router navigation without a full reload",
-    "Resize to 390x844 and check page overflow and table scroll wrappers",
-    "Record Chromium 141.0.7390.37 with no uncaught page errors and no failed responses"
+    "Mount the production footer markup from AlertOverviewAlertCard.tsx with the class returned by getAlertOverviewStartedAtClass() and the project CSS",
+    "Measure the text bounding rects of the Started run and the status run and assert their top and bottom edges match within 1px",
+    "Mount the production ProxmoxBackupServersTable with synthetic PBS server, PVE guest and standalone agent resources sharing one agent identity",
+    "Focus the PBS row disclosure button and activate it with Enter, then select the History subtab",
+    "Intercept /api/metrics-store/history requests and assert the requested resourceType/resourceId pair",
+    "Repeat both surfaces at desktop and narrow widths and capture a screenshot of each rendered surface",
+    "Record Chromium from the offline Playwright runtime with no uncaught page errors"
   ],
-  "command": "pulse-worker-browser scripts/check-docs-fragment-navigation.cjs",
-  "notes": "Offline Playwright Chromium run of the production Docs page. Synthetic backend: /api/security/status is answered with hasAuthentication=false; the shipped API markdown asset is served by the Vite dev server, not a live Pulse. Heading ids follow GitHub's algorithm (lower-case, punctuation removed, spaces to hyphens, per-document duplicate numbering) so repository fragment links resolve. The renderer keeps the documentation route dependency-free. Chromium 141.0.7390.37 matches the offline runtime. This receipt is content-addressed to the changed frontend sources at this candidate base."
+  "command": "pulse-worker-browser scripts/check-alert-card-footer.cjs; pulse-worker-browser scripts/check-pbs-host-history-correlation.cjs",
+  "notes": "Two offline Playwright Chromium runs, each against the production component with the project CSS and synthetic props; no live Pulse, backend, WebSocket or credential path. #2119: the alert-card footer is an items-center flex row that already carries the top margin, so the child 'mt-1' pushed the Started run 2px below the delivery-status span; removing it aligns both runs (top 66 / bottom 82 at 2010x1072 and 480x800, delta 0). #1723: the fixture feeds synthetic PBS/guest/agent resources and answers /api/metrics-store/history with empty points, so the panels correctly show the collecting-history state; the assertion is the requested history target, vm/proxmox:100 (the guest series), never agent/pbs-1. No page errors and no failed responses. This receipt is content-addressed to the two changed frontend sources at this candidate base."
 }
