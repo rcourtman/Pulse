@@ -1653,6 +1653,16 @@ describe('Workloads performance contract', () => {
       expect(filesystemsSectionIndex).toBeGreaterThan(-1);
       expect(tagsSectionIndex).toBeGreaterThan(-1);
       expect(filesystemsSectionIndex).toBeLessThan(tagsSectionIndex);
+      // Ordering cannot prevent the compact label column from clipping paths.
+      // Filesystem rows delegate full-path presentation to the shared renderer.
+      const filesystemSectionSource = guestDrawerOverviewSource.slice(
+        filesystemsSectionIndex,
+        tagsSectionIndex,
+      );
+      expect(filesystemSectionSource).toContain("layout: 'stacked'");
+      expect(filesystemSectionSource).toContain('wrap: true');
+      expect(guestDrawerOverviewSource.match(/layout: 'stacked'/g)).toHaveLength(1);
+
       expect(guestDrawerOverviewSource).toContain('TechnicalDetailsSection');
       expect(nodeDrawerOverviewSource).toContain('TechnicalDetailsSection');
       const retiredInfoCardFrameClass = [
