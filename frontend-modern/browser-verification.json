@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "base_sha": "8d276987c0911a124eef884e809ca45e197b8abb",
+  "base_sha": "3e80d79349cb35b44d630053edb64a30cda39bca",
   "verified_at": "2026-09-22T15:46:31.148690Z",
   "result": "passed",
   "changed_paths": [
@@ -50,5 +50,5 @@
     "Inspect constrained desktop and smallest-phone screenshots"
   ],
   "command": "pulse-worker-browser tmp/release-proof/browser.cjs",
-  "notes": "Release-line exact locked dependencies; Chromium 141.0.7390.37 / Playwright 1.56.1. Synthetic guest, production GuestDrawerOverview, shared renderer and application CSS. Five layouts check all five path text ranges, progress bars, no page overflow and no uncaught errors. Desktop constrained 650px pane and 320px phone screenshots inspected. Initial fixture API mock accidentally intercepted source imports; corrected to the actual API URL prefix before successful proof. Not live backend, published-build qualification or reporter confirmation. Compact rows remain unchanged."
+  "notes": "Release-line exact locked dependencies; Chromium 141.0.7390.37 / Playwright 1.56.1. Synthetic guest, production GuestDrawerOverview, shared renderer and application CSS. Five layouts check all five path text ranges, progress bars, no page overflow and no uncaught errors. Desktop constrained 650px pane and 320px phone screenshots inspected. Initial fixture API mock accidentally intercepted source imports; corrected to the actual API URL prefix before successful proof. Not live backend, published-build qualification or reporter confirmation. Compact rows remain unchanged. Receipt re-anchored after the PBS test-fixture-only commit; verified frontend content and verification time are unchanged."
 }
