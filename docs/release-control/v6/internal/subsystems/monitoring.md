@@ -103,6 +103,32 @@ and projection proofs, not native CORE appliance acceptance or reporter
 confirmation.
 
 
+**Legacy reporting failure isolation and memory components — issue #2077**
+
+Live telemetry and history retain the legacy REST graph/query contract and the
+single successful-batch fast path. A batch rejected with HTTP 400, 422 or 500
+falls back to one request per graph (at most six calls including the batch).
+A failed optional graph must not discard successful CPU, memory or ARC graphs.
+Authentication, rate-limit, missing-endpoint, service-unavailable, decoding,
+transport and cancellation errors are not graph fallback triggers; these also
+stop an in-progress split. If every graph fails, the original batch error is
+returned. Missing memory readings remain unavailable, never fabricated usage.
+FreeBSD `active` pages are not a total-used-memory alias. Without an explicit
+used series, history derives usage from the known capacity and reported free
+memory, subtracting separately reported ARC as the live projection does.
+
+`TestRESTReportingGraphFailurePreservesSnapshotTelemetry`,
+`TestRESTReportingGraphFailureBoundaries`,
+`TestRESTReportingPartialAndMalformedResponses` and
+`TestReportingActiveMemoryIsNotTotalUsed` in
+`internal/truenas/client_test.go` exercise request-validating synthetic REST
+responses, repeated full snapshots, CPU/free/ARC projections, matching history,
+partial data, bounded errors and cancellation. They do not establish the native
+CORE request schema, row timestamps/units, appliance acceptance or the reporter's
+exact failure. Native response evidence remains required before claiming that
+this repair resolves the reported telemetry journey.
+
+
 **Availability backfill preserves concurrent discovery changes (7 September 2026)**
 
 The backfill List snapshot is a work list, not an authoritative record to save.
