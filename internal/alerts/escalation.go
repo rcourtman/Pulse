@@ -114,3 +114,28 @@ func (m *Manager) checkEscalations() {
 		m.safeCallEscalationRepeatCallback(alert, len(escalation.Levels))
 	}
 }
+
+// PrepareEscalationNotification revalidates an asynchronously dispatched
+// escalation against the current policy and occurrence. The callback snapshot
+// is not authority to send after recovery, acknowledgement or a policy edit.
+// This does not recall a notification already handed to a destination.
+func (m *Manager) PrepareEscalationNotification(snapshot *Alert, level int) (*Alert, EscalationLevel, bool) {
+	if m == nil || snapshot == nil {
+		return nil, EscalationLevel{}, false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.config.Enabled || m.config.ActivationState != ActivationActive || !m.config.Schedule.Escalation.Enabled || level <= 0 || level > len(m.config.Schedule.Escalation.Levels) {
+		return nil, EscalationLevel{}, false
+	}
+	active, ok := m.getActiveAlertNoLock(snapshot.ID)
+	if !ok || active == nil || !active.StartTime.Equal(snapshot.StartTime) || active.Acknowledged {
+		return nil, EscalationLevel{}, false
+	}
+	if _, snoozed := alertSnoozeUntil(active, m.policyNow()); snoozed {
+		return nil, EscalationLevel{}, false
+	}
+	target := m.config.Schedule.Escalation.Levels[level-1]
+	target.DestinationIDs = append([]string(nil), target.DestinationIDs...)
+	return cloneAlertForOutput(active), target, true
+}

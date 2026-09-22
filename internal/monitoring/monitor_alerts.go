@@ -280,10 +280,12 @@ func (m *Monitor) handleAlertEscalated(hub *websocket.Hub, alert *alerts.Alert, 
 		Int("level", level).
 		Msg("Alert escalated")
 
-	config := m.alertManager.GetConfig()
-	if level <= 0 || level > len(config.Schedule.Escalation.Levels) {
+	current, escalationLevel, eligible := m.alertManager.PrepareEscalationNotification(alert, level)
+	if !eligible {
 		return
 	}
+
+	alert = current
 
 	if m.alertManager.ShouldSuppressNotification(alert) {
 		log.Info().
@@ -295,7 +297,6 @@ func (m *Monitor) handleAlertEscalated(hub *websocket.Hub, alert *alerts.Alert, 
 	}
 
 	if m.notificationMgr != nil {
-		escalationLevel := config.Schedule.Escalation.Levels[level-1]
 		if len(escalationLevel.DestinationIDs) > 0 {
 			m.notificationMgr.SendEscalatedAlertToDestinations(alert, escalationLevel.Notify, escalationLevel.DestinationIDs)
 			m.broadcastEscalatedAlert(hub, alert)

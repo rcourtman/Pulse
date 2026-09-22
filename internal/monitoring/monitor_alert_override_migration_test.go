@@ -62,10 +62,7 @@ func TestHandleAlertEscalatedPreservesLegacyAppriseAndExactWebhookRouting(t *tes
 		cfg.Schedule.QuietHours.Enabled = false
 		manager.UpdateConfig(cfg)
 
-		(&Monitor{notificationMgr: notifMgr, alertManager: manager}).handleAlertEscalated(nil, &alerts.Alert{
-			ID: "apprise-escalation", Type: "connectivity", Level: alerts.AlertLevelCritical,
-			ResourceID: "node/pve-1", ResourceName: "pve-1", StartTime: time.Now(),
-		}, 1)
+		(&Monitor{notificationMgr: notifMgr, alertManager: manager}).handleAlertEscalated(nil, activeEscalationFixture(t, manager, "connectivity", alerts.AlertLevelCritical), 1)
 
 		select {
 		case <-requests:
@@ -106,10 +103,7 @@ func TestHandleAlertEscalatedPreservesLegacyAppriseAndExactWebhookRouting(t *tes
 		cfg.Schedule.QuietHours.Enabled = false
 		manager.UpdateConfig(cfg)
 
-		(&Monitor{notificationMgr: notifMgr, alertManager: manager}).handleAlertEscalated(nil, &alerts.Alert{
-			ID: "exact-webhook-escalation", Type: "connectivity", Level: alerts.AlertLevelCritical,
-			ResourceID: "node/pve-1", ResourceName: "pve-1", StartTime: time.Now(),
-		}, 1)
+		(&Monitor{notificationMgr: notifMgr, alertManager: manager}).handleAlertEscalated(nil, activeEscalationFixture(t, manager, "connectivity", alerts.AlertLevelCritical), 1)
 
 		select {
 		case <-selectedRequests:
