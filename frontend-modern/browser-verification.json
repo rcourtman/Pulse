@@ -1,40 +1,54 @@
 {
   "version": 1,
-  "base_sha": "9acf6faebfccf43dc3061a4ee2919a4fdc4c5efe",
-  "verified_at": "2026-09-22T11:26:59.305030Z",
+  "base_sha": "3e80d79349cb35b44d630053edb64a30cda39bca",
+  "verified_at": "2026-09-22T15:46:31.148690Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/shared/DetailSectionTable.tsx",
+    "frontend-modern/src/components/shared/detailSectionModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "73f1bd57e0bcec1136fc94b231aa065b024714d2d49f30576e590f914f2d7020"
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "713c26cde7852d7499138684a142e623b99f591d6b1f60c5eb639efef25376ff",
+    "frontend-modern/src/components/shared/DetailSectionTable.tsx": "f14935b93d3062e22215f55dcf8725589265b69a60a03dae10949b374a1e2cb8",
+    "frontend-modern/src/components/shared/detailSectionModel.ts": "0669d3afc5bc3d0809c3c2ee4204913c28aa87703c218ee3110b626e5792d086"
   },
   "routes": [
-    "/proxmox/backups (production component fixture)",
-    "/browser-tests/pbs-host-history-correlation.html"
+    "GuestDrawerOverview production-component fixture /proof.html"
   ],
   "viewports": [
     {
+      "width": 1600,
+      "height": 1100
+    },
+    {
       "width": 1280,
-      "height": 900
+      "height": 1100
+    },
+    {
+      "width": 768,
+      "height": 1100
     },
     {
       "width": 390,
-      "height": 844
+      "height": 1100
+    },
+    {
+      "width": 320,
+      "height": 1100
     }
   ],
   "states": [
-    "Two datastores on one PBS, with a single agent represented by guest and standalone rows",
-    "History on tank, archive, then tank again, with populated synthetic CPU/memory/disk/network history",
-    "Fresh resource snapshots with changing usage and alternating datastore array order"
+    "Guest with System, Memory, Filesystems and Tags sections",
+    "Shared-prefix mount paths ending in Films and Series",
+    "Long path with spaces and 140-character unbroken path segment",
+    "1280px desktop with a constrained 650px pane; tablet/phone touch emulation"
   ],
   "interactions": [
-    "Keyboard-expand each datastore row and select History",
-    "Check both datastore identities before each switch",
-    "Refresh three snapshots at each viewport; assert updated usage, retained drawer DOM, selected History tab and seven chart paths",
-    "Assert all six history requests use vm/proxmox:100, never the PBS service target",
-    "Inspect desktop and mobile screenshots; no uncaught page errors"
+    "Read all paths without hovering or scrolling horizontally",
+    "Assert text ranges fit all five label boxes at all five layouts, no page overflow or uncaught errors, and five progress bars",
+    "Inspect constrained desktop and smallest-phone screenshots"
   ],
-  "command": "pulse-worker-browser .pbs-proof/check.cjs (wrapper runs scripts/check-pbs-host-history-correlation.cjs in an exact source copy with assigned release-line dependencies)",
-  "notes": "Release-line reproduction of #1723: before repair, reordered snapshots duplicate tank and lose archive in both Chromium and the new component test (9 passed, 1 failed). After repair, 54 focused tests and TypeScript checking pass. Chromium 141.0.7390.37 / Playwright 1.56.1 passes tank/archive/tank switching and three fresh reordered snapshots at both viewports; six requests target vm/proxmox:100 and all seven chart paths, History selection and drawer identity survive. Desktop and mobile screenshots visually inspected. The first post-fix browser attempt timed out during navigation at 30 seconds; retained as adverse evidence. The final script allows 120 seconds for navigation with all interaction assertions unchanged. No timing-cause diagnosis. Source and test files match the assigned tree. Release-line package-lock SHA-256 924fa21e5d81c577692af8dccad993680d41bb29a1531cea00e05fc309ecbdaa; offline dependency snapshot c82f3e505ccf93d12cf0ed4ebb5ff5185f6e683ae17c8f2b3d9ac4f0b2f1b9b1. Synthetic component props and metrics, not installed backend or reporter data. History reset to Summary was not reproduced; not whole-issue resolution or release qualification."
+  "command": "pulse-worker-browser tmp/release-proof/browser.cjs",
+  "notes": "Release-line exact locked dependencies; Chromium 141.0.7390.37 / Playwright 1.56.1. Synthetic guest, production GuestDrawerOverview, shared renderer and application CSS. Five layouts check all five path text ranges, progress bars, no page overflow and no uncaught errors. Desktop constrained 650px pane and 320px phone screenshots inspected. Initial fixture API mock accidentally intercepted source imports; corrected to the actual API URL prefix before successful proof. Not live backend, published-build qualification or reporter confirmation. Compact rows remain unchanged. Receipt re-anchored after the PBS test-fixture-only commit; verified frontend content and verification time are unchanged."
 }

@@ -8000,6 +8000,16 @@ describe('shared primitive guardrails', () => {
     expect(detailSectionTableSource).toContain('lg:flex-none');
     expect(detailSectionTableSource).not.toContain('lg:flex-1');
     expect(detailSectionTableSource).toContain('lg:grid-cols-[7rem_minmax(0,1fr)]');
+    // Long identifiers opt into the shared full-width row; compact rows keep
+    // their original track and the table-wide truncation policy is untouched.
+    expect(detailSectionModelSource).toContain("layout?: 'stacked'");
+    expect(detailSectionTableSource).toContain("row.layout !== 'stacked'");
+    expect(detailSectionTableSource).toContain(
+      "colspan={row.layout === 'stacked' ? 2 : undefined}",
+    );
+    expect(detailSectionTableSource).toContain('lg:grid-cols-[minmax(0,1fr)]');
+    expect(detailSectionTableSource).toContain('[overflow-wrap:anywhere]');
+
     expect(detailSectionTableSource).toContain('lg:text-left');
     expect(detailSectionTableSource).toContain('lg:divide-y-0');
     expect(detailSectionModelSource).toContain('footerContent?: JSX.Element');

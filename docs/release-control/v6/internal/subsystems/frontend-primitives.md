@@ -4681,6 +4681,13 @@ row closes the panel instead of presenting a separate text button; consumers
 may own the platform-specific section data, but they must not recreate local
 `DetailField` grids or route platform-neutral detail tables through a
 provider-named primitive.
+Long identifying labels can opt into `DetailRow.layout: 'stacked'`: the shared
+renderer places the complete label above its value and progress bar in one
+full-width cell on both narrow and desktop layouts. The label wraps even an
+unbroken path segment rather than inheriting table nowrap/ellipsis; it must be
+readable without hover or horizontal scrolling. Compact two-cell rows remain
+the default. This is a presentation choice only: value formatting, unknown
+usage, tone and accessible progress metadata retain their existing semantics.
 Platform row-detail disclosure controls are also registry-backed templates.
 `frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
 owns `PlatformResourceDetailToggleButton`, which composes

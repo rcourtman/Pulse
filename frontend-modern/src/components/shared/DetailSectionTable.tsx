@@ -90,16 +90,26 @@ export const DetailSectionTable: Component<{
             </TableRow>
             <For each={section.rows}>
               {(row) => (
-                <TableRow class="lg:grid lg:min-w-0 lg:grid-cols-[7rem_minmax(0,1fr)] lg:items-start lg:gap-3 lg:py-0.5 lg:hover:bg-transparent">
-                  <TableCell class="w-[38%] px-2 py-1 align-top text-muted lg:w-auto lg:px-0 lg:py-0">
-                    {row.label}
-                  </TableCell>
+                <TableRow
+                  class={`lg:grid lg:min-w-0 lg:items-start lg:gap-3 lg:py-0.5 lg:hover:bg-transparent ${row.layout === 'stacked' ? 'lg:grid-cols-[minmax(0,1fr)]' : 'lg:grid-cols-[7rem_minmax(0,1fr)]'}`}
+                >
+                  {row.layout !== 'stacked' ? (
+                    <TableCell class="w-[38%] px-2 py-1 align-top text-muted lg:w-auto lg:px-0 lg:py-0">
+                      {row.label}
+                    </TableCell>
+                  ) : null}
                   <TableCell
+                    colspan={row.layout === 'stacked' ? 2 : undefined}
                     class={`px-2 py-1 text-right align-top font-medium lg:min-w-0 lg:px-0 lg:py-0 lg:text-left ${detailValueToneClass(
                       row.tone,
                     )} ${row.valueClass ?? ''}`}
                     title={row.title ?? row.value}
                   >
+                    {row.layout === 'stacked' ? (
+                      <span class="mb-1 block whitespace-normal text-left font-normal leading-snug text-muted [overflow-wrap:anywhere]">
+                        {row.label}
+                      </span>
+                    ) : null}
                     {row.valueContent ?? (
                       <span
                         title={row.title ?? row.value}
