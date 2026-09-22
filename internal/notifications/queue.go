@@ -705,6 +705,12 @@ func normalizeNotificationLinks(
 
 // Enqueue adds a notification to the queue
 func (nq *NotificationQueue) Enqueue(notif *QueuedNotification) error {
+	nq.mu.Lock()
+	defer nq.mu.Unlock()
+	return nq.enqueueLocked(notif)
+}
+
+func (nq *NotificationQueue) enqueueLocked(notif *QueuedNotification) error {
 	if notif == nil {
 		return fmt.Errorf("notification cannot be nil")
 	}
@@ -779,9 +785,6 @@ func (nq *NotificationQueue) Enqueue(notif *QueuedNotification) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal operational links: %w", err)
 	}
-
-	nq.mu.Lock()
-	defer nq.mu.Unlock()
 
 	query := `
 		INSERT INTO notification_queue

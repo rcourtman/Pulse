@@ -43,7 +43,9 @@ Unknown and absent persisted targets preserve historical all-destination
 behavior, and destination tag filters still apply after target selection.
 Grouping is an explicit runtime policy: `grouping.enabled=false` or a zero
 window delivers each alert independently, and disabling grouping flushes any
-pending alerts as individual deliveries. Grouped provider payloads must retain
+in-memory pending firing alerts as individual deliveries. Already admitted
+persistent recovery groups retain their original deadline across a policy edit.
+Grouped provider payloads must retain
 every alert, while live ntfy firing deliveries and webhook tests share the same
 severity-derived title, priority, and tags.
 Email rendering treats `patrol_finding` as a finding rather than a numeric
@@ -138,6 +140,46 @@ stable opaque routing identities and must not expose credentials.
 
 
 ## Current State
+
+### Persistent resolved-alert grouping
+
+`SendResolvedAlert` applies the configured grouping window to recoveries as
+well as firings. Event types are never mixed. With the persistent queue available,
+`internal/notifications/resolved_grouping.go` persists the first recovery's
+window and coalesces only untouched, not-yet-due pending jobs with identical
+notification type, destination configuration and quiet-hours schedule. Queue
+scheduling metadata identifies these groups; it is not the provider HTTP method.
+Deadlines round up to queue timestamp precision, never shorten the grouping
+window, and do not slide with each added occurrence. Retry batches are immutable.
+No schema or driver modification is needed. Pending groups survive manager
+shutdown/reopen. The queue-unavailable fallback uses a separate in-memory buffer
+and does not promise restart durability.
+
+Admission retains destination-specific successful firing receipts. A destination
+that never received an occurrence, or an unannounced alert, must not receive its
+recovery. Group extension deduplicates by alert ID and occurrence start time,
+retains each resolution timestamp and regenerates the group's operational links.
+Delivery consumes only receipts for the occurrences in the delivered job.
+Grouping disabled or a zero window keeps new recoveries individual; changing
+that policy does not rewrite already-admitted persistent jobs.
+
+Generic payloads and built-in/custom recovery summary data retain all grouped
+alerts and the count, rather than rendering only the first alert. PagerDuty's
+built-in Events v2 resolve path remains one deduplication key per request;
+it is explicitly excluded from coalescing to avoid consuming other incidents'
+receipts. Existing rate limits, retry budgets, destination security checks and
+firing grouping are unchanged.
+
+Verification: `resolved_grouping_contract_test.go` establishes ordinary firing
+receipts then resolves fifteen alerts in one process, after manager restart,
+and across restart with pending recoveries. It checks unseen-destination and
+unannounced-alert suppression, per-occurrence resolution metadata, eleven
+recovery renderers, individual PagerDuty keys, and the disabled-grouping burst's
+rate-limit/dead-letter consequence. The HTTP adapter is in-process; queue and
+receipt persistence are real. Focused and race runs establish this synthetic
+boundary, not a full notification-suite result, installed monitor recovery,
+provider acceptance, reporter confirmation or release qualification. The existing
+singleton delivery test explicitly disables grouping.
 
 ### Webhook retry delay conversion
 
