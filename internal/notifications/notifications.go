@@ -550,6 +550,7 @@ func defaultAppriseExec(ctx context.Context, args []string) ([]byte, error) {
 type notificationRecord struct {
 	lastSent   time.Time
 	alertStart time.Time
+	level      alerts.AlertLevel // Highest delivered severity for this occurrence.
 }
 
 // Alert represents an alert (interface to avoid circular dependency)
@@ -1164,10 +1165,12 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 	}
 
 	// Check cooldown. A disabled cooldown means "do not send repeat
-	// notifications for the same active alert occurrence"; escalation uses an
-	// explicit bypass because its cadence is owned by the alert schedule.
+	// notifications for the same active alert occurrence". A higher severity is
+	// new information, not a repeat. Scheduled escalation retains its explicit
+	// bypass because its cadence is owned by the alert schedule.
 	record, exists := n.lastNotified[alert.ID]
-	if !options.bypassCooldown && exists && record.alertStart.Equal(alert.StartTime) && (n.cooldown <= 0 || time.Since(record.lastSent) < n.cooldown) {
+	severityIncreased := notificationSeverityRank(record.level) > 0 && notificationSeverityRank(alert.Level) > notificationSeverityRank(record.level)
+	if !options.bypassCooldown && !severityIncreased && exists && record.alertStart.Equal(alert.StartTime) && (n.cooldown <= 0 || time.Since(record.lastSent) < n.cooldown) {
 		elapsed := time.Since(record.lastSent)
 		remainingCooldown := time.Duration(0)
 		if n.cooldown > elapsed {
@@ -1221,6 +1224,20 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 	n.mu.Unlock()
 }
 
+// Unknown levels cannot opt into the severity cooldown exception.
+func notificationSeverityRank(level alerts.AlertLevel) int {
+	switch level {
+	case alerts.AlertLevelInfo:
+		return 1
+	case alerts.AlertLevelWarning:
+		return 2
+	case alerts.AlertLevelCritical:
+		return 3
+	default:
+		return 0
+	}
+}
+
 func (n *NotificationManager) markAlertsNotified(alertsToSend []*alerts.Alert, sentAt time.Time) {
 	n.mu.Lock()
 	if n.lastNotified == nil {
@@ -1230,7 +1247,14 @@ func (n *NotificationManager) markAlertsNotified(alertsToSend []*alerts.Alert, s
 		if alert == nil {
 			continue
 		}
+		level := alert.Level
+		// Destinations and retries can complete out of order. A late warning
+		// receipt must not re-enable critical delivery for this occurrence.
+		if previous, ok := n.lastNotified[alert.ID]; ok && previous.alertStart.Equal(alert.StartTime) && notificationSeverityRank(previous.level) > notificationSeverityRank(level) {
+			level = previous.level
+		}
 		n.lastNotified[alert.ID] = notificationRecord{
+			level:      level,
 			lastSent:   sentAt,
 			alertStart: alert.StartTime,
 		}
