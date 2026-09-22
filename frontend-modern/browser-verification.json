@@ -1,54 +1,32 @@
 {
   "version": 1,
-  "base_sha": "4b1fb511d1f1d2d363ba732914e6678f1111a9b2",
-  "verified_at": "2026-09-22T13:31:09.864671Z",
+  "base_sha": "9fbc4e7b3a8d5ddff9886852c700d43b9b6322c7",
+  "verified_at": "2026-09-22T16:26:06.944232Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
-    "frontend-modern/src/components/shared/DetailSectionTable.tsx",
-    "frontend-modern/src/components/shared/detailSectionModel.ts"
-  ],
+  "changed_paths": ["frontend-modern/src/utils/agentInstallCommand.ts"],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "713c26cde7852d7499138684a142e623b99f591d6b1f60c5eb639efef25376ff",
-    "frontend-modern/src/components/shared/DetailSectionTable.tsx": "f14935b93d3062e22215f55dcf8725589265b69a60a03dae10949b374a1e2cb8",
-    "frontend-modern/src/components/shared/detailSectionModel.ts": "0669d3afc5bc3d0809c3c2ee4204913c28aa87703c218ee3110b626e5792d086"
+    "frontend-modern/src/utils/agentInstallCommand.ts": "5c456b9b8cf2d114d5be62bb46c27b265d30fc49c3df88d2ec42631414f65c64"
   },
-  "routes": [
-    "GuestDrawerOverview production-component fixture /proof.html"
-  ],
+  "routes": ["Production buildUnixAgentInstallCommand in synthetic clipboard/text-input fixture"],
   "viewports": [
     {
-      "width": 1600,
-      "height": 1100
-    },
-    {
       "width": 1280,
-      "height": 1100
-    },
-    {
-      "width": 768,
-      "height": 1100
+      "height": 850
     },
     {
       "width": 390,
-      "height": 1100
-    },
-    {
-      "width": 320,
-      "height": 1100
+      "height": 850
     }
   ],
   "states": [
-    "Guest with System, Memory, Filesystems and Tags sections",
-    "Shared-prefix mount paths ending in Films and Series",
-    "Long path with spaces and 140-character unbroken path segment",
-    "1280px desktop with a constrained 650px pane; tablet/phone touch emulation"
+    "Tokenless HTTPS, token HTTP, quoted URL/token, insecure HTTPS, custom CA with extra flags"
   ],
   "interactions": [
-    "Read all paths without hovering or scrolling horizontally",
-    "Assert text ranges fit all five label boxes at all five layouts, no page overflow or uncaught errors, and five progress bars",
-    "Inspect before/after desktop, constrained desktop and smallest-phone screenshots"
+    "Copy generated command with browser clipboard API and paste with Control+V into input type=text",
+    "Assert five variants preserve exact bytes at both viewports; old source changes all five",
+    "Check pasted output syntax with sh and bash: old five fail, repaired five pass",
+    "Inspect desktop-before and narrow-after screenshots"
   ],
-  "command": "pulse-worker-browser .proof-filesystems/after.cjs",
-  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1. Synthetic guest, real GuestDrawerOverview, shared renderer and application CSS. Before repair, desktop labels are 112px with ellipsis; after repair complete paths wrap above usage. No live backend, published-build qualification or reporter confirmation. Other detail rows retain their compact layout."
+  "command": "pulse-worker-browser .proof-install/browser.cjs",
+  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1. TypeScript-transpiled production utility, synthetic pulse.invalid and invented tokens. Generic text field, not pfSense DOM or installation. No backend/network/service proof. Full fixture and results retained with lane outcome."
 }
