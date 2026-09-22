@@ -502,6 +502,14 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			pbsStorages = append(pbsStorages, pbsStorage)
 		}
 		m.state.UpdateStorageForInstance("pbs-"+instanceName, pbsStorages)
+		// PBS storage is not evaluated by the unified metric path (which
+		// handles TrueNAS and VMware storage). Evaluate fresh poll observations
+		// here, as the PVE storage poller does, rather than relying on mock ticks.
+		if m.alertManager != nil {
+			for _, storage := range pbsStorages {
+				m.alertManager.CheckStorageWithCapacityTrend(storage, m.storageCapacityTrend(storage, time.Now()))
+			}
+		}
 		log.Debug().
 			Str("instance", instanceName).
 			Int("storageEntries", len(pbsStorages)).

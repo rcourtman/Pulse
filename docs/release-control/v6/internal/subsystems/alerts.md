@@ -2781,3 +2781,28 @@ rename retry and Unix destination hardening. This addresses one write source
 in #1966, not total installed write amplification: directory metadata handling,
 intent snapshots, changing alert histories and database writes remain separate.
 It changes neither alert latency nor the selected release candidate.
+
+
+### PBS capacity has one alert policy owner
+
+PBS datastore capacity alerts are evaluated by `CheckStorageWithCapacityTrend`
+from fresh PBS polls. Storage defaults, canonical datastore aliases, per-resource
+overrides, hysteresis and predictive capacity policy govern that lifecycle.
+The fixed 90/95% PBS topology assessment remains resource risk evidence; its
+Pulse-generated `capacity_runway_low` incidents must not independently enter
+active alerts on either the datastore or the parent backup server. Existing
+copies retire through normal policy reconciliation, without deleting state or
+claiming that capacity itself recovered. Other datastore state/error incidents
+and native provider incidents retain their existing lifecycle.
+
+`TestPBSCapacityUsesStoragePolicyNotTopologyBands` in
+`internal/alerts/unified_incidents_test.go` uses real registry projection to pin
+both duplicate symptoms at 97.9%, canonical-alias 99% versus 90% policy, existing
+alert retirement, threshold recovery, and preservation of datastore failure.
+The posture and roll-up tests use datastore state failures, independent of
+capacity. This relies on the live PBS poll evaluator; a release adaptation must
+include that evaluator rather than remove the topology alerts in isolation.
+`TestPBSPolledCapacityRequiresObservedRecovery` in
+`internal/monitoring/monitor_pbs_coverage_test.go` additionally exercises the
+97.9% policy transition through synthetic PBS HTTP polling, storage conversion
+and unified alert synchronisation, including absence of duplicate parent alerts.

@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
@@ -576,7 +578,7 @@ func TestSyncUnifiedResourceIncidentsMarksPBSBackupPosture(t *testing.T) {
 			Hostname:       "pbs-main.local",
 			DatastoreCount: 2,
 			Datastores: []unifiedresources.PBSDatastoreMeta{
-				{Name: "fast", Status: "online", Total: 100, Used: 96},
+				{Name: "fast", Status: "ERROR", Total: 100, Used: 96},
 				{Name: "archive", Status: "online", Total: 100, Used: 40},
 			},
 			ProtectedWorkloadCount: 2,
@@ -585,22 +587,22 @@ func TestSyncUnifiedResourceIncidentsMarksPBSBackupPosture(t *testing.T) {
 			StorageRisk: &unifiedresources.StorageRisk{
 				Level: storagehealth.RiskCritical,
 				Reasons: []unifiedresources.StorageRiskReason{
-					{Code: "capacity_runway_low", Severity: storagehealth.RiskCritical, Summary: "PBS datastore fast is 96% full"},
+					{Code: "pbs_datastore_state", Severity: storagehealth.RiskCritical, Summary: "PBS datastore fast is ERROR"},
 				},
 			},
 		},
 		Incidents: []unifiedresources.ResourceIncident{{
 			Provider: "pulse",
-			NativeID: "pbs-instance:pbs-main:capacity_runway_low",
-			Code:     "capacity_runway_low",
+			NativeID: "pbs-instance:pbs-main:pbs_datastore_state",
+			Code:     "pbs_datastore_state",
 			Severity: storagehealth.RiskCritical,
-			Summary:  "PBS datastore fast is 96% full",
+			Summary:  "PBS datastore fast is ERROR",
 		}},
 	}
 
 	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
 
-	alertID := "unified-incident-pbs-main-pulse-pbs-instance-pbs-main-capacity-runway-low-capacity-runway-low"
+	alertID := "unified-incident-pbs-main-pulse-pbs-instance-pbs-main-pbs-datastore-state-pbs-datastore-state"
 	assertAlertPresent(t, m, alertID)
 
 	m.mu.RLock()
@@ -610,7 +612,7 @@ func TestSyncUnifiedResourceIncidentsMarksPBSBackupPosture(t *testing.T) {
 	if alert.Type != "backup-posture-incident" {
 		t.Fatalf("alert type = %q, want backup-posture-incident", alert.Type)
 	}
-	wantMessage := "Backup server pbs-main has datastore capacity risk. Affects 1 backup datastore: fast"
+	wantMessage := "Backup server pbs-main has degraded datastore availability. Affects 1 backup datastore: fast"
 	if alert.Message != wantMessage {
 		t.Fatalf("message = %q, want %q", alert.Message, wantMessage)
 	}
@@ -734,17 +736,17 @@ func TestSyncUnifiedResourceIncidentsSuppressesPBSDatastoreChildWhenParentRollsU
 			PBS: &unifiedresources.PBSData{
 				DatastoreCount: 1,
 				Datastores: []unifiedresources.PBSDatastoreMeta{
-					{Name: "fast", Status: "online", Total: 100, Used: 96},
+					{Name: "fast", Status: "ERROR", Total: 100, Used: 96},
 				},
 				ProtectedWorkloadCount: 2,
 				ProtectedWorkloadNames: []string{"media01", "app01"},
 			},
 			Incidents: []unifiedresources.ResourceIncident{{
 				Provider: "pulse",
-				NativeID: "pbs-instance:pbs-main:capacity_runway_low",
-				Code:     "capacity_runway_low",
+				NativeID: "pbs-instance:pbs-main:pbs_datastore_state",
+				Code:     "pbs_datastore_state",
 				Severity: storagehealth.RiskCritical,
-				Summary:  "PBS datastore fast is 96% full",
+				Summary:  "PBS datastore fast is ERROR",
 			}},
 		},
 		{
@@ -761,10 +763,10 @@ func TestSyncUnifiedResourceIncidentsSuppressesPBSDatastoreChildWhenParentRollsU
 			},
 			Incidents: []unifiedresources.ResourceIncident{{
 				Provider: "pulse",
-				NativeID: "pbs-instance:pbs-main:capacity_runway_low",
-				Code:     "capacity_runway_low",
+				NativeID: "pbs-instance:pbs-main:pbs_datastore_state",
+				Code:     "pbs_datastore_state",
 				Severity: storagehealth.RiskCritical,
-				Summary:  "PBS datastore fast is 96% full",
+				Summary:  "PBS datastore fast is ERROR",
 			}},
 		},
 	}
@@ -1003,17 +1005,17 @@ func TestGetActiveAlertsPrioritizesBackupPostureExposure(t *testing.T) {
 			PBS: &unifiedresources.PBSData{
 				DatastoreCount: 1,
 				Datastores: []unifiedresources.PBSDatastoreMeta{
-					{Name: "fast", Status: "online", Total: 100, Used: 96},
+					{Name: "fast", Status: "ERROR", Total: 100, Used: 96},
 				},
 				ProtectedWorkloadCount: 2,
 				ProtectedWorkloadNames: []string{"media01", "app01"},
 			},
 			Incidents: []unifiedresources.ResourceIncident{{
 				Provider: "pulse",
-				NativeID: "pbs-instance:pbs-main:capacity_runway_low",
-				Code:     "capacity_runway_low",
+				NativeID: "pbs-instance:pbs-main:pbs_datastore_state",
+				Code:     "pbs_datastore_state",
 				Severity: storagehealth.RiskCritical,
-				Summary:  "PBS datastore fast is 96% full",
+				Summary:  "PBS datastore fast is ERROR",
 			}},
 		},
 		{
@@ -1330,5 +1332,94 @@ func TestTrueNASNativeCriticalTransition(t *testing.T) {
 				t.Fatal("missing recovery callback")
 			}
 		})
+	}
+}
+
+// PBS capacity has one policy owner: CheckStorage. Topology risk remains
+// visible, but must not create threshold-independent child/parent alerts.
+func TestPBSCapacityUsesStoragePolicyNotTopologyBands(t *testing.T) {
+	m := newTestManager(t)
+	config := unifiedEvalBaseConfig()
+	config.StorageDefault = HysteresisThreshold{Trigger: 90, Clear: 85}
+	config.Overrides = map[string]ThresholdConfig{"pbs-main/fast": {Usage: &HysteresisThreshold{Trigger: 99, Clear: 98}}}
+	configureUnifiedEvalManager(t, m, config)
+	disableTestTimeThresholds(m)
+	instance := models.PBSInstance{ID: "pbs-main", Name: "main", Status: "online", LastSeen: time.Now(), Datastores: []models.PBSDatastore{{Name: "fast", Status: "online", Total: 1000, Used: 979, Free: 21, Usage: 97.9}}}
+	registry := unifiedresources.NewRegistry(unifiedresources.NewMemoryStore())
+	registry.IngestSnapshot(models.StateSnapshot{PBSInstances: []models.PBSInstance{instance}})
+	resources := registry.List()
+	capacityResources := 0
+	for _, r := range resources {
+		for _, i := range r.Incidents {
+			if i.Code == "capacity_runway_low" {
+				capacityResources++
+				break
+			}
+		}
+	}
+	if capacityResources != 2 {
+		t.Fatalf("want real parent and child capacity evidence, got %d", capacityResources)
+	}
+	storage := models.Storage{ID: "pbs-main-fast", AliasIDs: []string{"pbs-main/fast"}, Name: "fast", Instance: "pbs-main", Type: "pbs", Status: "online", Total: 1000, Used: 979, Free: 21, Usage: 97.9}
+	observe := func() {
+		for range 5 {
+			m.CheckStorage(storage)
+			m.SyncUnifiedResourceIncidents(resources)
+		}
+	}
+	observe()
+	if active := m.GetActiveAlerts(); len(active) != 0 {
+		t.Fatalf("99%% policy bypassed by topology incidents: %+v", active)
+	}
+	// Seed both pre-upgrade canonical alerts, with unchanged risk evidence.
+	// The next sync must retire them without deleting resource observations.
+	m.mu.Lock()
+	for _, spec := range alertspecs.BuildUnifiedResourceAlertSpecs(resources) {
+		if spec.Kind != alertspecs.AlertSpecKindProviderIncident {
+			continue
+		}
+		for _, resource := range resources {
+			if resource.ID != spec.ResourceID {
+				continue
+			}
+			incident, ok := incidentForProviderSpec(resource, spec)
+			if !ok || incident.Code != "capacity_runway_low" {
+				continue
+			}
+			alert := unifiedIncidentAlert(resource, incident, AlertLevelCritical, time.Now())
+			applyCanonicalIdentity(alert, spec.ID, string(spec.Kind))
+			m.setActiveAlertNoLock(canonicalTrackingKeyForSpec(spec, alert.ID), alert)
+		}
+	}
+	m.mu.Unlock()
+	if active := m.GetActiveAlerts(); len(active) != 2 {
+		t.Fatalf("want two pre-upgrade duplicates, got %d", len(active))
+	}
+	observe()
+	if active := m.GetActiveAlerts(); len(active) != 0 {
+		t.Fatalf("pre-upgrade duplicates retained: %+v", active)
+	}
+	config.Overrides["pbs-main/fast"] = ThresholdConfig{Usage: &HysteresisThreshold{Trigger: 90, Clear: 85}}
+	m.UpdateConfig(config)
+	disableTestTimeThresholds(m)
+	observe()
+	active := m.GetActiveAlerts()
+	if len(active) != 1 || active[0].ResourceID != storage.ID || active[0].CanonicalKind != "metric-threshold" {
+		t.Fatalf("want one policy-owned capacity alert, got %+v", active)
+	}
+	config.Overrides["pbs-main/fast"] = ThresholdConfig{Usage: &HysteresisThreshold{Trigger: 99, Clear: 98}}
+	m.UpdateConfig(config)
+	disableTestTimeThresholds(m)
+	observe()
+	if active := m.GetActiveAlerts(); len(active) != 0 {
+		t.Fatalf("raising policy did not clear capacity: %+v", active)
+	}
+	// The same nearly-full datastore failing is still actionable.
+	instance.Datastores[0].Status = "ERROR"
+	registry.IngestSnapshot(models.StateSnapshot{PBSInstances: []models.PBSInstance{instance}})
+	resources = registry.List()
+	observe()
+	if active := m.GetActiveAlerts(); len(active) == 0 {
+		t.Fatal("capacity policy hid datastore failure")
 	}
 }

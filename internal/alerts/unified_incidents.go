@@ -94,6 +94,19 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 			storageKey := canonicalTrackingKeyForSpec(spec, alert.ID)
 			observedConditions[storageKey] = struct{}{}
 
+			// PBS capacity is evaluated by CheckStorageWithCapacityTrend using
+			// storage defaults, aliases, overrides and hysteresis. The topology's
+			// fixed risk bands are resource context, not a second alert policy.
+			// Keep the condition observed so pre-upgrade duplicates retire as a
+			// policy change without claiming that datastore health recovered.
+			if strings.EqualFold(strings.TrimSpace(incident.Provider), "pulse") &&
+				incident.Code == "capacity_runway_low" &&
+				(resource.Type == unifiedresources.ResourceTypePBS ||
+					(resource.Type == unifiedresources.ResourceTypeStorage && resource.Storage != nil &&
+						resource.Storage.Platform == "pbs" && resource.Storage.Type == "pbs-datastore")) {
+				continue
+			}
+
 			if alertType, ok := unifiedAlertResourceType(resource); ok {
 				if disableAllKubernetes && isUnifiedKubernetesAlertType(alertType) {
 					continue
