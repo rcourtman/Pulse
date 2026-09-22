@@ -1,13 +1,17 @@
 {
   "version": 1,
-  "base_sha": "4f3734630f76441047805a28dfadca4df2b6f9b1",
+  "base_sha": "702278cd8cca6bfbd65747c72fbb7afdc7f7a48e",
   "verified_at": "2026-09-22T16:26:06.944232Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/utils/agentInstallCommand.ts"],
+  "changed_paths": [
+    "frontend-modern/src/utils/agentInstallCommand.ts"
+  ],
   "content_sha256": {
     "frontend-modern/src/utils/agentInstallCommand.ts": "5c456b9b8cf2d114d5be62bb46c27b265d30fc49c3df88d2ec42631414f65c64"
   },
-  "routes": ["Production buildUnixAgentInstallCommand in synthetic clipboard/text-input fixture"],
+  "routes": [
+    "Production buildUnixAgentInstallCommand in synthetic clipboard/text-input fixture"
+  ],
   "viewports": [
     {
       "width": 1280,
@@ -28,5 +32,5 @@
     "Inspect desktop-before and narrow-after screenshots"
   ],
   "command": "pulse-worker-browser .proof-install/browser.cjs",
-  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1. TypeScript-transpiled production utility, synthetic pulse.invalid and invented tokens. Generic text field, not pfSense DOM or installation. No backend/network/service proof. Full fixture and results retained with lane outcome. Rebound after test-only assertion correction; production utility hash is unchanged from the browser run."
+  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1. TypeScript-transpiled production utility, synthetic pulse.invalid and invented tokens. Generic text field, not pfSense DOM or installation. No backend/network/service proof. Retained proof was rebound after the test-only assertion correction and exact candidate integration; production utility bytes are unchanged from the browser run."
 }
