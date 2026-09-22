@@ -534,7 +534,12 @@ workflow execution ref and SHA equal the peeled tag commit. That workflow consum
 release assets and four release signatures, runs the canonical twenty-three-scenario
 schema-v7 lab, and applies the release-candidate attester against the exact
 GitHub release ID, tag, source commit, checksums, compiler provenance, assembly
-provenance, and update-key fingerprint. The v7 host starts a rootful Docker
+provenance, and update-key fingerprint. The attester anchors the candidate to
+the branch the control plane maps the version to, either `origin/main` or the
+release train's `origin/release/vX.Y`, and verifies that remote-tracking ref
+against the canonical origin's live branch tip, so a release-train candidate is
+qualified against the line that owns its version rather than being required to
+appear on `main`. The v7 host starts a rootful Docker
 daemon inside the disposable systemd container without mounting the hosted
 runner socket or exposing a TCP listener. It imports an offline, source-bound
 fixture image and proves legacy inventory, summary-only typed-helper parity,
