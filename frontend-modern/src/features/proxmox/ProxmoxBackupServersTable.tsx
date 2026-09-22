@@ -279,7 +279,10 @@ export function buildBackupServerRows(
       rows.push({
         key: `${server.id}:${datastore.name}`,
         ...host,
-        datastore,
+        // Row stores reconcile independently from the nested PBS snapshot. Do
+        // not alias its datastore object: a reordered snapshot reconciles that
+        // array by position and would overwrite this row's datastore identity.
+        datastore: { ...datastore },
         backupCount: countFor(server, datastore.name),
       });
     }

@@ -83,6 +83,35 @@ describe('ProxmoxBackupServersTable details', () => {
     expect(screen.getByTestId('pbs-resource-detail')).toBeInTheDocument();
   });
 
+  it('keeps each datastore identity and open drawer through reordered snapshots', async () => {
+    const makeServers = (reverse = false) => {
+      const pbs = makePbsResource();
+      pbs.pbs!.datastores!.push({
+        name: 'archive',
+        total: 2000,
+        used: 600,
+        available: 1400,
+        usagePercent: 30,
+      });
+      if (reverse) pbs.pbs!.datastores!.reverse();
+      return [pbs];
+    };
+    const [servers, setServers] = createSignal(makeServers());
+    const { container } = render(() => <ProxmoxBackupServersTable servers={servers()} />);
+    const datastoreNames = () =>
+      Array.from(container.querySelectorAll('td[title]')).map((cell) => cell.getAttribute('title'));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Expand details for pbs-main' })[1]);
+    const detail = screen.getByTestId('pbs-resource-detail');
+    expect(datastoreNames()).toEqual(['pbs-main · archive', 'pbs-main · tank']);
+
+    setServers(makeServers(true));
+    await waitFor(() =>
+      expect(datastoreNames()).toEqual(['pbs-main · archive', 'pbs-main · tank']),
+    );
+    expect(screen.getByTestId('pbs-resource-detail')).toBe(detail);
+    expect(resourceDetailDrawerMount).toHaveBeenCalledTimes(1);
+  });
+
   it('opens the canonical resource drawer with merged host details expanded', () => {
     render(() => <ProxmoxBackupServersTable servers={[makePbsResource()]} />);
 
