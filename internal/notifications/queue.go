@@ -1682,6 +1682,19 @@ func (nq *NotificationQueue) SetProcessor(processor func(*QueuedNotification) er
 	}
 }
 
+// installProcessor records the notification processor without waking the worker.
+// Manager construction uses this instead of SetProcessor because construction
+// runs before the owner applies saved destination configuration (webhooks,
+// email, Apprise). Waking here would let an already-due persisted job be
+// processed while the destination list is still empty and be terminally
+// cancelled as "delivery disabled". The worker's ticker and any later enqueue
+// begin delivery once configuration is present.
+func (nq *NotificationQueue) installProcessor(processor func(*QueuedNotification) error) {
+	nq.mu.Lock()
+	nq.processor = processor
+	nq.mu.Unlock()
+}
+
 // processBatch processes a batch of pending notifications concurrently
 func (nq *NotificationQueue) processBatch() {
 	const batchLimit = 20

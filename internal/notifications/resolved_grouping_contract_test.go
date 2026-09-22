@@ -102,7 +102,9 @@ func TestResolvedGroupingOrdinaryRestart(t *testing.T) {
 			var recovery payload
 			select {
 			case recovery = <-received:
-			case <-time.After(5 * time.Second):
+			case <-time.After(12 * time.Second):
+				// The queue processes on its own ticker; the wait must exceed that
+				// interval so a grouped recovery is not raced by the poll period.
 				t.Fatal("no grouped recovery")
 			}
 			if recovery.Event != "resolved" || len(recovery.Alerts) != 15 {
@@ -227,6 +229,77 @@ func TestResolvedGroupingDisabledBurstRetainsRateLimit(t *testing.T) {
 		if job.Attempts != 3 || (job.LastError == nil || !strings.Contains(*job.LastError, "rate limit exceeded")) {
 			t.Errorf("wrong retry outcome: %+v", job)
 		}
+	}
+}
+
+// A restart must not terminally cancel a due persisted delivery before the
+// owner has applied saved destination configuration. Manager construction
+// happens before saved webhooks/email/Apprise are loaded in the monitor
+// startup path; the worker must not treat the still-empty destination list as
+// a permanent policy decision.
+func TestRestartKeepsDueDeliveryPendingUntilConfigured(t *testing.T) {
+	received := make(chan struct{}, 4)
+	server := newResolvedContractServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		received <- struct{}{}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	dir := t.TempDir()
+	hook := WebhookConfig{ID: "ops", Name: "ops", URL: server.URL, Enabled: true}
+	configJSON, err := json.Marshal(hook)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seed, err := NewNotificationQueue(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	due := time.Now().Add(-time.Second)
+	if err := seed.Enqueue(&QueuedNotification{
+		ID:          "restart-due",
+		Type:        "webhook_resolved",
+		Status:      QueueStatusPending,
+		Config:      configJSON,
+		Alerts:      []*alerts.Alert{{ID: "restart-due", ResourceName: "restart-due", StartTime: time.Now().Add(-time.Minute)}},
+		MaxAttempts: 3,
+		NextRetryAt: &due,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := seed.Stop(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Production order: construct the manager, then apply saved configuration.
+	m := NewNotificationManagerWithDataDir("", dir)
+	defer m.Stop()
+	m.webhookClient = server.Client()
+	if err := m.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
+		t.Fatal(err)
+	}
+	// A premature startup wake must not consume the due job before the
+	// destination configuration is restored.
+	time.Sleep(250 * time.Millisecond)
+	queue := m.GetQueue()
+	if queue == nil {
+		t.Fatal("queue unavailable")
+	}
+	var status string
+	if err := queue.db.QueryRow(`SELECT status FROM notification_queue WHERE id = 'restart-due'`).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != string(QueueStatusPending) {
+		t.Fatalf("due delivery status before configuration = %s, want pending", status)
+	}
+
+	m.AddWebhook(hook)
+	queue.processBatch()
+	select {
+	case <-received:
+	case <-time.After(5 * time.Second):
+		stats, _ := queue.GetQueueStats()
+		t.Fatalf("configured due delivery not sent: %v", stats)
 	}
 }
 

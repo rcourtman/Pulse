@@ -755,9 +755,14 @@ func NewNotificationManagerWithDataDir(publicURL string, dataDir string) *Notifi
 	// Create webhook client after NotificationManager is initialized
 	nm.webhookClient = nm.createSecureWebhookClient(WebhookTimeout)
 
-	// Wire up queue processor if queue is available
+	// Wire up the queue processor without waking the worker. Construction runs
+	// before the owner applies saved destination configuration (webhooks,
+	// email, Apprise); waking here would let an already-due persisted job be
+	// processed while the destination list is still empty and be terminally
+	// cancelled as "delivery disabled". The worker's ticker and later enqueues
+	// begin delivery once configuration is present.
 	if queue != nil {
-		queue.SetProcessor(nm.ProcessQueuedNotification)
+		queue.installProcessor(nm.ProcessQueuedNotification)
 	}
 
 	// Start periodic cleanup of old lastNotified entries (every 1 hour)
