@@ -4044,6 +4044,7 @@ func TestSendResolvedAlert(t *testing.T) {
 	nm.AddWebhook(webhook)
 
 	nm.SetNotifyOnResolve(true)
+	nm.SetGroupingConfig(false, 0, false, false)
 
 	alert := &alerts.Alert{
 		ID:           "test-alert",
