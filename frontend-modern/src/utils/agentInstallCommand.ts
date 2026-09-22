@@ -148,65 +148,78 @@ export const buildUnixAgentInstallCommand = ({
   const normalizedExtraArgs = extraArgs.map((arg) => arg.trim()).filter((arg) => arg.length > 0);
   const installRequiresInsecure = insecure || normalizedBaseUrl.startsWith('http://');
   const curlFlags = insecure ? '-kfsSL' : '-fsSL';
-  const caCertArg = normalizedCaCertPath
-    ? ` \\\n    --cacert ${shellQuoteArg(normalizedCaCertPath)}`
-    : '';
-  const insecureArg = installRequiresInsecure ? ` \\\n    --insecure` : '';
+  // Build shell grammar explicitly: command fields such as pfSense's remove
+  // pasted newlines. Never flatten a multiline script (or quoted user data).
+  if (
+    [normalizedBaseUrl, normalizedToken, normalizedCaCertPath, ...normalizedExtraArgs].some(
+      (value) => /[\r\n]/.test(value),
+    )
+  ) {
+    throw new Error('Pulse install command values must not contain line breaks.');
+  }
+  const caCertArg = normalizedCaCertPath ? ` --cacert ${shellQuoteArg(normalizedCaCertPath)}` : '';
+  const insecureArg = installRequiresInsecure ? ' --insecure' : '';
   const preflightArgs = [
     `--url ${shellQuoteArg(normalizedBaseUrl)}`,
     '--preflight-only',
     '--output json',
     '--non-interactive',
-  ].join(' \\\n    ');
+  ].join(' ');
   const installArgs = [
     `--url ${shellQuoteArg(normalizedBaseUrl)}`,
     ...(normalizedToken ? ['--token-file "$token_file"'] : []),
     ...normalizedExtraArgs,
     '--non-interactive',
-  ].join(' \\\n    ');
+  ].join(' ');
   const rootTokenSetup = normalizedToken
-    ? `    token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)
-    token_file="$token_dir/token"
-    umask 077
-    printf %s ${shellQuoteArg(normalizedToken)} > "$token_file"
-`
-    : '';
+    ? [
+        'token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX);',
+        'token_file="$token_dir/token";',
+        'umask 077;',
+        `printf %s ${shellQuoteArg(normalizedToken)} > "$token_file";`,
+      ]
+    : [];
   const sudoTokenSetup = normalizedToken
-    ? `    token_dir=$(sudo mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)
-    token_file="$token_dir/token"
-    printf %s ${shellQuoteArg(normalizedToken)} | sudo tee "$token_file" >/dev/null
-    sudo chmod 0600 "$token_file"
-`
-    : '';
+    ? [
+        'token_dir=$(sudo mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX);',
+        'token_file="$token_dir/token";',
+        `printf %s ${shellQuoteArg(normalizedToken)} | sudo tee "$token_file" >/dev/null;`,
+        'sudo chmod 0600 "$token_file";',
+      ]
+    : [];
 
-  return `(
-  set -e
-  tmp_dir=$(mktemp -d)
-  token_dir=""
-  install_script="$tmp_dir/install.sh"
-  cleanup() {
-    rm -rf -- "$tmp_dir"
-    if [ -n "${'${token_dir:-}'}" ]; then
-      if [ "$(id -u)" -eq 0 ]; then
-        rm -rf -- "$token_dir"
-      elif command -v sudo >/dev/null 2>&1; then
-        sudo rm -rf -- "$token_dir" >/dev/null 2>&1 || true
-      fi
-    fi
-  }
-  trap cleanup EXIT HUP INT TERM
-  curl ${curlFlags}${normalizedCaCertPath ? ` --cacert ${shellQuoteArg(normalizedCaCertPath)}` : ''} ${shellQuoteArg(`${normalizedBaseUrl}/install.sh`)} -o "$install_script"
-  chmod +x "$install_script"
-  bash "$install_script" ${preflightArgs}${caCertArg}${insecureArg}
-  if [ "$(id -u)" -eq 0 ]; then
-${rootTokenSetup}    bash "$install_script" ${installArgs}${caCertArg}${insecureArg}
-  elif command -v sudo >/dev/null 2>&1; then
-${sudoTokenSetup}    sudo bash "$install_script" ${installArgs}${caCertArg}${insecureArg}
-  else
-    echo "Root privileges required. Run as root (su -) and retry." >&2
-    exit 1
-  fi
-)`;
+  return [
+    '(',
+    'set -e;',
+    'tmp_dir=$(mktemp -d);',
+    'token_dir="";',
+    'install_script="$tmp_dir/install.sh";',
+    'cleanup() {',
+    'rm -rf -- "$tmp_dir";',
+    'if [ -n "${token_dir:-}" ]; then',
+    'if [ "$(id -u)" -eq 0 ]; then',
+    'rm -rf -- "$token_dir";',
+    'elif command -v sudo >/dev/null 2>&1; then',
+    'sudo rm -rf -- "$token_dir" >/dev/null 2>&1 || true;',
+    'fi;',
+    'fi;',
+    '};',
+    'trap cleanup EXIT HUP INT TERM;',
+    `curl ${curlFlags}${caCertArg} ${shellQuoteArg(`${normalizedBaseUrl}/install.sh`)} -o "$install_script";`,
+    'chmod +x "$install_script";',
+    `bash "$install_script" ${preflightArgs}${caCertArg}${insecureArg};`,
+    'if [ "$(id -u)" -eq 0 ]; then',
+    ...rootTokenSetup,
+    `bash "$install_script" ${installArgs}${caCertArg}${insecureArg};`,
+    'elif command -v sudo >/dev/null 2>&1; then',
+    ...sudoTokenSetup,
+    `sudo bash "$install_script" ${installArgs}${caCertArg}${insecureArg};`,
+    'else',
+    'echo "Root privileges required. Run as root (su -) and retry." >&2;',
+    'exit 1;',
+    'fi;',
+    ')',
+  ].join(' ');
 };
 
 export const buildPowerShellInstallScriptBootstrap = (baseUrl: string) => {
