@@ -10,7 +10,7 @@ This release candidate follows `v6.4.5-rc.1` and gathers the accumulated monitor
 - **Slow starts are recoverable** - A delayed or stalled startup now shows connection status and a retry, and large alert histories catch up incrementally instead of blocking the server (#2129).
 - **Disk I/O totals are more accurate** - Partition accounting no longer inflates whole-device traffic, and endurance counters stop raising false disk-wear warnings (#2112).
 - **Backup alerts stay truthful** - A PBS host or config backup no longer raises a repeated guest backup-age alert, while a guest backed up locally and copied to a PBS is still counted once (#1741, #1721, #2136).
-- **PBS History stays with the selected system** - Backup Server rows correlate with their linked guest or agent only when stable identity proves they are the same system, and multiple datastores retain distinct row identity when refresh ordering changes (#1723).
+- **PBS History keeps its identity** - Linked guest and agent rows correlate only when stable identity proves they are the same system. Multiple datastores stay distinct when refresh ordering changes (#1723).
 - **Alert history reads stay bounded** - Repeated attention polls reuse the folded alert history instead of re-walking the whole event log, so a large history no longer starves metric writes or freezes an LXC (#2146).
 - **Alert thresholds lists stay complete** - The Alert Thresholds instance list keeps every host row visible while scrolling instead of dropping rows as the window estimate drifts (#2130).
 - **Alerts overview counts and layout align** - Overview statistics match the underlying incidents, and the alert-card footer Started run now shares the baseline of the delivery-status run (#2119).
