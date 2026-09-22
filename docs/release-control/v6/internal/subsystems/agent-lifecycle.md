@@ -7977,3 +7977,18 @@ This does not change token scopes, agent admission, or existing agent cleanup.
 Regression coverage: `TestQuickSecuritySetupForcePreservesSystemSettings` and
 `TestInitializeSystemSettingsPreservesExistingBytes`, `TestInitializeSystemSettingsMissing`,
 `TestInitializeSystemSettingsReadError`.
+
+### Unix bootstrap survives single-line command fields
+
+The shared frontend Unix installer command uses explicit shell statement
+separators rather than literal newlines or backslash-newline continuations.
+This preserves its grammar when copied into a single-line command field (#2123).
+The builder rejects embedded CR/LF in its normalized inputs rather than silently
+altering a quoted URL, credential, CA path or option. Shell quoting is unchanged.
+Download and unprivileged preflight still precede token-file creation and sudo
+installation. Root and sudo paths retain private token directories, file modes,
+TLS options, non-interactive operation and cleanup on success or failure.
+`agentInstallCommand.test.ts` covers normalized-input syntax and
+synthetic root/sudo execution under sh and Bash, including download, preflight
+and install failures. A clipboard fixture proves input compatibility, not native
+FreeBSD installation, offline dependency availability or service persistence.

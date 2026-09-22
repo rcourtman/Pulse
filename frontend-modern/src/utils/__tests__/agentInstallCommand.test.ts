@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   buildUnixAgentInstallCommand,
@@ -330,7 +330,7 @@ fi
     });
 
     expect(command).toContain('--token-file "$token_file"');
-    expect(command).toContain('--enable-docker \\\n    --disable-host \\\n    --enable-commands');
+    expect(command).toContain('--enable-docker --disable-host --enable-commands');
   });
 
   it('preserves extra env assignments for shared Windows install transport', () => {
@@ -393,4 +393,130 @@ describe('resolveAgentCommandPlatform', () => {
     expect(resolveAgentCommandPlatform(undefined)).toBe('linux');
     expect(resolveAgentCommandPlatform(null)).toBe('linux');
   });
+});
+
+const variants = [
+  { baseUrl: 'https://pulse.invalid' },
+  { baseUrl: 'http://pulse.invalid/base/', token: 'invented-token' },
+  { baseUrl: "https://pulse.invalid/agent's path", token: "tok'en;$(false)`false`\\value" },
+  { baseUrl: 'https://pulse.invalid', insecure: true, token: 'invented-token' },
+  {
+    baseUrl: 'https://pulse.invalid',
+    caCertPath: "/tmp/agent's ca.pem",
+    extraArgs: ['--enable-docker', '--disable-host'],
+  },
+];
+
+describe('single-line Unix install commands', () => {
+  it.each(variants)('survives text-input normalization: %j', (options) => {
+    const command = buildUnixAgentInstallCommand(options);
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = command;
+    expect(command).not.toMatch(/[\r\n]/);
+    expect(input.value).toBe(command);
+    for (const shell of ['sh', 'bash']) {
+      expect(() => execFileSync(shell, ['-n', '-c', input.value])).not.toThrow();
+    }
+  });
+
+  it.each([
+    { baseUrl: 'https://pulse.invalid/a\nb' },
+    { baseUrl: 'https://pulse.invalid', token: 'a\rb' },
+    { baseUrl: 'https://pulse.invalid', caCertPath: '/tmp/a\nb' },
+    { baseUrl: 'https://pulse.invalid', extraArgs: ['--a\n--b'] },
+  ])('rejects embedded line breaks without silently changing values: %j', (options) => {
+    expect(() => buildUnixAgentInstallCommand(options)).toThrow('must not contain line breaks');
+  });
+
+  it.each(['sh', 'bash'])(
+    'preserves execution and failure ordering under %s after paste',
+    (shell) => {
+      const dir = mkdtempSync(join(tmpdir(), 'pulse-single-line-'));
+      const trace = join(dir, 'trace');
+      const tokenPath = join(dir, 'token-path');
+      const scriptPath = join(dir, 'script-path');
+      const token = "tok'en;$(false)`false`\\value";
+      const installer = join(dir, 'fixture-installer');
+      const fake = (name: string, body: string) => {
+        writeFileSync(join(dir, name), `#!/bin/sh\n${body}\n`);
+        chmodSync(join(dir, name), 0o700);
+      };
+      try {
+        fake('id', 'echo "$FAKE_UID"');
+        fake('sudo', 'echo sudo >> "$TRACE"; exec "$@"');
+        fake(
+          'curl',
+          `echo fetch >> "$TRACE"
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = -o ]; then output="$2"; shift; fi
+  shift
+done
+printf %s "$output" > "$SCRIPT_PATH"
+[ "$FAIL_AT" != fetch ] || exit 22
+cp "$INSTALLER" "$output"`,
+        );
+        writeFileSync(
+          installer,
+          `#!/bin/sh
+set -e
+case " $* " in
+  *' --preflight-only '*) echo preflight >> "$TRACE"; [ "$FAIL_AT" != preflight ]; exit $? ;;
+esac
+echo install >> "$TRACE"
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = --token-file ]; then token_file="$2"; shift; fi
+  shift
+done
+printf %s "$token_file" > "$TOKEN_PATH"
+[ "$(stat -c %a "$token_file")" = 600 ]
+[ "$(stat -c %a "$(dirname "$token_file")")" = 700 ]
+[ "$(cat "$token_file")" = "$EXPECTED_TOKEN" ]
+[ "$FAIL_AT" != install ]
+`,
+        );
+        for (const uid of ['0', '1000']) {
+          for (const failAt of ['', 'fetch', 'preflight', 'install']) {
+            writeFileSync(trace, '');
+            rmSync(tokenPath, { force: true });
+            const command = buildUnixAgentInstallCommand({
+              baseUrl: 'https://pulse.invalid',
+              token,
+            });
+            const input = document.createElement('input');
+            input.value = command;
+            const run = () =>
+              execFileSync(shell, ['-c', input.value], {
+                env: {
+                  ...process.env,
+                  PATH: `${dir}:${process.env.PATH}`,
+                  FAKE_UID: uid,
+                  FAIL_AT: failAt,
+                  TRACE: trace,
+                  TOKEN_PATH: tokenPath,
+                  SCRIPT_PATH: scriptPath,
+                  INSTALLER: installer,
+                  EXPECTED_TOKEN: token,
+                },
+              });
+            if (failAt) expect(run).toThrow();
+            else expect(run).not.toThrow();
+            const events = readFileSync(trace, 'utf8').trim().split('\n');
+            expect(events[0]).toBe('fetch');
+            expect(existsSync(dirname(readFileSync(scriptPath, 'utf8')))).toBe(false);
+            if (failAt === 'fetch' || failAt === 'preflight') {
+              expect(events).toEqual(failAt === 'fetch' ? ['fetch'] : ['fetch', 'preflight']);
+              expect(existsSync(tokenPath)).toBe(false);
+            } else {
+              expect(events[1]).toBe('preflight');
+              expect(events).toContain('install');
+              expect(existsSync(dirname(readFileSync(tokenPath, 'utf8')))).toBe(false);
+            }
+          }
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
 });
