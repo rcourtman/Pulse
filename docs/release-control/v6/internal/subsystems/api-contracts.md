@@ -10891,3 +10891,17 @@ setup and checks persisted non-auth preferences, rather than substituting a
 status-only or unrelated test for the setup contract. The registry routes only `internal/api/security_setup_fix.go` to this narrow
 setup proof policy; unrelated API runtime paths retain their existing verification
 requirements. No runtime paths or required contract updates are exempted.
+
+### Single-line Unix client install transport
+
+`frontend-modern/src/utils/agentInstallCommand.ts` emits a single-line Unix
+bootstrap with explicit shell separators so text-input paste normalization
+cannot join shell statements (#2123). It retains the canonical URL, quoted
+credential-to-private-file transport, custom CA/insecure continuity, and
+preflight-before-install ordering; no API request, response or auth scope changes.
+Normalized values containing CR/LF are rejected, not rewritten. Regression
+coverage in `agentInstallCommand.test.ts` checks shell syntax after
+text-input normalization, literal quoted token bytes, root/sudo private-file
+permissions, cleanup and early exit when download or preflight fails. This
+client transport repair does not establish the reporter's native pfSense abort
+cause or successful offline installation.
