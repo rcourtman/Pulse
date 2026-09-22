@@ -126,6 +126,24 @@ const stringValues = (...candidates: unknown[]): string[] =>
       : [],
   );
 
+const isGuestWithAgent = (resource: Resource): boolean =>
+  (resource.type === 'vm' || resource.type === 'system-container') &&
+  Boolean(resource.agent ?? resource.platformData?.agent);
+
+// The agent identity is the same on a PVE guest and on the standalone host row
+// that represents the same machine. It is the only reliable way to tell one
+// host surfaced twice from two genuinely different hosts sharing a name.
+const correlatedAgentKey = (resource: Resource): string | undefined => {
+  const direct = resource.agent?.agentId?.trim();
+  if (direct) return direct;
+  const platformAgent = resource.platformData?.agent;
+  if (platformAgent && typeof platformAgent === 'object') {
+    const agentId = (platformAgent as { agentId?: unknown }).agentId;
+    if (typeof agentId === 'string' && agentId.trim()) return agentId.trim();
+  }
+  return undefined;
+};
+
 const uniquelyCorrelatedAgent = (
   server: Resource,
   candidates: readonly Resource[],
@@ -135,16 +153,39 @@ const uniquelyCorrelatedAgent = (
   const matches = candidates.filter((candidate) => {
     // Host telemetry can be merged into a PVE guest rather than a standalone
     // agent. Keep the unique-identity check and require an actual agent facet.
-    const guestWithAgent =
-      (candidate.type === 'vm' || candidate.type === 'system-container') &&
-      Boolean(candidate.agent ?? candidate.platformData?.agent);
-    if (candidate.type !== 'agent' && !guestWithAgent) return false;
+    if (candidate.type !== 'agent' && !isGuestWithAgent(candidate)) return false;
     for (const token of identityTokens(candidate)) {
       if (serverTokens.has(token)) return true;
     }
     return false;
   });
-  return matches.length === 1 ? matches[0] : undefined;
+  if (matches.length === 0) return undefined;
+  if (matches.length === 1) return matches[0];
+
+  // A single agent can surface twice: folded into its PVE guest and as the
+  // standalone host row. Those are one host, not an ambiguous pair. Collapse by
+  // agent identity and prefer the guest, whose metrics target carries the
+  // persisted history the Backups drawer renders.
+  const byAgentKey = new Map<string, Resource[]>();
+  for (const match of matches) {
+    const key = correlatedAgentKey(match);
+    // Without an agent identity we cannot prove the rows are the same host, so
+    // stay conservative and decline to guess.
+    if (!key) return undefined;
+    const bucket = byAgentKey.get(key);
+    if (bucket) {
+      bucket.push(match);
+    } else {
+      byAgentKey.set(key, [match]);
+    }
+  }
+  if (byAgentKey.size !== 1) return undefined;
+  const group = Array.from(byAgentKey.values())[0];
+  return (
+    group.find((match) => isGuestWithAgent(match) && match.metricsTarget) ??
+    group.find((match) => match.metricsTarget) ??
+    group[0]
+  );
 };
 
 const mergePBSAgentPresentation = (server: Resource, agent: Resource): Resource => {

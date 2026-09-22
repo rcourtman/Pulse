@@ -897,7 +897,14 @@ container inventory table.
     correlation retains the canonical PBS row id and service facet, uses the
     Agent metrics target and telemetry facets, and fails closed when no Agent
     matches or more than one candidate matches. It must not alter registry
-    identity or treat input order as correlation evidence.
+    identity or treat input order as correlation evidence. A single agent
+    surfaced as both a VM/system-container guest and a standalone agent row is
+    one identity, not an ambiguous pair: collapse candidates that share an
+    agent identity before deciding, and prefer the guest's canonical
+    metricsTarget because it names the persisted host series, while the PBS
+    service target names the service key and has no host history. Only distinct
+    agent identities, or candidates whose identity cannot be proven equal,
+    decline to choose.
 13. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx` shared with `storage-recovery`: Proxmox workload coverage rows are both a storage/recovery protection-posture surface and a unified-resource identity consumer boundary.
 14. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx` shared with `storage-recovery`: Proxmox recoverable workload table rows are both a storage/recovery coverage surface and a unified-resource platform-table consumer boundary.
 15. `frontend-modern/src/routing/routePreload.ts` shared with `frontend-primitives`, `performance-and-scalability`: the app-shell route preload registry is a canonical frontend shell boundary, an authenticated hot-path performance boundary, and the entry point for the unified-resource Actions workspace.

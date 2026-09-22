@@ -5996,6 +5996,10 @@ PBS History keeps the PBS drawer identity while reading the uniquely correlated 
 
 Bounded adaptations of reviewed main 3a189f31d447 (identity only) and 605643b01722. No metrics-store/storage-tier implementation or release metadata changes. Focused regressions and release-line browser proof are recorded in docs/qualification/release-v6.4-history/README.md. This is source qualification, not installed or published acceptance.
 
+### Release-line PBS host-history correlation — 22 September 2026
+
+A single agent can arrive as two distinct resources: a PVE guest carrying its telemetry and the standalone `source=pbs` host row. Collapse those candidates by agent identity and resolve the Backups PBS row to the guest target, whose persisted host series the drawer charts; keeping the PBS service target leaves History on a key with no host data. Distinct agent identities stay ambiguous, and a missing agent identity is not sameness proof. Do not add a second guest-estate request to compensate. This release-line adaptation of reviewed main e9a426aeeb supersedes the 605643b01722 correlation attempt.
+
 ### Quick security setup preserves unrelated settings
 
 Authenticated force setup in `internal/api/security_setup_fix.go` retains the
