@@ -1,54 +1,36 @@
 {
   "version": 1,
-  "base_sha": "f57ffe7c147b5b1dfd6bf50d9d905eaf301c0dbd",
-  "verified_at": "2026-09-22T15:46:31.148690Z",
+  "base_sha": "9bae208982eaabb1afb333499a835484ce665a28",
+  "verified_at": "2026-09-22T17:27:08.265530Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
-    "frontend-modern/src/components/shared/DetailSectionTable.tsx",
-    "frontend-modern/src/components/shared/detailSectionModel.ts"
+    "frontend-modern/src/utils/agentInstallCommand.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "713c26cde7852d7499138684a142e623b99f591d6b1f60c5eb639efef25376ff",
-    "frontend-modern/src/components/shared/DetailSectionTable.tsx": "f14935b93d3062e22215f55dcf8725589265b69a60a03dae10949b374a1e2cb8",
-    "frontend-modern/src/components/shared/detailSectionModel.ts": "0669d3afc5bc3d0809c3c2ee4204913c28aa87703c218ee3110b626e5792d086"
+    "frontend-modern/src/utils/agentInstallCommand.ts": "5c456b9b8cf2d114d5be62bb46c27b265d30fc49c3df88d2ec42631414f65c64"
   },
   "routes": [
-    "GuestDrawerOverview production-component fixture /proof.html"
+    "Production buildUnixAgentInstallCommand in synthetic clipboard/text-input fixture"
   ],
   "viewports": [
     {
-      "width": 1600,
-      "height": 1100
-    },
-    {
       "width": 1280,
-      "height": 1100
-    },
-    {
-      "width": 768,
-      "height": 1100
+      "height": 850
     },
     {
       "width": 390,
-      "height": 1100
-    },
-    {
-      "width": 320,
-      "height": 1100
+      "height": 850
     }
   ],
   "states": [
-    "Guest with System, Memory, Filesystems and Tags sections",
-    "Shared-prefix mount paths ending in Films and Series",
-    "Long path with spaces and 140-character unbroken path segment",
-    "1280px desktop with a constrained 650px pane; tablet/phone touch emulation"
+    "Tokenless HTTPS, token HTTP, quoted URL/token, insecure HTTPS, custom CA and extra flags"
   ],
   "interactions": [
-    "Read all paths without hovering or scrolling horizontally",
-    "Assert text ranges fit all five label boxes at all five layouts, no page overflow or uncaught errors, and five progress bars",
-    "Inspect constrained desktop and smallest-phone screenshots"
+    "Copy with browser Clipboard API, await completion, paste using Control+V into input type=text",
+    "Five variants at two viewports preserve exact bytes after repair; all ten old-source pastes lose grammar",
+    "sh and Bash syntax: 20 old-source checks fail, 20 repaired checks pass",
+    "Inspect desktop-before and narrow-after screenshots"
   ],
-  "command": "pulse-worker-browser tmp/release-proof/browser.cjs",
-  "notes": "Release-line exact locked dependencies; Chromium 141.0.7390.37 / Playwright 1.56.1. Synthetic guest, production GuestDrawerOverview, shared renderer and application CSS. Five layouts check all five path text ranges, progress bars, no page overflow and no uncaught errors. Desktop constrained 650px pane and 320px phone screenshots inspected. Initial fixture API mock accidentally intercepted source imports; corrected to the actual API URL prefix before successful proof. Not live backend, published-build qualification or reporter confirmation. Compact rows remain unchanged. Receipt re-anchored after the PBS test-fixture-only commit; verified frontend content and verification time are unchanged. Re-anchored after the #2160 backend-only backport; the entire frontend tree is byte-identical to the previous receipt tip. No browser rerun claimed."
+  "command": "pulse-worker-browser tmp/install-proof/browser.cjs",
+  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1; exact release-line locked TypeScript production utility. Synthetic pulse.invalid and invented tokens, generic text field, not native pfSense DOM/service/install or offline download acceptance. Initial fixture did not await async clipboard write and failed on stale clipboard content; synchronisation corrected before this successful run. Prior #2121 browser proof remains unchanged with byte-identical files; retained separately in lane output. No rerun of that layout proof claimed."
 }

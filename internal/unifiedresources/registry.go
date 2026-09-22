@@ -3047,7 +3047,8 @@ func (rr *ResourceRegistry) resolveLinkedResource(source DataSource, sourceID st
 // one already-linked host boundary. This is the durable join for cases where
 // Proxmox reports a SAS address in its serial field while smartctl reports the
 // drive's real serial. Device paths are safe only inside the common parent and
-// only when the topology match is unique.
+// only when the topology match is unique. Serial-less direct devices also use
+// this join: a USB bridge may expose hardware identity to only one collector.
 func (rr *ResourceRegistry) resolveLinkedPhysicalDisk(source DataSource, incoming Resource) string {
 	if incoming.PhysicalDisk == nil || incoming.ParentID == nil {
 		return ""
@@ -3084,7 +3085,7 @@ func (rr *ResourceRegistry) resolveLinkedPhysicalDisk(source DataSource, incomin
 		existingDevice := strings.ToLower(normalizePhysicalDiskDeviceToken(existing.PhysicalDisk.DevPath))
 		agentReportsSAS := (source == SourceProxmox && strings.EqualFold(existing.PhysicalDisk.DiskType, "sas")) ||
 			(source == SourceAgent && strings.EqualFold(incoming.PhysicalDisk.DiskType, "sas"))
-		deviceMatch := agentReportsSAS &&
+		deviceMatch := (agentReportsSAS || physicalDiskMissingIdentityPathCompatible(incoming.PhysicalDisk, existing.PhysicalDisk)) &&
 			incomingDevice != "" &&
 			incomingDevice == existingDevice &&
 			physicalDiskTopologyCompatible(incoming.PhysicalDisk, existing.PhysicalDisk)
@@ -3097,6 +3098,21 @@ func (rr *ResourceRegistry) resolveLinkedPhysicalDisk(source DataSource, incomin
 		matchID = resourceID
 	}
 	return matchID
+}
+
+// A kernel path identifies a direct device only within its already-correlated
+// host. Missing identity is not conflicting identity. Never use this fallback
+// for controller members: the block path can represent several physical disks.
+func physicalDiskMissingIdentityPathCompatible(left, right *PhysicalDiskMeta) bool {
+	if left == nil || right == nil {
+		return false
+	}
+	if diskinventory.IsControllerMemberTarget(left.Target) || diskinventory.IsControllerMemberTarget(right.Target) {
+		return false
+	}
+	leftHasID := diskinventory.IsUsableHardwareID(left.Serial) || diskinventory.IsUsableHardwareID(left.WWN)
+	rightHasID := diskinventory.IsUsableHardwareID(right.Serial) || diskinventory.IsUsableHardwareID(right.WWN)
+	return !leftHasID || !rightHasID
 }
 
 func physicalDiskTopologyCompatible(left, right *PhysicalDiskMeta) bool {
@@ -3497,13 +3513,13 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 		previous := existing.PhysicalDisk
 		existing.PhysicalDisk = mergePhysicalDiskData(existing.PhysicalDisk, incoming.PhysicalDisk)
 		if source == SourceProxmox && previous != nil && hasDataSource(existing.Sources, SourceAgent) {
-			if previous.Serial != "" &&
+			if diskinventory.IsUsableHardwareID(previous.Serial) &&
 				(previous.Collection == nil ||
 					(previous.Collection.Serial.State == diskinventory.FieldAvailable &&
 						strings.HasPrefix(strings.ToLower(previous.Collection.Serial.Source), "smartctl"))) {
 				existing.PhysicalDisk.Serial = previous.Serial
 			}
-			if previous.WWN != "" {
+			if diskinventory.IsUsableHardwareID(previous.WWN) {
 				existing.PhysicalDisk.WWN = previous.WWN
 			}
 			if previous.DiskType != "" {
@@ -3821,10 +3837,10 @@ func mergePhysicalDiskData(existing *PhysicalDiskMeta, incoming *PhysicalDiskMet
 	if incoming.Vendor != "" {
 		merged.Vendor = incoming.Vendor
 	}
-	if incoming.Serial != "" {
+	if diskinventory.IsUsableHardwareID(incoming.Serial) {
 		merged.Serial = incoming.Serial
 	}
-	if incoming.WWN != "" {
+	if diskinventory.IsUsableHardwareID(incoming.WWN) {
 		merged.WWN = incoming.WWN
 	}
 	if incoming.DiskType != "" {
