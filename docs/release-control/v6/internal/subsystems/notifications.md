@@ -365,9 +365,22 @@ occurrence.
 That same queue boundary also owns processor attachment semantics. The
 canonical queue may persist pending notifications before a delivery processor is
 configured, but it must not mark those entries sending, failed, or sent until a
-processor exists. When a processor is attached, the queue owner must wake the
-pending backlog through the same canonical batch path instead of relying on a
-separate direct-send shortcut or waiting for an unrelated timer tick.
+processor exists. An explicit processor attachment must wake the pending backlog
+through the same canonical batch path instead of relying on a separate
+direct-send shortcut or waiting for an unrelated timer tick.
+
+Manager construction is the one attachment that must not wake the worker.
+Construction runs before the owner has applied saved destination configuration
+(webhooks, email, Apprise), so an already-due persisted job would be evaluated
+against a still-empty destination list and terminally cancelled as
+`ErrNotificationDeliverySkipped`. Construction records the processor without
+waking it; the worker's own ticker and any later enqueue begin delivery once
+configuration is present. This preserves the disabled-destination cancellation
+policy at processing time without letting startup order decide it.
+`TestRestartKeepsDueDeliveryPendingUntilConfigured` in
+`resolved_grouping_contract_test.go` seeds a due persisted delivery, constructs
+the manager before restoring its webhook, and proves the row stays `pending`
+until configuration is applied and then delivers.
 Alert delivery cooldown is also owned at this boundary. Normal alert delivery
 must suppress duplicate sends for the same active alert occurrence when
 cooldown is disabled or still active. A manager-admitted increase above the
