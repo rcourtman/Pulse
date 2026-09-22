@@ -370,10 +370,18 @@ pending backlog through the same canonical batch path instead of relying on a
 separate direct-send shortcut or waiting for an unrelated timer tick.
 Alert delivery cooldown is also owned at this boundary. Normal alert delivery
 must suppress duplicate sends for the same active alert occurrence when
-cooldown is disabled or still active; scheduled escalation delivery is the
-explicit exception and must route through the dedicated escalation send path so
-the alert schedule, not transport cooldown, controls escalation cadence and
-channel targeting.
+cooldown is disabled or still active. A manager-admitted increase above the
+highest delivered severity for that occurrence is new information and must pass
+this gate, while retaining normal destination selection and grouping. Late
+lower-severity delivery receipts must not lower that high-water mark and permit
+repeat critical sends. A new occurrence has its own severity history. This
+exception does not bypass manager acknowledgement, snooze, flapping or hourly
+budget admission, nor destination routing or rate limits. Scheduled escalation
+retains its dedicated send path so the alert schedule, not transport cooldown,
+controls escalation cadence and channel targeting.
+`TestMonitorSeverityDelivery` covers observation-to-HTTP delivery and the
+persisted delivery log for custom sensors, CPU metrics and ZFS health; callback
+success alone is not delivery evidence.
 The grouping timer is also notification-owned delivery state. Live alert
 configuration must apply enabled, window, node, and guest grouping fields as
 one policy update. Turning grouping off must stop the timer and deliver every
