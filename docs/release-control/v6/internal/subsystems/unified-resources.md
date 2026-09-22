@@ -5108,3 +5108,24 @@ establish the cause of a particular installation's association.
 
 Release-line adaptation of reviewed main 63c9c0e495 (backport of PR #2007) for
 issue #1930. No release metadata changes.
+
+### Linked direct-disk aliases with missing hardware identity (#2076)
+
+Agent SMART and PVE physical-disk observations may share a canonical resource
+when they have the same already-correlated parent, the same normalized device
+path, compatible controller/target metadata and exactly one opposite-source
+candidate. The direct-device fallback applies only when at least one observation
+has neither a usable serial nor WWN. Two differing populated hardware identities
+are not missing identity; matching capacity or model is never identity evidence.
+Controller-member targets cannot use this fallback because a kernel path can
+represent several members. Existing explicit hardware and SAS correlation remain
+separate rules. Source-native IDs and per-source status are retained on the merged
+resource, as are hardware details supplied by the richer collector.
+
+`TestIssue2076USBMixedSourceSnapshot` covers serial-present/absent in either
+collector, both absent and placeholder identity through repeated ordinary snapshot
+replacement, physical-disk views and JSON projection. Negative cases retain
+separate conflicting IDs, devices, hosts and controller members; the linked-disk
+ambiguity test rejects multiple opposite-source candidates in both directions.
+These are synthetic source proofs, not appliance acceptance or a claim about
+which collector produced a reporter's row.

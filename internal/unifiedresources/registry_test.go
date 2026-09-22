@@ -1,6 +1,8 @@
 package unifiedresources
 
 import (
+	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -6412,5 +6414,125 @@ func TestIssue1720ArrayVolumeMergesBareSerialWithPrefixedWWN(t *testing.T) {
 	}
 	if byPath["/dev/sda"].PhysicalDisk.SizeBytes == byPath["/dev/sdb"].PhysicalDisk.SizeBytes {
 		t.Fatalf("sibling volumes collapsed into one identity: %+v", byPath)
+	}
+}
+
+func usbAliasSnapshot(agentSerial, pveSerial string) models.StateSnapshot {
+	now := time.Now()
+	return models.StateSnapshot{
+		Nodes:         []models.Node{{ID: "pve-node", Name: "node", Instance: "pve", LinkedAgentID: "agent", Status: "online", LastSeen: now}},
+		Hosts:         []models.Host{{ID: "agent", Hostname: "node", LinkedNodeID: "pve-node", Status: "online", LastSeen: now, Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{Device: "sdx", Serial: agentSerial, Type: "usb", SizeBytes: 239_000_000_000, Health: "PASSED", Temperature: 31}}}}},
+		PhysicalDisks: []models.PhysicalDisk{{ID: ProxmoxPhysicalDiskSourceID("pve", "node", "/dev/sdx", "", ""), Instance: "pve", Node: "node", DevPath: "/dev/sdx", Serial: pveSerial, Type: "usb", Size: 239_000_000_000, Health: "PASSED", LastChecked: now}},
+	}
+}
+
+// Exercise ordinary host/PVE snapshot ingestion, canonical views and their JSON
+// projection repeatedly, not only a correlation helper or an invented identity.
+func TestIssue2076USBMixedSourceSnapshot(t *testing.T) {
+	for _, serials := range [][2]string{{"", "USB-SERIAL"}, {"USB-SERIAL", ""}, {"", ""}, {"UNKNOWN", "USB-SERIAL"}, {"USB-SERIAL", "UNKNOWN"}} {
+		t.Run(fmt.Sprintf("%s/%s", serials[0], serials[1]), func(t *testing.T) {
+			snapshot := usbAliasSnapshot(serials[0], serials[1])
+			adapter := NewMonitorAdapter(NewRegistry(nil))
+			var id string
+			for cycle := 0; cycle < 4; cycle++ {
+				adapter.PopulateFromSnapshot(snapshot)
+				views := adapter.PhysicalDisks()
+				if len(views) != 1 {
+					t.Fatalf("cycle %d: disks = %d, want one linked USB device", cycle, len(views))
+				}
+				if cycle == 0 {
+					id = views[0].ID()
+				} else if views[0].ID() != id {
+					t.Fatal("canonical ID changed")
+				}
+				payload, err := json.Marshal(adapter.GetAll())
+				if err != nil {
+					t.Fatal(err)
+				}
+				var resources []Resource
+				if err := json.Unmarshal(payload, &resources); err != nil {
+					t.Fatal(err)
+				}
+				count := 0
+				for _, r := range resources {
+					if r.Type != ResourceTypePhysicalDisk {
+						continue
+					}
+					count++
+					if !hasDataSource(r.Sources, SourceAgent) || !hasDataSource(r.Sources, SourceProxmox) || r.ParentID == nil {
+						t.Fatalf("missing source/parent: %+v", r)
+					}
+					if r.PhysicalDisk == nil || r.PhysicalDisk.SizeBytes != 239_000_000_000 || r.PhysicalDisk.Temperature != 31 {
+						t.Fatalf("lost disk facts: %+v", r.PhysicalDisk)
+					}
+					if serials[0] == "USB-SERIAL" || serials[1] == "USB-SERIAL" {
+						if r.PhysicalDisk.Serial != "USB-SERIAL" {
+							t.Fatalf("lost serial: %+v", r.PhysicalDisk)
+						}
+					}
+				}
+				if count != 1 {
+					t.Fatalf("JSON disks = %d", count)
+				}
+			}
+		})
+	}
+}
+
+func TestIssue2076USBDoesNotMergeUnsafeAliases(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		change func(*models.StateSnapshot)
+	}{
+		{"conflicting serials", func(s *models.StateSnapshot) { s.Hosts[0].Sensors.SMART[0].Serial = "OTHER-SERIAL" }},
+		{"different device same size", func(s *models.StateSnapshot) { s.Hosts[0].Sensors.SMART[0].Device = "sdy" }},
+		{"controller member", func(s *models.StateSnapshot) { s.Hosts[0].Sensors.SMART[0].Target = "megaraid,0" }},
+		{"conflicting controllers", func(s *models.StateSnapshot) {
+			s.Hosts[0].Sensors.SMART[0].Controller = "controller-a"
+			s.PhysicalDisks[0].Controller = "controller-b"
+		}},
+		{"different hosts", func(s *models.StateSnapshot) {
+			s.Hosts[0].LinkedNodeID = ""
+			s.Hosts[0].Hostname = "other"
+			s.Nodes[0].LinkedAgentID = ""
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := usbAliasSnapshot("", "USB-SERIAL")
+			tc.change(&s)
+			rr := NewRegistry(nil)
+			rr.IngestSnapshot(s)
+			if got := len(rr.ListByType(ResourceTypePhysicalDisk)); got != 2 {
+				t.Fatalf("disks=%d, want separate observations", got)
+			}
+		})
+	}
+}
+
+func TestIssue2076USBLinkedDiskAmbiguity(t *testing.T) {
+	for _, source := range []DataSource{SourceAgent, SourceProxmox} {
+		t.Run(string(source), func(t *testing.T) {
+			other := SourceAgent
+			if source == SourceAgent {
+				other = SourceProxmox
+			}
+			rr := NewRegistry(nil)
+			parent := "host:linked"
+			incoming := Resource{Type: ResourceTypePhysicalDisk, ParentID: &parent, PhysicalDisk: &PhysicalDiskMeta{DevPath: "sdx", DiskType: "usb"}}
+			for _, id := range []string{"a", "b"} {
+				rr.resources[id] = &Resource{ID: id, Type: ResourceTypePhysicalDisk, ParentID: &parent, Sources: []DataSource{other}, PhysicalDisk: &PhysicalDiskMeta{DevPath: "/dev/sdx", Serial: "SERIAL-" + id, DiskType: "usb"}}
+			}
+			if got := rr.resolveLinkedPhysicalDisk(source, incoming); got != "" {
+				t.Fatalf("ambiguous path matched %q", got)
+			}
+			delete(rr.resources, "b")
+			if got := rr.resolveLinkedPhysicalDisk(source, incoming); got != "a" {
+				t.Fatalf("unique missing-identity alias matched %q", got)
+			}
+			incoming.PhysicalDisk.WWN = "DIFFERENT-WWN"
+			if got := rr.resolveLinkedPhysicalDisk(source, incoming); got != "" {
+				t.Fatalf("conflicting hardware identity matched %q", got)
+			}
+		})
 	}
 }
