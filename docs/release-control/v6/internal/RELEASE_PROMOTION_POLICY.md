@@ -241,12 +241,19 @@ stable release is an exact soaked candidate rather than the tip of a branch
 that keeps moving, and so that the always-running maintainer can release
 without the other lanes changing the candidate underneath it.
 
-1. Founder intent, clarified on 2026-09-05: fast progress, with willingness
-   to use many betas before GA. Release scope, version, maturity and timing
-   belong to the maintainer's judgment from current evidence. The former
-   fixed v6.5 September 8/15 and v6.6 September 22 calendar is withdrawn.
-   The existing exact-candidate, source, soak and publication-authority
-   requirements still apply.
+1. Founder direction, 2026-09-23: releasing is the default. Every 14 days
+   the maintainer cuts the next minor line from `main`, publishes its RC,
+   and promotes the exact RC to stable once its soak is clean. A due step is
+   held, and a candidate withdrawn or replaced, only for a listed stop
+   reason: a regression against the current stable release, a security
+   problem, data loss or a failed upgrade or rollback, a qualification
+   failure, or a release-pipeline failure. A defect the current stable
+   release already has, or a fix that landed after selection, waits for the
+   next cycle or a patch release. The operating policy is
+   `pulse-dev-infra/maintainer/RELEASE_POLICY.md`. This replaces the
+   2026-09-05 direction that left timing to open-ended judgment. The
+   exact-candidate, source, soak and publication-authority requirements
+   still apply.
 2. Each train has its own branch, `release/v6.N`, created from `main` at cut
    time and declared in `docs/release-control/control_plane.json` so the
    release workflow verifies that governed source line. `main` is never
@@ -275,12 +282,16 @@ without the other lanes changing the candidate underneath it.
    candidate; patch releases keep the 72 hour minimum. Patch releases are for
    a named regression or security issue only.
 5. "Soaked clean" means all of: the soak has elapsed since the candidate's
-   release was published; no open issue labelled `affects-<candidate
-   version>` is at high or critical severity; the maintainer's dogfood
-   instance and the demo server ran the candidate for the whole soak without
-   an incident; and preview-channel telemetry, where it exists, shows no
-   elevated failure rate. The release steward names this evidence in the
-   packet.
+   release was published; no open issue reports an unresolved regression,
+   security or data-loss problem in the candidate, including any issue
+   labelled `affects-<candidate version>` at high or critical severity;
+   preview-channel telemetry, where it exists, shows no elevated failure
+   rate; and, where the candidate observation guest is operational, the
+   candidate ran there for the soak without an incident. An unavailable
+   guest is recorded as a limitation rather than a reason to hold. The
+   stable dogfood instance and the demo server keep running the current
+   stable release by design and are not soak evidence. The release steward
+   names this evidence in the packet.
 6. Version-bound owner exceptions waived the soak for v6.0.0, v6.1.0,
    v6.2.0, v6.3.0, and v6.4.0. They remain recorded and bounded; the train
    does not continue the practice. An exception requires active customer
