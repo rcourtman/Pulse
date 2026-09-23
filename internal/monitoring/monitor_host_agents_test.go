@@ -5931,6 +5931,129 @@ func TestDedupeUnifiedMetricWritesDropsExactReplays(t *testing.T) {
 	}
 }
 
+// Issue #1966: a host agent and an API-backed TrueNAS connection can report
+// the same hostname without resolving to the same canonical resource. This
+// fixture checks their actual source IDs, metrics targets and unified-writer
+// selection. It deliberately pairs an identical synthetic CPU sample to
+// show that exact replay dedupe is per target: this is not evidence that the
+// reporter's two live samples had equal timestamps or values.
+func TestUnifiedAgentMetricsKeepSameHostnameHostAgentAndTrueNASTargetsSeparate(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	const (
+		hostname     = "truenas-iscsi.example.test"
+		hostAgentID  = "host-agent-iscsi"
+		connectionID = "truenas-connection-2"
+		cpuPercent   = 37.5
+	)
+	observedAt := time.Date(2026, time.September, 23, 17, 0, 0, 0, time.UTC)
+
+	fixtures := truenas.DefaultFixtures()
+	fixtures.System.Hostname = hostname
+	fixtures.System.CPUPercent = cpuPercent
+	fixtures.System.IntervalSeconds = 30
+	fixtures.System.CollectedAt = observedAt
+	fixtures.CollectedAt = observedAt
+	provider := truenas.NewLiveProviderForConnection(
+		&truenas.FixtureFetcher{Snapshot: fixtures}, connectionID,
+	)
+	trueNASRecords := provider.RecordsFromSnapshot(&fixtures)
+	if len(trueNASRecords) == 0 {
+		t.Fatal("connection-scoped TrueNAS provider returned no records")
+	}
+
+	host := models.Host{
+		ID:              hostAgentID,
+		Hostname:        hostname,
+		MachineID:       "host-agent-machine-iscsi",
+		CPUUsage:        cpuPercent,
+		Status:          "online",
+		LastSeen:        observedAt,
+		IntervalSeconds: 30,
+	}
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{Hosts: []models.Host{host}}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceTrueNAS: trueNASRecords,
+	})
+
+	var hostResource, trueNASResource *unifiedresources.Resource
+	for _, resource := range resourceStore.GetAll() {
+		if resource.Type != unifiedresources.ResourceTypeAgent || resource.Name != hostname {
+			continue
+		}
+		resourceCopy := resource
+		switch {
+		case monitorHasSource(resource.Sources, unifiedresources.SourceAgent):
+			hostResource = &resourceCopy
+		case monitorHasSource(resource.Sources, unifiedresources.SourceTrueNAS):
+			trueNASResource = &resourceCopy
+		}
+	}
+	if hostResource == nil || trueNASResource == nil {
+		t.Fatalf("same-hostname resources did not remain separately source-owned: host=%+v TrueNAS=%+v", hostResource, trueNASResource)
+	}
+	if hostResource.ID == trueNASResource.ID {
+		t.Fatalf("same-hostname host agent and connection-scoped TrueNAS resolved to one canonical ID %q", hostResource.ID)
+	}
+
+	hostTarget := resourceStore.MetricsTargetForResource(hostResource.ID)
+	if hostTarget == nil || hostTarget.ResourceType != "agent" || hostTarget.ResourceID != hostAgentID {
+		t.Fatalf("host-agent metrics target = %+v, want agent/%s", hostTarget, hostAgentID)
+	}
+	trueNASTarget := resourceStore.MetricsTargetForResource(trueNASResource.ID)
+	if trueNASTarget == nil || trueNASTarget.ResourceType != "agent" || trueNASTarget.ResourceID != connectionID {
+		t.Fatalf("TrueNAS metrics target = %+v, want agent/%s", trueNASTarget, connectionID)
+	}
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	persistentStore, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = persistentStore.Close() }()
+	monitor := &Monitor{metricsStore: persistentStore}
+	var writes []metrics.WriteMetric
+	monitor.syncUnifiedAgentMetrics(resourceStore, &writes)
+
+	var trueNASCPU *metrics.WriteMetric
+	for i := range writes {
+		write := &writes[i]
+		if write.MetricType != "cpu" {
+			continue
+		}
+		if write.ResourceID == hostTarget.ResourceID {
+			t.Fatalf("unified sync selected the host-agent target %q; that source uses the direct agent writer", hostTarget.ResourceID)
+		}
+		if write.ResourceID == trueNASTarget.ResourceID {
+			trueNASCPU = write
+		}
+	}
+	if trueNASCPU == nil {
+		t.Fatalf("unified sync did not select the TrueNAS agent target %q for CPU; writes=%+v", trueNASTarget.ResourceID, writes)
+	}
+	if trueNASCPU.Value != cpuPercent || !trueNASCPU.Timestamp.Equal(observedAt) {
+		t.Fatalf("TrueNAS CPU sample = %+v, want value %v at %s", trueNASCPU, cpuPercent, observedAt)
+	}
+
+	// The fixture intentionally supplies one identical (type, metric, time,
+	// value) observation under each proven-distinct source target. The replay
+	// guard preserves both first writes because its store key includes ID, then
+	// drops each exact same-target replay. Production-source equality for this
+	// reporter remains unverified until paired values/timestamps are provided.
+	hostCPU := *trueNASCPU
+	hostCPU.ResourceID = hostTarget.ResourceID
+	pairedMonitor := &Monitor{}
+	paired := pairedMonitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{*trueNASCPU, hostCPU})
+	if len(paired) != 2 {
+		t.Fatalf("distinct source targets retained %d of the deliberately identical paired samples; want 2", len(paired))
+	}
+	if replay := pairedMonitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{*trueNASCPU, hostCPU}); len(replay) != 0 {
+		t.Fatalf("exact same-target paired replays retained %d writes, want 0: %+v", len(replay), replay)
+	}
+}
+
 func TestSyncUnifiedStorageMetricsDefersWritesToBatchSink(t *testing.T) {
 	observedAt := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
 	resourceStore := unifiedresources.NewMonitorAdapter(nil)
