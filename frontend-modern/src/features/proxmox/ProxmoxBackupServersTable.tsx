@@ -144,21 +144,23 @@ const correlatedAgentKey = (resource: Resource): string | undefined => {
   return undefined;
 };
 
+// Host telemetry can be merged into a PVE guest rather than a standalone
+// agent. Keep the unique-identity check and require an actual agent facet.
+const isCorrelationCandidate = (serverTokens: Set<string>, candidate: Resource): boolean => {
+  if (candidate.type !== 'agent' && !isGuestWithAgent(candidate)) return false;
+  for (const token of identityTokens(candidate)) {
+    if (serverTokens.has(token)) return true;
+  }
+  return false;
+};
+
 const uniquelyCorrelatedAgent = (
   server: Resource,
   candidates: readonly Resource[],
 ): Resource | undefined => {
   const serverTokens = identityTokens(server);
   if (serverTokens.size === 0) return undefined;
-  const matches = candidates.filter((candidate) => {
-    // Host telemetry can be merged into a PVE guest rather than a standalone
-    // agent. Keep the unique-identity check and require an actual agent facet.
-    if (candidate.type !== 'agent' && !isGuestWithAgent(candidate)) return false;
-    for (const token of identityTokens(candidate)) {
-      if (serverTokens.has(token)) return true;
-    }
-    return false;
-  });
+  const matches = candidates.filter((candidate) => isCorrelationCandidate(serverTokens, candidate));
   if (matches.length === 0) return undefined;
   if (matches.length === 1) return matches[0];
 
@@ -187,6 +189,30 @@ const uniquelyCorrelatedAgent = (
     group[0]
   );
 };
+
+// True when the snapshot still offers a host row for this server, even if the
+// match is ambiguous and `uniquelyCorrelatedAgent` declines to choose. The
+// distinction matters for correlation retention: a snapshot that simply omits
+// the host row is a transient refresh gap, while an ambiguous snapshot is a
+// deliberate decline that must not be papered over with a remembered guess.
+const hasCorrelationCandidate = (server: Resource, candidates: readonly Resource[]): boolean => {
+  const serverTokens = identityTokens(server);
+  if (serverTokens.size === 0) return false;
+  return candidates.some((candidate) => isCorrelationCandidate(serverTokens, candidate));
+};
+
+// A live refresh can briefly omit the correlated host row (for example while a
+// realtime snapshot replaces the merged estate), which used to flip the Backups
+// drawer's Identity and History target between the host series and the PBS
+// service key. Keep the last resolved correlation per PBS server and reuse it
+// only across such an omission, and only while the remembered host is still
+// plausibly current, so a genuinely removed or replaced host is not advertised
+// indefinitely. A host that is present but ambiguous still declines.
+export type PbsCorrelationRetention = Map<string, Resource>;
+
+export const createPbsCorrelationRetention = (): PbsCorrelationRetention => new Map();
+
+const PBS_CORRELATION_RETENTION_MAX_STALENESS_MS = 5 * 60 * 1000;
 
 const mergePBSAgentPresentation = (server: Resource, agent: Resource): Resource => {
   const serverPlatform = server.platformData ?? {};
@@ -225,6 +251,7 @@ const mergePBSAgentPresentation = (server: Resource, agent: Resource): Resource 
 export function buildBackupServerRows(
   servers: readonly Resource[],
   backups: readonly PBSBackup[] = [],
+  retention?: PbsCorrelationRetention,
 ): BackupServerRow[] {
   const rows: BackupServerRow[] = [];
   const counts = buildBackupCounts(backups);
@@ -241,14 +268,33 @@ export function buildBackupServerRows(
   // *datastore* storage resources (type 'storage', sources ['pbs']). This table
   // is about the server, so keep only actual PBS server instances — otherwise a
   // datastore renders as a phantom offline "server" row.
-  const sortedServers = servers
-    .filter((resource) => resource.type === 'pbs')
+  const pbsServers = servers.filter((resource) => resource.type === 'pbs');
+  const sortedServers = pbsServers
     .map((server) => {
       const agent = uniquelyCorrelatedAgent(server, servers);
-      return agent ? mergePBSAgentPresentation(server, agent) : server;
+      if (agent) {
+        retention?.set(server.id, agent);
+        return mergePBSAgentPresentation(server, agent);
+      }
+      const retained = retention?.get(server.id);
+      if (retained) {
+        const fresh =
+          server.lastSeen - retained.lastSeen <= PBS_CORRELATION_RETENTION_MAX_STALENESS_MS;
+        if (fresh && !hasCorrelationCandidate(server, servers)) {
+          return mergePBSAgentPresentation(server, retained);
+        }
+        if (!fresh) retention?.delete(server.id);
+      }
+      return server;
     })
     .slice()
     .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
+  if (retention) {
+    const presentIds = new Set(pbsServers.map((server) => server.id));
+    for (const id of retention.keys()) {
+      if (!presentIds.has(id)) retention.delete(id);
+    }
+  }
   for (const server of sortedServers) {
     const datastores = (server.pbs?.datastores ?? [])
       .slice()
@@ -296,7 +342,10 @@ export function ProxmoxBackupServersTable(props: {
   emptyIcon?: JSX.Element;
   layoutWidth?: Accessor<number | null | undefined>;
 }) {
-  const rows = () => buildBackupServerRows(props.servers, props.backups ?? []);
+  const retention = createPbsCorrelationRetention();
+  const rows = createMemo(() =>
+    buildBackupServerRows(props.servers, props.backups ?? [], retention),
+  );
   const observedWidth = useObservedElementWidth();
   const layoutMode = createMemo(() => {
     const width = props.layoutWidth?.() ?? observedWidth.width();

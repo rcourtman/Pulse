@@ -163,6 +163,11 @@ const launchOptions = {
             };
             // Both datastore rows must use the same host series, including revisiting
             // the first row after its history component has been disposed.
+            let retainedIdentity = [];
+            let retainedPaths = 0;
+            const detail = page.locator(
+              '[data-inline-platform-resource-detail-for="pbs-1"]',
+            );
             for (const [index, datastore] of [
               'tank',
               'archive',
@@ -177,9 +182,6 @@ const launchOptions = {
                 ['proxback · archive', 'proxback · tank'],
               );
               await openDatastore(datastore);
-              const detail = page.locator(
-                '[data-inline-platform-resource-detail-for="pbs-1"]',
-              );
               await detail.evaluate((node) => {
                 node.dataset.proofIdentity = 'retained';
               });
@@ -238,6 +240,8 @@ const launchOptions = {
                 identityBefore,
                 'Identity rows changed after a refreshed snapshot',
               );
+              retainedIdentity = identityAfter;
+              retainedPaths = pathsBefore;
               observations.push({
                 datastore,
                 paths: pathsBefore,
@@ -245,6 +249,49 @@ const launchOptions = {
                 refreshPreservedHistory: true,
               });
             }
+
+            // A live refresh can briefly omit the correlated host row while the
+            // PBS server row stays. That must not flip the drawer's Identity or
+            // History target to the PBS service key (#1723).
+            await page.getByRole('button', { name: 'Drop correlated host' }).click();
+            await page
+              .getByRole('status', { name: 'Snapshot number' })
+              .filter({ hasText: '4' })
+              .waitFor();
+            assert.equal(
+              await detail.getAttribute('data-proof-identity'),
+              'retained',
+              'drawer remounted after the host row was omitted',
+            );
+            assert.equal(
+              await page
+                .getByRole('tab', { name: 'History', exact: true })
+                .getAttribute('aria-selected'),
+              'true',
+              'history reset after the host row was omitted',
+            );
+            assert.equal(
+              await detail
+                .locator('[data-testid="guest-history-plot"] path')
+                .count(),
+              retainedPaths,
+              'history chart lost its series when the host row was omitted',
+            );
+            assert.deepEqual(
+              await readIdentityRows(detail),
+              retainedIdentity,
+              'Identity rows changed when the host row was transiently omitted',
+            );
+            observations.push({
+              hostRowOmitted: true,
+              identity: retainedIdentity,
+              refreshPreservedHistory: true,
+            });
+            await page.getByRole('button', { name: 'Restore correlated host' }).click();
+            await page
+              .getByRole('status', { name: 'Snapshot number' })
+              .filter({ hasText: '5' })
+              .waitFor();
 
             if (!targets.includes(expected)) {
               throw new Error(

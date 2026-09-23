@@ -2430,6 +2430,28 @@ parity is unchanged.
 `frontend-modern/src/security/__tests__/dependencySecurity.test.ts` pins the
 manifest ranges and locked floors so a later downgrade is rejected.
 
+### Reviewed @types/node 26.6.2 refresh
+
+The 2026-09-23 `npm-minor-patch` group (Dependabot #2189) advances the
+`@types/node` type-surface dependency from 26.6.1 to 26.6.2 in both
+`frontend-modern` and `tests/integration`, with no other direct version change
+in those two manifests. The portal `internal/cloudcp/portal/frontend` part of the
+same group is a separate `ws` override refresh that requires a portal bundle
+decision and is owned separately, so it is not carried here. `@types/node` is a
+dev-only declaration package: it does not enter the shipped frontend bundle,
+the installer, the artifact, signing, promotion or rollback boundary. The
+`dependencySecurity.test.ts` reviewed floor for `@types/node` moves to 26.6.2 so
+a later downgrade below this review is rejected, and `@playwright/test` stays
+pinned at 1.56.1, so browser-test parity is unchanged.
+
+Verification status: the `frontend-modern` offline dependency snapshot is bound
+to the previously locked `@types/node` 26.6.1, so `npm ci --offline` against the
+updated lockfile cannot resolve the 26.6.2 tarball in this assignment. The
+manifest/lock/contract/proof change is prepared and its static version
+assertions hold, but a host dependency acquisition on a later launch is required
+before the frontend suite can be executed against the new lockfile. No passing
+frontend suite or release acceptance is claimed here.
+
 ### Manual update freshness
 
 Manual update checks carry explicit freshness to the update manager. They bypass

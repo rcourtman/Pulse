@@ -1,16 +1,21 @@
 {
   "version": 1,
-  "base_sha": "79cf2d0058c374adc7fcc2e7268ab2261e10fa24",
-  "verified_at": "2026-09-22T23:54:27Z",
+  "base_sha": "92edc056627a88bbdb11a8f6d6f95aacd061607a",
+  "verified_at": "2026-09-23T09:22:16Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts": "24f77d42e2542dd0e8fcf9c55f25a8373c563069c5a0dc112afa6a4456d5a93a"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "b19198cb055e5f0f107c2d6749d6def719bd84310de585e3b6a349fa22fac3c1"
   },
   "routes": [
-    "/browser-tests/pbs-host-history-correlation.html?topology=guest&order=stable (Proxmox Backups server drawer)"
+    "/browser-tests/pbs-host-history-correlation.html?topology=guest&order=stable (Proxmox Backups server drawer)",
+    "/browser-tests/pbs-host-history-correlation.html?topology=guest&order=reordered (Proxmox Backups server drawer)",
+    "/browser-tests/pbs-host-history-correlation.html?topology=pbs-only&order=stable (Proxmox Backups server drawer)",
+    "/browser-tests/pbs-host-history-correlation.html?topology=pbs-only&order=reordered (Proxmox Backups server drawer)",
+    "/browser-tests/pbs-host-history-correlation.html?topology=side-by-side&order=stable (Proxmox Backups server drawer)",
+    "/browser-tests/pbs-host-history-correlation.html?topology=side-by-side&order=reordered (Proxmox Backups server drawer)"
   ],
   "viewports": [
     {
@@ -23,16 +28,17 @@
     }
   ],
   "states": [
-    "Drawer History tab selected with a populated host history target",
-    "Snapshot with the merged host metrics target transiently absent (availability notice)",
-    "Snapshot with the metrics target restored on the same selection"
+    "Drawer History tab selected with a populated correlated host series",
+    "Timer-driven snapshot replacing the datastore inventory in stable and reversed order",
+    "Snapshot that briefly omits the correlated host row while the PBS server row remains",
+    "Snapshot that restores the correlated host row on the same selection"
   ],
   "interactions": [
-    "Expand the Proxmox Backups server row and select the History tab; assert the chart paths render",
-    "Apply a snapshot that removes the merged host metrics target; assert the drawer is not remounted and the History selection is retained, showing the in-tab availability notice",
-    "Apply a snapshot that restores the metrics target; assert the same History selection recovers the chart paths",
-    "Repeat at 1280x900 and 390x844; the same check fails on the pre-fix source (no notice, selection reset)"
+    "Expand the Proxmox Backups server row, switch between datastore rows and select History; assert the chart paths render against the host metrics target",
+    "Apply timer-driven stable and reordered snapshots; assert the drawer is not remounted, the History selection is retained, the chart series survive and the Discovery/Metrics Target rows stay byte-identical",
+    "Apply a snapshot that omits the correlated host row; assert the Identity rows and History chart stay on the retained host target instead of falling back to the PBS service key",
+    "Restore the correlated host row; assert the same target is confirmed, and repeat the complete matrix at 1280x900 and 390x844"
   ],
-  "command": "pulse-worker-browser scripts/check-drawer-tab-retention.cjs",
-  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1. Production ResourceDetailDrawer mounted through the real ProxmoxBackupServersTable fixture with synthetic API responses. Proves the drawer tab-retention behaviour, not backend persistence or installed release behaviour. The identical check timed out on the pre-fix source because the selected tab reset to Overview."
+  "command": "pulse-worker-browser scripts/check-pbs-host-history-correlation.cjs",
+  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1. Production ProxmoxBackupServersTable mounted through the real browser fixture with synthetic API responses and an intercepted metrics-history request. Proves the retained host correlation, not backend persistence or installed release behaviour. The same check fails on the pre-fix source: omitting the host row flips the drawer's Discovery and Metrics Target rows to agent:pbs-1 and drops the host series."
 }
