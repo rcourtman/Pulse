@@ -8424,3 +8424,15 @@ passing because capability wiring is absent. Surface regressions also remove
 the planner while retaining execute authority and transport, and assert control
 is absent in both provider tools and the surface contract. These are offline
 fixture and policy proofs, not hosted-model or installed acceptance.
+
+### Knowledge-store persistence serialization
+
+`internal/ai/adapters.KnowledgeStore` persists resource notes through an atomic
+temp-file, fsync and rename. Concurrent `SaveNote` calls must not interleave on
+that temp path: disk writes are serialized behind a dedicated save mutex, and
+asynchronous saves are tracked so a caller that removes or inspects the data
+directory can join them. An observer must read either the previous store or a
+complete new snapshot, never a partially written file. This is an internal
+durability boundary, not a public API or stored-format change. The
+`TestKnowledgeStore_SaveLoad` cleanup join and the concurrent-save reload
+regression in `internal/ai/adapters/adapters_additional_test.go` enforce it.

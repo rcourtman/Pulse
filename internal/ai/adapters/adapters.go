@@ -155,6 +155,8 @@ func (a *EventCorrelatorToolAdapter) GetCorrelationsForResource(resourceID strin
 // KnowledgeStore provides persistent storage for resource notes
 type KnowledgeStore struct {
 	mu      sync.RWMutex
+	saveMu  sync.Mutex
+	saveWG  sync.WaitGroup
 	entries map[string][]KnowledgeEntry
 	dataDir string
 }
@@ -213,7 +215,11 @@ func (s *KnowledgeStore) SaveNote(resourceID, note, category string) error {
 	s.entries[resourceID] = append(s.entries[resourceID], entry)
 
 	if s.dataDir != "" {
-		go s.saveToDisk() // Async save
+		s.saveWG.Add(1)
+		go func() {
+			defer s.saveWG.Done()
+			s.saveToDisk()
+		}()
 	}
 
 	return nil
@@ -247,7 +253,17 @@ func (s *KnowledgeStore) GetKnowledge(resourceID string, category string) []Know
 	return filtered
 }
 
+// flush blocks until every asynchronous save started by SaveNote has finished.
+// Callers that remove or inspect the data directory (including tests) use it to
+// avoid racing a still-running writer.
+func (s *KnowledgeStore) flush() {
+	s.saveWG.Wait()
+}
+
 func (s *KnowledgeStore) saveToDisk() {
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
