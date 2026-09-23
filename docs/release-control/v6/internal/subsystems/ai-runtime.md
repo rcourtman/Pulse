@@ -7973,3 +7973,15 @@ collapsed. `internal/ai/findings_flapping_test.go`,
 `internal/ai/findings_storm_throttler_test.go`, and
 `internal/ai/findings_alert_mirror_test.go` pin the threshold, the collapse,
 the hydration, and the matcher.
+
+### Knowledge-store persistence serialization
+
+`internal/ai/adapters.KnowledgeStore` persists resource notes through an atomic
+temp-file, fsync and rename. Concurrent `SaveNote` calls must not interleave on
+that temp path: disk writes are serialized behind a dedicated save mutex, and
+asynchronous saves are tracked so a caller that removes or inspects the data
+directory can join them. An observer must read either the previous store or a
+complete new snapshot, never a partially written file. This is an internal
+durability boundary, not a public API or stored-format change. The
+`TestKnowledgeStore_SaveLoad` cleanup join and the concurrent-save reload
+regression in `internal/ai/adapters/adapters_additional_test.go` enforce it.
