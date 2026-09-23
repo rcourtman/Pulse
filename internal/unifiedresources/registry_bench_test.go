@@ -2,9 +2,49 @@ package unifiedresources
 
 import (
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 )
+
+// BenchmarkRegistry_CachedVMReads measures concurrent reads from a clean
+// 1,000-VM view cache. It isolates the reader lock path used by typed accessors
+// from ingestion, sorting, and serialization work.
+func BenchmarkRegistry_CachedVMReads(b *testing.B) {
+	const count = 1000
+	records := make([]IngestRecord, count)
+	for i := range records {
+		records[i] = IngestRecord{
+			SourceID: fmt.Sprintf("vm-%d", i),
+			Resource: Resource{
+				Type:   ResourceTypeVM,
+				Name:   fmt.Sprintf("vm-%d", i),
+				Status: StatusOnline,
+			},
+		}
+	}
+
+	registry := NewRegistry(nil)
+	registry.IngestRecords(SourceProxmox, records)
+	if got := len(registry.VMs()); got != count {
+		b.Fatalf("VM cache length = %d, want %d", got, count)
+	}
+
+	var total atomic.Uint64
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		var local uint64
+		for pb.Next() {
+			local += uint64(len(registry.VMs()))
+		}
+		total.Add(local)
+	})
+	b.StopTimer()
+	if got, want := total.Load(), uint64(b.N*count); got != want {
+		b.Fatalf("read cache totals = %d, want %d", got, want)
+	}
+}
 
 // BenchmarkIngestRecords_NewResources measures the ingest path when every
 // record creates a new resource (no dedup). This is the baseline cost of
