@@ -79,7 +79,7 @@
     "@typescript-eslint/parser": "^8.70.0",
     "@vitest/coverage-v8": "^4.1.11",
     "autoprefixer": "^10.6.1",
-    "eslint": "^9.20.0",
+    "eslint": "^10.11.0",
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-solid": "^0.18.0",
     "globals": "^17.12.0",
