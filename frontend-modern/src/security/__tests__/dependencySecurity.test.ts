@@ -173,13 +173,15 @@ describe('frontend dependency security floors', () => {
   });
 
   it('keeps the reviewed npm-minor-patch floors', () => {
-    // Dependabot npm-minor-patch group, reviewed 2026-09-21. Each floor is the
-    // lowest version this review accepted, so a later downgrade is rejected.
+    // Dependabot npm-minor-patch group, reviewed 2026-09-21 and 2026-09-23.
+    // Each floor is the lowest version this review accepted, so a later
+    // downgrade is rejected. The 2026-09-23 refresh raises @types/node to
+    // 26.6.2 in frontend-modern and tests/integration.
     const floors: Array<[string, [number, number, number]]> = [
       ['dompurify', [3, 4, 15]],
       ['highlight.js', [11, 12, 0]],
       ['solid-js', [1, 9, 15]],
-      ['@types/node', [26, 6, 1]],
+      ['@types/node', [26, 6, 2]],
       ['typescript-eslint', [8, 70, 0]],
       ['@typescript-eslint/eslint-plugin', [8, 70, 0]],
       ['@typescript-eslint/parser', [8, 70, 0]],
