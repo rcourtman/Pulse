@@ -1245,6 +1245,8 @@ type DockerData struct {
 type PBSData struct {
 	InstanceID               string                        `json:"instanceId,omitempty"`
 	Hostname                 string                        `json:"hostname,omitempty"`
+	// NodeName is the hostname PBS reports for its node, distinct from its configured connection label and endpoint.
+	NodeName                 string                        `json:"nodeName,omitempty"`
 	HostURL                  string                        `json:"hostUrl,omitempty"`
 	GuestURL                 string                        `json:"guestUrl,omitempty"`
 	Version                  string                        `json:"version,omitempty"`

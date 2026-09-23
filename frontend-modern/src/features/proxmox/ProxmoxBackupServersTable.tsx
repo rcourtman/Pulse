@@ -110,6 +110,9 @@ const identityValues = (resource: Resource): Array<string | undefined> => [
   ...(resource.identity?.ips ?? []),
   resource.agent?.hostname,
   resource.pbs?.hostname,
+  // A PBS node reports its machine hostname even when the connection uses an
+  // IP or DNS alias that its host agent does not report (#1723).
+  resource.pbs?.nodeName,
   resource.pbs?.instanceId,
   resource.platformId,
   resource.name,

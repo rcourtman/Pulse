@@ -254,6 +254,14 @@ command-capable profile.
 
 ## Shared Boundaries
 
+PBS History in the Proxmox Backups server drawer may use the uniquely
+corroborated host-agent identity from the PBS-reported node name when the
+configured connection label and service endpoint do not identify that host.
+The drawer retains the canonical PBS row and selects the correlated host's
+metrics target for host history; ambiguity fails closed and the PBS service
+target is never represented as host history. This read-only correlation is not
+backup, restore, or recovery evidence and does not change storage authority.
+
 - After password configuration has been persisted and the runtime local-admin identity changes, authorizer synchronisation must also occur if subsequent API-token persistence fails. Development first-run reset must clear the configured-admin bypass only on successful auth reset, not on its persistence-failure rollback path. No role-store deletion or migration is part of this recovery.
 
 ### Development harness rate-budget isolation

@@ -1,34 +1,35 @@
 {
   "version": 1,
-  "base_sha": "46abf39498b577604c70436d5b2b0624fee3c92e",
-  "verified_at": "2026-09-23T10:29:20Z",
+  "base_sha": "252b54b60472644e46974092271e7c1f2165bf80",
+  "verified_at": "2026-09-23T13:05:01Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"],
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/types/resource.ts"
+  ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "99ef48ddd60e82780d86d7a8740fa2e6957c2c6f9a86ac23d3030fe50766ac5e"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "21271000f8974d5c38b7bc10a5bc5e37769604ea33619eaaaf2c3413ab39865b",
+    "frontend-modern/src/types/resource.ts": "8fe7ed6af3128e02fafad2173b4e4d376a9c1292c89982dfcd1cbec6249d1c1e"
   },
-  "routes": ["/browser-tests/pbs-host-history-correlation.html (Proxmox Backups server drawer)"],
+  "routes": [
+    "/browser-tests/pbs-host-history-correlation.html (Proxmox Backups server drawer)"
+  ],
   "viewports": [
-    {
-      "width": 1280,
-      "height": 900
-    },
-    {
-      "width": 390,
-      "height": 844
-    }
+    { "width": 1280, "height": 900 },
+    { "width": 390, "height": 844 }
   ],
   "states": [
-    "Backups drawer on the correlated guest host series with the History tab selected and populated",
-    "Fresh snapshot in which the correlated host row is transiently omitted while the PBS server row remains",
-    "Snapshot in which the correlated host row is restored on the same drawer selection"
+    "PBS server uses an IP endpoint (10.0.0.5) and nodeName (proxback-vm) as the only machine identity shared with the host agent",
+    "History selected on the correlated VM host series across tank, archive, and tank datastore rows",
+    "Refresh snapshot temporarily omits guest and standalone host rows while the PBS service row remains",
+    "Refresh snapshot restores the correlated host without changing the drawer selection"
   ],
   "interactions": [
-    "Expand each datastore row (tank, archive, revisited tank) and select History; assert the chart paths and Identity rows persist across fresh snapshots",
-    "Click 'Drop correlated host' so the refresh snapshot omits the guest and standalone agent rows; assert the drawer is not remounted, the History selection and chart paths survive, and the Identity rows stay on the host series (vm/proxmox:100)",
-    "Click 'Restore correlated host' and assert the host target is confirmed",
-    "Repeat at 1280x900 and 390x844; the same check fails on the pre-fix source, where the Identity rows flip to agent:pbs-1"
+    "Expand each datastore row (tank, archive, tank), select History, and assert three history requests per viewport target vm/proxmox:100 with seven chart paths",
+    "Omit the correlated host rows and assert the PBS drawer's identity rows and History target remain on vm/proxmox:100",
+    "Restore the host rows and confirm history correlation remains on the same target",
+    "Repeat at 1280x900 and 390x844; assert no history request uses the PBS service target agent/pbs-1 and inspect both screenshots for retained History charts"
   ],
-  "command": "pulse-worker-browser scripts/check-pbs-host-history-correlation.cjs",
-  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1. Production ProxmoxBackupServersTable mounted through the release/v6.4 browser fixture with synthetic API responses. Both viewports passed with 7 chart paths before and after the transient host-row omission; a negative control with the retention change removed failed with the Identity rows flipping to agent:pbs-1, reproducing the reporter's flicker. Proves the drawer correlation-retention behaviour, not backend persistence or installed release behaviour."
+  "command": "pulse-worker-browser scripts/check-pbs-host-history-correlation.cjs (offline npm ci --offline from the prepared frontend cache when node_modules is absent)",
+  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1. The production ProxmoxBackupServersTable was exercised with synthetic API data: PBS host 10.0.0.5, reported nodeName proxback-vm, and a host agent whose hostname is proxback-vm. The proof passed both desktop and narrow viewports with 3 requests per viewport, all vm/proxmox:100, and 7 chart paths retained while the host rows were omitted and restored. Screenshots were visually checked. This proves browser correlation and history routing on the tested source, not backend persistence or installed release behaviour."
 }

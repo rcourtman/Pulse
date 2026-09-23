@@ -11,6 +11,8 @@
 //   pulse-worker-browser scripts/check-pbs-host-history-correlation.cjs
 const path = require('node:path');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const { spawnSync } = require('node:child_process');
 const { chromium } = require('playwright');
 
 const ROOT = path.resolve(process.cwd(), 'frontend-modern');
@@ -22,8 +24,20 @@ const launchOptions = {
 
 (async () => {
   process.chdir(ROOT);
+  const viteEntry = path.join(ROOT, 'node_modules', 'vite', 'dist', 'node', 'index.js');
+  if (!fs.existsSync(viteEntry)) {
+    // The browser runner is isolated from the host package tree. Recreate the
+    // exact locked dependencies from the assigned offline cache when needed.
+    const install = spawnSync(
+      'npm',
+      ['ci', '--offline', '--prefix', ROOT, '--cache', path.join(ROOT, '.npm', 'npm')],
+      { cwd: process.cwd(), stdio: 'inherit' },
+    );
+    if (install.error) throw install.error;
+    if (install.status !== 0) process.exit(install.status ?? 1);
+  }
   const { createServer } = await import(
-    path.join(ROOT, 'node_modules', 'vite', 'dist', 'node', 'index.js')
+    viteEntry
   );
   const server = await createServer({
     root: ROOT,

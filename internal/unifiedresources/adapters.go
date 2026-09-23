@@ -1506,6 +1506,7 @@ func resourceFromPBSInstance(instance models.PBSInstance) (Resource, ResourceIde
 		PBS: &PBSData{
 			InstanceID:             instance.ID,
 			Hostname:               extractHostname(instance.Host),
+			NodeName:               strings.TrimSpace(instance.NodeName),
 			HostURL:                instance.Host,
 			GuestURL:               instance.GuestURL,
 			Version:                instance.Version,

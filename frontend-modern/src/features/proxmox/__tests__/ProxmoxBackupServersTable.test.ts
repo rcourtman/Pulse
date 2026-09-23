@@ -146,6 +146,40 @@ const makeCorrelatedAgent = (overrides: Partial<Resource> = {}): Resource =>
   }) as Resource;
 
 describe('buildBackupServerRows PBS host correlation retention', () => {
+  it('uses the PBS-reported node name when its connection label and endpoint are not the host identity', () => {
+    const pbs = makePbsResource({
+      id: 'pbs-1',
+      name: 'backup-connection',
+      displayName: 'backup-connection',
+      platformId: 'backup-connection',
+      sources: ['pbs'],
+      pbs: {
+        instanceId: 'backup-connection',
+        hostname: '10.0.0.5',
+        nodeName: 'proxback-vm',
+        connectionHealth: 'healthy',
+        datastores: [{ name: 'tank', total: 1_000, used: 400, available: 600 }],
+      },
+      metricsTarget: { resourceType: 'agent', resourceId: 'backup-connection' },
+    });
+    const agent = makeCorrelatedAgent({
+      name: 'proxback-vm',
+      displayName: 'proxback-vm',
+      agent: { agentId: 'agent-proxback', hostname: 'proxback-vm' },
+      metricsTarget: { resourceType: 'agent', resourceId: 'agent-proxback' },
+    });
+
+    const rows = buildBackupServerRows([pbs, agent]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].resource.id).toBe('pbs-1');
+    expect(rows[0].resource.pbs?.instanceId).toBe('backup-connection');
+    expect(rows[0].resource.metricsTarget).toEqual({
+      resourceType: 'agent',
+      resourceId: 'agent-proxback',
+    });
+  });
+
   it('retains the resolved host target while a refresh snapshot omits the host row', () => {
     const retention = createPbsCorrelationRetention();
     const pbs = makeCorrelatablePbs();
