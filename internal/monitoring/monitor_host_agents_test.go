@@ -5933,29 +5933,36 @@ func TestDedupeUnifiedMetricWritesDropsExactReplays(t *testing.T) {
 
 // Issue #1966: a host agent and an API-backed TrueNAS connection can report
 // the same hostname without resolving to the same canonical resource. This
-// fixture checks their actual source IDs, metrics targets and unified-writer
-// selection. It deliberately pairs an identical synthetic CPU sample to
-// show that exact replay dedupe is per target: this is not evidence that the
-// reporter's two live samples had equal timestamps or values.
-func TestUnifiedAgentMetricsKeepSameHostnameHostAgentAndTrueNASTargetsSeparate(t *testing.T) {
+// fixture checks their disk-write source IDs, metrics targets and writer
+// selection, including that TrueNAS pool capacity is a different series. Its
+// deliberately identical synthetic pair tests the replay-key boundary, not
+// whether the reporter's live samples had equal timestamps or values.
+func TestUnifiedDiskWriteMetricsKeepSameHostnameHostAgentAndTrueNASTargetsSeparate(t *testing.T) {
 	previous := truenas.IsFeatureEnabled()
 	truenas.SetFeatureEnabled(true)
 	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
 
 	const (
-		hostname     = "truenas-iscsi.example.test"
-		hostAgentID  = "host-agent-iscsi"
-		connectionID = "truenas-connection-2"
-		cpuPercent   = 37.5
+		hostname      = "truenas-iscsi.example.test"
+		hostAgentID   = "host-agent-iscsi"
+		connectionID  = "truenas-connection-2"
+		hostWriteRate = 128_000
+		trueNASRate   = 3_400_000
 	)
 	observedAt := time.Date(2026, time.September, 23, 17, 0, 0, 0, time.UTC)
 
 	fixtures := truenas.DefaultFixtures()
 	fixtures.System.Hostname = hostname
-	fixtures.System.CPUPercent = cpuPercent
+	fixtures.System.DiskWriteRate = trueNASRate
 	fixtures.System.IntervalSeconds = 30
 	fixtures.System.CollectedAt = observedAt
 	fixtures.CollectedAt = observedAt
+	fixtures.Pools = fixtures.Pools[:1]
+	fixtures.Datasets = nil
+	fixtures.Disks = nil
+	fixtures.Apps = nil
+	fixtures.VMs = nil
+	fixtures.Shares = nil
 	provider := truenas.NewLiveProviderForConnection(
 		&truenas.FixtureFetcher{Snapshot: fixtures}, connectionID,
 	)
@@ -5968,7 +5975,7 @@ func TestUnifiedAgentMetricsKeepSameHostnameHostAgentAndTrueNASTargetsSeparate(t
 		ID:              hostAgentID,
 		Hostname:        hostname,
 		MachineID:       "host-agent-machine-iscsi",
-		CPUUsage:        cpuPercent,
+		DiskWriteRate:   hostWriteRate,
 		Status:          "online",
 		LastSeen:        observedAt,
 		IntervalSeconds: 30,
@@ -6006,6 +6013,29 @@ func TestUnifiedAgentMetricsKeepSameHostnameHostAgentAndTrueNASTargetsSeparate(t
 	if trueNASTarget == nil || trueNASTarget.ResourceType != "agent" || trueNASTarget.ResourceID != connectionID {
 		t.Fatalf("TrueNAS metrics target = %+v, want agent/%s", trueNASTarget, connectionID)
 	}
+	if hostResource.Metrics == nil || hostResource.Metrics.DiskWrite == nil ||
+		hostResource.Metrics.DiskWrite.Source != unifiedresources.SourceAgent ||
+		hostResource.Metrics.DiskWrite.Value != hostWriteRate {
+		t.Fatalf("host-agent disk-write observation = %+v, want agent rate %v", hostResource.Metrics, hostWriteRate)
+	}
+	if trueNASResource.Metrics == nil || trueNASResource.Metrics.DiskWrite == nil ||
+		trueNASResource.Metrics.DiskWrite.Source != unifiedresources.SourceTrueNAS ||
+		trueNASResource.Metrics.DiskWrite.Value != trueNASRate {
+		t.Fatalf("TrueNAS disk-write observation = %+v, want API rate %v", trueNASResource.Metrics, trueNASRate)
+	}
+
+	var poolTarget *unifiedresources.MetricsTarget
+	for _, resource := range resourceStore.GetAll() {
+		if resource.Type == unifiedresources.ResourceTypeStorage && resource.Name == "tank" &&
+			monitorHasSource(resource.Sources, unifiedresources.SourceTrueNAS) {
+			poolTarget = resourceStore.MetricsTargetForResource(resource.ID)
+			break
+		}
+	}
+	if poolTarget == nil || poolTarget.ResourceType != "storage" ||
+		poolTarget.ResourceID != "system:"+connectionID+"/pool:tank" {
+		t.Fatalf("TrueNAS pool metrics target = %+v, want connection-scoped storage pool", poolTarget)
+	}
 
 	cfg := metrics.DefaultConfig(t.TempDir())
 	persistentStore, err := metrics.NewStore(cfg)
@@ -6017,24 +6047,42 @@ func TestUnifiedAgentMetricsKeepSameHostnameHostAgentAndTrueNASTargetsSeparate(t
 	var writes []metrics.WriteMetric
 	monitor.syncUnifiedAgentMetrics(resourceStore, &writes)
 
-	var trueNASCPU *metrics.WriteMetric
+	var trueNASWrite *metrics.WriteMetric
 	for i := range writes {
 		write := &writes[i]
-		if write.MetricType != "cpu" {
+		if write.MetricType != "diskwrite" {
 			continue
 		}
 		if write.ResourceID == hostTarget.ResourceID {
 			t.Fatalf("unified sync selected the host-agent target %q; that source uses the direct agent writer", hostTarget.ResourceID)
 		}
 		if write.ResourceID == trueNASTarget.ResourceID {
-			trueNASCPU = write
+			trueNASWrite = write
 		}
 	}
-	if trueNASCPU == nil {
-		t.Fatalf("unified sync did not select the TrueNAS agent target %q for CPU; writes=%+v", trueNASTarget.ResourceID, writes)
+	if trueNASWrite == nil {
+		t.Fatalf("unified sync did not select the TrueNAS agent target %q for diskwrite; writes=%+v", trueNASTarget.ResourceID, writes)
 	}
-	if trueNASCPU.Value != cpuPercent || !trueNASCPU.Timestamp.Equal(observedAt) {
-		t.Fatalf("TrueNAS CPU sample = %+v, want value %v at %s", trueNASCPU, cpuPercent, observedAt)
+	if trueNASWrite.Value != trueNASRate || !trueNASWrite.Timestamp.Equal(observedAt) {
+		t.Fatalf("TrueNAS disk-write sample = %+v, want value %v at %s", trueNASWrite, trueNASRate, observedAt)
+	}
+	var storageWrites []metrics.WriteMetric
+	monitor.syncUnifiedStorageMetrics(resourceStore, &storageWrites)
+	if len(storageWrites) != 4 {
+		t.Fatalf("TrueNAS pool capacity writes = %+v, want usage/used/total/avail only", storageWrites)
+	}
+	poolSeries := make(map[string]bool)
+	for _, write := range storageWrites {
+		if write.ResourceType != "storage" || write.ResourceID != poolTarget.ResourceID ||
+			write.MetricType == "diskwrite" {
+			t.Fatalf("TrueNAS pool capacity reached an agent disk-write series: %+v", write)
+		}
+		poolSeries[write.MetricType] = true
+	}
+	for _, metric := range []string{"usage", "used", "total", "avail"} {
+		if !poolSeries[metric] {
+			t.Fatalf("TrueNAS pool missing capacity series %q; writes=%+v", metric, storageWrites)
+		}
 	}
 
 	// The fixture intentionally supplies one identical (type, metric, time,
@@ -6042,14 +6090,14 @@ func TestUnifiedAgentMetricsKeepSameHostnameHostAgentAndTrueNASTargetsSeparate(t
 	// guard preserves both first writes because its store key includes ID, then
 	// drops each exact same-target replay. Production-source equality for this
 	// reporter remains unverified until paired values/timestamps are provided.
-	hostCPU := *trueNASCPU
-	hostCPU.ResourceID = hostTarget.ResourceID
+	hostWrite := *trueNASWrite
+	hostWrite.ResourceID = hostTarget.ResourceID
 	pairedMonitor := &Monitor{}
-	paired := pairedMonitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{*trueNASCPU, hostCPU})
+	paired := pairedMonitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{*trueNASWrite, hostWrite})
 	if len(paired) != 2 {
 		t.Fatalf("distinct source targets retained %d of the deliberately identical paired samples; want 2", len(paired))
 	}
-	if replay := pairedMonitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{*trueNASCPU, hostCPU}); len(replay) != 0 {
+	if replay := pairedMonitor.dedupeUnifiedMetricWrites([]metrics.WriteMetric{*trueNASWrite, hostWrite}); len(replay) != 0 {
 		t.Fatalf("exact same-target paired replays retained %d writes, want 0: %+v", len(replay), replay)
 	}
 }
