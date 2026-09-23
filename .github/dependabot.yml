@@ -96,6 +96,14 @@ updates:
           - "version-update:semver-major"
           - "version-update:semver-minor"
           - "version-update:semver-patch"
+      # TypeScript majors must land with the lint toolchain:
+      # @typescript-eslint/eslint-plugin@8.70.0, @typescript-eslint/parser@8.70.0
+      # and typescript-eslint@8.70.0 each declare a peer dependency of
+      # "typescript": ">=4.8.4 <6.1.0". Keep TypeScript majors as explicit work
+      # rather than opening proposals the checked-in toolchain cannot build.
+      - dependency-name: "typescript"
+        update-types:
+          - "version-update:semver-major"
 
   - package-ecosystem: "docker"
     directories:

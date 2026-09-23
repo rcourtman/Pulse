@@ -41,13 +41,20 @@ func isPrereleaseVersion(version string) bool {
 	return strings.Contains(version, "-")
 }
 
-// unpublishedStableVersions lists stable versions whose tag and packet exist in
-// the repository but which never activated as a public GitHub release. They are
-// not valid rollback targets and must not be treated as the previous stable.
+// unpublishedStableVersions lists stable versions that never activated as a
+// public GitHub release, whether or not a same-version tag or packet was
+// staged. They are not valid rollback targets and must not be treated as the
+// previous stable.
 var unpublishedStableVersions = map[string]bool{
 	// Tagged 2026-08-31; the private Pro build failed its memory gate and the
 	// release commit verdict failed, so the packet shipped through v6.4.3 instead.
 	"6.4.2": true,
+	// v6.4.3 and v6.4.4 were only ever published as prereleases
+	// (v6.4.3-rc.1, v6.4.4-beta.N). The v6.4.5 stable patch promotes the
+	// exercised v6.4.5-rc.N candidate, so the last published stable remains
+	// v6.4.1 and is the rollback target.
+	"6.4.3": true,
+	"6.4.4": true,
 }
 
 func previousStablePatchVersion(version string) (string, bool) {
@@ -70,6 +77,50 @@ func previousStablePatchVersion(version string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// stablePatchPromotedPrerelease reports the same-version release candidate a
+// stable patch promotes, if one exists. A stable patch with a same-version RC
+// is RC-derived: the promotion resolver selects promotion_mode
+// "stable-rc-promotion" and refuses the emergency no-RC hotfix path, so the
+// install-metadata contract must assert that shape instead of the emergency
+// one. Detection reads the published candidate notes so it stays offline and
+// matches the release line's retained metadata.
+func stablePatchPromotedPrerelease(docsReleasesDir, version string) (string, bool) {
+	if isPrereleaseVersion(version) {
+		return "", false
+	}
+	matches, err := filepath.Glob(filepath.Join(docsReleasesDir, "RELEASE_NOTES_v"+version+"-rc.*.md"))
+	if err != nil {
+		return "", false
+	}
+	best := ""
+	bestNumber := -1
+	for _, match := range matches {
+		filename := filepath.Base(match)
+		tag := strings.TrimSuffix(strings.TrimPrefix(filename, "RELEASE_NOTES_v"), ".md")
+		marker := strings.LastIndex(tag, "-rc.")
+		if marker < 0 {
+			continue
+		}
+		number, err := strconv.Atoi(tag[marker+len("-rc."):])
+		if err != nil {
+			continue
+		}
+		if number > bestNumber {
+			bestNumber = number
+			best = "v" + tag
+		}
+	}
+	if best == "" {
+		return "", false
+	}
+	return best, true
+}
+
+func currentStablePatchPromotedPrerelease(t *testing.T, version string) (string, bool) {
+	t.Helper()
+	return stablePatchPromotedPrerelease(repoFile("docs", "releases"), version)
 }
 
 func previousStableForPrereleaseVersion(version string) (string, bool) {
@@ -182,6 +233,53 @@ func TestPreviousStableForPrereleaseVersionCrossesMinorBoundaries(t *testing.T) 
 				t.Fatalf("previousStableForPrereleaseVersion(%q) = %q, want %q", test.version, got, test.want)
 			}
 		})
+	}
+}
+
+func TestPreviousStablePatchVersionSkipsUnpublishedStables(t *testing.T) {
+	tests := []struct {
+		version string
+		want    string
+		ok      bool
+	}{
+		{version: "6.4.1", want: "6.4.0", ok: true},
+		{version: "6.4.2", want: "6.4.1", ok: true},
+		// v6.4.2 was tagged but never published; v6.4.3 and v6.4.4 only ever
+		// shipped as prereleases, so v6.4.5 rolls back to the published v6.4.1.
+		{version: "6.4.5", want: "6.4.1", ok: true},
+		{version: "6.4.0", ok: false},
+		{version: "6.4.5-rc.2", ok: false},
+	}
+	for _, test := range tests {
+		t.Run(test.version, func(t *testing.T) {
+			got, ok := previousStablePatchVersion(test.version)
+			if ok != test.ok || got != test.want {
+				t.Fatalf("previousStablePatchVersion(%q) = %q, %v; want %q, %v", test.version, got, ok, test.want, test.ok)
+			}
+		})
+	}
+}
+
+func TestStablePatchPromotedPrereleaseDetectsSameVersionCandidate(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{
+		"RELEASE_NOTES_v6.4.5-rc.1.md",
+		"RELEASE_NOTES_v6.4.5-rc.2.md",
+		"RELEASE_NOTES_v6.4.4-beta.4.md",
+		"RELEASE_NOTES_v6.4.5-beta.1.md",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o600); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	if got, ok := stablePatchPromotedPrerelease(dir, "6.4.5"); !ok || got != "v6.4.5-rc.2" {
+		t.Fatalf("stablePatchPromotedPrerelease(6.4.5) = %q, %v; want v6.4.5-rc.2, true", got, ok)
+	}
+	if got, ok := stablePatchPromotedPrerelease(dir, "6.4.6"); ok {
+		t.Fatalf("stablePatchPromotedPrerelease(6.4.6) = %q, true; want no same-version candidate", got)
+	}
+	if got, ok := stablePatchPromotedPrerelease(dir, "6.4.5-rc.2"); ok {
+		t.Fatalf("stablePatchPromotedPrerelease(6.4.5-rc.2) = %q, true; want prerelease ignored", got)
 	}
 }
 
@@ -325,28 +423,42 @@ func TestInstallDockerProofTracksStablePatchReleaseContract(t *testing.T) {
 	if !ok {
 		t.Skip("current release is not a stable patch release")
 	}
+	promotedTag, rcDerived := currentStablePatchPromotedPrerelease(t, version)
+	installabilityPath := repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md")
 
-	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
+	required := make([]string, 0, 5)
+	required = append(required,
 		"The active stable `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
-		"This patch release uses the stable hotfix path with `rollback_version=v"+previous+"`, `hotfix_exception=true`, a release-owner reason, and no fabricated same-version RC tag.",
-		"active customer harm",
 		"`no-mobile-impact`",
 		"For the active stable `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"`",
 	)
+	if rcDerived {
+		// An RC-derived stable patch promotes the exercised same-version
+		// candidate, so the active-stable paragraph names the promoted tag
+		// instead of the emergency no-RC hotfix path.
+		required = append(required, "promoted_from_tag="+promotedTag)
+	} else {
+		required = append(required,
+			"This patch release uses the stable hotfix path with `rollback_version=v"+previous+"`, `hotfix_exception=true`, a release-owner reason, and no fabricated same-version RC tag.",
+			"active customer harm",
+		)
+	}
+	assertFileContainsAllNormalized(t, installabilityPath, required...)
+
 	if version == "6.3.1" {
-		assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
+		assertFileContainsAllNormalized(t, installabilityPath,
 			"the prior `v"+previous+"` decision could not be reused for this patch",
 			"the release owner recorded that separate `v6.3.1` exception",
 			"public Unknown Publisher disclosure",
 		)
-	} else {
-		assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
+	} else if !rcDerived {
+		assertFileContainsAllNormalized(t, installabilityPath,
 			"standing SignPath-unavailable policy from `v6.3.2` onward",
 			"Public Unknown Publisher disclosure",
 		)
 	}
 	if version == "6.4.2" {
-		assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
+		assertFileContainsAllNormalized(t, installabilityPath,
 			"The governed branch is `main`",
 			"authenticated non-administrator organization members can reach infrastructure action control",
 			"SSO-only deployments can treat every authenticated IdP user as an instance administrator without an explicit grant",
