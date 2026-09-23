@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
-import { buildBackupServerRows } from '../ProxmoxBackupServersTable';
+import { buildBackupServerRows, createPbsCorrelationRetention } from '../ProxmoxBackupServersTable';
 
 const makePbsResource = (overrides: Partial<Resource> = {}): Resource =>
   ({
@@ -107,5 +107,98 @@ describe('buildBackupServerRows', () => {
     expect(rows[0].cpuPercent).toBeUndefined();
     expect(rows[0].memoryPercent).toBeUndefined();
     expect(rows[0].uptimeSeconds).toBeUndefined();
+  });
+});
+
+const makeCorrelatablePbs = (lastSeen = 1_700_000_000_000): Resource =>
+  makePbsResource({
+    id: 'pbs-1',
+    name: 'proxback',
+    displayName: 'proxback',
+    platformId: 'proxback',
+    sources: ['pbs'],
+    lastSeen,
+    pbs: {
+      instanceId: 'proxback',
+      hostname: 'proxback-vm',
+      connectionHealth: 'healthy',
+      datastores: [{ name: 'tank', total: 1_000, used: 400, available: 600 }],
+    },
+    // The PBS service target names the service key, not the host series.
+    metricsTarget: { resourceType: 'agent', resourceId: 'proxback' },
+  });
+
+const makeCorrelatedAgent = (overrides: Partial<Resource> = {}): Resource =>
+  ({
+    id: 'agent-proxback',
+    type: 'agent',
+    name: 'proxback',
+    displayName: 'proxback',
+    platformId: 'agent-proxback',
+    platformType: 'proxmox-pbs',
+    sourceType: 'hybrid',
+    sources: ['agent', 'pbs'],
+    status: 'online',
+    lastSeen: 1_700_000_000_000,
+    agent: { agentId: 'agent-proxback', hostname: 'proxback' },
+    metricsTarget: { resourceType: 'agent', resourceId: 'agent-proxback' },
+    ...overrides,
+  }) as Resource;
+
+describe('buildBackupServerRows PBS host correlation retention', () => {
+  it('retains the resolved host target while a refresh snapshot omits the host row', () => {
+    const retention = createPbsCorrelationRetention();
+    const pbs = makeCorrelatablePbs();
+    const agent = makeCorrelatedAgent();
+
+    const first = buildBackupServerRows([pbs, agent], [], retention);
+    expect(first[0].resource.metricsTarget?.resourceId).toBe('agent-proxback');
+
+    // The host row is briefly absent; the service target must not replace it.
+    const omitted = buildBackupServerRows([pbs], [], retention);
+    expect(omitted[0].resource.metricsTarget?.resourceId).toBe('agent-proxback');
+
+    // A later snapshot that carries the host again confirms the same target.
+    const restored = buildBackupServerRows([pbs, agent], [], retention);
+    expect(restored[0].resource.metricsTarget?.resourceId).toBe('agent-proxback');
+  });
+
+  it('does not reuse a remembered host when the current snapshot is ambiguous', () => {
+    const retention = createPbsCorrelationRetention();
+    const pbs = makeCorrelatablePbs();
+    const agent = makeCorrelatedAgent();
+    buildBackupServerRows([pbs, agent], [], retention);
+
+    const otherAgent = makeCorrelatedAgent({
+      id: 'agent-other',
+      platformId: 'agent-other',
+      agent: { agentId: 'agent-other', hostname: 'proxback' },
+      metricsTarget: { resourceType: 'agent', resourceId: 'agent-other' },
+    });
+    const ambiguous = buildBackupServerRows([pbs, agent, otherAgent], [], retention);
+
+    expect(ambiguous[0].resource.metricsTarget?.resourceId).toBe('proxback');
+  });
+
+  it('drops a remembered host once it is stale relative to the server', () => {
+    const retention = createPbsCorrelationRetention();
+    const agent = makeCorrelatedAgent({ lastSeen: 1_700_000_000_000 });
+    const pbs = makeCorrelatablePbs(1_700_000_000_000);
+    buildBackupServerRows([pbs, agent], [], retention);
+
+    const stale = makeCorrelatablePbs(1_700_000_000_000 + 6 * 60 * 1000);
+    const rows = buildBackupServerRows([stale], [], retention);
+    expect(rows[0].resource.metricsTarget?.resourceId).toBe('proxback');
+    expect(retention.size).toBe(0);
+  });
+
+  it('prunes remembered hosts for servers that are no longer present', () => {
+    const retention = createPbsCorrelationRetention();
+    const pbs = makeCorrelatablePbs();
+    buildBackupServerRows([pbs, makeCorrelatedAgent()], [], retention);
+    expect(retention.has('pbs-1')).toBe(true);
+
+    buildBackupServerRows([makePbsResource({ id: 'pbs-2', name: 'other' })], [], retention);
+    expect(retention.has('pbs-1')).toBe(false);
   });
 });

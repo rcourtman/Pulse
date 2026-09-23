@@ -567,6 +567,14 @@ describe('ProxmoxBackupsTable', () => {
     expect(proxmoxBackupServersTableSource).toContain(
       'metricsTarget: agent.metricsTarget ?? server.metricsTarget',
     );
+    // A refresh that briefly omits the correlated host row must not flip the
+    // drawer target to the PBS service key; retain the resolved host per server
+    // and reuse it only across the omission.
+    expect(proxmoxBackupServersTableSource).toContain('createPbsCorrelationRetention');
+    expect(proxmoxBackupServersTableSource).toContain('hasCorrelationCandidate');
+    expect(proxmoxBackupServersTableSource).toContain(
+      'buildBackupServerRows(props.servers, props.backups ?? [], retention)',
+    );
     expect(proxmoxBackupServersTableSource).not.toContain(
       '<span class="font-medium text-base-content">Server:</span>',
     );

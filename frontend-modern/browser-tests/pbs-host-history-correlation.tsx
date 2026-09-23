@@ -86,9 +86,13 @@ const Fixture = () => {
   // Simulates a snapshot in which the merged host correlation target is
   // transiently absent, which is what gates the drawer's History tab.
   const [dropMetricsTarget, setDropMetricsTarget] = createSignal(false);
+  // Simulates a live refresh that briefly omits the correlated host row while
+  // the PBS server row remains, which is what flipped the drawer's Identity and
+  // History target between the host series and the service key (#1723).
+  const [dropHostRows, setDropHostRows] = createSignal(false);
   const refresh = () => {
     const count = snapshot() + 1;
-    const next = structuredClone([pbs, guest, standalone]);
+    let next = structuredClone([pbs, guest, standalone]);
     next[1].cpu = { current: 15.4 + count };
     const tank = next[0].pbs!.datastores!.find((store) => store.name === 'tank')!;
     tank.used = 400 + count * 10;
@@ -99,6 +103,9 @@ const Fixture = () => {
     }
     if (dropMetricsTarget()) {
       for (const resource of next) delete resource.metricsTarget;
+    }
+    if (dropHostRows()) {
+      next = next.filter((resource) => resource.type === 'pbs');
     }
     setServers(next);
     setSnapshot(count);
@@ -122,6 +129,23 @@ const Fixture = () => {
       >
         Restore metrics target
       </button>
+      <button
+        onClick={() => {
+          setDropHostRows(true);
+          refresh();
+        }}
+      >
+        Drop correlated host
+      </button>
+      <button
+        onClick={() => {
+          setDropHostRows(false);
+          refresh();
+        }}
+      >
+        Restore correlated host
+      </button>
+      <output aria-label="Snapshot number">{snapshot()}</output>
       <ProxmoxBackupServersTable servers={servers()} />
     </>
   );

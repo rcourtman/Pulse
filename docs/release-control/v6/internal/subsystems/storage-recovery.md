@@ -6000,6 +6000,8 @@ Bounded adaptations of reviewed main 3a189f31d447 (identity only) and 605643b017
 
 A single agent can arrive as two distinct resources: a PVE guest carrying its telemetry and the standalone `source=pbs` host row. Collapse those candidates by agent identity and resolve the Backups PBS row to the guest target, whose persisted host series the drawer charts; keeping the PBS service target leaves History on a key with no host data. Distinct agent identities stay ambiguous, and a missing agent identity is not sameness proof. Do not add a second guest-estate request to compensate. This release-line adaptation of reviewed main e9a426aeeb supersedes the 605643b01722 correlation attempt.
 
+A realtime refresh can briefly omit the correlated host row while the PBS server row remains. Retain the last resolved host per PBS server across that omission instead of falling back to the service target, so the drawer's Identity rows and History series stay on the host key. Reuse the remembered host only while it is still fresh relative to the server and drop it once stale, so a removed or replaced host is not advertised indefinitely; a present but ambiguous host still declines.
+
 ### Quick security setup preserves unrelated settings
 
 Authenticated force setup in `internal/api/security_setup_fix.go` retains the

@@ -280,4 +280,76 @@ describe('ProxmoxBackupServersTable details', () => {
       'proxmox:100',
     );
   });
+
+  it('retains the correlated host target when a refreshed snapshot omits the agent row', async () => {
+    const makeServers = (): [Resource, Resource] => {
+      const pbs = makePbsResource();
+      pbs.id = 'pbs-1';
+      pbs.name = 'proxback';
+      pbs.displayName = 'proxback';
+      pbs.platformId = 'pbs-1';
+      pbs.sources = ['pbs'];
+      pbs.agent = undefined;
+      // The PBS service target names the service key, not the host series.
+      pbs.metricsTarget = { resourceType: 'agent', resourceId: 'proxback' };
+      pbs.pbs = {
+        instanceId: 'proxback',
+        hostname: 'proxback-vm',
+        version: '3.2.1',
+        connectionHealth: 'healthy',
+        datastores: [{ name: 'tank', total: 1000, used: 400, available: 600, usagePercent: 40 }],
+      };
+      pbs.platformData = {
+        sources: ['pbs'],
+        pbs: { instanceId: 'proxback', hostname: 'proxback-vm', datastoreCount: 1 },
+      };
+      const agent = {
+        id: 'agent-proxback',
+        type: 'agent',
+        name: 'proxback-vm',
+        displayName: 'proxback-vm',
+        platformId: 'agent-proxback',
+        platformType: 'proxmox-pbs',
+        sourceType: 'hybrid',
+        sources: ['agent', 'pbs'],
+        status: 'online',
+        lastSeen: pbs.lastSeen + 1000,
+        agent: { agentId: 'agent-proxback', hostname: 'proxback-vm' },
+        metricsTarget: { resourceType: 'agent', resourceId: 'agent-proxback' },
+        platformData: {
+          sources: ['agent', 'pbs'],
+          agent: { agentId: 'agent-proxback', hostname: 'proxback-vm' },
+        },
+      } as Resource;
+      return [pbs, agent];
+    };
+    const [pbs, agent] = makeServers();
+    const [servers, setServers] = createSignal<Resource[]>([pbs, agent]);
+    render(() => <ProxmoxBackupServersTable servers={servers()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand details for proxback' }));
+    expect(screen.getByTestId('pbs-resource-detail')).toHaveAttribute(
+      'data-metrics-resource-id',
+      'agent-proxback',
+    );
+
+    // A live refresh snapshot can transiently omit the correlated agent row.
+    // The drawer target must not fall back to the PBS service target.
+    setServers([pbs]);
+    await waitFor(() =>
+      expect(screen.getByTestId('pbs-resource-detail')).toHaveAttribute(
+        'data-metrics-resource-id',
+        'agent-proxback',
+      ),
+    );
+
+    // When the agent returns, the retained correlation is confirmed, not re-guessed.
+    setServers([pbs, agent]);
+    await waitFor(() =>
+      expect(screen.getByTestId('pbs-resource-detail')).toHaveAttribute(
+        'data-metrics-resource-id',
+        'agent-proxback',
+      ),
+    );
+  });
 });
