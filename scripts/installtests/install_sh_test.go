@@ -2658,6 +2658,83 @@ func TestInstallSHFreeBSDRendererUsesDaemonSupervisorPidfile(t *testing.T) {
 	}
 }
 
+// TestInstallSHFreeBSDAgentLogsUseRotatingWriter pins the FreeBSD half of the
+// log-capture fix for issue #2123: rc.d has no journal and daemon(8) does not
+// capture the child's stdout, so the agent must own a rotating --log-file and
+// the completion hint must point at it. pfSense has no /var/log/messages, so
+// the old system-log hint is removed entirely rather than repointed.
+func TestInstallSHFreeBSDAgentLogsUseRotatingWriter(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`AGENT_LOG_FILE="${STATE_DIR}/logs/${AGENT_NAME}.log"`,
+		`AGENT_LOG_FILE="${TRUENAS_LOG_DIR}/${AGENT_NAME}.log"`,
+		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f ${AGENT_LOG_FILE}"`,
+		`log_info "To view logs: tail -f ${AGENT_LOG_FILE}"`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing FreeBSD rotating agent log wiring: %s", needle)
+		}
+	}
+	if strings.Contains(script, "tail -f /var/log/messages") {
+		t.Fatal("install.sh still points FreeBSD/pfSense users at /var/log/messages, which does not exist on pfSense")
+	}
+}
+
+// TestInstallSHFreeBSDBuildArgsPassesLogFile verifies the FreeBSD rc.d service
+// args actually carry --log-file once AGENT_LOG_FILE is set.
+func TestInstallSHFreeBSDBuildArgsPassesLogFile(t *testing.T) {
+	script := `
+		PULSE_URL="http://pulse.local:7655"
+		PULSE_TOKEN=""
+		INTERVAL="30s"
+		INTERVAL_EXPLICIT="false"
+		ENABLE_HOST="true"
+		HOST_EXPLICIT="false"
+		ENABLE_DOCKER=""
+		DOCKER_EXPLICIT="false"
+		ENABLE_KUBERNETES=""
+		KUBERNETES_EXPLICIT="false"
+		KUBECONFIG_PATH=""
+		ENABLE_PROXMOX=""
+		PROXMOX_EXPLICIT="false"
+		PROXMOX_TYPE=""
+		INSECURE="false"
+		ENABLE_COMMANDS="false"
+		ENROLL="false"
+		HEALTH_ADDR=""
+		HEALTH_ADDR_SET="false"
+		AGENT_ID=""
+		HOSTNAME_OVERRIDE=""
+		STATE_DIR="/var/lib/pulse-agent"
+		CURL_CA_BUNDLE=""
+		KUBE_INCLUDE_ALL_PODS="false"
+		KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
+		DISK_EXCLUDES=()
+		DISK_INCLUDES=()
+		RUNTIME_TOKEN_FILE=""
+		AGENT_LOG_FILE="/var/lib/pulse-agent/logs/pulse-agent.log"
+` + extractInstallShellFunction(t, "build_exec_arg_items") + `
+` + extractInstallShellFunction(t, "join_exec_arg_items") + `
+` + extractInstallShellFunction(t, "build_exec_args") + `
+		build_exec_args
+		printf 'EXEC_ARGS=%s\n' "$EXEC_ARGS"
+	`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	if !strings.Contains(got, "--log-file /var/lib/pulse-agent/logs/pulse-agent.log") {
+		t.Fatalf("FreeBSD service args missing rotating --log-file:\n%s", got)
+	}
+}
+
 func TestInstallSHUsesCanonicalCompletionHelper(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
@@ -2676,7 +2753,7 @@ func TestInstallSHUsesCanonicalCompletionHelper(t *testing.T) {
 		`complete_installation_flow "$UNRAID_STORAGE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f ${AGENT_LOG_FILE}"`,
 		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f ${AGENT_LOG_FILE}"`,
 		`complete_installation_flow "$TRUENAS_STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." ""`,
-		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f /var/log/messages"`,
+		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f ${AGENT_LOG_FILE}"`,
 		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "journalctl -u ${AGENT_NAME} --no-pager -n 20"`,
 		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f /var/log/${AGENT_NAME}.log"`,
 	}
