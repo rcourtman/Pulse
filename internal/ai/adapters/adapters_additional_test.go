@@ -1,8 +1,10 @@
 package adapters
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -73,6 +75,7 @@ func TestEventCorrelatorToolAdapter(t *testing.T) {
 func TestKnowledgeStore_SaveLoad(t *testing.T) {
 	dir := t.TempDir()
 	store := NewKnowledgeStore(dir)
+	defer store.flush()
 
 	if err := store.SaveNote("agent:res-1", "note", "general"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -126,5 +129,34 @@ func TestKnowledgeStore_LoadFromDisk_DoesNotCanonicalizeLegacyHostKeys(t *testin
 	}
 	if len(store.GetKnowledge("host:alpha", "general")) != 0 {
 		t.Fatalf("expected unsupported host query alias to be rejected")
+	}
+}
+
+func TestKnowledgeStore_ConcurrentSaveNotePersistsAllEntries(t *testing.T) {
+	dir := t.TempDir()
+	store := NewKnowledgeStore(dir)
+
+	const count = 25
+	var wg sync.WaitGroup
+	for i := 0; i < count; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			if err := store.SaveNote(fmt.Sprintf("agent:res-%d", i), "note", "general"); err != nil {
+				t.Errorf("SaveNote(agent:res-%d): %v", i, err)
+			}
+		}(i)
+	}
+	wg.Wait()
+	store.flush()
+
+	loaded := NewKnowledgeStore(dir)
+	if err := loaded.loadFromDisk(); err != nil {
+		t.Fatalf("load after concurrent saves: %v", err)
+	}
+	for i := 0; i < count; i++ {
+		if got := loaded.GetKnowledge(fmt.Sprintf("agent:res-%d", i), "general"); len(got) != 1 {
+			t.Fatalf("expected exactly one entry for agent:res-%d, got %d", i, len(got))
+		}
 	}
 }
