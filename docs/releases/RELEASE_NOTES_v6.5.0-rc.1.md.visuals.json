@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "decision": "Zero captures: this candidate is mainly behavioural reliability, installation, alert and identity work. Static before-and-after images would not verify those effects and could expose environment-specific names.",
+  "captures": []
+}
