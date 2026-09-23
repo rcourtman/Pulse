@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Guard the low-noise dependency update policy and its covered manifests."""
 
+import json
 from pathlib import Path
 import unittest
 
@@ -10,6 +11,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / ".github" / "dependabot.yml"
 SECURITY_SCAN = ROOT / ".github" / "workflows" / "security-scan.yml"
+ACTION_MANIFESTS = ROOT / "scripts" / "release_control" / "action_consumer_manifests.json"
 
 
 def manifest_directories(filename: str) -> list[str]:
@@ -158,6 +160,20 @@ class DependabotConfigTest(unittest.TestCase):
             ignored["typescript"],
             {"version-update:semver-major"},
         )
+
+    def test_github_actions_updates_preserve_reviewed_action_pins(self) -> None:
+        # action_consumer_manifests.json pins each release-consumed action to an
+        # exact SHA plus the upstream action.yml sha256, and
+        # release_promotion_policy_test.py requires every workflow step to match
+        # it. Refreshing a pin needs the upstream bytes through the reviewed
+        # pin-refresh route, so Dependabot must not propose version updates the
+        # manifest contract would reject.
+        manifests = json.loads(ACTION_MANIFESTS.read_text(encoding="utf-8"))
+        ignored = {
+            item["dependency-name"]
+            for item in self.updates["github-actions"]["ignore"]
+        }
+        self.assertEqual(ignored, set(manifests))
 
     def test_weekly_scan_covers_the_same_lockfiles(self) -> None:
         workflow = yaml.safe_load(SECURITY_SCAN.read_text(encoding="utf-8"))

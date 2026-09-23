@@ -23,6 +23,21 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    # scripts/release_control/action_consumer_manifests.json pins each
+    # release-consumed action to an exact SHA plus the upstream action.yml
+    # sha256, and release_promotion_policy_test.py requires every workflow step
+    # to match that manifest. Refreshing a pin needs the upstream action bytes
+    # through the reviewed pin-refresh route, so keep these actions as explicit
+    # work rather than opening proposals the manifest contract cannot accept.
+    ignore:
+      - dependency-name: "actions/attest"
+      - dependency-name: "azure/setup-helm"
+      - dependency-name: "docker/build-push-action"
+      - dependency-name: "docker/login-action"
+      - dependency-name: "docker/setup-buildx-action"
+      - dependency-name: "docker/setup-qemu-action"
+      - dependency-name: "signpath/github-action-submit-signing-request"
+      - dependency-name: "tailscale/github-action"
 
   - package-ecosystem: "gomod"
     directories:
