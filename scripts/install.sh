@@ -6821,6 +6821,13 @@ if [[ "$TRUENAS" == true ]]; then
     mkdir -p "$TRUENAS_STATE_DIR"
     mkdir -p "$TRUENAS_LOG_DIR"
 
+    # FreeBSD rc.d has no journal and daemon(8) does not capture the child's
+    # stdout, so the agent's own rotating writer must own its log. On Linux the
+    # systemd unit captures stdout via journald instead.
+    if [[ "$(uname -s)" == "FreeBSD" ]]; then
+        AGENT_LOG_FILE="${TRUENAS_LOG_DIR}/${AGENT_NAME}.log"
+    fi
+
     TRUENAS_STORED_BINARY="$TRUENAS_STATE_DIR/${BINARY_NAME}"
 
     # Move binary to persistent storage location
@@ -6958,7 +6965,7 @@ EOF
         log_info "Logs: tail -f ${TRUENAS_LOG_FILE}"
     elif [[ "$(uname -s)" == "FreeBSD" ]]; then
         log_info "Service: $TRUENAS_SERVICE_STORAGE (symlinked to rc.d)"
-        log_info "Logs: tail -f /var/log/messages"
+        log_info "Logs: tail -f ${AGENT_LOG_FILE}"
     fi
     log_info ""
     log_info "The Init/Shutdown task ensures the agent survives TrueNAS upgrades."
@@ -7023,6 +7030,12 @@ if [[ "$OS" == "freebsd" ]] || [[ -f /etc/rc.subr ]]; then
     RCSCRIPT="/usr/local/etc/rc.d/${AGENT_NAME}"
     log_info "Configuring FreeBSD rc.d service at $RCSCRIPT..."
 
+    # FreeBSD rc.d has no journal, and daemon(8) does not capture the child's
+    # stdout, so the agent's own rotating writer must own its log. Without this
+    # the agent logs are lost and the completion hint below would point at a
+    # system log that never receives them (and that pfSense does not even ship).
+    AGENT_LOG_FILE="${STATE_DIR}/logs/${AGENT_NAME}.log"
+
     # Build command line args
     ensure_runtime_token_file "$STATE_DIR"
     clear_proxmox_state_if_needed
@@ -7050,9 +7063,9 @@ BOOTEOF
 
     # Stop existing agent if running
     restart_sysv_agent_service "$RCSCRIPT"
-    complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f /var/log/messages"
+    complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f ${AGENT_LOG_FILE}"
     log_info "To check status: $RCSCRIPT status"
-    log_info "To view logs: tail -f /var/log/messages"
+    log_info "To view logs: tail -f ${AGENT_LOG_FILE}"
     exit 0
 fi
 
