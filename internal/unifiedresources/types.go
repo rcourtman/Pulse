@@ -1248,6 +1248,7 @@ type DockerData struct {
 type PBSData struct {
 	InstanceID               string                        `json:"instanceId,omitempty"`
 	Hostname                 string                        `json:"hostname,omitempty"`
+	NodeName                 string                        `json:"nodeName,omitempty"`
 	HostURL                  string                        `json:"hostUrl,omitempty"`
 	GuestURL                 string                        `json:"guestUrl,omitempty"`
 	Version                  string                        `json:"version,omitempty"`

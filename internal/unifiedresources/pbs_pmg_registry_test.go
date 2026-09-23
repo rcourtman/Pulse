@@ -309,6 +309,67 @@ func TestIngestSnapshotSkipsAmbiguousPBSHostAgentAssociation(t *testing.T) {
 	}
 }
 
+// A PBS connection is often configured by IP or a DNS alias the agent never
+// reports. The node hostname PBS reports about itself is then the only machine
+// identity linking the host agent to the connection (#1723).
+func TestIngestSnapshotAssociatesPBSHostAgentByReportedNodeName(t *testing.T) {
+	now := time.Now().UTC()
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:        "agent-pbs-1",
+				Hostname:  "pbs-one.local",
+				MachineID: "machine-pbs-1",
+				ReportIP:  "10.9.9.9",
+				Status:    "online",
+				LastSeen:  now,
+				Sensors: models.HostSensorSummary{
+					SMART: []models.HostDiskSMART{{Device: "/dev/sda", Serial: "PBS-DISK-1"}},
+				},
+			},
+		},
+		PBSInstances: []models.PBSInstance{
+			{
+				ID:   "pbs-1",
+				Name: "backup-connection",     // connection label, not the machine
+				Host: "https://10.0.0.5:8007", // endpoint the agent never reports
+				// Machine identity the PBS node reports about itself.
+				NodeName: "pbs-one.local",
+				Status:   "online",
+				LastSeen: now,
+			},
+		},
+	})
+
+	var pbsResource *Resource
+	var hostResource *Resource
+	for _, resource := range registry.List() {
+		switch resource.Type {
+		case ResourceTypePBS:
+			copy := resource
+			pbsResource = &copy
+		case ResourceTypeAgent:
+			if resource.Agent != nil && resource.Agent.AgentID == "agent-pbs-1" {
+				copy := resource
+				hostResource = &copy
+			}
+		}
+	}
+	if pbsResource == nil || pbsResource.PBS == nil {
+		t.Fatalf("expected PBS resource with payload, got %+v", pbsResource)
+	}
+	if pbsResource.PBS.NodeName != "pbs-one.local" {
+		t.Fatalf("PBS nodeName = %q, want reported machine hostname", pbsResource.PBS.NodeName)
+	}
+	if hostResource == nil {
+		t.Fatal("expected host agent resource")
+	}
+	if !containsDataSource(hostResource.Sources, SourcePBS) {
+		t.Fatalf("PBS host sources = %v, want PBS membership via reported node name", hostResource.Sources)
+	}
+}
+
 func containsPlatformScope(values []string, expected string) bool {
 	for _, value := range values {
 		if value == expected {

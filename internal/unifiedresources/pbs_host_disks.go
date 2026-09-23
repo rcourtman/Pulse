@@ -98,6 +98,13 @@ func pbsInstanceCorroboratesHost(instance models.PBSInstance, host models.Host) 
 	if hostName == "" {
 		return false
 	}
+	// The node hostname the PBS API reports about itself is machine identity.
+	// It is the strongest evidence when the connection is configured by IP or
+	// a DNS alias the agent never reports, which the connection label and the
+	// configured endpoint cannot corroborate on their own (#1723).
+	if nodeName := NormalizeHostname(instance.NodeName); nodeName != "" && nodeName == hostName {
+		return true
+	}
 	if instanceName := NormalizeHostname(instance.Name); instanceName != "" && instanceName == hostName {
 		return true
 	}
