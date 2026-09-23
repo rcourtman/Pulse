@@ -904,7 +904,13 @@ container inventory table.
     metricsTarget because it names the persisted host series, while the PBS
     service target names the service key and has no host history. Only distinct
     agent identities, or candidates whose identity cannot be proven equal,
-    decline to choose.
+    decline to choose. A realtime refresh can briefly omit the correlated host
+    row while the PBS server row remains: retain the last resolved correlation
+    per PBS server across that omission rather than substituting the PBS service
+    target, so the drawer's identity rows and history target stay stable. Reuse
+    the remembered host only while it is still fresh relative to the server and
+    drop it once stale, so a removed or replaced host is not advertised
+    indefinitely; a present but ambiguous host still declines.
 13. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx` shared with `storage-recovery`: Proxmox workload coverage rows are both a storage/recovery protection-posture surface and a unified-resource identity consumer boundary.
 14. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx` shared with `storage-recovery`: Proxmox recoverable workload table rows are both a storage/recovery coverage surface and a unified-resource platform-table consumer boundary.
 15. `frontend-modern/src/routing/routePreload.ts` shared with `frontend-primitives`, `performance-and-scalability`: the app-shell route preload registry is a canonical frontend shell boundary, an authenticated hot-path performance boundary, and the entry point for the unified-resource Actions workspace.

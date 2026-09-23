@@ -290,6 +290,8 @@ canonical input or create a second mobile disclosure interaction.
 
 One agent can be surfaced twice for a single PBS host: folded into its PVE guest and as a standalone `source=pbs` host row. Those two rows are one machine, not an ambiguous pair. Correlation must collapse candidates that share an agent identity and prefer the guest representation, whose canonical metrics target carries the persisted host history; the PBS service target has no host series and renders the collecting-history state. Two candidates with distinct agent identities remain ambiguous, and a candidate with no agent identity must not be treated as proof of sameness.
 
+A live snapshot can briefly omit the correlated host row while the PBS server row remains, for example while a realtime refresh replaces the merged estate. The correlation must retain the last resolved host per PBS server across that omission instead of falling back to the PBS service target, so the drawer's Identity rows and History series do not flicker. Reuse the remembered host only while it is still fresh relative to the server, and drop it once stale so a removed or replaced host is not advertised indefinitely; a host row that is present but ambiguous still declines.
+
 Presentation helpers that mirror a server-side classification must name the
 predicate they mirror and expose it as a single exported function rather than
 inlining the boundary at each call site. `isPhysicalDiskWearoutReported` mirrors

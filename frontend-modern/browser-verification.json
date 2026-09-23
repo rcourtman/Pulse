@@ -1,17 +1,13 @@
 {
   "version": 1,
-  "base_sha": "6e52fcac77b13c03c043c88ca953efa79d8fcb8f",
-  "verified_at": "2026-09-23T01:17:07Z",
+  "base_sha": "46abf39498b577604c70436d5b2b0624fee3c92e",
+  "verified_at": "2026-09-23T10:29:20Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts"
-  ],
+  "changed_paths": ["frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts": "24f77d42e2542dd0e8fcf9c55f25a8373c563069c5a0dc112afa6a4456d5a93a"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "99ef48ddd60e82780d86d7a8740fa2e6957c2c6f9a86ac23d3030fe50766ac5e"
   },
-  "routes": [
-    "/browser-tests/pbs-host-history-correlation.html?topology=guest&order=stable (Proxmox Backups server drawer)"
-  ],
+  "routes": ["/browser-tests/pbs-host-history-correlation.html (Proxmox Backups server drawer)"],
   "viewports": [
     {
       "width": 1280,
@@ -23,16 +19,16 @@
     }
   ],
   "states": [
-    "Drawer History tab selected with a populated host history target",
-    "Snapshot with the merged host metrics target transiently absent (availability notice)",
-    "Snapshot with the metrics target restored on the same selection"
+    "Backups drawer on the correlated guest host series with the History tab selected and populated",
+    "Fresh snapshot in which the correlated host row is transiently omitted while the PBS server row remains",
+    "Snapshot in which the correlated host row is restored on the same drawer selection"
   ],
   "interactions": [
-    "Expand the Proxmox Backups server row and select the History tab; assert the chart paths render",
-    "Apply a snapshot that removes the merged host metrics target; assert the drawer is not remounted and the History selection is retained, showing the in-tab availability notice",
-    "Apply a snapshot that restores the metrics target; assert the same History selection recovers the chart paths",
-    "Repeat at 1280x900 and 390x844; the same check fails on the pre-fix source (no notice, selection reset)"
+    "Expand each datastore row (tank, archive, revisited tank) and select History; assert the chart paths and Identity rows persist across fresh snapshots",
+    "Click 'Drop correlated host' so the refresh snapshot omits the guest and standalone agent rows; assert the drawer is not remounted, the History selection and chart paths survive, and the Identity rows stay on the host series (vm/proxmox:100)",
+    "Click 'Restore correlated host' and assert the host target is confirmed",
+    "Repeat at 1280x900 and 390x844; the same check fails on the pre-fix source, where the Identity rows flip to agent:pbs-1"
   ],
-  "command": "pulse-worker-browser scripts/check-drawer-tab-retention.cjs",
-  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1. Re-verified on the composed v6.4.5-rc.2 candidate (release/v6.4 828182ab6 plus the 6.4.5-rc.2 release-metadata commit): production ResourceDetailDrawer mounted through the real ProxmoxBackupServersTable fixture with synthetic API responses on the release/v6.4 tree. Proves the drawer tab-retention behaviour, not backend persistence or installed release behaviour. Both viewports passed with 7 chart paths before and after the transient target loss."
+  "command": "pulse-worker-browser scripts/check-pbs-host-history-correlation.cjs",
+  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1. Production ProxmoxBackupServersTable mounted through the release/v6.4 browser fixture with synthetic API responses. Both viewports passed with 7 chart paths before and after the transient host-row omission; a negative control with the retention change removed failed with the Identity rows flipping to agent:pbs-1, reproducing the reporter's flicker. Proves the drawer correlation-retention behaviour, not backend persistence or installed release behaviour."
 }

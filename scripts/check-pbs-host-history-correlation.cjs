@@ -35,6 +35,23 @@ const launchOptions = {
   const pageErrors = [];
   const expected = 'vm/proxmox:100';
   const wrong = 'agent/pbs-1';
+  // Reporter avsdev-cw sees the Identity card's "Discovery" and "Metrics
+  // Target" rows flick between a service id and the correlated host id while
+  // the table sits idle. Read the rendered rows so a snapshot-driven identity
+  // change fails the check instead of only being visible to a human.
+  const readIdentityRows = (detail) =>
+    detail
+      .locator('[data-testid="resource-identity-section"] tr')
+      .evaluateAll((rows) =>
+        rows
+          .map((row) => {
+            const cells = row.querySelectorAll('td');
+            return cells.length >= 2
+              ? [cells[0].textContent.trim(), cells[1].textContent.trim()]
+              : null;
+          })
+          .filter((row) => row && row[0]),
+      );
   try {
     await server.listen();
     browser = await chromium.launch(launchOptions);
@@ -118,6 +135,9 @@ const launchOptions = {
         );
       };
       const observations = [];
+      let retainedIdentity = [];
+      let retainedPaths = 0;
+      const detail = page.locator('[data-inline-platform-resource-detail-for="pbs-1"]');
       // Both datastore rows must use the same host series, including revisiting
       // the first row after its history component has been disposed.
       for (const [index, datastore] of ['tank', 'archive', 'tank'].entries()) {
@@ -128,7 +148,6 @@ const launchOptions = {
           ['proxback · archive', 'proxback · tank'],
         );
         await openDatastore(datastore);
-        const detail = page.locator('[data-inline-platform-resource-detail-for="pbs-1"]');
         await detail.evaluate((node) => {
           node.dataset.proofIdentity = 'retained';
         });
@@ -157,12 +176,55 @@ const launchOptions = {
           await detail.locator('[data-testid="guest-history-plot"] path').count(),
           pathsBefore,
         );
+        retainedIdentity = await readIdentityRows(detail);
+        retainedPaths = pathsBefore;
         observations.push({
           datastore,
           paths: pathsBefore,
           refreshPreservedHistory: true,
         });
       }
+
+      // A live refresh can briefly omit the correlated host row while the
+      // PBS server row stays. That must not flip the drawer's Identity or
+      // History target to the PBS service key (#1723).
+      await page.getByRole('button', { name: 'Drop correlated host' }).click();
+      await page
+        .getByRole('status', { name: 'Snapshot number' })
+        .filter({ hasText: '4' })
+        .waitFor();
+      assert.equal(
+        await detail.getAttribute('data-proof-identity'),
+        'retained',
+        'drawer remounted after the host row was omitted',
+      );
+      assert.equal(
+        await page
+          .getByRole('tab', { name: 'History', exact: true })
+          .getAttribute('aria-selected'),
+        'true',
+        'history reset after the host row was omitted',
+      );
+      assert.equal(
+        await detail.locator('[data-testid="guest-history-plot"] path').count(),
+        retainedPaths,
+        'history chart lost its series when the host row was omitted',
+      );
+      assert.deepEqual(
+        await readIdentityRows(detail),
+        retainedIdentity,
+        'Identity rows changed when the host row was transiently omitted',
+      );
+      observations.push({
+        hostRowOmitted: true,
+        identity: retainedIdentity,
+        refreshPreservedHistory: true,
+      });
+      await page.getByRole('button', { name: 'Restore correlated host' }).click();
+      await page
+        .getByRole('status', { name: 'Snapshot number' })
+        .filter({ hasText: '5' })
+        .waitFor();
 
       if (!targets.includes(expected)) {
         throw new Error(
