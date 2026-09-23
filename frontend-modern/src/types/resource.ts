@@ -472,6 +472,7 @@ export interface ResourcePBSDatastore {
 export interface ResourcePBSMeta {
   instanceId?: string;
   hostname?: string;
+  nodeName?: string;
   version?: string;
   uptimeSeconds?: number;
   datastoreCount?: number;

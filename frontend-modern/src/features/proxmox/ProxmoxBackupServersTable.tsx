@@ -110,6 +110,12 @@ const identityValues = (resource: Resource): Array<string | undefined> => [
   ...(resource.identity?.ips ?? []),
   resource.agent?.hostname,
   resource.pbs?.hostname,
+  // The node hostname PBS reports about itself is machine identity. The
+  // connection may be configured by an IP or DNS alias the agent never
+  // reports, so without this the host correlation can drop out between
+  // snapshots and the drawer falls back to the service history target
+  // (#1723).
+  resource.pbs?.nodeName,
   resource.pbs?.instanceId,
   resource.platformId,
   resource.name,

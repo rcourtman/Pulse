@@ -29,7 +29,11 @@ const pbs = {
   memory: { current: 20.3, total: 8000, used: 1624, free: 6376 },
   pbs: {
     instanceId: 'proxback',
-    hostname: 'proxback-vm',
+    // The connection is configured by an address the agent never reports, so
+    // the reported node name below is the only machine identity that links the
+    // PBS service row to its host agent (#1723).
+    hostname: '10.0.0.5',
+    nodeName: 'proxback-vm',
     version: '3.2.1',
     connectionHealth: 'healthy',
     datastores: [
@@ -42,7 +46,12 @@ const pbs = {
   discoveryTarget: { resourceType: 'agent', resourceId: 'pbs-1' },
   platformData: {
     sources: ['pbs'],
-    pbs: { instanceId: 'proxback', hostname: 'proxback-vm', datastoreCount: 2 },
+    pbs: {
+      instanceId: 'proxback',
+      hostname: '10.0.0.5',
+      nodeName: 'proxback-vm',
+      datastoreCount: 2,
+    },
   },
 } as unknown as Resource;
 

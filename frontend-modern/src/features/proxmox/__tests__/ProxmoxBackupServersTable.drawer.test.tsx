@@ -224,6 +224,58 @@ describe('ProxmoxBackupServersTable details', () => {
     },
   );
 
+  it('correlates a PBS connection configured by IP to its agent via the reported node name', () => {
+    const pbs = makePbsResource();
+    pbs.sources = ['pbs'];
+    pbs.agent = undefined;
+    pbs.name = 'backup-connection';
+    pbs.displayName = 'Backup connection';
+    pbs.platformId = 'pbs-1';
+    pbs.pbs = {
+      ...pbs.pbs!,
+      instanceId: 'pbs-1',
+      hostname: '10.0.0.5',
+      nodeName: 'pbs-one.local',
+    };
+    pbs.metricsTarget = { resourceType: 'agent', resourceId: 'pbs-1' };
+    pbs.platformData = {
+      sources: ['pbs'],
+      pbs: {
+        instanceId: 'pbs-1',
+        hostname: '10.0.0.5',
+        nodeName: 'pbs-one.local',
+        datastoreCount: 1,
+      },
+    };
+    const agent = {
+      id: 'agent-host-1',
+      type: 'agent',
+      name: 'pbs-one.local',
+      displayName: 'PBS host',
+      platformId: 'agent-host-1',
+      platformType: 'proxmox-pbs',
+      sourceType: 'hybrid',
+      sources: ['agent', 'pbs'],
+      status: 'online',
+      lastSeen: pbs.lastSeen + 1_000,
+      agent: { agentId: 'agent-pbs-1', hostname: 'pbs-one.local', osName: 'Debian GNU/Linux' },
+      identity: { hostname: 'pbs-one.local', ips: ['10.9.9.9'] },
+      metricsTarget: { resourceType: 'agent', resourceId: 'agent-pbs-1' },
+      platformData: {
+        sources: ['agent', 'pbs'],
+        agent: { agentId: 'agent-pbs-1', hostname: 'pbs-one.local' },
+      },
+    } as Resource;
+
+    render(() => <ProxmoxBackupServersTable servers={[pbs, agent]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Expand details for backup-connection' }));
+
+    const detail = screen.getByTestId('pbs-resource-detail');
+    expect(detail).toHaveAttribute('data-agent-id', 'agent-pbs-1');
+    expect(detail).toHaveAttribute('data-metrics-resource-id', 'agent-pbs-1');
+    expect(detail).toHaveAttribute('data-metrics-resource-type', 'agent');
+  });
+
   it('reuses the PVE guest when the same agent is listed as both guest and standalone host', () => {
     const pbs = makePbsResource();
     pbs.sources = ['pbs'];
