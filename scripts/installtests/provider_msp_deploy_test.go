@@ -303,7 +303,7 @@ func TestProviderMSPControlPlaneDockerfileBuildsReleaseLicenseBinary(t *testing.
 	text := string(dockerfileBytes)
 	assertContainsAll(t, text,
 		"# syntax=docker/dockerfile:1.7",
-		"FROM --platform=linux/amd64 node:24-alpine@sha256:",
+		"FROM --platform=linux/amd64 node:24-alpine@sha256:"+node24Amd64FrontendDigest+" AS frontend-builder",
 		"npm ci",
 		"npm run build",
 		"FROM --platform=$BUILDPLATFORM golang:1.26.8-alpine@sha256:",
