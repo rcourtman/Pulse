@@ -12,6 +12,27 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
+func TestRegistry_CachedReadsUseSharedLock(t *testing.T) {
+	rr := NewRegistry(nil)
+	// A clean, empty registry already has a valid empty cache. Holding another
+	// read lock must not prevent a cached accessor from completing.
+	rr.mu.RLock()
+	done := make(chan struct{})
+	go func() {
+		_ = rr.VMs()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		rr.mu.RUnlock()
+	case <-time.After(5 * time.Second):
+		rr.mu.RUnlock()
+		<-done
+		t.Fatal("cached view read waited for an exclusive registry lock")
+	}
+}
+
 // TestMemoryStore_RecordActionAuditAppliesRedaction is an integration check
 // at the registry-store boundary. The MemoryStore is the backing store the
 // registry uses in tests and contract examples, and operator-authored audit
