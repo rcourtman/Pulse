@@ -5622,15 +5622,29 @@ func (rr *ResourceRegistry) ensureViewsLocked() {
 	rr.rebuildViews()
 }
 
-// withViewCache acquires a write lock to ensure views are fresh, then
-// downgrades to a read lock and calls fn. This avoids TOCTOU gaps.
+// withViewCache reads clean cached views under a shared lock. If a rebuild is
+// needed, it ensures the cache under the write lock and retries the shared
+// read; retrying also handles invalidation between rebuilding and reading.
 func withViewCache[T any](rr *ResourceRegistry, fn func() T) T {
-	rr.mu.Lock()
-	rr.ensureViewsLocked()
-	rr.mu.Unlock()
+	for {
+		if value, clean := readCleanViewCache(rr, fn); clean {
+			return value
+		}
+
+		rr.mu.Lock()
+		rr.ensureViewsLocked()
+		rr.mu.Unlock()
+	}
+}
+
+func readCleanViewCache[T any](rr *ResourceRegistry, fn func() T) (T, bool) {
 	rr.mu.RLock()
 	defer rr.mu.RUnlock()
-	return fn()
+	if rr.viewsDirty {
+		var zero T
+		return zero, false
+	}
+	return fn(), true
 }
 
 // rebuildViews recomputes all cached view slices from the current resource map.
