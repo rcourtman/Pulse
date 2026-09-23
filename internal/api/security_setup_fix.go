@@ -138,42 +138,53 @@ func ensureAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Req
 	// Session users must match configured admin identity for privileged operations.
 	if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
 		sessionUser := strings.TrimSpace(GetSessionUsername(cookie.Value))
-		configuredAdmin := ""
-		if cfg != nil {
-			configuredAdmin = strings.TrimSpace(cfg.AuthUser)
-		}
-
-		if configuredAdmin != "" && strings.EqualFold(sessionUser, configuredAdmin) {
+		if sessionUserHasSettingsAdminPrivileges(cfg, req, sessionUser) {
 			return true
 		}
 
-		// Org-scoped tenant sessions preserve canonical org management
-		// privileges for settings-bound routes.
-		orgScoped := false
-		if org := GetOrganization(req.Context()); org != nil {
-			orgID := strings.TrimSpace(org.ID)
-			if orgID != "" && orgID != "default" {
-				orgScoped = true
-				if org.CanUserIDManage(sessionUser) {
-					return true
-				}
-			}
-		}
-
-		if !orgScoped && sessionUserCarriesAdminPrivileges(cfg, sessionUser) {
-			return true
-		}
-
-		if configuredAdmin == "" || !strings.EqualFold(sessionUser, configuredAdmin) {
-			log.Warn().
-				Str("path", req.URL.Path).
-				Str("user", sessionUser).
-				Msg("Session user missing admin privileges for privileged operation")
-			http.Error(w, "Admin privileges required", http.StatusForbidden)
-			return false
-		}
+		log.Warn().
+			Str("path", req.URL.Path).
+			Str("user", sessionUser).
+			Msg("Session user missing admin privileges for privileged operation")
+		http.Error(w, "Admin privileges required", http.StatusForbidden)
+		return false
 	}
 	return true
+}
+
+// sessionUserHasSettingsAdminPrivileges is the session rule ensureAdminSession
+// enforces for settings-bound routes: the configured local admin; on an
+// org-scoped request, a user who can manage that organization; otherwise an
+// instance administrator. The security status snapshot publishes settings
+// capabilities from this same rule, so a surface the UI offers is one its
+// routes accept.
+//
+// It is deliberately wider than the platform admin rule. An org owner
+// administers their own organization's settings but is never an instance or
+// platform administrator; RequirePlatformAdmin and the billingAdmin capability
+// keep excluding org-scoped sessions.
+func sessionUserHasSettingsAdminPrivileges(cfg *config.Config, req *http.Request, sessionUser string) bool {
+	sessionUser = strings.TrimSpace(sessionUser)
+	if sessionUser == "" {
+		return false
+	}
+
+	configuredAdmin := ""
+	if cfg != nil {
+		configuredAdmin = strings.TrimSpace(cfg.AuthUser)
+	}
+	if configuredAdmin != "" && strings.EqualFold(sessionUser, configuredAdmin) {
+		return true
+	}
+
+	// Org-scoped tenant sessions preserve canonical org management
+	// privileges for settings-bound routes.
+	if sessionIsOrgScoped(req) {
+		org := GetOrganization(req.Context())
+		return org != nil && org.CanUserIDManage(sessionUser)
+	}
+
+	return sessionUserCarriesAdminPrivileges(cfg, sessionUser)
 }
 
 // sessionIsOrgScoped reports whether the request is bound to a tenant
