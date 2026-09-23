@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 const resourceDeltaField = "resourceDelta"
@@ -48,33 +50,101 @@ type resourceDeltaPayload struct {
 	Order   []string          `json:"order,omitempty"`
 }
 
+func decodeEntryID(entry json.RawMessage, field string) (string, error) {
+	var identity struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(entry, &identity); err != nil {
+		return "", fmt.Errorf("decode state %s identity: %w", field, err)
+	}
+	return identity.ID, nil
+}
+
+// extractKeyedEntries splits an encoded array into per-entry RawMessages
+// keyed by id. knownIDs, when its length matches the decoded entry count,
+// carries ids already known from the Go value that was marshaled into
+// encoded - encoding/json marshals a slice in its original order, so
+// knownIDs[i] is entries[i]'s id without needing to decode that entry just
+// to find it. One entry (the first) is always verified against its knownIDs
+// counterpart before the rest are trusted; on any mismatch every entry falls
+// back to being decoded directly, exactly as if knownIDs had not been
+// supplied. This runs on every current-state broadcast, and on a busy
+// instance the array here can hold well over a thousand entries, so skipping
+// a redundant per-entry decode is worth doing - but never at the cost of
+// silently mis-keying a client's delta baseline.
 func extractKeyedEntries(
 	encoded json.RawMessage,
 	field string,
+	knownIDs []string,
 ) (map[string]json.RawMessage, []string, error) {
 	var entries []json.RawMessage
 	if err := json.Unmarshal(encoded, &entries); err != nil {
 		return nil, nil, fmt.Errorf("decode state %s: %w", field, err)
 	}
-	byID := make(map[string]json.RawMessage)
+
+	useKnownIDs := len(knownIDs) == len(entries) && len(entries) > 0
+	if useKnownIDs {
+		firstID, err := decodeEntryID(entries[0], field)
+		if err != nil {
+			return nil, nil, err
+		}
+		useKnownIDs = firstID == knownIDs[0]
+	}
+
+	byID := make(map[string]json.RawMessage, len(entries))
 	order := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		var identity struct {
-			ID string `json:"id"`
+	for i, entry := range entries {
+		id := ""
+		if useKnownIDs {
+			id = knownIDs[i]
+		} else {
+			var err error
+			id, err = decodeEntryID(entry, field)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
-		if err := json.Unmarshal(entry, &identity); err != nil {
-			return nil, nil, fmt.Errorf("decode state %s identity: %w", field, err)
-		}
-		if identity.ID == "" {
+		if id == "" {
 			return nil, nil, fmt.Errorf("state %s entry is missing id", field)
 		}
-		if _, exists := byID[identity.ID]; exists {
-			return nil, nil, fmt.Errorf("state %s id %q is duplicated", field, identity.ID)
+		if _, exists := byID[id]; exists {
+			return nil, nil, fmt.Errorf("state %s id %q is duplicated", field, id)
 		}
-		byID[identity.ID] = append(json.RawMessage(nil), entry...)
-		order = append(order, identity.ID)
+		byID[id] = append(json.RawMessage(nil), entry...)
+		order = append(order, id)
 	}
 	return byID, order, nil
+}
+
+// knownEntryIDs returns state's resource/infrastructure/alert ids in
+// marshal order when state is the concrete frontend type, so
+// extractKeyedEntries can skip re-deriving them from JSON. It returns three
+// nil slices for any other state shape (mock/test payloads, etc.), which
+// extractKeyedEntries treats as "no known ids" and decodes normally.
+func knownEntryIDs(state interface{}) (resourceIDs, infrastructureIDs, alertIDs []string) {
+	typed, ok := state.(models.StateFrontend)
+	if !ok {
+		if ptr, ptrOK := state.(*models.StateFrontend); ptrOK && ptr != nil {
+			typed, ok = *ptr, true
+		}
+	}
+	if !ok {
+		return nil, nil, nil
+	}
+
+	resourceIDs = make([]string, len(typed.Resources))
+	for i, r := range typed.Resources {
+		resourceIDs[i] = r.ID
+	}
+	infrastructureIDs = make([]string, len(typed.ConnectedInfrastructure))
+	for i, item := range typed.ConnectedInfrastructure {
+		infrastructureIDs[i] = item.ID
+	}
+	alertIDs = make([]string, len(typed.ActiveAlerts))
+	for i, a := range typed.ActiveAlerts {
+		alertIDs[i] = a.ID
+	}
+	return resourceIDs, infrastructureIDs, alertIDs
 }
 
 func buildClientStateSnapshot(state interface{}) (*clientStateSnapshot, error) {
@@ -88,10 +158,12 @@ func buildClientStateSnapshot(state interface{}) (*clientStateSnapshot, error) {
 		return nil, fmt.Errorf("decode state snapshot: %w", err)
 	}
 
+	resourceIDs, infrastructureIDs, alertIDs := knownEntryIDs(state)
+
 	resources := make(map[string]json.RawMessage)
 	resourceOrder := make([]string, 0)
 	if encodedResources, ok := fields["resources"]; ok {
-		resources, resourceOrder, err = extractKeyedEntries(encodedResources, "resource")
+		resources, resourceOrder, err = extractKeyedEntries(encodedResources, "resource", resourceIDs)
 		if err != nil {
 			return nil, err
 		}
@@ -105,12 +177,16 @@ func buildClientStateSnapshot(state interface{}) (*clientStateSnapshot, error) {
 		keyed:         make(map[string]*keyedFieldSnapshot),
 	}
 
+	knownIDsByField := map[string][]string{
+		infrastructureField: infrastructureIDs,
+		activeAlertsField:   alertIDs,
+	}
 	for _, keyedField := range keyedDeltaFields {
 		encodedField, ok := fields[keyedField.field]
 		if !ok {
 			continue
 		}
-		entries, order, keyErr := extractKeyedEntries(encodedField, keyedField.field)
+		entries, order, keyErr := extractKeyedEntries(encodedField, keyedField.field, knownIDsByField[keyedField.field])
 		if keyErr != nil {
 			continue
 		}

@@ -371,3 +371,144 @@ func TestClientStateBaselineAdvancesOnlyAfterDeltaIsQueued(t *testing.T) {
 		t.Fatal("client baseline did not advance after the delta was queued")
 	}
 }
+
+// TestExtractKeyedEntriesUsesKnownIDsWhenTheyMatch confirms the id-cache fast
+// path (knownIDs from the Go value that was marshaled) produces exactly the
+// same keying a full per-entry decode would, for a realistic multi-entry
+// array.
+func TestExtractKeyedEntriesUsesKnownIDsWhenTheyMatch(t *testing.T) {
+	encoded, err := json.Marshal([]map[string]string{
+		{"id": "r-1", "name": "alpha"},
+		{"id": "r-2", "name": "beta"},
+		{"id": "r-3", "name": "gamma"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	byID, order, err := extractKeyedEntries(encoded, "resource", []string{"r-1", "r-2", "r-3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := []string{order[0], order[1], order[2]}; got[0] != "r-1" || got[1] != "r-2" || got[2] != "r-3" {
+		t.Fatalf("order = %v, want [r-1 r-2 r-3]", got)
+	}
+	for _, id := range []string{"r-1", "r-2", "r-3"} {
+		if _, ok := byID[id]; !ok {
+			t.Fatalf("byID missing %q: %v", id, byID)
+		}
+	}
+}
+
+// TestExtractKeyedEntriesFallsBackWhenKnownIDsAreWrong is the safety-net
+// test: if knownIDs ever disagrees with what's actually encoded (a future
+// refactor reorders a slice, adds a custom MarshalJSON, whatever), the
+// function must self-heal by decoding every entry directly rather than
+// trusting mismatched hints and mis-keying the result.
+func TestExtractKeyedEntriesFallsBackWhenKnownIDsAreWrong(t *testing.T) {
+	encoded, err := json.Marshal([]map[string]string{
+		{"id": "r-1", "name": "alpha"},
+		{"id": "r-2", "name": "beta"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Deliberately wrong/stale hints - must not be trusted.
+	byID, order, err := extractKeyedEntries(encoded, "resource", []string{"stale-1", "stale-2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(order) != 2 || order[0] != "r-1" || order[1] != "r-2" {
+		t.Fatalf("order = %v, want [r-1 r-2] (mismatched hints must be ignored)", order)
+	}
+	if _, ok := byID["stale-1"]; ok {
+		t.Fatal("byID trusted a stale/mismatched known id")
+	}
+	if _, ok := byID["r-1"]; !ok {
+		t.Fatal("byID missing the correctly-decoded id r-1")
+	}
+}
+
+// TestKnownEntryIDsMatchesStateFrontendMarshalOrder pins the invariant the
+// id-cache fast path depends on: models.StateFrontend's resource/
+// infrastructure/alert slices marshal in the same order knownEntryIDs reads
+// them in. If this ever breaks, extractKeyedEntries's first-entry check
+// falls back safely, but this test should fail first and loudly.
+func TestKnownEntryIDsMatchesStateFrontendMarshalOrder(t *testing.T) {
+	state := models.EmptyStateFrontend()
+	state.Resources = []models.ResourceFrontend{
+		{ID: "res-a", Type: "vm", Name: "a"},
+		{ID: "res-b", Type: "vm", Name: "b"},
+	}
+	state.ConnectedInfrastructure = []models.ConnectedInfrastructureItemFrontend{
+		{ID: "infra-a", Name: "a"},
+		{ID: "infra-b", Name: "b"},
+	}
+	state.ActiveAlerts = []models.Alert{
+		{ID: "alert-a"},
+		{ID: "alert-b"},
+	}
+
+	resourceIDs, infrastructureIDs, alertIDs := knownEntryIDs(state)
+	if got := resourceIDs; len(got) != 2 || got[0] != "res-a" || got[1] != "res-b" {
+		t.Fatalf("resourceIDs = %v", got)
+	}
+	if got := infrastructureIDs; len(got) != 2 || got[0] != "infra-a" || got[1] != "infra-b" {
+		t.Fatalf("infrastructureIDs = %v", got)
+	}
+	if got := alertIDs; len(got) != 2 || got[0] != "alert-a" || got[1] != "alert-b" {
+		t.Fatalf("alertIDs = %v", got)
+	}
+
+	encoded, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &fields); err != nil {
+		t.Fatal(err)
+	}
+
+	for field, ids := range map[string][]string{
+		"resources":         resourceIDs,
+		infrastructureField: infrastructureIDs,
+		activeAlertsField:   alertIDs,
+	} {
+		var rawEntries []json.RawMessage
+		if err := json.Unmarshal(fields[field], &rawEntries); err != nil {
+			t.Fatalf("%s: %v", field, err)
+		}
+		if len(rawEntries) != len(ids) {
+			t.Fatalf("%s: marshaled %d entries, knownEntryIDs has %d", field, len(rawEntries), len(ids))
+		}
+		for i, entry := range rawEntries {
+			actualID, err := decodeEntryID(entry, field)
+			if err != nil {
+				t.Fatalf("%s[%d]: %v", field, i, err)
+			}
+			if actualID != ids[i] {
+				t.Fatalf("%s[%d]: marshaled id %q, knownEntryIDs said %q", field, i, actualID, ids[i])
+			}
+		}
+	}
+}
+
+// TestKnownEntryIDsHandlesStateFrontendPointerAndUnknownTypes confirms the
+// pointer variant is recognized, and that a state shape knownEntryIDs
+// doesn't understand (mock payloads, test fixtures, etc.) degrades to "no
+// known ids" rather than panicking or misbehaving.
+func TestKnownEntryIDsHandlesStateFrontendPointerAndUnknownTypes(t *testing.T) {
+	state := models.EmptyStateFrontend()
+	state.Resources = []models.ResourceFrontend{{ID: "res-a"}}
+
+	resourceIDs, _, _ := knownEntryIDs(&state)
+	if len(resourceIDs) != 1 || resourceIDs[0] != "res-a" {
+		t.Fatalf("pointer variant: resourceIDs = %v, want [res-a]", resourceIDs)
+	}
+
+	resourceIDs, infrastructureIDs, alertIDs := knownEntryIDs(map[string]string{"status": "ok"})
+	if resourceIDs != nil || infrastructureIDs != nil || alertIDs != nil {
+		t.Fatalf("unknown state shape should yield nil ids, got %v %v %v", resourceIDs, infrastructureIDs, alertIDs)
+	}
+}
