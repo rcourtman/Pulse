@@ -5027,6 +5027,19 @@ func (m *Monitor) GetUnifiedReadState() unifiedresources.ReadState {
 // ephemeral snapshot-backed adapter to preserve read access without exposing
 // direct state reads to consumer packages.
 func (m *Monitor) GetUnifiedReadStateOrSnapshot() unifiedresources.ReadState {
+	if m == nil {
+		return nil
+	}
+	// A store that is itself the read state needs no view. Building one
+	// deep-clones every resource, twice, only for this caller to discard the
+	// copies, and alert evaluation reaches here once per resource per poll
+	// through the default CPU evaluation window, which made every poll cost
+	// grow with the square of the estate (#2199).
+	if !mock.IsMockEnabled() {
+		if readState := m.GetUnifiedReadState(); readState != nil {
+			return m.readStateWithStandaloneHostContinuity(readState)
+		}
+	}
 	return m.currentUnifiedStateView().readState
 }
 
