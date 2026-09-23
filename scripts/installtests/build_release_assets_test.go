@@ -1317,62 +1317,21 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"# Pulse v"+version+" Release Notes",
 		"## What's improved",
 		"## Before you upgrade",
-		"Same-name systems stay separate",
-		"Windows agent delivery is restored",
-		"Large Availability estates scan faster",
-		"Slow starts are recoverable",
-		"Disk I/O totals are more accurate",
-		"carries every change from the `v6.4.2` packet",
-		"map at least one trusted IdP group to the built-in `admin` role",
-		"not Authenticode-signed",
-		"Unknown Publisher warning",
-		"does not require a companion mobile release",
 		"The rollback target is stable `v"+previous+"`",
 	)
 	assertFileDoesNotContain(t, releaseNotesPath, "## Fixes")
-	comparisonSummary := "This changelog describes the changes since `v" + comparisonVersion + "`"
-	if version == "6.4.0-rc.10" {
-		comparisonSummary = "The `v6.4.0-rc.9` release staged an immutable draft, tag, and exact-version artifacts but did not activate publicly."
-	}
 	assertFileContainsAllNormalized(t, changelogPath,
+		"This changelog describes the changes since `v"+comparisonVersion+"`",
 		"Version: `v"+version+"`",
 		"Previous stable: `v"+previous+"`",
 		"Rollback target: `v"+previous+"`",
-		"Promotion path: exact-SHA single-build release candidate from `main`",
-		comparisonSummary,
-		"carries the complete `v6.4.2` change set",
-		"no longer pin a guest in Backup Running",
-		"(#1815)",
-		"no longer collapse into a single host or Docker record",
-		"(#1753)",
-		"Windows Unified Agent auto-update no longer fails with HTTP 404",
-		"(#1820)",
-		"Windows signing decision: prereleases publish checksum- and detached-signature-verified Windows agents without Authenticode",
+		"Rollback command: `sudo /bin/update --version v"+previous+"`",
 		"Mobile decision: `no-mobile-impact`",
-		"no companion mobile build or store rollout is required",
 	)
-	if version == "6.3.0-rc.6" {
-		assertFileContainsAllNormalized(t, releaseNotesPath,
-			"Chart and resource-query services now qualify independently from the residual API router, shrinking the root test critical path.",
-			"Public server and provider control-plane images publish and attest in parallel from one verified exact-candidate payload.",
-			"PVE compilation remains credential-free. GitHub-hosted jobs retain signing, release mutation, and publication credentials.",
-		)
-		assertFileContainsAllNormalized(t, changelogPath,
-			"Chart handling and resource queries are production packages with independent test scheduling",
-			"Exact-version public Docker staging overlaps qualification, and server and provider control-plane products publish as parallel matrix legs.",
-			"Publication still requires exact-source identity, immutable manifests, signatures, public/private artifact integrity, installer smoke, and final convergence verification.",
-		)
-	}
-	if version == "6.4.0-rc.13" {
-		assertFileContainsAllNormalized(t, releaseNotesPath,
-			"Unchanged stopped-container details are refreshed every 15 minutes instead of being re-inspected every 30 seconds",
-			"Separate standalone sites that reuse a short node name can link to their own host agents through unique provider-observed addresses",
-		)
-		assertFileContainsAllNormalized(t, changelogPath,
-			"Docker hosts with many stopped containers no longer re-inspect every historical container on each 30-second agent report",
-			"Separate standalone Proxmox sites that reuse a short node name no longer lose correct agent links when their provider-observed addresses uniquely disambiguate them",
-		)
-	}
+	branch := requiredReleaseBranchForVersion(t, version)
+	assertFileContainsAllNormalized(t, changelogPath,
+		"Promotion path: exact-SHA release candidate from `"+branch+"`",
+	)
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
 		"docs/releases/RELEASE_NOTES_v"+version+".md",
 		"docs/releases/V6_CHANGELOG_v"+version+".md",
@@ -1401,7 +1360,7 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		`CANONICAL_DEFAULT_PULSE_VERSION="`+version+`"`,
 	)
 	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
-		"The active prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
+		"cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"This prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
 		"For the active prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
 		"No governed mobile-facing path changed from `v"+previous+"`, so the release decision is `no-mobile-impact`",

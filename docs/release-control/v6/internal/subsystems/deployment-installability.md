@@ -2857,7 +2857,7 @@ version. It opened the `v6.4.0` candidate line from `main` with
 `rollback_version=v6.3.1` and did not move stable/latest install pointers or
 stable semver aliases.
 
-The active prerelease `v6.4.3-rc.1` cut sets the repo-root `VERSION`, repo-root
+The earlier prerelease `v6.4.3-rc.1` cut set the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
 Helm chart release metadata to the same `6.4.3-rc.1` release version. It follows
 stable `v6.4.1` and opens the published `v6.4.3` candidate line. It opens that
@@ -3332,7 +3332,7 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active prerelease `v6.4.3-rc.1` cut, the repo-root compose default and
+For the earlier prerelease `v6.4.3-rc.1` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.4.3-rc.1` until the next
 governed stable cut moves them forward. The tagged but unpublished `v6.4.2`
 cut pinned `6.4.2` until this candidate moved them forward. The stable promotion guard remains in
@@ -5677,8 +5677,21 @@ its caller-level benchmarks do not corroborate it (`NormalizeRoute` improved and
 advisory for source landing; no threshold was changed and the failed advisory
 result is preserved.
 
-Verification status: the exact-source Go build and package tests require the
-offline dependency snapshot for the updated lockfile, which is not present in
-the current assignment; a host dependency acquisition on the next launch is
-required before this contract's Go evidence can be produced. No passing Go
-suite, installed build or release acceptance is claimed here.
+Verification status: focused release-metadata proof and full exact-source
+qualification are separate checks. Neither a documented contract nor a focused
+test by itself establishes installed build or release acceptance.
+
+For the active prerelease `v6.5.0-rc.1` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.5.0-rc.1` until the next
+governed stable cut moves them forward. The active prerelease `v6.5.0-rc.1`
+cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default,
+`scripts/install-docker.sh` fallback, and Helm chart release metadata to the same
+`6.5.0-rc.1` release version. It follows stable `v6.4.1` and opens the published
+`v6.5.0` candidate line. This prerelease keeps `rollback_version=v6.4.1`,
+publishes a versioned public GitHub prerelease plus versioned Docker and Helm
+artifacts, and does not move stable/latest install pointers or stable semver
+aliases. No governed mobile-facing path changed from `v6.4.1`, so the release
+decision is `no-mobile-impact` and no companion upload or public mobile-store
+rollout is part of this candidate. The prerelease Windows path retains
+exact-SHA, checksum, and detached-signature verification without Authenticode.
+Stable `v6.5.0` also skips SignPath under the standing unavailable policy.

@@ -295,6 +295,19 @@ func previousPrereleaseVersion(version string) (string, bool) {
 	return fmt.Sprintf("%s-rc.%d", base, rc-1), true
 }
 
+// The release installer and Compose defaults must move with the governed
+// VERSION in the same candidate, rather than retaining a prior RC or latest.
+func TestCurrentReleaseInstallerDefaultsMatchVERSION(t *testing.T) {
+	version := currentReleaseVersion(t)
+	assertFileContainsAll(t, repoFile("scripts", "install-docker.sh"),
+		`CANONICAL_DEFAULT_PULSE_VERSION="`+version+`"`,
+	)
+	assertFileContainsAll(t, repoFile("docker-compose.yml"),
+		"image: ${PULSE_IMAGE:-rcourtman/pulse:"+version+"}",
+	)
+	assertFileDoesNotContain(t, repoFile("docker-compose.yml"), ":latest")
+}
+
 func TestInstallDockerScriptUsesConfiguredImageRepoDefault(t *testing.T) {
 	workDir := t.TempDir()
 	version := currentReleaseVersion(t)
