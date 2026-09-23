@@ -148,9 +148,16 @@ class DependabotConfigTest(unittest.TestCase):
         }
         self.assertEqual(
             set(ignored),
-            {"playwright", "playwright-core", "@playwright/test"},
+            {"playwright", "playwright-core", "@playwright/test", "typescript"},
         )
-        self.assertTrue(all(types == all_semver for types in ignored.values()))
+        for browser_runtime in ("playwright", "playwright-core", "@playwright/test"):
+            self.assertEqual(ignored[browser_runtime], all_semver)
+        # TypeScript majors must land with the @typescript-eslint peer range
+        # (">=4.8.4 <6.1.0"), so keep them as explicit work.
+        self.assertEqual(
+            ignored["typescript"],
+            {"version-update:semver-major"},
+        )
 
     def test_weekly_scan_covers_the_same_lockfiles(self) -> None:
         workflow = yaml.safe_load(SECURITY_SCAN.read_text(encoding="utf-8"))
