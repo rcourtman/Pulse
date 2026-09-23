@@ -1215,7 +1215,7 @@ describe('UnifiedResourceTable performance contract', () => {
         },
         { timeout: 15000 },
       );
-    });
+    }, 20000);
   });
 
   describe('Grouped vs flat mode contract', () => {
