@@ -5619,3 +5619,44 @@ covers the recorded snapshot and its removal. Local shell suites
 (`test-pulse-auto-update.sh`, `test-install-update-resilience.sh`,
 `test-script-reference-integrity.sh`) pass; hosted Go installtest execution
 remains required and is not claimed here.
+
+### Governed dependency floors for the go-minor-patch group
+
+The managed `go-minor-patch` group advances three direct modules together with
+their required transitives: `golang.org/x/crypto` 0.56.0 -> 0.57.0,
+`golang.org/x/term` 0.45.0 -> 0.46.0 and `modernc.org/sqlite` 1.53.0 -> 1.59.0
+(which pins `modernc.org/libc` 1.75.7, `modernc.org/memory` 1.12.1 and
+`golang.org/x/text` 0.42.0). No other direct version changes. The pure-Go SQLite
+driver is the storage engine for the metrics, alert and audit stores, so the
+1.59.0 release carries the upstream journal-rollback data-corruption fix and the
+native-libc re-vendor that changes query CPU cost; the `modernc.org/libc` floor
+must move with it because the driver requires the same pinned version.
+
+This is routine managed dependency maintenance and is independent of the
+6 September 2026 SQLite SIGSEGV investigation exclusion: no crash is reproduced,
+no database or executable is inspected, and no adverse evidence from that
+investigation is cleared or relied upon here.
+
+The dev-runtime dependency-manifest floor proof now covers these modules.
+`scripts/tests/test-hot-dev-runtime.sh` raises the `golang.org/x/crypto` floor to
+v0.57.0, adds a `golang.org/x/term` floor of v0.46.0 and adds a
+`test_go_storage_dependency_integrity_floor` case asserting
+`modernc.org/sqlite` >= v1.59.0 and `modernc.org/libc` >= v1.75.7. These are
+floors, not pins, so a later safe upgrade keeps passing while a downgrade below
+the qualified release fails. The managed-backend manifest-invalidation fixtures
+in `tests/integration/scripts/managed-local-backend.test.mjs` already prove that a
+`go.mod`- or `go.sum`-only change rebuilds a stale backend binary.
+
+The Build and Test benchmark job reports a `NormalizeSegment` sec/op delta for
+this batch. That is a code-layout/measurement artifact, not a product
+regression: `normalizeSegment` is a pure function with no dependency calls, and
+its caller-level benchmarks do not corroborate it (`NormalizeRoute` improved and
+`FullMiddlewarePath` changed within its variance). The benchmark gate is
+advisory for source landing; no threshold was changed and the failed advisory
+result is preserved.
+
+Verification status: the exact-source Go build and package tests require the
+offline dependency snapshot for the updated lockfile, which is not present in
+the current assignment; a host dependency acquisition on the next launch is
+required before this contract's Go evidence can be produced. No passing Go
+suite, installed build or release acceptance is claimed here.
