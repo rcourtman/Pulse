@@ -2527,6 +2527,17 @@ vdev layout is reported` in
 
 ## Current State
 
+### Org managers see org-bound settings, not recovery administration
+
+`/api/security/status` now grants an owner or admin of the selected
+organization the org-bound `infrastructureRead`, `availabilityRead` and
+`reportingRead` capabilities, because those routes already admit org managers
+and read only that organization's state. `systemSettingsRead`, which gates
+System → Recovery with backup polling and configuration export/import, stays
+withheld from every org-scoped session, so an org manager is not offered
+instance recovery or configuration transfer. See the api-contracts contract,
+rule 35.
+
 ### TLS verification preference survives node re-registration
 
 A PVE or PBS node whose operator disabled certificate verification keeps that
