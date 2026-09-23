@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM --platform=linux/amd64 node:24-alpine@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS frontend-builder
+FROM --platform=linux/amd64 node:24-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81 AS frontend-builder
 WORKDIR /app/frontend-modern
 COPY frontend-modern/package*.json ./
 RUN --mount=type=cache,id=pulse-control-plane-npm-cache,target=/root/.npm \
@@ -12,7 +12,7 @@ COPY SECURITY.md TERMS.md /app/
 RUN --mount=type=cache,id=pulse-control-plane-npm-cache,target=/root/.npm \
     npm run build
 
-FROM --platform=$BUILDPLATFORM golang:1.26.8-alpine@sha256:ce864e7223ac17b1775e6fd0b4c0db580c2eb50e7953a427916379e4b92a1628 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.8-alpine@sha256:51a7c389a5ddaf82f527191a1e9bff9928655130a44e4975dd1d7e0acf59f1ae AS builder
 ARG VERSION=dev
 ARG BUILD_TIME=unknown
 ARG GIT_COMMIT=unknown
@@ -51,7 +51,7 @@ RUN --mount=type=cache,id=pulse-control-plane-go-mod,target=/go/pkg/mod \
       -trimpath \
       -o /pulse-control-plane ./cmd/pulse-control-plane
 
-FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS control-plane-runtime-foundation
+FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS control-plane-runtime-foundation
 RUN apk add --no-cache ca-certificates docker-cli
 ENTRYPOINT ["pulse-control-plane"]
 
