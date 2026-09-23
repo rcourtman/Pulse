@@ -458,9 +458,13 @@ PBS presentation correlation accepts standalone agents and VM/system-container r
 
 A single agent surfaced as both a VM/system-container guest and a standalone agent row is one identity, not an ambiguous pair. Collapse candidates that share an agent identity before deciding, and prefer the guest's canonical metricsTarget because it names the persisted host series; the PBS service target names the service key and has no host history. Only distinct agent identities, or candidates whose identity cannot be proven equal, decline to choose. Never use input order or a fallback that discards the PBS row id.
 
+A realtime refresh can briefly omit the correlated host row while the PBS server row remains. Retain the last resolved correlation per PBS server across that omission rather than substituting the PBS service target, so the drawer's identity rows and history target stay stable. Reuse the remembered host only while it is still fresh relative to the server and drop it once stale, so a removed or replaced host is not advertised indefinitely; a present but ambiguous host still declines.
+
 Verification: ProxmoxBackupServersTable.drawer.test.tsx covers standalone and
 merged guest targets, missing disks, duplicate guest/host representations of one
-agent, and genuinely ambiguous identities;
+agent, genuinely ambiguous identities, and retaining the resolved host target
+across a transient host-row omission;
+ProxmoxBackupServersTable.test.ts covers retention, staleness and pruning;
 ProxmoxPageSurface.contract.test.tsx covers hydration and deduplication.
 
 

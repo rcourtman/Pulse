@@ -629,9 +629,13 @@ The Backups surface passes its complete deduplicated route inventory to the PBS 
 
 One agent can be surfaced twice for a single PBS host: folded into its PVE guest and as a standalone `source=pbs` host row. Those two rows are one machine, not an ambiguous pair. Correlation must collapse candidates that share an agent identity and prefer the guest representation, whose canonical metrics target carries the persisted host history; the PBS service target has no host series and renders the collecting-history state. Two candidates with distinct agent identities remain ambiguous, and a candidate with no agent identity must not be treated as proof of sameness.
 
+A live snapshot can briefly omit the correlated host row while the PBS server row remains, for example while a realtime refresh replaces the merged estate. The correlation must retain the last resolved host per PBS server across that omission instead of falling back to the PBS service target, so the drawer's Discovery and Metrics Target rows and its History series do not flicker. Reuse the remembered host only while it is still fresh relative to the server, and drop it once stale so a removed or replaced host is not advertised indefinitely; a host row that is present but ambiguous still declines.
+
 Verification: ProxmoxBackupServersTable.drawer.test.tsx covers standalone and
 merged guest targets, missing disks, duplicate guest/host representations of one
-agent, and genuinely ambiguous identities;
+agent, genuinely ambiguous identities, and retaining the resolved host target
+across a transient host-row omission;
+ProxmoxBackupServersTable.test.ts covers retention, staleness and pruning;
 ProxmoxPageSurface.contract.test.tsx covers hydration and deduplication.
 
 
