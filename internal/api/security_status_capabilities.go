@@ -78,7 +78,13 @@ type securityStatusAuthSnapshot struct {
 	username       string
 	proxyIsAdmin   bool
 	sessionIsAdmin bool
-	tokenRecord    *config.APITokenRecord
+	// sessionManagesOrg is set for an org-scoped session that
+	// ensureAdminSession admits: an owner or admin of the request's
+	// organization, or the configured admin. It widens only the org-bound
+	// settings surfaces, never sessionIsAdmin, so instance administration and
+	// the privileged status fields stay closed to org-scoped sessions.
+	sessionManagesOrg bool
+	tokenRecord       *config.APITokenRecord
 }
 
 func (s securityStatusAuthSnapshot) tokenScopes() []string {
@@ -189,15 +195,19 @@ func (r *Router) buildSecurityStatusAuthSnapshot(req *http.Request) securityStat
 		// identity or an explicit RBAC admin grant (including SSO group role
 		// mappings). Org-scoped sessions keep their own management rules.
 		sessionIsAdmin := false
-		if !sessionIsOrgScoped(req) {
+		sessionManagesOrg := false
+		if sessionIsOrgScoped(req) {
+			sessionManagesOrg = sessionUserHasSettingsAdminPrivileges(r.config, req, username)
+		} else {
 			sessionIsAdmin = sessionUserCarriesAdminPrivileges(r.config, username)
 		}
 		return securityStatusAuthSnapshot{
-			request:        snapshotReq,
-			authenticated:  true,
-			authMethod:     "session",
-			username:       username,
-			sessionIsAdmin: sessionIsAdmin,
+			request:           snapshotReq,
+			authenticated:     true,
+			authMethod:        "session",
+			username:          username,
+			sessionIsAdmin:    sessionIsAdmin,
+			sessionManagesOrg: sessionManagesOrg,
 		}
 	}
 
@@ -275,9 +285,22 @@ func (r *Router) securityStatusSettingsCapabilitiesFromSnapshot(snapshot securit
 	canReadReporting := canReadSettings &&
 		r.canAccessPermissionSurface(snapshot, internalauth.ActionRead, internalauth.ResourceNodes, config.ScopeSettingsRead)
 
+	// Infrastructure, availability, and reporting are org-bound: their routes
+	// pass ensureAdminSession, which admits an org manager inside their own
+	// organization, and their handlers read that organization's config and
+	// monitor state. A provider opening a client workspace lands there as the
+	// org owner, and without these the settings navigation hides the only
+	// pages that connect the client's systems and build its reports. Every
+	// other capability stays instance administration.
+	canReadOrgSettings := canReadSettings || snapshot.sessionManagesOrg
+	if snapshot.sessionManagesOrg && !canReadReporting {
+		allowed, err := r.authorizer.Authorize(snapshot.request.Context(), internalauth.ActionRead, internalauth.ResourceNodes)
+		canReadReporting = err == nil && allowed
+	}
+
 	return securityStatusSettingsCapabilities{
-		InfrastructureRead:    canReadSettings,
-		AvailabilityRead:      canReadSettings,
+		InfrastructureRead:    canReadOrgSettings,
+		AvailabilityRead:      canReadOrgSettings,
 		PulseIntelligenceRead: canReadPulseIntelligence,
 		DiagnosticsRead:       canReadSettings,
 		SystemLogsRead:        canReadSettings,
