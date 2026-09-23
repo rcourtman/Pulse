@@ -1129,6 +1129,7 @@ func TestCurrentStablePatchReleasePacketTracksInstallMetadata(t *testing.T) {
 		t.Skip("current release is not a stable patch release")
 	}
 	releaseBranch := requiredReleaseBranchForVersion(t, version)
+	promotedTag, rcDerived := currentStablePatchPromotedPrerelease(t, version)
 
 	releaseNotesPath := repoFile("docs", "releases", "RELEASE_NOTES_v"+version+".md")
 	changelogPath := repoFile("docs", "releases", "V6_CHANGELOG_v"+version+".md")
@@ -1139,17 +1140,30 @@ func TestCurrentStablePatchReleasePacketTracksInstallMetadata(t *testing.T) {
 		"## What's improved",
 		"not Authenticode-signed",
 		"Unknown Publisher warning",
-		"This patch does not require a companion mobile release",
+		"does not require a companion mobile release",
 		"rollback target is stable `v"+previous+"`",
 	)
-	assertFileContainsAllNormalized(t, changelogPath,
+	changelogRequired := make([]string, 0, 7)
+	changelogRequired = append(changelogRequired,
 		"Version: `v"+version+"`",
 		"Rollback target: `v"+previous+"`",
-		"Promotion path: emergency stable patch from `"+releaseBranch+"`",
 		"Windows signing decision: the standing SignPath-unavailable policy publishes unsigned Windows Unified Agent binaries",
 		"Unknown Publisher warning",
 		"Mobile decision: `no-mobile-impact`",
 	)
+	if rcDerived {
+		// A stable patch with a same-version RC promotes the exercised
+		// candidate; the promotion resolver refuses the emergency no-RC path.
+		changelogRequired = append(changelogRequired,
+			"Promoted prerelease: `"+promotedTag+"`",
+			"Promotion path: exact-SHA single-build release candidate from `"+releaseBranch+"`",
+		)
+	} else {
+		changelogRequired = append(changelogRequired,
+			"Promotion path: emergency stable patch from `"+releaseBranch+"`",
+		)
+	}
+	assertFileContainsAllNormalized(t, changelogPath, changelogRequired...)
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
 		"docs/releases/RELEASE_NOTES_v"+version+".md",
 		"docs/releases/V6_CHANGELOG_v"+version+".md",
@@ -1175,11 +1189,20 @@ func TestCurrentStablePatchReleasePacketTracksInstallMetadata(t *testing.T) {
 	assertFileContainsAll(t, repoFile("scripts", "install-docker.sh"),
 		`CANONICAL_DEFAULT_PULSE_VERSION="`+version+`"`,
 	)
-	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
+	installabilityPath := repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md")
+	installabilityRequired := make([]string, 0, 3)
+	installabilityRequired = append(installabilityRequired,
 		"The active stable `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
-		"This patch release uses the stable hotfix path with `rollback_version=v"+previous+"`, `hotfix_exception=true`, a release-owner reason, and no fabricated same-version RC tag.",
 		"For the active stable `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"`",
 	)
+	if rcDerived {
+		installabilityRequired = append(installabilityRequired, "promoted_from_tag="+promotedTag)
+	} else {
+		installabilityRequired = append(installabilityRequired,
+			"This patch release uses the stable hotfix path with `rollback_version=v"+previous+"`, `hotfix_exception=true`, a release-owner reason, and no fabricated same-version RC tag.",
+		)
+	}
+	assertFileContainsAllNormalized(t, installabilityPath, installabilityRequired...)
 }
 
 func TestCurrentStableMinorReleasePacketTracksInstallMetadata(t *testing.T) {
