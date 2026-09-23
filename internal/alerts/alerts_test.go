@@ -2416,7 +2416,7 @@ func TestCheckBackupsSkipsOrphanedWhenDisabled(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
 
-	alertOrphaned := false
+	alertOrphaned := true
 	m.mu.Lock()
 	m.config.Enabled = true
 	m.config.BackupDefaults = BackupAlertConfig{
@@ -2448,11 +2448,28 @@ func TestCheckBackupsSkipsOrphanedWhenDisabled(t *testing.T) {
 	m.CheckBackups(rollups, map[string]GuestLookup{}, map[string][]GuestLookup{})
 
 	m.mu.RLock()
+	var activeOrphan bool
+	for _, alert := range m.activeAlerts {
+		if alert != nil && alert.Type == "backup-age" && metadataBoolValue(alert.Metadata, "orphaned") {
+			activeOrphan = true
+		}
+	}
+	m.mu.RUnlock()
+	if !activeOrphan {
+		t.Fatal("expected an orphaned backup-age alert before disabling orphaned alerts")
+	}
+
+	disabled := false
+	m.mu.Lock()
+	m.config.BackupDefaults.AlertOrphaned = &disabled
+	m.mu.Unlock()
+	m.CheckBackups(rollups, map[string]GuestLookup{}, map[string][]GuestLookup{})
+
+	m.mu.RLock()
 	defer m.mu.RUnlock()
 	for storageKey, alert := range m.activeAlerts {
-		id := effectiveAlertID(alert, storageKey)
-		if strings.HasPrefix(id, "backup-age-") {
-			t.Fatalf("expected orphaned backup to be skipped, found alert %s", id)
+		if alert != nil && alert.Type == "backup-age" {
+			t.Fatalf("expected orphaned backup alert to clear after disabling it, found %s", effectiveAlertID(alert, storageKey))
 		}
 	}
 }
