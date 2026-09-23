@@ -1,36 +1,38 @@
 {
   "version": 1,
-  "base_sha": "9bae208982eaabb1afb333499a835484ce665a28",
-  "verified_at": "2026-09-22T17:27:08.265530Z",
+  "base_sha": "fea47bb621a38ac996830db7e9d677174e3930e5",
+  "verified_at": "2026-09-23T00:07:46Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/utils/agentInstallCommand.ts"
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/utils/agentInstallCommand.ts": "5c456b9b8cf2d114d5be62bb46c27b265d30fc49c3df88d2ec42631414f65c64"
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts": "24f77d42e2542dd0e8fcf9c55f25a8373c563069c5a0dc112afa6a4456d5a93a"
   },
   "routes": [
-    "Production buildUnixAgentInstallCommand in synthetic clipboard/text-input fixture"
+    "/browser-tests/pbs-host-history-correlation.html?topology=guest&order=stable (Proxmox Backups server drawer)"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 850
+      "height": 900
     },
     {
       "width": 390,
-      "height": 850
+      "height": 844
     }
   ],
   "states": [
-    "Tokenless HTTPS, token HTTP, quoted URL/token, insecure HTTPS, custom CA and extra flags"
+    "Drawer History tab selected with a populated host history target",
+    "Snapshot with the merged host metrics target transiently absent (availability notice)",
+    "Snapshot with the metrics target restored on the same selection"
   ],
   "interactions": [
-    "Copy with browser Clipboard API, await completion, paste using Control+V into input type=text",
-    "Five variants at two viewports preserve exact bytes after repair; all ten old-source pastes lose grammar",
-    "sh and Bash syntax: 20 old-source checks fail, 20 repaired checks pass",
-    "Inspect desktop-before and narrow-after screenshots"
+    "Expand the Proxmox Backups server row and select the History tab; assert the chart paths render",
+    "Apply a snapshot that removes the merged host metrics target; assert the drawer is not remounted and the History selection is retained, showing the in-tab availability notice",
+    "Apply a snapshot that restores the metrics target; assert the same History selection recovers the chart paths",
+    "Repeat at 1280x900 and 390x844; the same check fails on the pre-fix source (no notice, selection reset)"
   ],
-  "command": "pulse-worker-browser tmp/install-proof/browser.cjs",
-  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1; exact release-line locked TypeScript production utility. Synthetic pulse.invalid and invented tokens, generic text field, not native pfSense DOM/service/install or offline download acceptance. Initial fixture did not await async clipboard write and failed on stale clipboard content; synchronisation corrected before this successful run. Prior #2121 browser proof remains unchanged with byte-identical files; retained separately in lane output. No rerun of that layout proof claimed."
+  "command": "pulse-worker-browser scripts/check-drawer-tab-retention.cjs",
+  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1. Release-line backport of main 2c3a6b306a; production ResourceDetailDrawer mounted through the real ProxmoxBackupServersTable fixture with synthetic API responses on the release/v6.4 tree. Proves the drawer tab-retention behaviour, not backend persistence or installed release behaviour. Both viewports passed with 7 chart paths before and after the transient target loss."
 }

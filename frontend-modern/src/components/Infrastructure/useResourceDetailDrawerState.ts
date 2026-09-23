@@ -87,11 +87,21 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
     }
   });
 
+  // Fall back to Overview only when the drawer starts showing a different
+  // resource. A live snapshot can transiently omit a field that gates a tab
+  // (for example a merged metrics target during a refresh), and discarding the
+  // user's selection on that change made the History tab silently jump back to
+  // Overview. Each tab body already renders an availability notice while its
+  // tab is unavailable, so a same-resource change must not reset the selection.
+  let lastResourceId: string | undefined;
   createEffect(() => {
-    const current = activeTab();
+    const resourceId = resource.id;
     const available = new Set(derived.tabs().map((tab) => tab.id));
-    if (!available.has(current)) {
-      setActiveTab('overview');
+    if (resourceId !== lastResourceId) {
+      if (!available.has(activeTab())) {
+        setActiveTab('overview');
+      }
+      lastResourceId = resourceId;
     }
   });
 

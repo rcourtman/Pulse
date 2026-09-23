@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createStore, reconcile } from 'solid-js/store';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '../ResourceDetailDrawer';
 import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
@@ -313,5 +314,44 @@ describe('ResourceDetailDrawer machine metrics history', () => {
     expect(within(hostSection).getByRole('button', { name: 'Show host' })).toBeInTheDocument();
     expect(within(hostSection).queryByRole('button', { name: 'Hide host' })).toBeNull();
     expect(within(hostSection).queryByText('Hardware')).toBeNull();
+  });
+
+  it('keeps the selected History tab across a snapshot refresh that briefly drops the metrics target', async () => {
+    const initial = resource({
+      id: 'pbs-1',
+      type: 'pbs',
+      metricsTarget: { resourceType: 'agent', resourceId: 'agent-pbs-1' },
+      cpu: { current: 12 },
+    });
+    const [pbs, setPbs] = createStore<Resource>(initial);
+    render(() => <ResourceDetailDrawer resource={pbs} />);
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    expect(screen.getByTestId('machine-history')).toHaveAttribute(
+      'data-resource-id',
+      'agent-pbs-1',
+    );
+
+    // A snapshot refresh arrives without the merged metrics target. The drawer
+    // must not silently discard the user's History selection: it should show
+    // the in-tab notice and recover when the target returns on the next poll.
+    setPbs(reconcile({ ...initial, metricsTarget: undefined }, { merge: false }));
+    expect(screen.getByText('Metrics history is unavailable.')).toBeInTheDocument();
+
+    setPbs(
+      reconcile(
+        resource({
+          id: 'pbs-1',
+          type: 'pbs',
+          metricsTarget: { resourceType: 'agent', resourceId: 'agent-pbs-1' },
+          cpu: { current: 12 },
+        }),
+        { merge: false },
+      ),
+    );
+    expect(screen.getByTestId('machine-history')).toHaveAttribute(
+      'data-resource-id',
+      'agent-pbs-1',
+    );
   });
 });
