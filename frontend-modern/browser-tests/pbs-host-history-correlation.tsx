@@ -107,6 +107,9 @@ const resources =
 const Fixture = () => {
   const [servers, setServers] = createSignal(structuredClone(resources));
   const [snapshot, setSnapshot] = createSignal(0);
+  // Simulates a snapshot in which the merged host correlation target is
+  // transiently absent, which is what gates the drawer's History tab.
+  const [dropMetricsTarget, setDropMetricsTarget] = createSignal(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
   onCleanup(() => clearTimeout(timer));
   const refresh = () => {
@@ -119,6 +122,9 @@ const Fixture = () => {
     tank.usagePercent = 40 + count;
     if (query.get('order') !== 'stable' && count % 2 === 1) {
       next[0].pbs!.datastores!.reverse();
+    }
+    if (dropMetricsTarget()) {
+      for (const resource of next) delete resource.metricsTarget;
     }
     setServers(next);
     setSnapshot(count);
@@ -133,6 +139,22 @@ const Fixture = () => {
         }}
       >
         Schedule automatic snapshot
+      </button>
+      <button
+        onClick={() => {
+          setDropMetricsTarget(true);
+          refresh();
+        }}
+      >
+        Drop metrics target
+      </button>
+      <button
+        onClick={() => {
+          setDropMetricsTarget(false);
+          refresh();
+        }}
+      >
+        Restore metrics target
       </button>
       <output aria-label="Snapshot number">{snapshot()}</output>
       <ProxmoxBackupServersTable servers={servers()} />
