@@ -1078,8 +1078,13 @@ artifact-selection behaviour.
    platform. FreeBSD base ships `sha256(1)` and neither GNU `sha256sum` nor
    Perl `shasum`, so the unified installer and the MCP installer must fall back
    through the available digest tool instead of refusing an otherwise correct
-   download. The shared installer helper owns that fallback so every download
-   (agent, typed helper, action runner) is verified consistently.
+    download. The shared installer helper owns that fallback so every download
+    (agent, typed helper, action runner) is verified consistently.
+    FreeBSD and pfSense installs must likewise leave the agent with a durable,
+    installer-owned rotating log. rc.d has no journal and `daemon(8)` discards
+    the child's stdout, so the rendered rc.d service must carry the agent's
+    `--log-file` and the install summary must point at that file rather than
+    `/var/log/messages`, which pfSense does not ship.
    The shell installer must disclose `--enable-commands` as Pulse command
    execution, disabled by default, and must name both Patrol actions and
    Proxmox LXC Docker inventory as the operator-visible reasons to enable it.

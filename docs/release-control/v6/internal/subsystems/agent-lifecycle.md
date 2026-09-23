@@ -1168,6 +1168,12 @@ update, profile rollout, command reachability, or fleet-control authority.
     `shasum`, so checksum verification must fall back through the digest tools
     actually present on the target platform rather than failing a valid agent
     download when coreutils is absent.
+    FreeBSD-family diagnostics are part of that lifecycle too. The rc.d service
+    has no journal and `daemon(8)` does not capture the child's stdout, so the
+    rendered service must pass an installer-owned rotating `--log-file` and the
+    installer's completion hint must name that file. A platform system log is
+    not a substitute: pfSense ships no `/var/log/messages`, and repointing the
+    hint at a log that receives no agent output would still strand the operator.
 
 Server update planning is part of the same lifecycle contract. The System
 Updates plan must surface a structured upgrade-readiness verdict before an
