@@ -4447,6 +4447,19 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Hosted install command payloads carry a minted token
+
+`POST /api/agent-install-command` returns a non-empty `token` (and, for
+Proxmox types, a `command` embedding it) on any hosted runtime, including a
+fresh provider MSP client workspace whose config holds no local credential,
+API token, proxy secret or SSO provider. Hosted mode is enforced
+authentication for this decision, as it already is for
+`configTransferAuthenticationConfigured`. The response shape is unchanged; a
+self-hosted runtime with no authentication configured still receives the
+token-less payload. `TestContract_HostedRuntimeAgentInstallCommandCarriesToken`
+in `internal/api/contract_test.go` pins the hosted payload through the
+router-built config handlers.
+
 ### Node auto-register TLS fields are operator-owned on update
 
 The `/api/auto-register` completion request and response shapes are unchanged.

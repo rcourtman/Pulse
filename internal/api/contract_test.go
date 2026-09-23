@@ -25293,3 +25293,34 @@ func TestSessionTokenCreationWithProductionMonitorWiring(t *testing.T) {
 		t.Fatalf("expected cross-org denial payload to mention access_denied and token binding, got %q", body)
 	}
 }
+
+// A provider MSP client workspace is a hosted runtime whose users sign in
+// through the control plane handoff, so its config carries no local
+// credential, API token, proxy secret or SSO provider. The install command
+// payload must still carry a minted token there, or an agent installed from
+// the client workspace cannot report.
+func TestContract_HostedRuntimeAgentInstallCommandCarriesToken(t *testing.T) {
+	router := newConfigTransferTestRouter(t, true, nil)
+	router.config.PublicURL = "https://t-client.msp.example"
+
+	for _, body := range []string{`{"type":"host","name":"client-host"}`, `{"type":"pve"}`} {
+		req := httptest.NewRequest(http.MethodPost, "/api/agent-install-command", strings.NewReader(body))
+		req.Host = "t-client.msp.example"
+		rec := httptest.NewRecorder()
+		router.configHandlers.HandleAgentInstallCommand(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: status = %d, body=%s", body, rec.Code, rec.Body.String())
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("%s: decode: %v", body, err)
+		}
+		token, _ := payload["token"].(string)
+		if strings.TrimSpace(token) == "" {
+			t.Fatalf("%s: hosted install payload has no token: %s", body, rec.Body.String())
+		}
+		if command, _ := payload["command"].(string); command != "" && !strings.Contains(command, token) {
+			t.Fatalf("%s: install command does not carry the minted token", body)
+		}
+	}
+}

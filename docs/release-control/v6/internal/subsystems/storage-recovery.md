@@ -2538,6 +2538,15 @@ withheld from every org-scoped session, so an org manager is not offered
 instance recovery or configuration transfer. See the api-contracts contract,
 rule 35.
 
+### Hosted install tokens persist like any other workspace token
+
+Hosted client workspaces now mint agent install tokens where they previously
+returned none. Each token is issued through `issueAndPersistAgentInstallToken`
+into the workspace's own config persistence, the same store and write path as
+every other API token, so backup, restore and recovery of a client workspace
+carry these tokens without any new storage surface. A restored workspace keeps
+its agents' tokens; revoking one remains Settings → Infrastructure → Tokens.
+
 ### TLS verification preference survives node re-registration
 
 A PVE or PBS node whose operator disabled certificate verification keeps that
