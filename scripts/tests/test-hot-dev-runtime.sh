@@ -352,11 +352,24 @@ assert_module_at_least() {
 
 test_go_module_security_dependency_floors() {
   local output
-  output="$(cd "${ROOT_DIR}" && go list -m golang.org/x/net golang.org/x/crypto golang.org/x/sys)"
+  output="$(cd "${ROOT_DIR}" && go list -m golang.org/x/net golang.org/x/crypto golang.org/x/term golang.org/x/sys)"
 
   assert_module_at_least "Go module floor keeps x/net past restricted-outbound advisories" "${output}" "golang.org/x/net" "v0.56.0"
-  assert_module_at_least "Go module floor excludes SSH connection deadlock advisories" "${output}" "golang.org/x/crypto" "v0.56.0"
+  assert_module_at_least "Go module floor excludes SSH connection deadlock advisories" "${output}" "golang.org/x/crypto" "v0.57.0"
+  assert_module_at_least "Go module floor keeps x/term past the read-error handling release" "${output}" "golang.org/x/term" "v0.46.0"
   assert_module_at_least "Go module floor keeps x/sys aligned with security module graph" "${output}" "golang.org/x/sys" "v0.47.0"
+}
+
+# The metrics and alerting stores run on the pure-Go SQLite driver, so a
+# downgrade past the qualified storage release would silently drop the
+# upstream journal-rollback corruption fix. Keep the driver and the libc
+# version it requires aligned as floors, not pins.
+test_go_storage_dependency_integrity_floor() {
+  local output
+  output="$(cd "${ROOT_DIR}" && go list -m modernc.org/sqlite modernc.org/libc)"
+
+  assert_module_at_least "Go storage floor keeps sqlite past the journal-rollback corruption fix" "${output}" "modernc.org/sqlite" "v1.59.0"
+  assert_module_at_least "Go storage floor keeps libc aligned with the pinned sqlite driver" "${output}" "modernc.org/libc" "v1.75.7"
 }
 
 # Kubernetes publishes these generated APIs as a coordinated release. A grouped
@@ -427,6 +440,7 @@ test_hot_dev_lab_agent_mode_enables_lan_and_guest_docker_inventory_defaults
 test_hot_dev_remembers_explicit_lab_agent_mode_for_later_managed_starts
 test_hot_dev_browser_urls_distinguish_bind_and_browser_hosts
 test_go_module_security_dependency_floors
+test_go_storage_dependency_integrity_floor
 test_go_kubernetes_module_cohort
 test_go_release_toolchain_floor
 test_backend_race_suite_keeps_hosted_runner_timeout_headroom
