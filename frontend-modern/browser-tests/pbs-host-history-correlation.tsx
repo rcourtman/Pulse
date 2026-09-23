@@ -78,25 +78,49 @@ const standalone = {
   platformData: { sources: ['agent', 'pbs'], agent: sharedAgent },
 } as unknown as Resource;
 
+const query = new URLSearchParams(window.location.search);
+
 const Fixture = () => {
   const [servers, setServers] = createSignal(structuredClone([pbs, guest, standalone]));
-  let snapshot = 0;
+  const [snapshot, setSnapshot] = createSignal(0);
+  // Simulates a snapshot in which the merged host correlation target is
+  // transiently absent, which is what gates the drawer's History tab.
+  const [dropMetricsTarget, setDropMetricsTarget] = createSignal(false);
+  const refresh = () => {
+    const count = snapshot() + 1;
+    const next = structuredClone([pbs, guest, standalone]);
+    next[1].cpu = { current: 15.4 + count };
+    const tank = next[0].pbs!.datastores!.find((store) => store.name === 'tank')!;
+    tank.used = 400 + count * 10;
+    tank.available = 600 - count * 10;
+    tank.usagePercent = 40 + count;
+    if (query.get('order') !== 'stable' && count % 2 === 1) {
+      next[0].pbs!.datastores!.reverse();
+    }
+    if (dropMetricsTarget()) {
+      for (const resource of next) delete resource.metricsTarget;
+    }
+    setServers(next);
+    setSnapshot(count);
+  };
   return (
     <>
+      <button onClick={refresh}>Refresh resource snapshot</button>
       <button
         onClick={() => {
-          snapshot += 1;
-          const next = structuredClone([pbs, guest, standalone]);
-          next[1].cpu = { current: 15.4 + snapshot };
-          const tank = next[0].pbs!.datastores!.find((store) => store.name === 'tank')!;
-          tank.used = 400 + snapshot * 10;
-          tank.available = 600 - snapshot * 10;
-          tank.usagePercent = 40 + snapshot;
-          if (snapshot % 2 === 1) next[0].pbs!.datastores!.reverse();
-          setServers(next);
+          setDropMetricsTarget(true);
+          refresh();
         }}
       >
-        Refresh resource snapshot
+        Drop metrics target
+      </button>
+      <button
+        onClick={() => {
+          setDropMetricsTarget(false);
+          refresh();
+        }}
+      >
+        Restore metrics target
       </button>
       <ProxmoxBackupServersTable servers={servers()} />
     </>

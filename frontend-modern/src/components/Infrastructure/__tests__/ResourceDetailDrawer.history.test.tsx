@@ -216,6 +216,11 @@ describe('ResourceDetailDrawer change history section', () => {
     );
     expect(resourceDetailDrawerStateSource).not.toContain('createResource(');
     expect(resourceDetailDrawerStateSource).not.toContain('MonitoringAPI.');
+    // #1723: a transient snapshot change (for example a momentarily absent
+    // merged metrics target) must not discard the selected drawer tab. The
+    // guard resets only when the drawer starts showing a different resource.
+    expect(resourceDetailDrawerStateSource).toContain('lastResourceId');
+    expect(resourceDetailDrawerStateSource).toContain('resourceId !== lastResourceId');
     expect(resourceDetailDrawerHistoryStateSource).toContain(
       "from '@/hooks/createNonSuspendingQuery'",
     );

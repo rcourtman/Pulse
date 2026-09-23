@@ -5129,3 +5129,19 @@ separate conflicting IDs, devices, hosts and controller members; the linked-disk
 ambiguity test rejects multiple opposite-source candidates in both directions.
 These are synthetic source proofs, not appliance acceptance or a claim about
 which collector produced a reporter's row.
+
+### Drawer tab selection survives a transient snapshot change (#1723)
+
+The shared resource detail drawer keeps the operator's selected tab while a
+live snapshot is being replaced. `useResourceDetailDrawerState` falls back to
+Overview only when the drawer starts showing a different resource; it must not
+reset merely because the current tab is momentarily absent from the derived tab
+list. A merged host's metrics target can be omitted for one snapshot during a
+refresh, and treating that as a permanent loss of the History tab made the
+Proxmox -> Backups drawer silently jump back to Overview. Each tab body already
+renders its own availability notice while its tab is unavailable, so the
+selection can be retained and recovered without manufacturing a target. The
+`ResourceDetailDrawer.history.test.tsx` guard pins the single-resource reset
+boundary, and `scripts/check-drawer-tab-retention.cjs` exercises the rendered
+drawer at desktop and narrow widths: selecting History, dropping the merged
+metrics target, and restoring it must keep the selection and recover the chart.
