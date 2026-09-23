@@ -24809,6 +24809,116 @@ func TestSecurityStatusCurrentUserForScopedLocalSession(t *testing.T) {
 	}
 }
 
+func orgScopedSessionRequest(t *testing.T, user string, org *models.Organization) *http.Request {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	req.AddCookie(platformAdminSession(t, user))
+	return req.WithContext(context.WithValue(req.Context(), OrgContextKey, org))
+}
+
+// A provider opening a client workspace lands in that client's organization as
+// its owner. ensureAdminSession has always let an org manager through the
+// org-bound settings routes, but the security status snapshot reported every
+// settings capability as false for any org-scoped session, so the settings
+// navigation hid Infrastructure and Reporting and the owner had no way to
+// connect a single system. Those org-bound capabilities must follow the route
+// rule, while instance administration stays closed to org-scoped sessions.
+func TestSecurityStatusOrgBoundSettingsFollowOrgManagementRule(t *testing.T) {
+	prev := authpkg.GetAuthorizer()
+	authpkg.SetAuthorizer(&authpkg.DefaultAuthorizer{})
+	defer authpkg.SetAuthorizer(prev)
+
+	cfg := platformAdminConfig(t, "admin")
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	org := &models.Organization{
+		ID:          "t-client01",
+		DisplayName: "Client Workspace",
+		OwnerUserID: "u_provider_owner",
+		Members: []models.OrganizationMember{
+			{UserID: "u_provider_owner", Role: models.OrgRoleOwner},
+			{UserID: "u_org_admin", Role: models.OrgRoleAdmin},
+			{UserID: "u_org_viewer", Role: models.OrgRoleViewer},
+		},
+	}
+
+	for _, tc := range []struct {
+		name    string
+		user    string
+		manager bool
+	}{
+		{name: "owner", user: "u_provider_owner", manager: true},
+		{name: "org admin", user: "u_org_admin", manager: true},
+		{name: "viewer", user: "u_org_viewer", manager: false},
+		{name: "outsider", user: "u_outsider", manager: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ensureAdminSession(router.config, httptest.NewRecorder(), orgScopedSessionRequest(t, tc.user, org)); got != tc.manager {
+				t.Fatalf("precondition: ensureAdminSession = %v, want %v", got, tc.manager)
+			}
+
+			caps := router.securityStatusSettingsCapabilitiesFromSnapshot(
+				router.buildSecurityStatusAuthSnapshot(orgScopedSessionRequest(t, tc.user, org)))
+
+			orgBound := map[string]bool{
+				"infrastructureRead": caps.InfrastructureRead,
+				"availabilityRead":   caps.AvailabilityRead,
+				"reportingRead":      caps.ReportingRead,
+			}
+			for name, got := range orgBound {
+				if got != tc.manager {
+					t.Errorf("%s = %v for an org-scoped %s; its route answers %v", name, got, tc.name, tc.manager)
+				}
+			}
+
+			instanceWide := map[string]bool{
+				"systemSettingsRead":  caps.SystemSettingsRead,
+				"diagnosticsRead":     caps.DiagnosticsRead,
+				"systemLogsRead":      caps.SystemLogsRead,
+				"authenticationRead":  caps.AuthenticationRead,
+				"authenticationWrite": caps.AuthenticationWrite,
+				"singleSignOnWrite":   caps.SingleSignOnWrite,
+				"apiAccessWrite":      caps.APIAccessWrite,
+				"users":               caps.Users,
+				"roles":               caps.Roles,
+				"relayWrite":          caps.RelayWrite,
+				"billingAdmin":        caps.BillingAdmin,
+			}
+			for name, got := range instanceWide {
+				if got {
+					t.Errorf("%s advertised to an org-scoped %s; instance administration stays closed to org-scoped sessions", name, tc.name)
+				}
+			}
+		})
+	}
+}
+
+// With a real RBAC authorizer, reporting also needs read:nodes. An org owner
+// the authorizer refuses must not be offered the reporting surface, because
+// RequirePermission refuses the route before ensureAdminSession runs.
+func TestSecurityStatusOrgBoundReportingRespectsAuthorizer(t *testing.T) {
+	cfg := platformAdminConfig(t, "admin")
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router.authorizer = orgBoundDenyAllAuthorizer{}
+
+	org := &models.Organization{ID: "t-client03", DisplayName: "Client", OwnerUserID: "u_owner"}
+	caps := router.securityStatusSettingsCapabilitiesFromSnapshot(
+		router.buildSecurityStatusAuthSnapshot(orgScopedSessionRequest(t, "u_owner", org)))
+
+	if caps.ReportingRead {
+		t.Fatal("reportingRead advertised although the authorizer refuses read:nodes")
+	}
+	if !caps.InfrastructureRead {
+		t.Fatal("infrastructureRead must still follow ensureAdminSession for the org owner")
+	}
+}
+
+type orgBoundDenyAllAuthorizer struct{}
+
+func (orgBoundDenyAllAuthorizer) Authorize(context.Context, string, string) (bool, error) {
+	return false, nil
+}
+
 // Embedding the interface makes any unexpected mutation fail rather than
 // supplying no-op write methods to this read-only API contract fixture.
 type diagnosticContractManager struct{ alerting.NotificationManager }
