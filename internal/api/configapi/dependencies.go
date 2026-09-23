@@ -129,8 +129,16 @@ func agentInstallCommandPolicyIntent(enableCommands bool) string {
 	return agenttokens.CommandPolicyIntent(enableCommands)
 }
 
+// authConfiguredForAgentLifecycle decides whether install commands carry a
+// minted agent token. A hosted runtime always enforces authentication, the
+// same as the router's configTransferAuthenticationConfigured says: its
+// sessions arrive through the control plane handoff, so a fresh client
+// workspace has no local credential, API token, proxy secret or SSO provider
+// for the per-config check to find. Without this term every install command
+// from a provider's client workspace came back without a token, and an agent
+// installed from it could not report.
 func (h *ConfigHandlers) authConfiguredForAgentLifecycle(cfg *config.Config) bool {
-	return h.runtimeDependencies().AuthConfigured(cfg)
+	return h.hostedMode || h.runtimeDependencies().AuthConfigured(cfg)
 }
 
 func (h *ConfigHandlers) apiTokenOwnerUserIDForRequest(cfg *config.Config, r *http.Request) string {
