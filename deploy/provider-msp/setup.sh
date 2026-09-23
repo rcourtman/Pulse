@@ -529,26 +529,16 @@ ensure_env_file() {
 
 Created ${env_path} from .env.example.
 
-Edit it now and set required values:
-  - DOMAIN
+Edit it now and set the three values only you can supply:
+  - DOMAIN (client workspaces are served at https://<client-id>.DOMAIN)
   - ACME_EMAIL
   - CF_DNS_API_TOKEN (with the default ACME_DNS_PROVIDER=cloudflare; for any
     other Traefik dnsChallenge provider, set ACME_DNS_PROVIDER and put that
     provider's credential variables in dns-credentials.env)
-  - TRAEFIK_IMAGE (digest pinned)
-  - DOCKER_SOCKET_PROXY_IMAGE (digest pinned)
-  - CONTROL_PLANE_IMAGE (digest pinned)
-  - CP_PULSE_IMAGE (digest pinned)
-  - PULSE_PROVIDER_MSP_DATA_DIR
-  - PULSE_PROVIDER_MSP_DOCKER_NETWORK
-  - PULSE_PROVIDER_MSP_DOCKER_SUBNET
-  - PULSE_PROVIDER_MSP_DOCKER_SOCKET
-  - PULSE_PROVIDER_MSP_ROOT_SPACECHECK_DIR
-  - PULSE_PROVIDER_MSP_DOCKER_SPACECHECK_DIR
-  - CP_TRUSTED_PROXY_CIDRS
 
-setup.sh will generate CP_ADMIN_KEY and CP_ENTITLEMENT_SIGNING_PRIVATE_KEY if they
-are still blank.
+Everything else has a working default. setup.sh resolves the image pins to
+digests and generates CP_ADMIN_KEY and CP_ENTITLEMENT_SIGNING_PRIVATE_KEY while
+they are blank.
 
 EOF
 
@@ -750,6 +740,24 @@ pull_provider_images() {
   done
 }
 
+start_provider_services() {
+  # Leave the platform running. The next steps setup prints (bootstrap, then
+  # the portal sign-in link) only work against a running control plane; a
+  # setup that stopped at "prepared" handed a first-time provider a sign-in
+  # link that answered 404 until something else happened to start it.
+  log "starting provider MSP services"
+  (cd "${PULSE_PROVIDER_MSP_INSTALL_DIR}" && docker compose up -d traefik docker-socket-proxy control-plane)
+
+  local attempt
+  for attempt in $(seq 1 30); do
+    if (cd "${PULSE_PROVIDER_MSP_INSTALL_DIR}" && docker compose ps --services --status running 2>/dev/null) | grep -qx control-plane; then
+      return 0
+    fi
+    sleep 2
+  done
+  die "control plane did not reach running state; inspect: cd ${PULSE_PROVIDER_MSP_INSTALL_DIR} && docker compose logs control-plane"
+}
+
 run_install_proof_if_requested() {
   local mode
   mode="$(echo "${PULSE_PROVIDER_MSP_RUN_INSTALL_PROOF}" | tr '[:upper:]' '[:lower:]')"
@@ -786,7 +794,7 @@ print_summary() {
 
   cat <<EOF
 
-Pulse Provider MSP setup prepared.
+Pulse Provider MSP is running.
 
 Paths:
   - Deploy dir: ${PULSE_PROVIDER_MSP_INSTALL_DIR}
@@ -850,6 +858,7 @@ main() {
   # signal rather than a record created before setup can succeed.
   ensure_eval_license
   validate_compose_config
+  start_provider_services
   run_install_proof_if_requested
   print_summary
 }

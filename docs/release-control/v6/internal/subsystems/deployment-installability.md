@@ -2416,6 +2416,20 @@ artifact-selection behaviour.
 
 ## Current State
 
+### Provider MSP setup leaves the platform running
+
+`deploy/provider-msp/setup.sh` now ends by starting `traefik`,
+`docker-socket-proxy` and `control-plane` and waits for the control plane to
+run before printing its summary. It previously stopped at "setup prepared"
+with only the bootstrap command as the next step, so a first-time provider's
+sign-in link answered `404` until `run-install-proof.sh` or a manual
+`docker compose up -d` happened to start the control plane. The first-run
+message also names only the three values a provider must supply (`DOMAIN`,
+`ACME_EMAIL`, and the DNS-01 credential) instead of listing fourteen, most of
+which have working defaults or are generated. Verified on 2026-09-23 on a
+v6.4.1 bundle: portal `404` with the control plane stopped, `200` after the
+changed `setup.sh`.
+
 ### Reviewed frontend dependency security floors
 
 The 2026-09-21 npm-minor-patch group raises the reviewed floors of the
