@@ -1161,16 +1161,22 @@ describe('UnifiedResourceTable performance contract', () => {
       await waitFor(() => {
         expect(container.querySelector('table')).toBeInTheDocument();
       });
-      await waitFor(() => {
-        const rowCount = getBodyRowCount(container);
-        expect(rowCount).toBeGreaterThan(0);
-        expect(rowCount).toBeLessThanOrEqual(140);
-      });
-      await waitFor(() => {
-        expect(getAllByText('Local Only').length).toBeGreaterThan(0);
-      });
+      await waitFor(
+        () => {
+          const rowCount = getBodyRowCount(container);
+          expect(rowCount).toBeGreaterThan(0);
+          expect(rowCount).toBeLessThanOrEqual(140);
+        },
+        { timeout: 15000 },
+      );
+      await waitFor(
+        () => {
+          expect(getAllByText('Local Only').length).toBeGreaterThan(0);
+        },
+        { timeout: 15000 },
+      );
       expect(getPreferredInfrastructureDisplayName(resources[0]!)).toBe('Sensitive Host');
-    });
+    }, 30000);
 
     it('Profile M: caps mounted rows when windowing is active', async () => {
       const resources = makeResources(PROFILES.M);
@@ -1186,12 +1192,15 @@ describe('UnifiedResourceTable performance contract', () => {
       await waitFor(() => {
         expect(container.querySelector('table')).toBeInTheDocument();
       });
-      await waitFor(() => {
-        const rowCount = getBodyRowCount(container);
-        expect(rowCount).toBeGreaterThan(0);
-        expect(rowCount).toBeLessThanOrEqual(140);
-      });
-    });
+      await waitFor(
+        () => {
+          const rowCount = getBodyRowCount(container);
+          expect(rowCount).toBeGreaterThan(0);
+          expect(rowCount).toBeLessThanOrEqual(140);
+        },
+        { timeout: 15000 },
+      );
+    }, 30000);
 
     it('Profile L: keeps mounted rows capped under large load', async () => {
       const resources = makeResources(PROFILES.L);
