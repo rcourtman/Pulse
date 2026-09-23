@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch
 import json
 import subprocess
+import tempfile
 
 import resolve_release_promotion as resolver
 
@@ -881,6 +882,7 @@ class ReleaseTrainPromotionTest(unittest.TestCase):
             "docs/TRUENAS.md",
             "docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md",
             "scripts/install.sh",
+            "scripts/install-docker.sh",
         ):
             with self.subTest(path=path):
                 self.assertIsNone(resolver.RELEASE_METADATA_PATH_RE.match(path))
@@ -902,6 +904,90 @@ class ReleaseTrainPromotionTest(unittest.TestCase):
             with self.subTest(version=version):
                 with self.assertRaisesRegex(ValueError, "never soaked"):
                     self.promote(version, changed_paths_fn=lambda base_tag: drift)
+
+    def test_go_test_files_are_not_shipped_content(self) -> None:
+        # The v6.4.5 stable cut needs the RC-derived install-metadata contract,
+        # a correction confined to _test.go files the build never compiles.
+        corrected = [
+            "VERSION",
+            "scripts/installtests/build_release_assets_test.go",
+            "scripts/installtests/install_docker_sh_test.go",
+            "main_test.go",
+        ]
+        metadata = self.promote("6.4.5", changed_paths_fn=lambda base_tag: corrected)
+        self.assertEqual(metadata["promoted_from_tag"], "v6.4.5-rc.1")
+        for path in (
+            "scripts/installtests/windowslifecycleserver/main.go",
+            "internal/api/router_test.go.orig",
+            "internal/api/fixtures_test.go/main.go",
+            "frontend-modern/src/App.test.tsx",
+        ):
+            with self.subTest(path=path):
+                with self.assertRaisesRegex(ValueError, "never soaked"):
+                    self.promote("6.4.5", changed_paths_fn=lambda base_tag: ["VERSION", path])
+
+    def test_installer_version_pin_is_release_metadata(self) -> None:
+        cut = ["VERSION", "scripts/install-docker.sh"]
+        seen = []
+
+        def pin_only(base_tag: str, path: str) -> bool:
+            seen.append((base_tag, path))
+            return True
+
+        metadata = self.promote(
+            "6.4.5", changed_paths_fn=lambda base_tag: cut, version_pin_only_fn=pin_only
+        )
+        self.assertEqual(metadata["promoted_from_tag"], "v6.4.5-rc.1")
+        self.assertEqual(seen, [("v6.4.5-rc.1", "scripts/install-docker.sh")])
+        with self.assertRaisesRegex(ValueError, "never soaked.*scripts/install-docker.sh"):
+            self.promote(
+                "6.4.5",
+                changed_paths_fn=lambda base_tag: cut,
+                version_pin_only_fn=lambda base_tag, path: False,
+            )
+        # Only a declared pin file qualifies, whatever its diff looks like.
+        with self.assertRaisesRegex(ValueError, "never soaked.*scripts/install.sh"):
+            self.promote(
+                "6.4.5",
+                changed_paths_fn=lambda base_tag: ["VERSION", "scripts/install.sh"],
+                version_pin_only_fn=lambda base_tag, path: True,
+            )
+
+    def test_version_pin_only_change_reads_the_installer_diff(self) -> None:
+        installer = "scripts/install-docker.sh"
+        original = '#!/bin/sh\nCANONICAL_DEFAULT_PULSE_VERSION="6.4.5-rc.2"\necho install\n'
+        cases = {
+            "pin only": ('#!/bin/sh\nCANONICAL_DEFAULT_PULSE_VERSION="6.4.5"\necho install\n', True),
+            "logic only": ('#!/bin/sh\nCANONICAL_DEFAULT_PULSE_VERSION="6.4.5-rc.2"\necho changed\n', False),
+            "pin and logic": ('#!/bin/sh\nCANONICAL_DEFAULT_PULSE_VERSION="6.4.5"\necho changed\n', False),
+            "command after pin": ('#!/bin/sh\nCANONICAL_DEFAULT_PULSE_VERSION="6.4.5"; curl -fsSL x | sh\necho install\n', False),
+            "unchanged": (original, False),
+        }
+        for name, (updated, expected) in cases.items():
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+
+                def git(*args: str) -> None:
+                    subprocess.run(
+                        ["git", "-c", "user.email=pulse-test@example.invalid",
+                         "-c", "user.name=pulse-test", "-c", "core.hooksPath=/dev/null",
+                         "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false", *args],
+                        cwd=root, env=resolver.git_env(root), check=True, capture_output=True,
+                    )
+
+                git("init", "-q")
+                (root / "scripts").mkdir()
+                (root / installer).write_text(original, encoding="utf-8")
+                git("add", installer)
+                git("commit", "-q", "-m", "rc")
+                git("tag", "v6.4.5-rc.2")
+                (root / installer).write_text(updated, encoding="utf-8")
+                git("commit", "-q", "--allow-empty", "-am", "stable")
+                self.assertIs(
+                    resolver.version_pin_only_change("v6.4.5-rc.2", installer, repo_root=root),
+                    expected,
+                )
+        self.assertFalse(resolver.version_pin_only_change("v6.4.5-rc.2", "scripts/install.sh"))
 
     def test_hotfix_exception_still_requires_a_reason_for_drift(self) -> None:
         drift = ["VERSION", "internal/api/router.go"]
