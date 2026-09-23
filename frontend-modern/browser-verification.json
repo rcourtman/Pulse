@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "base_sha": "fea47bb621a38ac996830db7e9d677174e3930e5",
-  "verified_at": "2026-09-23T00:07:46Z",
+  "base_sha": "6e52fcac77b13c03c043c88ca953efa79d8fcb8f",
+  "verified_at": "2026-09-23T01:17:07Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts"
@@ -34,5 +34,5 @@
     "Repeat at 1280x900 and 390x844; the same check fails on the pre-fix source (no notice, selection reset)"
   ],
   "command": "pulse-worker-browser scripts/check-drawer-tab-retention.cjs",
-  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1. Release-line backport of main 2c3a6b306a; production ResourceDetailDrawer mounted through the real ProxmoxBackupServersTable fixture with synthetic API responses on the release/v6.4 tree. Proves the drawer tab-retention behaviour, not backend persistence or installed release behaviour. Both viewports passed with 7 chart paths before and after the transient target loss."
+  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1. Re-verified on the composed v6.4.5-rc.2 candidate (release/v6.4 828182ab6 plus the 6.4.5-rc.2 release-metadata commit): production ResourceDetailDrawer mounted through the real ProxmoxBackupServersTable fixture with synthetic API responses on the release/v6.4 tree. Proves the drawer tab-retention behaviour, not backend persistence or installed release behaviour. Both viewports passed with 7 chart paths before and after the transient target loss."
 }
