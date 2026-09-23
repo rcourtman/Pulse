@@ -575,3 +575,31 @@ func TestCheckRuntimePrerequisitesReportsMissingDockerDaemon(t *testing.T) {
 		t.Fatalf("failures = %q, want docker daemon ping failure", got)
 	}
 }
+
+// provider-msp status and upgrade.sh probe tenant health from a one-off
+// container that is not attached to any isolated tenant network. The image's
+// own Docker HEALTHCHECK result must decide health whenever it exists, so a
+// healthy client does not read as unhealthy just because the caller cannot
+// route to it; only a container with no HEALTHCHECK falls back to HTTP.
+func TestDockerRecordedHealthDecidesWhenTheImageDeclaresOne(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name         string
+		health       *container.Health
+		wantHealthy  bool
+		wantRecorded bool
+	}{
+		{name: "healthy", health: &container.Health{Status: container.Healthy}, wantHealthy: true, wantRecorded: true},
+		{name: "unhealthy", health: &container.Health{Status: container.Unhealthy}, wantHealthy: false, wantRecorded: true},
+		{name: "starting", health: &container.Health{Status: container.Starting}, wantHealthy: false, wantRecorded: true},
+		{name: "no healthcheck", health: &container.Health{Status: container.NoHealthcheck}, wantRecorded: false},
+		{name: "health absent", health: nil, wantRecorded: false},
+	} {
+		inspect := container.InspectResponse{State: &container.State{Running: true, Health: tc.health}}
+		healthy, recorded := dockerRecordedHealth(inspect)
+		if healthy != tc.wantHealthy || recorded != tc.wantRecorded {
+			t.Errorf("%s: dockerRecordedHealth = (%v, %v), want (%v, %v)", tc.name, healthy, recorded, tc.wantHealthy, tc.wantRecorded)
+		}
+	}
+}
