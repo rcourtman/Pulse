@@ -5538,6 +5538,20 @@ a valid pinned SSH signature and the extracted request expression with absent
 and synthetic email. It does not establish installed onboarding, server acceptance
 or legal identity. See the qualification evidence below.
 
+### Node 24 amd64 release-builder digest parity
+
+The canonical Pulse release Dockerfile and provider-MSP control-plane Dockerfile
+pin the same immutable amd64 Node 24 Alpine frontend-builder image. The
+`TestNode24FrontendBuilderDigestIsAligned` installability test binds both
+build inputs to the current dependency digest. The canonical release-build
+metadata proof `TestDockerBuildUsesCanonicalReleaseLdflags` and hosted
+provider-MSP control proof `TestProviderMSPControlPlaneDockerfileBuildsReleaseLicenseBinary`
+also require that exact digest while retaining their release metadata and
+license-build assertions. These are source-contract checks, not an image build.
+The hosted release build must verify the landed exact source, and provider-MSP
+rollout and installed acceptance must be observed separately before this refresh
+is considered operationally complete.
+
 ### Pinned release action consumer compatibility
 
 The grouped release actions use immutable revisions recorded in
