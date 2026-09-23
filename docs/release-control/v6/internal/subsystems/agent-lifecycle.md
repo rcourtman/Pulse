@@ -3401,6 +3401,18 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Org managers reach the agent install path in their own organization
+
+An owner or admin of the selected organization now receives
+`settingsCapabilities.infrastructureRead` from `/api/security/status`, matching
+the `ensureAdminSession` rule that already let them through the Infrastructure
+routes. A provider opening a client workspace from the Pulse Account portal
+therefore lands on Settings → Infrastructure with the host install flow open,
+instead of a navigation that hid the page and fell through to General. The
+install tokens it generates stay bound to that organization; nothing about token
+scope, agent registration or reporting identity changes. See the api-contracts
+contract, rule 35, for the capability rule.
+
 ### Auto-register preserves the operator's stored TLS choice
 
 Re-registering an existing Proxmox node through the canonical auto-register

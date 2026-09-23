@@ -301,6 +301,12 @@ nil.
 
 The authenticated security-status currentUsername is the validated caller principal, not an administrator configuration disclosure. Public responses omit it. An organisation-scoped local session may receive its own identity while authUsername and instance-settings capabilities remain withheld; clients must not interpret identity availability as privilege.
 
+An organisation-scoped session manager receives only the org-bound
+`infrastructureRead`, `availabilityRead` and `reportingRead` security-status
+capabilities, matching routes that already admit org managers and read only
+that organisation's state. It does not gain instance administration, security
+configuration, SSO, user/role, audit, relay, recovery or billing capabilities.
+
 API token scope copy must match runtime authority. `ai:chat` covers Assistant
 conversation, model selection, sessions, and knowledge reads only. Knowledge
 save/delete/import/clear and explicit governed action approval/execution
