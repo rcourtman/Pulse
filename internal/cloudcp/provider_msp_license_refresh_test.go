@@ -116,8 +116,8 @@ func (f *fakeProviderMSPLicenseServer) ServeHTTP(w http.ResponseWriter, r *http.
 		}
 	case "/v1/provider-msp/billing-portal":
 		body := f.verify(r, "billing-portal")
-		if body["return_url"] != "https://msp.example.com/portal" {
-			f.t.Fatalf("billing portal return_url = %v", body["return_url"])
+		if body["return_url"] != "https://msp.example.com/portal?provider_msp_checkout=billing" {
+			f.t.Fatalf("billing portal return_url = %v, want the portal flagged to apply a plan change", body["return_url"])
 		}
 		w.WriteHeader(f.portalStatus)
 		_, _ = w.Write([]byte(`{"url":"https://billing.stripe.com/p/session/test"}`))

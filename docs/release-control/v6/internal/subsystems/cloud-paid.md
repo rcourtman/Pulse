@@ -3454,14 +3454,20 @@ load. `msp_solo` (3 client workspaces) is the first paid step above the
 
 In the portal, provider-hosted mode shows the `billing` section as **Plan**
 (`internal/cloudcp/portal/frontend/src/provider_plan.ts`), never Pulse-hosted
-or self-hosted billing. The section shows the evaluation or paid plan, its
-expiry, how many client workspaces are in use, and, on an evaluation, the plans
-above the current cap with their monthly or annual price. Owners and admins
-get Buy, Manage billing and "Apply my purchase now"; read-only members are told
-who can buy. After Stripe returns to `?provider_msp_checkout=complete` the
-panel keeps refreshing the licence until the purchase lands. It then polls the
-plan until the restarted control plane serves the new plan, and it never
-reloads the page. Regression coverage:
+or self-hosted billing. The section shows the evaluation or paid plan, how
+many client workspaces are in use, the evaluation's expiry, and, on an
+evaluation, the plans above the current cap with their monthly or annual
+price. A paid plan shows no licence date while it renews; once the licence is
+inside its 14-day grace the panel says the subscription has not renewed and
+when clients lose the plan. Owners and admins get Buy, Manage billing and an
+immediate refresh ("Apply my purchase now", or "Apply it now" on a paid plan);
+read-only members are told who can buy. After Stripe returns to
+`?provider_msp_checkout=complete` the panel keeps refreshing the licence until
+the purchase lands. It then polls the plan until the restarted control plane
+serves the new plan, and it never reloads the page. Manage billing returns to
+`?provider_msp_checkout=billing`, and the panel checks the licence twice so a
+plan changed in the Stripe billing portal applies without a click. Regression
+coverage:
 `TestLoadConfig_ProviderHostedMSPPrefersRenewedLicense` in
 `internal/cloudcp/config_test.go`,
 `TestProviderMSPLicenseRefreshInstallsThePaidLicenceAndRestarts` and

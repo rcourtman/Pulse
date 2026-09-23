@@ -69,7 +69,18 @@ function clientWorkspaces(count: number): string {
   return count === 1 ? '1 client workspace' : String(count) + ' client workspaces';
 }
 
-function renderCurrentPlan(plan: ProviderPlanState, canManage: boolean, busy: string, inUse: number): string {
+// A paid licence is signed to the paid period end plus 14 days of grace and
+// re-signed as the subscription renews, so one that ends inside that window
+// means the subscription has stopped renewing.
+const PAID_GRACE_MS = 14 * 24 * 60 * 60 * 1000;
+
+function paidLicenceInGrace(plan: ProviderPlanState, now: number): boolean {
+  if (!plan.expires_at) return false;
+  var expiresAt = new Date(plan.expires_at).getTime();
+  return !isNaN(expiresAt) && expiresAt - now <= PAID_GRACE_MS;
+}
+
+function renderCurrentPlan(plan: ProviderPlanState, canManage: boolean, busy: string, inUse: number, now: number): string {
   var expires = formatDate(plan.expires_at);
   var title = providerPlanName(plan.plan_version);
   var description: string;
@@ -81,8 +92,11 @@ function renderCurrentPlan(plan: ProviderPlanState, canManage: boolean, busy: st
       : 'Your evaluation covers ' + clientWorkspaces(plan.workspace_limit) + '. Buy a plan to add more.';
     if (expires) meta.push('Expires ' + expires);
   } else {
-    description = 'Up to ' + clientWorkspaces(plan.workspace_limit) + '. Renews automatically while your subscription is active.';
-    if (expires) meta.push('Licence valid to ' + expires);
+    // The renewal date lives in Manage billing; the licence date only
+    // matters, and only shows, once the subscription has stopped renewing.
+    description = paidLicenceInGrace(plan, now)
+      ? 'Your subscription has not renewed. Your clients keep this plan until ' + expires + '. Open Manage billing to renew or update your payment method.'
+      : 'Up to ' + clientWorkspaces(plan.workspace_limit) + '. Renews automatically while your subscription is active.';
     if (canManage) {
       cta = '<button class="btn-secondary billing-action-button" type="button" data-provider-plan-action="manage-billing"' +
         (busy ? ' disabled' : '') + '>' + (busy === 'manage-billing' ? 'Opening…' : 'Manage billing') + '</button>';
@@ -131,7 +145,7 @@ function renderOffer(option: ProviderPlanOption, canManage: boolean, busy: strin
   );
 }
 
-export function renderProviderPlanHTML(view: ProviderPlanView, canManage: boolean, inUse = -1): string {
+export function renderProviderPlanHTML(view: ProviderPlanView, canManage: boolean, inUse = -1, now = Date.now()): string {
   var parts: string[] = ['<div class="billing-section-intro"><h2>Plan</h2></div>'];
   if (view.notice) {
     parts.push('<p class="billing-action-meta" role="status">' + escapeText(view.notice) + '</p>');
@@ -146,7 +160,7 @@ export function renderProviderPlanHTML(view: ProviderPlanView, canManage: boolea
   }
   var plan = view.plan;
   if (!plan) return parts.join('');
-  parts.push(renderCurrentPlan(plan, canManage, view.busy, inUse));
+  parts.push(renderCurrentPlan(plan, canManage, view.busy, inUse, now));
 
   if (plan.evaluation) {
     if (plan.plans_error) {
@@ -170,9 +184,9 @@ export function renderProviderPlanHTML(view: ProviderPlanView, canManage: boolea
 
   if (canManage && plan.license_id) {
     parts.push(
-      '<p class="billing-action-meta">Just paid? ' +
+      '<p class="billing-action-meta">' + (plan.evaluation ? 'Just paid? ' : 'Changed your plan? ') +
         '<button class="btn-secondary btn-compact" type="button" data-provider-plan-action="refresh"' + (view.busy ? ' disabled' : '') + '>' +
-          (view.busy === 'refresh' ? 'Checking…' : 'Apply my purchase now') +
+          (view.busy === 'refresh' ? 'Checking…' : (plan.evaluation ? 'Apply my purchase now' : 'Apply it now')) +
         '</button>' +
       '</p>'
     );
@@ -214,6 +228,9 @@ function providerAccount(accounts: PortalAccountSummary[] | undefined): PortalAc
 const CHECKOUT_RETURN_PARAM = 'provider_msp_checkout';
 const APPLY_POLL_MS = 5000;
 const APPLY_POLL_ATTEMPTS = 12;
+// Most visits to Manage billing change nothing, so a return checks twice (the
+// plan-change webhook can trail the redirect) rather than polling.
+const BILLING_RETURN_ATTEMPTS = 2;
 // The control plane restarts to apply a changed licence; give it a moment,
 // then poll the plan until it answers with the new one.
 const RESTART_SETTLE_MS = 8000;
@@ -320,6 +337,13 @@ export function installProviderPlan(deps: ProviderPlanDeps): ProviderPlanControl
     });
   }
 
+  function checkAfterBillingReturn(attempt: number) {
+    void refresh(false).then(function(applied) {
+      if (applied || attempt + 1 >= BILLING_RETURN_ATTEMPTS) return;
+      later(function() { checkAfterBillingReturn(attempt + 1); }, APPLY_POLL_MS);
+    });
+  }
+
   document.addEventListener('click', function(event) {
     var target = event.target instanceof HTMLElement ? event.target.closest('[data-provider-plan-action]') as HTMLElement | null : null;
     if (!target) return;
@@ -391,6 +415,8 @@ export function installProviderPlan(deps: ProviderPlanDeps): ProviderPlanControl
     if (returned === 'complete') {
       view.notice = 'Payment received. Applying your plan…';
       pollAfterCheckout(0);
+    } else if (returned === 'billing') {
+      checkAfterBillingReturn(0);
     } else {
       view.notice = 'Checkout was cancelled. Nothing was charged.';
     }

@@ -2722,7 +2722,13 @@
   function clientWorkspaces(count) {
     return count === 1 ? "1 client workspace" : String(count) + " client workspaces";
   }
-  function renderCurrentPlan(plan, canManage, busy, inUse) {
+  var PAID_GRACE_MS = 14 * 24 * 60 * 60 * 1e3;
+  function paidLicenceInGrace(plan, now) {
+    if (!plan.expires_at) return false;
+    var expiresAt = new Date(plan.expires_at).getTime();
+    return !isNaN(expiresAt) && expiresAt - now <= PAID_GRACE_MS;
+  }
+  function renderCurrentPlan(plan, canManage, busy, inUse, now) {
     var expires = formatDate(plan.expires_at);
     var title = providerPlanName(plan.plan_version);
     var description;
@@ -2732,8 +2738,7 @@
       description = expires ? "Your evaluation covers " + clientWorkspaces(plan.workspace_limit) + " until " + expires + ". Buy a plan to keep your clients monitored after that and to add more." : "Your evaluation covers " + clientWorkspaces(plan.workspace_limit) + ". Buy a plan to add more.";
       if (expires) meta.push("Expires " + expires);
     } else {
-      description = "Up to " + clientWorkspaces(plan.workspace_limit) + ". Renews automatically while your subscription is active.";
-      if (expires) meta.push("Licence valid to " + expires);
+      description = paidLicenceInGrace(plan, now) ? "Your subscription has not renewed. Your clients keep this plan until " + expires + ". Open Manage billing to renew or update your payment method." : "Up to " + clientWorkspaces(plan.workspace_limit) + ". Renews automatically while your subscription is active.";
       if (canManage) {
         cta = '<button class="btn-secondary billing-action-button" type="button" data-provider-plan-action="manage-billing"' + (busy ? " disabled" : "") + ">" + (busy === "manage-billing" ? "Opening\u2026" : "Manage billing") + "</button>";
       }
@@ -2753,7 +2758,7 @@
     var action = canManage ? '<button class="btn-primary billing-action-button" type="button" data-provider-plan-action="buy" data-provider-plan-version="' + escapeAttribute(option.plan_version) + '" data-provider-plan-cycle="' + escapeAttribute(option.billing_cycle) + '"' + (busy ? " disabled" : "") + ">" + (busy === "buy:" + option.plan_version ? "Opening checkout\u2026" : "Buy " + escapeText(name)) + "</button>" : "";
     return '<article class="billing-action-row" data-provider-plan-offer="' + escapeAttribute(option.plan_version) + '"><div class="billing-action-main"><div class="billing-action-copy"><h3>' + escapeText(name) + "</h3><p>Up to " + escapeText(clientWorkspaces(option.workspace_limit)) + '.</p></div><div class="billing-action-meta">' + escapeText(formatProviderPlanPrice(option)) + "</div></div>" + (action ? '<div class="billing-action-cta">' + action + "</div>" : "") + "</article>";
   }
-  function renderProviderPlanHTML(view, canManage, inUse = -1) {
+  function renderProviderPlanHTML(view, canManage, inUse = -1, now = Date.now()) {
     var parts = ['<div class="billing-section-intro"><h2>Plan</h2></div>'];
     if (view.notice) {
       parts.push('<p class="billing-action-meta" role="status">' + escapeText(view.notice) + "</p>");
@@ -2768,7 +2773,7 @@
     }
     var plan = view.plan;
     if (!plan) return parts.join("");
-    parts.push(renderCurrentPlan(plan, canManage, view.busy, inUse));
+    parts.push(renderCurrentPlan(plan, canManage, view.busy, inUse, now));
     if (plan.evaluation) {
       if (plan.plans_error) {
         parts.push('<p class="billing-action-meta" role="alert">' + escapeText(plan.plans_error) + "</p>");
@@ -2794,7 +2799,7 @@
     }
     if (canManage && plan.license_id) {
       parts.push(
-        '<p class="billing-action-meta">Just paid? <button class="btn-secondary btn-compact" type="button" data-provider-plan-action="refresh"' + (view.busy ? " disabled" : "") + ">" + (view.busy === "refresh" ? "Checking\u2026" : "Apply my purchase now") + "</button></p>"
+        '<p class="billing-action-meta">' + (plan.evaluation ? "Just paid? " : "Changed your plan? ") + '<button class="btn-secondary btn-compact" type="button" data-provider-plan-action="refresh"' + (view.busy ? " disabled" : "") + ">" + (view.busy === "refresh" ? "Checking\u2026" : plan.evaluation ? "Apply my purchase now" : "Apply it now") + "</button></p>"
       );
     }
     return parts.join("");
@@ -2809,6 +2814,7 @@
   var CHECKOUT_RETURN_PARAM = "provider_msp_checkout";
   var APPLY_POLL_MS = 5e3;
   var APPLY_POLL_ATTEMPTS = 12;
+  var BILLING_RETURN_ATTEMPTS = 2;
   var RESTART_SETTLE_MS = 8e3;
   var RESTART_POLL_MS = 3e3;
   var RESTART_POLL_ATTEMPTS = 20;
@@ -2914,6 +2920,14 @@
         }, APPLY_POLL_MS);
       });
     }
+    function checkAfterBillingReturn(attempt) {
+      void refresh(false).then(function(applied) {
+        if (applied || attempt + 1 >= BILLING_RETURN_ATTEMPTS) return;
+        later(function() {
+          checkAfterBillingReturn(attempt + 1);
+        }, APPLY_POLL_MS);
+      });
+    }
     document.addEventListener("click", function(event) {
       var target = event.target instanceof HTMLElement ? event.target.closest("[data-provider-plan-action]") : null;
       if (!target) return;
@@ -2982,6 +2996,8 @@
       if (returned === "complete") {
         view.notice = "Payment received. Applying your plan\u2026";
         pollAfterCheckout(0);
+      } else if (returned === "billing") {
+        checkAfterBillingReturn(0);
       } else {
         view.notice = "Checkout was cancelled. Nothing was charged.";
       }

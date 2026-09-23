@@ -74,6 +74,26 @@ describe('renderProviderPlanHTML', () => {
     expect(html).toContain('data-provider-plan-action="manage-billing"');
     expect(html).not.toContain('data-provider-plan-action="buy"');
     expect(html).toContain('Change plan, update your payment method or cancel renewal');
+    expect(html).toContain('Changed your plan?');
+    expect(html).not.toContain('Just paid?');
+  });
+
+  it('keeps the licence date out of a renewing plan and warns once renewal has stopped', () => {
+    const now = Date.parse('2026-10-01T00:00:00Z');
+    const renewing = renderProviderPlanHTML(view({
+      plan: evaluationPlan({ plan_version: 'msp_solo', evaluation: false, workspace_limit: 3, expires_at: '2026-11-06T00:00:00Z' }),
+    }), true, 2, now);
+    expect(renewing).toContain('Renews automatically');
+    expect(renewing).toContain('2 of 3 client workspaces in use');
+    expect(renewing).not.toContain('2026');
+    expect(renewing).not.toContain('Nov');
+
+    const lapsed = renderProviderPlanHTML(view({
+      plan: evaluationPlan({ plan_version: 'msp_solo', evaluation: false, workspace_limit: 3, expires_at: '2026-10-10T00:00:00Z' }),
+    }), true, 2, now);
+    expect(lapsed).toContain('Your subscription has not renewed.');
+    expect(lapsed).toContain('Open Manage billing to renew');
+    expect(lapsed).not.toContain('Renews automatically');
   });
 
   it('keeps the evaluation visible when plans cannot be loaded', () => {
@@ -203,6 +223,36 @@ describe('installProviderPlan', () => {
     await flush();
     expect(controller.view().notice).toBe('Your Solo plan is active.');
     expect(document.getElementById(PROVIDER_PLAN_ROOT_ID)!.innerHTML).toContain('Manage billing');
+  });
+
+  it('applies a plan changed in Manage billing when the provider comes back', async () => {
+    api.fetchPlan = vi.fn().mockResolvedValue(evaluationPlan({ plan_version: 'msp_solo', evaluation: false, workspace_limit: 3 }));
+    api.refreshLicense = vi.fn()
+      .mockResolvedValueOnce({ status: 'active', changed: false })
+      .mockResolvedValueOnce({ status: 'active', changed: true, restart_scheduled: true });
+    const { store, controller } = install(providerBootstrap(), '?provider_msp_checkout=billing');
+    await controller.load();
+    expect(store.getShellState().activeSection).toBe('billing');
+    expect(controller.view().notice).toBe('');
+    await flush();
+    expect(api.refreshLicense).toHaveBeenCalledTimes(1);
+    timers.shift()!();
+    await flush();
+    expect(api.refreshLicense).toHaveBeenCalledTimes(2);
+    expect(controller.view().notice).toContain('being applied');
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('checks a Manage billing return only twice when nothing changed', async () => {
+    api.refreshLicense = vi.fn().mockResolvedValue({ status: 'active', changed: false });
+    const { controller } = install(providerBootstrap(), '?provider_msp_checkout=billing');
+    await controller.load();
+    await flush();
+    timers.shift()!();
+    await flush();
+    expect(api.refreshLicense).toHaveBeenCalledTimes(2);
+    expect(timers).toHaveLength(0);
+    expect(controller.view().notice).toBe('');
   });
 
   it('says nothing was charged when checkout is cancelled', () => {

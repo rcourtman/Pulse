@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -357,7 +358,10 @@ func (r *ProviderMSPLicenseRefresher) Checkout(ctx context.Context, planVersion,
 // BillingPortal opens the Stripe billing portal for this platform's
 // subscription and returns its URL.
 func (r *ProviderMSPLicenseRefresher) BillingPortal(ctx context.Context) (string, error) {
-	request, err := r.signedRequest("billing-portal", buildCPURL(r.cfg.BaseURL, portal.PortalPagePath, nil))
+	// Come back flagged, so the portal applies a plan changed there instead
+	// of showing the old one until the next scheduled refresh.
+	returnURL := buildCPURL(r.cfg.BaseURL, portal.PortalPagePath, url.Values{"provider_msp_checkout": {"billing"}})
+	request, err := r.signedRequest("billing-portal", returnURL)
 	if err != nil {
 		return "", err
 	}
