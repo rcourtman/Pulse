@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -1009,5 +1010,52 @@ func TestLoadConfig_SessionTTLInvalid(t *testing.T) {
 
 	if _, err := LoadConfig(); err == nil {
 		t.Fatal("expected error for invalid CP_SESSION_TTL")
+	}
+}
+
+// A paying provider must keep starting after the self-issued evaluation on
+// the host expires: a renewed licence that validates wins, and an unusable
+// one falls back to the host file.
+func TestLoadConfig_ProviderHostedMSPPrefersRenewedLicense(t *testing.T) {
+	setProviderHostedMSPEnv(t)
+	t.Setenv("CP_ENV", "production")
+	dataDir := t.TempDir()
+	t.Setenv("CP_DATA_DIR", dataDir)
+	issuer := newProviderMSPTestIssuer(t)
+	key := trialSigningEnvPublicKey(t)
+
+	hostFile := writeProviderMSPTestFile(t, filepath.Join(t.TempDir(), "eval.jwt"),
+		issuer.sign(t, "lic_msp_eval", pkglicensing.PlanVersionMSPEval, time.Now().Add(-60*24*time.Hour), key))
+	t.Setenv("CP_PROVIDER_MSP_LICENSE_FILE", hostFile)
+	renewedExpiry := time.Now().Add(40 * 24 * time.Hour).Truncate(time.Second)
+	writeProviderMSPTestFile(t, ProviderMSPRenewedLicensePath(dataDir),
+		issuer.sign(t, "lic_msp_paid", "msp_solo", renewedExpiry, key))
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig with an expired evaluation and a valid renewed licence: %v", err)
+	}
+	if cfg.ProviderMSPPlanVersion != "msp_solo" || cfg.ProviderMSPPlanSource != ProviderMSPPlanSourceRenewedLicense || cfg.ProviderMSPLicenseID != "lic_msp_paid" {
+		t.Fatalf("resolved plan=%q source=%q license=%q", cfg.ProviderMSPPlanVersion, cfg.ProviderMSPPlanSource, cfg.ProviderMSPLicenseID)
+	}
+	if !cfg.ProviderMSPLicenseExpiresAt.Equal(renewedExpiry) {
+		t.Fatalf("ProviderMSPLicenseExpiresAt = %v, want %v", cfg.ProviderMSPLicenseExpiresAt, renewedExpiry)
+	}
+	if limit, _ := pkglicensing.WorkspaceLimitForPlan(cfg.ProviderMSPPlanVersion); limit != 3 {
+		t.Fatalf("msp_solo workspace limit = %d, want 3", limit)
+	}
+
+	// An expired renewed licence falls back to a valid host licence.
+	writeProviderMSPTestFile(t, hostFile, issuer.sign(t, "lic_msp_eval", pkglicensing.PlanVersionMSPEval, time.Now().Add(30*24*time.Hour), key))
+	writeProviderMSPTestFile(t, ProviderMSPRenewedLicensePath(dataDir), issuer.sign(t, "lic_msp_paid", "msp_solo", time.Now().Add(-60*24*time.Hour), key))
+	cfg, err = LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig with an expired renewed licence: %v", err)
+	}
+	if cfg.ProviderMSPPlanSource != ProviderMSPPlanSourceLicenseFile || cfg.ProviderMSPPlanVersion != pkglicensing.PlanVersionMSPEval {
+		t.Fatalf("fallback plan=%q source=%q", cfg.ProviderMSPPlanVersion, cfg.ProviderMSPPlanSource)
+	}
+	if !ProviderMSPPlanSourceIsSignedLicense(ProviderMSPPlanSourceRenewedLicense) || ProviderMSPPlanSourceIsSignedLicense(ProviderMSPPlanSourceEnvFallback) {
+		t.Fatal("ProviderMSPPlanSourceIsSignedLicense must accept both signed sources and nothing else")
 	}
 }

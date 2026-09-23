@@ -3431,6 +3431,36 @@ Pulse-service-backed capabilities. `providerChained` retains its narrower
 meaning: a Pulse-signed licence is available to embed so release builds can
 verify the lease.
 
+### Provider-hosted MSP platforms buy and renew their own licence
+
+A provider-hosted control plane now buys and renews its licence through the
+licence server's self-serve provider MSP path (pulse-pro
+`license-server/provider_msp_purchase.go`), with no key copy and nobody at
+Pulse in the loop. Portal routes under `/api/accounts/{account_id}/provider-msp/`
+serve plan state to any member. Checkout, the Stripe billing portal and an
+immediate licence refresh are restricted to owners and admins. The purchasable
+plan list comes from the licence server's `GET /v1/provider-msp/plans`, so the
+portal offers only what the catalogue sells, at Stripe's price, and drops any
+plan without a known workspace limit. `ProviderMSPLicenseRefresher` signs
+every request that must come from this platform with its lease signing key,
+validates the returned licence the way startup does, requires it to bind this
+platform's key, and installs it at `ProviderMSPRenewedLicensePath`.
+`LoadConfig` prefers that renewed licence while it validates (plan source
+`renewed_license`), so a paying provider keeps starting after the self-issued
+evaluation on the host expires. A changed licence restarts the control plane
+through the graceful shutdown path, because the plan version is read once at
+load. `msp_solo` (3 client workspaces) is the first paid step above the
+2-workspace evaluation. Regression coverage:
+`TestLoadConfig_ProviderHostedMSPPrefersRenewedLicense` in
+`internal/cloudcp/config_test.go`,
+`TestProviderMSPLicenseRefreshInstallsThePaidLicenceAndRestarts` and
+`TestProviderMSPPortalRoutesRelayToTheLicenceServer` in
+`internal/cloudcp/provider_msp_license_refresh_test.go`,
+`TestRegisterRoutes_ProviderMSPPurchaseRoutesRequireOwnerOrAdmin` in
+`internal/cloudcp/routes_auth_test.go`, and
+`TestProviderMSPWorkspaceLadderRisesFromTheEvaluation` in
+`pkg/licensing/features_test.go`.
+
 ### Runtime display load remains outside commercial bootstrap ownership
 
 `frontend-modern/src/useAppRuntimeState.ts` now loads presentation defaults

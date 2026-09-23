@@ -247,7 +247,7 @@ func (rt *providerMSPProofRuntime) runProviderMSPProof(ctx context.Context, opts
 	if err != nil {
 		return nil, err
 	}
-	if !opts.AllowEnvPlan && strings.TrimSpace(rt.cfg.ProviderMSPPlanSource) != cloudcp.ProviderMSPPlanSourceLicenseFile {
+	if !opts.AllowEnvPlan && !cloudcp.ProviderMSPPlanSourceIsSignedLicense(rt.cfg.ProviderMSPPlanSource) {
 		return nil, fmt.Errorf("provider MSP proof requires %s plan source; rerun with --allow-env-plan only for local development", cloudcp.ProviderMSPPlanSourceLicenseFile)
 	}
 

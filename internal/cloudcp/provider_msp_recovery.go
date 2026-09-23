@@ -213,7 +213,7 @@ func validateProviderMSPRecoveryConfig(cfg *CPConfig, opts ProviderMSPRecoveryOp
 	if _, known := pkglicensing.WorkspaceLimitForPlan(cfg.ProviderMSPPlanVersion); !known {
 		return fmt.Errorf("provider MSP plan %q has no known workspace limit", cfg.ProviderMSPPlanVersion)
 	}
-	if !opts.AllowEnvPlan && strings.TrimSpace(cfg.ProviderMSPPlanSource) != ProviderMSPPlanSourceLicenseFile {
+	if !opts.AllowEnvPlan && !ProviderMSPPlanSourceIsSignedLicense(cfg.ProviderMSPPlanSource) {
 		return fmt.Errorf("provider MSP recovery requires %s plan source; rerun with --allow-env-plan only for local development", ProviderMSPPlanSourceLicenseFile)
 	}
 	return nil

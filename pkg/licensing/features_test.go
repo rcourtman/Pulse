@@ -623,6 +623,7 @@ func TestWorkspaceLimitForPlan_KnownPlans(t *testing.T) {
 		{"cloud_power", 1},
 		{"cloud_max", 1},
 		{"cloud_founding", 1},
+		{"msp_solo", 3},
 		{"msp_starter", 5},
 		{"msp_hosted_v1", 5},
 		{"msp_growth", 15},
@@ -639,6 +640,24 @@ func TestWorkspaceLimitForPlan_KnownPlans(t *testing.T) {
 				t.Errorf("WorkspaceLimitForPlan(%q) = %d, want %d", tt.plan, limit, tt.wantLimit)
 			}
 		})
+	}
+}
+
+// The provider MSP ladder must rise from the evaluation through every paid
+// tier: the evaluation stays below the cheapest paid plan so needing one more
+// client is what converts, and Solo is that first paid step.
+func TestProviderMSPWorkspaceLadderRisesFromTheEvaluation(t *testing.T) {
+	ladder := []string{PlanVersionMSPEval, "msp_solo", "msp_starter", "msp_growth", "msp_scale"}
+	previous := 0
+	for _, plan := range ladder {
+		limit, known := WorkspaceLimitForPlan(plan)
+		if !known {
+			t.Fatalf("%s has no workspace limit", plan)
+		}
+		if limit <= previous {
+			t.Fatalf("%s allows %d workspaces, not more than the step below it (%d)", plan, limit, previous)
+		}
+		previous = limit
 	}
 }
 
