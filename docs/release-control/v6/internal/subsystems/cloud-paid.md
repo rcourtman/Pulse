@@ -3431,6 +3431,24 @@ Pulse-service-backed capabilities. `providerChained` retains its narrower
 meaning: a Pulse-signed licence is available to embed so release builds can
 verify the lease.
 
+### Provider MSP health monitor keeps clients running across upgrades
+
+The control plane's health monitor restarts an unhealthy client workspace
+with a single Docker restart, never a stop: Docker's `unless-stopped` policy
+does not bring back a container stopped through the API, so a stopped client
+stayed down until someone started it by hand. Before each health check, and
+once as soon as the control plane starts, the monitor also reattaches the
+provider support containers (Traefik and the control plane) to every active
+client's isolated tenant network. Recreating either one, which every
+`upgrade.sh` run does to the control plane, drops those attachments, cutting
+the client's Traefik route and, with the old stop behaviour, taking every
+client offline three minutes later. A client without an isolated network is
+skipped quietly. Regression coverage:
+`TestHealthMonitorReattachesSupportContainersAndRestartsInsteadOfStopping` in
+`internal/cloudcp/health_monitor_test.go` and
+`TestEnsureSupportContainersOnTenantNetworkSkipsMissingNetwork` in
+`internal/cloudcp/docker/manager_test.go`.
+
 ### Provider MSP status reads client health that any caller can observe
 
 `provider-msp status`, which `upgrade.sh` gates on before every provider

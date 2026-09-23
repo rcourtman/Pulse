@@ -863,6 +863,39 @@ func (m *Manager) Stop(ctx context.Context, containerID string) error {
 	return err
 }
 
+// Restart stops and starts a container in one daemon call. The health
+// monitor relies on it to recover an unhealthy tenant: a container stopped
+// through the API is never brought back by the unless-stopped restart
+// policy, so stopping it left the client workspace down for good.
+func (m *Manager) Restart(ctx context.Context, containerID string) error {
+	timeout := 30
+	_, err := m.cli.ContainerRestart(ctx, containerID, client.ContainerRestartOptions{Timeout: &timeout})
+	return err
+}
+
+// EnsureSupportContainersOnTenantNetwork reattaches the provider support
+// containers (Traefik and the control plane) to a tenant's isolated network.
+// They join it when the tenant is created, but recreating either one, as an
+// upgrade or any compose change does, drops the attachment: Traefik then has
+// no route to the client and the control plane cannot reach it. A tenant
+// without an isolated network has nothing to reattach.
+func (m *Manager) EnsureSupportContainersOnTenantNetwork(ctx context.Context, tenantID string) error {
+	if m == nil || m.cli == nil || !m.cfg.IsolateTenantNetworks || strings.TrimSpace(tenantID) == "" {
+		return nil
+	}
+	networkName := m.tenantNetworkName(tenantID)
+	if networkName == "" {
+		return nil
+	}
+	if _, err := m.cli.NetworkInspect(ctx, networkName, client.NetworkInspectOptions{}); err != nil {
+		if errdefs.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("inspect tenant network %q: %w", networkName, err)
+	}
+	return m.connectSupportContainersToTenantNetwork(ctx, networkName)
+}
+
 // Start starts a stopped tenant container.
 func (m *Manager) Start(ctx context.Context, containerID string) error {
 	_, err := m.cli.ContainerStart(ctx, containerID, client.ContainerStartOptions{})
