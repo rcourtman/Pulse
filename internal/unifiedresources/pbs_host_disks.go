@@ -98,6 +98,12 @@ func pbsInstanceCorroboratesHost(instance models.PBSInstance, host models.Host) 
 	if hostName == "" {
 		return false
 	}
+	// PBS reports the node hostname independently of the configured connection
+	// label and endpoint. Use that machine identity when the connection is
+	// configured by an IP or DNS alias the host agent does not report (#1723).
+	if nodeName := NormalizeHostname(instance.NodeName); nodeName != "" && nodeName == hostName {
+		return true
+	}
 	if instanceName := NormalizeHostname(instance.Name); instanceName != "" && instanceName == hostName {
 		return true
 	}

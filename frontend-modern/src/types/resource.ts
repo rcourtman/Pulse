@@ -472,6 +472,8 @@ export interface ResourcePBSDatastore {
 export interface ResourcePBSMeta {
   instanceId?: string;
   hostname?: string;
+  /** PBS-reported machine hostname; correlation evidence, not the service or canonical resource identity. */
+  nodeName?: string;
   version?: string;
   uptimeSeconds?: number;
   datastoreCount?: number;

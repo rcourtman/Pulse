@@ -503,6 +503,14 @@ that manual-channel consequence must stay visible at desktop and narrow widths.
 
 ## Shared Boundaries
 
+The Proxmox Backups server table keeps the PBS service row and drawer identity
+while it correlates history to a host agent. A uniquely matching normalized
+PBS-reported node name may corroborate that host when the connection label or
+IP/DNS endpoint is not the machine hostname. This presentation correlation must
+fail closed for ambiguous agents, preserve the canonical PBS row, and use the
+host agent's metrics target only for host history; it must not rewrite resource
+identity or present the PBS service target as host history.
+
 Settings navigation discoverability is part of the shared settings-shell
 boundary. A settings route that is available in normal commercial presentation
 must be reachable through the sidebar unless it is explicitly a hidden

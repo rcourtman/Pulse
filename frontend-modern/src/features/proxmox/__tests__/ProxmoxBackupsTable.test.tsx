@@ -33,6 +33,18 @@ vi.mock('@/utils/apiClient', () => ({
   apiFetchJSON: apiFetchJSONMock,
 }));
 
+vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
+  ResourceDetailDrawer: (props: { resource: Resource }) => (
+    <div
+      data-testid="pbs-resource-detail"
+      data-resource-id={props.resource.id}
+      data-agent-id={props.resource.agent?.agentId}
+      data-metrics-resource-id={props.resource.metricsTarget?.resourceId}
+      data-metrics-resource-type={props.resource.metricsTarget?.resourceType}
+    />
+  ),
+}));
+
 const jsonResponse = (payload: unknown) =>
   new Response(JSON.stringify(payload), {
     status: 200,
@@ -578,6 +590,69 @@ describe('ProxmoxBackupsTable', () => {
     expect(proxmoxBackupServersTableSource).not.toContain(
       '<span class="font-medium text-base-content">Server:</span>',
     );
+  });
+
+  it('keeps the PBS server identity while routing IP-configured History to its reported host', async () => {
+    mockBackupAPIs();
+    const pbsServer = {
+      ...pbsServerResource,
+      id: 'pbs-1',
+      name: 'backup-connection',
+      displayName: 'Backup connection',
+      platformId: 'backup-connection',
+      sources: ['pbs'],
+      agent: undefined,
+      pbs: {
+        ...pbsServerResource.pbs!,
+        instanceId: 'pbs-1',
+        hostname: '10.0.0.5',
+        nodeName: 'pbs-one.local',
+      },
+      metricsTarget: { resourceType: 'agent', resourceId: 'pbs-1' },
+      platformData: {
+        sources: ['pbs'],
+        pbs: {
+          instanceId: 'pbs-1',
+          hostname: '10.0.0.5',
+          nodeName: 'pbs-one.local',
+          datastoreCount: 1,
+        },
+      },
+    } as Resource;
+    const hostAgent = {
+      id: 'agent-host-1',
+      type: 'agent',
+      name: 'pbs-one.local',
+      displayName: 'PBS host',
+      platformId: 'agent-host-1',
+      platformType: 'proxmox-pbs',
+      sourceType: 'hybrid',
+      sources: ['agent', 'pbs'],
+      status: 'online',
+      lastSeen: pbsServer.lastSeen + 1_000,
+      agent: { agentId: 'agent-pbs-1', hostname: 'pbs-one.local' },
+      metricsTarget: { resourceType: 'agent', resourceId: 'agent-pbs-1' },
+      platformData: {
+        sources: ['agent', 'pbs'],
+        agent: { agentId: 'agent-pbs-1', hostname: 'pbs-one.local' },
+      },
+    } as Resource;
+
+    renderInRouter(() => (
+      <ProxmoxBackupsTable
+        emptyIcon={<span />}
+        workloads={[workloadResource]}
+        servers={[pbsServer, hostAgent]}
+      />
+    ));
+
+    await screen.findAllByText('pbs-docker');
+    fireEvent.click(screen.getByRole('row', { name: /backup-connection/ }));
+    const detail = await screen.findByTestId('pbs-resource-detail');
+    expect(detail).toHaveAttribute('data-resource-id', 'pbs-1');
+    expect(detail).toHaveAttribute('data-agent-id', 'agent-pbs-1');
+    expect(detail).toHaveAttribute('data-metrics-resource-id', 'agent-pbs-1');
+    expect(detail).toHaveAttribute('data-metrics-resource-type', 'agent');
   });
 
   it('keeps backup coverage fed by Proxmox VM/LXC guests when Overview demotes app containers', () => {

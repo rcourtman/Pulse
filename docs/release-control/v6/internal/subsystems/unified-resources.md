@@ -185,6 +185,19 @@ distinction afterwards. The unified risk projection gates wearout on
 `storagehealth.WearoutReported` so its verdict and the server-side alert verdict
 about the same disk cannot diverge.
 
+### PBS-reported node name correlation
+
+The PBS resource payload may carry optional `pbs.nodeName`, sourced from the
+node name reported by PBS rather than the configured connection label or
+endpoint. The unified-resource adapter may use its normalized value to
+corroborate one host agent when it matches that agent's hostname; multiple
+matching agents remain ambiguous and must not be attached. The field is
+correlation evidence only: it does not change the PBS resource ID, canonical
+identity, service metrics target, or provider endpoint. Preserve it through
+resource serialization so the Proxmox Backups drawer can perform the same
+fail-closed presentation correlation while selecting host history from the
+agent metrics target.
+
 ## Canonical Files
 
 1. `internal/unifiedresources/types.go`

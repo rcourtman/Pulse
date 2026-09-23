@@ -41,6 +41,23 @@ func TestResourceFromProxmoxNodeIncludesTemperature(t *testing.T) {
 	}
 }
 
+func TestResourceFromPBSInstanceProjectsReportedNodeName(t *testing.T) {
+	instance := models.PBSInstance{
+		ID:       "pbs-1",
+		Name:     "backup-connection",
+		Host:     "https://10.0.0.5:8007",
+		NodeName: "  pbs-one.local  ",
+	}
+
+	resource, _ := resourceFromPBSInstance(instance)
+	if resource.PBS == nil {
+		t.Fatal("expected PBS payload")
+	}
+	if got, want := resource.PBS.NodeName, "pbs-one.local"; got != want {
+		t.Fatalf("PBS nodeName = %q, want trimmed provider-reported name %q", got, want)
+	}
+}
+
 func TestResourceFromProxmoxNodeIncludesNetworkInterfaces(t *testing.T) {
 	node := models.Node{
 		ID: "mock-cluster-pve1", Name: "pve1", Status: "online",

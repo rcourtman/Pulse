@@ -77,6 +77,35 @@ func TestRefreshCanonicalIdentityPrefersTargetsAndCanonicalHostData(t *testing.T
 	}
 }
 
+func TestPBSReportedNodeNameDoesNotChangeCanonicalIdentity(t *testing.T) {
+	resource := Resource{
+		ID:   "pbs-1",
+		Type: ResourceTypePBS,
+		Name: "backup-connection",
+		Identity: ResourceIdentity{
+			Hostnames: []string{"backup-connection"},
+		},
+		PBS:           &PBSData{InstanceID: "pbs-1", NodeName: "pbs-one.local"},
+		MetricsTarget: &MetricsTarget{ResourceType: "pbs", ResourceID: "pbs-1"},
+	}
+	RefreshCanonicalIdentity(&resource)
+	if resource.Canonical == nil {
+		t.Fatal("expected canonical identity")
+	}
+	canonicalBefore := *resource.Canonical
+	targetBefore := *resource.MetricsTarget
+
+	resource.PBS.NodeName = "renamed-pbs-node.local"
+	RefreshCanonicalIdentity(&resource)
+
+	if !reflect.DeepEqual(*resource.Canonical, canonicalBefore) {
+		t.Fatalf("changing provider-reported PBS node name changed canonical identity: before=%+v after=%+v", canonicalBefore, *resource.Canonical)
+	}
+	if *resource.MetricsTarget != targetBefore {
+		t.Fatalf("changing provider-reported PBS node name changed service metrics target: before=%+v after=%+v", targetBefore, *resource.MetricsTarget)
+	}
+}
+
 func TestDockerCollectionModeDoesNotChangeCanonicalIdentity(t *testing.T) {
 	resource := Resource{
 		ID:   "docker-host-1",
