@@ -4533,6 +4533,25 @@ auto-register mutation boundary.
     `TestConfigTransferSSOViewerDeniedBeforeBodyRead` and
     `TestActionRoutesRequireExplicitSSOAdminOnSSOOnlyInstance`.
 
+    Org-bound settings are the one place an org-scoped session is not
+    withheld. `ensureAdminSession` admits the configured administrator or a
+    manager (owner or admin) of the request's organization inside an
+    org-scoped request, and that rule is `sessionUserHasSettingsAdminPrivileges`
+    for both the route gate and the snapshot. The snapshot records it as
+    `sessionManagesOrg`, never as `sessionIsAdmin`, and it widens only
+    `infrastructureRead`, `availabilityRead` and `reportingRead`, whose routes
+    pass `ensureAdminSession` and whose handlers read that organization's own
+    config and monitor state; `reportingRead` still requires the authorizer's
+    `read` on `nodes`. Every other capability, `detailLevel` and `authUsername`
+    stay instance administration. Before this, a provider opening a client
+    workspace from the Pulse Account portal arrived as the org owner with every
+    capability `false`, so Settings hid the Infrastructure and Reporting pages
+    that the routes would have served and the handoff to
+    `/settings/infrastructure` fell through to General. Regression coverage:
+    `TestSecurityStatusOrgBoundSettingsFollowOrgManagementRule` and
+    `TestSecurityStatusOrgBoundReportingRespectsAuthorizer` in
+    `internal/api/contract_test.go`.
+
 36. Configured SSO admission restrictions fail closed on missing identity
     claims. OIDC and SAML providers with `allowedEmails` or `allowedDomains`
     must reject an assertion that omits the email claim; absence is not a way
