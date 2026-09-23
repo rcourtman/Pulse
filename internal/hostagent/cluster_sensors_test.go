@@ -182,6 +182,36 @@ func TestCollectClusterSensors_NotProxmox(t *testing.T) {
 	}
 }
 
+func TestCollectClusterSensors_Disabled(t *testing.T) {
+	logger := zerolog.New(zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+		w.Out = os.Stderr
+	})).Level(zerolog.DebugLevel)
+
+	commandCalled := false
+	a := &Agent{
+		logger: logger,
+		cfg: Config{
+			EnableProxmox:             true,
+			DisableClusterPeerSensors: true,
+		},
+		collector: &mockCollector{
+			goos: "linux",
+			commandCombinedOutputFn: func(ctx context.Context, name string, arg ...string) (string, error) {
+				commandCalled = true
+				return "", fmt.Errorf("cluster peer collection must be disabled")
+			},
+		},
+	}
+
+	result := a.collectClusterSensors(context.Background())
+	if result != nil {
+		t.Errorf("expected nil when cluster peer sensors are disabled, got %v", result)
+	}
+	if commandCalled {
+		t.Error("cluster peer collection ran despite being disabled")
+	}
+}
+
 func TestCollectClusterSensors_NotLinux(t *testing.T) {
 	logger := zerolog.New(zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
 		w.Out = os.Stderr

@@ -80,8 +80,9 @@ type Config struct {
 	DeploySSHUser string // Default: root. Non-root users must support passwordless sudo for install steps.
 
 	// Network configuration
-	ReportIP    string // IP address to report instead of auto-detected (for multi-NIC systems)
-	DisableCeph bool   // If true, disables local Ceph status polling
+	ReportIP                  string // IP address to report instead of auto-detected (for multi-NIC systems)
+	DisableCeph               bool   // If true, disables local Ceph status polling
+	DisableClusterPeerSensors bool   // If true, keeps Proxmox monitoring local and skips SSH sensor collection from cluster peers
 
 	// AvailabilityTargets are the externally probed availability checks the
 	// server assigned to this agent at startup. Later assignments arrive

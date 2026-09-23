@@ -36,7 +36,7 @@ const (
 // collectClusterSensors discovers Proxmox cluster siblings and collects temperature
 // data from each via SSH. Returns nil if not in a cluster or no peers are reachable.
 func (a *Agent) collectClusterSensors(ctx context.Context) []agentshost.ClusterNodeSensors {
-	if !a.cfg.EnableProxmox {
+	if !a.cfg.EnableProxmox || a.cfg.DisableClusterPeerSensors {
 		return nil
 	}
 
