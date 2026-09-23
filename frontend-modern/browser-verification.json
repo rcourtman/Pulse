@@ -1,13 +1,15 @@
 {
   "version": 1,
-  "base_sha": "92edc056627a88bbdb11a8f6d6f95aacd061607a",
-  "verified_at": "2026-09-23T09:22:16Z",
+  "base_sha": "4f11deddc728a69f937dcb04777c9e44276c3f95",
+  "verified_at": "2026-09-23T11:26:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/types/resource.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "b19198cb055e5f0f107c2d6749d6def719bd84310de585e3b6a349fa22fac3c1"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "f6b50e71870ca4a3e0dcfa3e47413542e8444296bc68481c60e15d1a5d921f9f",
+    "frontend-modern/src/types/resource.ts": "db2509b73b2ed550ea1890aaef34e2a3dfe7d500aa193586562f9e20b95283ab"
   },
   "routes": [
     "/browser-tests/pbs-host-history-correlation.html?topology=guest&order=stable (Proxmox Backups server drawer)",
@@ -28,17 +30,18 @@
     }
   ],
   "states": [
+    "PBS connection configured by 10.0.0.5 and linked to the host agent only by the reported pbs.nodeName, across pbs-only, side-by-side and PVE-guest topologies",
     "Drawer History tab selected with a populated correlated host series",
     "Timer-driven snapshot replacing the datastore inventory in stable and reversed order",
     "Snapshot that briefly omits the correlated host row while the PBS server row remains",
     "Snapshot that restores the correlated host row on the same selection"
   ],
   "interactions": [
-    "Expand the Proxmox Backups server row, switch between datastore rows and select History; assert the chart paths render against the host metrics target",
+    "Expand the Proxmox Backups server row, switch between datastore rows and select History; assert the chart paths render against the host metrics target even though the configured endpoint is not a machine-identity token",
     "Apply timer-driven stable and reordered snapshots; assert the drawer is not remounted, the History selection is retained, the chart series survive and the Discovery/Metrics Target rows stay byte-identical",
     "Apply a snapshot that omits the correlated host row; assert the Identity rows and History chart stay on the retained host target instead of falling back to the PBS service key",
     "Restore the correlated host row; assert the same target is confirmed, and repeat the complete matrix at 1280x900 and 390x844"
   ],
   "command": "pulse-worker-browser scripts/check-pbs-host-history-correlation.cjs",
-  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1. Production ProxmoxBackupServersTable mounted through the real browser fixture with synthetic API responses and an intercepted metrics-history request. Proves the retained host correlation, not backend persistence or installed release behaviour. The same check fails on the pre-fix source: omitting the host row flips the drawer's Discovery and Metrics Target rows to agent:pbs-1 and drops the host series."
+  "notes": "Chromium 141.0.7390.37 / Playwright 1.56.1. Production ProxmoxBackupServersTable mounted through the real browser fixture with synthetic API responses and an intercepted metrics-history request. Proves the reported-node-name host correlation and its retention across a transient host-row omission, not backend persistence or installed release behaviour. The recorded history requests target agent/agent-proxback and vm/proxmox:100 and never the PBS service target agent/pbs-1. The same check fails on the pre-fix source: the drawer falls back to the PBS service key when the endpoint is not a machine-identity token, and omitting the host row flips the Discovery and Metrics Target rows to agent:pbs-1."
 }
