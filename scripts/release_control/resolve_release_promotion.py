@@ -46,6 +46,15 @@ RELEASE_METADATA_PATH_RE = re.compile(
     r"|docs/release-control/v6/internal/subsystems/deployment-installability\.md"
     r")$"
 )
+# Go excludes _test.go files from every build, so they are never shipped content.
+# A stable cut may need test-only corrections for its own metadata contract.
+NON_SHIPPING_PATH_RE = re.compile(r"^(?:.+/)?[^/]+_test\.go$")
+# A stable cut re-pins the installer's default version from the RC to the
+# stable release. That line is release metadata. Any other installer change is
+# shipped content the candidate never soaked.
+VERSION_PIN_LINE_RES = {
+    "scripts/install-docker.sh": re.compile(r'^CANONICAL_DEFAULT_PULSE_VERSION="[^"\s]+"$'),
+}
 WINDOWS_AUTHENTICODE_AVAILABLE = False
 WINDOWS_AUTHENTICODE_STANDING_UNSIGNED_MIN_VERSION = (6, 3, 2)
 WINDOWS_AUTHENTICODE_UNAVAILABLE_REASON = (
@@ -294,6 +303,28 @@ def changed_paths_between(base_tag: str) -> list[str]:
     return [path for path in result.stdout.splitlines() if path.strip()]
 
 
+def version_pin_only_change(base_tag: str, path: str, *, repo_root: Path | None = None) -> bool:
+    """Return whether path changed since base_tag only in its version pin line."""
+
+    pin = VERSION_PIN_LINE_RES.get(path)
+    if pin is None:
+        return False
+    result = subprocess.run(
+        ["git", "diff", "--unified=0", "--no-color", "--no-ext-diff", f"{base_tag}..HEAD", "--", path],
+        cwd=repo_root or REPO_ROOT,
+        env=git_env(repo_root),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    changed = [
+        line[1:]
+        for line in result.stdout.splitlines()
+        if line[:1] in {"+", "-"} and not line.startswith(("+++ ", "--- "))
+    ]
+    return bool(changed) and all(pin.fullmatch(line) for line in changed)
+
+
 def classify_routine_patch_risks(paths: list[str]) -> list[str]:
     risks: list[str] = []
     for path in sorted(set(paths)):
@@ -343,6 +374,7 @@ def resolve_metadata(
     list_same_version_rc_tags_fn: Callable[[str], list[str]] = list_same_version_rc_tags,
     list_published_prereleases_fn: Callable[[], list[tuple[str, int]]] = list_published_prereleases,
     changed_paths_fn: Callable[[str], list[str]] = changed_paths_between,
+    version_pin_only_fn: Callable[[str, str], bool] = version_pin_only_change,
     tag_exists_fn: Callable[[str], bool] = tag_exists,
     tag_commit_fn: Callable[[str], str] = tag_commit,
     head_descends_from_fn: Callable[[str], bool] = head_descends_from,
@@ -530,6 +562,11 @@ def resolve_metadata(
                 path
                 for path in changed_paths_fn(promoted_from_tag)
                 if not RELEASE_METADATA_PATH_RE.match(path)
+                and not NON_SHIPPING_PATH_RE.match(path)
+                and not (
+                    path in VERSION_PIN_LINE_RES
+                    and version_pin_only_fn(promoted_from_tag, path)
+                )
             ]
 
             if hotfix_exception:
