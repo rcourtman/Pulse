@@ -304,7 +304,7 @@ administrator or settings-scope checks, expose queue contents to new callers, or
 change tenant selection. Missing owners fail with 503 rather than dereferencing
 nil.
 
-The authenticated security-status currentUsername is the validated caller principal, not an administrator configuration disclosure. Public responses omit it. An organisation-scoped local session may receive its own identity while authUsername and instance-settings capabilities remain withheld; clients must not interpret identity availability as privilege.
+The authenticated security-status currentUsername is the validated caller principal, not an administrator configuration disclosure. Public responses omit it. An organisation-scoped local session may receive its own identity while authUsername and instance-settings capabilities remain withheld; clients must not interpret identity availability as privilege. A manager of that organisation additionally receives the org-bound infrastructureRead, availabilityRead and reportingRead capabilities, because their routes already admit org managers through ensureAdminSession and read only that organisation's state; this never extends to authentication, SSO, users, roles, audit, relay, system, diagnostics or billing surfaces.
 
 API token scope copy must match runtime authority. `ai:chat` covers Assistant
 conversation, model selection, sessions, and knowledge reads only. Knowledge
