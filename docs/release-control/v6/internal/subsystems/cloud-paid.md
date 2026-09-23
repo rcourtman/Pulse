@@ -3431,6 +3431,19 @@ Pulse-service-backed capabilities. `providerChained` retains its narrower
 meaning: a Pulse-signed licence is available to embed so release builds can
 verify the lease.
 
+### Provider MSP status reads client health that any caller can observe
+
+`provider-msp status`, which `upgrade.sh` gates on before every provider
+upgrade, decides client-workspace health from the runtime image's recorded
+Docker HEALTHCHECK when the container declares one, and falls back to the
+direct `/api/health` HTTP probe only for images without it. The command runs
+in a one-off container on the provider ingress network, which cannot reach a
+client's isolated tenant network, so the HTTP probe alone reported every real
+client unhealthy and blocked upgrades on any install with a client. The
+long-lived control plane's health monitor uses the same rule. Regression
+coverage: `TestDockerRecordedHealthDecidesWhenTheImageDeclaresOne` in
+`internal/cloudcp/docker/manager_test.go`.
+
 ### Runtime display load remains outside commercial bootstrap ownership
 
 `frontend-modern/src/useAppRuntimeState.ts` now loads presentation defaults
