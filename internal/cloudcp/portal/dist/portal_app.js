@@ -2826,6 +2826,19 @@
       return setTimeout(fn, ms);
     };
     var view = { loading: false, error: "", plan: null, cycle: "monthly", busy: "", notice: "" };
+    var planEpoch = 0;
+    var applying = null;
+    function isApplied(plan, target) {
+      return !!target.plan_version && plan.plan_version === target.plan_version && (!target.license_id || plan.license_id === target.license_id) && (!target.expires_at || plan.expires_at === target.expires_at);
+    }
+    function finishApplying(plan) {
+      applying = null;
+      planEpoch += 1;
+      view.plan = plan;
+      view.error = "";
+      view.notice = "Your " + providerPlanName(plan.plan_version) + " plan is active.";
+      render();
+    }
     function account() {
       var bootstrap = deps.store.getBootstrap();
       if (bootstrap.provider_hosted_mode !== true || !bootstrap.authenticated) return null;
@@ -2841,47 +2854,59 @@
     async function load() {
       var current = account();
       if (!current) return;
+      var epoch = planEpoch;
       view.loading = true;
       render();
       try {
-        view.plan = await deps.api.fetchPlan(current.id);
+        var plan = await deps.api.fetchPlan(current.id);
+        if (epoch !== planEpoch) return;
+        if (applying) {
+          if (isApplied(plan, applying)) finishApplying(plan);
+          return;
+        }
+        view.plan = plan;
         view.error = "";
       } catch (error) {
-        view.error = error instanceof Error && error.message ? error.message : "Your plan could not be loaded.";
+        if (epoch === planEpoch) {
+          view.error = error instanceof Error && error.message ? error.message : "Your plan could not be loaded.";
+        }
       } finally {
         view.loading = false;
         render();
       }
     }
-    function waitForAppliedPlan(previousPlan, attempt) {
+    function waitForAppliedPlan(target, attempt) {
+      if (applying !== target) return;
       var current = account();
       if (!current) return;
       deps.api.fetchPlan(current.id).then(function(plan) {
-        if (plan.plan_version !== previousPlan) {
-          view.plan = plan;
-          view.error = "";
-          view.notice = "Your " + providerPlanName(plan.plan_version) + " plan is active.";
-          render();
+        if (applying !== target) return;
+        if (isApplied(plan, target)) {
+          finishApplying(plan);
           return;
         }
         throw new Error("plan not applied yet");
       }).catch(function() {
+        if (applying !== target) return;
         if (attempt + 1 >= RESTART_POLL_ATTEMPTS) {
-          view.notice = "Your plan should be active now. Open this page again if it still shows the old plan.";
+          applying = null;
+          planEpoch += 1;
+          view.notice = "The updated plan could not be confirmed yet. Open this page again or use the apply button.";
           render();
           return;
         }
         later(function() {
-          waitForAppliedPlan(previousPlan, attempt + 1);
+          waitForAppliedPlan(target, attempt + 1);
         }, RESTART_POLL_MS);
       });
     }
-    function applyRestart() {
-      var previousPlan = view.plan ? view.plan.plan_version : "";
+    function applyRestart(target) {
+      applying = target;
+      planEpoch += 1;
       view.notice = "Your plan is being applied. This takes a few seconds.";
       render();
       later(function() {
-        waitForAppliedPlan(previousPlan, 0);
+        waitForAppliedPlan(target, 0);
       }, RESTART_SETTLE_MS);
     }
     async function refresh(manual) {
@@ -2892,7 +2917,7 @@
       try {
         var result = await deps.api.refreshLicense(current.id);
         if (result.restart_scheduled) {
-          applyRestart();
+          applyRestart(result);
           return true;
         }
         if (manual) {
