@@ -2451,16 +2451,26 @@ has not repeated that live-host proof.
 
 ### Provider MSP clients survive a support-container recreate
 
-Recreating the control plane or Traefik (every `upgrade.sh` run recreates the
-control plane) used to detach them from each client's isolated network. The
-health monitor then saw every client as failing and stopped it, and nothing
-restarted it, so an upgrade on a v6.4.1 install with clients took all of them
-offline. The monitor now reattaches the support containers on startup and on
-every pass, and restarts rather than stops an unhealthy client. Verified on
-2026-09-23 on a v6.4.1 provider bundle with two clients: a control-plane
-recreate rejoined both client networks within a second, a Traefik-only
-recreate had its client routes back on the next 60-second pass, and neither
- client was stopped.
+Recreating the control plane or Traefik detaches it from each client's
+isolated network. The health monitor now reattaches both support containers
+on startup and each pass, and restarts rather than stops an unhealthy client.
+The original PR reports a two-client v6.4.1 lab reproduction and recovery on
+the same installation on 2026-09-23; that is not installed acceptance of this
+integrated source. Reconnection selects support containers from the configured
+provider ingress network. Both reconnection and new workspace provisioning
+require exact tenant ownership and tenant-runtime labels on an existing
+isolated network before attaching containers; provisioning refuses an
+unlabelled same-named network instead of adopting it. A legacy client without
+an isolated network remains a reconnection no-op.
+Client removal follows the same installation boundary: the Docker manager
+identifies the managed client's network by its derived name and exact tenant
+and runtime labels, not by a generic tenant-network label alone. It must force
+disconnect only this provider's role-labelled support containers that are
+still attached to that network, selecting them through the configured provider
+ingress network. A recreated or other provider's support container is not a
+cleanup target. `internal/cloudcp/docker/manager_test.go` covers the network
+selection and disconnect filters; source-only coverage does not replace a
+two-provider installed upgrade, recreation and cleanup check.
 
 ### Provider MSP operations accept a renewed licence
 
