@@ -372,6 +372,8 @@ func (m *Manager) ensureTenantNetwork(ctx context.Context, tenantID string) (str
 	networkName := m.tenantNetworkName(tenantID)
 	inspect, err := m.cli.NetworkInspect(ctx, networkName, client.NetworkInspectOptions{})
 	if err == nil {
+		// A matching name is not evidence that this is our isolated network.
+		// In particular, never adopt a pre-existing unlabelled Docker network.
 		if !isOwnedTenantNetwork(inspect.Network.Labels, tenantID) {
 			return "", fmt.Errorf("network %q is not the isolated network for tenant %q", networkName, tenantID)
 		}
@@ -422,6 +424,8 @@ func (m *Manager) connectSupportContainersByLabel(ctx context.Context, networkNa
 	}
 	filters := client.Filters{}
 	filters = filters.Add("label", label)
+	// Role labels are shared by every provider MSP installation on a host.
+	// Never attach another installation's support container to this tenant.
 	filters = filters.Add("network", providerNetwork)
 	result, err := m.cli.ContainerList(ctx, client.ContainerListOptions{
 		Filters: filters,
@@ -885,6 +889,45 @@ func (m *Manager) Stop(ctx context.Context, containerID string) error {
 	return err
 }
 
+// Restart stops and starts a container in one daemon call. The health
+// monitor relies on it to recover an unhealthy tenant: a container stopped
+// through the API is never brought back by the unless-stopped restart
+// policy, so stopping it left the client workspace down for good.
+func (m *Manager) Restart(ctx context.Context, containerID string) error {
+	timeout := 30
+	_, err := m.cli.ContainerRestart(ctx, containerID, client.ContainerRestartOptions{Timeout: &timeout})
+	return err
+}
+
+// EnsureSupportContainersOnTenantNetwork reattaches the provider support
+// containers (Traefik and the control plane) to a tenant's isolated network.
+// They join it when the tenant is created, but recreating either one, as an
+// upgrade or any compose change does, drops the attachment: Traefik then has
+// no route to the client and the control plane cannot reach it. A tenant
+// without an isolated network has nothing to reattach.
+func (m *Manager) EnsureSupportContainersOnTenantNetwork(ctx context.Context, tenantID string) error {
+	if m == nil || m.cli == nil || !m.cfg.IsolateTenantNetworks || strings.TrimSpace(tenantID) == "" {
+		return nil
+	}
+	networkName := m.tenantNetworkName(tenantID)
+	if networkName == "" {
+		return nil
+	}
+	inspected, err := m.cli.NetworkInspect(ctx, networkName, client.NetworkInspectOptions{})
+	if err != nil {
+		if errdefs.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("inspect tenant network %q: %w", networkName, err)
+	}
+	// A name alone does not establish ownership. Never attach provider support
+	// containers to an unrelated network that happens to have the derived name.
+	if !isOwnedTenantNetwork(inspected.Network.Labels, tenantID) {
+		return fmt.Errorf("network %q is not the isolated network for tenant %q", networkName, tenantID)
+	}
+	return m.connectSupportContainersToTenantNetwork(ctx, networkName)
+}
+
 // Start starts a stopped tenant container.
 func (m *Manager) Start(ctx context.Context, containerID string) error {
 	_, err := m.cli.ContainerStart(ctx, containerID, client.ContainerStartOptions{})
@@ -978,6 +1021,7 @@ func (m *Manager) disconnectSupportContainersFromTenantNetwork(ctx context.Conte
 		}
 		filters := client.Filters{}
 		filters = filters.Add("label", label)
+		// The role label is shared by every provider installation on this host.
 		filters = filters.Add("network", providerNetwork)
 		result, err := m.cli.ContainerList(ctx, client.ContainerListOptions{
 			All:     true,
@@ -987,6 +1031,8 @@ func (m *Manager) disconnectSupportContainersFromTenantNetwork(ctx context.Conte
 			return fmt.Errorf("list provider support containers for disconnect label %q: %w", label, err)
 		}
 		for _, item := range result.Items {
+			// A replacement support container has not joined this tenant network.
+			// Do not try to disconnect it (or another provider's container).
 			if !networkHasContainer(inspected.Network.Containers, item.ID) {
 				continue
 			}
