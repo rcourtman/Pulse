@@ -73,6 +73,30 @@ func TestProviderMSPStatusReportsHealthyOperatorSurface(t *testing.T) {
 	}
 }
 
+// A lapsed licence is reported, not failed: upgrade.sh gates on status, and a
+// lapsed install must still upgrade and keep its portal up to renew.
+func TestProviderMSPStatusReportsALapsedLicenceWithoutFailing(t *testing.T) {
+	cfg := testProviderMSPPreflightConfig(t, cloudcp.ProviderMSPPlanSourceLicenseFile)
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	cfg.ProviderMSPLicenseExpiresAt = now.Add(-30 * 24 * time.Hour)
+	report, err := runProviderMSPStatusWithDependencies(context.Background(), cfg, providerMSPStatusOptions{}, providerMSPStatusDependencies{
+		RunPreflight: func(context.Context, *cloudcp.CPConfig, providerMSPPreflightOptions) (*providerMSPPreflightReport, error) {
+			return healthyProviderMSPStatusPreflightReport(), nil
+		},
+		NewDocker: healthyProviderMSPStatusDocker(map[string]bool{}),
+		CheckBackup: func(context.Context, *cloudcp.CPConfig) (*providerMSPBackupStatus, error) {
+			return healthyProviderMSPBackupStatus(now), nil
+		},
+		Now: func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatalf("runProviderMSPStatusWithDependencies: %v", err)
+	}
+	if !report.OK || !report.LicenseLapsed {
+		t.Fatalf("report OK=%v LicenseLapsed=%v failures=%v, want OK and lapsed", report.OK, report.LicenseLapsed, report.Failures)
+	}
+}
+
 func TestProviderMSPStatusFailsOnFailedUnhealthyAndStuckWorkspaces(t *testing.T) {
 	cfg := testProviderMSPPreflightConfig(t, cloudcp.ProviderMSPPlanSourceLicenseFile)
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)

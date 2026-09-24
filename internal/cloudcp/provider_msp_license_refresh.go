@@ -389,6 +389,7 @@ type ProviderMSPPlanState struct {
 	Evaluation        bool                         `json:"evaluation"`
 	LicenseID         string                       `json:"license_id,omitempty"`
 	ExpiresAt         string                       `json:"expires_at,omitempty"`
+	Lapsed            bool                         `json:"lapsed"`
 	WorkspaceLimit    int                          `json:"workspace_limit"`
 	PurchaseAvailable bool                         `json:"purchase_available"`
 	Plans             []ProviderMSPPurchasablePlan `json:"plans"`
@@ -409,6 +410,7 @@ func providerMSPPlanState(ctx context.Context, cfg *CPConfig, refresher *Provide
 	if !cfg.ProviderMSPLicenseExpiresAt.IsZero() {
 		state.ExpiresAt = cfg.ProviderMSPLicenseExpiresAt.Format(time.RFC3339)
 	}
+	state.Lapsed = cfg.ProviderMSPLicenseLapsed(time.Now())
 	if refresher == nil || state.LicenseID == "" {
 		return state
 	}

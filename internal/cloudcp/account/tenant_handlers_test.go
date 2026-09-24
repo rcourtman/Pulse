@@ -698,3 +698,42 @@ func TestCreateWorkspace_BlockedWhenSubscriptionCanceled(t *testing.T) {
 		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusForbidden, rec.Body.String())
 	}
 }
+
+// A provider control plane keeps running on a lapsed licence so its portal can
+// sell the renewal, but it must not add clients until the provider buys.
+func TestCreateWorkspace_ProviderHostedMSPRefusesNewClientsOnALapsedLicence(t *testing.T) {
+	reg := newTestRegistry(t)
+	lapsed := true
+	mux, _ := newTestTenantMuxWithWorkspaceLimitPolicy(
+		t,
+		reg,
+		t.TempDir(),
+		WorkspaceLimitPolicy{ProviderHostedMSP: true, ProviderMSPPlanVersion: "msp_eval", ProviderMSPLicenseLapsed: func() bool { return lapsed }},
+		cpstripe.WithDefaultMSPPlanVersion("msp_eval"),
+	)
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Provider MSP"}); err != nil {
+		t.Fatal(err)
+	}
+	create := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/tenants", bytes.NewBufferString(`{"display_name":"Acme Dental"}`))
+		return doRequest(t, mux, req)
+	}
+
+	rec := create()
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "Buy a plan from Plan") {
+		t.Fatalf("create on a lapsed licence = %d %q, want 403 pointing to Plan", rec.Code, rec.Body.String())
+	}
+	if count, _ := reg.CountActiveByAccountID(accountID); count != 0 {
+		t.Fatalf("lapsed licence created %d workspaces", count)
+	}
+
+	// Once the provider buys and the licence is current again, clients can be added.
+	lapsed = false
+	if rec := create(); rec.Code != http.StatusCreated {
+		t.Fatalf("create after renewal = %d %q, want 201", rec.Code, rec.Body.String())
+	}
+}

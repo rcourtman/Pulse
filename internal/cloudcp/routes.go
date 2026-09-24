@@ -250,6 +250,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	if deps.Config.IsMSPControlPlane() {
 		workspaceLimitPolicy.ProviderHostedMSP = true
 		workspaceLimitPolicy.ProviderMSPPlanVersion = providerMSPPlanVersion(deps.Config)
+		workspaceLimitPolicy.ProviderMSPLicenseLapsed = func() bool { return deps.Config.ProviderMSPLicenseLapsed(time.Now()) }
 	}
 	createTenant := account.HandleCreateTenantWithWorkspaceLimitPolicy(deps.Registry, provisioner, workspaceLimitPolicy)
 	updateTenant := account.HandleUpdateTenant(deps.Registry)

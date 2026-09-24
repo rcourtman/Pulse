@@ -3455,6 +3455,40 @@ Regression coverage:
 `TestEnsureTenantNetworkRejectsUnownedExistingNetwork` in
 `internal/cloudcp/docker/manager_test.go`.
 
+### A provider control plane keeps its portal up on a lapsed licence
+
+A provider-hosted control plane used to refuse to start once its licence was
+past expiry and the 7-day grace: `ValidateLicense` rejected it, so `LoadConfig`
+failed and the portal went down at the next restart. That is exactly when the
+provider needs the portal, because Plan is the only place to buy or renew;
+the same happened to a paying provider whose subscription lapsed. Startup now
+resolves an authentic, key-bound licence with
+`pkglicensing.ValidateLicenseAllowingLapse`, preferring a current licence
+(renewed first) and otherwise the lapsed one that expired later, and logs the
+lapse. Nothing is unlocked by this: client runtimes still verify the provider
+licence carried in each lease with `ValidateLicense` and drop MSP capabilities
+once it lapses, workspace creation refuses with `provider_msp_license_lapsed`,
+and the refresher still refuses to adopt a lapsed licence from the licence
+server. The Plan panel reads `lapsed` from the plan state, says the evaluation
+or plan ended and what that means for clients, and offers the plans, including
+the same plan again after a paid plan ends; `provider-msp status` prints
+`license_lapsed` without failing, so a lapsed install can still upgrade. The
+portal also shows a control plane error's `message` in preference to its
+machine `error` code, which had been surfacing codes such as
+`provider_msp_license_lapsed` and `already_subscribed` as the whole message.
+Verified on 2026-09-24 against the walkthrough lab: the control plane started
+on an evaluation that lapsed 20 days earlier, the Plan panel offered Solo and
+Starter, adding a client showed the lapse sentence, and with a live
+subscription the refresher restored the paid licence on its own. Regression
+coverage: `TestValidateLicenseAllowingLapseReturnsLapsedButStillAuthenticLicence`
+in `pkg/licensing/service_lapsed_test.go`,
+`TestLoadConfig_ProviderHostedMSPStartsOnALapsedLicence` in
+`internal/cloudcp/config_test.go`,
+`TestCreateWorkspace_ProviderHostedMSPRefusesNewClientsOnALapsedLicence` in
+`internal/cloudcp/account/tenant_handlers_lapsed_test.go`, and
+`TestProviderMSPLicenseRefreshRefusesALapsedLicence` in
+`internal/cloudcp/provider_msp_license_refresh_test.go`.
+
 ### Provider-hosted MSP platforms buy and renew their own licence
 
 A provider-hosted control plane now buys and renews its licence through the

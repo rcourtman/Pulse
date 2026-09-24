@@ -991,6 +991,51 @@ func TestLoadConfig_SessionTTLProviderHostedDefault(t *testing.T) {
 	}
 }
 
+// Refusing to start on a lapsed licence took the provider's portal down at the
+// moment the provider needed it to buy. The control plane now starts, reports
+// the licence as lapsed, and when both licences have lapsed it starts on the
+// one that expired later, so a lapsed paid plan reads as that plan.
+func TestLoadConfig_ProviderHostedMSPStartsOnALapsedLicence(t *testing.T) {
+	setProviderHostedMSPEnv(t)
+	t.Setenv("CP_ENV", "production")
+	dataDir := t.TempDir()
+	t.Setenv("CP_DATA_DIR", dataDir)
+	issuer := newProviderMSPTestIssuer(t)
+	key := trialSigningEnvPublicKey(t)
+	hostFile := writeProviderMSPTestFile(t, filepath.Join(t.TempDir(), "eval.jwt"),
+		issuer.sign(t, "lic_msp_eval", pkglicensing.PlanVersionMSPEval, time.Now().Add(-60*24*time.Hour), key))
+	t.Setenv("CP_PROVIDER_MSP_LICENSE_FILE", hostFile)
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig with only a lapsed evaluation: %v", err)
+	}
+	if cfg.ProviderMSPPlanVersion != pkglicensing.PlanVersionMSPEval || cfg.ProviderMSPPlanSource != ProviderMSPPlanSourceLicenseFile {
+		t.Fatalf("lapsed evaluation resolved plan=%q source=%q", cfg.ProviderMSPPlanVersion, cfg.ProviderMSPPlanSource)
+	}
+	if !cfg.ProviderMSPLicenseLapsed(time.Now()) {
+		t.Fatal("ProviderMSPLicenseLapsed = false for an evaluation that ended 60 days ago")
+	}
+
+	writeProviderMSPTestFile(t, ProviderMSPRenewedLicensePath(dataDir),
+		issuer.sign(t, "lic_msp_paid", "msp_solo", time.Now().Add(-20*24*time.Hour), key))
+	cfg, err = LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig with both licences lapsed: %v", err)
+	}
+	if cfg.ProviderMSPPlanSource != ProviderMSPPlanSourceRenewedLicense || cfg.ProviderMSPPlanVersion != "msp_solo" || !cfg.ProviderMSPLicenseLapsed(time.Now()) {
+		t.Fatalf("both lapsed resolved plan=%q source=%q lapsed=%v, want the later-expiring paid licence",
+			cfg.ProviderMSPPlanVersion, cfg.ProviderMSPPlanSource, cfg.ProviderMSPLicenseLapsed(time.Now()))
+	}
+
+	// Inside the 7-day grace the licence is expired but not yet lapsed.
+	writeProviderMSPTestFile(t, ProviderMSPRenewedLicensePath(dataDir),
+		issuer.sign(t, "lic_msp_paid", "msp_solo", time.Now().Add(-2*24*time.Hour), key))
+	if cfg, err = LoadConfig(); err != nil || cfg.ProviderMSPLicenseLapsed(time.Now()) {
+		t.Fatalf("licence 2 days past expiry: err=%v lapsed=%v, want running and not lapsed", err, cfg != nil && cfg.ProviderMSPLicenseLapsed(time.Now()))
+	}
+}
+
 func TestLoadConfig_SessionTTLOverride(t *testing.T) {
 	setProviderHostedMSPEnv(t)
 	t.Setenv("CP_SESSION_TTL", "36h")

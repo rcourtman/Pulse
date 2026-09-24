@@ -23,15 +23,18 @@ type providerMSPStatusOptions struct {
 }
 
 type providerMSPStatusReport struct {
-	OK                       bool
-	Environment              string
-	ControlMode              string
-	BaseURL                  string
-	PlanVersion              string
-	PlanSource               string
-	LicenseID                string
-	LicenseEmail             string
-	WorkspaceLimit           int
+	OK             bool
+	Environment    string
+	ControlMode    string
+	BaseURL        string
+	PlanVersion    string
+	PlanSource     string
+	LicenseID      string
+	LicenseEmail   string
+	WorkspaceLimit int
+	// LicenseLapsed is informational, not a failure: a lapsed install must
+	// still upgrade and keep its portal up so the provider can renew there.
+	LicenseLapsed            bool
 	RegistryReady            bool
 	TotalTenants             int
 	HealthyTenants           int
@@ -117,6 +120,7 @@ func runProviderMSPStatusWithDependencies(ctx context.Context, cfg *cloudcp.CPCo
 		LicenseID:      strings.TrimSpace(cfg.ProviderMSPLicenseID),
 		LicenseEmail:   strings.ToLower(strings.TrimSpace(cfg.ProviderMSPLicenseEmail)),
 		WorkspaceLimit: workspaceLimit,
+		LicenseLapsed:  cfg.ProviderMSPLicenseLapsed(deps.Now()),
 		CountsByState:  map[registry.TenantState]int{},
 	}
 	addFailure := func(format string, args ...any) {
@@ -399,6 +403,7 @@ func printProviderMSPStatusReport(report *providerMSPStatusReport) {
 	fmt.Printf("license_id=%s\n", report.LicenseID)
 	fmt.Printf("license_email=%s\n", report.LicenseEmail)
 	fmt.Printf("workspace_limit=%d\n", report.WorkspaceLimit)
+	fmt.Printf("license_lapsed=%t\n", report.LicenseLapsed)
 	fmt.Printf("registry_ready=%t\n", report.RegistryReady)
 	fmt.Printf("total_tenants=%d\n", report.TotalTenants)
 	fmt.Printf("healthy_tenants=%d\n", report.HealthyTenants)
