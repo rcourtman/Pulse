@@ -23,21 +23,6 @@ func TestChangeDetector_DefaultsAndHelpers(t *testing.T) {
 	if got := intToString(42); got != "42" {
 		t.Errorf("intToString(42) = %q", got)
 	}
-	if got := formatFloat(2.0); got != "2" {
-		t.Errorf("formatFloat(2.0) = %q", got)
-	}
-	if got := formatFloat(2.5); got != "2.5" {
-		t.Errorf("formatFloat(2.5) = %q", got)
-	}
-
-	cpu := formatCPUChangeDescription("vm-1", 4, 2)
-	if !strings.Contains(cpu, "decreased") {
-		t.Errorf("expected cpu decrease description, got %q", cpu)
-	}
-	mem := formatMemoryChangeDescription("vm-1", 8<<30, 4<<30)
-	if !strings.Contains(mem, "decreased") {
-		t.Errorf("expected memory decrease description, got %q", mem)
-	}
 }
 
 func TestNewChangeDetector_LoadsFromDisk(t *testing.T) {

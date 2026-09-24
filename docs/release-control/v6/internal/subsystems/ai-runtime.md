@@ -6633,15 +6633,17 @@ The patrol-local `memory.ChangeDetector.GetChangesSummary` path now also
 delegates to the shared memory recent-change presentation helper, so any
 future fallback summary entry point inherits the same heading, resource
 prefixing, and change-type labels without re-implementing the markdown shape.
-That detector's on-disk history (`ai_changes.json`) is legacy and read-only.
-Nothing in the runtime has called `DetectChanges` since patrol moved to
-agentic execution, so the detector only loads that file at construction and
-never writes it. Detected changes stay in memory, and there is no background
-save to join before a data directory is removed. The unjoined save goroutine
-that `DetectChanges` used to launch was reachable only from tests, and could
-outlive a `t.TempDir` cleanup; it was removed rather than hardened.
-`TestChangeDetector_LegacyHistoryIsReadOnly` proves detection leaves the file
-and directory untouched.
+That detector is a reader of legacy history, not a detector. Its on-disk
+history (`ai_changes.json`) was written by releases that still ran change
+detection, which patrol dropped when it moved to agentic execution. The
+detector loads that file once at construction and never modifies it, so it
+holds no lock and has no background save to join before a data directory is
+removed. `DetectChanges`, its snapshot diffing and `ResourceSnapshot` were
+reachable only from tests and are retired; new change history belongs in the
+unified-resource timeline, not in this fallback. Tests seed the fallback
+through a legacy `ai_changes.json`, the same path production reads, and
+`TestChangeDetector_LegacyHistoryIsReadOnly` proves reads leave the file and
+directory untouched.
 Those unified-resource action and export audit records are now also exposed
 through the enterprise audit read surface so operators can inspect the
 execution trail without reaching into storage internals.
