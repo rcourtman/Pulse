@@ -3443,6 +3443,29 @@ network name alone must not cross an MSP installation boundary. Regression
 coverage is in `internal/cloudcp/docker/manager_test.go`; installed multi-provider
 acceptance remains separate.
 
+### Provider MSP health monitor keeps clients running across upgrades (v6.5)
+
+Backported to the v6.5 line from main (#2216, reconciled in `82f07453f8`).
+The control plane's health monitor restarts an unhealthy client workspace with
+a single Docker restart, never a stop: Docker's `unless-stopped` policy does
+not bring back a container stopped through the API. Once at startup and before
+each health check, it reattaches the provider support containers (Traefik and
+the control plane) to every active client's isolated tenant network, which a
+recreate of either container drops. Without it, upgrading a provider install
+to this line left the recreated control plane off every client network, so
+clients could not renew their entitlement leases and the portal could not read
+their health, and a recreated Traefik had no route to any client. Reattachment
+keeps the installation-scoped ownership checks already on this line: only a
+network carrying this tenant's runtime labels, and only this installation's
+support containers, are touched; a client without an isolated network is
+skipped. Regression coverage:
+`TestHealthMonitorReattachesSupportContainersAndRestartsInsteadOfStopping` and
+`TestHealthMonitorKeepsProviderInstallationsIsolatedOnRecovery` in
+`internal/cloudcp/health_monitor_test.go`, and
+`TestEnsureSupportContainersOnTenantNetworkSkipsMissingNetwork` and
+`TestEnsureSupportContainersOnTenantNetworkRejectsWrongOwner` in
+`internal/cloudcp/docker/manager_test.go`.
+
 ### Provider MSP status reads client health that any caller can observe
 
 `provider-msp status`, which `upgrade.sh` gates on before every provider
