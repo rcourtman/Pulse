@@ -623,6 +623,27 @@ that manual-channel consequence must stay visible at desktop and narrow widths.
 
 ## Shared Boundaries
 
+### Maintenance schedule copy
+
+Operator maintenance banners show local absolute start and end timestamps,
+including future dates. Past-time relative formatting must not turn a future
+expiry into "just now". The banner describes paused attention rather than
+promising that rejected alert observations are acknowledged. Active and
+future-window mounted regressions pin these user-visible claims.
+
+### Retained state in bounded platform windows
+
+`PlatformWindowedRows` and `PlatformWindowedList` keep one keyed renderer owner
+while the visible window moves. Items present in both windows retain component
+identity, active detail tabs and unsaved edits. Passing a new window must update
+the existing renderer rather than instantiate another renderer around it.
+Removed items still unmount, and row budgets and spacer behavior are unchanged.
+The mounted scroll regression in `PlatformWindowedRows.test.tsx` exercises both
+renderers with an edited input retained across overlapping windows. The browser
+journey is a narrow Proxmox node Manage form, scrolling to lifecycle Save while
+the synthetic estate continues updating, plus the alert timeline and note form.
+
+
 ### PBS host history correlation
 
 The Backups surface passes its complete deduplicated route inventory to the PBS table. Only PBS servers render as rows; other resources supply correlation inputs. Preserve PBS drawer identity and use the correlated canonical history target. Missing disk utilisation does not gate CPU/memory history.

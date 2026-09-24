@@ -1,37 +1,55 @@
 {
   "version": 1,
-  "base_sha": "3b1b43293e21d06d1286124f96f78b1247443dea",
-  "verified_at": "2026-09-24T09:02:03Z",
+  "base_sha": "0abe518219f75512fc3f9ca0fdbd4ce549e30e90",
+  "verified_at": "2026-09-24T16:05:19Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/BrandingSettingsCard.tsx"
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
+    "frontend-modern/src/features/platformPage/PlatformWindowedList.tsx",
+    "frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/BrandingSettingsCard.tsx": "6516a05aff71b1d96660f81189b6df8bceccf7e94d15d6c3213556e794f2ae40"
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx": "5c47a4d5d5ff12b0f6cf0e495bd02ebdadccd81135ad1ff91f9f13e90b5a81af",
+    "frontend-modern/src/features/platformPage/PlatformWindowedList.tsx": "1842c634054e46e24d965a063719065ca1156b3f061d594c878a8866d5b33a3e",
+    "frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx": "6f5dbc611dfbb00bc2d770fcf06b8dbf329ebd76dc022bb63191480a221cb457"
   },
   "routes": [
-    "/settings/system-general (Application branding card, Header preview)"
+    "/proxmox/overview",
+    "/alerts",
+    "/docs/INSTALL",
+    "/docs/UPGRADE_v6"
   ],
   "viewports": [
     {
-      "width": 1280,
+      "width": 1440,
       "height": 900
     },
     {
       "width": 390,
       "height": 844
+    },
+    {
+      "width": 900,
+      "height": 900
     }
   ],
   "states": [
-    "No custom logo and no custom name: the preview falls back to the default Pulse lockup",
-    "Light colour scheme at 1280x900 and 390x844",
-    "Dark colour scheme at 1280x900"
+    "Expanded Disaster Recovery D node with Manage selected, unsaved and saved lifecycle selection, and disabled Saving controls.",
+    "Future maintenance scheduled for 25 September with actual local start/end dates, edited expiry, cancelled window, and active maintenance with an actual future deadline.",
+    "Mute, retired and active policy states, persisted maintenance and mute after a graceful same-data restart, and stable canonical resource identity.",
+    "Active and absent node connectivity alert, open retained incident with ordered firing, resolution and re-fire events, expanded Evidence details, and empty disabled Save Note.",
+    "Empty filtered History, persisted search after reload, cleared search results and intermediate-width filter controls.",
+    "Signed installer code and helper-ownership guidance, with internal code scrolling and narrow document layout."
   ],
   "interactions": [
-    "Open Settings > General with the white_label capability present; assert the Header preview renders exactly one svg.pulse-brand-logo (blue disc, white ring, white centre dot) and no \"\u25cf\" text glyph",
-    "Compare the preview mark with the page header lockup: both render PulseBrandMark at 20px",
-    "Check the page does not scroll horizontally at 390px wide"
+    "Show all 50 nodes, expand Disaster Recovery D, select Manage, change lifecycle, scroll to Save, save, return Active and save. Manage and unsaved selection survive the retained-row window shift and viewport changes.",
+    "Create resource-only future maintenance, edit its end, cancel it, then create a one-hour active window. Inspect actual banner pixels at phone and desktop widths.",
+    "Save Mute all attention with active maintenance, reload, gracefully restart the same final binary with unchanged data, and reload. Confirm identical canonical agent identity and policy, with the node connectivity alert absent.",
+    "Cancel maintenance while keeping mute, verify the alert stays absent, then restore normal monitoring. Mute and resume the active occurrence once more and verify one open incident with its original start and ordered resolve/refire events.",
+    "Open Monitoring menu, close with Escape and verify focus returns, reopen and dismiss with outside click. Inspect menu placement and clipping at phone width.",
+    "Open Timeline and Evidence details, inspect occurrence and observation timestamps, verify empty Save Note is disabled without submitting a note.",
+    "Filter History to no results, reload to verify persisted search, then clear it. Follow signed-installer and ownership links to their headings and inspect code and narrow layout."
   ],
-  "command": "node verify.mjs (Playwright against a private mock-mode backend on :7681 and Vite on :5199)",
-  "notes": "Chromium via Playwright 1.56.1 from repos/pulse/node_modules. Real app and backend in PULSE_MOCK_MODE with ALLOW_ADMIN_BYPASS; the only stub is /api/license/runtime-capabilities with white_label added, because the mock install has no white-label entitlement and the card is gated behind it. Before the fix the same preview drew a blue circle containing a \"\u25cf\" text character instead of the Pulse brand mark, as seen in a provider-hosted client workspace on the walkthrough lab. Console errors were only the mock environment's failing update check."
+  "command": "Playwright browser inspection against an isolated synthetic server on pulse-dev:7701 through a loopback SSH tunnel.",
+  "notes": "Final backend SHA-256 77d17ff9e21ccdef3f5fff9f7b91b841abe3570bf8e04e1eda501c554e3a5889. Frontend index SHA-256 b9f1288bd188c8e549ccd4cdfa7aa75b56d49df3fc0f59de9e11dac90d449172. Actual pixels and DOM state were inspected. Repeated suppressed observations, expiry, delayed lifecycle replay and native-alias startup ordering are covered by failing-baseline regression tests and final race checks. The synthetic provider does not qualify production notification destinations or installed upgrade/rollback behavior."
 }

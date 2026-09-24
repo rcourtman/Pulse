@@ -556,7 +556,18 @@ as complete.
 
 Published exact-version install and rollback guidance must preserve the server
 and Unified Agent installer boundary. Supported systemd and Proxmox LXC
-deployments use the signed `/bin/update --version vX.Y.Z` server helper;
+deployments may use `/bin/update --version vX.Y.Z` only when the installed
+helper belongs to the Pulse server installer. Community-scripts Proxmox
+containers may own a different `/bin/update` that ignores the version argument.
+Generated install and rollback sections must each state this ownership boundary
+and link the signed server-installer flow from the candidate's versioned docs,
+with the exact installation or rollback target, for absent or unverified helpers.
+Operators verify the resulting version after restart.
+Signed installer recipes run in a fresh temporary directory and stop on any
+download or signature-verification failure before executing the installer.
+`scripts/tests/test_signed_installer_docs.py` executes both documented recipes
+with controlled download and verification failures and checks exact-version
+forwarding on success.
 `/opt/pulse/scripts/install.sh` and release archives' `scripts/install.sh` are
 Unified Agent installers and must never be presented as server rollback
 commands. Docker guidance instead pins the target image and recreates the

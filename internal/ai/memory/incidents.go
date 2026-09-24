@@ -78,19 +78,20 @@ type Incident struct {
 }
 
 type incidentShell struct {
-	ID                 string
-	AlertIdentifier    string
-	AlertType          string
-	Level              string
-	ResourceID         string
-	ResourceName       string
-	ResourceType       string
-	Node               string
-	Instance           string
-	Message            string
-	OpenedAt           time.Time
-	OccurrenceClosedAt *time.Time
-	Events             []IncidentEvent
+	ID                  string
+	AlertIdentifier     string
+	AlertType           string
+	Level               string
+	ResourceID          string
+	ResourceName        string
+	ResourceType        string
+	Node                string
+	Instance            string
+	Message             string
+	OpenedAt            time.Time
+	OccurrenceClosedAt  *time.Time
+	OccurrenceRefiredAt *time.Time
+	Events              []IncidentEvent
 }
 
 type incidentJSON struct {
@@ -115,24 +116,25 @@ type incidentJSON struct {
 }
 
 type incidentShellJSON struct {
-	ID                 string          `json:"id"`
-	AlertIdentifier    string          `json:"alertIdentifier"`
-	AlertType          string          `json:"alertType"`
-	Level              string          `json:"level"`
-	ResourceID         string          `json:"resourceId"`
-	ResourceName       string          `json:"resourceName"`
-	ResourceType       string          `json:"resourceType,omitempty"`
-	Node               string          `json:"node,omitempty"`
-	Instance           string          `json:"instance,omitempty"`
-	Message            string          `json:"message,omitempty"`
-	OpenedAt           time.Time       `json:"openedAt"`
-	OccurrenceClosedAt *time.Time      `json:"occurrenceClosedAt,omitempty"`
-	Events             []IncidentEvent `json:"events,omitempty"`
-	Status             IncidentStatus  `json:"status,omitempty"`
-	ClosedAt           *time.Time      `json:"closedAt,omitempty"`
-	Acknowledged       bool            `json:"acknowledged,omitempty"`
-	AckUser            string          `json:"ackUser,omitempty"`
-	AckTime            *time.Time      `json:"ackTime,omitempty"`
+	ID                  string          `json:"id"`
+	AlertIdentifier     string          `json:"alertIdentifier"`
+	AlertType           string          `json:"alertType"`
+	Level               string          `json:"level"`
+	ResourceID          string          `json:"resourceId"`
+	ResourceName        string          `json:"resourceName"`
+	ResourceType        string          `json:"resourceType,omitempty"`
+	Node                string          `json:"node,omitempty"`
+	Instance            string          `json:"instance,omitempty"`
+	Message             string          `json:"message,omitempty"`
+	OpenedAt            time.Time       `json:"openedAt"`
+	OccurrenceClosedAt  *time.Time      `json:"occurrenceClosedAt,omitempty"`
+	OccurrenceRefiredAt *time.Time      `json:"occurrenceRefiredAt,omitempty"`
+	Events              []IncidentEvent `json:"events,omitempty"`
+	Status              IncidentStatus  `json:"status,omitempty"`
+	ClosedAt            *time.Time      `json:"closedAt,omitempty"`
+	Acknowledged        bool            `json:"acknowledged,omitempty"`
+	AckUser             string          `json:"ackUser,omitempty"`
+	AckTime             *time.Time      `json:"ackTime,omitempty"`
 }
 
 func (i Incident) MarshalJSON() ([]byte, error) {
@@ -192,19 +194,20 @@ func (i *Incident) UnmarshalJSON(data []byte) error {
 
 func (s incidentShell) MarshalJSON() ([]byte, error) {
 	return json.Marshal(incidentShellJSON{
-		ID:                 s.ID,
-		AlertIdentifier:    strings.TrimSpace(s.AlertIdentifier),
-		AlertType:          s.AlertType,
-		Level:              s.Level,
-		ResourceID:         s.ResourceID,
-		ResourceName:       s.ResourceName,
-		ResourceType:       s.ResourceType,
-		Node:               s.Node,
-		Instance:           s.Instance,
-		Message:            s.Message,
-		OpenedAt:           s.OpenedAt,
-		OccurrenceClosedAt: s.OccurrenceClosedAt,
-		Events:             s.Events,
+		ID:                  s.ID,
+		AlertIdentifier:     strings.TrimSpace(s.AlertIdentifier),
+		AlertType:           s.AlertType,
+		Level:               s.Level,
+		ResourceID:          s.ResourceID,
+		ResourceName:        s.ResourceName,
+		ResourceType:        s.ResourceType,
+		Node:                s.Node,
+		Instance:            s.Instance,
+		Message:             s.Message,
+		OpenedAt:            s.OpenedAt,
+		OccurrenceClosedAt:  s.OccurrenceClosedAt,
+		OccurrenceRefiredAt: s.OccurrenceRefiredAt,
+		Events:              s.Events,
 	})
 }
 
@@ -217,19 +220,20 @@ func (s *incidentShell) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*s = incidentShell{
-		ID:                 payload.ID,
-		AlertIdentifier:    strings.TrimSpace(payload.AlertIdentifier),
-		AlertType:          payload.AlertType,
-		Level:              payload.Level,
-		ResourceID:         payload.ResourceID,
-		ResourceName:       payload.ResourceName,
-		ResourceType:       payload.ResourceType,
-		Node:               payload.Node,
-		Instance:           payload.Instance,
-		Message:            payload.Message,
-		OpenedAt:           payload.OpenedAt,
-		OccurrenceClosedAt: payload.OccurrenceClosedAt,
-		Events:             cloneIncidentEvents(payload.Events),
+		ID:                  payload.ID,
+		AlertIdentifier:     strings.TrimSpace(payload.AlertIdentifier),
+		AlertType:           payload.AlertType,
+		Level:               payload.Level,
+		ResourceID:          payload.ResourceID,
+		ResourceName:        payload.ResourceName,
+		ResourceType:        payload.ResourceType,
+		Node:                payload.Node,
+		Instance:            payload.Instance,
+		Message:             payload.Message,
+		OpenedAt:            payload.OpenedAt,
+		OccurrenceClosedAt:  payload.OccurrenceClosedAt,
+		OccurrenceRefiredAt: payload.OccurrenceRefiredAt,
+		Events:              cloneIncidentEvents(payload.Events),
 	}
 	if s.OccurrenceClosedAt == nil && payload.ClosedAt != nil {
 		s.OccurrenceClosedAt = cloneTime(*payload.ClosedAt)
@@ -396,6 +400,36 @@ func (s *IncidentStore) RecordAlertFired(alert *alerts.Alert) {
 	s.saveAsync()
 }
 
+// RecordAlertRefired reopens a retained occurrence only for a newer explicit
+// refire. Its timestamp survives checkpoints so delayed lifecycle replay cannot
+// close it with the previous resolution or reopen it after a later resolution.
+func (s *IncidentStore) RecordAlertRefired(alert *alerts.Alert, occurredAt time.Time) {
+	if alert == nil || occurredAt.IsZero() {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	shell := s.findLifecycleOccurrenceLocked(alert)
+	if shell == nil {
+		shell = newIncidentShellFromAlert(alert)
+		s.incidents = append(s.incidents, shell)
+	}
+	if shell.OccurrenceRefiredAt != nil && !occurredAt.After(*shell.OccurrenceRefiredAt) {
+		return
+	}
+	if shell.OccurrenceClosedAt != nil && !occurredAt.After(*shell.OccurrenceClosedAt) {
+		return
+	}
+	shell.OccurrenceRefiredAt = cloneTime(occurredAt)
+	shell.OccurrenceClosedAt = nil
+	updateIncidentShellFromAlert(shell, alert)
+	if !s.projectsFromCanonicalLocked() {
+		s.addEventAtLocked(shell, IncidentEventAlertFired, occurredAt, formatAlertSummary(alert), nil)
+	}
+	s.trimLocked()
+	s.saveAsync()
+}
+
 // RecordAlertAcknowledged records an acknowledgement event for an alert.
 func (s *IncidentStore) RecordAlertAcknowledged(alert *alerts.Alert, user string) {
 	if alert == nil {
@@ -467,6 +501,9 @@ func (s *IncidentStore) RecordAlertResolved(alert *alerts.Alert, resolvedAt time
 		now := time.Now()
 		resolvedAt = now
 	}
+	if shell.OccurrenceRefiredAt != nil && resolvedAt.Before(*shell.OccurrenceRefiredAt) {
+		return
+	}
 	shell.OccurrenceClosedAt = cloneTime(resolvedAt)
 
 	if !s.projectsFromCanonicalLocked() {
@@ -523,7 +560,7 @@ func (s *IncidentStore) EnsureAlertOccurrence(alert *alerts.Alert, resolvedAt *t
 		changed = true
 	}
 
-	if resolvedAt != nil && !resolvedAt.IsZero() {
+	if resolvedAt != nil && !resolvedAt.IsZero() && (shell.OccurrenceRefiredAt == nil || !resolvedAt.Before(*shell.OccurrenceRefiredAt)) {
 		shell.OccurrenceClosedAt = cloneTime(*resolvedAt)
 		if !hasIncidentEventType(shell.Events, IncidentEventAlertResolved) {
 			s.addEventAtLocked(shell, IncidentEventAlertResolved, *resolvedAt, "Alert resolved", map[string]interface{}{
@@ -1628,6 +1665,9 @@ func cloneIncidentShell(src *incidentShell) *incidentShell {
 		t := *src.OccurrenceClosedAt
 		clone.OccurrenceClosedAt = &t
 	}
+	if src.OccurrenceRefiredAt != nil {
+		clone.OccurrenceRefiredAt = cloneTime(*src.OccurrenceRefiredAt)
+	}
 	clone.Events = cloneIncidentEvents(src.Events)
 	return &clone
 }
@@ -1657,7 +1697,7 @@ func normalizeIncidentShellState(shell *incidentShell) {
 	sortIncidentEvents(shell.Events)
 	if shell.OccurrenceClosedAt == nil {
 		for i := len(shell.Events) - 1; i >= 0; i-- {
-			if shell.Events[i].Type == IncidentEventAlertResolved {
+			if shell.Events[i].Type == IncidentEventAlertResolved && (shell.OccurrenceRefiredAt == nil || !shell.Events[i].Timestamp.Before(*shell.OccurrenceRefiredAt)) {
 				shell.OccurrenceClosedAt = cloneTime(shell.Events[i].Timestamp)
 				break
 			}

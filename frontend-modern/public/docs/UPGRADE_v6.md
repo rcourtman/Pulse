@@ -148,13 +148,23 @@ Preferred path:
 
 - **Settings → System → Updates**
 
-If you prefer CLI, use the installed update helper for the target version:
+If you prefer CLI, use this command only when `/bin/update` was installed by
+the Pulse server installer:
 
 ```bash
 sudo /bin/update --version vX.Y.Z
 ```
 
-`/bin/update` is installed by the supported systemd and Proxmox LXC server installer. If your host does not have it yet, follow the signed server-installer flow in [INSTALL.md](INSTALL.md). Agent updates and v5-to-v6 agent upgrades still use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**; that screen is for both first installs and in-place agent upgrades.
+On Proxmox community-scripts containers, `/bin/update` can belong to the
+community-scripts updater, which can ignore `--version`. If that is your
+installation, the helper is absent, or you cannot confirm its owner, follow the
+[signed server-installer flow](INSTALL.md#2-bare-metal--systemd) and set
+`PULSE_VERSION` to the exact target tag. This also applies to rollback. Verify
+the installed version with `GET /api/version` after the service restarts.
+
+Agent updates and v5-to-v6 agent upgrades use the `/install.sh` command generated
+in **Settings → Infrastructure → Install on a host**. That screen is for both
+first installs and in-place agent upgrades.
 
 Operator note for builds after `v6.0.0-rc.2`: the historical Pulse update
 signer was not recovered. Hosts pinned to the `rc.2` trust root should not
@@ -273,11 +283,15 @@ older v5 agents do not understand observer configuration.
 ### Can I keep Pulse v5 stable while I test Pulse v6?
 
 Yes. Keep a rollback path available while you evaluate v6. The final release
-on the v5 line is 5.1.36, so the stable rollback command is:
+on the v5 line is 5.1.36. On installations with the Pulse-owned update helper,
+the rollback command is:
 
 ```bash
 sudo /bin/update --version v5.1.36
 ```
+
+The [installer ownership requirements](#systemd-and-proxmox-lxc-installs) above
+also apply to this command.
 
 ### Why did my v5 install upgrade itself to v6?
 
@@ -286,11 +300,15 @@ offer v6, so upgrading from those versions is always a manual step. Pulse
 5.1.28 and older have no such pin: installs with auto-update enabled follow
 the newest stable GitHub release, which is now v6. If that happened to you,
 your data and configuration carry over; run through the Post-Upgrade
-Checklist above to confirm everything still works. To return to v5, run:
+Checklist above to confirm everything still works. To return to v5 with the
+Pulse-owned update helper, run:
 
 ```bash
 sudo /bin/update --version v5.1.36
 ```
+
+For community-scripts installations or an unknown helper owner, use the
+[installer ownership guidance](#systemd-and-proxmox-lxc-installs) above.
 
 ## Migration Notes (v6)
 

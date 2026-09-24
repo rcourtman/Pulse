@@ -295,7 +295,9 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 				alert.AckTime = nil
 				alert.AckUser = ""
 			}
-			m.setActiveAlertNoLock(storageKey, alert)
+			if !m.setActiveAlertNoLock(storageKey, alert) {
+				return
+			}
 			m.recentAlerts[trackingKey] = alert
 			m.historyManager.AddAlert(*alert)
 			m.recordAlertEvent(eventlog.TypeFired, alert, storageKey, "metric-threshold", message, nil)
@@ -360,6 +362,9 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		applyCanonicalIdentity(existingAlert, spec.ID, string(spec.Kind))
 		applyCanonicalOperationalEvidence(existingAlert, spec, evidence, time.Now())
 
+		if !m.setActiveAlertNoLock(storageKey, existingAlert) {
+			return
+		}
 		shouldRenotify := false
 		if existingAlert.Acknowledged {
 		} else if m.shouldNotifyAfterCooldown(existingAlert) {
@@ -375,7 +380,6 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 				existingAlert.LastNotified = nil
 			}
 		}
-		m.setActiveAlertNoLock(storageKey, existingAlert)
 	default:
 		if !exists || existingAlert == nil {
 			return

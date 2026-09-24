@@ -157,8 +157,6 @@ describe('ResourceOperatorStateSection', () => {
     // nothing once it ends.
     expect(sectionSource).toContain('scheduledMaintenanceWindow');
     expect(sectionSource).toContain('Maintenance window scheduled.');
-    expect(sectionSource).toContain('Auto-acknowledgement will');
-    expect(sectionSource).toContain("start{' '}");
   });
 
   it('exposes Edit window and Cancel window controls when a window exists', () => {

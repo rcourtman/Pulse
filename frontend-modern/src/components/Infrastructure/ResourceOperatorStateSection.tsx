@@ -27,7 +27,7 @@ import { describeResourceInventoryOwnership } from '@/utils/resourceMonitoringPo
  *   - Lock the resource against automated remediation (action broker
  *     refuses dispatch with resource_remediation_locked:)
  *   - Schedule a maintenance window during which all findings on the
- *     resource get auto-acknowledged with cause=maintenance_window
+ *     resource have their alert and Patrol attention paused
  *
  * The section stays compact and out of the way until the operator has
  * something to say about the resource — fresh-install resources see a
@@ -576,18 +576,16 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
 
       <Show when={activeMaintenanceWindow()}>
         <div class="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-200">
-          <span class="font-semibold">Maintenance window active.</span> Findings raised on this
-          resource
+          <span class="font-semibold">Maintenance window active.</span> Attention on this resource
           <Show when={activeMaintenanceWindow()!.maintenanceScope === 'resource_and_descendants'}>
             {' '}
             and its descendants
           </Show>{' '}
-          are auto-acknowledged until{' '}
-          {formatRelativeTime(
+          is paused until{' '}
+          {new Date(
             activeMaintenanceWindow()!.maintenanceActiveEndAt ??
               activeMaintenanceWindow()!.maintenanceEndAt!,
-            { compact: true },
-          )}
+          ).toLocaleString()}
           .
           <Show when={activeMaintenanceWindow()!.maintenanceReason}>
             <span class="block mt-0.5">Reason: {activeMaintenanceWindow()!.maintenanceReason}</span>
@@ -597,11 +595,9 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
 
       <Show when={scheduledMaintenanceWindow() && !activeMaintenanceWindow()}>
         <div class="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200">
-          <span class="font-semibold">Maintenance window scheduled.</span> Auto-acknowledgement will
-          start{' '}
-          {formatRelativeTime(scheduledMaintenanceWindow()!.maintenanceStartAt!, { compact: true })}{' '}
-          and end{' '}
-          {formatRelativeTime(scheduledMaintenanceWindow()!.maintenanceEndAt!, { compact: true })}.
+          <span class="font-semibold">Maintenance window scheduled.</span> Attention will be paused
+          from {new Date(scheduledMaintenanceWindow()!.maintenanceStartAt!).toLocaleString()} until{' '}
+          {new Date(scheduledMaintenanceWindow()!.maintenanceEndAt!).toLocaleString()}.
           <Show when={scheduledMaintenanceWindow()!.maintenanceReason}>
             <span class="block mt-0.5">
               Reason: {scheduledMaintenanceWindow()!.maintenanceReason}

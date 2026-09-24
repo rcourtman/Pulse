@@ -2544,6 +2544,17 @@ persists recurrence JSON and scope in additive columns while legacy one-shot
 rows retain their existing meaning. Scheduling, updating, changing scope, or
 clearing either form remains an atomic operator-state plus resource-timeline
 lifecycle write.
+
+The operator-state banner projects these authoritative occurrence boundaries
+as local absolute start and end timestamps, including scheduled future dates.
+An active maintenance window describes paused attention rather than claiming
+that rejected observations have been acknowledged. Persisted policy remains
+keyed by canonical resource identity. Monitoring reconciles restored native
+alert aliases after registry publication, before evaluation or shared-state
+publication. Mounted operator-state regressions cover active and scheduled
+copy, while the monitoring restore regression covers SQLite policy and native
+aliases before the first observation.
+
 `NormalizeResourceOperatorState` trims whitespace, de-duplicates capability
 names, guarantees a non-nil empty capability list, and lower-cases the
 criticality value before persistence. SQLite reads must apply that
@@ -4410,6 +4421,15 @@ durable backend facts about what changed on a resource belong in
 projection for notes, analyses, command breadcrumbs, runbooks, and other
 operator-facing incident memory. Agents must not model the same durable backend
 fact in both places as competing primary histories.
+
+Alert lifecycle resource changes record a nonzero occurrence start in
+`MetadataAlertStartedAt` (`alert_started_at`), separately from the transition
+timestamp. A refire retains this start, so the canonical incident query can
+reconstruct the original occurrence without an incident-memory checkpoint.
+Legacy changes without the metadata retain timestamp-based projection.
+`TestMonitorLifecycleRefireReopensRetainedOccurrence` in
+`internal/monitoring/monitor_alert_handling_test.go` proves the metadata bridge,
+ordered lifecycle history and canonical-only reconstruction together.
 
 The unified resource core is strong and canonical, but monitoring and some
 frontend/API consumers are still being tightened around it.

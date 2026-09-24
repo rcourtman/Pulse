@@ -18,19 +18,23 @@ export function PlatformWindowedList<Item>(props: PlatformWindowedListProps<Item
     enableThreshold: props.enableThreshold,
     windowSize: props.windowSize,
   });
-  const renderItems = (items: readonly Item[], globalOffset: number) => (
-    <For each={items}>{(item, index) => props.children(item, () => globalOffset + index())}</For>
+  // Pass reactive inputs through to one For owner so overlapping windows
+  // preserve the mounted item and any local interaction state.
+  const renderItems = (items: Accessor<readonly Item[]>, globalOffset: Accessor<number>) => (
+    <For each={items()}>
+      {(item, index) => props.children(item, () => globalOffset() + index())}
+    </For>
   );
 
   return (
-    <Show when={windowing.isWindowed()} fallback={renderItems(props.items(), 0)}>
+    <Show when={windowing.isWindowed()} fallback={renderItems(props.items, () => 0)}>
       <div
         ref={windowing.setAnchorRef}
         aria-hidden="true"
         data-platform-window-spacer="top"
         style={{ height: `${windowing.topSpacerHeight()}px` }}
       />
-      {renderItems(windowing.visibleItems(), windowing.startIndex())}
+      {renderItems(windowing.visibleItems, windowing.startIndex)}
       <div
         aria-hidden="true"
         data-platform-window-spacer="bottom"

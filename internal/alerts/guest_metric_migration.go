@@ -192,7 +192,9 @@ func (m *Manager) migrateGuestAlertNoLock(storageKey, specID, kind, resourceID, 
 	}
 	applyCanonicalIdentity(matchedAlert, specID, kind)
 
-	m.setActiveAlertNoLock(storageKey, matchedAlert)
+	if !m.setActiveAlertNoLock(storageKey, matchedAlert) {
+		return nil
+	}
 	m.moveAlertTrackingStateNoLock(oldTrackingKey, storageKey, matchedAlert)
 
 	if matchCount > 1 {

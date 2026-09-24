@@ -10,6 +10,7 @@ import (
 
 const (
 	MetadataAlertIdentifier = "alert_identifier"
+	MetadataAlertStartedAt  = "alert_started_at"
 	MetadataAlertType       = "alert_type"
 	MetadataAlertLevel      = "alert_level"
 	MetadataAlertMessage    = "alert_message"
@@ -30,6 +31,7 @@ const resourceChangeOutputExcerptLimit = 500
 // durable in the canonical resource history rather than only incident memory.
 type AlertTimelineChange struct {
 	AlertIdentifier string
+	AlertStartedAt  time.Time
 	AlertType       string
 	AlertLevel      string
 	AlertMessage    string
@@ -68,6 +70,9 @@ func BuildAlertTimelineChange(resourceID string, kind ChangeKind, occurredAt tim
 			MetadataAlertValue:      alert.AlertValue,
 			MetadataAlertThreshold:  alert.AlertThreshold,
 		},
+	}
+	if !alert.AlertStartedAt.IsZero() {
+		change.Metadata[MetadataAlertStartedAt] = alert.AlertStartedAt.UTC().Format(time.RFC3339Nano)
 	}
 	for key, value := range cloneChangeMetadata(alert.AlertMetadata) {
 		if _, exists := change.Metadata[key]; exists {

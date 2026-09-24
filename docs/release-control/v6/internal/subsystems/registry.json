@@ -2519,6 +2519,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/alerts/alert_admission_test.go",
               "internal/alerts/canonical_stateful_test.go",
               "internal/alerts/incident_synthesis_test.go",
               "internal/alerts/intent_policy_test.go",
@@ -2754,6 +2755,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/alerts/alert_admission_test.go",
               "internal/alerts/alerts_test.go",
               "internal/alerts/callback_config_coverage_test.go",
               "internal/alerts/canonical_override_migration_test.go",
@@ -7188,6 +7190,7 @@
               "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
               "frontend-modern/src/utils/__tests__/resourceStateAdapters.test.ts",
               "internal/mock/alert_incidents_test.go",
+              "internal/mock/generator_test.go",
               "internal/mock/integration_coverage_test.go",
               "internal/mock/platform_fixtures_test.go"
             ]
@@ -8723,6 +8726,7 @@
             "exact_files": [
               "internal/ai/tools/filesystem_evidence_test.go",
               "internal/monitoring/docker_filesystem_evidence_test.go",
+              "internal/monitoring/monitor_alert_handling_test.go",
               "internal/unifiedresources/action_request_identity_test.go",
               "internal/unifiedresources/action_result_v2_test.go",
               "internal/unifiedresources/availability_link_test.go",

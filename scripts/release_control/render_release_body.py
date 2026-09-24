@@ -481,16 +481,28 @@ def sanitize_release_notes(raw_text: str, version: str) -> str:
     return _collapse_blank_lines(text)
 
 
+def server_installer_fallback(target: str, docs_version: str) -> str:
+    return (
+        "On Proxmox community-scripts containers, or if you cannot confirm who installed "
+        "`/bin/update`, follow the "
+        f"[signed server-installer instructions](https://github.com/rcourtman/Pulse/blob/v{docs_version}/docs/INSTALL.md#2-bare-metal--systemd) "
+        f"with `PULSE_VERSION={target}`. The community-scripts updater can ignore `--version`."
+    )
+
+
 def build_installation_section(version: str) -> str:
     return "\n".join(
         [
             "## Install",
             "",
-            "For systemd and Proxmox LXC installs, use **Settings → System → Updates** or:",
+            "For systemd and Proxmox LXC server updates, use **Settings → System → Updates**. "
+            "Use this CLI command only when `/bin/update` was installed by the Pulse server installer:",
             "",
             "```bash",
             f"sudo /bin/update --version v{version}",
             "```",
+            "",
+            server_installer_fallback(f"v{version}", version),
             "",
             "For Docker:",
             "",
@@ -514,9 +526,14 @@ def build_rollback_section(args: argparse.Namespace) -> str:
             "",
             f"The rollback target is `{args.rollback_target}`:",
             "",
+            "For systemd and Proxmox LXC servers, use this command only when "
+            "`/bin/update` was installed by the Pulse server installer:",
+            "",
             "```bash",
             args.rollback_command,
             "```",
+            "",
+            server_installer_fallback(args.rollback_target, args.version),
             "",
             "For Docker Compose, set the Pulse image to the rollback target and recreate the container.",
         ]

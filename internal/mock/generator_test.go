@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestBuildFixtureStateIncludesDockerHosts(t *testing.T) {
@@ -730,9 +731,12 @@ func collectFixtureIdentities(graph FixtureGraph) map[string][]string {
 	for _, host := range state.Hosts {
 		add("host", host.ID)
 		add("host-hostname", host.Hostname)
+		add("host-machine-id", host.ID+"="+host.MachineID)
 	}
 	for _, dockerHost := range state.DockerHosts {
 		add("docker-host", dockerHost.ID)
+		add("docker-host-machine-id", dockerHost.ID+"="+dockerHost.MachineID)
+		add("docker-agent-id", dockerHost.ID+"="+dockerHost.AgentID)
 		for _, c := range dockerHost.Containers {
 			add("docker-container", c.ID)
 		}
@@ -763,6 +767,13 @@ func collectFixtureIdentities(graph FixtureGraph) map[string][]string {
 		add("physical-disk", disk.ID)
 	}
 
+	resources, _ := graph.UnifiedResourceSnapshot()
+	for _, resource := range resources {
+		if resource.Type == unifiedresources.ResourceTypeAgent {
+			add("canonical-agent", resource.ID)
+		}
+	}
+
 	for category := range ids {
 		sort.Strings(ids[category])
 	}
@@ -778,6 +789,9 @@ func TestFixtureIdentityStableAcrossBoots(t *testing.T) {
 
 	first := collectFixtureIdentities(buildFixtureGraph(DefaultConfig, now))
 	second := collectFixtureIdentities(buildFixtureGraph(DefaultConfig, now))
+	if len(first["canonical-agent"]) == 0 || len(second["canonical-agent"]) == 0 {
+		t.Fatal("fixture graph must project canonical agents before comparing their identities")
+	}
 
 	categories := map[string]struct{}{}
 	for category := range first {
