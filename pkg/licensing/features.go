@@ -191,6 +191,7 @@ var CloudPlanWorkspaceLimits = map[string]int{
 
 	// MSP tiers — client caps from pricing spec
 	"msp_eval":    2,  // MSP evaluation: up to 2 clients, unlicensed, not sold
+	"msp_solo":    3,  // MSP Solo: up to 3 clients, the first paid step above the evaluation
 	"msp_starter": 5,  // MSP Starter: up to 5 clients
 	"msp_growth":  15, // MSP Growth: up to 15 clients
 	"msp_scale":   40, // MSP Scale: up to 40 clients
