@@ -42,7 +42,8 @@ checks unchanged. `TestAgentReportRefreshClonesRegistryOnce` requires one clone
 per agent-report refresh and `TestResourceSnapshotStoreClonesOncePerPass` pins
 the wrapper. With node-indexed guest parents, a synthetic agent-report refresh
 at 2,080 resources moved from 188 to 82 ms; the pass still covers the whole
-estate, and it stays synchronous (see the agent-lifecycle contract).
+estate, and report-driven passes run at most once per 2-second window (see
+the agent-lifecycle contract).
 
 ### Linked Pulse agent memory for Proxmox LXC — issue #2148 (22 September 2026)
 

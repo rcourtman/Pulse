@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -6412,11 +6413,11 @@ func TestApplyHostReportHonoursRemovalBlockWhenIdentityWouldFork(t *testing.T) {
 // countingResourceStore counts registry clones handed out by the live store.
 type countingResourceStore struct {
 	*unifiedresources.MonitorAdapter
-	getAll int
+	getAll atomic.Int32
 }
 
 func (c *countingResourceStore) GetAll() []unifiedresources.Resource {
-	c.getAll++
+	c.getAll.Add(1)
 	return c.MonitorAdapter.GetAll()
 }
 
@@ -6440,8 +6441,8 @@ func TestResourceSnapshotStoreClonesOncePerPass(t *testing.T) {
 	store := newResourceSnapshotStore(counting)
 	first := store.GetAll()
 	second := store.GetAll()
-	if counting.getAll != 1 {
-		t.Fatalf("underlying GetAll calls = %d, want 1", counting.getAll)
+	if got := counting.getAll.Load(); got != 1 {
+		t.Fatalf("underlying GetAll calls = %d, want 1", got)
 	}
 	if len(first) != 1 || len(second) != 1 || &first[0] != &second[0] {
 		t.Fatalf("pass consumers did not share one snapshot: %d and %d resources", len(first), len(second))
@@ -6480,7 +6481,97 @@ func TestAgentReportRefreshClonesRegistryOnce(t *testing.T) {
 	}
 
 	m.refreshUnifiedResourceStoreAfterAgentStateChange()
-	if counting.getAll != 1 {
-		t.Fatalf("registry clones for one agent report refresh = %d, want 1", counting.getAll)
+	if got := counting.getAll.Load(); got != 1 {
+		t.Fatalf("registry clones for one agent report refresh = %d, want 1", got)
+	}
+}
+
+// newAgentReportThrottleMonitor returns a monitor whose report-driven store
+// refreshes are throttled to window, with one online host agent.
+func newAgentReportThrottleMonitor(t *testing.T, window time.Duration) (*Monitor, *countingResourceStore) {
+	t.Helper()
+	state := models.NewState()
+	state.UpsertHost(models.Host{ID: "agent-1", Hostname: "pve1.example", Status: "online", CPUUsage: 1, LastSeen: time.Now().UTC()})
+	counting := &countingResourceStore{MonitorAdapter: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))}
+	m := &Monitor{
+		state:                    state,
+		resourceStore:            counting,
+		metricsHistory:           NewMetricsHistory(32, time.Hour),
+		agentReportRefreshWindow: window,
+	}
+	t.Cleanup(m.stopAgentReportRefresh)
+	return m, counting
+}
+
+func reportAgentCPU(m *Monitor, cpu float64) {
+	m.state.UpsertHost(models.Host{ID: "agent-1", Hostname: "pve1.example", Status: "online", CPUUsage: cpu, LastSeen: time.Now().UTC()})
+	m.refreshUnifiedResourceStoreAfterAgentReport()
+}
+
+func publishedAgentCPU(t *testing.T, store *countingResourceStore) float64 {
+	t.Helper()
+	for _, resource := range store.MonitorAdapter.GetAll() {
+		if resource.Type == unifiedresources.ResourceTypeAgent && resource.Metrics != nil && resource.Metrics.CPU != nil {
+			return resource.Metrics.CPU.Value
+		}
+	}
+	t.Fatal("no agent CPU in the canonical store")
+	return 0
+}
+
+// Accepted agent reports refresh the estate-wide store at most once per
+// window: the first report after a quiet window is published before the call
+// returns, and reports inside the window fold into one trailing refresh that
+// publishes the latest state (#2199).
+func TestAgentReportRefreshFoldsReportsWithinWindow(t *testing.T) {
+	const window = 500 * time.Millisecond
+	m, store := newAgentReportThrottleMonitor(t, window)
+
+	reportAgentCPU(m, 10)
+	if got := store.getAll.Load(); got != 1 {
+		t.Fatalf("refreshes after the leading report = %d, want 1", got)
+	}
+	if got := publishedAgentCPU(t, store); got != 10 {
+		t.Fatalf("leading report published CPU %v, want 10", got)
+	}
+
+	for cpu := 20.0; cpu <= 60; cpu += 10 {
+		reportAgentCPU(m, cpu)
+	}
+	if got := store.getAll.Load(); got != 1 {
+		t.Fatalf("refreshes during the window = %d, want the burst deferred", got)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for store.getAll.Load() < 2 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := store.getAll.Load(); got != 2 {
+		t.Fatalf("refreshes after the window = %d, want one trailing refresh", got)
+	}
+	if got := publishedAgentCPU(t, store); got != 60 {
+		t.Fatalf("trailing refresh published CPU %v, want the latest report's 60", got)
+	}
+
+	time.Sleep(window + 100*time.Millisecond)
+	reportAgentCPU(m, 70)
+	if got := store.getAll.Load(); got != 3 {
+		t.Fatalf("refreshes after a quiet window = %d, want a synchronous leading refresh", got)
+	}
+	if got := publishedAgentCPU(t, store); got != 70 {
+		t.Fatalf("leading report after a quiet window published CPU %v, want 70", got)
+	}
+}
+
+func TestStopCancelsPendingAgentReportRefresh(t *testing.T) {
+	const window = 100 * time.Millisecond
+	m, store := newAgentReportThrottleMonitor(t, window)
+
+	reportAgentCPU(m, 10)
+	reportAgentCPU(m, 20)
+	m.stopAgentReportRefresh()
+	time.Sleep(3 * window)
+	if got := store.getAll.Load(); got != 1 {
+		t.Fatalf("refreshes after stop = %d, want the pending trailing refresh cancelled", got)
 	}
 }
