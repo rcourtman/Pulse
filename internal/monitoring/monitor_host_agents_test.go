@@ -6484,3 +6484,58 @@ func TestAgentReportRefreshClonesRegistryOnce(t *testing.T) {
 		t.Fatalf("registry clones for one agent report refresh = %d, want 1", counting.getAll)
 	}
 }
+
+// A standalone agent offline across a restart is added back to every canonical
+// read-state lookup from host continuity. Alert evaluation makes one lookup per
+// resource per poll, so the overlay must be reused, not rebuilt per lookup.
+func TestStandaloneHostContinuityReadStateReusedAcrossLookups(t *testing.T) {
+	now := time.Now().UTC()
+	state := models.NewState()
+	state.UpsertHost(models.Host{ID: "agent-live", Hostname: "live.example", Status: "online", LastSeen: now})
+	continuity := config.NewHostContinuityStore(t.TempDir(), nil)
+	if err := continuity.Upsert(config.HostContinuityEntry{HostID: "agent-gone", Hostname: "gone.example", LastSeen: now.Add(-time.Hour)}); err != nil {
+		t.Fatalf("seed host continuity: %v", err)
+	}
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	m := &Monitor{state: state, resourceStore: adapter, hostContinuityStore: continuity}
+	m.refreshUnifiedResourceStoreAfterAgentStateChange()
+
+	first := m.GetUnifiedReadStateOrSnapshot()
+	if first == unifiedresources.ReadState(adapter) {
+		t.Fatal("read state has no continuity overlay for the offline standalone agent")
+	}
+	found := false
+	for _, host := range first.Hosts() {
+		found = found || host.Hostname() == "gone.example"
+	}
+	if !found {
+		t.Fatal("continuity overlay does not include the offline standalone agent")
+	}
+	if second := m.GetUnifiedReadStateOrSnapshot(); second != first {
+		t.Fatal("a second read-state lookup rebuilt the continuity overlay")
+	}
+}
+
+// GetLiveHostsSnapshot runs on every agent report, config fetch, and host
+// continuity lookup, so it must copy the hosts alone, not the whole state.
+func TestGetLiveHostsSnapshotCopiesOnlyHosts(t *testing.T) {
+	state := models.NewState()
+	state.UpsertHost(models.Host{ID: "agent-1", Hostname: "pve1.example", Status: "online"})
+	vms := make([]models.VM, 1000)
+	for i := range vms {
+		vms[i] = models.VM{
+			ID: fmt.Sprintf("lab:pve1:%d", 100+i), VMID: 100 + i, Name: fmt.Sprintf("vm-%d", i),
+			Node: "pve1", Instance: "lab", Status: "running", Type: "qemu",
+			Disks: []models.Disk{{Mountpoint: "/", Total: 10 << 30, Used: 1 << 30}},
+		}
+	}
+	state.UpdateVMs(vms)
+	m := &Monitor{state: state}
+
+	if hosts := m.GetLiveHostsSnapshot(); len(hosts) != 1 || hosts[0].ID != "agent-1" {
+		t.Fatalf("live hosts = %+v, want the one registered agent", hosts)
+	}
+	if allocs := testing.AllocsPerRun(10, func() { _ = m.GetLiveHostsSnapshot() }); allocs > 50 {
+		t.Fatalf("GetLiveHostsSnapshot allocated %.0f times with 1 host and 1000 guests; it is copying guests", allocs)
+	}
+}
