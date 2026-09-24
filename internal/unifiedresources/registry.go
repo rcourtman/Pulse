@@ -126,12 +126,13 @@ type ResourceRegistry struct {
 	// viewsDirty is false, like every other cached field above.
 	cachedSourceTargets map[string][]SourceTarget
 
-	// agentNodeScanIndex buckets agent resources by lowercased node name for
-	// the duration of one buildChildCounts pass, where the agent-parent
-	// fallback would otherwise scan every resource once per guest. Only that
-	// pass sets it; nil means callers take the full scan. Bucket membership
-	// is fixed for the pass (Type and NodeName are never mutated mid-pass)
-	// while scores stay live through the shared pointers.
+	// agentNodeScanIndex buckets agent resources by lowercased node name
+	// while guests are ingested and during one buildChildCounts pass, where
+	// the agent-parent fallback would otherwise scan every resource once per
+	// guest. nil means callers take the full scan. ingestRecord rebuilds it
+	// whenever an ingest yields an agent, so bucket membership always matches
+	// what the full scan would see; scores stay live through the shared
+	// pointers.
 	agentNodeScanIndex map[string][]agentNodeCandidate
 }
 
@@ -268,12 +269,23 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 		rr.ingestPMGInstance(instance)
 	}
 	var guestSuccessions []CanonicalIDSuccession
+	// Every guest resolves its parent node, which can fall back to a scan of
+	// every resource. Each agent-producing source is ingested above, so bucket
+	// agents by node once for the guest loops instead of walking the registry
+	// per guest: that walk made every agent report's rebuild quadratic in the
+	// estate (#2199).
+	rr.mu.Lock()
+	rr.agentNodeScanIndex = rr.buildAgentNodeScanIndexLocked()
+	rr.mu.Unlock()
 	for _, vm := range snapshot.VMs {
 		guestSuccessions = append(guestSuccessions, rr.ingestVM(vm, clusterByInstance, nodeNamesByInstance)...)
 	}
 	for _, ct := range snapshot.Containers {
 		guestSuccessions = append(guestSuccessions, rr.ingestContainer(ct, clusterByInstance, nodeNamesByInstance)...)
 	}
+	rr.mu.Lock()
+	rr.agentNodeScanIndex = nil
+	rr.mu.Unlock()
 	rr.applyRecordSuccessions(guestSuccessions)
 	for _, storage := range snapshot.Storage {
 		rr.ingestStorage(storage)
@@ -2658,9 +2670,12 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 // normal canonical matching rules, but may only introduce absent resources.
 // Returning an empty ID also prevents a skipped record from attaching retired
 // identities or migrating operator-owned state onto the current resource.
-func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, resource Resource, identity ResourceIdentity, onlyMissing bool) string {
+func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, resource Resource, identity ResourceIdentity, onlyMissing bool) (ingestedID string) {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
+	if rr.agentNodeScanIndex != nil {
+		defer func() { rr.refreshAgentNodeScanIndexLocked(ingestedID) }()
+	}
 	rr.invalidateSourceTargetsLocked()
 	sourceID = normalizeSourceID(sourceID)
 	if sourceID == "" {
@@ -4549,6 +4564,11 @@ func (rr *ResourceRegistry) proxmoxNodeParentIDFromResourcesLocked(instance, clu
 		// buildChildCounts is mid-pass: only this node's agent candidates
 		// can match, so skip the full walk.
 		for _, candidate := range rr.agentNodeScanIndex[strings.ToLower(nodeName)] {
+			// A merge since indexing may have replaced or removed the entry;
+			// the full scan would only see the registry's current object.
+			if rr.resources[candidate.id] != candidate.resource {
+				continue
+			}
 			consider(candidate.id, candidate.resource)
 		}
 		return bestID
@@ -4601,11 +4621,10 @@ func proxmoxNodeParentScopeScore(instance, clusterName string, parent *ProxmoxDa
 	}
 }
 
-func (rr *ResourceRegistry) buildChildCounts() {
-	// The parent-resolution loop below may hit the agent fallback scan once
-	// per guest. Bucketing agents by node name up front turns each of those
-	// scans into a lookup over that node's few candidates.
-	rr.agentNodeScanIndex = make(map[string][]agentNodeCandidate)
+// buildAgentNodeScanIndexLocked buckets agent resources by lowercased node
+// name. The caller holds rr.mu for writing.
+func (rr *ResourceRegistry) buildAgentNodeScanIndexLocked() map[string][]agentNodeCandidate {
+	index := make(map[string][]agentNodeCandidate)
 	for id, r := range rr.resources {
 		if r == nil || r.Proxmox == nil || CanonicalResourceType(r.Type) != ResourceTypeAgent {
 			continue
@@ -4614,8 +4633,30 @@ func (rr *ResourceRegistry) buildChildCounts() {
 		if nodeName == "" {
 			continue
 		}
-		rr.agentNodeScanIndex[nodeName] = append(rr.agentNodeScanIndex[nodeName], agentNodeCandidate{id: id, resource: r})
+		index[nodeName] = append(index[nodeName], agentNodeCandidate{id: id, resource: r})
 	}
+	return index
+}
+
+// refreshAgentNodeScanIndexLocked rebuilds a live index after an ingest
+// yields an agent, whose node name may be new to the buckets. Guest ingests,
+// the common case while the index is live, leave it untouched.
+func (rr *ResourceRegistry) refreshAgentNodeScanIndexLocked(resourceID string) {
+	if rr.agentNodeScanIndex == nil {
+		return
+	}
+	resource := rr.resources[CanonicalResourceID(resourceID)]
+	if resource == nil || resource.Proxmox == nil || CanonicalResourceType(resource.Type) != ResourceTypeAgent {
+		return
+	}
+	rr.agentNodeScanIndex = rr.buildAgentNodeScanIndexLocked()
+}
+
+func (rr *ResourceRegistry) buildChildCounts() {
+	// The parent-resolution loop below may hit the agent fallback scan once
+	// per guest. Bucketing agents by node name up front turns each of those
+	// scans into a lookup over that node's few candidates.
+	rr.agentNodeScanIndex = rr.buildAgentNodeScanIndexLocked()
 	defer func() { rr.agentNodeScanIndex = nil }()
 
 	// ChildCount and ParentName are derived fields. Clear prior values before

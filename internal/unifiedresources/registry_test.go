@@ -6650,3 +6650,132 @@ func TestIssue2076USBLinkedDiskAmbiguity(t *testing.T) {
 		})
 	}
 }
+
+// Guest ingest resolves each guest's parent node, which can fall back to a
+// scan of every agent. The guest pass answers that fallback from
+// agentNodeScanIndex, so the index must resolve exactly what the scan would.
+
+// agentNodeScanFixture spans three clusters that reuse node names, so a
+// by-name bucket holds candidates from every cluster and scope scoring has to
+// pick the right one. Every other node runs a linked host agent. A fourth
+// cluster's nodes are keyed by their endpoint instance while its guests report
+// the cluster name, so no direct source mapping reaches their parent and only
+// the agent scan resolves it.
+func agentNodeScanFixture(now time.Time) models.StateSnapshot {
+	snapshot := models.StateSnapshot{LastUpdate: now}
+	for n := 0; n < 2; n++ {
+		nodeName := fmt.Sprintf("pve%d", n)
+		snapshot.Nodes = append(snapshot.Nodes, models.Node{
+			ID: "ep-" + nodeName, Name: nodeName, Instance: "ep", ClusterName: "prod",
+			Status: "online", Type: "node", LastSeen: now,
+		})
+		vmid := 900 + n
+		snapshot.VMs = append(snapshot.VMs, models.VM{
+			ID: fmt.Sprintf("prod:%s:%d", nodeName, vmid), VMID: vmid,
+			Name: fmt.Sprintf("vm-%d", vmid), Node: nodeName, Instance: "prod",
+			Status: "running", Type: "qemu", LastSeen: now,
+		})
+	}
+	for cluster := 0; cluster < 3; cluster++ {
+		instance := fmt.Sprintf("lab%d", cluster)
+		for n := 0; n < 4; n++ {
+			nodeName := fmt.Sprintf("pve%d", n)
+			nodeID := instance + "-" + nodeName
+			node := models.Node{
+				ID:       nodeID,
+				Name:     nodeName,
+				Instance: instance,
+				Status:   "online",
+				Type:     "node",
+				LastSeen: now,
+			}
+			if n%2 == 0 {
+				hostID := fmt.Sprintf("agent-%s-%s", instance, nodeName)
+				node.LinkedAgentID = hostID
+				snapshot.Hosts = append(snapshot.Hosts, models.Host{
+					ID:           hostID,
+					Hostname:     fmt.Sprintf("%s.%s.example", nodeName, instance),
+					Status:       "online",
+					LastSeen:     now,
+					LinkedNodeID: nodeID,
+				})
+			}
+			snapshot.Nodes = append(snapshot.Nodes, node)
+			for g := 0; g < 3; g++ {
+				vmid := 100 + cluster*100 + n*10 + g
+				snapshot.VMs = append(snapshot.VMs, models.VM{
+					ID: fmt.Sprintf("%s:%s:%d", instance, nodeName, vmid), VMID: vmid,
+					Name: fmt.Sprintf("vm-%d", vmid), Node: nodeName, Instance: instance,
+					Status: "running", Type: "qemu", LastSeen: now,
+				})
+				ctid := 5000 + vmid
+				snapshot.Containers = append(snapshot.Containers, models.Container{
+					ID: fmt.Sprintf("%s:%s:%d", instance, nodeName, ctid), VMID: ctid,
+					Name: fmt.Sprintf("ct-%d", ctid), Node: nodeName, Instance: instance,
+					Status: "running", Type: "lxc", LastSeen: now,
+				})
+			}
+		}
+	}
+	return snapshot
+}
+
+func TestGuestIngestParentsMatchFullAgentScan(t *testing.T) {
+	snapshot := agentNodeScanFixture(time.Now().UTC())
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(snapshot)
+
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+	if rr.agentNodeScanIndex != nil {
+		t.Fatal("agent node index outlived the ingest pass")
+	}
+	checked := 0
+	for id, resource := range rr.resources {
+		if resource.Type != ResourceTypeVM && resource.Type != ResourceTypeSystemContainer {
+			continue
+		}
+		if resource.Proxmox == nil {
+			t.Fatalf("guest %s has no Proxmox data", id)
+		}
+		// With the index nil this resolves through the full scan.
+		want := rr.proxmoxNodeParentIDLocked(resource.Proxmox.Instance, resource.Proxmox.ClusterName, resource.Proxmox.NodeName, "")
+		if want == "" {
+			t.Fatalf("full scan found no parent for guest %s on %s/%s", id, resource.Proxmox.Instance, resource.Proxmox.NodeName)
+		}
+		if got := CanonicalResourceID(resource.parentBySource[SourceProxmox]); got != want {
+			t.Fatalf("guest %s on %s/%s: ingest parent %q, full scan %q", id, resource.Proxmox.Instance, resource.Proxmox.NodeName, got, want)
+		}
+		checked++
+	}
+	if want := len(snapshot.VMs) + len(snapshot.Containers); checked != want {
+		t.Fatalf("checked %d guests, want %d", checked, want)
+	}
+}
+
+func TestAgentNodeScanIndexTracksAgentsIngestedWhileLive(t *testing.T) {
+	now := time.Now().UTC()
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		LastUpdate: now,
+		Nodes:      []models.Node{{ID: "lab-pve1", Name: "pve1", Instance: "lab", Status: "online", Type: "node", LastSeen: now}},
+	})
+
+	rr.mu.Lock()
+	rr.agentNodeScanIndex = rr.buildAgentNodeScanIndexLocked()
+	rr.mu.Unlock()
+	defer func() {
+		rr.mu.Lock()
+		rr.agentNodeScanIndex = nil
+		rr.mu.Unlock()
+	}()
+
+	rr.ingestProxmoxNode(models.Node{ID: "lab-pve2", Name: "pve2", Instance: "lab", Status: "online", Type: "node", LastSeen: now}, nil)
+
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+	candidates := rr.agentNodeScanIndex["pve2"]
+	if len(candidates) != 1 || rr.resources[candidates[0].id] != candidates[0].resource {
+		t.Fatalf("index bucket for an agent ingested while live = %+v, want its registry entry", candidates)
+	}
+}
