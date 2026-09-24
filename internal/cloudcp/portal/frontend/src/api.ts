@@ -109,15 +109,18 @@ export function createPortalAPI(context: PortalAPIContext): PortalAPI {
     return null;
   }
 
+  // Control plane errors carry a machine code in "error" and, when there is
+  // something to tell the person, a sentence in "message". Show the sentence;
+  // older handlers put their only human text in "error", so fall back to it.
   function messageFromPayload(payload: unknown, fallback: string): string {
     if (payload && typeof payload === 'object') {
-      var errorMessage = (payload as { error?: unknown }).error;
-      if (typeof errorMessage === 'string' && errorMessage.trim()) {
-        return errorMessage;
-      }
       var message = (payload as { message?: unknown }).message;
       if (typeof message === 'string' && message.trim()) {
         return message;
+      }
+      var errorMessage = (payload as { error?: unknown }).error;
+      if (typeof errorMessage === 'string' && errorMessage.trim()) {
+        return errorMessage;
       }
     }
     if (typeof payload === 'string' && payload.trim()) {

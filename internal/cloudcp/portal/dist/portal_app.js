@@ -1034,13 +1034,13 @@
     }
     function messageFromPayload(payload, fallback) {
       if (payload && typeof payload === "object") {
-        var errorMessage = payload.error;
-        if (typeof errorMessage === "string" && errorMessage.trim()) {
-          return errorMessage;
-        }
         var message = payload.message;
         if (typeof message === "string" && message.trim()) {
           return message;
+        }
+        var errorMessage = payload.error;
+        if (typeof errorMessage === "string" && errorMessage.trim()) {
+          return errorMessage;
         }
       }
       if (typeof payload === "string" && payload.trim()) {
@@ -1517,7 +1517,7 @@
       if (body.error !== "workspace_limit_reached") return "";
       var entity = clientLanguage ? "client workspaces" : "workspaces";
       var counts = typeof body.current === "number" && typeof body.limit === "number" && body.limit > 0 ? " (" + body.current + " of " + body.limit + " in use)" : "";
-      return "Your license limit for " + entity + " is reached" + counts + ". Remove a " + (clientLanguage ? "client" : "workspace") + " or upgrade your license to add more.";
+      return "Your plan limit for " + entity + " is reached" + counts + ". Remove a " + (clientLanguage ? "client" : "workspace") + " or move to a bigger plan to add more.";
     }
     var createWorkspace = async function(accountID) {
       var nameEl = getElement("ws-name-" + accountID);
@@ -2728,15 +2728,30 @@
     var expiresAt = new Date(plan.expires_at).getTime();
     return !isNaN(expiresAt) && expiresAt - now <= PAID_GRACE_MS;
   }
+  function planEnded(plan, now) {
+    if (plan.lapsed) return true;
+    if (!plan.expires_at) return false;
+    var expiresAt = new Date(plan.expires_at).getTime();
+    return !isNaN(expiresAt) && now >= expiresAt;
+  }
   function renderCurrentPlan(plan, canManage, busy, inUse, now) {
     var expires = formatDate(plan.expires_at);
     var title = providerPlanName(plan.plan_version);
     var description;
     var meta = [inUse >= 0 ? String(inUse) + " of " + clientWorkspaces(plan.workspace_limit) + " in use" : clientWorkspaces(plan.workspace_limit)];
     var cta = "";
-    if (plan.evaluation) {
+    var ended = planEnded(plan, now);
+    var lostFeatures = plan.lapsed ? " Client workspaces keep running with core monitoring but have lost their MSP features, and no new clients can be added." : "";
+    if (plan.evaluation && ended) {
+      description = "Your evaluation ended" + (expires ? " on " + expires : "") + "." + lostFeatures + " Buy a plan to keep your clients monitored and to add more.";
+    } else if (plan.evaluation) {
       description = expires ? "Your evaluation covers " + clientWorkspaces(plan.workspace_limit) + " until " + expires + ". Buy a plan to keep your clients monitored after that and to add more." : "Your evaluation covers " + clientWorkspaces(plan.workspace_limit) + ". Buy a plan to add more.";
       if (expires) meta.push("Expires " + expires);
+    } else if (ended) {
+      description = "Your " + title + " plan ended" + (expires ? " on " + expires : "") + "." + lostFeatures + " Renew from Manage billing or buy a plan below.";
+      if (canManage) {
+        cta = '<button class="btn-secondary billing-action-button" type="button" data-provider-plan-action="manage-billing"' + (busy ? " disabled" : "") + ">" + (busy === "manage-billing" ? "Opening\u2026" : "Manage billing") + "</button>";
+      }
     } else {
       description = paidLicenceInGrace(plan, now) ? "Your subscription has not renewed. Your clients keep this plan until " + expires + ". Open Manage billing to renew or update your payment method." : "Up to " + clientWorkspaces(plan.workspace_limit) + ". Renews automatically while your subscription is active.";
       if (canManage) {
@@ -2774,7 +2789,8 @@
     var plan = view.plan;
     if (!plan) return parts.join("");
     parts.push(renderCurrentPlan(plan, canManage, view.busy, inUse, now));
-    if (plan.evaluation) {
+    var ended = planEnded(plan, now);
+    if (plan.evaluation || ended) {
       if (plan.plans_error) {
         parts.push('<p class="billing-action-meta" role="alert">' + escapeText(plan.plans_error) + "</p>");
       } else if (plan.purchase_available) {
@@ -2783,7 +2799,7 @@
         });
         var cycle = hasAnnual ? view.cycle : "monthly";
         var offers = plan.plans.filter(function(option) {
-          return option.billing_cycle === cycle && option.workspace_limit > plan.workspace_limit;
+          return option.billing_cycle === cycle && (ended && !plan.evaluation ? option.workspace_limit >= plan.workspace_limit : option.workspace_limit > plan.workspace_limit);
         });
         parts.push('<div class="billing-section-intro"><h3>Choose a plan</h3><p>You pay per client workspace, never per monitored system. Every client workspace is full Pulse.</p></div>');
         parts.push(renderCycleToggle(cycle, hasAnnual));
