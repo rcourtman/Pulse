@@ -2932,7 +2932,7 @@
             if (billingReturn) {
               if (!view.plan) {
                 acceptRunningPlan(plan, false);
-                return true;
+                return false;
               }
               if (sameRunningPlan(view.plan, plan)) return false;
             }

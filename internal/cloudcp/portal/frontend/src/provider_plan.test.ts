@@ -446,6 +446,33 @@ describe('installProviderPlan', () => {
     expect(timers).toHaveLength(0);
   });
 
+  it('keeps the second billing check when refresh finishes before the first plan load', async () => {
+    const oldPlan = evaluationPlan({
+      plan_version: 'msp_solo', evaluation: false, license_id: 'lic_old', workspace_limit: 3,
+    });
+    const newPlan = evaluationPlan({
+      plan_version: 'msp_starter', evaluation: false, license_id: 'lic_new', workspace_limit: 5,
+    });
+    let served = oldPlan;
+    api.fetchPlan = vi.fn().mockImplementation(() => Promise.resolve(served));
+    api.refreshLicense = vi.fn().mockImplementation(() => Promise.resolve({
+      status: 'active', changed: false, restart_scheduled: false,
+      plan_version: served.plan_version, license_id: served.license_id, expires_at: served.expires_at,
+    }));
+    const { controller } = install(providerBootstrap(), '?provider_msp_checkout=billing');
+    await flush();
+    expect(controller.view().plan).toEqual(oldPlan);
+    expect(controller.view().notice).toBe('');
+    expect(timers).toHaveLength(1);
+
+    served = newPlan;
+    timers.shift()!();
+    await flush();
+    expect(controller.view().plan).toEqual(newPlan);
+    expect(controller.view().notice).toBe('Your Starter plan is active.');
+    expect(timers).toHaveLength(0);
+  });
+
   it('checks a Manage billing return only twice when nothing changed', async () => {
     api.refreshLicense = vi.fn().mockResolvedValue({ status: 'active', changed: false });
     const { controller } = install(providerBootstrap(), '?provider_msp_checkout=billing');

@@ -3498,7 +3498,9 @@ plan changed in the Stripe billing portal applies without a click. It also
 accepts a matching paid plan already applied by the background refresher
 without requiring a second restart; an unchanged visit stays silent. A stale
 panel is replaced only after the refreshed running plan is confirmed, never
-because the billing return URL says a change was made. Regression
+because the billing return URL says a change was made. When the return check
+finishes before the initial plan load, the panel may show that confirmed paid
+plan silently but must keep its second check for a later webhook. Regression
 coverage:
 `TestLoadConfig_ProviderHostedMSPPrefersRenewedLicense` in
 `internal/cloudcp/config_test.go`,

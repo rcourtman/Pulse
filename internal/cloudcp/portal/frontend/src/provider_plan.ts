@@ -371,7 +371,9 @@ export function installProviderPlan(deps: ProviderPlanDeps): ProviderPlanControl
           if (billingReturn) {
             if (!view.plan) {
               acceptRunningPlan(plan, false);
-              return true;
+              // Without an earlier view there is no evidence of a change;
+              // keep the second check for a webhook trailing the redirect.
+              return false;
             }
             if (sameRunningPlan(view.plan, plan)) return false;
           }
