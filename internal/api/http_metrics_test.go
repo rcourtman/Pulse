@@ -246,6 +246,16 @@ func TestNormalizeRoute(t *testing.T) {
 	}
 }
 
+// The root and empty paths must return before splitting. Without the fast
+// path, "/" still normalizes to "/" but allocates a split slice on every call.
+func TestNormalizeRoute_RootFastPathDoesNotAllocate(t *testing.T) {
+	for _, path := range []string{"/", ""} {
+		if allocs := testing.AllocsPerRun(100, func() { _ = normalizeRoute(path) }); allocs != 0 {
+			t.Errorf("normalizeRoute(%q) allocated %v times per call, want 0", path, allocs)
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // recordAPIRequest integration tests — verify that the core recording
 // function correctly populates all three Prometheus metric vectors.
