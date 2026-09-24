@@ -1,4 +1,5 @@
 import type { PortalBootstrapData, PortalAccessMember } from './types';
+import type { ProviderPlanAPI, ProviderPlanState } from './provider_plan';
 
 interface PortalAPIContext {
   getBootstrap(): PortalBootstrapData;
@@ -49,7 +50,7 @@ export interface PortalMemberRoleRequest {
   role: string;
 }
 
-export interface PortalAPI {
+export interface PortalAPI extends ProviderPlanAPI {
   fetchBootstrap(): Promise<PortalBootstrapData>;
   requestMagicLink(email: string): Promise<PortalMagicLinkResponse>;
   logout(): Promise<void>;
@@ -222,6 +223,28 @@ export function createPortalAPI(context: PortalAPIContext): PortalAPI {
       return request<void>(accountURL(accountID, '/members/' + encodeURIComponent(userID)), {
         method: 'DELETE',
       }, 'Failed to remove member.');
+    },
+    fetchPlan: function(accountID: string) {
+      return request<ProviderPlanState>(accountURL(accountID, '/provider-msp/plan'), {
+        headers: { Accept: 'application/json' },
+      }, 'Your plan could not be loaded.');
+    },
+    startCheckout: function(accountID: string, planVersion: string, billingCycle: string) {
+      return request<{ url?: string }>(accountURL(accountID, '/provider-msp/checkout'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan_version: planVersion, billing_cycle: billingCycle }),
+      }, 'Checkout is unavailable right now.');
+    },
+    openBillingPortal: function(accountID: string) {
+      return request<{ url?: string }>(accountURL(accountID, '/provider-msp/billing-portal'), {
+        method: 'POST',
+      }, 'Billing is unavailable right now.');
+    },
+    refreshLicense: function(accountID: string) {
+      return request<{ status?: string; changed?: boolean; restart_scheduled?: boolean }>(accountURL(accountID, '/provider-msp/license/refresh'), {
+        method: 'POST',
+      }, 'The licence could not be refreshed right now.');
     },
   };
 }

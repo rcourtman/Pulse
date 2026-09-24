@@ -801,7 +801,7 @@ func providerMSPBackupRequiresRuntimeTenantDir(state registry.TenantState) bool 
 }
 
 func resolveProviderMSPBackupLicensePath(cfg *CPConfig) (string, bool, error) {
-	if providerMSPPlanSourceOrDefault(cfg.ProviderMSPPlanSource) != ProviderMSPPlanSourceLicenseFile {
+	if !ProviderMSPPlanSourceIsSignedLicense(providerMSPPlanSourceOrDefault(cfg.ProviderMSPPlanSource)) {
 		return "", false, nil
 	}
 	licensePath := strings.TrimSpace(cfg.ProviderMSPLicenseFile)

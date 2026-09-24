@@ -2429,6 +2429,19 @@ recreate rejoined both client networks within a second, a Traefik-only
 recreate had its client routes back on the next 60-second pass, and neither
 client was stopped.
 
+### Provider MSP operations accept a renewed licence
+
+`provider-msp preflight`, `proof`, `recover` and `backup` treat a licence
+the control plane renewed into its data directory (plan source
+`renewed_license`) the same as the host `CP_PROVIDER_MSP_LICENSE_FILE`,
+through `ProviderMSPPlanSourceIsSignedLicense`. Only the development
+environment fallback is still refused. Without this, the first paid renewal
+would have made every day-2 command refuse to run on the platform it was paid
+for. Backups keep including the host licence file, and a restored platform
+fetches its renewed licence again on the next refresh. Regression coverage:
+`TestProviderMSPPreflightAcceptsRenewedLicenseSource` in
+`cmd/pulse-control-plane/provider_msp_preflight_test.go`.
+
 ### Provider MSP upgrades work once a client exists
 
 `deploy/provider-msp/upgrade.sh` and `run-install-proof.sh` run
