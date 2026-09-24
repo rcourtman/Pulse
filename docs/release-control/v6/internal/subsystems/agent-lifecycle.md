@@ -596,6 +596,10 @@ acknowledgement stays a success rather than a rejection so a real agent does not
 read a demo server as an outage and retry-storm it. Tests that assert report
 admission or tenant isolation must therefore not enable mock mode, or the
 assertion passes without exercising the boundary.
+Report admission, config fetch, and continuity lookups read the live host list
+through `GetLiveHostsSnapshot`, which copies only hosts (see the monitoring
+contract); it must not route through a full state snapshot, which copied every
+guest on each agent report.
 
 Physical-disk evidence collected by a host agent must survive projection back
 into monitoring's models. Absent evidence has to carry its declared sentinel

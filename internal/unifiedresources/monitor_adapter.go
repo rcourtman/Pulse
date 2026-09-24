@@ -1,6 +1,8 @@
 package unifiedresources
 
 import (
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -24,6 +26,27 @@ type MonitorAdapter struct {
 	activeAlerts    []models.Alert
 	lastRebuiltAt   time.Time
 	staleThresholds map[DataSource]time.Duration
+
+	overlays overlayReadStateCache
+}
+
+// overlayReadStateMaxAge bounds how long an overlay built from one registry
+// generation is reused. The overlay evaluates source staleness when it is
+// built, so reuse stays within the staleness read paths already accept.
+const overlayReadStateMaxAge = 2 * time.Second
+
+// overlayReadStateCache holds the last overlay built from this adapter's
+// registry. Host continuity overlays are requested on every canonical
+// read-state lookup, which alert evaluation makes once per resource per poll;
+// rebuilding the registry for each made polls quadratic while a standalone
+// agent stayed offline across a restart.
+type overlayReadStateCache struct {
+	mu        sync.Mutex
+	registry  *ResourceRegistry
+	rebuiltAt time.Time
+	key       [sha256.Size]byte
+	builtAt   time.Time
+	overlay   ReadState
 }
 
 // NewMonitorAdapter creates a monitor-facing adapter around a registry.
@@ -97,12 +120,67 @@ func readStateWithRecords(readState ReadState, source DataSource, records []Inge
 	if registry == nil {
 		return readState
 	}
+	// Capture the generation before reading it, so a mutation during the build
+	// leaves the cached overlay keyed to the older generation.
+	rebuiltAt := adapter.LastRebuiltAt()
+	key, keyed := overlayRecordsKey(source, records, onlyMissing)
+	now := time.Now()
+	if keyed {
+		if overlay := adapter.overlays.lookup(registry, rebuiltAt, key, now); overlay != nil {
+			return overlay
+		}
+	}
 
 	cloned := NewRegistry(registry.store)
 	thresholds := adapter.currentStaleThresholds()
 	cloned.IngestResourcesWithStaleThresholds(registry.List(), thresholds)
 	cloned.ingestRecords(source, records, onlyMissing)
-	return NewMonitorAdapterWithStaleThresholds(cloned, thresholds)
+	overlay := NewMonitorAdapterWithStaleThresholds(cloned, thresholds)
+	if keyed {
+		adapter.overlays.store(registry, rebuiltAt, key, now, overlay)
+	}
+	return overlay
+}
+
+// overlayRecordsKey fingerprints an overlay request. Resource.UpdatedAt is
+// stamped when a record is built, not observed, so it is left out.
+func overlayRecordsKey(source DataSource, records []IngestRecord, onlyMissing bool) ([sha256.Size]byte, bool) {
+	stable := make([]IngestRecord, len(records))
+	for i, record := range records {
+		record.Resource.UpdatedAt = time.Time{}
+		stable[i] = record
+	}
+	payload, err := json.Marshal(struct {
+		Source      DataSource
+		OnlyMissing bool
+		Records     []IngestRecord
+	}{source, onlyMissing, stable})
+	if err != nil {
+		return [sha256.Size]byte{}, false
+	}
+	return sha256.Sum256(payload), true
+}
+
+func (c *overlayReadStateCache) lookup(registry *ResourceRegistry, rebuiltAt time.Time, key [sha256.Size]byte, now time.Time) ReadState {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.overlay == nil || c.registry != registry || !c.rebuiltAt.Equal(rebuiltAt) || c.key != key {
+		return nil
+	}
+	if age := now.Sub(c.builtAt); age < 0 || age >= overlayReadStateMaxAge {
+		return nil
+	}
+	return c.overlay
+}
+
+func (c *overlayReadStateCache) store(registry *ResourceRegistry, rebuiltAt time.Time, key [sha256.Size]byte, now time.Time, overlay ReadState) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.registry = registry
+	c.rebuiltAt = rebuiltAt
+	c.key = key
+	c.builtAt = now
+	c.overlay = overlay
 }
 
 func (a *MonitorAdapter) currentRegistry() *ResourceRegistry {

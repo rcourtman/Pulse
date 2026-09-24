@@ -4359,7 +4359,9 @@ func (m *Monitor) GetLiveHostsSnapshot() []models.Host {
 	if m == nil || m.state == nil {
 		return nil
 	}
-	return m.state.GetSnapshot().Hosts
+	// Copy only the hosts. GetSnapshot deep-copies every guest as well, and
+	// this runs on each agent report, config fetch, and continuity lookup.
+	return m.state.GetHosts()
 }
 
 // SetOrgID sets the organization ID for this monitor instance.

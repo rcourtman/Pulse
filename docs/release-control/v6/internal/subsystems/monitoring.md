@@ -2426,6 +2426,14 @@ must apply the same continuity overlay when `HostsSnapshot()` resolves its
 canonical read state, so settings and other host-list consumers do not blank
 previously admitted Pulse Agent rows during a config-driven monitor swap while
 fresh reports are still in flight.
+Continuity lookups must stay cheap because every canonical read-state lookup
+makes one. `readStateWithStandaloneHostContinuity` takes the live host list
+once per call, and `GetLiveHostsSnapshot` copies only hosts through
+`State.GetHosts` rather than deep-copying every guest through `GetSnapshot`;
+agent reports and config fetches share that accessor. With one offline
+standalone agent, a lookup at 2,080 synthetic resources moved from 136 ms to
+74 microseconds. `TestStandaloneHostContinuityReadStateReusedAcrossLookups` and
+`TestGetLiveHostsSnapshotCopiesOnlyHosts` pin both.
 That same mock-runtime boundary also owns freshness while demos are running.
 The mock update loop must keep provider-backed TrueNAS and VMware records plus
 legacy PBS and PMG summaries on current `LastSeen` and health state each tick,
