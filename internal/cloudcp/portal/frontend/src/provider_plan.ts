@@ -198,7 +198,16 @@ export interface ProviderPlanAPI {
   fetchPlan(accountID: string): Promise<ProviderPlanState>;
   startCheckout(accountID: string, planVersion: string, billingCycle: string): Promise<{ url?: string }>;
   openBillingPortal(accountID: string): Promise<{ url?: string }>;
-  refreshLicense(accountID: string): Promise<{ status?: string; changed?: boolean; restart_scheduled?: boolean }>;
+  refreshLicense(accountID: string): Promise<ProviderPlanRefreshResult>;
+}
+
+export interface ProviderPlanRefreshResult {
+  status?: string;
+  changed?: boolean;
+  restart_scheduled?: boolean;
+  plan_version?: string;
+  license_id?: string;
+  expires_at?: string;
 }
 
 export interface ProviderPlanDeps {
@@ -241,6 +250,23 @@ export function installProviderPlan(deps: ProviderPlanDeps): ProviderPlanControl
   var navigate = deps.navigate || function(url: string) { window.location.assign(url); };
   var later = deps.setTimeoutFn || function(fn: () => void, ms: number) { return setTimeout(fn, ms); };
   var view: ProviderPlanView = { loading: false, error: '', plan: null, cycle: 'monthly', busy: '', notice: '' };
+  var planEpoch = 0;
+  var applying: ProviderPlanRefreshResult | null = null;
+
+  function isApplied(plan: ProviderPlanState, target: ProviderPlanRefreshResult): boolean {
+    return !!target.plan_version && plan.plan_version === target.plan_version &&
+      (!target.license_id || plan.license_id === target.license_id) &&
+      (!target.expires_at || plan.expires_at === target.expires_at);
+  }
+
+  function finishApplying(plan: ProviderPlanState) {
+    applying = null;
+    planEpoch += 1; // Ignore plan requests started before the restart completed.
+    view.plan = plan;
+    view.error = '';
+    view.notice = 'Your ' + providerPlanName(plan.plan_version) + ' plan is active.';
+    render();
+  }
 
   function account(): PortalAccountSummary | null {
     var bootstrap = deps.store.getBootstrap();
@@ -259,46 +285,58 @@ export function installProviderPlan(deps: ProviderPlanDeps): ProviderPlanControl
   async function load() {
     var current = account();
     if (!current) return;
+    var epoch = planEpoch;
     view.loading = true;
     render();
     try {
-      view.plan = await deps.api.fetchPlan(current.id);
+      var plan = await deps.api.fetchPlan(current.id);
+      if (epoch !== planEpoch) return;
+      if (applying) {
+        if (isApplied(plan, applying)) finishApplying(plan);
+        return;
+      }
+      view.plan = plan;
       view.error = '';
     } catch (error) {
-      view.error = error instanceof Error && error.message ? error.message : 'Your plan could not be loaded.';
+      if (epoch === planEpoch) {
+        view.error = error instanceof Error && error.message ? error.message : 'Your plan could not be loaded.';
+      }
     } finally {
       view.loading = false;
       render();
     }
   }
 
-  function waitForAppliedPlan(previousPlan: string, attempt: number) {
+  function waitForAppliedPlan(target: ProviderPlanRefreshResult, attempt: number) {
+    if (applying !== target) return;
     var current = account();
     if (!current) return;
     deps.api.fetchPlan(current.id).then(function(plan) {
-      if (plan.plan_version !== previousPlan) {
-        view.plan = plan;
-        view.error = '';
-        view.notice = 'Your ' + providerPlanName(plan.plan_version) + ' plan is active.';
-        render();
+      if (applying !== target) return;
+      if (isApplied(plan, target)) {
+        finishApplying(plan);
         return;
       }
       throw new Error('plan not applied yet');
     }).catch(function() {
+      if (applying !== target) return;
       if (attempt + 1 >= RESTART_POLL_ATTEMPTS) {
-        view.notice = 'Your plan should be active now. Open this page again if it still shows the old plan.';
+        applying = null;
+        planEpoch += 1;
+        view.notice = 'The updated plan could not be confirmed yet. Open this page again or use the apply button.';
         render();
         return;
       }
-      later(function() { waitForAppliedPlan(previousPlan, attempt + 1); }, RESTART_POLL_MS);
+      later(function() { waitForAppliedPlan(target, attempt + 1); }, RESTART_POLL_MS);
     });
   }
 
-  function applyRestart() {
-    var previousPlan = view.plan ? view.plan.plan_version : '';
+  function applyRestart(target: ProviderPlanRefreshResult) {
+    applying = target;
+    planEpoch += 1;
     view.notice = 'Your plan is being applied. This takes a few seconds.';
     render();
-    later(function() { waitForAppliedPlan(previousPlan, 0); }, RESTART_SETTLE_MS);
+    later(function() { waitForAppliedPlan(target, 0); }, RESTART_SETTLE_MS);
   }
 
   async function refresh(manual: boolean): Promise<boolean> {
@@ -309,7 +347,7 @@ export function installProviderPlan(deps: ProviderPlanDeps): ProviderPlanControl
     try {
       var result = await deps.api.refreshLicense(current.id);
       if (result.restart_scheduled) {
-        applyRestart();
+        applyRestart(result);
         return true;
       }
       if (manual) {
