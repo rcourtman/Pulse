@@ -23,6 +23,21 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Bounded generation change comparison — issue #2199
+
+Accepted snapshot rebuilds compare the previous and replacement registry
+generations by resource ID without deep-cloning and sorting both complete
+resource lists solely for change emission. Classification reads both generations
+under registry read locks, materialises change records, and releases those locks
+before the backing store persists them. Discovery, removal, state, relationship
+and configuration classifications retain the existing journal semantics;
+unchanged telemetry and volatile relationship timestamps produce no new
+journal row. `TestRecordRegistryChangesBetweenGenerationsMatchesListComparison`
+compares the old and new paths, while
+`TestRegistryGenerationComparisonIgnoresUnchangedTelemetry` pins the no-op
+boundary. The 1,000-resource benchmark is component evidence, not installed
+fleet CPU attribution or a release acceptance claim.
+
 Canonical frontend memory withdrawal is explicit: when a resource snapshot omits the canonical memory metric and its Proxmox memory facet marks usageUnavailable, the display merge must clear any previous metric. Plain partial omission remains compatible with richer REST state, and an incoming canonical metric (including measured zero) takes precedence over unavailable raw evidence. The adapter transition tests pin withdrawal and recovery; the hybrid-memory Chromium fixture exercises the rendered table and drawer at 1280px and 390px. Workload details remain canonical-only: withdrawal shows N/A in the table and removes the Memory section rather than manufacturing a raw-facet total; measured-zero recovery restores Total and Free, with screenshot positioning above fixed navigation. This does not change agent-only or arbitrary field-deletion semantics.
 
 **VM-linked agent memory read — issue #1962 (7 September 2026)**

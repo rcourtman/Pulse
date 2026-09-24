@@ -33,6 +33,31 @@ func TestRegistry_CachedReadsUseSharedLock(t *testing.T) {
 	}
 }
 
+func TestRegistryGenerationComparisonIgnoresUnchangedTelemetry(t *testing.T) {
+	store := NewMemoryStore()
+	before := NewRegistry(store)
+	after := NewRegistry(store)
+	observedAt := time.Date(2026, 9, 24, 6, 0, 0, 0, time.UTC)
+	first := IngestRecord{
+		SourceID: "vm-101",
+		Resource: Resource{
+			Type:     ResourceTypeVM,
+			Name:     "vm-101",
+			Status:   StatusOnline,
+			LastSeen: observedAt,
+		},
+	}
+	before.IngestRecords(SourceProxmox, []IngestRecord{first})
+	updated := first
+	updated.Resource.LastSeen = observedAt.Add(time.Minute)
+	after.IngestRecords(SourceProxmox, []IngestRecord{updated})
+
+	recordRegistryChangesBetweenGenerations(before, after, observedAt.Add(time.Minute), nil, SourcePulseDiff, "")
+	if got := len(store.changes); got != 0 {
+		t.Fatalf("telemetry-only generation emitted %d change records, want none", got)
+	}
+}
+
 // TestMemoryStore_RecordActionAuditAppliesRedaction is an integration check
 // at the registry-store boundary. The MemoryStore is the backing store the
 // registry uses in tests and contract examples, and operator-authored audit

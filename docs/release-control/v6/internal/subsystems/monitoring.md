@@ -17,6 +17,19 @@
 
 ## Purpose
 
+### Canonical registry publication during accepted ingest — issue #2199
+
+The monitor adapter builds a replacement resource generation away from readers.
+The previous generation remains readable while change records are classified
+and persisted; classification releases registry read locks before any backing
+store write can block. Writer ordering, journal classification, active-alert
+copying and publication of the replacement generation remain intact. A repeat
+of an unchanged snapshot must not append duplicate change records.
+`TestMonitorAdapterPopulateFromSnapshotDoesNotRepeatChangeJournal` and
+`TestMonitorAdapterSerializesSupplementalMutationAfterSnapshotPublication`
+cover the publish and blocked-persistence boundaries. Synthetic performance
+improvement alone does not establish field CPU relief.
+
 ### Linked Pulse agent memory for Proxmox LXC — issue #2148 (22 September 2026)
 
 Both LXC memory paths (the efficient `cluster/resources` builder and the

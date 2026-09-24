@@ -53,9 +53,70 @@ func recordRegistryChanges(store ResourceStore, before, after []Resource, observ
 	}
 }
 
+// recordRegistryChangesBetweenGenerations compares two complete registry
+// generations without making the deep, sorted List clones needed by public
+// readers. The resources are read only while both registry locks are held;
+// persistence happens after releasing them so a slow store cannot block
+// registry readers. The caller must keep the old generation stable until this
+// returns (MonitorAdapter's mutationMu does so during a replacement).
+func recordRegistryChangesBetweenGenerations(before, after *ResourceRegistry, observedAt time.Time, occurredAt *time.Time, sourceType ChangeSourceType, sourceAdapterHint ChangeSourceAdapter) {
+	if before == nil || after == nil || before.store == nil {
+		return
+	}
+
+	var pending []ResourceChange
+	before.mu.RLock()
+	after.mu.RLock()
+	beforeByID := make(map[string]*Resource, len(before.resources))
+	for _, resource := range before.resources {
+		if resource != nil && resource.ID != "" {
+			beforeByID[resource.ID] = resource
+		}
+	}
+	afterByID := make(map[string]*Resource, len(after.resources))
+	for _, resource := range after.resources {
+		if resource != nil && resource.ID != "" {
+			afterByID[resource.ID] = resource
+		}
+	}
+	for id, previous := range beforeByID {
+		current, exists := afterByID[id]
+		var next Resource
+		if exists {
+			next = *current
+		}
+		if change := buildResourceChange(*previous, true, next, exists, observedAt, occurredAt, sourceType, sourceAdapterHint); change != nil {
+			pending = append(pending, *change)
+		}
+	}
+	for id, current := range afterByID {
+		if _, exists := beforeByID[id]; exists {
+			continue
+		}
+		if change := buildResourceChange(Resource{}, false, *current, true, observedAt, occurredAt, sourceType, sourceAdapterHint); change != nil {
+			pending = append(pending, *change)
+		}
+	}
+	after.mu.RUnlock()
+	before.mu.RUnlock()
+
+	for _, change := range pending {
+		if err := before.store.RecordChange(change); err != nil {
+			log.Printf("unifiedresources: failed to record change for %s: %v", change.ResourceID, err)
+		}
+	}
+}
+
 func buildResourceChange(before Resource, beforeOK bool, after Resource, afterOK bool, observedAt time.Time, occurredAt *time.Time, sourceType ChangeSourceType, sourceAdapterHint ChangeSourceAdapter) *ResourceChange {
 	if !beforeOK && !afterOK {
 		return nil
+	}
+	var changedFields []string
+	if beforeOK && afterOK {
+		changedFields = resourceChangedFields(before, after)
+		if len(changedFields) == 0 {
+			return nil
+		}
 	}
 
 	change := &ResourceChange{
@@ -100,11 +161,6 @@ func buildResourceChange(before Resource, beforeOK bool, after Resource, afterOK
 		}
 		change.RelatedResources = relatedResourceIDs(change.ResourceID, before, after)
 		return change
-	}
-
-	changedFields := resourceChangedFields(before, after)
-	if len(changedFields) == 0 {
-		return nil
 	}
 
 	change.Metadata = map[string]any{"changedFields": changedFields}
