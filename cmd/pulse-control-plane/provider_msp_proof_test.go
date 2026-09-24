@@ -6,12 +6,14 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
@@ -429,4 +431,49 @@ func writeProviderMSPProofLicenseForTest(t *testing.T, licenseID, email, planVer
 		t.Fatalf("WriteFile: %v", err)
 	}
 	return path
+}
+
+// The proof's workspaces count against the provider's own client limit. When
+// there is no room for all of them it must refuse before creating any: on a
+// two-client evaluation with a client already added, it used to create the
+// first proof workspace, get refused on the second, and leave the first
+// occupying a slot.
+func TestProviderMSPProofRefusesWithoutFreeSlotsAndCreatesNothing(t *testing.T) {
+	t.Setenv("DOCKER_HOST", "unix:///tmp/pulse-provider-msp-proof-missing-docker.sock")
+	t.Setenv("DOCKER_TLS_VERIFY", "")
+	t.Setenv("DOCKER_CERT_PATH", "")
+
+	cfg := testProviderMSPProofConfig(t)
+	rt, err := newProviderMSPProofRuntimeFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("newProviderMSPProofRuntimeFromConfig: %v", err)
+	}
+	defer rt.close()
+
+	bootstrap, err := cloudcp.BootstrapProviderMSP(context.Background(), cfg, cloudcp.ProviderMSPBootstrapOptions{
+		AccountName: "Acme Provider",
+		OwnerEmail:  "owner@example.com",
+	})
+	if err != nil {
+		t.Fatalf("BootstrapProviderMSP: %v", err)
+	}
+	if err := rt.registry.Create(&registry.Tenant{ID: "t-realclient", AccountID: bootstrap.AccountID, DisplayName: "Real Client", State: registry.TenantStateActive}); err != nil {
+		t.Fatalf("create existing client: %v", err)
+	}
+
+	_, err = rt.runProviderMSPProof(context.Background(), providerMSPProofOptions{
+		AccountName:     "Acme Provider",
+		OwnerEmail:      "owner@example.com",
+		WorkspacePrefix: "Provider MSP Proof",
+		WorkspaceCount:  bootstrap.WorkspaceLimit,
+		InstallType:     "pve",
+		TargetPath:      "/settings/infrastructure?add=linux-host",
+	})
+	want := fmt.Sprintf("has %d free (1 of %d in use)", bootstrap.WorkspaceLimit-1, bootstrap.WorkspaceLimit)
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("runProviderMSPProof error = %v, want refusal naming %q", err, want)
+	}
+	if count, err := rt.registry.CountActiveByAccountID(bootstrap.AccountID); err != nil || count != 1 {
+		t.Fatalf("active workspaces after refusal = %d, %v; want only the existing client", count, err)
+	}
 }

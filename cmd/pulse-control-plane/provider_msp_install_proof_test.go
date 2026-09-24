@@ -407,3 +407,54 @@ func (f *fakeProviderMSPInstallProofRuntime) CleanupProviderMSPProofTenants(_ co
 func (f *fakeProviderMSPInstallProofRuntime) Close() {
 	f.closed = true
 }
+
+// A proof that fails part-way returns no report, so the workspace list the
+// install proof used to clean up from was empty and the workspaces it had
+// already created stayed behind in the provider's client slots.
+func TestProviderMSPInstallProofCleansUpWorkspacesFromAPartialProof(t *testing.T) {
+	cfg := testProviderMSPProofConfig(t)
+	fakeRuntime := &fakeProviderMSPInstallProofRuntime{
+		proofErr: &providerMSPProofPartialError{
+			err:              errors.New("create proof workspace 2: workspace limit reached"),
+			CreatedTenantIDs: []string{"ws-proof-01"},
+		},
+	}
+
+	report, err := runProviderMSPInstallProofWithDependencies(context.Background(), cfg, providerMSPInstallProofOptions{
+		AccountName:          "Example MSP",
+		OwnerEmail:           "owner@example.com",
+		WorkspacePrefix:      "Provider MSP Proof",
+		WorkspaceCount:       2,
+		InstallType:          "pve",
+		TargetPath:           "/settings/infrastructure?add=linux-host",
+		BackupOutput:         "/tmp/provider-msp-install-proof.tar.gz",
+		RestoreTargetDataDir: "/tmp/provider-msp-restore-drill",
+		Cleanup:              true,
+	}, providerMSPInstallProofDependencies{
+		Bootstrap: func(context.Context, *cloudcp.CPConfig, cloudcp.ProviderMSPBootstrapOptions) (*cloudcp.ProviderMSPBootstrapResult, error) {
+			return healthyProviderMSPInstallProofBootstrap(), nil
+		},
+		RunPreflight: func(context.Context, *cloudcp.CPConfig, providerMSPPreflightOptions) (*providerMSPPreflightReport, error) {
+			return healthyProviderMSPStatusPreflightReport(), nil
+		},
+		RunStatus: func(context.Context, *cloudcp.CPConfig, providerMSPStatusOptions) (*providerMSPStatusReport, error) {
+			return &providerMSPStatusReport{OK: true}, nil
+		},
+		NewProofRuntime: func(*cloudcp.CPConfig) (providerMSPInstallProofRuntime, error) {
+			return fakeRuntime, nil
+		},
+		CreateBackup: func(context.Context, *cloudcp.CPConfig, string) (*cloudcp.ProviderMSPBackupCreateResult, error) {
+			t.Fatal("backup should not run after a failed proof")
+			return nil, nil
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "workspace limit reached") {
+		t.Fatalf("install proof error = %v, want the proof failure", err)
+	}
+	if report == nil || report.OK || !report.CleanupOK {
+		t.Fatalf("report = %#v, want failed with cleanup done", report)
+	}
+	if !reflect.DeepEqual(fakeRuntime.cleanupTenantIDs, []string{"ws-proof-01"}) {
+		t.Fatalf("cleanup tenant ids = %#v, want the workspace the partial proof created", fakeRuntime.cleanupTenantIDs)
+	}
+}

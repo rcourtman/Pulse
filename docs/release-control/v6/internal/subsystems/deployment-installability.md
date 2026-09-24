@@ -2423,6 +2423,25 @@ artifact-selection behaviour.
 
 ## Current State
 
+### Provider MSP install proof never strands a client slot
+
+`run-install-proof.sh`, which setup's summary recommends before the first real
+client, creates its temporary proof workspaces on the provider's own account,
+so they count against the same client limit. It now checks for room before
+creating any and refuses with the counts ("the proof creates 2 temporary client
+workspaces but this account has 0 free (3 of 3 in use)"). Previously, on a
+two-client evaluation that already had a client, it created the first proof
+workspace, was refused the second, and returned no report, so its cleanup had
+no workspace list and the first proof workspace stayed behind in one of the
+evaluation's two slots. A proof that fails part-way now returns the IDs it
+created, and `install-proof` removes them. Verified on 2026-09-24 against the
+walkthrough lab: refusal before any workspace was created, client count
+unchanged. Regression coverage:
+`TestProviderMSPProofRefusesWithoutFreeSlotsAndCreatesNothing` in
+`cmd/pulse-control-plane/provider_msp_proof_test.go` and
+`TestProviderMSPInstallProofCleansUpWorkspacesFromAPartialProof` in
+`cmd/pulse-control-plane/provider_msp_install_proof_test.go`.
+
 ### Provider MSP setup points buyers at the portal
 
 `deploy/provider-msp/setup.sh` no longer tells an evaluating provider to
