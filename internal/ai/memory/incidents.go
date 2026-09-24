@@ -282,8 +282,9 @@ type IncidentStoreConfig struct {
 type IncidentStore struct {
 	mu                    sync.RWMutex
 	saveMu                sync.Mutex
-	savePending           atomic.Bool  // a queued save will capture the latest state; further requests coalesce
-	savesCompleted        atomic.Int64 // completed JSON replacements, observable by tests
+	savePending           atomic.Bool    // a queued save will capture the latest state; further requests coalesce
+	saveWG                sync.WaitGroup // asynchronous saves still running or queued; joined by flush
+	savesCompleted        atomic.Int64   // completed JSON replacements, observable by tests
 	incidents             []*incidentShell
 	maxIncidents          int
 	maxEvents             int
@@ -1459,11 +1460,23 @@ func (s *IncidentStore) saveAsync() {
 	if !s.savePending.CompareAndSwap(false, true) {
 		return
 	}
+	s.saveWG.Add(1)
 	go func() {
+		defer s.saveWG.Done()
 		if err := s.saveToDisk(); err != nil {
 			log.Warn().Err(err).Msg("failed to save incident history")
 		}
 	}()
+}
+
+// flush blocks until every asynchronous save queued by a mutation has
+// finished. A queued save still creates the data directory and writes its
+// temp file after the mutation returns, so callers that remove or inspect the
+// data directory (including tests) join it first. Stop mutating the store
+// before calling flush: WaitGroup forbids a new save being queued while a
+// previous Wait is still returning.
+func (s *IncidentStore) flush() {
+	s.saveWG.Wait()
 }
 
 func (s *IncidentStore) saveToDisk() error {

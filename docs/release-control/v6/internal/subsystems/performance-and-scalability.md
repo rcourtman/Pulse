@@ -1963,26 +1963,41 @@ WAL checkpoints more aggressive again, reopens duplicate-write failures,
 removes the bounded rollup-window checkpointing, or removes the metrics DB
 path/cadence controls must re-prove the metrics-store hot path with the owned
 store tests rather than assuming the earlier vacuum fixes are sufficient.
-The metrics identity and single-series lookup must also share one unique
+Metric identity and every range read must also share one unique, time-major
+`idx_metrics_query_all(resource_type, resource_id, tier, timestamp,
+metric_type)` B-tree. Reintroducing a second full-width identity index is a
+write-amplification regression even when retained `metrics.db` size looks small:
+every sample would dirty both trees in the WAL and every checkpoint would copy
+both sets of pages back into the main file. The column order is part of the
+invariant. A metric-major tree such as the retired
 `idx_metrics_lookup(resource_type, resource_id, metric_type, tier, timestamp)`
-B-tree. Reintroducing a second full-width identity index is a write-amplification
-regression even when retained `metrics.db` size looks small: every sample would
-dirty both trees in the WAL and every checkpoint would copy both sets of pages
-back into the main file. Legacy databases may keep their existing unique index
-authoritative while the replacement index is built, but that O(rows) migration
-must run on deferred startup maintenance and swap indexes in one SQLite
-transaction so constructor latency, concurrent reads, uniqueness, and crash
-recovery remain intact. The deterministic issue-1124 profile must continue to
-attribute writes by logical payload, table/index `dbstat` pages, page-cache
-writes/spills, WAL frames, checkpoint frames, process write bytes where the
-host exposes them, and traced sync calls rather than treating final file size
-as a proxy. Its checked invariant persists 157,452 samples across 2,197 mixed
-provider resources and caps the no-auto-checkpoint workload at 40,000 WAL
-frames; the former four-index schema produces 50,516 frames while the
-consolidated schema produces 35,030. Checkpoint-threshold changes must also
-prove physical writes, WAL allocation, write latency, restart, and the
-four-connection concurrent-read case; a no-reader byte reduction alone is not
-sufficient to widen the production WAL bound.
+gives every series its own insertion point once it retains history, so each
+commit rewrites one leaf page per series; the time-major order lets one poll's
+samples for a resource share pages. With one hour of retained history for 480
+series, 30 polls write 25,310 WAL frames under the metric-major layout and 6,022
+under the time-major one (`TestMetricsIdentityIndexSteadyStateWrites` requires
+at most 35%), consistent with a production install measuring about 10.6 KB of
+WAL and checkpoint writes per ~60-byte sample before the change (#1966). The
+accepted cost is on metric-filtered reads, which now scan a resource's other
+metrics in the window: a single-metric 500-node query moved from 45 to 59
+microseconds and the 24-hour 50-disk `smart_temp` batch from about 0.25 to 0.49
+s, while all-metric dashboard reads are unchanged. Legacy databases keep their
+existing unique index authoritative while the replacement index is built, but
+that O(rows) migration must run on deferred startup maintenance and swap indexes
+in one SQLite transaction so constructor latency, concurrent reads, uniqueness,
+and crash recovery remain intact; a database with no unique identity index at
+all migrates synchronously so upserts never run without a conflict target. The
+deterministic issue-1124 profile must continue to attribute writes by logical
+payload, table/index `dbstat` pages, page-cache writes/spills, WAL frames,
+checkpoint frames, process write bytes where the host exposes them, and traced
+sync calls rather than treating final file size as a proxy. Its checked
+invariant persists 157,452 samples across 2,197 mixed provider resources and
+caps the no-auto-checkpoint workload at 23,000 WAL frames; the v6.1.1 four-index
+schema produces 50,516 frames, the metric-major lookup schema 36,308, and the
+time-major identity schema 20,223. Checkpoint-threshold changes must also prove
+physical writes, WAL allocation, write latency, restart, and the four-connection
+concurrent-read case; a no-reader byte reduction alone is not sufficient to
+widen the production WAL bound.
 Retention must also return freed SQLite pages to the OS
 proportionally to the current freelist, bounded per cycle, and on every
 retention cycle rather than only when that cycle deleted rows: a fixed small
