@@ -485,9 +485,15 @@ describe('installProviderPlan', () => {
     expect(controller.view().notice).toBe('');
   });
 
-  it('says nothing was charged when checkout is cancelled', () => {
+  it('does not infer a charge outcome from a cancelled checkout return', () => {
     const { controller } = install(providerBootstrap(), '?provider_msp_checkout=cancelled');
-    expect(controller.view().notice).toBe('Checkout was cancelled. Nothing was charged.');
+    expect(controller.view().notice).toBe('Checkout was not completed here. Check your current plan below.');
+    expect(api.refreshLicense).not.toHaveBeenCalled();
+  });
+
+  it('ignores an unrecognised checkout return value', () => {
+    const { controller } = install(providerBootstrap(), '?provider_msp_checkout=unknown');
+    expect(controller.view().notice).toBe('');
     expect(api.refreshLicense).not.toHaveBeenCalled();
   });
 

@@ -3043,8 +3043,8 @@
         pollAfterCheckout(0);
       } else if (returned === "billing") {
         checkAfterBillingReturn(0);
-      } else {
-        view.notice = "Checkout was cancelled. Nothing was charged.";
+      } else if (returned === "cancelled") {
+        view.notice = "Checkout was not completed here. Check your current plan below.";
       }
     }
     return {
