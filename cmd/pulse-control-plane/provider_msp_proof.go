@@ -395,8 +395,9 @@ func (rt *providerMSPProofRuntime) createProviderMSPProofWorkspace(ctx context.C
 		rt.registry,
 		rt.provisioner,
 		account.WorkspaceLimitPolicy{
-			ProviderHostedMSP:      true,
-			ProviderMSPPlanVersion: providerMSPProofPlanVersion(rt.cfg),
+			ProviderHostedMSP:        true,
+			ProviderMSPPlanVersion:   providerMSPProofPlanVersion(rt.cfg),
+			ProviderMSPLicenseLapsed: func() bool { return rt.cfg.ProviderMSPLicenseLapsed(time.Now()) },
 		},
 	)
 	mux := http.NewServeMux()

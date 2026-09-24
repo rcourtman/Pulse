@@ -2438,6 +2438,20 @@ artifact-selection behaviour.
 
 ## Current State
 
+### A lapsed provider MSP install still starts and upgrades
+
+A provider-hosted install whose licence is past expiry and grace (an
+evaluation that ran out, or a paid plan that was not renewed) now starts its
+control plane instead of crash-looping on licence validation, so the portal
+and its Plan tab stay reachable to buy or renew. `provider-msp status`, which
+`upgrade.sh` gates on, prints `license_lapsed=true` as information rather than
+a failure, so such an install can still be upgraded. Client runtimes keep
+enforcing the lapse themselves and new clients are refused until a current
+licence is in place. Verified on 2026-09-24 on the walkthrough lab with an
+evaluation that lapsed 20 days earlier. Regression coverage:
+`TestProviderMSPStatusReportsALapsedLicenceWithoutFailing` in
+`cmd/pulse-control-plane/provider_msp_status_test.go`.
+
 ### Provider MSP setup points buyers at the portal
 
 `deploy/provider-msp/setup.sh` no longer tells an evaluating provider to

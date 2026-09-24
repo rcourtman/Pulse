@@ -96,6 +96,31 @@ describe('renderProviderPlanHTML', () => {
     expect(lapsed).not.toContain('Renews automatically');
   });
 
+  // The control plane keeps serving the portal on a lapsed licence precisely
+  // so the provider can buy here; the panel must say so and offer the plans.
+  it('tells a provider whose evaluation ended what happened and how to buy', () => {
+    const now = Date.parse('2026-12-10T00:00:00Z');
+    const html = renderProviderPlanHTML(view({
+      plan: evaluationPlan({ expires_at: '2026-11-22T20:49:54Z', lapsed: true }),
+    }), true, 2, now);
+    expect(html).toContain('Your evaluation ended on');
+    expect(html).toContain('lost their MSP features, and no new clients can be added');
+    expect(html).toContain('data-provider-plan-action="buy" data-provider-plan-version="msp_solo"');
+    expect(html).not.toContain('Your evaluation covers');
+  });
+
+  it('offers the same plan again after a paid plan lapses', () => {
+    const now = Date.parse('2026-12-10T00:00:00Z');
+    const html = renderProviderPlanHTML(view({
+      plan: evaluationPlan({ plan_version: 'msp_solo', evaluation: false, workspace_limit: 3, expires_at: '2026-11-20T00:00:00Z', lapsed: true }),
+    }), true, 3, now);
+    expect(html).toContain('Your Solo plan ended on');
+    expect(html).toContain('data-provider-plan-action="buy" data-provider-plan-version="msp_solo"');
+    expect(html).toContain('data-provider-plan-action="buy" data-provider-plan-version="msp_starter"');
+    expect(html).toContain('data-provider-plan-action="manage-billing"');
+    expect(html).not.toContain('Renews automatically');
+  });
+
   it('keeps the evaluation visible when plans cannot be loaded', () => {
     const html = renderProviderPlanHTML(view({ plan: evaluationPlan({ plans: [], purchase_available: false, plans_error: 'Plans are unavailable right now.' }) }), true);
     expect(html).toContain('Free evaluation');

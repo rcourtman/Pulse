@@ -188,8 +188,8 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     var counts = typeof body.current === 'number' && typeof body.limit === 'number' && body.limit > 0
       ? ' (' + body.current + ' of ' + body.limit + ' in use)'
       : '';
-    return 'Your license limit for ' + entity + ' is reached' + counts + '. Remove a ' +
-      (clientLanguage ? 'client' : 'workspace') + ' or upgrade your license to add more.';
+    return 'Your plan limit for ' + entity + ' is reached' + counts + '. Remove a ' +
+      (clientLanguage ? 'client' : 'workspace') + ' or move to a bigger plan to add more.';
   }
 
   var createWorkspace = async function(accountID: string): Promise<void> {
