@@ -22,7 +22,6 @@ PULSE_PROVIDER_MSP_LICENSE_URL="${PULSE_PROVIDER_MSP_LICENSE_URL:-https://licens
 PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE="${PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE:-0}"
 PULSE_PROVIDER_MSP_EVAL_EMAIL="${PULSE_PROVIDER_MSP_EVAL_EMAIL:-}"
 PULSE_PROVIDER_MSP_SIGNUP_SOURCE="${PULSE_PROVIDER_MSP_SIGNUP_SOURCE:-provider_msp_setup}"
-PULSE_PROVIDER_MSP_UPGRADE_URL="${PULSE_PROVIDER_MSP_UPGRADE_URL:-https://pulserelay.pro/msp.html}"
 
 log() {
   echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] $*"
@@ -436,16 +435,10 @@ ensure_eval_license() {
   chmod 0600 "${eval_path}"
   set_env_value CP_PROVIDER_MSP_LICENSE_FILE "./provider-msp-eval-license.jwt" "${env_path}"
 
-  local expires license_id
+  local expires
   expires="$(printf '%s' "${response}" | jq -r '.expires_at // empty' 2>/dev/null || true)"
-  license_id="$(printf '%s' "${response}" | jq -r '.license_id // empty' 2>/dev/null || true)"
   log "evaluation license installed: 2 client workspaces${expires:+, expires ${expires}}"
-  if [[ "${license_id}" =~ ^lic_msp_[a-f0-9]+$ ]]; then
-    log "  when you need a third client, request an upgrade at:"
-    log "  ${PULSE_PROVIDER_MSP_UPGRADE_URL%/}?eval_license_id=${license_id}#request"
-  else
-    log "  when you need a third client, request an upgrade at ${PULSE_PROVIDER_MSP_UPGRADE_URL%/}#request"
-  fi
+  log "  when you need a third client, buy a plan from Plan in your provider portal"
 }
 
 ensure_generated_secrets() {
@@ -812,15 +805,15 @@ Prove the platform before the first real client:
 Portal (after bootstrap):
   https://${domain}/portal
 
+Plan: the evaluation covers two clients. When you need a third, open Plan in
+the portal and buy one; checkout is by Stripe and the new limit applies within
+seconds. Change plan or cancel renewal from Manage billing in the same place.
+
 Day 2: portal sessions last 7 days. Re-run the bootstrap command above any
 time to print a fresh owner sign-in link, or use
   docker compose run --rm control-plane provider-msp portal-link --email you@example.com
 for any invited teammate. Set RESEND_API_KEY in .env to enable emailed
 sign-in links instead.
-
-Lease signing public key (your provider MSP license must bind this key;
-re-print any time with ./setup.sh --print-lease-signing-public-key):
-  $(derive_lease_signing_public_key)
 
 EOF
 }
