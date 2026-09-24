@@ -230,7 +230,7 @@ func TestProviderMSPLicenseRefreshAppliesShorterPaidPeriod(t *testing.T) {
 	refresher.SetRestart(func() { restarted <- struct{}{} })
 
 	result, err := refresher.Refresh(context.Background())
-	if err != nil || !result.Changed || !result.RestartScheduled || result.ExpiresAt != shorterExpiry.Format(time.RFC3339) {
+	if err != nil || !result.Changed || !result.RestartScheduled || result.ExpiresAt != shorterExpiry.UTC().Format(time.RFC3339) {
 		t.Fatalf("shorter paid-period refresh = %+v, %v", result, err)
 	}
 	installed, err := os.ReadFile(ProviderMSPRenewedLicensePath(cfg.DataDir))
