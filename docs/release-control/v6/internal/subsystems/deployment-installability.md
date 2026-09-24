@@ -2269,6 +2269,17 @@ artifact-selection behaviour.
 
 ## Current State
 
+### Provider MSP tenant-network ownership during provisioning and cleanup
+
+Provisioning refuses an empty tenant ID or an existing same-named network
+without the exact tenant and runtime labels. It connects only role-labelled
+support containers on this installation's provider ingress network. Removing a
+managed client selects only its derived, correctly labelled tenant network and
+force-disconnects only local support containers actually attached to it. This
+prevents role labels shared by two provider installations on one Docker daemon
+from selecting the other installation. Docker API fixture tests cover these
+guards; they do not establish installed two-provider acceptance.
+
 ### Provider MSP upgrades work once a client exists
 
 `deploy/provider-msp/upgrade.sh` and `run-install-proof.sh` run
