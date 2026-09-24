@@ -2416,6 +2416,20 @@ artifact-selection behaviour.
 
 ## Current State
 
+### Provider MSP setup leaves the platform running
+
+`deploy/provider-msp/setup.sh` now ends by starting `traefik`,
+`docker-socket-proxy` and `control-plane` and waits for the control plane to
+run before printing its summary. It previously stopped at "setup prepared"
+with only the bootstrap command as the next step, so a first-time provider's
+sign-in link answered `404` until `run-install-proof.sh` or a manual
+`docker compose up -d` happened to start the control plane. The first-run
+message also names only the three values a provider must supply (`DOMAIN`,
+`ACME_EMAIL`, and the DNS-01 credential) instead of listing fourteen, most of
+which have working defaults or are generated. PR #2212 reports a v6.4.1
+first-run 404 and a 200 after starting the platform; this assigned candidate
+has not repeated that live-host proof.
+
 ### Provider MSP clients survive a support-container recreate
 
 Recreating the control plane or Traefik (every `upgrade.sh` run recreates the
@@ -2427,7 +2441,7 @@ every pass, and restarts rather than stops an unhealthy client. Verified on
 2026-09-23 on a v6.4.1 provider bundle with two clients: a control-plane
 recreate rejoined both client networks within a second, a Traefik-only
 recreate had its client routes back on the next 60-second pass, and neither
-client was stopped.
+ client was stopped.
 
 ### Provider MSP operations accept a renewed licence
 
