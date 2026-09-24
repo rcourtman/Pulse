@@ -53,6 +53,20 @@ is exposed as unavailable, rather than replaced with a synthetic healthy state.
 
 Delivery-log diagnostic text is a notification-attempt projection, not an agent admission or liveness verdict. Masking embedded destination credentials preserves failure context without changing agent identities, credentials, session replacement or removal policy. Consumers must use the retained failureClass and outcome as delivery evidence only; a transport error does not establish that the monitored agent is offline.
 
+### Accepted reports refresh the canonical store synchronously — issue #2199
+
+An accepted host, Docker or Kubernetes report, and an agent removal, refresh the
+canonical resource store before the handler returns, so ReadState consumers see
+agent-backed truth without waiting for a broadcast. The #2199 reductions keep
+that contract: they make each refresh pass cheaper (node-indexed guest parents
+in the unified-resources contract, one registry snapshot per pass in the
+monitoring contract) without deferring or coalescing reports. A pass is still
+estate-wide, so its cost scales with agent report volume times estate size;
+coalescing reports would trade this immediate visibility and needs its own
+decision here first.
+
+### Canonical Patrol and Assistant continuation, 2026-09-07
+
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
 Patrol planning uses the canonical action broker's plan-only boundary. Policy

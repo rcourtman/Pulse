@@ -6408,3 +6408,79 @@ func TestApplyHostReportHonoursRemovalBlockWhenIdentityWouldFork(t *testing.T) {
 		t.Fatalf("expected removal block to be cleared, still have %+v", monitor.state.GetRemovedHostAgents())
 	}
 }
+
+// countingResourceStore counts registry clones handed out by the live store.
+type countingResourceStore struct {
+	*unifiedresources.MonitorAdapter
+	getAll int
+}
+
+func (c *countingResourceStore) GetAll() []unifiedresources.Resource {
+	c.getAll++
+	return c.MonitorAdapter.GetAll()
+}
+
+// plainResourceStore lacks metrics-target resolution.
+type plainResourceStore struct {
+	ResourceStoreInterface
+}
+
+func TestResourceSnapshotStoreClonesOncePerPass(t *testing.T) {
+	now := time.Now().UTC()
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		LastUpdate: now,
+		VMs: []models.VM{{
+			ID: "lab:pve1:101", VMID: 101, Name: "db", Node: "pve1", Instance: "lab",
+			Status: "running", Type: "qemu", LastSeen: now,
+		}},
+	})
+	counting := &countingResourceStore{MonitorAdapter: adapter}
+
+	store := newResourceSnapshotStore(counting)
+	first := store.GetAll()
+	second := store.GetAll()
+	if counting.getAll != 1 {
+		t.Fatalf("underlying GetAll calls = %d, want 1", counting.getAll)
+	}
+	if len(first) != 1 || len(second) != 1 || &first[0] != &second[0] {
+		t.Fatalf("pass consumers did not share one snapshot: %d and %d resources", len(first), len(second))
+	}
+	resolver, ok := store.(MetricsTargetResourceStore)
+	if !ok || resolver.MetricsTargetForResource(first[0].ID) == nil {
+		t.Fatal("snapshot store does not forward metrics-target resolution")
+	}
+	if again := newResourceSnapshotStore(store); again != store {
+		t.Fatal("wrapping a pass snapshot again must reuse it")
+	}
+
+	plain := plainResourceStore{ResourceStoreInterface: adapter}
+	if wrapped := newResourceSnapshotStore(plain); wrapped != ResourceStoreInterface(plain) {
+		t.Fatal("a store without metrics-target resolution must pass through unwrapped")
+	}
+}
+
+// An accepted agent report refreshes the store once. Every metric sync and the
+// alert sync in that pass must share a single registry clone (#2199).
+func TestAgentReportRefreshClonesRegistryOnce(t *testing.T) {
+	now := time.Now().UTC()
+	state := models.NewState()
+	state.UpdateNodes([]models.Node{{ID: "lab-pve1", Name: "pve1", Instance: "lab", Status: "online", Type: "node", LastSeen: now}})
+	state.UpdateVMs([]models.VM{{
+		ID: "lab:pve1:101", VMID: 101, Name: "db", Node: "pve1", Instance: "lab",
+		Status: "running", Type: "qemu", CPU: 0.2, LastSeen: now,
+	}})
+	state.UpsertHost(models.Host{ID: "agent-1", Hostname: "pve1.example", Status: "online", CPUUsage: 3, LastSeen: now})
+
+	counting := &countingResourceStore{MonitorAdapter: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))}
+	m := &Monitor{
+		state:          state,
+		resourceStore:  counting,
+		metricsHistory: NewMetricsHistory(32, time.Hour),
+	}
+
+	m.refreshUnifiedResourceStoreAfterAgentStateChange()
+	if counting.getAll != 1 {
+		t.Fatalf("registry clones for one agent report refresh = %d, want 1", counting.getAll)
+	}
+}
