@@ -83,7 +83,7 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 				AND tier = ? AND timestamp >= ? AND timestamp < ?
 				GROUP BY resource_type, resource_id, metric_type, bucket_ts`,
 			args:      []any{int64(60), int64(60), "minute", "vm", "vm-1", "cpu", "raw", int64(0), farFuture},
-			wantIndex: "idx_metrics_lookup",
+			wantIndex: metricsIdentityIndex,
 		},
 		{
 			name: "batched rollup aggregation insert",
@@ -102,8 +102,8 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 				GROUP BY resource_type, resource_id, metric_type, bucket_ts`,
 			args: []any{int64(60), int64(60), "minute", "raw", int64(0), farFuture},
 			// The SELECT filters on (tier, timestamp) without resource/metric
-			// columns. SQLite uses an index-ordered scan (SCAN USING INDEX)
-			// on idx_metrics_lookup. A TEMP B-TREE may still be used for
+			// columns. SQLite may use an index-ordered scan (SCAN USING INDEX)
+			// on the identity index. A TEMP B-TREE may still be used for
 			// GROUP BY. The INSERT side uses the same unique index for ON CONFLICT.
 			allowIndexScan: true,
 		},
@@ -359,7 +359,7 @@ func containsCoveringIndexScan(plan string) bool {
 }
 
 // containsIndexScan returns true if any plan line shows an index-ordered scan
-// on the metrics table (e.g., "SCAN metrics USING INDEX idx_metrics_lookup").
+// on the metrics table (e.g., "SCAN metrics USING INDEX idx_metrics_query_all").
 // This differs from a covering-index scan in that it reads table rows via the
 // index, but still avoids a full table scan.
 func containsIndexScan(plan string) bool {
@@ -405,13 +405,10 @@ func newPlanTestDB(t *testing.T) *sql.DB {
 			tier TEXT NOT NULL DEFAULT 'raw'
 		);
 
-		CREATE UNIQUE INDEX IF NOT EXISTS idx_metrics_lookup
-		ON metrics(resource_type, resource_id, metric_type, tier, timestamp);
-
 		CREATE INDEX IF NOT EXISTS idx_metrics_tier_time
 		ON metrics(tier, timestamp);
 
-		CREATE INDEX IF NOT EXISTS idx_metrics_query_all
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_metrics_query_all
 		ON metrics(resource_type, resource_id, tier, timestamp, metric_type);
 
 		CREATE TABLE IF NOT EXISTS metrics_meta (
