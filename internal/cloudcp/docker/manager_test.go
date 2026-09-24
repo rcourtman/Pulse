@@ -641,3 +641,36 @@ func TestEnsureSupportContainersOnTenantNetworkSkipsMissingNetwork(t *testing.T)
 		t.Fatalf("reconcile changed the host for a missing network: %v", mutations)
 	}
 }
+
+func TestEnsureSupportContainersOnTenantNetworkRejectsWrongOwner(t *testing.T) {
+	var mutations []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Api-Version", "1.47")
+		if strings.HasSuffix(r.URL.Path, "/_ping") {
+			_, _ = w.Write([]byte("OK"))
+			return
+		}
+		if r.Method != http.MethodGet {
+			mutations = append(mutations, r.Method+" "+r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"Name":"pulse-provider-msp-tenant-t-acme","Id":"net-1","Labels":{"pulse.tenant.id":"t-other","pulse.provider-msp.network":"tenant"}}`))
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
+	t.Setenv("DOCKER_TLS_VERIFY", "")
+	t.Setenv("DOCKER_CERT_PATH", "")
+
+	mgr, err := NewManager(ManagerConfig{Image: "pulse:test", Network: "pulse-provider-msp", IsolateTenantNetworks: true})
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	t.Cleanup(func() { _ = mgr.Close() })
+
+	if err := mgr.EnsureSupportContainersOnTenantNetwork(context.Background(), "t-acme"); err == nil {
+		t.Fatal("expected wrong-owner network to be rejected")
+	}
+	if len(mutations) != 0 {
+		t.Fatalf("reconcile changed wrong-owner network: %v", mutations)
+	}
+}
