@@ -438,7 +438,8 @@ ensure_eval_license() {
   local expires
   expires="$(printf '%s' "${response}" | jq -r '.expires_at // empty' 2>/dev/null || true)"
   log "evaluation license installed: 2 client workspaces${expires:+, expires ${expires}}"
-  log "  when you need a third client, buy a plan from Plan in your provider portal"
+  log "  Plan in your provider portal shows whether a paid upgrade is available"
+  log "  keep within two clients until Plan confirms a higher active limit"
 }
 
 ensure_generated_secrets() {
@@ -681,14 +682,12 @@ validate_env_file() {
   # of the first screen, and an isolation guarantee is the one claim a provider
   # cannot evaluate from a screenshot.
   #
-  # Unlicensed runs on msp_eval (2 client workspaces). Set the licence file
-  # when you buy; the paid caps come from the licence, never from here.
+  # Unlicensed runs on msp_eval (2 client workspaces). Paid caps come from a
+  # valid licence, never from local configuration.
   local license_file
   license_file="$(env_value CP_PROVIDER_MSP_LICENSE_FILE "${env_path}")"
   if [[ -z "${license_file}" ]]; then
     log "no CP_PROVIDER_MSP_LICENSE_FILE set: evaluation mode, 2 client workspaces"
-    log "to buy, request a licence bound to this lease signing public key:"
-    log "  $(derive_lease_signing_public_key)"
     return 0
   fi
   if [[ "${license_file}" != /* ]]; then
@@ -696,11 +695,10 @@ validate_env_file() {
   fi
   if [[ ! -f "${license_file}" ]]; then
     die "CP_PROVIDER_MSP_LICENSE_FILE is set but does not exist: ${license_file}
-Leave it blank to run in evaluation mode (2 client workspaces), or request your
-provider MSP license with this lease signing public key
-(./setup.sh --print-lease-signing-public-key):
-  $(derive_lease_signing_public_key)
-The license must bind this key or the control plane will refuse to start."
+Leave it blank to run in evaluation mode (2 client workspaces), or place an
+already issued license at that path. For a custom license, print the platform's
+lease signing public key with ./setup.sh --print-lease-signing-public-key;
+the license must bind that key or the control plane will refuse to start."
   fi
 }
 
@@ -805,9 +803,10 @@ Prove the platform before the first real client:
 Portal (after bootstrap):
   https://${domain}/portal
 
-Plan: the evaluation covers two clients. When you need a third, open Plan in
-the portal and buy one; checkout is by Stripe and the new limit applies within
-seconds. Change plan or cancel renewal from Manage billing in the same place.
+Plan: the evaluation covers two clients. Open Plan in the portal to see whether
+a paid upgrade is available. Keep within two clients until Plan confirms a
+higher active limit. A paid plan exposes Manage billing for changes or
+cancellation.
 
 Day 2: portal sessions last 7 days. Re-run the bootstrap command above any
 time to print a fresh owner sign-in link, or use
