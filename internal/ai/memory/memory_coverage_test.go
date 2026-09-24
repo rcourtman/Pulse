@@ -23,21 +23,6 @@ func TestChangeDetector_DefaultsAndHelpers(t *testing.T) {
 	if got := intToString(42); got != "42" {
 		t.Errorf("intToString(42) = %q", got)
 	}
-	if got := formatFloat(2.0); got != "2" {
-		t.Errorf("formatFloat(2.0) = %q", got)
-	}
-	if got := formatFloat(2.5); got != "2.5" {
-		t.Errorf("formatFloat(2.5) = %q", got)
-	}
-
-	cpu := formatCPUChangeDescription("vm-1", 4, 2)
-	if !strings.Contains(cpu, "decreased") {
-		t.Errorf("expected cpu decrease description, got %q", cpu)
-	}
-	mem := formatMemoryChangeDescription("vm-1", 8<<30, 4<<30)
-	if !strings.Contains(mem, "decreased") {
-		t.Errorf("expected memory decrease description, got %q", mem)
-	}
 }
 
 func TestNewChangeDetector_LoadsFromDisk(t *testing.T) {
@@ -77,67 +62,6 @@ func TestNewChangeDetector_LoadError(t *testing.T) {
 	if len(detector.changes) != 0 {
 		t.Fatalf("expected no changes after load error, got %d", len(detector.changes))
 	}
-}
-
-func TestChangeDetector_SaveToDisk_Scenarios(t *testing.T) {
-	t.Run("NoDataDir", func(t *testing.T) {
-		d := &ChangeDetector{}
-		if err := d.saveToDisk(); err != nil {
-			t.Fatalf("expected nil error, got %v", err)
-		}
-	})
-
-	t.Run("MissingDir", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		missing := filepath.Join(tmpDir, "missing")
-		d := &ChangeDetector{
-			dataDir: missing,
-			changes: []Change{{ID: "c1"}},
-		}
-		if err := d.saveToDisk(); err == nil {
-			t.Fatal("expected error for missing directory")
-		}
-	})
-
-	t.Run("MarshalError", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		d := &ChangeDetector{
-			dataDir: tmpDir,
-			changes: []Change{{ID: "c1", Before: func() {}}},
-		}
-		if err := d.saveToDisk(); err == nil {
-			t.Fatal("expected marshal error")
-		}
-	})
-
-	t.Run("RenameError", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		destDir := filepath.Join(tmpDir, "ai_changes.json")
-		if err := os.MkdirAll(destDir, 0755); err != nil {
-			t.Fatalf("mkdir: %v", err)
-		}
-		d := &ChangeDetector{
-			dataDir: tmpDir,
-			changes: []Change{{ID: "c1"}},
-		}
-		if err := d.saveToDisk(); err == nil {
-			t.Fatal("expected rename error")
-		}
-	})
-
-	t.Run("Success", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		d := &ChangeDetector{
-			dataDir: tmpDir,
-			changes: []Change{{ID: "c1"}},
-		}
-		if err := d.saveToDisk(); err != nil {
-			t.Fatalf("saveToDisk error: %v", err)
-		}
-		if _, err := os.Stat(filepath.Join(tmpDir, "ai_changes.json")); err != nil {
-			t.Fatalf("expected file to exist: %v", err)
-		}
-	})
 }
 
 func TestChangeDetector_LoadFromDisk_Scenarios(t *testing.T) {
@@ -230,20 +154,6 @@ func TestChangeDetector_LoadFromDisk_Scenarios(t *testing.T) {
 			t.Fatalf("expected oldest remaining change to be c2")
 		}
 	})
-}
-
-func TestChangeDetector_DetectChanges_SaveError(t *testing.T) {
-	tmpDir := t.TempDir()
-	badDir := filepath.Join(tmpDir, "not-dir")
-	if err := os.WriteFile(badDir, []byte("x"), 0600); err != nil {
-		t.Fatalf("write file: %v", err)
-	}
-
-	detector := NewChangeDetector(ChangeDetectorConfig{DataDir: badDir})
-	detector.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-1", Name: "vm-1", Type: "vm", Status: "running"},
-	})
-	time.Sleep(20 * time.Millisecond)
 }
 
 func TestIncidentStore_DefaultsAndSummary(t *testing.T) {
@@ -913,10 +823,10 @@ func TestRemediationLog_Log_SaveError(t *testing.T) {
 		dataDir:    badDir,
 		maxRecords: 1,
 	}
+	// Log persists before returning, so the failed save has already run here.
 	if err := log.Log(RemediationRecord{Problem: "p", Action: "a"}); err != nil {
 		t.Fatalf("log error: %v", err)
 	}
-	time.Sleep(20 * time.Millisecond)
 }
 
 func TestNewRemediationLog_LoadsFromDisk(t *testing.T) {

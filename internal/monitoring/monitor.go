@@ -1301,6 +1301,11 @@ type Monitor struct {
 	// data, which is the dominant write amplification in #1966.
 	unifiedMetricSyncMu   sync.Mutex
 	unifiedMetricSyncLast map[unifiedMetricSampleKey]unifiedMetricSample
+
+	// agentReportRefreshWindow folds accepted agent reports into at most one
+	// canonical store refresh per window; zero refreshes on every report.
+	agentReportRefreshWindow time.Duration
+	agentReportRefresh       agentReportRefreshState
 }
 
 func (m *Monitor) setRuntimeContext(ctx context.Context, hub *websocket.Hub) {
@@ -1738,6 +1743,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 	m := &Monitor{
 		config:                     cfg,
 		state:                      models.NewState(),
+		agentReportRefreshWindow:   agentReportRefreshInterval,
 		pveClients:                 make(map[string]PVEClientInterface),
 		pbsClients:                 make(map[string]*pbs.Client),
 		pmgClients:                 make(map[string]*pmg.Client),
@@ -4359,7 +4365,9 @@ func (m *Monitor) GetLiveHostsSnapshot() []models.Host {
 	if m == nil || m.state == nil {
 		return nil
 	}
-	return m.state.GetSnapshot().Hosts
+	// Copy only the hosts. GetSnapshot deep-copies every guest as well, and
+	// this runs on each agent report, config fetch, and continuity lookup.
+	return m.state.GetHosts()
 }
 
 // SetOrgID sets the organization ID for this monitor instance.
@@ -5110,6 +5118,7 @@ func (m *Monitor) updateResourceStoreForRead(state models.StateSnapshot) {
 		return
 	}
 	recordSupplementalResourceChanges(store, m.collectSupplementalChanges())
+	store = newResourceSnapshotStore(store)
 	m.syncAllUnifiedMetrics(store)
 	m.syncUnifiedResourceAlertsToState(store.GetAll())
 }
@@ -5157,6 +5166,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	if atomicStore, ok := store.(AtomicSnapshotResourceStore); ok {
 		atomicStore.PopulateSnapshotAndSupplemental(snapshotForStore, recordsBySource)
 		recordSupplementalResourceChanges(store, supplementalChanges)
+		store = newResourceSnapshotStore(store)
 		m.syncAllUnifiedMetrics(store)
 		for source, records := range recordsBySource {
 			if len(records) == 0 {
@@ -5188,12 +5198,55 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	}
 
 	recordSupplementalResourceChanges(store, supplementalChanges)
+	store = newResourceSnapshotStore(store)
 	m.syncAllUnifiedMetrics(store)
 	m.syncUnifiedResourceAlertsToState(store.GetAll())
 }
 
-// refreshUnifiedResourceStoreAfterAgentStateChange makes accepted agent
-// ingest and removal immediately visible to canonical ReadState consumers.
+// resourceSnapshotStore serves one GetAll clone to every consumer of a single
+// store-refresh pass. The metric syncs and the alert sync each cloned the
+// whole registry for themselves, up to six clones for every accepted agent
+// report (#2199). Consumers of a pass only read, so they can share one
+// generation.
+type resourceSnapshotStore struct {
+	ResourceStoreInterface
+	targets   MetricsTargetResourceStore
+	resources []unifiedresources.Resource
+	listed    bool
+}
+
+// newResourceSnapshotStore wraps store for one refresh pass. A store that
+// cannot resolve metrics targets is returned as is, so the metric syncs'
+// capability checks see exactly what they would without the wrapper.
+func newResourceSnapshotStore(store ResourceStoreInterface) ResourceStoreInterface {
+	if store == nil {
+		return nil
+	}
+	if _, ok := store.(*resourceSnapshotStore); ok {
+		return store
+	}
+	targets, ok := store.(MetricsTargetResourceStore)
+	if !ok {
+		return store
+	}
+	return &resourceSnapshotStore{ResourceStoreInterface: store, targets: targets}
+}
+
+func (s *resourceSnapshotStore) GetAll() []unifiedresources.Resource {
+	if !s.listed {
+		s.resources = s.ResourceStoreInterface.GetAll()
+		s.listed = true
+	}
+	return s.resources
+}
+
+func (s *resourceSnapshotStore) MetricsTargetForResource(resourceID string) *unifiedresources.MetricsTarget {
+	return s.targets.MetricsTargetForResource(resourceID)
+}
+
+// refreshUnifiedResourceStoreAfterAgentStateChange makes agent removal and
+// host-agent evaluation immediately visible to canonical ReadState consumers;
+// accepted reports go through refreshUnifiedResourceStoreAfterAgentReport.
 // WebSocket broadcasts may also rebuild the store for their own hydrate path,
 // but client presence must never be the trigger that publishes agent-backed
 // runtime truth or retires removed inventory.
@@ -5202,6 +5255,105 @@ func (m *Monitor) refreshUnifiedResourceStoreAfterAgentStateChange() {
 		return
 	}
 	m.updateResourceStore(m.GetState())
+}
+
+// agentReportRefreshInterval bounds how often accepted agent reports refresh
+// the canonical store. It matches readPathRegistryFreshness, the staleness the
+// read paths already accept.
+const agentReportRefreshInterval = readPathRegistryFreshness
+
+// agentReportRefreshState throttles report-driven store refreshes to a leading
+// refresh plus at most one trailing refresh per window.
+type agentReportRefreshState struct {
+	mu       sync.Mutex
+	lastRun  time.Time
+	running  bool
+	pending  *time.Timer
+	stopped  bool
+	inFlight sync.WaitGroup
+}
+
+// refreshUnifiedResourceStoreAfterAgentReport publishes an accepted agent
+// report to the canonical store. Every refresh is estate-wide, so refreshing
+// on each report made total cost grow with agents times resources (#2199).
+// The first report after a quiet window still refreshes before the handler
+// returns. Reports within agentReportRefreshInterval of the previous refresh
+// fold into one trailing refresh at the window's end, which reads the latest
+// state and broadcasts it. Agent removal and host-agent evaluation keep
+// refreshing immediately through refreshUnifiedResourceStoreAfterAgentStateChange.
+func (m *Monitor) refreshUnifiedResourceStoreAfterAgentReport() {
+	if m == nil || m.state == nil {
+		return
+	}
+	window := m.agentReportRefreshWindow
+	if window <= 0 {
+		m.updateResourceStore(m.GetState())
+		return
+	}
+
+	r := &m.agentReportRefresh
+	r.mu.Lock()
+	if r.stopped || r.pending != nil {
+		// A due trailing refresh reads state after this report was applied.
+		r.mu.Unlock()
+		return
+	}
+	now := time.Now()
+	if !r.running && now.Sub(r.lastRun) >= window {
+		r.running = true
+		r.lastRun = now
+		r.mu.Unlock()
+		m.updateResourceStore(m.GetState())
+		r.mu.Lock()
+		r.running = false
+		r.mu.Unlock()
+		return
+	}
+	r.inFlight.Add(1)
+	r.pending = time.AfterFunc(max(window-now.Sub(r.lastRun), 0), m.runTrailingAgentReportRefresh)
+	r.mu.Unlock()
+}
+
+func (m *Monitor) runTrailingAgentReportRefresh() {
+	r := &m.agentReportRefresh
+	defer r.inFlight.Done()
+	r.mu.Lock()
+	r.pending = nil
+	if r.stopped {
+		r.mu.Unlock()
+		return
+	}
+	r.running = true
+	r.lastRun = time.Now()
+	r.mu.Unlock()
+
+	m.updateResourceStore(m.GetState())
+
+	r.mu.Lock()
+	r.running = false
+	r.mu.Unlock()
+
+	// No handler follows a trailing refresh, so publish it to clients here.
+	m.mu.RLock()
+	hub := m.wsHub
+	m.mu.RUnlock()
+	if hub != nil {
+		m.broadcastCurrentState(hub)
+	}
+}
+
+// stopAgentReportRefresh cancels a pending trailing refresh and waits for one
+// already running, so none touches stores Stop is about to close.
+func (m *Monitor) stopAgentReportRefresh() {
+	r := &m.agentReportRefresh
+	r.mu.Lock()
+	r.stopped = true
+	if r.pending != nil && r.pending.Stop() {
+		r.pending = nil
+		r.inFlight.Done()
+	}
+	r.mu.Unlock()
+	r.inFlight.Wait()
 }
 
 func recordSupplementalResourceChanges(store ResourceStoreInterface, changes []unifiedresources.ResourceChange) {
@@ -7400,6 +7552,9 @@ const guestMetadataDrainTimeout = 2 * time.Second
 
 func (m *Monitor) Stop() {
 	log.Info().Msg("stopping monitor")
+
+	// A trailing agent-report refresh must not run against stores closed below.
+	m.stopAgentReportRefresh()
 
 	if m.deadMan != nil {
 		m.deadMan.stop(time.Now().UTC(), m.alertManager)

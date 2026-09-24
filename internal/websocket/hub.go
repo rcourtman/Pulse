@@ -614,7 +614,19 @@ type Hub struct {
 	tenantCoalesceGeneration map[string]uint64
 	stateBroadcastWake       chan struct{}
 	stateBroadcastDone       chan struct{}
+	// stateBroadcastInterval is the minimum spacing between state broadcasts
+	// to one audience (all clients, or one tenant); zero disables spacing.
+	stateBroadcastInterval   time.Duration
+	lastStateBroadcast       time.Time
+	tenantLastStateBroadcast map[string]time.Time
 }
+
+// defaultStateBroadcastInterval spaces state broadcasts to one audience. Each
+// broadcast rebuilds and diffs the full frontend state, and every accepted
+// agent report requests one, so a 100 ms debounce let broadcasts scale with
+// agent count (#2199). Report-driven store refreshes run at most once per
+// 2 seconds, so broadcasting more often mostly re-sent the same resources.
+const defaultStateBroadcastInterval = 2 * time.Second
 
 // Message represents a WebSocket message
 type Message struct {
@@ -702,6 +714,8 @@ func NewHub(getState func(orgID string) interface{}) *Hub {
 		tenantCoalesceGeneration: make(map[string]uint64),
 		stateBroadcastWake:       make(chan struct{}, 1),
 		stateBroadcastDone:       make(chan struct{}),
+		stateBroadcastInterval:   defaultStateBroadcastInterval,
+		tenantLastStateBroadcast: make(map[string]time.Time),
 	}
 }
 
@@ -1218,6 +1232,7 @@ func (h *Hub) markGlobalStateBroadcastReady(generation uint64) {
 	h.coalesceReady = h.coalescePending
 	h.coalescePending = nil
 	h.coalesceTimer = nil
+	h.lastStateBroadcast = time.Now()
 	h.coalesceMutex.Unlock()
 	h.wakeStateBroadcastWorker()
 }
@@ -1237,6 +1252,7 @@ func (h *Hub) markTenantStateBroadcastReady(orgID string, generation uint64) {
 	delete(h.tenantCoalescePending, orgID)
 	delete(h.tenantCoalesceTimers, orgID)
 	delete(h.tenantCoalesceGeneration, orgID)
+	h.tenantLastStateBroadcast[orgID] = time.Now()
 	h.coalesceMutex.Unlock()
 	h.wakeStateBroadcastWorker()
 }
@@ -1401,6 +1417,20 @@ func (h *Hub) marshalBroadcastMessage(msg Message, orgID string) ([]byte, bool) 
 	return data, true
 }
 
+// stateBroadcastDelayLocked returns how long a newly requested state
+// broadcast waits: coalesceWindow to merge simultaneous signals, and at least
+// stateBroadcastInterval after the audience's previous broadcast. The caller
+// holds coalesceMutex.
+func (h *Hub) stateBroadcastDelayLocked(last time.Time) time.Duration {
+	delay := h.coalesceWindow
+	if !last.IsZero() && h.stateBroadcastInterval > 0 {
+		if wait := h.stateBroadcastInterval - time.Since(last); wait > delay {
+			delay = wait
+		}
+	}
+	return delay
+}
+
 // runBroadcastSequencer handles sequenced broadcasts with coalescing for rapid state updates
 func (h *Hub) runBroadcastSequencer() {
 	for {
@@ -1410,22 +1440,18 @@ func (h *Hub) runBroadcastSequencer() {
 			if msg.Type == "rawData" {
 				h.coalesceMutex.Lock()
 
-				// Cancel pending timer if exists
-				if h.coalesceTimer != nil {
-					h.coalesceTimer.Stop()
-				}
-
-				// Update pending message
+				// The latest state wins. A due broadcast is not rescheduled, so
+				// a steady stream of signals cannot postpone it.
 				current := msg
 				h.coalescePending = &current
-				h.nextGeneration++
-				generation := h.nextGeneration
-				h.coalesceGeneration = generation
-
-				// Set timer to send after coalesce window
-				h.coalesceTimer = time.AfterFunc(h.coalesceWindow, func() {
-					h.markGlobalStateBroadcastReady(generation)
-				})
+				if h.coalesceTimer == nil {
+					h.nextGeneration++
+					generation := h.nextGeneration
+					h.coalesceGeneration = generation
+					h.coalesceTimer = time.AfterFunc(h.stateBroadcastDelayLocked(h.lastStateBroadcast), func() {
+						h.markGlobalStateBroadcastReady(generation)
+					})
+				}
 
 				h.coalesceMutex.Unlock()
 			} else {
@@ -1440,23 +1466,18 @@ func (h *Hub) runBroadcastSequencer() {
 			if tb.Message.Type == "rawData" {
 				h.coalesceMutex.Lock()
 
-				// Cancel pending timer for this tenant if exists
-				if timer := h.tenantCoalesceTimers[tb.OrgID]; timer != nil {
-					timer.Stop()
-				}
-
-				// Update pending message for this tenant
+				// The latest state wins; a due tenant broadcast keeps its time.
 				msgCopy := tb.Message
 				h.tenantCoalescePending[tb.OrgID] = &msgCopy
-				h.nextGeneration++
-				generation := h.nextGeneration
-				h.tenantCoalesceGeneration[tb.OrgID] = generation
-
-				// Set timer to send after coalesce window
-				orgID := tb.OrgID // Capture for closure
-				h.tenantCoalesceTimers[orgID] = time.AfterFunc(h.coalesceWindow, func() {
-					h.markTenantStateBroadcastReady(orgID, generation)
-				})
+				if h.tenantCoalesceTimers[tb.OrgID] == nil {
+					h.nextGeneration++
+					generation := h.nextGeneration
+					h.tenantCoalesceGeneration[tb.OrgID] = generation
+					orgID := tb.OrgID // Capture for closure
+					h.tenantCoalesceTimers[orgID] = time.AfterFunc(h.stateBroadcastDelayLocked(h.tenantLastStateBroadcast[orgID]), func() {
+						h.markTenantStateBroadcastReady(orgID, generation)
+					})
+				}
 
 				h.coalesceMutex.Unlock()
 			} else {

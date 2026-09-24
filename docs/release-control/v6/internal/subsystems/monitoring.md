@@ -30,6 +30,23 @@ of an unchanged snapshot must not append duplicate change records.
 cover the publish and blocked-persistence boundaries. Synthetic performance
 improvement alone does not establish field CPU relief.
 
+### One registry snapshot per store refresh pass — issue #2199
+
+Each store refresh pass (`updateResourceStore`, its read-path twin, and so
+every accepted agent report) ran five metric syncs and the alert sync, and each
+cloned the whole registry through `GetAll`. A pass now wraps the store in
+`resourceSnapshotStore`, which clones once and forwards metrics-target
+resolution, so every consumer of the pass reads one generation. Stores without
+metrics-target resolution pass through unwrapped, keeping the syncs' capability
+checks unchanged. `TestAgentReportRefreshClonesRegistryOnce` requires one clone
+per agent-report refresh and `TestResourceSnapshotStoreClonesOncePerPass` pins
+the wrapper. With node-indexed guest parents, a synthetic agent-report refresh
+at 2,080 resources moved from 188 to 82 ms; the pass still covers the whole
+estate, and report-driven passes run at most once per 2-second window (see
+the agent-lifecycle contract).
+
+### Linked Pulse agent memory for Proxmox LXC — issue #2148 (22 September 2026)
+
 ### Linked Pulse agent memory for Proxmox LXC — issue #2148 (22 September 2026)
 
 Both LXC memory paths (the efficient `cluster/resources` builder and the
@@ -2410,6 +2427,14 @@ must apply the same continuity overlay when `HostsSnapshot()` resolves its
 canonical read state, so settings and other host-list consumers do not blank
 previously admitted Pulse Agent rows during a config-driven monitor swap while
 fresh reports are still in flight.
+Continuity lookups must stay cheap because every canonical read-state lookup
+makes one. `readStateWithStandaloneHostContinuity` takes the live host list
+once per call, and `GetLiveHostsSnapshot` copies only hosts through
+`State.GetHosts` rather than deep-copying every guest through `GetSnapshot`;
+agent reports and config fetches share that accessor. With one offline
+standalone agent, a lookup at 2,080 synthetic resources moved from 136 ms to
+74 microseconds. `TestStandaloneHostContinuityReadStateReusedAcrossLookups` and
+`TestGetLiveHostsSnapshotCopiesOnlyHosts` pin both.
 That same mock-runtime boundary also owns freshness while demos are running.
 The mock update loop must keep provider-backed TrueNAS and VMware records plus
 legacy PBS and PMG summaries on current `LastSeen` and health state each tick,

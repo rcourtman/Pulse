@@ -230,7 +230,7 @@ func TestProviderMSPLicenseRefreshAppliesShorterPaidPeriod(t *testing.T) {
 	refresher.SetRestart(func() { restarted <- struct{}{} })
 
 	result, err := refresher.Refresh(context.Background())
-	if err != nil || !result.Changed || !result.RestartScheduled || result.ExpiresAt != shorterExpiry.Format(time.RFC3339) {
+	if err != nil || !result.Changed || !result.RestartScheduled || result.ExpiresAt != shorterExpiry.UTC().Format(time.RFC3339) {
 		t.Fatalf("shorter paid-period refresh = %+v, %v", result, err)
 	}
 	installed, err := os.ReadFile(ProviderMSPRenewedLicensePath(cfg.DataDir))
@@ -241,6 +241,26 @@ func TestProviderMSPLicenseRefreshAppliesShorterPaidPeriod(t *testing.T) {
 	case <-restarted:
 	case <-time.After(5 * time.Second):
 		t.Fatal("shorter paid-period licence did not restart the control plane")
+	}
+}
+
+// Startup tolerates a lapsed licence so the portal stays up, but the refresher
+// must never adopt one the licence server returns.
+func TestProviderMSPLicenseRefreshRefusesALapsedLicence(t *testing.T) {
+	issuer := newProviderMSPTestIssuer(t)
+	fake := &fakeProviderMSPLicenseServer{t: t, currentStatus: http.StatusOK}
+	server := httptest.NewServer(fake)
+	defer server.Close()
+	cfg := newProviderMSPRefreshTestConfig(t, server.URL)
+	fake.currentLicense = issuer.sign(t, "lic_msp_paid", "msp_solo", time.Now().Add(-30*24*time.Hour), trialSigningEnvPublicKey(t))
+	refresher := NewProviderMSPLicenseRefresher(cfg)
+	refresher.SetRestart(func() { t.Fatal("a lapsed licence must not restart the control plane") })
+
+	if _, err := refresher.Refresh(context.Background()); err == nil || !strings.Contains(err.Error(), "unusable") {
+		t.Fatalf("Refresh with a lapsed licence err = %v, want refusal", err)
+	}
+	if _, err := os.Stat(ProviderMSPRenewedLicensePath(cfg.DataDir)); !os.IsNotExist(err) {
+		t.Fatalf("lapsed licence was installed: %v", err)
 	}
 }
 

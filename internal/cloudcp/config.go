@@ -234,6 +234,13 @@ func LoadConfig() (*CPConfig, error) {
 		providerMSPLicenseEmail = resolved.LicenseEmail
 		providerMSPLicenseKey = resolved.LicenseKey
 		providerMSPLeaseSigningPublicKey = resolved.LeaseSigningPublicKey
+		if resolved.lapsed(time.Now()) {
+			log.Warn().
+				Str("license_id", resolved.LicenseID).
+				Str("plan_version", resolved.PlanVersion).
+				Time("expired_at", resolved.ExpiresAt).
+				Msg("Provider MSP license has lapsed: the portal stays up to sell the renewal, no new clients can be added, and client workspaces drop MSP capabilities")
+		}
 	}
 
 	cfg := &CPConfig{
@@ -626,7 +633,14 @@ type providerMSPLicenseResolution struct {
 	ExpiresAt             time.Time
 }
 
+// resolveProviderMSPPlanFromLicenseFile validates a licence the control plane
+// is about to adopt, such as one the licence server just returned. It refuses
+// a lapsed licence.
 func resolveProviderMSPPlanFromLicenseFile(path string) (*providerMSPLicenseResolution, error) {
+	return resolveProviderMSPLicenseFile(path, false)
+}
+
+func resolveProviderMSPLicenseFile(path string, allowLapsed bool) (*providerMSPLicenseResolution, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return nil, fmt.Errorf("CP_PROVIDER_MSP_LICENSE_FILE is required")
@@ -636,7 +650,11 @@ func resolveProviderMSPPlanFromLicenseFile(path string) (*providerMSPLicenseReso
 		return nil, err
 	}
 	pkglicensing.InitEmbeddedPublicKey()
-	license, err := pkglicensing.ValidateLicense(licenseKey)
+	validate := pkglicensing.ValidateLicense
+	if allowLapsed {
+		validate = pkglicensing.ValidateLicenseAllowingLapse
+	}
+	license, err := validate(licenseKey)
 	if err != nil {
 		return nil, fmt.Errorf("validate CP_PROVIDER_MSP_LICENSE_FILE: %w", err)
 	}
@@ -689,26 +707,62 @@ func ProviderMSPRenewedLicensePath(dataDir string) string {
 	return filepath.Join(dataDir, "control-plane", "provider-msp-license.jwt")
 }
 
-// resolveProviderMSPLicense prefers a renewed licence that still validates
-// and falls back to CP_PROVIDER_MSP_LICENSE_FILE. The renewed licence is
-// tried first because the host file is usually the self-issued evaluation,
-// which expires; a paying provider must keep starting after it does. The
-// lease signing key check in validate still ties either licence to this
-// control plane's private key.
+// lapsed reports whether the licence is past its expiry and grace period, the
+// point at which client runtimes stop accepting leases chained to it.
+func (r *providerMSPLicenseResolution) lapsed(now time.Time) bool {
+	return providerMSPLicenseLapsed(r.ExpiresAt, now)
+}
+
+func providerMSPLicenseLapsed(expiresAt, now time.Time) bool {
+	return !expiresAt.IsZero() && now.After(expiresAt.Add(pkglicensing.DefaultGracePeriod))
+}
+
+// ProviderMSPLicenseLapsed reports whether this platform's licence is past its
+// expiry and grace period. The control plane keeps running so its portal can
+// sell the renewal, but it adds no clients, and client runtimes drop MSP
+// capabilities on their own when they verify the lapsed licence.
+func (c *CPConfig) ProviderMSPLicenseLapsed(now time.Time) bool {
+	if c == nil {
+		return false
+	}
+	return providerMSPLicenseLapsed(c.ProviderMSPLicenseExpiresAt, now)
+}
+
+// resolveProviderMSPLicense picks the licence a provider-hosted control plane
+// starts on: a current renewed licence first, then a current
+// CP_PROVIDER_MSP_LICENSE_FILE. The renewed licence wins because the host file
+// is usually the self-issued evaluation, which expires; a paying provider must
+// keep starting after it does. When neither is current it still starts, on
+// whichever lapsed licence expires later, because refusing to start would take
+// down the portal, which is the only place a provider can buy or renew. Both
+// candidates must be authentic Pulse licences, and validate still ties the
+// chosen one to this control plane's lease signing key.
 func resolveProviderMSPLicense(hostFile, dataDir string) (*providerMSPLicenseResolution, string, error) {
+	now := time.Now()
+	var renewed *providerMSPLicenseResolution
 	renewedPath := ProviderMSPRenewedLicensePath(dataDir)
 	if _, err := os.Stat(renewedPath); err == nil {
-		renewed, err := resolveProviderMSPPlanFromLicenseFile(renewedPath)
-		if err == nil {
+		candidate, err := resolveProviderMSPLicenseFile(renewedPath, true)
+		if err != nil {
+			log.Warn().Err(err).Str("path", renewedPath).Msg("Renewed provider MSP license is unusable; falling back to CP_PROVIDER_MSP_LICENSE_FILE")
+		} else {
+			renewed = candidate
+		}
+	}
+	if renewed != nil && !renewed.lapsed(now) {
+		return renewed, ProviderMSPPlanSourceRenewedLicense, nil
+	}
+	host, err := resolveProviderMSPLicenseFile(hostFile, true)
+	if err != nil {
+		if renewed != nil {
 			return renewed, ProviderMSPPlanSourceRenewedLicense, nil
 		}
-		log.Warn().Err(err).Str("path", renewedPath).Msg("Renewed provider MSP license is unusable; falling back to CP_PROVIDER_MSP_LICENSE_FILE")
-	}
-	resolved, err := resolveProviderMSPPlanFromLicenseFile(hostFile)
-	if err != nil {
 		return nil, "", err
 	}
-	return resolved, ProviderMSPPlanSourceLicenseFile, nil
+	if !host.lapsed(now) || renewed == nil || !renewed.ExpiresAt.After(host.ExpiresAt) {
+		return host, ProviderMSPPlanSourceLicenseFile, nil
+	}
+	return renewed, ProviderMSPPlanSourceRenewedLicense, nil
 }
 
 func readProviderMSPLicenseFile(path string) (string, error) {

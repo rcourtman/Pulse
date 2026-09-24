@@ -20,6 +20,9 @@ export interface ProviderPlanState {
   evaluation: boolean;
   license_id?: string;
   expires_at?: string;
+  // Past expiry and grace: client workspaces have lost MSP features and no
+  // new clients can be added until the provider buys or renews.
+  lapsed?: boolean;
   workspace_limit: number;
   purchase_available: boolean;
   plans: ProviderPlanOption[];
@@ -80,17 +83,38 @@ function paidLicenceInGrace(plan: ProviderPlanState, now: number): boolean {
   return !isNaN(expiresAt) && expiresAt - now <= PAID_GRACE_MS;
 }
 
+// The licence has run out: the evaluation or paid period is over. The control
+// plane keeps serving this portal so the provider can buy or renew here.
+function planEnded(plan: ProviderPlanState, now: number): boolean {
+  if (plan.lapsed) return true;
+  if (!plan.expires_at) return false;
+  var expiresAt = new Date(plan.expires_at).getTime();
+  return !isNaN(expiresAt) && now >= expiresAt;
+}
+
 function renderCurrentPlan(plan: ProviderPlanState, canManage: boolean, busy: string, inUse: number, now: number): string {
   var expires = formatDate(plan.expires_at);
   var title = providerPlanName(plan.plan_version);
   var description: string;
   var meta: string[] = [inUse >= 0 ? String(inUse) + ' of ' + clientWorkspaces(plan.workspace_limit) + ' in use' : clientWorkspaces(plan.workspace_limit)];
   var cta = '';
-  if (plan.evaluation) {
+  var ended = planEnded(plan, now);
+  var lostFeatures = plan.lapsed
+    ? ' Client workspaces keep running with core monitoring but have lost their MSP features, and no new clients can be added.'
+    : '';
+  if (plan.evaluation && ended) {
+    description = 'Your evaluation ended' + (expires ? ' on ' + expires : '') + '.' + lostFeatures + ' Buy a plan to keep your clients monitored and to add more.';
+  } else if (plan.evaluation) {
     description = expires
       ? 'Your evaluation covers ' + clientWorkspaces(plan.workspace_limit) + ' until ' + expires + '. Buy a plan to keep your clients monitored after that and to add more.'
       : 'Your evaluation covers ' + clientWorkspaces(plan.workspace_limit) + '. Buy a plan to add more.';
     if (expires) meta.push('Expires ' + expires);
+  } else if (ended) {
+    description = 'Your ' + title + ' plan ended' + (expires ? ' on ' + expires : '') + '.' + lostFeatures + ' Renew from Manage billing or buy a plan below.';
+    if (canManage) {
+      cta = '<button class="btn-secondary billing-action-button" type="button" data-provider-plan-action="manage-billing"' +
+        (busy ? ' disabled' : '') + '>' + (busy === 'manage-billing' ? 'Opening…' : 'Manage billing') + '</button>';
+    }
   } else {
     // The renewal date lives in Manage billing; the licence date only
     // matters, and only shows, once the subscription has stopped renewing.
@@ -162,14 +186,17 @@ export function renderProviderPlanHTML(view: ProviderPlanView, canManage: boolea
   if (!plan) return parts.join('');
   parts.push(renderCurrentPlan(plan, canManage, view.busy, inUse, now));
 
-  if (plan.evaluation) {
+  var ended = planEnded(plan, now);
+  if (plan.evaluation || ended) {
     if (plan.plans_error) {
       parts.push('<p class="billing-action-meta" role="alert">' + escapeText(plan.plans_error) + '</p>');
     } else if (plan.purchase_available) {
       var hasAnnual = plan.plans.some(function(option) { return option.billing_cycle === 'annual'; });
       var cycle = hasAnnual ? view.cycle : 'monthly';
+      // After a paid plan ends, buying the same plan again is a valid choice.
       var offers = plan.plans.filter(function(option) {
-        return option.billing_cycle === cycle && option.workspace_limit > plan!.workspace_limit;
+        return option.billing_cycle === cycle &&
+          (ended && !plan!.evaluation ? option.workspace_limit >= plan!.workspace_limit : option.workspace_limit > plan!.workspace_limit);
       });
       parts.push('<div class="billing-section-intro"><h3>Choose a plan</h3><p>You pay per client workspace, never per monitored system. Every client workspace is full Pulse.</p></div>');
       parts.push(renderCycleToggle(cycle, hasAnnual));

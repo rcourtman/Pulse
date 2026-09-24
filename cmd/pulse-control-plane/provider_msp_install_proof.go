@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -265,6 +266,12 @@ func runProviderMSPInstallProofWithDependencies(ctx context.Context, cfg *cloudc
 		proofTenantIDs = providerMSPInstallProofTenantIDs(proof.Workspaces)
 	}
 	if err != nil {
+		// A proof that fails part-way returns no report, but it may already
+		// have created workspaces; remove those too.
+		var partial *providerMSPProofPartialError
+		if errors.As(err, &partial) && len(proofTenantIDs) == 0 {
+			proofTenantIDs = partial.CreatedTenantIDs
+		}
 		addFailure("workspace proof: %v", err)
 		return failAfterProof(err)
 	}

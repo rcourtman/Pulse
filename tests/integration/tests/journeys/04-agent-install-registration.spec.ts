@@ -291,10 +291,25 @@ test.describe("Journey: Agent Install → Registration → Host Visible", () => 
       });
       expect(updateRes.ok()).toBeTruthy();
 
-      const stateRes2 = await apiRequest(page, "/api/state");
-      expect(stateRes2.ok()).toBeTruthy();
-      const state2 = (await stateRes2.json()) as Record<string, unknown>;
-      const host2 = findRegisteredAgentResource(state2);
+      // Reports within one refresh window are published together by a
+      // trailing store refresh (agent-lifecycle contract, #2199), so the
+      // update is visible within the window rather than at once.
+      let host2: StateResource | undefined;
+      await expect
+        .poll(
+          async () => {
+            const stateRes2 = await apiRequest(page, "/api/state");
+            expect(stateRes2.ok()).toBeTruthy();
+            const state2 = (await stateRes2.json()) as Record<string, unknown>;
+            host2 = findRegisteredAgentResource(state2);
+            return readNumber(asRecord(host2?.cpu)?.current) ?? 0;
+          },
+          {
+            message: "CPU usage should reflect updated report (75%)",
+            timeout: 10_000,
+          },
+        )
+        .toBeGreaterThanOrEqual(70);
       expect(host2, "Host should still exist after second report").toBeTruthy();
 
       const lastSeen2 = readNumber(host2!.lastSeen);

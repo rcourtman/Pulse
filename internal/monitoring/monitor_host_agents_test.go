@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -6406,5 +6407,226 @@ func TestApplyHostReportHonoursRemovalBlockWhenIdentityWouldFork(t *testing.T) {
 	}
 	if len(monitor.state.GetRemovedHostAgents()) != 0 {
 		t.Fatalf("expected removal block to be cleared, still have %+v", monitor.state.GetRemovedHostAgents())
+	}
+}
+
+// countingResourceStore counts registry clones handed out by the live store.
+type countingResourceStore struct {
+	*unifiedresources.MonitorAdapter
+	getAll atomic.Int32
+}
+
+func (c *countingResourceStore) GetAll() []unifiedresources.Resource {
+	c.getAll.Add(1)
+	return c.MonitorAdapter.GetAll()
+}
+
+// plainResourceStore lacks metrics-target resolution.
+type plainResourceStore struct {
+	ResourceStoreInterface
+}
+
+func TestResourceSnapshotStoreClonesOncePerPass(t *testing.T) {
+	now := time.Now().UTC()
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		LastUpdate: now,
+		VMs: []models.VM{{
+			ID: "lab:pve1:101", VMID: 101, Name: "db", Node: "pve1", Instance: "lab",
+			Status: "running", Type: "qemu", LastSeen: now,
+		}},
+	})
+	counting := &countingResourceStore{MonitorAdapter: adapter}
+
+	store := newResourceSnapshotStore(counting)
+	first := store.GetAll()
+	second := store.GetAll()
+	if got := counting.getAll.Load(); got != 1 {
+		t.Fatalf("underlying GetAll calls = %d, want 1", got)
+	}
+	if len(first) != 1 || len(second) != 1 || &first[0] != &second[0] {
+		t.Fatalf("pass consumers did not share one snapshot: %d and %d resources", len(first), len(second))
+	}
+	resolver, ok := store.(MetricsTargetResourceStore)
+	if !ok || resolver.MetricsTargetForResource(first[0].ID) == nil {
+		t.Fatal("snapshot store does not forward metrics-target resolution")
+	}
+	if again := newResourceSnapshotStore(store); again != store {
+		t.Fatal("wrapping a pass snapshot again must reuse it")
+	}
+
+	plain := plainResourceStore{ResourceStoreInterface: adapter}
+	if wrapped := newResourceSnapshotStore(plain); wrapped != ResourceStoreInterface(plain) {
+		t.Fatal("a store without metrics-target resolution must pass through unwrapped")
+	}
+}
+
+// An accepted agent report refreshes the store once. Every metric sync and the
+// alert sync in that pass must share a single registry clone (#2199).
+func TestAgentReportRefreshClonesRegistryOnce(t *testing.T) {
+	now := time.Now().UTC()
+	state := models.NewState()
+	state.UpdateNodes([]models.Node{{ID: "lab-pve1", Name: "pve1", Instance: "lab", Status: "online", Type: "node", LastSeen: now}})
+	state.UpdateVMs([]models.VM{{
+		ID: "lab:pve1:101", VMID: 101, Name: "db", Node: "pve1", Instance: "lab",
+		Status: "running", Type: "qemu", CPU: 0.2, LastSeen: now,
+	}})
+	state.UpsertHost(models.Host{ID: "agent-1", Hostname: "pve1.example", Status: "online", CPUUsage: 3, LastSeen: now})
+
+	counting := &countingResourceStore{MonitorAdapter: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))}
+	m := &Monitor{
+		state:          state,
+		resourceStore:  counting,
+		metricsHistory: NewMetricsHistory(32, time.Hour),
+	}
+
+	m.refreshUnifiedResourceStoreAfterAgentStateChange()
+	if got := counting.getAll.Load(); got != 1 {
+		t.Fatalf("registry clones for one agent report refresh = %d, want 1", got)
+	}
+}
+
+// newAgentReportThrottleMonitor returns a monitor whose report-driven store
+// refreshes are throttled to window, with one online host agent.
+func newAgentReportThrottleMonitor(t *testing.T, window time.Duration) (*Monitor, *countingResourceStore) {
+	t.Helper()
+	state := models.NewState()
+	state.UpsertHost(models.Host{ID: "agent-1", Hostname: "pve1.example", Status: "online", CPUUsage: 1, LastSeen: time.Now().UTC()})
+	counting := &countingResourceStore{MonitorAdapter: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))}
+	m := &Monitor{
+		state:                    state,
+		resourceStore:            counting,
+		metricsHistory:           NewMetricsHistory(32, time.Hour),
+		agentReportRefreshWindow: window,
+	}
+	t.Cleanup(m.stopAgentReportRefresh)
+	return m, counting
+}
+
+func reportAgentCPU(m *Monitor, cpu float64) {
+	m.state.UpsertHost(models.Host{ID: "agent-1", Hostname: "pve1.example", Status: "online", CPUUsage: cpu, LastSeen: time.Now().UTC()})
+	m.refreshUnifiedResourceStoreAfterAgentReport()
+}
+
+func publishedAgentCPU(t *testing.T, store *countingResourceStore) float64 {
+	t.Helper()
+	for _, resource := range store.MonitorAdapter.GetAll() {
+		if resource.Type == unifiedresources.ResourceTypeAgent && resource.Metrics != nil && resource.Metrics.CPU != nil {
+			return resource.Metrics.CPU.Value
+		}
+	}
+	t.Fatal("no agent CPU in the canonical store")
+	return 0
+}
+
+// Accepted agent reports refresh the estate-wide store at most once per
+// window: the first report after a quiet window is published before the call
+// returns, and reports inside the window fold into one trailing refresh that
+// publishes the latest state (#2199).
+func TestAgentReportRefreshFoldsReportsWithinWindow(t *testing.T) {
+	const window = 500 * time.Millisecond
+	m, store := newAgentReportThrottleMonitor(t, window)
+
+	reportAgentCPU(m, 10)
+	if got := store.getAll.Load(); got != 1 {
+		t.Fatalf("refreshes after the leading report = %d, want 1", got)
+	}
+	if got := publishedAgentCPU(t, store); got != 10 {
+		t.Fatalf("leading report published CPU %v, want 10", got)
+	}
+
+	for cpu := 20.0; cpu <= 60; cpu += 10 {
+		reportAgentCPU(m, cpu)
+	}
+	if got := store.getAll.Load(); got != 1 {
+		t.Fatalf("refreshes during the window = %d, want the burst deferred", got)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for store.getAll.Load() < 2 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := store.getAll.Load(); got != 2 {
+		t.Fatalf("refreshes after the window = %d, want one trailing refresh", got)
+	}
+	if got := publishedAgentCPU(t, store); got != 60 {
+		t.Fatalf("trailing refresh published CPU %v, want the latest report's 60", got)
+	}
+
+	time.Sleep(window + 100*time.Millisecond)
+	reportAgentCPU(m, 70)
+	if got := store.getAll.Load(); got != 3 {
+		t.Fatalf("refreshes after a quiet window = %d, want a synchronous leading refresh", got)
+	}
+	if got := publishedAgentCPU(t, store); got != 70 {
+		t.Fatalf("leading report after a quiet window published CPU %v, want 70", got)
+	}
+}
+
+func TestStopCancelsPendingAgentReportRefresh(t *testing.T) {
+	const window = 100 * time.Millisecond
+	m, store := newAgentReportThrottleMonitor(t, window)
+
+	reportAgentCPU(m, 10)
+	reportAgentCPU(m, 20)
+	m.stopAgentReportRefresh()
+	time.Sleep(3 * window)
+	if got := store.getAll.Load(); got != 1 {
+		t.Fatalf("refreshes after stop = %d, want the pending trailing refresh cancelled", got)
+	}
+}
+
+// A standalone agent offline across a restart is added back to every canonical
+// read-state lookup from host continuity. Alert evaluation makes one lookup per
+// resource per poll, so the overlay must be reused, not rebuilt per lookup.
+func TestStandaloneHostContinuityReadStateReusedAcrossLookups(t *testing.T) {
+	now := time.Now().UTC()
+	state := models.NewState()
+	state.UpsertHost(models.Host{ID: "agent-live", Hostname: "live.example", Status: "online", LastSeen: now})
+	continuity := config.NewHostContinuityStore(t.TempDir(), nil)
+	if err := continuity.Upsert(config.HostContinuityEntry{HostID: "agent-gone", Hostname: "gone.example", LastSeen: now.Add(-time.Hour)}); err != nil {
+		t.Fatalf("seed host continuity: %v", err)
+	}
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	m := &Monitor{state: state, resourceStore: adapter, hostContinuityStore: continuity}
+	m.refreshUnifiedResourceStoreAfterAgentStateChange()
+
+	first := m.GetUnifiedReadStateOrSnapshot()
+	if first == unifiedresources.ReadState(adapter) {
+		t.Fatal("read state has no continuity overlay for the offline standalone agent")
+	}
+	found := false
+	for _, host := range first.Hosts() {
+		found = found || host.Hostname() == "gone.example"
+	}
+	if !found {
+		t.Fatal("continuity overlay does not include the offline standalone agent")
+	}
+	if second := m.GetUnifiedReadStateOrSnapshot(); second != first {
+		t.Fatal("a second read-state lookup rebuilt the continuity overlay")
+	}
+}
+
+// GetLiveHostsSnapshot runs on every agent report, config fetch, and host
+// continuity lookup, so it must copy the hosts alone, not the whole state.
+func TestGetLiveHostsSnapshotCopiesOnlyHosts(t *testing.T) {
+	state := models.NewState()
+	state.UpsertHost(models.Host{ID: "agent-1", Hostname: "pve1.example", Status: "online"})
+	vms := make([]models.VM, 1000)
+	for i := range vms {
+		vms[i] = models.VM{
+			ID: fmt.Sprintf("lab:pve1:%d", 100+i), VMID: 100 + i, Name: fmt.Sprintf("vm-%d", i),
+			Node: "pve1", Instance: "lab", Status: "running", Type: "qemu",
+			Disks: []models.Disk{{Mountpoint: "/", Total: 10 << 30, Used: 1 << 30}},
+		}
+	}
+	state.UpdateVMs(vms)
+	m := &Monitor{state: state}
+
+	if hosts := m.GetLiveHostsSnapshot(); len(hosts) != 1 || hosts[0].ID != "agent-1" {
+		t.Fatalf("live hosts = %+v, want the one registered agent", hosts)
+	}
+	if allocs := testing.AllocsPerRun(10, func() { _ = m.GetLiveHostsSnapshot() }); allocs > 50 {
+		t.Fatalf("GetLiveHostsSnapshot allocated %.0f times with 1 host and 1000 guests; it is copying guests", allocs)
 	}
 }

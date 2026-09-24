@@ -260,7 +260,26 @@ func (rt *providerMSPProofRuntime) runProviderMSPProof(ctx context.Context, opts
 		return nil, fmt.Errorf("bootstrap provider MSP account: %w", err)
 	}
 
+	// The proof creates its workspaces on the provider's own account, so they
+	// count against the same client limit real clients do. Check for room
+	// before creating anything: on a two-client evaluation that already has a
+	// client, the second proof workspace would otherwise be refused after the
+	// first was created, leaving it behind in one of the evaluation's slots.
+	if bootstrap.WorkspaceLimit > 0 {
+		inUse, err := rt.registry.CountActiveByAccountID(bootstrap.AccountID)
+		if err != nil {
+			return nil, fmt.Errorf("count client workspaces: %w", err)
+		}
+		if free := bootstrap.WorkspaceLimit - inUse; free < opts.WorkspaceCount {
+			return nil, fmt.Errorf("the proof creates %d temporary client workspaces but this account has %d free (%d of %d in use); run it on a fresh platform, before adding clients",
+				opts.WorkspaceCount, max(free, 0), inUse, bootstrap.WorkspaceLimit)
+		}
+	}
+
 	createdTenants := make([]*registry.Tenant, 0, opts.WorkspaceCount)
+	partial := func(err error) error {
+		return &providerMSPProofPartialError{err: err, CreatedTenantIDs: providerMSPProofTenantIDs(createdTenants)}
+	}
 	if opts.Cleanup {
 		defer func() {
 			_ = rt.cleanupProviderMSPProofTenants(context.Background(), createdTenants)
@@ -292,13 +311,13 @@ func (rt *providerMSPProofRuntime) runProviderMSPProof(ctx context.Context, opts
 		displayName := fmt.Sprintf("%s %02d", opts.WorkspacePrefix, idx+1)
 		tenant, err := rt.createProviderMSPProofWorkspace(ctx, bootstrap.AccountID, displayName, bootstrap.OwnerEmail)
 		if err != nil {
-			return nil, fmt.Errorf("create proof workspace %d: %w", idx+1, err)
+			return nil, partial(fmt.Errorf("create proof workspace %d: %w", idx+1, err))
 		}
 		createdTenants = append(createdTenants, tenant)
 
 		workspace, err := rt.proveProviderMSPWorkspace(ctx, tenant, bootstrap.OwnerUserID, opts.InstallType, opts.TargetPath)
 		if err != nil {
-			return nil, fmt.Errorf("prove workspace %s: %w", tenant.ID, err)
+			return nil, partial(fmt.Errorf("prove workspace %s: %w", tenant.ID, err))
 		}
 		if workspace.ContainerID == "" {
 			report.RuntimeContainerVerified = false
@@ -327,11 +346,33 @@ func (rt *providerMSPProofRuntime) runProviderMSPProof(ctx context.Context, opts
 
 	boundaryOK, err := rt.verifyProviderMSPInstallTokenIsolation(report.Workspaces)
 	if err != nil {
-		return nil, err
+		return nil, partial(err)
 	}
 	report.InstallTokenBoundaryOK = boundaryOK
 	report.WorkspaceCount = len(report.Workspaces)
 	return report, nil
+}
+
+// providerMSPProofPartialError is a proof that failed after creating some of
+// its workspaces. It carries their IDs so the caller can remove them: without
+// that, a failure part-way through left proof workspaces occupying client
+// slots, because no report (and so no workspace list) comes back on error.
+type providerMSPProofPartialError struct {
+	err              error
+	CreatedTenantIDs []string
+}
+
+func (e *providerMSPProofPartialError) Error() string { return e.err.Error() }
+func (e *providerMSPProofPartialError) Unwrap() error { return e.err }
+
+func providerMSPProofTenantIDs(tenants []*registry.Tenant) []string {
+	ids := make([]string, 0, len(tenants))
+	for _, tenant := range tenants {
+		if tenant != nil && strings.TrimSpace(tenant.ID) != "" {
+			ids = append(ids, tenant.ID)
+		}
+	}
+	return ids
 }
 
 func normalizeProviderMSPProofOptions(opts providerMSPProofOptions) (providerMSPProofOptions, error) {
@@ -395,8 +436,9 @@ func (rt *providerMSPProofRuntime) createProviderMSPProofWorkspace(ctx context.C
 		rt.registry,
 		rt.provisioner,
 		account.WorkspaceLimitPolicy{
-			ProviderHostedMSP:      true,
-			ProviderMSPPlanVersion: providerMSPProofPlanVersion(rt.cfg),
+			ProviderHostedMSP:        true,
+			ProviderMSPPlanVersion:   providerMSPProofPlanVersion(rt.cfg),
+			ProviderMSPLicenseLapsed: func() bool { return rt.cfg.ProviderMSPLicenseLapsed(time.Now()) },
 		},
 	)
 	mux := http.NewServeMux()

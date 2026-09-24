@@ -552,3 +552,36 @@ func TestUnifiedAgentHandlers_HandleLinkUnlink(t *testing.T) {
 		t.Fatalf("unlink status = %d, want 200: %s", unlinkRec.Code, unlinkRec.Body.String())
 	}
 }
+
+func TestAgentConfigFetchAuditTrackerRecordsOnlyNewDeliveries(t *testing.T) {
+	tracker := newAgentConfigFetchAuditTracker()
+	start := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
+	for _, step := range []struct {
+		name   string
+		token  string
+		hash   string
+		at     time.Duration
+		reason string
+		audit  bool
+	}{
+		{"first delivery", "tok-a", "sha256:1", 0, "first_since_start", true},
+		{"unchanged poll", "tok-a", "sha256:1", time.Minute, "", false},
+		{"config change", "tok-a", "sha256:2", 2 * time.Minute, "config_changed", true},
+		{"unchanged after change", "tok-a", "sha256:2", 3 * time.Minute, "", false},
+		{"token rotation", "tok-b", "sha256:2", 4 * time.Minute, "token_changed", true},
+		{"just under a day", "tok-b", "sha256:2", 4*time.Minute + agentConfigFetchAuditInterval - time.Second, "", false},
+		{"a day since last audit", "tok-b", "sha256:2", 4*time.Minute + agentConfigFetchAuditInterval, "daily", true},
+	} {
+		reason, audit := tracker.observe("default", "agent-1", step.token, step.hash, start.Add(step.at))
+		if audit != step.audit || reason != step.reason {
+			t.Fatalf("%s: audit=%v reason=%q, want audit=%v reason=%q", step.name, audit, reason, step.audit, step.reason)
+		}
+	}
+	if reason, audit := tracker.observe("other-org", "agent-1", "tok-b", "sha256:2", start.Add(5*time.Minute)); !audit || reason != "first_since_start" {
+		t.Fatalf("same agent ID in another org: audit=%v reason=%q, want its own first delivery", audit, reason)
+	}
+	var unset *agentConfigFetchAuditTracker
+	if _, audit := unset.observe("default", "agent-1", "tok-a", "sha256:1", start); !audit {
+		t.Fatal("a handler without a tracker must audit every delivery")
+	}
+}

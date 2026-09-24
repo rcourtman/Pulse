@@ -49,6 +49,27 @@ describe('BrandingSettingsCard', () => {
     expect(brandingLogoPreview('YWJj', 'png')).toBe('data:image/png;base64,YWJj');
   });
 
+  // Without a custom logo the preview must show what the header shows: the
+  // real Pulse brand mark, not a stand-in glyph.
+  it('previews the default header with the Pulse brand mark', () => {
+    const { container } = render(() => (
+      <BrandingSettingsCard
+        displayName={() => ''}
+        setDisplayName={() => ''}
+        logoBase64={() => ''}
+        setLogoBase64={() => ''}
+        logoFormat={() => ''}
+        setLogoFormat={() => ''}
+        setHasUnsavedChanges={() => false}
+      />
+    ));
+    const mark = container.querySelector('svg.pulse-brand-logo');
+    expect(mark).not.toBeNull();
+    expect(mark?.querySelectorAll('circle')).toHaveLength(3);
+    expect(container.textContent).not.toContain('●');
+    expect(screen.queryByTestId('branding-logo-preview')).toBeNull();
+  });
+
   it('updates the application name and marks settings dirty', async () => {
     const state = renderCard();
 

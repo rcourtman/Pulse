@@ -2438,6 +2438,65 @@ artifact-selection behaviour.
 
 ## Current State
 
+### Provider MSP upgrades move an install to a new release bundle
+
+`setup.sh` resolves the image pins in `.env` to digests once, so `upgrade.sh`
+only ever re-pulled the release a provider first installed; moving to a new
+release meant finding the new digests by hand, and none of that release's
+fixes reached the install. Run from a newly extracted and verified release
+bundle (it carries `VERSION` and no `.env`), `upgrade.sh` now works on the
+existing install (`PULSE_PROVIDER_MSP_INSTALL_DIR`, default
+`/opt/pulse-provider-msp`): it resolves the bundle's `CONTROL_PLANE_IMAGE` and
+`CP_PULSE_IMAGE` tags (stamped by `scripts/build-release.sh`) to digests and
+prints current and target pins. It runs the status gate, preflight and the
+verified backup with the new release's control plane through a shell override,
+which compose prefers over `.env`, so those checks carry the new release's
+fixes while nothing on disk changes. Only then does it keep a
+`.env.pre-upgrade-<time>` copy, install the same bundle files `setup.sh`
+installs, write the new pins and start the new images. `--keep-image-pins`
+keeps hand-set pins. The runner also pulls the tenant runtime image before the
+first status check, which otherwise failed every upgrade to a new
+`CP_PULSE_IMAGE` with "not present locally". Verified on 2026-09-24 against
+the walkthrough lab with a v6.4.5-rc.2 bundle: the pins resolved from the real
+registry, and when that release's own status check failed the upgrade stopped
+with `.env`, the compose file and `upgrade.sh` byte-identical and the control
+plane unchanged. Regression coverage:
+`TestProviderMSPUpgradeFromBundleRepinsToTheBundleRelease` in
+`scripts/installtests/provider_msp_deploy_test.go`.
+
+### Provider MSP install proof never strands a client slot
+
+`run-install-proof.sh`, which setup's summary recommends before the first real
+client, creates its temporary proof workspaces on the provider's own account,
+so they count against the same client limit. It now checks for room before
+creating any and refuses with the counts ("the proof creates 2 temporary client
+workspaces but this account has 0 free (3 of 3 in use)"). Previously, on a
+two-client evaluation that already had a client, it created the first proof
+workspace, was refused the second, and returned no report, so its cleanup had
+no workspace list and the first proof workspace stayed behind in one of the
+evaluation's two slots. A proof that fails part-way now returns the IDs it
+created, and `install-proof` removes them. Verified on 2026-09-24 against the
+walkthrough lab: refusal before any workspace was created, client count
+unchanged. Regression coverage:
+`TestProviderMSPProofRefusesWithoutFreeSlotsAndCreatesNothing` in
+`cmd/pulse-control-plane/provider_msp_proof_test.go` and
+`TestProviderMSPInstallProofCleansUpWorkspacesFromAPartialProof` in
+`cmd/pulse-control-plane/provider_msp_install_proof_test.go`.
+
+### A lapsed provider MSP install still starts and upgrades
+
+A provider-hosted install whose licence is past expiry and grace (an
+evaluation that ran out, or a paid plan that was not renewed) now starts its
+control plane instead of crash-looping on licence validation, so the portal
+and its Plan tab stay reachable to buy or renew. `provider-msp status`, which
+`upgrade.sh` gates on, prints `license_lapsed=true` as information rather than
+a failure, so such an install can still be upgraded. Client runtimes keep
+enforcing the lapse themselves and new clients are refused until a current
+licence is in place. Verified on 2026-09-24 on the walkthrough lab with an
+evaluation that lapsed 20 days earlier. Regression coverage:
+`TestProviderMSPStatusReportsALapsedLicenceWithoutFailing` in
+`cmd/pulse-control-plane/provider_msp_status_test.go`.
+
 ### Provider MSP setup points buyers at the portal
 
 `deploy/provider-msp/setup.sh` no longer tells an evaluating provider to

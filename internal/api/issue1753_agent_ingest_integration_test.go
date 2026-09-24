@@ -98,23 +98,43 @@ func TestIssue1753SameNameProxmoxAgentsAuthenticateAndStayDistinctEndToEnd(t *te
 		t.Fatalf("provider links = %+v, want each site linked to its own authenticated agent", linkedByInstance)
 	}
 
-	resources, _ := monitor.UnifiedResourceSnapshot()
-	byInstance := make(map[string]unifiedresources.Resource)
-	for _, resource := range resources {
-		if resource.Proxmox != nil && resource.Proxmox.NodeName != "" {
-			byInstance[resource.Proxmox.Instance] = resource
-		}
-	}
-	if len(byInstance) != 2 {
-		t.Fatalf("presentation provider rows = %d, want 2: %+v", len(byInstance), resources)
-	}
-	for instance, want := range map[string]struct {
+	wantRows := map[string]struct {
 		agentID string
 		name    string
 	}{
 		"staging":    {agentID: "machine-staging", name: "Staging"},
 		"production": {agentID: "machine-production", name: "Production"},
-	} {
+	}
+	presentationRows := func() ([]unifiedresources.Resource, map[string]unifiedresources.Resource) {
+		resources, _ := monitor.UnifiedResourceSnapshot()
+		byInstance := make(map[string]unifiedresources.Resource)
+		for _, resource := range resources {
+			if resource.Proxmox != nil && resource.Proxmox.NodeName != "" {
+				byInstance[resource.Proxmox.Instance] = resource
+			}
+		}
+		return resources, byInstance
+	}
+	rowsLinked := func(byInstance map[string]unifiedresources.Resource) bool {
+		for instance, want := range wantRows {
+			resource := byInstance[instance]
+			if resource.Agent == nil || resource.Agent.AgentID != want.agentID {
+				return false
+			}
+		}
+		return true
+	}
+	// Reports inside one refresh window are published together by a trailing
+	// refresh (agent-lifecycle contract, #2199), so wait for the canonical rows.
+	resources, byInstance := presentationRows()
+	for deadline := time.Now().Add(5 * time.Second); !rowsLinked(byInstance) && time.Now().Before(deadline); {
+		time.Sleep(20 * time.Millisecond)
+		resources, byInstance = presentationRows()
+	}
+	if len(byInstance) != 2 {
+		t.Fatalf("presentation provider rows = %d, want 2: %+v", len(byInstance), resources)
+	}
+	for instance, want := range wantRows {
 		resource := byInstance[instance]
 		if resource.Agent == nil || resource.Agent.AgentID != want.agentID || resource.Name != want.name {
 			t.Fatalf("%s presentation row = %+v, want agent %q and name %q", instance, resource, want.agentID, want.name)

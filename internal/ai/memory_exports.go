@@ -13,9 +13,6 @@ type ChangeDetectorConfig = memory.ChangeDetectorConfig
 // Change is an alias for memory.Change
 type Change = memory.Change
 
-// ResourceSnapshot is an alias for memory.ResourceSnapshot
-type ResourceSnapshot = memory.ResourceSnapshot
-
 // ChangeType is an alias for memory.ChangeType
 type ChangeType = memory.ChangeType
 

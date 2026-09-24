@@ -53,6 +53,28 @@ is exposed as unavailable, rather than replaced with a synthetic healthy state.
 
 Delivery-log diagnostic text is a notification-attempt projection, not an agent admission or liveness verdict. Masking embedded destination credentials preserves failure context without changing agent identities, credentials, session replacement or removal policy. Consumers must use the retained failureClass and outcome as delivery evidence only; a transport error does not establish that the monitored agent is offline.
 
+### Accepted reports refresh the canonical store at most once per window — issue #2199
+
+Every canonical store refresh is estate-wide, so refreshing on each accepted
+report made total cost grow with agent count times estate size. Accepted host,
+Docker and Kubernetes reports, including rejected-report liveness, therefore
+refresh through `refreshUnifiedResourceStoreAfterAgentReport`, throttled to one
+refresh per `agentReportRefreshInterval` (2 seconds, the same staleness the
+read paths accept through `readPathRegistryFreshness`). The first report after
+a quiet window is published before the handler returns. Reports inside the
+window fold into one trailing refresh at the window's end, which reads the
+latest state and broadcasts it, so a report reaches ReadState consumers within
+the window rather than immediately. Agent removal and host-agent evaluation
+still refresh immediately, so removed inventory retires at once. `Monitor.Stop`
+cancels a pending trailing refresh and waits for a running one before closing
+stores. Monitors built without `New` keep a zero window and refresh on every
+report. `TestAgentReportRefreshFoldsReportsWithinWindow` and
+`TestStopCancelsPendingAgentReportRefresh` pin the leading, trailing and
+shutdown behaviour. The founder approved trading immediate visibility for this
+bound on 24 September 2026.
+
+### Canonical Patrol and Assistant continuation, 2026-09-07
+
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
 Patrol planning uses the canonical action broker's plan-only boundary. Policy
@@ -582,6 +604,10 @@ acknowledgement stays a success rather than a rejection so a real agent does not
 read a demo server as an outage and retry-storm it. Tests that assert report
 admission or tenant isolation must therefore not enable mock mode, or the
 assertion passes without exercising the boundary.
+Report admission, config fetch, and continuity lookups read the live host list
+through `GetLiveHostsSnapshot`, which copies only hosts (see the monitoring
+contract); it must not route through a full state snapshot, which copied every
+guest on each agent report.
 
 Physical-disk evidence collected by a host agent must survive projection back
 into monitoring's models. Absent evidence has to carry its declared sentinel
@@ -5212,6 +5238,11 @@ agent truth, effective enforcement, and bounded reason separately so lifecycle
 surfaces can show desired-disabled/applied-enabled and
 desired-enabled/applied-disabled as drift or attention, and no-report cases as
 pending or unknown rather than in-sync.
+
+Routine config polling is not a per-poll audit event:
+`/api/agents/agent/{id}/config` audits every failed fetch, and a successful one
+only on the agent's first delivery after start, a token or desired-config
+change, or once a day (see the API contract).
 That same canonical /api/auto-register path must also complete the live
 post-registration contract after persistence: it must trigger discovery refresh
 and emit the canonical `node_auto_registered` WebSocket payload instead of
