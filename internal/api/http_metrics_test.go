@@ -192,6 +192,26 @@ func TestNormalizeSegment(t *testing.T) {
 	}
 }
 
+// normalizeSegment runs on every path segment of every request, and each class
+// returns a constant label or the segment itself. The sink makes the result
+// escape, as it does in normalizeRoute. Without it, an inlined normalizeSegment
+// could copy a short segment into a stack buffer and hide the allocation.
+var normalizeSegmentSink string
+
+func TestNormalizeSegment_DoesNotAllocate(t *testing.T) {
+	for _, seg := range []string{
+		"12345",
+		"550e8400-e29b-41d4-a716-446655440000",
+		"abcdefghijklmnopqrstuvwxyz1234567890abcdef",
+		"resources",
+		"metrics-store",
+	} {
+		if allocs := testing.AllocsPerRun(100, func() { normalizeSegmentSink = normalizeSegment(seg) }); allocs != 0 {
+			t.Errorf("normalizeSegment(%q) allocated %v times per call, want 0", seg, allocs)
+		}
+	}
+}
+
 func TestNormalizeRoute(t *testing.T) {
 	tests := []struct {
 		name  string

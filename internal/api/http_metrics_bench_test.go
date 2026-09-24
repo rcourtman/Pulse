@@ -14,11 +14,14 @@ import (
 // BenchmarkNormalizeRoute measures route normalization with representative
 // API paths of varying complexity.
 //
-// The "/" fast path is deliberately not timed here. Paired CI runs measured it
-// at either 2.18ns or 2.50ns, about one CPU cycle apart, and changes that never
-// touched this code flipped it both ways by 13-30%.
-// TestNormalizeRoute_RootFastPathDoesNotAllocate pins what matters about the
-// path instead.
+// Neither the "/" fast path nor normalizeSegment is timed on its own. They
+// take 2-40ns, and paired CI runs measured each at one of two values a CPU
+// cycle or two apart, per call or per byte of the UUID scan.
+// Changes that never touched this code flipped them both ways by 13-50%.
+// Every path below runs its segments through normalizeSegment, so a real
+// slowdown in segment classification still shows here, most in with_uuid.
+// TestNormalizeRoute_RootFastPathDoesNotAllocate and
+// TestNormalizeSegment_DoesNotAllocate pin the allocation guarantees.
 func BenchmarkNormalizeRoute(b *testing.B) {
 	paths := []struct {
 		name string
@@ -133,30 +136,6 @@ func BenchmarkRecordAPIRequest_Parallel(b *testing.B) {
 			i++
 		}
 	})
-}
-
-// BenchmarkNormalizeSegment measures per-segment normalization for the three
-// detection paths: numeric ID, UUID, and long token.
-func BenchmarkNormalizeSegment(b *testing.B) {
-	segments := []struct {
-		name string
-		seg  string
-	}{
-		{"numeric_id", "12345"},
-		{"uuid", "550e8400-e29b-41d4-a716-446655440000"},
-		{"long_token", "abcdefghijklmnopqrstuvwxyz1234567890abcdef"},
-		{"short_name", "resources"},
-		{"medium_name", "metrics-store"},
-	}
-
-	for _, s := range segments {
-		b.Run(s.name, func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				_ = normalizeSegment(s.seg)
-			}
-		})
-	}
 }
 
 // BenchmarkFullMiddlewarePath simulates the complete per-request overhead:
