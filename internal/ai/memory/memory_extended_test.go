@@ -12,104 +12,16 @@ import (
 
 // Additional tests to improve coverage
 
-func TestChangeDetector_ConfigChange(t *testing.T) {
-	d := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 100})
-
-	// Initial state with memory
-	d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "running", Node: "node1", MemoryBytes: 4 * 1024 * 1024 * 1024},
-	})
-
-	// Memory increased - should detect config change
-	changes := d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "running", Node: "node1", MemoryBytes: 8 * 1024 * 1024 * 1024},
-	})
-
-	if len(changes) != 1 {
-		t.Fatalf("Expected 1 config change, got %d", len(changes))
-	}
-	if changes[0].ChangeType != ChangeConfig {
-		t.Errorf("Expected ChangeConfig, got %s", changes[0].ChangeType)
-	}
-}
-
-func TestChangeDetector_DiskChange(t *testing.T) {
-	d := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 100})
-
-	// Initial state with disk
-	d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "running", Node: "node1", DiskBytes: 100 * 1024 * 1024 * 1024},
-	})
-
-	// Disk increased significantly (>5%) - should detect config change
-	// Note: The implementation may not track disk changes, so this test documents behavior
-	changes := d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "running", Node: "node1", DiskBytes: 200 * 1024 * 1024 * 1024},
-	})
-
-	// Disk changes may not be tracked by the implementation - adjust expectation
-	// This test documents the current behavior
-	_ = changes
-}
-
-func TestChangeDetector_CPUChange(t *testing.T) {
-	d := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 100})
-
-	// Initial state with CPUCores
-	d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "running", Node: "node1", CPUCores: 2},
-	})
-
-	// CPUCores increased - should detect config change
-	changes := d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "running", Node: "node1", CPUCores: 4},
-	})
-
-	if len(changes) != 1 {
-		t.Fatalf("Expected 1 config change, got %d", len(changes))
-	}
-	if changes[0].ChangeType != ChangeConfig {
-		t.Errorf("Expected ChangeConfig, got %s", changes[0].ChangeType)
-	}
-}
-
-func TestChangeDetector_BackupChange(t *testing.T) {
-	d := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 100})
-
-	oldBackup := time.Now().Add(-24 * time.Hour)
-	newBackup := time.Now()
-
-	// Initial state with old backup
-	d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "running", Node: "node1", LastBackup: oldBackup},
-	})
-
-	// New backup completed
-	changes := d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "running", Node: "node1", LastBackup: newBackup},
-	})
-
-	if len(changes) != 1 {
-		t.Fatalf("Expected 1 backup change, got %d", len(changes))
-	}
-	if changes[0].ChangeType != ChangeBackedUp {
-		t.Errorf("Expected ChangeBackedUp, got %s", changes[0].ChangeType)
-	}
-}
-
 func TestChangeDetector_GetChangesSummary(t *testing.T) {
-	d := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 100})
-
-	// Create some changes
-	d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "running", Node: "node1"},
-	})
+	d := &ChangeDetector{maxChanges: 100, changes: []Change{
+		{ID: "c1", ResourceID: "vm-100", ResourceType: "vm", ResourceName: "web-server", ChangeType: ChangeCreated, DetectedAt: time.Now(), Description: "vm 'web-server' created"},
+	}}
 
 	since := time.Now().Add(-1 * time.Hour)
 	summary := d.GetChangesSummary(since, 5)
 
 	want := FormatRecentChangesContext(d.GetRecentChanges(5, since), false, "##")
-	if summary != want {
+	if summary == "" || summary != want {
 		t.Fatalf("expected shared recent-changes formatter, got %q want %q", summary, want)
 	}
 }
@@ -125,29 +37,10 @@ func TestChangeDetector_GetChangesSummary_NoChanges(t *testing.T) {
 	}
 }
 
-func TestChangeDetector_MultipleChangesAtOnce(t *testing.T) {
-	d := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 100})
-
-	// Initial state
-	d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "running", Node: "node1", MemoryBytes: 4 * 1024 * 1024 * 1024, CPUCores: 2},
-	})
-
-	// Multiple changes at once: status, memory, CPUCores, and migration
-	changes := d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "stopped", Node: "node2", MemoryBytes: 8 * 1024 * 1024 * 1024, CPUCores: 4},
-	})
-
-	// Should detect multiple changes
-	if len(changes) < 2 {
-		t.Errorf("Expected multiple changes, got %d", len(changes))
-	}
-}
-
 func TestChangeDetector_LegacyHistoryIsReadOnly(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "ai_changes.json")
-	legacy := []byte(`[{"id":"legacy-1","resource_id":"vm-100","resource_type":"vm","change_type":"created","detected_at":"2026-01-01T00:00:00Z"}]`)
+	legacy := []byte(`[{"id":"legacy-1","resource_id":"vm-100","resource_type":"vm","resource_name":"web-server","change_type":"created","detected_at":"2026-01-01T00:00:00Z","description":"vm 'web-server' created"}]`)
 	if err := os.WriteFile(path, legacy, 0600); err != nil {
 		t.Fatalf("write legacy history: %v", err)
 	}
@@ -156,17 +49,16 @@ func TestChangeDetector_LegacyHistoryIsReadOnly(t *testing.T) {
 		MaxChanges: 100,
 		DataDir:    tmpDir,
 	})
-	d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "running", Node: "node1"},
-	})
 
-	// Detected changes join the loaded legacy history in memory.
-	if got := d.GetChangesForResource("vm-100", 10); len(got) != 2 {
-		t.Fatalf("expected legacy and detected change, got %d", len(got))
+	// The legacy history is served through the read APIs.
+	if got := d.GetChangesForResource("vm-100", 10); len(got) != 1 || got[0].ID != "legacy-1" {
+		t.Fatalf("expected the legacy change, got %v", got)
+	}
+	if summary := d.GetChangesSummary(time.Time{}, 10); !containsStr(summary, "web-server") {
+		t.Fatalf("expected the legacy change in the summary, got %q", summary)
 	}
 
-	// Nothing writes the data directory, so no background save can outlive
-	// the test and race TempDir cleanup.
+	// Nothing rewrites the file or adds to the data directory.
 	entries, err := os.ReadDir(tmpDir)
 	if err != nil {
 		t.Fatalf("read data dir: %v", err)
@@ -362,27 +254,6 @@ func TestFormatDuration(t *testing.T) {
 	}
 }
 
-func TestFormatBytes(t *testing.T) {
-	tests := []struct {
-		input    int64
-		contains string
-	}{
-		{500, "B"},
-		{1024, "KB"},
-		{1024 * 1024, "MB"},
-		{1024 * 1024 * 1024, "GB"},
-		// Note: formatBytes doesn't handle TB, it shows as GB
-		{1024 * 1024 * 1024 * 1024, "GB"},
-	}
-
-	for _, tt := range tests {
-		result := formatBytes(tt.input)
-		if !containsStr(result, tt.contains) {
-			t.Errorf("formatBytes(%d) = %q, expected to contain %q", tt.input, result, tt.contains)
-		}
-	}
-}
-
 func TestTruncateOutput(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -399,23 +270,6 @@ func TestTruncateOutput(t *testing.T) {
 		if result != tt.expected {
 			t.Errorf("truncateOutput(%q, %d) = %q, want %q", tt.input, tt.maxLen, result, tt.expected)
 		}
-	}
-}
-
-func TestChangeDetector_TrimChanges(t *testing.T) {
-	d := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 3})
-
-	// Add 5 changes (exceeds max of 3)
-	for i := 0; i < 5; i++ {
-		d.DetectChanges([]ResourceSnapshot{
-			{ID: "vm-100", Name: "web", Type: "vm", Status: "running", Node: "node1", CPUCores: i + 1},
-		})
-	}
-
-	// Should only have 3 changes after trimming
-	changes := d.GetRecentChanges(100, time.Time{})
-	if len(changes) > 3 {
-		t.Errorf("Expected at most 3 changes after trimming, got %d", len(changes))
 	}
 }
 

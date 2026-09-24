@@ -5,123 +5,24 @@ import (
 	"time"
 )
 
-func TestChangeDetector_DetectNew(t *testing.T) {
-	d := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 100})
-
-	// First detection - should see new resource
-	snapshots := []ResourceSnapshot{
-		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "running", Node: "node1"},
-	}
-
-	changes := d.DetectChanges(snapshots)
-	if len(changes) != 1 {
-		t.Errorf("Expected 1 change (creation), got %d", len(changes))
-	}
-	if changes[0].ChangeType != ChangeCreated {
-		t.Errorf("Expected ChangeCreated, got %s", changes[0].ChangeType)
-	}
-}
-
-func TestChangeDetector_DetectStatusChange(t *testing.T) {
-	d := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 100})
-
-	// Initial state
-	d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "running", Node: "node1"},
-	})
-
-	// Status change
-	changes := d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "stopped", Node: "node1"},
-	})
-
-	if len(changes) != 1 {
-		t.Errorf("Expected 1 status change, got %d", len(changes))
-	}
-	if changes[0].ChangeType != ChangeStatus {
-		t.Errorf("Expected ChangeStatus, got %s", changes[0].ChangeType)
-	}
-	if changes[0].Before != "running" || changes[0].After != "stopped" {
-		t.Errorf("Expected running->stopped, got %v->%v", changes[0].Before, changes[0].After)
-	}
-}
-
-func TestChangeDetector_DetectMigration(t *testing.T) {
-	d := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 100})
-
-	// Initial state
-	d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "running", Node: "node1"},
-	})
-
-	// Migration
-	changes := d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "running", Node: "node2"},
-	})
-
-	if len(changes) != 1 {
-		t.Errorf("Expected 1 migration change, got %d", len(changes))
-	}
-	if changes[0].ChangeType != ChangeMigrated {
-		t.Errorf("Expected ChangeMigrated, got %s", changes[0].ChangeType)
-	}
-}
-
-func TestChangeDetector_DetectDeleted(t *testing.T) {
-	d := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 100})
-
-	// Initial state
-	d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "running", Node: "node1"},
-	})
-
-	// Delete (empty snapshot)
-	changes := d.DetectChanges([]ResourceSnapshot{})
-
-	if len(changes) != 1 {
-		t.Errorf("Expected 1 deletion change, got %d", len(changes))
-	}
-	if changes[0].ChangeType != ChangeDeleted {
-		t.Errorf("Expected ChangeDeleted, got %s", changes[0].ChangeType)
-	}
-}
-
-func TestChangeDetector_NoChanges(t *testing.T) {
-	d := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 100})
-
-	snapshot := []ResourceSnapshot{
-		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "running", Node: "node1"},
-	}
-
-	// First time - creates
-	d.DetectChanges(snapshot)
-
-	// Second time - no changes
-	changes := d.DetectChanges(snapshot)
-	if len(changes) != 0 {
-		t.Errorf("Expected 0 changes, got %d", len(changes))
-	}
-}
-
 func TestChangeDetector_GetChangesForResource(t *testing.T) {
-	d := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 100})
+	now := time.Now()
+	d := &ChangeDetector{maxChanges: 100, changes: []Change{
+		{ID: "c1", ResourceID: "vm-100", ChangeType: ChangeCreated, DetectedAt: now.Add(-3 * time.Minute)},
+		{ID: "c2", ResourceID: "vm-200", ChangeType: ChangeCreated, DetectedAt: now.Add(-2 * time.Minute)},
+		{ID: "c3", ResourceID: "vm-100", ChangeType: ChangeStatus, DetectedAt: now.Add(-time.Minute)},
+	}}
 
-	// Create and change a few times
-	d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web", Type: "vm", Status: "stopped", Node: "node1"},
-		{ID: "vm-200", Name: "db", Type: "vm", Status: "running", Node: "node1"},
-	})
-	d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web", Type: "vm", Status: "running", Node: "node1"},
-		{ID: "vm-200", Name: "db", Type: "vm", Status: "running", Node: "node1"},
-	})
-
-	// Get changes for vm-100 only
+	// Get changes for vm-100 only, most recent first
 	changes := d.GetChangesForResource("vm-100", 10)
-	for _, c := range changes {
-		if c.ResourceID != "vm-100" {
-			t.Errorf("Got change for wrong resource: %s", c.ResourceID)
-		}
+	if len(changes) != 2 {
+		t.Fatalf("Expected 2 changes for vm-100, got %d", len(changes))
+	}
+	if changes[0].ID != "c3" || changes[1].ID != "c1" {
+		t.Errorf("Expected vm-100 changes newest first, got %s, %s", changes[0].ID, changes[1].ID)
+	}
+	if limited := d.GetChangesForResource("vm-100", 1); len(limited) != 1 || limited[0].ID != "c3" {
+		t.Errorf("Expected the limit to keep only the newest change, got %v", limited)
 	}
 }
 
@@ -164,18 +65,16 @@ func TestRemediationLog_Stats(t *testing.T) {
 }
 
 func TestChangeDetector_GetRecentChanges(t *testing.T) {
-	d := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 100})
+	now := time.Now()
+	d := &ChangeDetector{maxChanges: 100, changes: []Change{
+		{ID: "old", ResourceID: "vm-100", DetectedAt: now.Add(-2 * time.Hour)},
+		{ID: "new", ResourceID: "vm-100", DetectedAt: now.Add(-10 * time.Minute)},
+	}}
 
-	// Create some changes
-	d.DetectChanges([]ResourceSnapshot{
-		{ID: "vm-100", Name: "web", Type: "vm", Status: "running", Node: "node1"},
-	})
-
-	// Get recent changes
-	since := time.Now().Add(-1 * time.Hour)
-	changes := d.GetRecentChanges(10, since)
-	if len(changes) == 0 {
-		t.Error("Expected at least 1 recent change")
+	// Only changes inside the window are recent
+	changes := d.GetRecentChanges(10, now.Add(-1*time.Hour))
+	if len(changes) != 1 || changes[0].ID != "new" {
+		t.Errorf("Expected only the change inside the window, got %v", changes)
 	}
 }
 
@@ -258,26 +157,5 @@ func TestRemediationLog_AutomaticVsManual(t *testing.T) {
 	// Verify both are counted
 	if stats["total"] != 2 {
 		t.Errorf("Expected 2 total, got %d", stats["total"])
-	}
-}
-
-func TestChangeDetector_Limit(t *testing.T) {
-	d := NewChangeDetector(ChangeDetectorConfig{MaxChanges: 5})
-
-	// Create many changes to exceed limit
-	for i := 0; i < 10; i++ {
-		d.DetectChanges([]ResourceSnapshot{
-			{ID: "vm-100", Name: "web", Type: "vm", Status: "running", Node: "node1"},
-		})
-		// Alternate status to create changes
-		d.DetectChanges([]ResourceSnapshot{
-			{ID: "vm-100", Name: "web", Type: "vm", Status: "stopped", Node: "node1"},
-		})
-	}
-
-	// Should have limited records
-	allChanges := d.GetRecentChanges(100, time.Time{})
-	if len(allChanges) > 5 {
-		t.Errorf("Expected max 5 changes due to limit, got %d", len(allChanges))
 	}
 }

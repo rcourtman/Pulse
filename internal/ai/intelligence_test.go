@@ -1,6 +1,9 @@
 package ai
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +15,49 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/patterns"
 	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+// newLegacyChangeDetector loads changes the only way the detector still gets
+// them in production: from a legacy ai_changes.json in its data directory.
+func newLegacyChangeDetector(t *testing.T, changes ...memory.Change) *memory.ChangeDetector {
+	t.Helper()
+	dir := t.TempDir()
+	data, err := json.Marshal(changes)
+	if err != nil {
+		t.Fatalf("marshal legacy change history: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "ai_changes.json"), data, 0o600); err != nil {
+		t.Fatalf("write legacy change history: %v", err)
+	}
+	return memory.NewChangeDetector(memory.ChangeDetectorConfig{MaxChanges: 10, DataDir: dir})
+}
+
+// legacyCreatedChange is a "created" entry as the retired detector recorded it.
+func legacyCreatedChange(resourceID, name, resourceType string) memory.Change {
+	return memory.Change{
+		ID:           "legacy-created-" + resourceID,
+		ResourceID:   resourceID,
+		ResourceType: resourceType,
+		ResourceName: name,
+		ChangeType:   memory.ChangeCreated,
+		DetectedAt:   time.Now(),
+		Description:  resourceType + " '" + name + "' created",
+	}
+}
+
+// legacyStatusChange is a status transition as the retired detector recorded it.
+func legacyStatusChange(resourceID, name, resourceType, before, after string) memory.Change {
+	return memory.Change{
+		ID:           "legacy-status-" + resourceID,
+		ResourceID:   resourceID,
+		ResourceType: resourceType,
+		ResourceName: name,
+		ChangeType:   memory.ChangeStatus,
+		Before:       before,
+		After:        after,
+		DetectedAt:   time.Now(),
+		Description:  "'" + name + "' status changed: " + before + " → " + after,
+	}
+}
 
 func TestNewIntelligence(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{DataDir: "/tmp/test"})
@@ -329,10 +375,7 @@ func TestIntelligence_GetResourceIntelligence_WithSubsystems(t *testing.T) {
 
 func TestIntelligence_GetResourceIntelligence_FallsBackToChangeDetector(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{})
-	changes := memory.NewChangeDetector(memory.ChangeDetectorConfig{MaxChanges: 10})
-	changes.DetectChanges([]memory.ResourceSnapshot{
-		{ID: "vm-rc", Name: "resource-vm", Type: "vm", Status: "running", SnapshotTime: time.Now()},
-	})
+	changes := newLegacyChangeDetector(t, legacyCreatedChange("vm-rc", "resource-vm", "vm"))
 
 	intel.SetSubsystems(nil, nil, nil, nil, nil, nil, changes, nil)
 
@@ -374,10 +417,7 @@ func TestIntelligence_GetRecentChanges_UsesCanonicalTimeline(t *testing.T) {
 
 func TestIntelligence_GetRecentChanges_FallsBackToMemoryDetector(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{})
-	changes := memory.NewChangeDetector(memory.ChangeDetectorConfig{MaxChanges: 10})
-	changes.DetectChanges([]memory.ResourceSnapshot{
-		{ID: "vm-fallback", Name: "resource-vm", Type: "vm", Status: "running", SnapshotTime: time.Now()},
-	})
+	changes := newLegacyChangeDetector(t, legacyCreatedChange("vm-fallback", "resource-vm", "vm"))
 	intel.SetSubsystems(nil, nil, nil, nil, nil, nil, changes, nil)
 
 	recent := intel.GetRecentChanges(time.Now().Add(-time.Hour), 100)
@@ -483,10 +523,7 @@ func TestIntelligence_FormatContext_WithKnowledge(t *testing.T) {
 
 func TestIntelligence_FormatContext_IncludesCanonicalRecentChanges(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{})
-	changes := memory.NewChangeDetector(memory.ChangeDetectorConfig{MaxChanges: 10})
-	changes.DetectChanges([]memory.ResourceSnapshot{
-		{ID: "vm-300", Name: "fallback-vm", Type: "vm", Status: "running", SnapshotTime: time.Now()},
-	})
+	changes := newLegacyChangeDetector(t, legacyCreatedChange("vm-300", "fallback-vm", "vm"))
 	intel.SetSubsystems(nil, nil, nil, nil, nil, nil, changes, nil)
 
 	canonicalStore := ur.NewMemoryStore()
@@ -514,10 +551,7 @@ func TestIntelligence_FormatContext_IncludesCanonicalRecentChanges(t *testing.T)
 
 func TestIntelligence_FormatContext_FallsBackToChangeDetector(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{})
-	changes := memory.NewChangeDetector(memory.ChangeDetectorConfig{MaxChanges: 10})
-	changes.DetectChanges([]memory.ResourceSnapshot{
-		{ID: "vm-301", Name: "fallback-vm", Type: "vm", Status: "running", SnapshotTime: time.Now()},
-	})
+	changes := newLegacyChangeDetector(t, legacyCreatedChange("vm-301", "fallback-vm", "vm"))
 	intel.SetSubsystems(nil, nil, nil, nil, nil, nil, changes, nil)
 
 	ctx := intel.FormatContext("vm-301")
@@ -559,10 +593,7 @@ func TestIntelligence_FormatGlobalContext_IncludesCanonicalRecentChanges(t *test
 
 func TestIntelligence_FormatGlobalContext_FallsBackToChangeDetector(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{})
-	changes := memory.NewChangeDetector(memory.ChangeDetectorConfig{MaxChanges: 10})
-	changes.DetectChanges([]memory.ResourceSnapshot{
-		{ID: "node-fallback", Name: "fallback-node", Type: "node", Status: "running", SnapshotTime: time.Now()},
-	})
+	changes := newLegacyChangeDetector(t, legacyCreatedChange("node-fallback", "fallback-node", "node"))
 	intel.SetSubsystems(nil, nil, nil, nil, nil, nil, changes, nil)
 
 	ctx := intel.FormatGlobalContext()
@@ -603,14 +634,11 @@ func TestIntelligence_BuildRecentChangesContext_UsesCanonicalSectionFormatter(t 
 
 func TestIntelligence_BuildRecentChangesContext_FallsBackToMemoryFormatter(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{})
-	changes := memory.NewChangeDetector(memory.ChangeDetectorConfig{MaxChanges: 10})
-	changes.DetectChanges([]memory.ResourceSnapshot{
-		{ID: "vm-302", Name: "fallback-vm", Type: "vm", Status: "running", SnapshotTime: time.Now()},
-	})
+	changes := newLegacyChangeDetector(t, legacyCreatedChange("vm-302", "fallback-vm", "vm"))
 
 	ctx := intel.buildRecentChangesContext("vm-302", nil, changes, true, 5)
 	want := memory.FormatRecentChangesContext(changes.GetChangesForResource("vm-302", 5), true, "##")
-	if ctx != want {
+	if ctx == "" || ctx != want {
 		t.Fatalf("expected fallback recent-changes context to use shared memory formatter:\nwant %q\n got %q", want, ctx)
 	}
 }
