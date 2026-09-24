@@ -548,6 +548,18 @@ Old metadata section.
             self.assertIn("https://pulserelay.pro/download.html", body)
             self.assertIn("The rollback target is `v5.1.28`", body)
             self.assertIn("sudo /bin/update --version v5.1.28", body)
+            for section, target in (
+                (render_release_body.build_installation_section(namespace.version), "v6.0.0-rc.2"),
+                (render_release_body.build_rollback_section(namespace), "v5.1.28"),
+            ):
+                self.assertLess(section.index("only when"), section.index("sudo /bin/update"))
+                self.assertIn("installed by the Pulse server installer", section)
+                self.assertIn("community-scripts updater can ignore `--version`", section)
+                self.assertIn(f"`PULSE_VERSION={target}`", section)
+                self.assertIn(
+                    "/blob/v6.0.0-rc.2/docs/INSTALL.md#2-bare-metal--systemd", section,
+                )
+                self.assertNotIn("/blob/main/", section)
             self.assertIn(
                 "For Docker Compose, set the Pulse image to the rollback target",
                 body,
@@ -577,6 +589,7 @@ Controls remain readable without horizontal scrolling.
             "Args",
             (),
             {
+                "version": "6.4.0",
                 "rollback_target": "v6.3.2",
                 "rollback_command": "sudo /bin/update --version v6.3.2",
             },

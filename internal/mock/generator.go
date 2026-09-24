@@ -2647,10 +2647,10 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 
 		host := models.DockerHost{
 			ID:                hostID,
-			AgentID:           fmt.Sprintf("agent-%s", randomHexString(6)),
+			AgentID:           fmt.Sprintf("agent-%s", mockStableHexString(16, "docker-agent", hostID)),
 			Hostname:          hostname,
 			DisplayName:       humanizeHostDisplayName(hostname),
-			MachineID:         randomHexString(32),
+			MachineID:         mockStableHexString(32, "docker-host-machine", hostID),
 			OS:                dockerOperatingSystems[rand.Intn(len(dockerOperatingSystems))],
 			KernelVersion:     dockerKernelVersions[rand.Intn(len(dockerKernelVersions))],
 			Architecture:      dockerArchitectures[rand.Intn(len(dockerArchitectures))],
@@ -3913,7 +3913,7 @@ func buildMockLinkedHostFromKubernetesNode(
 		IntervalSeconds: 30,
 		LastSeen:        lastSeen,
 		AgentVersion:    hostAgentVersions[rand.Intn(len(hostAgentVersions))],
-		MachineID:       randomHexString(32),
+		MachineID:       mockStableHexString(32, "linked-host-machine", hostID),
 		Tags:            tags,
 	}
 	host.NetInRate = SampleMetric("agent", host.ID, "netin", now)
@@ -4191,7 +4191,7 @@ func buildMockLinkedHostFromNode(node models.Node, hostID string, hostIndex int,
 		IntervalSeconds: 30,
 		LastSeen:        lastSeen,
 		AgentVersion:    hostAgentVersions[rand.Intn(len(hostAgentVersions))],
-		MachineID:       randomHexString(32),
+		MachineID:       mockStableHexString(32, "linked-host-machine", hostID),
 		Tags:            []string{"mock", "proxmox-node"},
 		LinkedNodeID:    node.ID,
 	}

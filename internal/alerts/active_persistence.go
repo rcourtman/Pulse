@@ -463,7 +463,9 @@ func (m *Manager) restoreActiveAlertSnapshots(alerts []*Alert, source string, re
 		}
 		seen[alert.ID] = true
 
-		m.setActiveAlertNoLock(alert.ID, alert)
+		if !m.setActiveAlertNoLock(alert.ID, alert) {
+			continue
+		}
 		if legacyID != alert.ID {
 			if m.activeAlertAlias == nil {
 				m.activeAlertAlias = make(map[string]string)

@@ -15,6 +15,22 @@
 
 ## Purpose
 
+### Retained occurrence re-fires preserve incident truth
+
+A reducer re-fire inside the retention window keeps its original occurrence
+identity and reopens that incident. It is distinct from replaying the initial
+firing. Canonical resource changes carry `alert_started_at` separately from the
+transition timestamp, so history reconstruction also retains one occurrence.
+Legacy records without that key retain their historical timestamp projection.
+Checkpointed re-fire timestamps reject earlier resolution replay and historical
+read repair. A later resolution still closes the occurrence, and replaying the
+older re-fire cannot reopen it. This does not change alert retention or delivery.
+
+`TestMonitorLifecycleRefireReopensRetainedOccurrence` covers both history paths,
+canonical reconstruction without an incident checkpoint, repeated replay and
+historical read repair. `TestIncidentRefireCheckpointPreservesTransitionOrder`
+covers checkpoint reload on either side of the final resolution.
+
 ### Automatic acknowledgement lifecycle
 
 Cleanup-triggered acknowledgement uses the same canonical retention records and
@@ -2543,6 +2559,14 @@ hidden by expected-offline.
 
 Every active-alert writer passes through the same operator-state gate, and
 notification delivery consults the same decision before quiet-hours policy.
+The active-store writer reports admission explicitly. Detectors must not add
+history, recent-alert state, fired events, rate-limit consumption, or delivery
+intent after a rejected write. Lifecycle evaluators report suppression without
+an activation transition. Restore and guest-identity migration must not revive
+acknowledgement or tracking state for a rejected alert. Repeated observations,
+policy removal or expiry, and post-mutation reconciliation are exercised across
+provider incidents, metric and canonical lifecycle writers in
+`internal/alerts/alert_admission_test.go`.
 Operator suppression is never converted into a quiet-hours replay, including
 for recovery notifications carrying stale replay metadata.
 After a persisted policy mutation, `ReconcileResourceOperatorState` resolves

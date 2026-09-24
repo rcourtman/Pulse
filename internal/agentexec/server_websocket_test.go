@@ -672,6 +672,7 @@ func TestHandleWebSocket_RejectsPerIPConnectionFlood(t *testing.T) {
 		t.Fatalf("Dial first connection: %v", err)
 	}
 	defer firstConn.Close()
+	remoteIP := normalizeWebSocketRemoteIP(firstConn.LocalAddr().String())
 
 	wsWriteMessage(t, firstConn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
 		AgentID:  "a1",
@@ -699,6 +700,13 @@ func TestHandleWebSocket_RejectsPerIPConnectionFlood(t *testing.T) {
 
 	firstConn.Close()
 	waitFor(t, 2*time.Second, func() bool { return !s.IsAgentConnected("a1") })
+	// The read loop removes the agent before the handler's deferred slot release.
+	// Wait for admission capacity itself before testing that it can be reused.
+	waitFor(t, 2*time.Second, func() bool {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		return s.ipConnCounts[remoteIP] == 0
+	})
 
 	thirdConn, _, err := dialAgentExecWebSocket(t, ts.URL)
 	if err != nil {

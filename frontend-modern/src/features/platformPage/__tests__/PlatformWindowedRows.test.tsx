@@ -1,6 +1,6 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, onCleanup } from 'solid-js';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PlatformWindowedRows } from '../PlatformWindowedRows';
 import { PlatformWindowedList } from '../PlatformWindowedList';
@@ -88,6 +88,81 @@ describe('PlatformWindowedRows', () => {
     expect(screen.getByRole('textbox', { name: 'Row-local state' })).toBe(input);
     expect(input).toHaveValue('still editing');
   });
+
+  it.each(['table', 'list'] as const)(
+    'preserves editing state in retained %s items when the scroll window moves',
+    async (kind) => {
+      let scrollTop = 0;
+      const rect = vi
+        .spyOn(Element.prototype, 'getBoundingClientRect')
+        .mockImplementation(function (this: Element) {
+          const top = this.getAttribute('data-platform-window-spacer') === 'top' ? -scrollTop : 0;
+          return {
+            x: 0,
+            y: top,
+            top,
+            left: 0,
+            right: 200,
+            bottom: top + 40,
+            width: 200,
+            height: 40,
+            toJSON: () => ({}),
+          } as DOMRect;
+        });
+      const height = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: 120 });
+      const visibility = (Element.prototype as Element & { checkVisibility?: () => boolean })
+        .checkVisibility;
+      (Element.prototype as Element & { checkVisibility?: () => boolean }).checkVisibility = () =>
+        true;
+      const items = Array.from({ length: 30 }, (_, id) => ({ id }));
+      try {
+        const content = (item: { id: number }) => <input aria-label={`Draft ${item.id}`} />;
+        const { container } = render(() =>
+          kind === 'table' ? (
+            <table>
+              <tbody>
+                <PlatformWindowedRows items={() => items} windowSize={8} enableThreshold={8}>
+                  {(item, index) => (
+                    <tr data-row={item.id} data-position={index()}>
+                      <td>{content(item)}</td>
+                    </tr>
+                  )}
+                </PlatformWindowedRows>
+              </tbody>
+            </table>
+          ) : (
+            <PlatformWindowedList items={() => items} windowSize={8} enableThreshold={8}>
+              {(item, index) => (
+                <div data-row={item.id} data-position={index()}>
+                  {content(item)}
+                </div>
+              )}
+            </PlatformWindowedList>
+          ),
+        );
+        const draft = screen.getByRole('textbox', { name: 'Draft 4' }) as HTMLInputElement;
+        await fireEvent.input(draft, { target: { value: 'keep this edit' } });
+        scrollTop = 160;
+        await fireEvent.scroll(window);
+        expect(container.querySelector('[data-platform-window-spacer="top"]')).not.toHaveStyle({
+          height: '0px',
+        });
+        expect(screen.getByRole('textbox', { name: 'Draft 4' })).toBe(draft);
+        expect(draft).toHaveValue('keep this edit');
+        expect(container.querySelector('[data-row="4"]')).toHaveAttribute('data-position', '4');
+        expect(container.querySelectorAll('[data-row]')).toHaveLength(8);
+      } finally {
+        cleanup();
+        rect.mockRestore();
+        if (height) Object.defineProperty(window, 'innerHeight', height);
+        if (visibility)
+          (Element.prototype as Element & { checkVisibility?: () => boolean }).checkVisibility =
+            visibility;
+        else Reflect.deleteProperty(Element.prototype, 'checkVisibility');
+      }
+    },
+  );
 
   it('renders keyed rows once in their latest order', async () => {
     const [items, setItems] = createSignal([

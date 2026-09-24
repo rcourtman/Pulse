@@ -17,6 +17,17 @@
 
 ## Purpose
 
+### Synthetic machine identity survives restart
+
+Linked mock hosts and Docker hosts derive their machine ID from their stable
+fixture host ID. Docker agent IDs are stable as well.
+Changing metric samples or rebuilding the graph must not give the same fixture
+machine a new canonical agent ID, orphaning saved operator policy. The existing
+`TestFixtureIdentityStableAcrossBoots` compares machine IDs per host and the
+unified canonical agent IDs, in addition to source IDs and names. This is a
+fixture guarantee. Production identity matching must still reject a conflicting
+nonempty machine ID rather than transfer policy to a different real machine.
+
 ### Canonical registry publication during accepted ingest — issue #2199
 
 The monitor adapter builds a replacement resource generation away from readers.
@@ -3917,6 +3928,18 @@ errored identity lookup. Monitoring does not reinterpret provider ownership or
 invent lifecycle state; Alerts owns signal suppression and unified resources
 owns persistence. `internal/monitoring/monitor_alert_intent_test.go` and the
 alerts intent-policy proof pin this adapter boundary.
+
+Alert restore precedes resource-store attachment during startup. Once the
+adapter attaches the persisted operator-policy resolver, monitoring asks Alerts
+to reconcile the restored set and refreshes shared alert state if it changed.
+Resource publication repeats reconciliation before evaluation and shared-state
+export, because native aliases may only become resolvable after the first
+observation populates the canonical registry. Persisted agent policy applies
+to those restored native-ID alerts even when the initial registry was empty.
+Muted or retired resources cannot retain active alerts merely because policy
+was unavailable during restore. The resolution survives a subsequent restart
+and preserves unaffected alerts. This ordering is pinned by
+`internal/monitoring/monitor_alert_restore_test.go`.
 
 `internal/maintenancesentinel/` is monitoring-owned post-maintenance assurance.
 Its bounded sweep derives every concrete one-shot or recurring occurrence that

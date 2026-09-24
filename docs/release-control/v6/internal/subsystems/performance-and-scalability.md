@@ -1421,6 +1421,22 @@ without contention or cross-delivery.
 
 ## Current State
 
+### Retained component state in bounded platform windows
+
+`PlatformWindowedRows` and `PlatformWindowedList` retain one keyed renderer
+owner as overlapping visible windows change. Components that remain visible
+keep their local state and unsaved edits. Removed items still unmount, and the
+existing row budgets and spacers remain bounded. The mounted regressions in
+`PlatformWindowedRows.test.tsx` exercise both renderers. The final browser
+receipt exercises a narrow Proxmox Manage form through scrolling, saving and
+viewport changes while the synthetic estate updates.
+
+This correctness proof does not close the large-estate performance gap. The
+final measurements and host-load limitation remain recorded in
+`records/resource-payload-static-metadata-2026-08-24.md`. They do not establish
+a controlled performance improvement or satisfy the open SLO qualification.
+
+
 ### Large API responses negotiate gzip without corrupting edge cases
 
 The main listener compresses eligible JSON and frontend text assets for
@@ -3138,6 +3154,14 @@ rebuilding the estate. `internal/mock/alert_incidents_test.go` proves bounded
 resource results and defensive-copy isolation, while
 `internal/api/alerting/alerts_test.go` proves that mock transport does not need
 the production incident store.
+
+Synthetic linked-host machine identities and Docker machine/agent identities
+are derived from stable fixture host identity when constructing the graph.
+Rebuilding the same estate therefore preserves canonical agent IDs and the
+resource policy attached to them. `internal/mock/generator_test.go` verifies
+nonempty machine and agent IDs and canonical identity across fixture rebuilds.
+This changes fixture generation only, without relaxing production identity
+resolution or adding work to the recurring update path.
 
 ### Update evidence reuses the bounded node observation
 

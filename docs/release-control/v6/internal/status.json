@@ -9786,7 +9786,7 @@
     },
     {
       "id": "resource-payload-static-metadata",
-      "summary": "The client-facing resource stream ships ~3KB of mostly-static metadata per resource (duplicated capabilities blobs with only 10 distinct values across 1,508 resources, canonicalIdentity alias/superseded-id history, aiSafeSummary prose, and policy routing) on every snapshot, REST recovery, and reconnect. At 50-node scale the snapshot is a single 4.73MB websocket frame and browser main-thread cost per delta reaches ~1s even on desktop hardware. Slimming the stream is a wire-format change with consumers beyond frontend-modern (pulse-mobile OTA compatibility, Pro surfaces, AI runtime), so it needs an owned slice with contract updates and cross-client verification.",
+      "summary": "Capabilities catalog, default-policy omission and alias deduplication reduced the resource payload in August, but canonical identity history remains inline. The September 24 reliability audit measured a 4,015,466-byte /api/state response and 1,037 ms maximum desktop idle long task on the 50-node synthetic estate. A final-source repeat still observed multi-second long tasks, but elevated host load prevents a controlled comparison. This remains an open cross-client payload and browser responsiveness gap requiring trace-led attribution, contract updates and mobile/Pro/runtime verification before closure. See the evidence record for measurements and limits.",
       "owner": "project-owner",
       "status": "triaged",
       "recorded_at": "2026-08-24",

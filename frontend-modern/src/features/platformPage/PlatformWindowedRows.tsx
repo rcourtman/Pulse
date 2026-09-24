@@ -132,16 +132,21 @@ export function PlatformWindowedRows<Row>(props: PlatformWindowedRowsProps<Row>)
     windowSize: props.windowSize,
   });
 
-  const renderRows = (items: readonly (Row | StablePlatformRow<Row>)[], globalOffset: number) => (
-    <For each={items}>
+  // Keep the For owner mounted when its window changes. Recreating it would
+  // discard editors and expanded detail state in rows retained by both windows.
+  const renderRows = (
+    items: Accessor<readonly (Row | StablePlatformRow<Row>)[]>,
+    globalOffset: Accessor<number>,
+  ) => (
+    <For each={items()}>
       {(item, index) =>
-        props.children(isStableRow(item) ? item.value() : item, () => globalOffset + index())
+        props.children(isStableRow(item) ? item.value() : item, () => globalOffset() + index())
       }
     </For>
   );
 
   return (
-    <Show when={windowing.isWindowed()} fallback={renderRows(renderItems(), 0)}>
+    <Show when={windowing.isWindowed()} fallback={renderRows(renderItems, () => 0)}>
       <tr
         ref={windowing.setAnchorRef}
         aria-hidden="true"
@@ -154,7 +159,7 @@ export function PlatformWindowedRows<Row>(props: PlatformWindowedRowsProps<Row>)
           style={{ height: `${windowing.topSpacerHeight()}px` }}
         />
       </tr>
-      {renderRows(windowing.visibleItems(), windowing.startIndex())}
+      {renderRows(windowing.visibleItems, windowing.startIndex)}
       <tr
         aria-hidden="true"
         data-platform-window-spacer="bottom"

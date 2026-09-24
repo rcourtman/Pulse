@@ -45,6 +45,17 @@ covers unchanged active evaluations, repeated fired/resolved transitions,
 JSON checkpoint reload, canonical-backed shells and delayed historical events.
 `TestIncidentStore_LifecycleRapidRecurrence` covers distinct subsecond starts.
 
+An explicit newer refire reopens the same retained occurrence. The checkpoint
+persists its refire timestamp so an older resolution, historical read repair,
+or repeated refire cannot override the latest transition. Canonical resource
+history carries `alert_started_at` separately from transition time, allowing
+`QueryIncidents` to reconstruct one occurrence after fire, resolution and refire
+even without a saved incident shell. Legacy history without this metadata keeps
+its timestamp-based fallback. `internal/ai/memory/incidents_refire_test.go` pins
+checkpoint and stale-replay behaviour, while
+`TestMonitorLifecycleRefireReopensRetainedOccurrence` exercises both local and
+canonical projections, including reconstruction from canonical history.
+
 This does not migrate existing duplicate records, change bounded retention,
 make acknowledgement event replay idempotent, or prove aggregate write-byte
 reductions or recipient delivery. An evicted occurrence can still be recreated

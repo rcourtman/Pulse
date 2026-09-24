@@ -1545,11 +1545,26 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         )
         self.assertIn("posture refresh removes obsolete rows", changelog)
 
+    def test_upgrade_guide_qualifies_pinned_server_updates(self) -> None:
+        upgrade_guide = read("docs/UPGRADE_v6.md")
+        server_updates = normalize_ws(
+            upgrade_guide.split("### systemd and Proxmox LXC installs", 1)[1].split("\n### ", 1)[0]
+        )
+        self.assertIn("sudo /bin/update --version vX.Y.Z", server_updates)
+        self.assertIn(
+            "only when `/bin/update` was installed by the Pulse server installer",
+            server_updates,
+        )
+        self.assertIn("community-scripts updater, which can ignore `--version`", server_updates)
+        self.assertIn("the helper is absent, or you cannot confirm its owner", server_updates)
+        self.assertIn("[signed server-installer flow](INSTALL.md#2-bare-metal--systemd)", server_updates)
+        self.assertIn("`PULSE_VERSION` to the exact target tag", server_updates)
+        self.assertIn("This also applies to rollback", server_updates)
+        self.assertIn("Verify the installed version with `GET /api/version`", server_updates)
+
     def test_upgrade_guide_points_at_current_rc_support_pack(self) -> None:
         upgrade_guide = read("docs/UPGRADE_v6.md")
         current_version = read("VERSION").strip()
-        self.assertIn("sudo /bin/update --version vX.Y.Z", upgrade_guide)
-        self.assertIn("follow the signed server-installer flow in [INSTALL.md](INSTALL.md)", upgrade_guide)
         self.assertIn("the historical Pulse update signer was not recovered", normalize_ws(upgrade_guide))
         self.assertIn("manual reinstall or other explicit trust migration", normalize_ws(upgrade_guide))
         self.assertIn("### License and Entitlements", upgrade_guide)
