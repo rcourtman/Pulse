@@ -2829,15 +2829,21 @@
     var planEpoch = 0;
     var applying = null;
     function isApplied(plan, target) {
-      return !!target.plan_version && plan.plan_version === target.plan_version && (!target.license_id || plan.license_id === target.license_id) && (!target.expires_at || plan.expires_at === target.expires_at);
+      return !plan.evaluation && !!target.plan_version && plan.plan_version === target.plan_version && (!target.license_id || plan.license_id === target.license_id) && (!target.expires_at || plan.expires_at === target.expires_at);
     }
-    function finishApplying(plan) {
+    function sameRunningPlan(left, right) {
+      return left.evaluation === right.evaluation && left.plan_version === right.plan_version && left.license_id === right.license_id && left.expires_at === right.expires_at;
+    }
+    function acceptRunningPlan(plan, announce) {
       applying = null;
       planEpoch += 1;
       view.plan = plan;
       view.error = "";
-      view.notice = "Your " + providerPlanName(plan.plan_version) + " plan is active.";
+      if (announce) view.notice = "Your " + providerPlanName(plan.plan_version) + " plan is active.";
       render();
+    }
+    function finishApplying(plan) {
+      acceptRunningPlan(plan, true);
     }
     function account() {
       var bootstrap = deps.store.getBootstrap();
@@ -2909,7 +2915,7 @@
         waitForAppliedPlan(target, 0);
       }, RESTART_SETTLE_MS);
     }
-    async function refresh(manual) {
+    async function refresh(manual, confirmCurrent = false, billingReturn = false) {
       var current = account();
       if (!current) return false;
       view.busy = "refresh";
@@ -2920,8 +2926,22 @@
           applyRestart(result);
           return true;
         }
+        if (confirmCurrent && result.status === "active" && result.plan_version) {
+          var plan = await deps.api.fetchPlan(current.id);
+          if (isApplied(plan, result)) {
+            if (billingReturn) {
+              if (!view.plan) {
+                acceptRunningPlan(plan, false);
+                return false;
+              }
+              if (sameRunningPlan(view.plan, plan)) return false;
+            }
+            finishApplying(plan);
+            return true;
+          }
+        }
         if (manual) {
-          deps.showToast(result.status === "active" ? "Your plan is already up to date." : "No payment has reached this platform yet. It can take a minute after checkout.");
+          deps.showToast(result.status === "active" ? "The updated plan could not be confirmed yet. Try again shortly." : "No payment has reached this platform yet. It can take a minute after checkout.");
         }
         return false;
       } catch (error) {
@@ -2933,10 +2953,10 @@
       }
     }
     function pollAfterCheckout(attempt) {
-      void refresh(false).then(function(applied) {
+      void refresh(false, true).then(function(applied) {
         if (applied) return;
         if (attempt + 1 >= APPLY_POLL_ATTEMPTS) {
-          view.notice = "Payment received. If your plan has not changed in a few minutes, use Apply my purchase now.";
+          view.notice = "A paid plan could not be confirmed yet. If you completed checkout, wait a minute and use Apply my purchase now.";
           render();
           return;
         }
@@ -2946,7 +2966,7 @@
       });
     }
     function checkAfterBillingReturn(attempt) {
-      void refresh(false).then(function(applied) {
+      void refresh(false, true, true).then(function(applied) {
         if (applied || attempt + 1 >= BILLING_RETURN_ATTEMPTS) return;
         later(function() {
           checkAfterBillingReturn(attempt + 1);
@@ -2999,7 +3019,7 @@
           });
           return;
         case "refresh":
-          void refresh(true);
+          void refresh(true, true);
           return;
       }
     });
@@ -3019,12 +3039,12 @@
       }
       deps.store.setActiveShellSection("billing");
       if (returned === "complete") {
-        view.notice = "Payment received. Applying your plan\u2026";
+        view.notice = "Checking for your paid plan\u2026";
         pollAfterCheckout(0);
       } else if (returned === "billing") {
         checkAfterBillingReturn(0);
-      } else {
-        view.notice = "Checkout was cancelled. Nothing was charged.";
+      } else if (returned === "cancelled") {
+        view.notice = "Checkout was not completed here. Check your current plan below.";
       }
     }
     return {
