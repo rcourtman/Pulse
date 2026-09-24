@@ -2280,6 +2280,19 @@ prevents role labels shared by two provider installations on one Docker daemon
 from selecting the other installation. Docker API fixture tests cover these
 guards; they do not establish installed two-provider acceptance.
 
+### Provider MSP clients survive a support-container recreate (v6.4)
+
+Backported from main. `upgrade.sh` recreates the control plane, and a
+recreated control plane or Traefik is no longer attached to any client's
+isolated network. The control plane's health monitor now reattaches both on
+startup and on every pass, within the installation-scoped ownership checks,
+and restarts rather than stops an unhealthy client, so upgrading a provider
+install with clients keeps their routes, leases and portal health intact.
+Verified on main on 2026-09-23 against a v6.4.1 provider bundle with two
+clients: a control-plane recreate rejoined both client networks within a
+second, a Traefik-only recreate had its routes back on the next 60-second
+pass, and clients the old monitor had stopped came back healthy.
+
 ### Provider MSP upgrades work once a client exists
 
 `deploy/provider-msp/upgrade.sh` and `run-install-proof.sh` run
