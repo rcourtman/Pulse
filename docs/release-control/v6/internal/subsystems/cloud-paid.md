@@ -3431,6 +3431,18 @@ Pulse-service-backed capabilities. `providerChained` retains its narrower
 meaning: a Pulse-signed licence is available to embed so release builds can
 verify the lease.
 
+### Provider MSP tenant networks remain installation scoped
+
+An existing isolated network is accepted for provisioning only when its tenant
+and provider-MSP runtime labels match the requested tenant; an empty tenant ID
+is refused. Support containers selected for connection or forced disconnect
+must also be on this installation's configured provider ingress network. Client
+removal selects only its derived, correctly labelled network and disconnects
+only local support containers still attached to it. Shared role labels or a
+network name alone must not cross an MSP installation boundary. Regression
+coverage is in `internal/cloudcp/docker/manager_test.go`; installed multi-provider
+acceptance remains separate.
+
 ### Provider MSP status reads client health that any caller can observe
 
 `provider-msp status`, which `upgrade.sh` gates on before every provider
