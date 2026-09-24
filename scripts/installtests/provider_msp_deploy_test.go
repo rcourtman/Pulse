@@ -643,3 +643,167 @@ func TestProviderMSPSetupLeavesPlatformRunning(t *testing.T) {
 	}
 	assertContainsAll(t, first, "DOMAIN", "ACME_EMAIL", "CF_DNS_API_TOKEN")
 }
+
+// Setup pins the images in .env to digests once, so an upgrade used to re-pull
+// only the release a provider first installed. Run from a newly extracted
+// bundle, upgrade.sh must install that bundle into the existing install,
+// re-pin the two Pulse images to the bundle's release, keep a copy of the old
+// .env, and only then hand over to the backup-gated flow.
+func TestProviderMSPUpgradeFromBundleRepinsToTheBundleRelease(t *testing.T) {
+	newDigest := "sha256:" + strings.Repeat("b", 64)
+	oldControlPlane := "ghcr.io/rcourtman/pulse-control-plane@sha256:" + strings.Repeat("a", 64)
+	oldRuntime := "ghcr.io/rcourtman/pulse@sha256:" + strings.Repeat("a", 64)
+
+	setup := func(t *testing.T) (bundle, install, dockerLog string) {
+		t.Helper()
+		root := t.TempDir()
+		bundle = filepath.Join(root, "pulse-provider-msp-v6.6.0")
+		install = filepath.Join(root, "install")
+		bin := filepath.Join(root, "bin")
+		for _, dir := range []string{bundle, install, bin} {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for _, name := range []string{"docker-compose.yml", "traefik.yml", "traefik-dynamic.yml", ".env.example", "run-install-proof.sh", "upgrade.sh", "setup.sh"} {
+			content, err := os.ReadFile(repoFile("deploy", "provider-msp", name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if name == ".env.example" {
+				// What scripts/build-release.sh stamps into a release bundle.
+				text := strings.Replace(string(content), "\nCONTROL_PLANE_IMAGE=\n", "\nCONTROL_PLANE_IMAGE=ghcr.io/rcourtman/pulse-control-plane:v6.6.0\n", 1)
+				text = strings.Replace(text, "\nCP_PULSE_IMAGE=\n", "\nCP_PULSE_IMAGE=ghcr.io/rcourtman/pulse:v6.6.0\n", 1)
+				content = []byte(text)
+			}
+			if err := os.WriteFile(filepath.Join(bundle, name), content, 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := os.WriteFile(filepath.Join(bundle, "VERSION"), []byte("6.6.0\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		env := "DOMAIN=msp.example.com\nCONTROL_PLANE_IMAGE=" + oldControlPlane + "\nCP_PULSE_IMAGE=" + oldRuntime + "\nPULSE_PROVIDER_MSP_DATA_DIR=/data\n"
+		if err := os.WriteFile(filepath.Join(install, ".env"), []byte(env), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(install, "upgrade.sh"), []byte("#!/bin/sh\necho old-upgrade-script\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		dockerLog = filepath.Join(root, "docker.log")
+		// Log each call with the control-plane pin in .env and the image
+		// compose would use (a shell value wins over .env) at that moment.
+		fake := "#!/bin/sh\nfile=$(grep '^CONTROL_PLANE_IMAGE=' .env 2>/dev/null | cut -d= -f2)\n" +
+			"echo \"$* [env=${file}] [uses=${CONTROL_PLANE_IMAGE:-$file}]\" >> " + dockerLog + "\n" +
+			"case \"$*\" in\n" +
+			"  'buildx imagetools inspect '*' --format '*) echo '{\"digest\":\"" + newDigest + "\"}' ;;\n" +
+			"  'buildx imagetools inspect '*) echo 'Digest: " + newDigest + "' ;;\n" +
+			"  *'backup create'*) echo 'archive_path=/data/backups/pre-upgrade.tar.gz' ;;\n" +
+			"esac\nexit 0\n"
+		if err := os.WriteFile(filepath.Join(bin, "docker"), []byte(fake), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return bundle, install, dockerLog
+	}
+	run := func(t *testing.T, bundle, install string, args ...string) string {
+		t.Helper()
+		cmd := exec.Command("bash", append([]string{filepath.Join(bundle, "upgrade.sh")}, args...)...)
+		cmd.Env = append(os.Environ(), "PATH="+filepath.Join(filepath.Dir(bundle), "bin")+":"+os.Getenv("PATH"), "PULSE_PROVIDER_MSP_INSTALL_DIR="+install)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("upgrade.sh %v: %v\n%s", args, err, output)
+		}
+		return string(output)
+	}
+	envOf := func(t *testing.T, install string) string {
+		t.Helper()
+		b, err := os.ReadFile(filepath.Join(install, ".env"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+
+	t.Run("upgrade", func(t *testing.T) {
+		bundle, install, dockerLog := setup(t)
+		output := run(t, bundle, install)
+		env := envOf(t, install)
+		for _, want := range []string{
+			"CONTROL_PLANE_IMAGE=ghcr.io/rcourtman/pulse-control-plane@" + newDigest,
+			"CP_PULSE_IMAGE=ghcr.io/rcourtman/pulse@" + newDigest,
+			"DOMAIN=msp.example.com",
+		} {
+			if !strings.Contains(env, want) {
+				t.Fatalf("upgraded .env lacks %q:\n%s", want, env)
+			}
+		}
+		backups, _ := filepath.Glob(filepath.Join(install, ".env.pre-upgrade-*"))
+		if len(backups) != 1 {
+			t.Fatalf("pre-upgrade .env copies = %v, want one", backups)
+		}
+		if old, _ := os.ReadFile(backups[0]); !strings.Contains(string(old), oldControlPlane) {
+			t.Fatal("pre-upgrade copy does not hold the previous pins")
+		}
+		installed, _ := os.ReadFile(filepath.Join(install, "upgrade.sh"))
+		shipped, _ := os.ReadFile(filepath.Join(bundle, "upgrade.sh"))
+		if string(installed) != string(shipped) {
+			t.Fatal("bundle upgrade.sh was not installed")
+		}
+		logBytes, _ := os.ReadFile(dockerLog)
+		lines := strings.Split(string(logBytes), "\n")
+		lineWith := func(needle string) string {
+			for _, line := range lines {
+				if strings.Contains(line, needle) {
+					return line
+				}
+			}
+			t.Fatalf("docker was never called with %q:\n%s", needle, logBytes)
+			return ""
+		}
+		// The check and the backup run the new release's control plane as a
+		// one-off while .env still holds the old pins; .env changes only
+		// before the new images start.
+		newControlPlane := "ghcr.io/rcourtman/pulse-control-plane@" + newDigest
+		for _, step := range []string{"control-plane provider-msp status", "provider-msp backup create"} {
+			line := lineWith(step)
+			if !strings.Contains(line, "[env="+oldControlPlane+"]") || !strings.Contains(line, "[uses="+newControlPlane+"]") {
+				t.Fatalf("%s should run the new control plane with .env untouched: %s", step, line)
+			}
+		}
+		// The new runtime image is pulled before status checks it is present.
+		pull := strings.Index(string(logBytes), "pull ghcr.io/rcourtman/pulse@"+newDigest)
+		status := strings.Index(string(logBytes), "control-plane provider-msp status")
+		if pull < 0 || status < 0 || pull > status {
+			t.Fatalf("the new tenant runtime image must be pulled before the status gate:\n%s", logBytes)
+		}
+		if line := lineWith("compose up -d traefik docker-socket-proxy control-plane"); !strings.Contains(line, "[env="+newControlPlane+"]") {
+			t.Fatalf("new images did not start on the new pins: %s", line)
+		}
+		if !strings.Contains(output, "provider_msp_upgrade_ok=true") || !strings.Contains(output, "provider_msp_upgrade_bundle_version=6.6.0") {
+			t.Fatalf("upgrade output:\n%s", output)
+		}
+	})
+
+	t.Run("keep image pins", func(t *testing.T) {
+		bundle, install, _ := setup(t)
+		run(t, bundle, install, "--keep-image-pins")
+		env := envOf(t, install)
+		if !strings.Contains(env, "CONTROL_PLANE_IMAGE="+oldControlPlane) || !strings.Contains(env, "CP_PULSE_IMAGE="+oldRuntime) {
+			t.Fatalf("--keep-image-pins changed the pins:\n%s", env)
+		}
+	})
+
+	t.Run("dry run changes nothing", func(t *testing.T) {
+		bundle, install, _ := setup(t)
+		output := run(t, bundle, install, "--dry-run")
+		if env := envOf(t, install); !strings.Contains(env, "CONTROL_PLANE_IMAGE="+oldControlPlane) {
+			t.Fatalf("dry run changed .env:\n%s", env)
+		}
+		if installed, _ := os.ReadFile(filepath.Join(install, "upgrade.sh")); string(installed) != "#!/bin/sh\necho old-upgrade-script\n" {
+			t.Fatal("dry run installed bundle files")
+		}
+		if !strings.Contains(output, "current="+oldControlPlane) || !strings.Contains(output, "target=ghcr.io/rcourtman/pulse-control-plane@"+newDigest) {
+			t.Fatalf("dry run did not print the pin plan:\n%s", output)
+		}
+	})
+}
