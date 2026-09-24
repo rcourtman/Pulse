@@ -2831,13 +2831,19 @@
     function isApplied(plan, target) {
       return !plan.evaluation && !!target.plan_version && plan.plan_version === target.plan_version && (!target.license_id || plan.license_id === target.license_id) && (!target.expires_at || plan.expires_at === target.expires_at);
     }
-    function finishApplying(plan) {
+    function sameRunningPlan(left, right) {
+      return left.evaluation === right.evaluation && left.plan_version === right.plan_version && left.license_id === right.license_id && left.expires_at === right.expires_at;
+    }
+    function acceptRunningPlan(plan, announce) {
       applying = null;
       planEpoch += 1;
       view.plan = plan;
       view.error = "";
-      view.notice = "Your " + providerPlanName(plan.plan_version) + " plan is active.";
+      if (announce) view.notice = "Your " + providerPlanName(plan.plan_version) + " plan is active.";
       render();
+    }
+    function finishApplying(plan) {
+      acceptRunningPlan(plan, true);
     }
     function account() {
       var bootstrap = deps.store.getBootstrap();
@@ -2909,7 +2915,7 @@
         waitForAppliedPlan(target, 0);
       }, RESTART_SETTLE_MS);
     }
-    async function refresh(manual, confirmCurrent = false) {
+    async function refresh(manual, confirmCurrent = false, billingReturn = false) {
       var current = account();
       if (!current) return false;
       view.busy = "refresh";
@@ -2923,6 +2929,13 @@
         if (confirmCurrent && result.status === "active" && result.plan_version) {
           var plan = await deps.api.fetchPlan(current.id);
           if (isApplied(plan, result)) {
+            if (billingReturn) {
+              if (!view.plan) {
+                acceptRunningPlan(plan, false);
+                return true;
+              }
+              if (sameRunningPlan(view.plan, plan)) return false;
+            }
             finishApplying(plan);
             return true;
           }
@@ -2953,7 +2966,7 @@
       });
     }
     function checkAfterBillingReturn(attempt) {
-      void refresh(false).then(function(applied) {
+      void refresh(false, true, true).then(function(applied) {
         if (applied || attempt + 1 >= BILLING_RETURN_ATTEMPTS) return;
         later(function() {
           checkAfterBillingReturn(attempt + 1);

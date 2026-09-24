@@ -3494,7 +3494,11 @@ paid plan appears, the panel gives conditional follow-up instead of claiming
 payment or activation. Manual Apply uses the same running-plan confirmation
 before updating the view. The panel never reloads the page. Manage billing returns to
 `?provider_msp_checkout=billing`, and the panel checks the licence twice so a
-plan changed in the Stripe billing portal applies without a click. Regression
+plan changed in the Stripe billing portal applies without a click. It also
+accepts a matching paid plan already applied by the background refresher
+without requiring a second restart; an unchanged visit stays silent. A stale
+panel is replaced only after the refreshed running plan is confirmed, never
+because the billing return URL says a change was made. Regression
 coverage:
 `TestLoadConfig_ProviderHostedMSPPrefersRenewedLicense` in
 `internal/cloudcp/config_test.go`,
