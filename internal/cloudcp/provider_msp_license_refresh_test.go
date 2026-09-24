@@ -211,6 +211,39 @@ func TestProviderMSPLicenseRefreshInstallsThePaidLicenceAndRestarts(t *testing.T
 	}
 }
 
+func TestProviderMSPLicenseRefreshAppliesShorterPaidPeriod(t *testing.T) {
+	issuer := newProviderMSPTestIssuer(t)
+	fake := &fakeProviderMSPLicenseServer{t: t, currentStatus: http.StatusOK}
+	server := httptest.NewServer(fake)
+	defer server.Close()
+	cfg := newProviderMSPRefreshTestConfig(t, server.URL)
+	cfg.ProviderMSPLicenseID = "lic_msp_paid"
+	cfg.ProviderMSPPlanVersion = "msp_solo"
+	cfg.ProviderMSPLicenseExpiresAt = time.Now().Add(90 * 24 * time.Hour).Truncate(time.Second)
+
+	// A billing-cycle change can shorten the paid period without changing the
+	// licence ID or plan. Retaining the old expiry would over-entitle it.
+	shorterExpiry := time.Now().Add(30 * 24 * time.Hour).Truncate(time.Second)
+	fake.currentLicense = issuer.sign(t, cfg.ProviderMSPLicenseID, cfg.ProviderMSPPlanVersion, shorterExpiry, trialSigningEnvPublicKey(t))
+	refresher := NewProviderMSPLicenseRefresher(cfg)
+	restarted := make(chan struct{}, 1)
+	refresher.SetRestart(func() { restarted <- struct{}{} })
+
+	result, err := refresher.Refresh(context.Background())
+	if err != nil || !result.Changed || !result.RestartScheduled || result.ExpiresAt != shorterExpiry.Format(time.RFC3339) {
+		t.Fatalf("shorter paid-period refresh = %+v, %v", result, err)
+	}
+	installed, err := os.ReadFile(ProviderMSPRenewedLicensePath(cfg.DataDir))
+	if err != nil || strings.TrimSpace(string(installed)) != fake.currentLicense {
+		t.Fatalf("shorter paid-period licence not installed: %v", err)
+	}
+	select {
+	case <-restarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("shorter paid-period licence did not restart the control plane")
+	}
+}
+
 func TestProviderMSPPortalRoutesRelayToTheLicenceServer(t *testing.T) {
 	fake := &fakeProviderMSPLicenseServer{
 		t:              t,

@@ -250,7 +250,7 @@ func (r *ProviderMSPLicenseRefresher) Refresh(ctx context.Context) (ProviderMSPL
 	}
 	result.Changed = renewed.LicenseID != r.cfg.ProviderMSPLicenseID ||
 		renewed.PlanVersion != r.cfg.ProviderMSPPlanVersion ||
-		renewed.ExpiresAt.After(r.cfg.ProviderMSPLicenseExpiresAt.Add(time.Hour))
+		!renewed.ExpiresAt.Equal(r.cfg.ProviderMSPLicenseExpiresAt)
 	if !result.Changed {
 		return result, nil
 	}

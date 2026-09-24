@@ -3449,8 +3449,11 @@ platform's key, and installs it at `ProviderMSPRenewedLicensePath`.
 `renewed_license`), so a paying provider keeps starting after the self-issued
 evaluation on the host expires. A changed licence restarts the control plane
 through the graceful shutdown path, because the plan version is read once at
-load. `msp_solo` (3 client workspaces) is the first paid step above the
-2-workspace evaluation.
+load. The comparison includes the signed expiry in both directions: a shorter
+paid period for the same licence ID and plan must replace the old licence and
+restart rather than retain a longer entitlement. An unchanged ID, plan and
+expiry must not trigger a restart. `msp_solo` (3 client workspaces) is the
+first paid step above the 2-workspace evaluation.
 
 In the portal, provider-hosted mode shows the `billing` section as **Plan**
 (`internal/cloudcp/portal/frontend/src/provider_plan.ts`), never Pulse-hosted
@@ -3470,7 +3473,8 @@ plan changed in the Stripe billing portal applies without a click. Regression
 coverage:
 `TestLoadConfig_ProviderHostedMSPPrefersRenewedLicense` in
 `internal/cloudcp/config_test.go`,
-`TestProviderMSPLicenseRefreshInstallsThePaidLicenceAndRestarts` and
+`TestProviderMSPLicenseRefreshInstallsThePaidLicenceAndRestarts`,
+`TestProviderMSPLicenseRefreshAppliesShorterPaidPeriod` and
 `TestProviderMSPPortalRoutesRelayToTheLicenceServer` in
 `internal/cloudcp/provider_msp_license_refresh_test.go`,
 `TestRegisterRoutes_ProviderMSPPurchaseRoutesRequireOwnerOrAdmin` in
