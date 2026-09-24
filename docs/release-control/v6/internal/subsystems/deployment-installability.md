@@ -2416,6 +2416,18 @@ artifact-selection behaviour.
 
 ## Current State
 
+### Provider MSP upgrades work once a client exists
+
+`deploy/provider-msp/upgrade.sh` and `run-install-proof.sh` run
+`provider-msp status` through `docker compose run --no-deps`, a container
+attached only to the provider ingress network. Client health is now read from
+the runtime image's recorded Docker HEALTHCHECK rather than an HTTP dial into
+each client's isolated network, so `upgrade.sh --dry-run` plans cleanly on an
+install with real clients instead of failing with `unhealthy active
+workspaces`. Install proofs that only ever ran against an empty install could
+not see this; verification on 2026-09-23 used a v6.4.1 bundle with one client
+whose container Docker reported healthy.
+
 ### Reviewed frontend dependency security floors
 
 The 2026-09-21 npm-minor-patch group raises the reviewed floors of the

@@ -3413,6 +3413,23 @@ install tokens it generates stay bound to that organization; nothing about token
 scope, agent registration or reporting identity changes. See the api-contracts
 contract, rule 35, for the capability rule.
 
+### Hosted runtimes always mint agent install tokens
+
+`POST /api/agent-install-command` mints and embeds an agent install token
+whenever the runtime enforces authentication. A hosted runtime
+(`PULSE_HOSTED_MODE=true`, which every provider MSP client workspace runs)
+always does, so `ConfigHandlers.authConfiguredForAgentLifecycle` now treats
+hosted mode as configured authentication, the same term the router's
+`configTransferAuthenticationConfigured` already carried. Before, a fresh
+client workspace had no local credential, API token, proxy secret or SSO
+provider for the per-config check to find: the host flow answered `200` with
+an empty token and the Proxmox flow built a command with none, so an agent
+installed from the provider's client workspace could not report. Self-hosted
+runtimes with no authentication configured keep the token-less command.
+Regression coverage: `TestHostedRuntimeMintsAgentInstallTokensWithoutLocalAuth`
+and `TestSelfHostedRuntimeWithoutAuthStillOmitsInstallToken` in
+`internal/api/configapi/hosted_agent_install_token_test.go`.
+
 ### Auto-register preserves the operator's stored TLS choice
 
 Re-registering an existing Proxmox node through the canonical auto-register

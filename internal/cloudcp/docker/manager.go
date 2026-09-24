@@ -1031,6 +1031,10 @@ func (m *Manager) HealthCheck(ctx context.Context, containerID string) (bool, er
 		return false, nil
 	}
 
+	if healthy, recorded := dockerRecordedHealth(inspect); recorded {
+		return healthy, nil
+	}
+
 	networkNames := m.healthCheckNetworkCandidates(inspect)
 	var netSettings *network.EndpointSettings
 	for _, networkName := range networkNames {
@@ -1053,6 +1057,29 @@ func (m *Manager) HealthCheck(ctx context.Context, containerID string) (bool, er
 	defer func() { _, _ = io.Copy(io.Discard, resp.Body); resp.Body.Close() }()
 
 	return resp.StatusCode == http.StatusOK, nil
+}
+
+// dockerRecordedHealth returns the result of the runtime image's own Docker
+// HEALTHCHECK, which probes /api/health inside the container, when the
+// container declares one. Docker records it on the container, so any caller
+// with the socket reads the same answer. The HTTP fallback below only works
+// from a process attached to the workspace's isolated network: the long-lived
+// control plane is, but `provider-msp status` runs in a one-off container on
+// the ingress network alone, so every real client read as unhealthy there and
+// upgrade.sh and the install proof refused to run on any install with a
+// client. A container still in its start period is not yet healthy.
+func dockerRecordedHealth(inspect container.InspectResponse) (healthy bool, recorded bool) {
+	if inspect.State == nil || inspect.State.Health == nil {
+		return false, false
+	}
+	switch inspect.State.Health.Status {
+	case container.Healthy:
+		return true, true
+	case container.Unhealthy, container.Starting:
+		return false, true
+	default:
+		return false, false
+	}
 }
 
 func (m *Manager) healthCheckNetworkCandidates(inspect container.InspectResponse) []string {
