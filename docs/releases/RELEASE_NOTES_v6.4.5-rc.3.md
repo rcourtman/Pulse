@@ -45,7 +45,7 @@ This release candidate follows `v6.4.5-rc.2` and gathers the accumulated monitor
 
 ## Known issues
 
-- Retiring a resource can produce repeated alert records and notifications in affected deployments (#2237); this candidate does not yet contain a verified correction.
+- Retiring a resource can produce repeated alert records and notifications in affected deployments (#2237). This candidate does not yet contain a verified correction.
 
 - Installed confirmation of the corrected PBS History identity on API-only nodes, agent-linked nodes, standalone PBS systems and multi-datastore systems remains outstanding.
 - Native pfSense GUI installation, service start and reboot confirmation remains outstanding.
