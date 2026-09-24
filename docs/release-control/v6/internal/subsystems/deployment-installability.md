@@ -894,6 +894,13 @@ artifact-selection behaviour.
    sign-in page agree. `provider-msp portal-link` is part of the packaged
    day-2 surface and mints links only for existing account members or pending
    invitees.
+   Setup's evaluation and closing guidance must point to Plan for actual paid
+   upgrade availability, not promise live Stripe checkout or a time-bound cap
+   increase. Operators must remain within the two-client evaluation limit
+   until Plan confirms a higher active limit. The ordinary empty-license path
+   must not present a lease signing key as a manual purchase step; the explicit
+   `--print-lease-signing-public-key` path remains available for separately
+   issued custom licenses, which must bind that key.
    Provider-hosted MSP installability must also pass provider-default report
    branding through the packaged tenant environment rather than requiring
    report-specific operator provisioning. The deployable control-plane config
