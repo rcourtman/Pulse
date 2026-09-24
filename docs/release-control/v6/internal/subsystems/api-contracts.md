@@ -8694,6 +8694,16 @@ payload shape: `agentId`, `commandsEnabled`, `settings`, `issuedAt`, and
 signed command decision and the signed settings payload, restricted to the
 agent-applied settings key schema, rather than treating `desiredConfig` itself
 as a direct member of that signature payload.
+
+Its `agent_config_fetch` audit events record every failed fetch but a
+successful fetch only when it is new audit information: the agent's first
+delivery after Pulse starts, a different token or `desiredConfig` hash, or an
+unchanged delivery last recorded 24 hours earlier. Agents poll every minute,
+and auditing each poll made this event over 99.9% of audit rows. Recorded
+successes carry `config=<desiredConfig hash>` and
+`reason=first_since_start|token_changed|config_changed|daily` in their details.
+`TestAgentConfigFetchAuditsNewDeliveriesAndEveryFailure` and
+`TestAgentConfigFetchAuditTrackerRecordsOnlyNewDeliveries` pin the rule.
 Agent profile delete and unassign clients must now also route canonical `204`
 success handling through shared allowed-status helpers in
 `frontend-modern/src/api/responseUtils.ts` instead of open-coding local

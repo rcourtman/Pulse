@@ -43,6 +43,8 @@ type UnifiedAgentHandlers struct {
 	// server upgrade on their next report instead of their next hourly update
 	// check. Empty (the default) omits it from acks.
 	serverVersion string
+
+	configFetchAudits *agentConfigFetchAuditTracker
 }
 
 // SetServerVersion supplies the running server version to include on report
@@ -63,7 +65,10 @@ func trimUnifiedAgentRoutePath(path string) string {
 
 // NewUnifiedAgentHandlers constructs a new handler set for Pulse Unified Agent ingest.
 func NewUnifiedAgentHandlers(mtm *monitoring.MultiTenantMonitor, m *monitoring.Monitor, hub *websocket.Hub) *UnifiedAgentHandlers {
-	return &UnifiedAgentHandlers{baseAgentHandlers: newBaseAgentHandlers(mtm, m, hub)}
+	return &UnifiedAgentHandlers{
+		baseAgentHandlers: newBaseAgentHandlers(mtm, m, hub),
+		configFetchAudits: newAgentConfigFetchAuditTracker(),
+	}
 }
 
 // HandleReport ingests Pulse Unified Agent reports.
@@ -607,8 +612,18 @@ func (h *UnifiedAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	LogAuditEventForTenant(GetOrgID(r.Context()), "agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true,
-		fmt.Sprintf("agent_id=%s token_id=%s", agentID, tokenID(record)))
+	configHash := ""
+	if signedConfig.DesiredConfig != nil {
+		configHash = signedConfig.DesiredConfig.Hash
+	}
+	orgID := GetOrgID(r.Context())
+	if reason, audit := h.configFetchAudits.observe(orgID, agentID, tokenID(record), configHash, time.Now()); audit {
+		details := fmt.Sprintf("agent_id=%s token_id=%s config=%s", agentID, tokenID(record), configHash)
+		if reason != "" {
+			details += " reason=" + reason
+		}
+		LogAuditEventForTenant(orgID, "agent_config_fetch", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, details)
+	}
 }
 
 func tokenID(record *config.APITokenRecord) string {
