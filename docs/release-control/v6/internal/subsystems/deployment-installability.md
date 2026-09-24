@@ -2438,6 +2438,20 @@ artifact-selection behaviour.
 
 ## Current State
 
+### The provider guide documents self-serve buying and bundle upgrades
+
+`docs/MSP.md` (byte-synced to `frontend-modern/public/docs/MSP.md`, and the
+page /msp links to) evaluates from the v6.6.0 provider bundle and describes the
+self-serve path end to end: buy and change plan from Plan in the portal, the
+platform fetches and applies its licence itself, what a lapsed licence means
+for the portal and client workspaces, and "Upgrading to a new release" with
+`upgrade.sh` run from a new bundle. It no longer mentions an assisted upgrade
+path, a setup-help contact form, or sending the signing key with a licence
+request except for custom licences above 40 clients.
+`TestProviderMSPEvaluationDocsUsePublishedSignedBundle` in
+`scripts/installtests/provider_msp_deploy_test.go` pins the bundle version and
+these statements.
+
 ### Provider MSP setup points buyers at the portal
 
 `deploy/provider-msp/setup.sh` no longer tells an evaluating provider to

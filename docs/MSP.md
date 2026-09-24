@@ -262,16 +262,15 @@ reports or collect report data in the provider control plane.
 
 MSP and Enterprise capabilities (`multi_tenant`, `unlimited`, `white_label`)
 are carried on the licence key. MSP plans are sized by client workspace count
-(Starter 5, Growth 15, Scale 40); workspace creation is blocked, not billed,
-when the limit is reached. The 60-day, two-workspace evaluation is
-self-service. Paid MSP licences are currently issued through the assisted
-upgrade path so the recurring licence renewal and key binding are checked
-before money changes hands.
+(Solo 3, Starter 5, Growth 15, Scale 40); workspace creation is blocked, not
+billed, when the limit is reached. The 60-day, two-workspace evaluation and
+every paid plan are self-service: you evaluate on your own host and buy from
+**Plan** in your provider portal, with nobody to contact.
 
 ### Evaluating without a licence
 
 Self-service evaluation is available from the signed provider bundle published
-with Pulse v6.4.1. Use this exact release asset and its integrity sidecars; do
+with Pulse v6.6.0. Use this exact release asset and its integrity sidecars; do
 **not** download the moving `main` branch archive or run its `setup.sh` as
 root. For a later release, first confirm its release page contains the
 versioned provider archive, checksum, and SSH signature before changing the
@@ -281,7 +280,7 @@ Download the versioned asset, verify it with Pulse's pinned release key, and
 only then extract and run the guided setup:
 
 ```bash
-export PULSE_VERSION=v6.4.1
+export PULSE_VERSION=v6.6.0
 export PULSE_MSP_BUNDLE="pulse-provider-msp-${PULSE_VERSION}.tar.gz"
 export PULSE_RELEASE_BASE="https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}"
 
@@ -303,10 +302,7 @@ sudo -E bash ./setup.sh
 
 The licence request omits an email address unless you export
 `PULSE_PROVIDER_MSP_EVAL_EMAIL` before running `setup.sh`, in which case that
-address is included in the request. If you
-want setup help, start from the
-[Pulse MSP evaluation page](https://pulserelay.pro/msp.html#evaluate) first;
-that contact request remains separate from the licence activation.
+address is included in the request.
 
 The host needs Ubuntu 24.04 or similar, a domain you can point at it, and
 ports 80 and 443 free. Install `curl`, `openssh-client`, `coreutils`, and `tar`
@@ -316,7 +312,7 @@ Traefik dnsChallenge provider works by setting `ACME_DNS_PROVIDER` in `.env`
 and putting that provider's credential variables in `dns-credentials.env`.
 
 Leave `CP_PROVIDER_MSP_LICENSE_FILE` blank and `setup.sh` self-issues a
-2-client evaluation licence. The v6.4.1 bundle sends the public half of the
+2-client evaluation licence. The bundle sends the public half of the
 signing key generated on your host, a setup-stage marker, and a signup-source
 label, plus the optional email address. This licence-request payload does not
 include the private key, client inventory or credentials; this is not a claim
@@ -335,22 +331,41 @@ entitlement leases chained to a Pulse-signed licence.
 you leave them blank, writing the resolved digests back into `.env`. The
 images are public, so this needs no credentials.
 
-Set the licence file when you buy; paid client caps come from the licence.
+### Buying and renewing
 
-### Licensing a provider deployment
+When you need a third client, open **Plan** in the provider portal, pick a
+plan and pay through Stripe checkout. The new client limit applies within
+seconds of returning to the portal: your control plane fetches its paid
+licence from the licence server and restarts itself to apply it, so there is
+no key or file to copy. **Manage billing** in the same place changes plan
+(bigger plans apply at once, smaller ones at renewal), updates your card,
+shows invoices, and cancels renewal. The licence renews itself for as long as
+the subscription does.
 
-In the provider-hosted model the licence is a signed file
-(`CP_PROVIDER_MSP_LICENSE_FILE`) that also binds your control plane's
-entitlement lease signing key:
+If a subscription is not renewed, or an evaluation reaches its end, the
+licence runs 7 more days and then lapses. The control plane and portal keep
+running so you can buy or renew from Plan, core monitoring keeps running in
+every client workspace, the client workspaces lose their MSP capabilities, and
+no new clients can be added until a current licence is in place again.
+`provider-msp status` reports `license_lapsed=true`.
+
+### How the licence binds your platform
+
+In the provider-hosted model the licence is a signed file that also binds
+your control plane's entitlement lease signing key:
 
 1. `setup.sh` generates `CP_ENTITLEMENT_SIGNING_PRIVATE_KEY` locally; the
    private key never leaves your host.
-2. Send the derived public key
-   (`./setup.sh --print-lease-signing-public-key`) with your licence request.
-3. The issued licence binds that key. The control plane refuses to start in
-   provider mode if the licence and key do not match, so a misconfigured
-   stack fails at startup instead of provisioning client workspaces that
-   silently run unlicensed.
+2. The evaluation licence, and every licence bought from Plan, binds the
+   public half of that key, which setup and the portal send for you.
+3. The control plane refuses to start in provider mode if the licence and
+   key do not match, so a misconfigured stack fails at startup instead of
+   provisioning client workspaces that silently run unlicensed.
+
+For more than 40 clients or a Pulse-hosted rollout, a custom licence is issued
+the same way: send the public key
+(`./setup.sh --print-lease-signing-public-key`) and set
+`CP_PROVIDER_MSP_LICENSE_FILE` to the licence you receive.
 
 Client runtimes lease their entitlements from your control plane (the
 control plane injects the refresh endpoint; nothing phones Pulse Cloud) and
@@ -358,6 +373,26 @@ verify each lease through the licence chain: Pulse's embedded key signs your
 licence, your licence binds your signing key, your signing key signs the
 lease. Leases carry the MSP capability set plus `white_label`, so branded
 per-client reports work inside every client workspace. When the licence
-expires, leases stop verifying after the grace period and client runtimes
-fall back to Community behavior; renew and restart the control plane to
-restore them.
+lapses, leases stop verifying and client runtimes fall back to Community
+behavior; renewing from Plan restores them without any change on the host.
+
+## Upgrading to a new release
+
+Download and verify the new release's provider bundle exactly as for a fresh
+install (set `PULSE_VERSION` to the new release), then run its `upgrade.sh`
+from the extracted bundle directory:
+
+```bash
+cd "pulse-provider-msp-${PULSE_VERSION}"
+sudo -E bash ./upgrade.sh --dry-run   # shows current and target image pins; changes nothing
+sudo -E bash ./upgrade.sh             # moves the install to this release
+sudo -E bash ./upgrade.sh --rollout-tenants   # also rolls client runtimes onto it
+```
+
+`upgrade.sh` works on your existing install (`/opt/pulse-provider-msp` unless
+you set `PULSE_PROVIDER_MSP_INSTALL_DIR`). It checks the platform and takes a
+verified backup before changing anything, then keeps a copy of `.env`
+(`.env.pre-upgrade-<time>`), installs the bundle's files, pins the control
+plane and client runtime images to the new release, and starts them. Pass
+`--keep-image-pins` if you pin images by hand. Run from the install directory
+instead, `upgrade.sh` re-applies the image pins already in `.env`.

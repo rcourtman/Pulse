@@ -502,9 +502,9 @@ func TestProviderMSPEvaluationDocsUsePublishedSignedBundle(t *testing.T) {
 	doc := string(repoDocBytes)
 	assertContainsAll(t, doc,
 		"signed provider bundle published",
-		"with Pulse v6.4.1",
+		"with Pulse v6.6.0",
 		"**not** download the moving `main` branch archive",
-		`export PULSE_VERSION=v6.4.1`,
+		`export PULSE_VERSION=v6.6.0`,
 		`PULSE_MSP_BUNDLE="pulse-provider-msp-${PULSE_VERSION}.tar.gz"`,
 		`releases/download/${PULSE_VERSION}`,
 		"ssh-keygen -Y verify",
@@ -516,7 +516,8 @@ func TestProviderMSPEvaluationDocsUsePublishedSignedBundle(t *testing.T) {
 		"a setup-stage marker, and a signup-source",
 		"this is not a claim",
 		"that setup makes no other network requests",
-		"contact request remains separate from the licence activation",
+		"open **Plan** in the provider portal",
+		"sudo -E bash ./upgrade.sh --dry-run",
 		`sudo -E bash ./setup.sh`,
 	)
 	assertNotContainsAny(t, doc,
@@ -525,6 +526,8 @@ func TestProviderMSPEvaluationDocsUsePublishedSignedBundle(t *testing.T) {
 		"credentials never leave the",
 		"cd Pulse-main/deploy/provider-msp",
 		"sudo -E ./setup.sh",
+		"assisted\nupgrade path",
+		"with your licence request",
 	)
 }
 
