@@ -116,6 +116,50 @@ jobs:
           fi
           echo "frontend_deps=$frontend_deps" >> "$GITHUB_OUTPUT"
 
+  provider-pair-docker:
+    name: Provider pair Docker acceptance
+    needs: changes
+    # Security backports need a live, exact-branch result before the steward
+    # freezes a release packet. Candidate qualification repeats the same case
+    # against the verified release image after freeze.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/') && needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact release-line source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify exact release-line source
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Preload pinned Docker helper image
+        run: docker pull 'alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6'
+
+      - name: Prove provider pair provisioning and cleanup
+        env:
+          PULSE_RUN_PROVIDER_PAIR_DOCKER_INTEGRATION: '1'
+          PULSE_DOCKER_INTEGRATION_IMAGE: alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+        run: |
+          set -euo pipefail
+          go test -count=1 -timeout 3m ./internal/cloudcp/docker \
+            -run '^TestIntegrationProviderPairNetworkIsolation$' -v \
+            | tee "$RUNNER_TEMP/provider-pair-network-test.log"
+          grep -q '^--- PASS: TestIntegrationProviderPairNetworkIsolation ' \
+            "$RUNNER_TEMP/provider-pair-network-test.log"
+
   frontend:
     name: Frontend
     needs: changes
