@@ -1,6 +1,7 @@
 import { Show, createSignal, type Accessor, type Component, type Setter } from 'solid-js';
 import ImageIcon from 'lucide-solid/icons/image';
 import Trash2 from 'lucide-solid/icons/trash-2';
+import { PulseBrandMark } from '@/components/Brand/PulseBrandMark';
 import { Button } from '@/components/shared/Button';
 import { FeatureGateSection } from '@/components/shared/FeatureGateSection';
 import { formControl, formHelpText, formLabel } from '@/components/shared/Form';
@@ -157,11 +158,7 @@ export const BrandingSettingsCard: Component<BrandingSettingsCardProps> = (props
             <div class="mt-3 flex min-h-10 items-center justify-center gap-2 overflow-hidden rounded bg-surface px-3 py-2">
               <Show
                 when={preview()}
-                fallback={
-                  <span class="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[10px] text-white">
-                    ●
-                  </span>
-                }
+                fallback={<PulseBrandMark class="h-5 w-5 shrink-0" decorative />}
               >
                 {(logo) => (
                   <img
