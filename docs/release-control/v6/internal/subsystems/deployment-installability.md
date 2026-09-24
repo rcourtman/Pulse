@@ -45,6 +45,28 @@ and publication-authority boundaries still apply.
 Its executable identity cases are in `release_snapshot_test.py`, and the staged
 workflow contract is verified in `release_promotion_policy_test.py`.
 
+### Provider-pair security qualification
+
+The provider-MSP network isolation repair on a release line requires a live
+two-provider Docker result before its public candidate is frozen. A protected
+`release/v*` push runs `TestIntegrationProviderPairNetworkIsolation` against
+the exact checked-out manager source on a fresh hosted runner with a pinned,
+preloaded helper image. The opt-in environment flag and an explicit passing
+test marker are both required; a skipped test is not acceptance. The case
+creates separate provider ingress networks with shared support-role labels,
+provisions the same tenant ID under each provider, rejects an unowned
+same-name network, and verifies that removing either tenant leaves the other
+provider's support attachments intact.
+
+Exact-candidate container qualification repeats the case on a fresh hosted
+runner using the control-plane image assembled from the verified immutable
+candidate payload, after its binary identity check. The branch-push result is
+pre-freeze manager/Docker security evidence, not exact-candidate qualification;
+neither check alone proves a full installed provider stack or publication.
+The workflow wiring is guarded by
+`TestProviderPairDockerSecurityAcceptanceRunsBeforeAndAfterFreeze` in
+`scripts/installtests/build_release_assets_test.go`.
+
 ### Backend preflight resource evidence
 
 The exact-source worker brackets the backend phase with bounded, read-only
