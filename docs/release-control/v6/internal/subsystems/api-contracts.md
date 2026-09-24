@@ -698,6 +698,20 @@ and slow-client eviction must use the same synchronized send/close ownership;
 recovering a send-on-closed panic is not a substitute for a race-free channel
 lifecycle.
 
+Invalidation coalescing is a throttle, not a restart-on-signal debounce. The
+first invalidation after a quiet period broadcasts after the 100 ms coalesce
+window; later invalidations for the same audience (all clients, or one tenant)
+replace the pending request without rescheduling it, and are broadcast no
+sooner than `defaultStateBroadcastInterval` (2 seconds) after that audience's
+previous broadcast. Every accepted agent report sends an invalidation and each
+broadcast resolves and diffs the full frontend state (about 130 ms at 2,080
+synthetic resources), so the debounce let broadcast work scale with agent
+count, and signals closer together than the window could postpone broadcasts
+indefinitely (#2199). `TestStateBroadcastsSpacedByInterval`,
+`TestTenantStateBroadcastsSpacedByInterval`, and
+`TestStateBroadcastNotStarvedBySteadySignals` pin the spacing, latest-state,
+and no-starvation behaviour.
+
 Browser clients declare their inbound state-frame ceiling on the WebSocket
 upgrade URL before initial-state construction begins. If a complete snapshot
 or a later delta exceeds that ceiling, the hub sends a compact
