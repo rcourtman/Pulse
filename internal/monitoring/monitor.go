@@ -5110,6 +5110,7 @@ func (m *Monitor) updateResourceStoreForRead(state models.StateSnapshot) {
 		return
 	}
 	recordSupplementalResourceChanges(store, m.collectSupplementalChanges())
+	store = newResourceSnapshotStore(store)
 	m.syncAllUnifiedMetrics(store)
 	m.syncUnifiedResourceAlertsToState(store.GetAll())
 }
@@ -5157,6 +5158,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	if atomicStore, ok := store.(AtomicSnapshotResourceStore); ok {
 		atomicStore.PopulateSnapshotAndSupplemental(snapshotForStore, recordsBySource)
 		recordSupplementalResourceChanges(store, supplementalChanges)
+		store = newResourceSnapshotStore(store)
 		m.syncAllUnifiedMetrics(store)
 		for source, records := range recordsBySource {
 			if len(records) == 0 {
@@ -5188,8 +5190,50 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	}
 
 	recordSupplementalResourceChanges(store, supplementalChanges)
+	store = newResourceSnapshotStore(store)
 	m.syncAllUnifiedMetrics(store)
 	m.syncUnifiedResourceAlertsToState(store.GetAll())
+}
+
+// resourceSnapshotStore serves one GetAll clone to every consumer of a single
+// store-refresh pass. The metric syncs and the alert sync each cloned the
+// whole registry for themselves, up to six clones for every accepted agent
+// report (#2199). Consumers of a pass only read, so they can share one
+// generation.
+type resourceSnapshotStore struct {
+	ResourceStoreInterface
+	targets   MetricsTargetResourceStore
+	resources []unifiedresources.Resource
+	listed    bool
+}
+
+// newResourceSnapshotStore wraps store for one refresh pass. A store that
+// cannot resolve metrics targets is returned as is, so the metric syncs'
+// capability checks see exactly what they would without the wrapper.
+func newResourceSnapshotStore(store ResourceStoreInterface) ResourceStoreInterface {
+	if store == nil {
+		return nil
+	}
+	if _, ok := store.(*resourceSnapshotStore); ok {
+		return store
+	}
+	targets, ok := store.(MetricsTargetResourceStore)
+	if !ok {
+		return store
+	}
+	return &resourceSnapshotStore{ResourceStoreInterface: store, targets: targets}
+}
+
+func (s *resourceSnapshotStore) GetAll() []unifiedresources.Resource {
+	if !s.listed {
+		s.resources = s.ResourceStoreInterface.GetAll()
+		s.listed = true
+	}
+	return s.resources
+}
+
+func (s *resourceSnapshotStore) MetricsTargetForResource(resourceID string) *unifiedresources.MetricsTarget {
+	return s.targets.MetricsTargetForResource(resourceID)
 }
 
 // refreshUnifiedResourceStoreAfterAgentStateChange makes accepted agent

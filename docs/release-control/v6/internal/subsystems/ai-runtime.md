@@ -6633,6 +6633,15 @@ The patrol-local `memory.ChangeDetector.GetChangesSummary` path now also
 delegates to the shared memory recent-change presentation helper, so any
 future fallback summary entry point inherits the same heading, resource
 prefixing, and change-type labels without re-implementing the markdown shape.
+That detector's on-disk history (`ai_changes.json`) is legacy and read-only.
+Nothing in the runtime has called `DetectChanges` since patrol moved to
+agentic execution, so the detector only loads that file at construction and
+never writes it. Detected changes stay in memory, and there is no background
+save to join before a data directory is removed. The unjoined save goroutine
+that `DetectChanges` used to launch was reachable only from tests, and could
+outlive a `t.TempDir` cleanup; it was removed rather than hardened.
+`TestChangeDetector_LegacyHistoryIsReadOnly` proves detection leaves the file
+and directory untouched.
 Those unified-resource action and export audit records are now also exposed
 through the enterprise audit read surface so operators can inspect the
 execution trail without reaching into storage internals.

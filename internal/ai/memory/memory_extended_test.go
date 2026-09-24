@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -143,31 +144,42 @@ func TestChangeDetector_MultipleChangesAtOnce(t *testing.T) {
 	}
 }
 
-func TestChangeDetector_Persistence(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "changes-test")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+func TestChangeDetector_LegacyHistoryIsReadOnly(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "ai_changes.json")
+	legacy := []byte(`[{"id":"legacy-1","resource_id":"vm-100","resource_type":"vm","change_type":"created","detected_at":"2026-01-01T00:00:00Z"}]`)
+	if err := os.WriteFile(path, legacy, 0600); err != nil {
+		t.Fatalf("write legacy history: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
 
-	// Create detector with persistence
 	d := NewChangeDetector(ChangeDetectorConfig{
 		MaxChanges: 100,
 		DataDir:    tmpDir,
 	})
-
-	// Create some changes
 	d.DetectChanges([]ResourceSnapshot{
 		{ID: "vm-100", Name: "web-server", Type: "vm", Status: "running", Node: "node1"},
 	})
 
-	// Wait a bit for async save
-	time.Sleep(100 * time.Millisecond)
+	// Detected changes join the loaded legacy history in memory.
+	if got := d.GetChangesForResource("vm-100", 10); len(got) != 2 {
+		t.Fatalf("expected legacy and detected change, got %d", len(got))
+	}
 
-	// Check if file was created (persistence is async, might not exist)
-	filePath := filepath.Join(tmpDir, "ai_changes.json")
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		t.Log("Changes file not created - persistence may be async")
+	// Nothing writes the data directory, so no background save can outlive
+	// the test and race TempDir cleanup.
+	entries, err := os.ReadDir(tmpDir)
+	if err != nil {
+		t.Fatalf("read data dir: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "ai_changes.json" {
+		t.Fatalf("data dir must hold only the legacy history, got %v", entries)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read legacy history: %v", err)
+	}
+	if !bytes.Equal(data, legacy) {
+		t.Fatalf("legacy history was rewritten: %s", data)
 	}
 }
 
@@ -304,11 +316,7 @@ func TestRemediationLog_FormatForContext_NoRecords(t *testing.T) {
 }
 
 func TestRemediationLog_Persistence(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "remediation-test")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create log with persistence
 	r := NewRemediationLog(RemediationLogConfig{
@@ -316,20 +324,19 @@ func TestRemediationLog_Persistence(t *testing.T) {
 		DataDir:    tmpDir,
 	})
 
-	_ = r.Log(RemediationRecord{
+	if err := r.Log(RemediationRecord{
 		ResourceID: "vm-100",
 		Problem:    "Test problem",
 		Action:     "Test action",
 		Outcome:    OutcomeResolved,
-	})
+	}); err != nil {
+		t.Fatalf("Log: %v", err)
+	}
 
-	// Wait a bit for async save
-	time.Sleep(100 * time.Millisecond)
-
-	// Check if file was created (persistence may be async)
+	// Log persists before returning.
 	filePath := filepath.Join(tmpDir, "ai_remediations.json")
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		t.Log("Remediation file not created - persistence may be async")
+	if _, err := os.Stat(filePath); err != nil {
+		t.Fatalf("expected remediation file after Log: %v", err)
 	}
 }
 

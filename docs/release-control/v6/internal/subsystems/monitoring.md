@@ -30,6 +30,22 @@ of an unchanged snapshot must not append duplicate change records.
 cover the publish and blocked-persistence boundaries. Synthetic performance
 improvement alone does not establish field CPU relief.
 
+### One registry snapshot per store refresh pass — issue #2199
+
+Each store refresh pass (`updateResourceStore`, its read-path twin, and so
+every accepted agent report) ran five metric syncs and the alert sync, and each
+cloned the whole registry through `GetAll`. A pass now wraps the store in
+`resourceSnapshotStore`, which clones once and forwards metrics-target
+resolution, so every consumer of the pass reads one generation. Stores without
+metrics-target resolution pass through unwrapped, keeping the syncs' capability
+checks unchanged. `TestAgentReportRefreshClonesRegistryOnce` requires one clone
+per agent-report refresh and `TestResourceSnapshotStoreClonesOncePerPass` pins
+the wrapper. With node-indexed guest parents, a synthetic agent-report refresh
+at 2,080 resources moved from 188 to 82 ms; the pass still covers the whole
+estate, and it stays synchronous (see the agent-lifecycle contract).
+
+### Linked Pulse agent memory for Proxmox LXC — issue #2148 (22 September 2026)
+
 ### Linked Pulse agent memory for Proxmox LXC — issue #2148 (22 September 2026)
 
 Both LXC memory paths (the efficient `cluster/resources` builder and the

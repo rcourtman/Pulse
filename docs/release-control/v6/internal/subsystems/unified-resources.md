@@ -38,6 +38,26 @@ compares the old and new paths, while
 boundary. The 1,000-resource benchmark is component evidence, not installed
 fleet CPU attribution or a release acceptance claim.
 
+### Node-indexed guest parent resolution during ingest — issue #2199
+
+Guest ingest resolves each Proxmox guest's parent node, and that lookup can
+fall back to scanning for agent candidates by node name. Walking every resource
+for every guest made each snapshot rebuild quadratic in the estate. Every
+agent-producing source is ingested before the VM and container loops, so the
+registry buckets agents by lowercased node name for those loops, reusing
+`agentNodeScanIndex` from `buildChildCounts`. `ingestRecord` rebuilds a live
+index whenever an ingest yields an agent, and the indexed walk skips entries
+that are no longer the registry's current object for their ID, so resolution
+matches the full scan exactly. `TestGuestIngestParentsMatchFullAgentScan`
+compares every guest's ingest-time parent with the full scan, including a
+cluster whose guests are reachable only through the scan, and
+`TestAgentNodeScanIndexTracksAgentsIngestedWhileLive` pins the rebuild. On a
+synthetic estate of 8-node clusters the rebuild moved from 74 to 42 ms at 2,080
+resources and now grows linearly; that is component evidence, not installed
+fleet CPU attribution.
+
+### Bounded incident-history selection
+
 Canonical frontend memory withdrawal is explicit: when a resource snapshot omits the canonical memory metric and its Proxmox memory facet marks usageUnavailable, the display merge must clear any previous metric. Plain partial omission remains compatible with richer REST state, and an incoming canonical metric (including measured zero) takes precedence over unavailable raw evidence. The adapter transition tests pin withdrawal and recovery; the hybrid-memory Chromium fixture exercises the rendered table and drawer at 1280px and 390px. Workload details remain canonical-only: withdrawal shows N/A in the table and removes the Memory section rather than manufacturing a raw-facet total; measured-zero recovery restores Total and Free, with screenshot positioning above fixed navigation. This does not change agent-only or arbitrary field-deletion semantics.
 
 **VM-linked agent memory read — issue #1962 (7 September 2026)**
