@@ -1,21 +1,21 @@
 {
   "version": 1,
-  "base_sha": "3b1b43293e21d06d1286124f96f78b1247443dea",
-  "verified_at": "2026-09-24T09:02:03Z",
+  "base_sha": "cefdc5f1090500f2cc7edfec5a4a0b3282737633",
+  "verified_at": "2026-09-24T16:16:41Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/BrandingSettingsCard.tsx"
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/BrandingSettingsCard.tsx": "6516a05aff71b1d96660f81189b6df8bceccf7e94d15d6c3213556e794f2ae40"
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "33311259efa6f5e21bfacf3295594d68bf2d8d56622b71390cb6eaa13a559a09"
   },
   "routes": [
-    "/settings/system-general (Application branding card, Header preview)"
+    "/patrol"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 900
+      "width": 1452,
+      "height": 1229
     },
     {
       "width": 390,
@@ -23,15 +23,20 @@
     }
   ],
   "states": [
-    "No custom logo and no custom name: the preview falls back to the default Pulse lockup",
-    "Light colour scheme at 1280x900 and 390x844",
-    "Dark colour scheme at 1280x900"
+    "Patrol off with model setup unavailable and 22 to 23 active attention decisions",
+    "Inbox list and selected decision detail on desktop",
+    "Expanded evidence and history for a selected decision",
+    "Activity tab and Inbox return",
+    "Inbox restored after route reload",
+    "Mobile Inbox list, loaded detail, and return to list"
   ],
   "interactions": [
-    "Open Settings > General with the white_label capability present; assert the Header preview renders exactly one svg.pulse-brand-logo (blue disc, white ring, white centre dot) and no \"\u25cf\" text glyph",
-    "Compare the preview mark with the page header lockup: both render PulseBrandMark at 20px",
-    "Check the page does not scroll horizontally at 390px wide"
+    "Open Sonarr attention decision and inspect actual desktop pixels and action links",
+    "Expand Evidence and history and inspect observations, protection, and timeline",
+    "Close attention detail, switch to Activity, and return to Inbox",
+    "Reload /patrol and confirm active decisions remain visible while Patrol is off",
+    "At 390 px open Sonarr, inspect loaded detail pixels, then return to list"
   ],
-  "command": "node verify.mjs (Playwright against a private mock-mode backend on :7681 and Vite on :5199)",
-  "notes": "Chromium via Playwright 1.56.1 from repos/pulse/node_modules. Real app and backend in PULSE_MOCK_MODE with ALLOW_ADMIN_BYPASS; the only stub is /api/license/runtime-capabilities with white_label added, because the mock install has no white-label entitlement and the card is gated behind it. Before the fix the same preview drew a blue circle containing a \"\u25cf\" text character instead of the Pulse brand mark, as seen in a provider-hosted client workspace on the walkthrough lab. Console errors were only the mock environment's failing update check."
+  "command": "In-app browser Playwright against current local Vite server at http://localhost:5173/patrol",
+  "notes": "The Patrol off toggle and model setup controls were left unchanged. The Inbox now shows the independent attention queue."
 }

@@ -4,10 +4,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PatrolIntelligenceSurface } from '../PatrolIntelligenceSurface';
 
+const patrolState = vi.hoisted(() => ({ setupOnly: false, enabled: true }));
+
 vi.mock('../usePatrolIntelligenceState', () => ({
   usePatrolIntelligenceState: () => ({
-    shouldShowPatrolSetupOnly: () => false,
-    patrolEnabledLocal: () => true,
+    shouldShowPatrolSetupOnly: () => patrolState.setupOnly,
+    patrolEnabledLocal: () => patrolState.enabled,
     setActiveTab: vi.fn(),
     setSelectedRun: vi.fn(),
     setFindingsFilterOverride: vi.fn(),
@@ -73,7 +75,22 @@ vi.mock('@/components/shared/MetadataBadge', () => ({
 }));
 
 describe('PatrolIntelligenceSurface finding handoff', () => {
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    patrolState.setupOnly = false;
+    patrolState.enabled = true;
+  });
+
+  it('keeps the attention inbox available when Patrol is off and needs setup', () => {
+    patrolState.setupOnly = true;
+    patrolState.enabled = false;
+
+    render(() => <PatrolIntelligenceSurface />);
+
+    expect(screen.getByRole('tab', { name: 'Inbox' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: 'Open scoped finding options' })).toBeInTheDocument();
+    expect(screen.queryByTestId('patrol-workspace')).not.toBeInTheDocument();
+  });
 
   it('keeps the selected decision resource in context and lets the operator broaden the list', () => {
     render(() => <PatrolIntelligenceSurface />);
