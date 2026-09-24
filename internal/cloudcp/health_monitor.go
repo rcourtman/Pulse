@@ -49,6 +49,12 @@ func (m *Monitor) Run(ctx context.Context) {
 		Bool("restart_on_fail", m.cfg.RestartOnFail).
 		Msg("Health monitor started")
 
+	// Check once straight away. The control plane starts fresh after every
+	// upgrade, and the first pass is what puts the recreated support
+	// containers back on each client's network; waiting a full interval
+	// leaves every client route broken for that long.
+	m.checkAll(ctx)
+
 	ticker := time.NewTicker(m.cfg.Interval)
 	defer ticker.Stop()
 
@@ -64,6 +70,9 @@ func (m *Monitor) Run(ctx context.Context) {
 }
 
 func (m *Monitor) checkAll(ctx context.Context) {
+	if ctx.Err() != nil {
+		return
+	}
 	activeContainerIDs := make(map[string]struct{})
 	tenants, err := m.registry.ListByState(registry.TenantStateActive)
 	if err != nil {
@@ -79,6 +88,16 @@ func (m *Monitor) checkAll(ctx context.Context) {
 			continue
 		}
 		activeContainerIDs[tenant.ContainerID] = struct{}{}
+
+		// Rejoin Traefik and the control plane to this client's network
+		// first. A recreated support container (every upgrade recreates the
+		// control plane) has lost it, which cuts the client's route and
+		// would make a healthy client look unreachable.
+		if err := m.docker.EnsureSupportContainersOnTenantNetwork(ctx, tenant.ID); err != nil {
+			log.Warn().Err(err).
+				Str("tenant_id", tenant.ID).
+				Msg("Health monitor: could not reattach support containers to tenant network")
+		}
 
 		healthy, err := m.docker.HealthCheck(ctx, tenant.ContainerID)
 		if err != nil {
@@ -117,14 +136,16 @@ func (m *Monitor) checkAll(ctx context.Context) {
 				Int("fail_threshold", m.cfg.FailThreshold).
 				Msg("Container unhealthy, attempting restart")
 
-			if err := m.docker.Stop(ctx, tenant.ContainerID); err != nil {
+			// Restart, never Stop: the unless-stopped policy does not bring
+			// back a container stopped through the API, so a stop took the
+			// client workspace down until someone started it by hand.
+			if err := m.docker.Restart(ctx, tenant.ContainerID); err != nil {
 				log.Error().
 					Err(err).
 					Str("tenant_id", tenant.ID).
 					Str("container_id", tenant.ContainerID).
-					Msg("Failed to stop unhealthy container")
+					Msg("Failed to restart unhealthy container")
 			}
-			// Docker restart policy (unless-stopped) will restart the container
 			m.failures[tenant.ContainerID] = 0
 		}
 	}
