@@ -30,6 +30,7 @@ type Deps struct {
 	HostedEntitlements *entitlements.Service
 	Version            string
 	EmailSender        email.Sender
+	ProviderMSPLicense *ProviderMSPLicenseRefresher // nil unless provider-hosted MSP can reach a licence server
 }
 
 func publicCloudSignupPath(cfg *CPConfig) string {
@@ -281,6 +282,16 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	// Tenant switching handoff (session + account-membership authenticated)
 	handoffHandler := handoff.HandleHandoff(deps.Registry, deps.Config.TenantsDir())
 	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}/handoff", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, handoffHandler)))
+
+	if deps.Config.IsProviderHostedMSP() {
+		// Plan, purchase and billing for a provider-hosted platform. Any
+		// member can see the plan; buying, billing and licence refresh are
+		// owner or admin actions.
+		mux.Handle("/api/accounts/{account_id}/provider-msp/plan", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, HandleProviderMSPPlan(deps.Config, deps.ProviderMSPLicense))))
+		mux.Handle("/api/accounts/{account_id}/provider-msp/checkout", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, accountMutationAuth(HandleProviderMSPCheckout(deps.ProviderMSPLicense)))))
+		mux.Handle("/api/accounts/{account_id}/provider-msp/billing-portal", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, accountMutationAuth(HandleProviderMSPBillingPortal(deps.ProviderMSPLicense)))))
+		mux.Handle("/api/accounts/{account_id}/provider-msp/license/refresh", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, accountMutationAuth(HandleProviderMSPLicenseRefresh(deps.ProviderMSPLicense)))))
+	}
 
 	// MSP portal API (session + account-membership authenticated)
 	portalEnv := portal.PortalEnvironment{
