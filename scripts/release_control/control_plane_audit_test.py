@@ -246,10 +246,11 @@ class ControlPlaneAuditTest(unittest.TestCase):
 
     def test_forward_patch_train_uses_actual_control_plane(self) -> None:
         for version in ("6.4.4-beta.1", "v6.4.4-beta.2", "6.4.4-rc.1",
-                        "6.4.4", "v6.4.4+build.1", "6.4.3-rc.1", "6.4.3"):
+                        "6.4.4", "v6.4.4+build.1", "6.4.3-rc.1", "6.4.3",
+                        "6.4.5-beta.1", "6.4.5-rc.3", "6.4.5"):
             with self.subTest(version=version):
                 self.assertEqual(release_branch_for_version(version), "release/v6.4")
-        for version in ("6.4.1", "6.4.2", "6.4.5-beta.1", "6.4.40-beta.1",
+        for version in ("6.4.1", "6.4.2", "6.4.6", "6.4.40-beta.1",
                         "6.4.30", "6.3.20", "6.6.0-beta.1"):
             with self.subTest(version=version):
                 self.assertEqual(release_branch_for_version(version), "main")
