@@ -4,8 +4,6 @@
 package memory
 
 import (
-	"encoding/json"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -53,20 +51,20 @@ type ResourceSnapshot struct {
 	SnapshotTime time.Time `json:"snapshot_time"`
 }
 
-// ChangeDetector tracks infrastructure changes over time
+// ChangeDetector tracks infrastructure changes over time.
+//
+// Recent-change context comes from the unified-resource timeline; the detector
+// is only its fallback. Its on-disk history (ai_changes.json) is legacy data
+// from before patrol stopped calling DetectChanges: it is loaded once at
+// construction and never written, so changes detected now stay in memory.
 type ChangeDetector struct {
 	mu            sync.RWMutex
 	previousState map[string]ResourceSnapshot // resourceID -> snapshot
 	changes       []Change
 	maxChanges    int
 
-	// Persistence
+	// dataDir holds the legacy history read by loadFromDisk.
 	dataDir string
-
-	// saveStateMu guards asynchronous save scheduling state.
-	saveStateMu   sync.Mutex
-	saveRunning   bool
-	saveRequested bool
 }
 
 // ChangeDetectorConfig configures the change detector
@@ -156,17 +154,10 @@ func (d *ChangeDetector) DetectChanges(currentSnapshots []ResourceSnapshot) []Ch
 		}
 	}
 
-	// Store new changes
+	// Store new changes in memory only; the legacy history is read-only.
 	if len(newChanges) > 0 {
 		d.changes = append(d.changes, newChanges...)
 		d.trimChanges()
-
-		// Persist asynchronously
-		go func() {
-			if err := d.saveToDisk(); err != nil {
-				log.Warn().Err(err).Msg("failed to save change history")
-			}
-		}()
 	}
 
 	return newChanges
@@ -306,35 +297,7 @@ func (d *ChangeDetector) trimChanges() {
 	}
 }
 
-// saveToDisk persists changes to JSON file
-func (d *ChangeDetector) saveToDisk() error {
-	if d.dataDir == "" {
-		return nil
-	}
-
-	d.mu.RLock()
-	changes := make([]Change, len(d.changes))
-	copy(changes, d.changes)
-	d.mu.RUnlock()
-
-	path, err := memoryPersistencePath(d.dataDir, changeHistoryFileName)
-	if err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(changes, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
-		return err
-	}
-
-	return os.Rename(tmpPath, path)
-}
-
-// loadFromDisk loads changes from JSON file
+// loadFromDisk loads the legacy change history from its JSON file
 func (d *ChangeDetector) loadFromDisk() error {
 	changes, ok, err := loadMemoryHistory(d.dataDir, changeHistoryFileName, "change history", func(a, b Change) bool {
 		return a.DetectedAt.Before(b.DetectedAt)
