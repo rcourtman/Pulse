@@ -53,6 +53,9 @@ describe('useStoragePoolsTableWindowing', () => {
       'group:closed',
       'record:storage-4',
     ]);
+    expect(items.filter((item) => item.kind === 'record').every((item) => !('group' in item))).toBe(
+      true,
+    );
   });
 
   it('keeps a large estate to a bounded 72-item DOM window and reveals expansion targets', () => {

@@ -5356,3 +5356,31 @@ selection can be retained and recovered without manufacturing a target. The
 boundary, and `scripts/check-drawer-tab-retention.cjs` exercises the rendered
 drawer at desktop and narrow widths: selecting History, dropping the merged
 metrics target, and restoring it must keep the selection and recover the chart.
+
+### Canonical reference resolution uses a derived alias index
+
+After ingest and canonical identity refresh, the registry defers building its
+derived simple-folded index for primary IDs, platform IDs and aliases until a
+public reference lookup actually needs an alias. Rebuilding it on every ingest
+made the registry's batch-ingest benchmarks regress. Distinct resources
+claiming the same alias remain ambiguous. During an ingest batch, internal
+reference reads use the live scan until the index is built. Exact canonical
+IDs, superseded IDs, source IDs and Proxmox guest references retain their
+existing precedence without paying the index build. `ResolveReferenceID` gives
+identity-only monitor callers the same resolution without cloning a resource.
+Registry tests cover Unicode fold classes, ambiguity, precedence and refresh.
+On the 1,500-agent synthetic benchmark, canonical-alias hits moved from about
+225µs and 1,518 allocations to about 5µs and 19 allocations. A server CPU
+profile attributed about 0.77s of a 30s baseline window to the old alias
+scan. These measurements identify this component cost, not the total
+installed-fleet CPU effect.
+
+The first #2260 benchmark job found the eager index build on ingest: its
+50-host merge benchmark rose 27.91% and the mixed ingest benchmark rose 24.88%,
+with additional allocations. After deferring index construction, five
+alternating exact-base/candidate worker runs at load 0.53-0.91 measured the
+50-host merge at 462.4µs versus 464.8µs (+0.5%) and mixed ingest at 4.918ms
+versus 4.953ms (+0.7%), with unchanged allocations. The 200-host merge was
+3.210ms versus 3.192ms (-0.6%). The warmed alias-hit benchmark remained about
+4.7µs and 19 allocations. These paired runs remove the observed local ingest
+regression; the revised PR still needs its CI benchmark result.

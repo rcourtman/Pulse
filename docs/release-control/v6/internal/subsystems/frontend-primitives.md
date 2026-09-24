@@ -7429,3 +7429,21 @@ real history hook and administration card: load a row, start a pending range
 read, confirm clear, then release the obsolete response at desktop and phone
 widths. Scripted API responses establish component behaviour, not installed
 backend deletion or destination delivery.
+
+### Large platform notices keep the inventory in view
+
+`PlatformOutdatedAgentNotice` previews at most three affected names and exposes
+the full list through a keyboard-operable button when more hosts are outdated.
+The count, update guidance and action link remain visible. This keeps a
+large-estate stale-agent warning from pushing the platform inventory and
+Storage search below the phone viewport while preserving every affected name
+on demand. The component test pins collapsed, expanded and collapsed-again
+states; 1440px, 768px and 390px browser checks verify placement and overflow.
+The shared `InlineNotice` action text uses opaque 800-level colors for its four
+tones. The current Tailwind configuration overrides several 900-level palette
+tokens with 25%-alpha colors for translucent backgrounds, so using those
+tokens for notice links made a working action look disabled. The browser proof
+also follows the outdated-agent action to Agent Doctor with all 49 host IDs.
+The broader palette override should be corrected in its own shared-design
+slice, with background users migrated to explicit alpha utilities so other
+900-level text consumers can use normal opaque color semantics.

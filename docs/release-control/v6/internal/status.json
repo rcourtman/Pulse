@@ -10419,21 +10419,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "pulse-maintainer-lane-l6",
-      "agent_id": "pulse-maintainer",
-      "summary": "Preserve non-auth system settings during quick security setup; retain authentication authorization and reviewed source identities",
-      "target_id": "v6-release-reliability",
-      "claimed_at": "2026-09-15T01:10:15Z",
-      "heartbeat_at": "2026-09-15T01:10:15Z",
-      "expires_at": "2026-09-15T03:10:15Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L6"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

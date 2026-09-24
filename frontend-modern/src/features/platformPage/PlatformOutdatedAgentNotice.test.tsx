@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it } from 'vitest';
 import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
 import { PlatformOutdatedAgentNotice } from './PlatformOutdatedAgentNotice';
@@ -50,6 +50,33 @@ describe('PlatformOutdatedAgentNotice', () => {
     const notice = screen.getByTestId('platform-outdated-agent-notice');
     expect(notice).toHaveTextContent('2 hosts are running an older Pulse agent.');
     expect(notice).toHaveTextContent('Affected: tower, delly.');
+  });
+
+  it('keeps a large affected-host list behind an expandable preview', () => {
+    render(() => (
+      <PlatformOutdatedAgentNotice
+        hosts={[
+          { name: 'tower', version: 'v6.0.0-rc.5' },
+          { name: 'delly', version: 'v6.0.0-rc.5' },
+          { name: 'lab', version: 'v6.0.0-rc.5' },
+          { name: 'remote', version: 'v6.0.0-rc.5' },
+        ]}
+        targetVersion="v6.0.0-rc.6"
+        missingLabel="images"
+      />
+    ));
+
+    const notice = screen.getByTestId('platform-outdated-agent-notice');
+    expect(notice).toHaveTextContent('Affected: tower, delly, lab, and 1 more.');
+    expect(notice).not.toHaveTextContent('Affected: tower, delly, lab, remote.');
+
+    const toggle = screen.getByRole('button', { name: 'Show all 4 hosts' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(notice).toHaveTextContent('Affected: tower, delly, lab, remote.');
+    fireEvent.click(screen.getByRole('button', { name: 'Hide affected names' }));
+    expect(notice).not.toHaveTextContent('Affected: tower, delly, lab, remote.');
   });
 
   it('uses latest-detail copy for hybrid platform pages', () => {

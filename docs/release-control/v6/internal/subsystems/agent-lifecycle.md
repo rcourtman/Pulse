@@ -8283,3 +8283,17 @@ TLS options, non-interactive operation and cleanup on success or failure.
 synthetic root/sudo execution under sh and Bash, including download, preflight
 and install failures. A clipboard fixture proves input compatibility, not native
 FreeBSD installation, offline dependency availability or service persistence.
+
+### Agent Doctor handoff stays readable on a phone
+
+The outdated-agent notice routes operators to Agent Doctor with the affected
+agent IDs. On a 390px viewport, the target list now allocates its visible
+columns to Agent, Status and Seen so the full "Needs attention" badge fits
+without horizontal scrolling or clipping. The Status column also receives
+enough width in the intermediate layout, while the wide desktop layout retains
+its original proportions and System, Reported and Target columns. Agent
+Doctor's light-tone guidance uses opaque text colors because the current
+900-level palette tokens
+are translucent. The 49-agent synthetic browser pass follows the deep link,
+inspects the guidance and status rows at phone and desktop widths, and keeps
+update commands and credential authority unchanged.

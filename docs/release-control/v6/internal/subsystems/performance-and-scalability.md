@@ -3309,3 +3309,42 @@ a 5-second step previously reserved over a million slots per series; the
 preallocation is now capped at `maxQueryAllSeriesCapacity` and append still
 grows the slice for genuinely dense series. `pkg/metrics/store_additional_test.go`
 pins the cap in `TestEstimateQueryAllBatchSeriesCapacityCapsPreallocation`.
+
+### Large-estate browser work stays bounded by changed resources
+
+The Proxmox overview's canonical Workloads projection consumes the same
+committed resource snapshot as its owning platform page. A consecutive delta
+now carries the changed resource IDs through `useUnifiedResources` to
+`useWorkloads`, so unchanged resource projections and workload rows retain
+their identity. A full REST refresh, missed version, organisation change, or
+unknown delta falls back to a complete projection. The all-resources cache
+captures its previous generation before publication so it can take this
+bounded path too. Hook tests pin both the incremental and fallback boundaries.
+
+The 50-node, 1,508-resource synthetic browser fixture exposed a separate
+quadratic Storage navigation cost: each record row included its entire group,
+and windowed row reconciliation traversed that group for every record. The
+record rows now carry only their own storage record, while group headers retain
+the group. At 390px with 4x CPU throttling, the measured Storage click's
+longest task fell from 5.9s to 1.75s, and final route navigation recorded
+0.66-1.65s Storage long tasks. The fixture uses random metric updates, so
+these are bounded browser observations, not an installed-fleet latency claim.
+The roughly 4MB initial resource payload remains the separately tracked
+`resource-payload-static-metadata` gap and still dominates cold hydration.
+
+### Workload-chart benchmark signal at audit landing
+
+The #2259 CI Benchmarks job reported `HandleWorkloadCharts_StoreBacked-4`
+at 168.7µs on its base and 189.1µs on its candidate (+12.13%, p=0.009,
+ten samples). The chart handler, store query and benchmark body were unchanged
+between those revisions. Two exact-base/candidate runs on `pulse-dev`
+alternated ten 500ms samples each. The first, starting at load 5.63, measured
+mean 426.3µs base versus 386.4µs candidate. The second, at load 1.26-1.54,
+measured 391.8µs base versus 396.0µs candidate (+1.1%), with wide per-pair
+variation. Both compiled benchmark binaries used pinned Go 1.26.8; the
+system `go version` outside the repository reports 1.26.5 but the module's
+toolchain directive selected 1.26.8 for compilation. Neither worker run
+reproduced the CI magnitude or establishes an improvement. Keep the signal
+open as an environment-bound observation under the existing
+`performance-post-rc-headroom` follow-up; no chart-path code change is
+justified by this comparison alone.

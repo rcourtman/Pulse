@@ -283,8 +283,7 @@ func (a *MonitorAdapter) ResolveCanonicalResourceID(ref string) (string, bool) {
 	if registry == nil {
 		return "", false
 	}
-	_, canonicalID, ok := registry.GetByReference(ref)
-	return canonicalID, ok
+	return registry.ResolveReferenceID(ref)
 }
 
 // ResolveCanonicalResourceAncestors returns the live canonical parent chain,
@@ -295,7 +294,7 @@ func (a *MonitorAdapter) ResolveCanonicalResourceAncestors(ref string) []string 
 	if registry == nil {
 		return nil
 	}
-	_, canonicalID, ok := registry.GetByReference(ref)
+	canonicalID, ok := registry.ResolveReferenceID(ref)
 	if !ok {
 		canonicalID = CanonicalResourceID(ref)
 	}
@@ -308,7 +307,7 @@ func (a *MonitorAdapter) ResolveCanonicalResourceAncestors(ref string) []string 
 		}
 		parentRef := CanonicalResourceID(*resource.ParentID)
 		parentID := parentRef
-		if _, resolvedParentID, resolved := registry.GetByReference(parentRef); resolved {
+		if resolvedParentID, resolved := registry.ResolveReferenceID(parentRef); resolved {
 			parentID = resolvedParentID
 		}
 		if parentID == "" {
