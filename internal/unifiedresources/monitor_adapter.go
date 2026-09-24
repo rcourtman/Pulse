@@ -314,7 +314,6 @@ func (a *MonitorAdapter) replaceRegistryLocked(snapshot models.StateSnapshot, re
 		return
 	}
 
-	before := registry.List()
 	rebuilt := NewRegistry(registry.store)
 	staleThresholds := a.currentStaleThresholds()
 	rebuilt.IngestSnapshotWithStaleThresholds(snapshot, staleThresholds)
@@ -353,7 +352,7 @@ func (a *MonitorAdapter) replaceRegistryLocked(snapshot models.StateSnapshot, re
 		occ := snapshot.LastUpdate
 		occurredAt = &occ
 	}
-	recordRegistryChanges(registry.store, before, rebuilt.List(), rebuiltAt, occurredAt, SourcePulseDiff, "")
+	recordRegistryChangesBetweenGenerations(registry, rebuilt, rebuiltAt, occurredAt, SourcePulseDiff, "")
 	rebuilt.PersistIdentityPins()
 
 	a.mu.Lock()

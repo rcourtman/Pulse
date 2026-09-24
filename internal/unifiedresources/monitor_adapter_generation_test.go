@@ -54,6 +54,20 @@ func TestMonitorAdapterSerializesSupplementalMutationAfterSnapshotPublication(t 
 		t.Fatal("snapshot rebuild did not reach change publication")
 	}
 
+	// Change persistence may block, but it must not retain either registry's
+	// read lock. Readers still use the previously published generation.
+	readDone := make(chan struct{})
+	go func() {
+		adapter.GetAll()
+		close(readDone)
+	}()
+	select {
+	case <-readDone:
+	case <-time.After(time.Second):
+		close(store.release)
+		t.Fatal("registry read blocked behind change persistence")
+	}
+
 	supplementalDone := make(chan struct{})
 	go func() {
 		adapter.PopulateSupplementalRecords(SourceAgent, []IngestRecord{{
