@@ -2438,8 +2438,11 @@ on startup and each pass, and restarts rather than stops an unhealthy client.
 The original PR reports a two-client v6.4.1 lab reproduction and recovery on
 the same installation on 2026-09-23; that is not installed acceptance of this
 integrated source. Reconnection selects support containers from the configured
-provider ingress network and requires exact tenant ownership labels before
-mutating an existing network.
+provider ingress network. Both reconnection and new workspace provisioning
+require exact tenant ownership and tenant-runtime labels on an existing
+isolated network before attaching containers; provisioning refuses an
+unlabelled same-named network instead of adopting it. A legacy client without
+an isolated network remains a reconnection no-op.
 
 ### Provider MSP operations accept a renewed licence
 

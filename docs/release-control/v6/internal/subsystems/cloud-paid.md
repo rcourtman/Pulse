@@ -3443,10 +3443,16 @@ client's isolated tenant network. Recreating either one, which every
 `upgrade.sh` run does to the control plane, drops those attachments, cutting
 the client's Traefik route and, with the old stop behaviour, taking every
 client offline three minutes later. A client without an isolated network is
-skipped quietly. Regression coverage:
+skipped quietly during recovery. Provisioning may create a missing isolated
+network, but it must not adopt a same-named pre-existing network unless the
+network has the exact tenant ID and provider-MSP tenant-runtime labels; an
+empty tenant ID is invalid. This prevents a foreign or unlabelled network from
+becoming a client's runtime route before support containers are attached.
+Regression coverage:
 `TestHealthMonitorReattachesSupportContainersAndRestartsInsteadOfStopping` in
 `internal/cloudcp/health_monitor_test.go` and
-`TestEnsureSupportContainersOnTenantNetworkSkipsMissingNetwork` in
+`TestEnsureSupportContainersOnTenantNetworkSkipsMissingNetwork` and
+`TestEnsureTenantNetworkRejectsUnownedExistingNetwork` in
 `internal/cloudcp/docker/manager_test.go`.
 
 ### Provider-hosted MSP platforms buy and renew their own licence
