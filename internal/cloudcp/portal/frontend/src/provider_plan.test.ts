@@ -200,7 +200,7 @@ describe('installProviderPlan', () => {
   it('applies a purchase after checkout returns and shows the new plan once the platform restarts', async () => {
     api.refreshLicense = vi.fn()
       .mockResolvedValueOnce({ status: 'no_paid_subscription' })
-      .mockResolvedValueOnce({ status: 'active', changed: true, restart_scheduled: true });
+      .mockResolvedValueOnce({ status: 'active', changed: true, restart_scheduled: true, plan_version: 'msp_solo' });
     const { store, controller } = install(providerBootstrap(), '?provider_msp_checkout=complete');
     await controller.load();
     expect(store.getShellState().activeSection).toBe('billing');
@@ -225,11 +225,60 @@ describe('installProviderPlan', () => {
     expect(document.getElementById(PROVIDER_PLAN_ROOT_ID)!.innerHTML).toContain('Manage billing');
   });
 
+  it('does not announce the old plan when refresh beats the initial plan request', async () => {
+    let resolveInitial!: (plan: ProviderPlanState) => void;
+    api.fetchPlan = vi.fn()
+      .mockImplementationOnce(() => new Promise<ProviderPlanState>((resolve) => { resolveInitial = resolve; }))
+      .mockResolvedValueOnce(evaluationPlan())
+      .mockResolvedValueOnce(evaluationPlan({ plan_version: 'msp_solo', evaluation: false, workspace_limit: 3 }));
+    api.refreshLicense = vi.fn().mockResolvedValue({
+      status: 'active', changed: true, restart_scheduled: true, plan_version: 'msp_solo',
+    });
+    const { controller } = install(providerBootstrap(), '?provider_msp_checkout=complete');
+    const initialLoad = controller.load();
+    await flush();
+    expect(controller.view().notice).toContain('being applied');
+
+    timers.shift()!();
+    await flush();
+    expect(controller.view().notice).not.toContain('plan is active');
+    expect(timers).toHaveLength(1);
+
+    timers.shift()!();
+    await flush();
+    expect(controller.view().notice).toBe('Your Solo plan is active.');
+    resolveInitial(evaluationPlan());
+    await initialLoad;
+    expect(controller.view().plan?.plan_version).toBe('msp_solo');
+  });
+
+  it('waits for the renewed licence date when the plan name is unchanged', async () => {
+    const original = evaluationPlan({ plan_version: 'msp_solo', evaluation: false, expires_at: '2026-10-10T00:00:00Z' });
+    const renewed = evaluationPlan({ plan_version: 'msp_solo', evaluation: false, expires_at: '2026-11-10T00:00:00Z' });
+    let served = original;
+    api.fetchPlan = vi.fn().mockImplementation(() => Promise.resolve(served));
+    api.refreshLicense = vi.fn().mockResolvedValue({
+      status: 'active', changed: true, restart_scheduled: true,
+      plan_version: 'msp_solo', expires_at: renewed.expires_at,
+    });
+    const { controller } = install(providerBootstrap(), '?provider_msp_checkout=billing');
+    await controller.load();
+    await flush();
+    timers.shift()!();
+    await flush();
+    expect(controller.view().notice).not.toContain('plan is active');
+    served = renewed;
+    timers.shift()!();
+    await flush();
+    expect(controller.view().plan?.expires_at).toBe(renewed.expires_at);
+    expect(controller.view().notice).toBe('Your Solo plan is active.');
+  });
+
   it('applies a plan changed in Manage billing when the provider comes back', async () => {
     api.fetchPlan = vi.fn().mockResolvedValue(evaluationPlan({ plan_version: 'msp_solo', evaluation: false, workspace_limit: 3 }));
     api.refreshLicense = vi.fn()
       .mockResolvedValueOnce({ status: 'active', changed: false })
-      .mockResolvedValueOnce({ status: 'active', changed: true, restart_scheduled: true });
+      .mockResolvedValueOnce({ status: 'active', changed: true, restart_scheduled: true, plan_version: 'msp_starter' });
     const { store, controller } = install(providerBootstrap(), '?provider_msp_checkout=billing');
     await controller.load();
     expect(store.getShellState().activeSection).toBe('billing');
