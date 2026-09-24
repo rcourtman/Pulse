@@ -1,5 +1,5 @@
 import type { PortalBootstrapData, PortalAccessMember } from './types';
-import type { ProviderPlanAPI, ProviderPlanState } from './provider_plan';
+import type { ProviderPlanAPI, ProviderPlanRefreshResult, ProviderPlanState } from './provider_plan';
 
 interface PortalAPIContext {
   getBootstrap(): PortalBootstrapData;
@@ -242,7 +242,7 @@ export function createPortalAPI(context: PortalAPIContext): PortalAPI {
       }, 'Billing is unavailable right now.');
     },
     refreshLicense: function(accountID: string) {
-      return request<{ status?: string; changed?: boolean; restart_scheduled?: boolean }>(accountURL(accountID, '/provider-msp/license/refresh'), {
+      return request<ProviderPlanRefreshResult>(accountURL(accountID, '/provider-msp/license/refresh'), {
         method: 'POST',
       }, 'The licence could not be refreshed right now.');
     },
