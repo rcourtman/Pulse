@@ -2674,6 +2674,17 @@ turning inactive rows into recovery state or preloading their inventories. The
 surface contract pins the route query map, the inactive recovery null query,
 and the direct Protection query parameters.
 
+### Agent config fetch auditing leaves recovery evidence unchanged
+
+`/api/agents/agent/{id}/config` now records a successful fetch in the security
+audit log only when it is new audit information (the agent's first delivery
+after start, a token or desired-config change, or once a day), while every
+failed fetch is still recorded. This changes no storage or recovery path:
+recovery actions keep their own action audits, dispatch receipts, and
+verification records, and only routine successful config polls stop producing
+one security-audit row each. The rule is pinned by
+`internal/api/host_agent_removal_lifecycle_integration_test.go`.
+
 ### Fresh agent command policy preserves the existing recovery authority boundary
 
 New self-hosted install-command tokens project their explicit command-policy
