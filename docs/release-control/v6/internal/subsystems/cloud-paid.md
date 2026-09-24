@@ -3483,9 +3483,16 @@ inside its 14-day grace the panel says the subscription has not renewed and
 when clients lose the plan. Owners and admins get Buy, Manage billing and an
 immediate refresh ("Apply my purchase now", or "Apply it now" on a paid plan);
 read-only members are told who can buy. After Stripe returns to
-`?provider_msp_checkout=complete` the panel keeps refreshing the licence until
-the purchase lands. It then polls the plan until the restarted control plane
-serves the new plan, and it never reloads the page. Manage billing returns to
+`?provider_msp_checkout=complete`, the redirect is a navigation hint, not
+proof of payment. The panel keeps checking without saying payment was received
+until the licence refresh reports `active` and the running plan is paid and
+matches the returned plan version, licence ID and expiry. A changed licence
+that schedules a restart is confirmed only after the restarted control plane
+serves the matching plan; an unchanged paid licence already applied by a
+background refresh can be confirmed without another restart. If no matching
+paid plan appears, the panel gives conditional follow-up instead of claiming
+payment or activation. Manual Apply uses the same running-plan confirmation
+before updating the view. The panel never reloads the page. Manage billing returns to
 `?provider_msp_checkout=billing`, and the panel checks the licence twice so a
 plan changed in the Stripe billing portal applies without a click. Regression
 coverage:
