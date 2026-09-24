@@ -134,6 +134,26 @@ func TestMonitorAdapterResolvesCanonicalOperatorIntentCapabilities(t *testing.T)
 	}
 }
 
+func TestMonitorAdapterCanonicalReferencePreservesAliasAmbiguity(t *testing.T) {
+	registry := NewRegistry(nil)
+	adapter := NewMonitorAdapter(registry)
+	registry.IngestResources([]Resource{
+		{ID: "host-a", Type: ResourceTypeAgent, Agent: &AgentData{AgentID: "one"}},
+		{ID: "host-b", Type: ResourceTypeAgent, Agent: &AgentData{AgentID: "shared"}},
+		{ID: "host-c", Type: ResourceTypeAgent, Agent: &AgentData{AgentID: "shared"}},
+	})
+
+	if id, ok := adapter.ResolveCanonicalResourceID("AGENT:ONE"); !ok || id != "host-a" {
+		t.Fatalf("unique alias resolved to %q, %v; want host-a", id, ok)
+	}
+	if id, ok := adapter.ResolveCanonicalResourceID("agent:shared"); ok {
+		t.Fatalf("ambiguous alias resolved to %q", id)
+	}
+	if id, ok := adapter.ResolveCanonicalResourceID("host-b"); !ok || id != "host-b" {
+		t.Fatalf("exact ID resolved to %q, %v; want host-b", id, ok)
+	}
+}
+
 func TestMonitorAdapterResolvesCanonicalResourceAncestorsNearestFirst(t *testing.T) {
 	registry := NewRegistry(NewMemoryStore())
 	adapter := NewMonitorAdapter(registry)

@@ -291,6 +291,101 @@ func TestResourceRegistry_GetByReferenceResolvesAgentRefOnMergedProxmoxHost(t *t
 	}
 }
 
+func TestResourceRegistry_CanonicalAliasIndexPreservesFoldAndAmbiguity(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestResources([]Resource{
+		{ID: "kelvin-host", Type: ResourceTypeAgent, Agent: &AgentData{AgentID: "Kelvin"}},
+		{ID: "dotted-host", Type: ResourceTypeAgent, Agent: &AgentData{AgentID: "İmachine"}},
+		{ID: "first-shared", Type: ResourceTypeAgent, Agent: &AgentData{AgentID: "shared"}},
+		{ID: "second-shared", Type: ResourceTypeAgent, Agent: &AgentData{AgentID: "shared"}},
+	})
+	if rr.canonicalIdentityIndex != nil {
+		t.Fatal("ingest should defer alias index construction")
+	}
+	if id, ok := rr.ResolveReferenceID("first-shared"); !ok || id != "first-shared" {
+		t.Fatalf("exact ID resolved to %q, %v; want first-shared", id, ok)
+	}
+	if rr.canonicalIdentityIndex != nil {
+		t.Fatal("exact ID read should not build the alias index")
+	}
+
+	if id, ok := rr.ResolveReferenceID("  AGENT:kelvin  "); !ok || id != "kelvin-host" {
+		t.Fatalf("Unicode folded alias resolved to %q, %v; want kelvin-host", id, ok)
+	}
+	if rr.canonicalIdentityIndex == nil {
+		t.Fatal("alias lookup did not build the index")
+	}
+	if id, ok := rr.ResolveReferenceID("agent:imachine"); ok {
+		t.Fatalf("dotted I must not fold into ordinary i, got %q", id)
+	}
+	if id, ok := rr.ResolveReferenceID("agent:shared"); ok {
+		t.Fatalf("ambiguous canonical alias resolved to %q", id)
+	}
+	if id, ok := rr.ResolveReferenceID("first-shared"); !ok || id != "first-shared" {
+		t.Fatalf("exact ID lost priority to ambiguous alias: %q, %v", id, ok)
+	}
+
+	rr.mu.Lock()
+	rr.canonicalIdentityIndex = nil
+	rr.mu.Unlock()
+	rr.mu.RLock()
+	id := rr.uniqueCanonicalIdentityResourceIDLocked("AGENT:kelvin")
+	sharedID := rr.uniqueCanonicalIdentityResourceIDLocked("agent:shared")
+	rr.mu.RUnlock()
+	if id != "kelvin-host" {
+		t.Fatalf("in-progress ingest scan resolved to %q; want kelvin-host", id)
+	}
+	if sharedID != "" {
+		t.Fatalf("in-progress ingest scan resolved ambiguous alias to %q", sharedID)
+	}
+}
+
+func TestResourceRegistry_CanonicalAliasIndexRefreshesAfterIngest(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestResources([]Resource{{
+		ID: "renamed-host", Type: ResourceTypeAgent, Agent: &AgentData{AgentID: "old-machine"},
+	}})
+	if _, ok := rr.ResolveReferenceID("agent:old-machine"); !ok {
+		t.Fatal("initial alias missing")
+	}
+	rr.IngestResources([]Resource{{
+		ID: "renamed-host", Type: ResourceTypeAgent, Agent: &AgentData{AgentID: "new-machine"},
+	}})
+	if id, ok := rr.ResolveReferenceID("agent:old-machine"); ok {
+		t.Fatalf("stale alias resolved after ingest to %q", id)
+	}
+	if id, ok := rr.ResolveReferenceID("agent:new-machine"); !ok || id != "renamed-host" {
+		t.Fatalf("new alias resolved to %q, %v; want renamed-host", id, ok)
+	}
+}
+
+func BenchmarkResourceRegistry_GetByCanonicalAlias(b *testing.B) {
+	resources := make([]Resource, 1500)
+	for i := range resources {
+		resources[i] = Resource{
+			ID:    fmt.Sprintf("agent-%d", i),
+			Type:  ResourceTypeAgent,
+			Agent: &AgentData{AgentID: fmt.Sprintf("machine-%d", i)},
+		}
+	}
+	rr := NewRegistry(nil)
+	rr.IngestResources(resources)
+	for _, test := range []struct {
+		name string
+		ref  string
+	}{
+		{"hit", "agent:machine-750"},
+		{"miss", "agent:unknown"},
+	} {
+		b.Run(test.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, _, _ = rr.GetByReference(test.ref)
+			}
+		})
+	}
+}
+
 func TestMonitorAdapterKeepsSameNamedProxmoxProvidersDistinct(t *testing.T) {
 	adapter := NewMonitorAdapter(NewRegistry(NewMemoryStore()))
 	seen := time.Date(2026, 7, 24, 8, 0, 0, 0, time.UTC)

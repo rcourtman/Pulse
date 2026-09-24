@@ -6151,3 +6151,13 @@ This does not change token scopes, agent admission, or existing agent cleanup.
 Regression coverage: `TestQuickSecuritySetupForcePreservesSystemSettings` and
 `TestInitializeSystemSettingsPreservesExistingBytes`, `TestInitializeSystemSettingsMissing`,
 `TestInitializeSystemSettingsReadError`.
+
+### Storage pool rows do not retain their whole group
+
+`buildStoragePoolsTableItems` assigns each record row its stable record key and
+record only. Group headers retain group metadata and expansion state. Passing
+the full group through every record row made the shared windowing reconciler
+walk the same group repeatedly during large-estate Storage navigation. The
+windowing test pins the row shape, and the 50-node browser fixture exercises
+expanded rows and History at desktop and phone widths. This is presentation
+work only; it changes no storage evidence, alert state or recovery authority.

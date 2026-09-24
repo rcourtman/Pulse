@@ -3929,6 +3929,12 @@ invent lifecycle state; Alerts owns signal suppression and unified resources
 owns persistence. `internal/monitoring/monitor_alert_intent_test.go` and the
 alerts intent-policy proof pin this adapter boundary.
 
+The monitor adapter asks the registry for only the canonical resource ID when
+resolving an alert reference. Exact IDs, superseded IDs, source IDs and
+canonical aliases retain their precedence and ambiguous aliases remain
+unresolved. This avoids cloning a full resource for every policy lookup while
+keeping alert intent tied to the same identity rules as resource reads.
+
 Alert restore precedes resource-store attachment during startup. Once the
 adapter attaches the persisted operator-policy resolver, monitoring asks Alerts
 to reconcile the restored set and refreshes shared alert state if it changed.

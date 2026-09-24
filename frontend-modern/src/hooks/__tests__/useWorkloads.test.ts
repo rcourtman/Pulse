@@ -1,4 +1,4 @@
-import { createEffect, createRoot, createSignal } from 'solid-js';
+import { batch, createEffect, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import useWorkloadsSource from '../useWorkloads.ts?raw';
 
@@ -395,6 +395,73 @@ describe('useWorkloads', () => {
     expect(result!.workloads()).toBe(secondRows);
 
     dispose();
+  });
+
+  it('adapts only changed canonical guests and fully refreshes when change history is unavailable', async () => {
+    const buildGuest = (id: string, name: string, cpu: number) =>
+      ({
+        id,
+        type: 'vm',
+        name,
+        status: 'running',
+        platformType: 'proxmox-pve',
+        sources: ['proxmox'],
+        proxmox: { sourceId: id, vmid: id === 'vm-a' ? 101 : 102, nodeName: 'pve1' },
+        cpu: { current: cpu },
+      }) as any;
+    let untouchedNameReads = 0;
+    const untouched = buildGuest('vm-a', 'vm-a', 10);
+    Object.defineProperty(untouched, 'name', {
+      get: () => {
+        untouchedNameReads += 1;
+        return 'vm-a';
+      },
+    });
+    const [snapshot, setSnapshot] = createSignal([untouched, buildGuest('vm-b', 'vm-b', 20)]);
+    const [change, setChange] = createSignal<{
+      version: number;
+      changedIds: ReadonlySet<string> | null;
+    }>({ version: 1, changedIds: null });
+
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useWorkloads(() => true, {
+        resourceSnapshot: snapshot,
+        resourceSnapshotChange: change,
+      });
+    });
+
+    try {
+      await flushAsync();
+      const originalRow = result!.workloads()[0];
+      untouchedNameReads = 0;
+      batch(() => {
+        setSnapshot([untouched, buildGuest('vm-b', 'vm-b', 85)]);
+        setChange({ version: 2, changedIds: new Set(['vm-b']) });
+      });
+      await flushAsync();
+      expect(untouchedNameReads).toBe(0);
+      expect(result!.workloads()[0]).toBe(originalRow);
+      expect(result!.workloads()[1]?.cpu).toBeCloseTo(0.85);
+
+      batch(() => {
+        setSnapshot([buildGuest('vm-a', 'renamed-a', 10), buildGuest('vm-b', 'vm-b', 85)]);
+        setChange({ version: 3, changedIds: null });
+      });
+      await flushAsync();
+      expect(result!.workloads()[0]?.name).toBe('renamed-a');
+
+      batch(() => {
+        setSnapshot([buildGuest('vm-a', 'renamed-again', 10), buildGuest('vm-b', 'vm-b', 85)]);
+        setChange({ version: 5, changedIds: new Set(['vm-b']) });
+      });
+      await flushAsync();
+      expect(result!.workloads()[0]?.name).toBe('renamed-again');
+    } finally {
+      dispose();
+    }
   });
 
   it('retains the fulfilled workload snapshot when a forced refresh fails', async () => {

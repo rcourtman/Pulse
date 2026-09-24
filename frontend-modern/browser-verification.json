@@ -1,23 +1,33 @@
 {
   "version": 1,
-  "base_sha": "0abe518219f75512fc3f9ca0fdbd4ce549e30e90",
-  "verified_at": "2026-09-24T16:05:19Z",
+  "base_sha": "d25403b8c3e28354d0e62fc3fc35898cca3e8f1c",
+  "verified_at": "2026-09-24T19:54:45Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
-    "frontend-modern/src/features/platformPage/PlatformWindowedList.tsx",
-    "frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx"
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx",
+    "frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/components/shared/InlineNotice.tsx",
+    "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/hooks/useUnifiedResources.ts",
+    "frontend-modern/src/hooks/useWorkloads.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx": "5c47a4d5d5ff12b0f6cf0e495bd02ebdadccd81135ad1ff91f9f13e90b5a81af",
-    "frontend-modern/src/features/platformPage/PlatformWindowedList.tsx": "1842c634054e46e24d965a063719065ca1156b3f061d594c878a8866d5b33a3e",
-    "frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx": "6f5dbc611dfbb00bc2d770fcf06b8dbf329ebd76dc022bb63191480a221cb457"
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx": "c112078ff621331510ac28490371ee7ba9099f7a1bbb64d0f66ff96400d4f89a",
+    "frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts": "3678e4b852ae0029760d3295fdd878cec436100f85c945dd46fe760da38887e4",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "7ae6fee729328039f4d1ade064ba5d6e899f0fdf0a72e96a7df7e034b4f464de",
+    "frontend-modern/src/components/shared/InlineNotice.tsx": "1a239f4240c57f83383f0d936f2e90ea6cb122627299e17500c20c7236c04e9d",
+    "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx": "7960f323dde72b2b2f9d961792d410db2bfd95bacd87b1ae55c1ed473737994e",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "808ba390e1978c07f08a033bc23d5cf4d62731b6cc8b388c024180b3914f6fce",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "c4d2f3c44b19c89d3cf0d15e033f825c37aaab985abfd963ddb5907cbab76fe2",
+    "frontend-modern/src/hooks/useWorkloads.ts": "453b90cfe6df925bd28a8713548c1348767f3c398d08c972b9b1f493e70986ef"
   },
   "routes": [
     "/proxmox/overview",
-    "/alerts",
-    "/docs/INSTALL",
-    "/docs/UPGRADE_v6"
+    "/proxmox/storage",
+    "/alerts/overview",
+    "/settings/infrastructure/agent-doctor"
   ],
   "viewports": [
     {
@@ -25,31 +35,30 @@
       "height": 900
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 768,
+      "height": 900
     },
     {
-      "width": 900,
-      "height": 900
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "Expanded Disaster Recovery D node with Manage selected, unsaved and saved lifecycle selection, and disabled Saving controls.",
-    "Future maintenance scheduled for 25 September with actual local start/end dates, edited expiry, cancelled window, and active maintenance with an actual future deadline.",
-    "Mute, retired and active policy states, persisted maintenance and mute after a graceful same-data restart, and stable canonical resource identity.",
-    "Active and absent node connectivity alert, open retained incident with ordered firing, resolution and re-fire events, expanded Evidence details, and empty disabled Save Note.",
-    "Empty filtered History, persisted search after reload, cleared search results and intermediate-width filter controls.",
-    "Signed installer code and helper-ownership guidance, with internal code scrolling and narrow document layout."
+    "50-node, 1,508-resource synthetic snapshot with two-second random metric updates and 49 outdated agents",
+    "Proxmox node selection, Workloads search/filter reset, Storage record Overview and History",
+    "Collapsed and keyboard-expanded affected-host notice, upgrade link and Agent Doctor guidance",
+    "Agent Doctor first and later table rows, badge and Seen values, keyboard row expansion and collapse",
+    "Mobile platform switcher open and Escape dismissed; alert Timeline expanded and dismissed",
+    "WebSocket reconnect and reload with no extra /api/state request on reconnect"
   ],
   "interactions": [
-    "Show all 50 nodes, expand Disaster Recovery D, select Manage, change lifecycle, scroll to Save, save, return Active and save. Manage and unsaved selection survive the retained-row window shift and viewport changes.",
-    "Create resource-only future maintenance, edit its end, cancel it, then create a one-hour active window. Inspect actual banner pixels at phone and desktop widths.",
-    "Save Mute all attention with active maintenance, reload, gracefully restart the same final binary with unchanged data, and reload. Confirm identical canonical agent identity and policy, with the node connectivity alert absent.",
-    "Cancel maintenance while keeping mute, verify the alert stays absent, then restore normal monitoring. Mute and resume the active occurrence once more and verify one open incident with its original start and ordered resolve/refire events.",
-    "Open Monitoring menu, close with Escape and verify focus returns, reopen and dismiss with outside click. Inspect menu placement and clipping at phone width.",
-    "Open Timeline and Evidence details, inspect occurrence and observation timestamps, verify empty Save Note is disabled without submitting a note.",
-    "Filter History to no results, reload to verify persisted search, then clear it. Follow signed-installer and ownership links to their headings and inspect code and narrow layout."
+    "Hydrate Proxmox Overview, expand a node, filter 929 guests to one named container, clear the filter and navigate to Alerts.",
+    "Switch Storage and Overview through live controls, open a storage record, select History and inspect chart placement and mobile scrolling.",
+    "Focus and activate Show all 49 hosts by keyboard, inspect the full list, collapse it and use the upgrade link to open Agent Doctor.",
+    "Inspect Agent Doctor at 1440, 768 and 390px, including guidance contrast, full badge and Seen text, first and later rows, keyboard expansion and return to Proxmox.",
+    "Open the mobile platform switcher, inspect stacking and clipping, dismiss with Escape. Reconnect WebSocket and reload, confirming resource hydration.",
+    "Navigate to Alerts and expand Timeline at desktop and phone widths; inspect dismissal and adjacent controls."
   ],
-  "command": "Playwright browser inspection against an isolated synthetic server on pulse-dev:7701 through a loopback SSH tunnel.",
-  "notes": "Final backend SHA-256 77d17ff9e21ccdef3f5fff9f7b91b841abe3570bf8e04e1eda501c554e3a5889. Frontend index SHA-256 b9f1288bd188c8e549ccd4cdfa7aa75b56d49df3fc0f59de9e11dac90d449172. Actual pixels and DOM state were inspected. Repeated suppressed observations, expiry, delayed lifecycle replay and native-alias startup ordering are covered by failing-baseline regression tests and final race checks. The synthetic provider does not qualify production notification destinations or installed upgrade/rollback behavior."
+  "command": "Playwright on the final rebuilt 50-node synthetic server at pulse-dev:7703 after the lazy registry index change: qa-agent-doctor-final-20260924.mjs, qa-final-20260924.mjs, qa-adjacent-20260924.mjs, qa-overlays-20260924.mjs, qa-notice-action-20260924.mjs.",
+  "notes": "Final frontend content hashes bind the receipt to every changed frontend runtime file. The browser binary used internal/unifiedresources/registry.go SHA-256 bb4fa4a0d9a635971c93d93282663bb8088e25e020c087e75de5a7b196c7222d. Pixel screenshots inspected at desktop, intermediate and phone widths, including the deepest changed states. No page errors or horizontal overflow. The synthetic fixture does not qualify installed-fleet latency or the remaining roughly 4 MB initial resource stream."
 }

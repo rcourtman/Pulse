@@ -153,4 +153,34 @@ describe('InfrastructureAgentDoctorPage action-runner enrollment', () => {
       screen.getByRole('button', { name: 'Rotate action-runner credential' }),
     ).toBeInTheDocument();
   });
+
+  it('keeps an attention row and its host-local repair guidance available through disclosure', () => {
+    render(() => (
+      <InfrastructureAgentDoctorPage
+        targets={[
+          targetFixture({
+            status: 'warning',
+            needsUpdate: true,
+            expectedVersion: '6.4.0',
+            lastSeen: Date.now(),
+          }),
+        ]}
+      />
+    ));
+
+    expect(screen.getAllByText('Needs attention')).toHaveLength(2);
+    expect(screen.getByText('just now')).toBeInTheDocument();
+    expect(screen.getByText(/commands are host-local/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide details for host-1' }));
+    expect(screen.getByRole('button', { name: 'Show details for host-1' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Show details for host-1' }));
+    expect(screen.getByRole('button', { name: 'Hide details for host-1' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
 });

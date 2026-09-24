@@ -1912,6 +1912,7 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Settings/__tests__/infrastructureAgentDoctorModel.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/InfrastructureAgentDoctorPage.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/InfrastructureSourceManager.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/infrastructureWorkspaceModel.test.ts"
@@ -5831,6 +5832,7 @@
               "frontend-modern/src/components/Workloads/__tests__/WorkloadsFilter.test.tsx",
               "frontend-modern/src/features/platformPage/__tests__/platformEstateOverviewModel.test.ts",
               "frontend-modern/src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts",
+              "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.test.tsx",
               "frontend-modern/src/features/platformPage/platformSearchSuggestions.test.ts"
             ]
           },
@@ -5898,6 +5900,7 @@
               "frontend-modern/src/components/shared/AnimatedNumber.test.tsx",
               "frontend-modern/src/components/shared/ColumnPicker.test.tsx",
               "frontend-modern/src/components/shared/FilterToolbar.test.tsx",
+              "frontend-modern/src/components/shared/InlineNotice.test.tsx",
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
               "frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts"
             ]
@@ -7979,6 +7982,7 @@
               "frontend-modern/src/components/Storage/__tests__/StorageGroupRow.test.tsx",
               "frontend-modern/src/components/Storage/__tests__/StoragePoolDetail.test.tsx",
               "frontend-modern/src/components/Storage/__tests__/useDiskDetailModel.test.ts",
+              "frontend-modern/src/components/Storage/__tests__/useStoragePoolsTableWindowing.test.ts",
               "frontend-modern/src/components/Storage/code_standards.test.ts",
               "frontend-modern/src/features/storageBackups/__tests__/diskPresentation.test.ts",
               "frontend-modern/src/features/storageBackups/__tests__/resourceStorageMapping.test.ts",

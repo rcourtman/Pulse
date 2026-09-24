@@ -18,6 +18,7 @@ const mockBackupsTableProps = vi.hoisted(() => vi.fn());
 const mockWorkloadSearch = vi.hoisted(() => vi.fn(() => ''));
 const mockSelectedNode = vi.hoisted(() => vi.fn<() => string | null>(() => null));
 const mockHandleNodeSelect = vi.hoisted(() => vi.fn());
+const mockWorkloadsOptions = vi.hoisted(() => vi.fn());
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource =>
   ({
@@ -88,17 +89,20 @@ vi.mock('@/components/Workloads/WorkloadsSurface', () => ({
 }));
 
 vi.mock('@/components/Workloads/useWorkloadsState', () => ({
-  useWorkloadsState: () => ({
-    surfaceConnected: () => false,
-    surfaceInitialDataReceived: () => false,
-    allGuests: () => [],
-    selectedNode: mockSelectedNode,
-    handleNodeSelect: mockHandleNodeSelect,
-    selectedHostHint: () => null,
-    totalStats: mockTotalStats,
-    search: mockWorkloadSearch,
-    setSearch: vi.fn(),
-  }),
+  useWorkloadsState: (options: unknown) => {
+    mockWorkloadsOptions(options);
+    return {
+      surfaceConnected: () => false,
+      surfaceInitialDataReceived: () => false,
+      allGuests: () => [],
+      selectedNode: mockSelectedNode,
+      handleNodeSelect: mockHandleNodeSelect,
+      selectedHostHint: () => null,
+      totalStats: mockTotalStats,
+      search: mockWorkloadSearch,
+      setSearch: vi.fn(),
+    };
+  },
 }));
 
 vi.mock('@/features/platformPage/sharedPlatformPage', () => ({
@@ -159,6 +163,7 @@ const renderSurface = () =>
 
 describe('ProxmoxPageSurface contract', () => {
   beforeEach(() => {
+    mockWorkloadsOptions.mockClear();
     mockSelectedNode.mockReturnValue(null);
     mockHandleNodeSelect.mockClear();
     mockPathname.mockReturnValue('/proxmox/overview');
@@ -174,6 +179,24 @@ describe('ProxmoxPageSurface contract', () => {
       pods: 0,
     });
     mockWorkloadSearch.mockReturnValue('');
+  });
+
+  it('passes the committed resource change metadata into the Workloads owner', () => {
+    const change = { version: 3, changedIds: new Set(['vm-1']) };
+    const resourceSnapshotChange = () => change;
+    mockUseUnifiedResources.mockReturnValue({
+      resources: () => [makeResource({ id: 'vm-1', type: 'vm' })],
+      resourceSnapshotChange,
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    });
+
+    renderSurface();
+
+    expect(mockWorkloadsOptions).toHaveBeenCalledWith(
+      expect.objectContaining({ resourceSnapshotChange }),
+    );
   });
 
   afterEach(() => {

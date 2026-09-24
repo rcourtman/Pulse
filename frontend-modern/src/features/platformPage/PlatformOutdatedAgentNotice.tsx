@@ -1,4 +1,4 @@
-import { Show, createMemo } from 'solid-js';
+import { Show, createMemo, createSignal } from 'solid-js';
 import { AlertTriangle, ArrowRight } from 'lucide-solid';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
@@ -29,6 +29,15 @@ type PlatformOutdatedAgentNoticeProps = {
 export function PlatformOutdatedAgentNotice(props: PlatformOutdatedAgentNoticeProps) {
   const count = createMemo(() => props.hosts.length);
   const names = createMemo(() => props.hosts.map((host) => host.name).join(', '));
+  const [showAllHosts, setShowAllHosts] = createSignal(false);
+  const preview = createMemo(() => {
+    const firstNames = props.hosts
+      .slice(0, 3)
+      .map((host) => host.name)
+      .join(', ');
+    const remaining = count() - 3;
+    return remaining > 0 ? `${firstNames}, and ${remaining} more` : firstNames;
+  });
   const actionLabel = createMemo(() => props.actionLabel || 'Open Infrastructure settings');
   const subjectSingular = createMemo(() => props.subjectSingular || 'host');
   const subjectPlural = createMemo(() => props.subjectPlural || 'hosts');
@@ -45,9 +54,9 @@ export function PlatformOutdatedAgentNotice(props: PlatformOutdatedAgentNoticePr
       return `${host.name} is running an older Pulse agent (${host.version}). Update it${target} to see ${props.missingLabel} for this ${subjectSingular()}.`;
     }
     if (copyVariant === 'latest-detail') {
-      return `${count()} ${subjectPlural()} are running an older Pulse agent. Update them${target} for the latest ${props.missingLabel}. Affected: ${names()}.`;
+      return `${count()} ${subjectPlural()} are running an older Pulse agent. Update them${target} for the latest ${props.missingLabel}. Affected: ${preview()}.`;
     }
-    return `${count()} ${subjectPlural()} are running an older Pulse agent. Update them${target} to see ${props.missingLabel}. Affected: ${names()}.`;
+    return `${count()} ${subjectPlural()} are running an older Pulse agent. Update them${target} to see ${props.missingLabel}. Affected: ${preview()}.`;
   });
 
   return (
@@ -61,7 +70,20 @@ export function PlatformOutdatedAgentNotice(props: PlatformOutdatedAgentNoticePr
         actionLabel={actionLabel()}
         actionIcon={<ArrowRight aria-hidden="true" />}
       >
-        {message()}
+        <span>{message()}</span>{' '}
+        <Show when={count() > 3}>
+          <button
+            type="button"
+            class="ml-1 font-medium underline underline-offset-2 hover:no-underline focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            aria-expanded={showAllHosts()}
+            onClick={() => setShowAllHosts((current) => !current)}
+          >
+            {showAllHosts() ? 'Hide affected names' : `Show all ${count()} ${subjectPlural()}`}
+          </button>
+          <Show when={showAllHosts()}>
+            <p class="mt-1 break-words">Affected: {names()}.</p>
+          </Show>
+        </Show>
       </InlineNotice>
     </Show>
   );

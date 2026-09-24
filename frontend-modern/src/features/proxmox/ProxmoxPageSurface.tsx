@@ -364,6 +364,7 @@ export function ProxmoxPageSurface() {
                       ? undefined
                       : overviewModel().resources
                   }
+                  resourceSnapshotChange={overviewResources.resourceSnapshotChange}
                   resourceSnapshotRefetch={() => overviewResources.refetch()}
                   inventoryCountsVisible={inventoryCountsVisible}
                   setInventoryCountsVisible={setInventoryCountsVisible}
@@ -434,6 +435,10 @@ interface ProxmoxOverviewProps {
   memoryDisplayBasis: Accessor<WorkloadsMemoryDisplayBasis>;
   setMemoryDisplayBasis: (value: WorkloadsMemoryDisplayBasis) => void;
   resourceSnapshot: Accessor<Resource[] | undefined>;
+  resourceSnapshotChange: Accessor<{
+    version: number;
+    changedIds: ReadonlySet<string> | null;
+  }>;
   resourceSnapshotRefetch: () => Promise<unknown>;
   inventoryCountsVisible: Accessor<boolean>;
   setInventoryCountsVisible: (visible: boolean) => void;
@@ -449,6 +454,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
     layoutWidth: overviewWidth.width,
     useWorkloads: true,
     resourceSnapshot: props.resourceSnapshot,
+    resourceSnapshotChange: props.resourceSnapshotChange,
     resourceSnapshotRefetch: props.resourceSnapshotRefetch,
     forcedPlatform: PROXMOX_PLATFORM_FILTER,
     excludedWorkloadTypes: PROXMOX_WORKLOAD_EXCLUDED_TYPES,
