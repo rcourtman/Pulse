@@ -403,8 +403,11 @@ func TestProviderMSPSetupScriptSupportsUnlicensedEvaluation(t *testing.T) {
 		"PULSE_PROVIDER_MSP_EVAL_EMAIL",
 		"PULSE_PROVIDER_MSP_SIGNUP_SOURCE",
 		`setup_stage: "images_ready"`,
-		"eval_license_id=",
+		"buy a plan from Plan in your provider portal",
 	)
+	// Buying happens in the portal. The old hint sent providers to a request
+	// form that waited on a human reply with a checkout link.
+	assertNotContainsAny(t, script, "request an upgrade", "eval_license_id=")
 	if strings.LastIndex(script, "pull_provider_images\n") > strings.LastIndex(script, "ensure_eval_license\n") {
 		t.Fatal("evaluation must be issued only after pinned provider images are reachable")
 	}
@@ -616,6 +619,14 @@ func TestProviderMSPSetupLeavesPlatformRunning(t *testing.T) {
 		"Pulse Provider MSP is running.",
 	)
 	assertNotContainsAny(t, script, "Pulse Provider MSP setup prepared.")
+
+	// The closing summary says where buying happens and no longer asks the
+	// provider to carry a lease signing key to anyone: the portal purchase
+	// binds it without a copy step.
+	summary := script[strings.Index(script, "Pulse Provider MSP is running."):]
+	summary = summary[:strings.Index(summary, "EOF")]
+	assertContainsAll(t, summary, "open Plan in\nthe portal", "Manage billing")
+	assertNotContainsAny(t, summary, "must bind this key", "derive_lease_signing_public_key")
 
 	sequence := "  ensure_eval_license\n  validate_compose_config\n  start_provider_services\n  run_install_proof_if_requested\n  print_summary\n"
 	if !strings.Contains(script, sequence) {

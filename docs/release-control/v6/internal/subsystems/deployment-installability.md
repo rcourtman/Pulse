@@ -2416,6 +2416,18 @@ artifact-selection behaviour.
 
 ## Current State
 
+### Provider MSP setup points buyers at the portal
+
+`deploy/provider-msp/setup.sh` no longer tells an evaluating provider to
+"request an upgrade" at a pulserelay.pro form that waited on a human reply with
+a checkout link. The evaluation log line and the closing summary both say to
+buy from Plan in the provider portal, where checkout binds the platform's lease
+signing key without a copy step, and the summary no longer prints that key as
+something the provider must send. `./setup.sh --print-lease-signing-public-key`
+remains for a custom licence. `TestProviderMSPSetupLeavesPlatformRunning` and
+the evaluation-issuance test in `scripts/installtests/provider_msp_deploy_test.go`
+pin both lines.
+
 ### Provider MSP setup leaves the platform running
 
 `deploy/provider-msp/setup.sh` now ends by starting `traefik`,
