@@ -204,3 +204,182 @@ func TestHealthMonitorReattachesSupportContainersAndRestartsInsteadOfStopping(t 
 		t.Fatalf("unhealthy client was stopped, which unless-stopped never undoes; daemon saw %q", got)
 	}
 }
+
+// Two provider installations can share a Docker daemon and the same support
+// role labels. A recreated container must only join the tenant network of the
+// installation whose ingress network already contains it.
+type multiProviderDaemon struct {
+	mu       sync.Mutex
+	networks map[string]*multiProviderNetwork
+	support  map[string]multiProviderSupport
+	health   map[string]string
+	calls    []string
+}
+
+type multiProviderNetwork struct {
+	tenantID string
+	attached map[string]bool
+}
+
+type multiProviderSupport struct {
+	role    string
+	ingress string
+}
+
+func (d *multiProviderDaemon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	path := dockerAPIVersionPrefix.ReplaceAllString(r.URL.Path, "")
+	w.Header().Set("Api-Version", "1.47")
+	w.Header().Set("Content-Type", "application/json")
+	switch {
+	case path == "/_ping":
+		_, _ = w.Write([]byte("OK"))
+	case r.Method == http.MethodGet && strings.HasPrefix(path, "/networks/"):
+		name := strings.TrimPrefix(path, "/networks/")
+		net, ok := d.networks[name]
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"network not found"}`))
+			return
+		}
+		containers := make(map[string]any, len(net.attached))
+		for id := range net.attached {
+			containers[id] = map[string]any{"Name": id}
+		}
+		labels := map[string]string{}
+		if net.tenantID != "" {
+			labels = map[string]string{"pulse.tenant.id": net.tenantID, "pulse.provider-msp.network": "tenant"}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"Name": name, "Id": name, "Containers": containers, "Labels": labels,
+		})
+	case r.Method == http.MethodPost && strings.HasPrefix(path, "/networks/") && strings.HasSuffix(path, "/connect"):
+		name := strings.TrimSuffix(strings.TrimPrefix(path, "/networks/"), "/connect")
+		var body struct{ Container string }
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if _, ok := d.networks[name]; !ok {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		d.networks[name].attached[body.Container] = true
+		d.calls = append(d.calls, "connect "+body.Container+" "+name)
+		w.WriteHeader(http.StatusOK)
+	case r.Method == http.MethodGet && path == "/containers/json":
+		var filters map[string]map[string]bool
+		if err := json.Unmarshal([]byte(r.URL.Query().Get("filters")), &filters); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		var items []map[string]any
+		for id, support := range d.support {
+			if matchesDockerFilter(filters["label"], support.role) && matchesDockerFilter(filters["network"], support.ingress) {
+				items = append(items, map[string]any{"Id": id, "State": "running"})
+			}
+		}
+		_ = json.NewEncoder(w).Encode(items)
+	case r.Method == http.MethodGet && strings.HasPrefix(path, "/containers/") && strings.HasSuffix(path, "/json"):
+		id := strings.TrimSuffix(strings.TrimPrefix(path, "/containers/"), "/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"Id":     id,
+			"State":  map[string]any{"Status": "running", "Running": true, "Health": map[string]any{"Status": d.health[id]}},
+			"Config": map[string]any{"Labels": map[string]string{}},
+		})
+	case r.Method == http.MethodPost && strings.HasPrefix(path, "/containers/"):
+		d.calls = append(d.calls, strings.TrimPrefix(path, "/containers/"))
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"message":"no such object"}`))
+	}
+}
+
+func matchesDockerFilter(values map[string]bool, candidate string) bool {
+	if len(values) == 0 {
+		return true
+	}
+	return values[candidate]
+}
+
+func (d *multiProviderDaemon) recorded() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return append([]string(nil), d.calls...)
+}
+
+func TestHealthMonitorKeepsProviderInstallationsIsolatedOnRecovery(t *testing.T) {
+	daemon := &multiProviderDaemon{
+		networks: map[string]*multiProviderNetwork{
+			"provider-a-tenant-t-alpha": {tenantID: "t-alpha", attached: map[string]bool{"client-alpha": true}},
+			"provider-b-tenant-t-beta":  {tenantID: "t-beta", attached: map[string]bool{"client-beta": true}},
+		},
+		support: map[string]multiProviderSupport{
+			"traefik-a": {role: "pulse.provider-msp.role=traefik", ingress: "provider-a"},
+			"control-a": {role: "pulse.provider-msp.role=control-plane", ingress: "provider-a"},
+			"traefik-b": {role: "pulse.provider-msp.role=traefik", ingress: "provider-b"},
+			"control-b": {role: "pulse.provider-msp.role=control-plane", ingress: "provider-b"},
+		},
+		health: map[string]string{"client-alpha": "healthy", "client-beta": "unhealthy"},
+	}
+	srv := httptest.NewServer(daemon)
+	t.Cleanup(srv.Close)
+	t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
+	t.Setenv("DOCKER_TLS_VERIFY", "")
+	t.Setenv("DOCKER_CERT_PATH", "")
+
+	for _, client := range []struct {
+		provider, tenantID, containerID string
+		passes                          int
+	}{
+		{provider: "provider-a", tenantID: "t-alpha", containerID: "client-alpha", passes: 1},
+		{provider: "provider-b", tenantID: "t-beta", containerID: "client-beta", passes: 3},
+	} {
+		mgr, err := docker.NewManager(docker.ManagerConfig{
+			Image: "pulse:test", Network: client.provider, IsolateTenantNetworks: true,
+			TenantNetworkPrefix: client.provider + "-tenant", BaseDomain: "msp.example.com",
+		})
+		if err != nil {
+			t.Fatalf("NewManager(%s): %v", client.provider, err)
+		}
+		t.Cleanup(func() { _ = mgr.Close() })
+		reg, err := registry.NewTenantRegistry(t.TempDir())
+		if err != nil {
+			t.Fatalf("NewTenantRegistry(%s): %v", client.provider, err)
+		}
+		t.Cleanup(func() { _ = reg.Close() })
+		if err := reg.Create(&registry.Tenant{
+			ID: client.tenantID, AccountID: client.provider, State: registry.TenantStateActive,
+			ContainerID: client.containerID,
+		}); err != nil {
+			t.Fatalf("Create(%s): %v", client.tenantID, err)
+		}
+		monitor := NewMonitor(reg, mgr, MonitorConfig{RestartOnFail: true, FailThreshold: 3})
+		for range client.passes {
+			monitor.checkAll(context.Background())
+		}
+	}
+
+	got := daemon.recorded()
+	want := map[string]int{
+		"connect traefik-a provider-a-tenant-t-alpha": 1,
+		"connect control-a provider-a-tenant-t-alpha": 1,
+		"connect traefik-b provider-b-tenant-t-beta":  1,
+		"connect control-b provider-b-tenant-t-beta":  1,
+		"client-beta/restart":                         1,
+	}
+	for _, call := range got {
+		if want[call] == 0 {
+			t.Fatalf("unexpected Docker mutation %q (including cross-client attachment or stop); all=%v", call, got)
+		}
+		want[call]--
+	}
+	for call, count := range want {
+		if count != 0 {
+			t.Fatalf("missing Docker mutation %q; all=%v", call, got)
+		}
+	}
+}
