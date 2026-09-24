@@ -302,6 +302,8 @@ describe('shell view', function() {
 
     expect(html).toContain('data-shell-section="billing">Plan</button>');
     expect(html).toContain('id="provider-plan-root"');
+    // The operations guide link must open the guide, not the repository root.
+    expect(html).toContain('href="https://github.com/rcourtman/Pulse/blob/main/docs/MSP.md"');
     expect(html).not.toContain('Self-hosted billing');
     expect(html).not.toContain('hosted billing');
     var tabs = ['workspaces', 'access', 'billing', 'support'].map(function(section) {
