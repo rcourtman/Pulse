@@ -1267,6 +1267,21 @@ artifact-selection behaviour.
    candidate workflow; publishing releases invoke it as a sibling of inert
    draft staging so qualification and upload overlap without weakening the
    activation join.
+   A provider-isolation security backport also requires a live two-installation
+   Docker result before the release steward freezes a packet. On protected
+   `release/v*` pushes, Build and Test checks out the event SHA, preloads a
+   digest-pinned helper image, and runs the opt-in provider-pair case against a
+   fresh daemon; a skipped test is not a pass. The case provisions the same
+   tenant ID in two independently named provider networks, verifies each
+   provider's support containers attach only to its own tenant network,
+   refuses a same-name unowned network, and checks that cleanup of one
+   provider neither detaches nor removes the other's resources. This is
+   source-line acceptance, not candidate-image or installed-service proof.
+   After packet freeze, the reusable container qualifier repeats the case
+   against its already assembled and digest-verified exact-candidate control-
+   plane image before Helm smoke. It requires the explicit live-test PASS and
+   retains the caller SHA and immutable payload binding; the earlier branch
+   result cannot substitute for this candidate qualification or vice versa.
    The server executable and its detached Minisign and SSH signatures are one
    architecture-bound payload unit; cross-archive deduplication must allow
    those three files to differ while continuing to reject drift in every

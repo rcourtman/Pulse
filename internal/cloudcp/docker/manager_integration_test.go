@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/containerd/errdefs"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
@@ -180,6 +181,155 @@ func TestIntegrationTenantNetworksAreNotMutuallyReachable(t *testing.T) {
 	}
 	if code := dockerIntegrationRunContainer(t, ctx, mgr, tenantA, []string{"ping", "-c", "1", "-W", "1", targetIP}); code == 0 {
 		t.Fatal("cross-tenant probe unexpectedly reached tenant B container")
+	}
+}
+
+// This exercises exact checked-out manager source against a fresh Docker daemon.
+// The release-line push check preloads a pinned helper image; final candidate
+// qualification uses its verified control-plane image instead. Unit fixtures
+// cover the API requests; this checks their effects with two installations.
+func TestIntegrationProviderPairNetworkIsolation(t *testing.T) {
+	if os.Getenv("PULSE_RUN_PROVIDER_PAIR_DOCKER_INTEGRATION") != "1" {
+		t.Skip("set PULSE_RUN_PROVIDER_PAIR_DOCKER_INTEGRATION=1 for live two-provider Docker proof")
+	}
+	image := strings.TrimSpace(os.Getenv("PULSE_DOCKER_INTEGRATION_IMAGE"))
+	if image == "" {
+		t.Fatal("PULSE_DOCKER_INTEGRATION_IMAGE must name a preloaded test image")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	suffix := dockerIntegrationSuffix(t)
+	tenantID := "t-shared-" + suffix
+	managerFor := func(provider string) *Manager {
+		t.Helper()
+		mgr, err := NewManager(ManagerConfig{
+			Image:                 image,
+			Network:               "pulse-it-provider-" + provider + "-" + suffix,
+			IsolateTenantNetworks: true,
+		})
+		if err != nil {
+			t.Fatalf("create provider %s manager: %v", provider, err)
+		}
+		t.Cleanup(func() { _ = mgr.Close() })
+		if _, err := mgr.cli.ImageInspect(ctx, image); err != nil {
+			t.Fatalf("inspect preloaded test image %q: %v", image, err)
+		}
+		if _, err := mgr.cli.NetworkCreate(ctx, mgr.cfg.Network, client.NetworkCreateOptions{
+			Driver: "bridge",
+			Labels: map[string]string{"pulse.integration": "provider-pair-network-proof"},
+		}); err != nil {
+			t.Fatalf("create provider %s ingress network: %v", provider, err)
+		}
+		t.Cleanup(func() {
+			_, _ = mgr.cli.NetworkRemove(context.Background(), mgr.cfg.Network, client.NetworkRemoveOptions{})
+		})
+		return mgr
+	}
+	a, b := managerFor("a"), managerFor("b")
+	aSupport := []string{
+		dockerIntegrationCreateSupportContainer(t, ctx, a, a.cfg.Network, providerSupportTraefikLabel),
+		dockerIntegrationCreateSupportContainer(t, ctx, a, a.cfg.Network, providerSupportControlPlaneLabel),
+	}
+	bSupport := []string{
+		dockerIntegrationCreateSupportContainer(t, ctx, b, b.cfg.Network, providerSupportTraefikLabel),
+		dockerIntegrationCreateSupportContainer(t, ctx, b, b.cfg.Network, providerSupportControlPlaneLabel),
+	}
+
+	aTenant, err := a.ensureTenantNetwork(ctx, tenantID)
+	if err != nil {
+		t.Fatalf("provision A tenant network: %v", err)
+	}
+	t.Cleanup(func() { _ = a.removeTenantNetwork(context.Background(), aTenant) })
+	bTenant, err := b.ensureTenantNetwork(ctx, tenantID)
+	if err != nil {
+		t.Fatalf("provision B tenant network: %v", err)
+	}
+	t.Cleanup(func() { _ = b.removeTenantNetwork(context.Background(), bTenant) })
+	if err := a.connectSupportContainersToTenantNetwork(ctx, aTenant); err != nil {
+		t.Fatalf("attach A support: %v", err)
+	}
+	if err := b.connectSupportContainersToTenantNetwork(ctx, bTenant); err != nil {
+		t.Fatalf("attach B support: %v", err)
+	}
+	createTenantContainer := func(mgr *Manager, provider, networkName string) string {
+		t.Helper()
+		resp, err := mgr.cli.ContainerCreate(ctx, client.ContainerCreateOptions{
+			Config: &container.Config{
+				Image:      image,
+				Entrypoint: []string{"sleep"},
+				Cmd:        []string{"300"},
+				Labels: map[string]string{
+					"pulse.managed":   "true",
+					"pulse.tenant.id": tenantID,
+				},
+			},
+			NetworkingConfig: &network.NetworkingConfig{
+				EndpointsConfig: map[string]*network.EndpointSettings{networkName: {}},
+			},
+			Name: "pulse-it-client-" + provider + "-" + suffix,
+		})
+		if err != nil {
+			t.Fatalf("create provider %s tenant container: %v", provider, err)
+		}
+		t.Cleanup(func() {
+			_, _ = mgr.cli.ContainerRemove(context.Background(), resp.ID, client.ContainerRemoveOptions{Force: true})
+		})
+		if _, err := mgr.cli.ContainerStart(ctx, resp.ID, client.ContainerStartOptions{}); err != nil {
+			t.Fatalf("start provider %s tenant container: %v", provider, err)
+		}
+		return resp.ID
+	}
+	aClient := createTenantContainer(a, "a", aTenant)
+	bClient := createTenantContainer(b, "b", bTenant)
+	for _, id := range aSupport {
+		dockerIntegrationAssertAttached(t, ctx, a, id, aTenant)
+		dockerIntegrationAssertNotAttached(t, ctx, a, id, bTenant)
+	}
+	for _, id := range bSupport {
+		dockerIntegrationAssertAttached(t, ctx, b, id, bTenant)
+		dockerIntegrationAssertNotAttached(t, ctx, b, id, aTenant)
+	}
+
+	// An unrelated unlabelled network with our derived name must not be adopted.
+	collision := a.tenantNetworkName("t-collision-" + suffix)
+	if _, err := a.cli.NetworkCreate(ctx, collision, client.NetworkCreateOptions{Driver: "bridge"}); err != nil {
+		t.Fatalf("create unowned collision network: %v", err)
+	}
+	t.Cleanup(func() { _, _ = a.cli.NetworkRemove(context.Background(), collision, client.NetworkRemoveOptions{}) })
+	if _, err := a.ensureTenantNetwork(ctx, "t-collision-"+suffix); err == nil {
+		t.Fatal("provider A adopted an unowned same-name network")
+	}
+	if _, err := a.cli.NetworkInspect(ctx, collision, client.NetworkInspectOptions{}); err != nil {
+		t.Fatalf("unowned collision network was changed: %v", err)
+	}
+
+	if err := a.Remove(ctx, aClient); err != nil {
+		t.Fatalf("remove A tenant container: %v", err)
+	}
+	if _, err := a.cli.NetworkInspect(ctx, aTenant, client.NetworkInspectOptions{}); !errdefs.IsNotFound(err) {
+		t.Fatalf("A tenant network remains or lookup failed unexpectedly: %v", err)
+	}
+	for _, id := range aSupport {
+		dockerIntegrationAssertNotAttached(t, ctx, a, id, aTenant)
+		dockerIntegrationAssertAttached(t, ctx, a, id, a.cfg.Network)
+	}
+	if _, err := b.cli.NetworkInspect(ctx, bTenant, client.NetworkInspectOptions{}); err != nil {
+		t.Fatalf("A cleanup removed B tenant network: %v", err)
+	}
+	for _, id := range bSupport {
+		dockerIntegrationAssertAttached(t, ctx, b, id, bTenant)
+		dockerIntegrationAssertAttached(t, ctx, b, id, b.cfg.Network)
+	}
+	if err := b.Remove(ctx, bClient); err != nil {
+		t.Fatalf("remove B tenant container: %v", err)
+	}
+	if _, err := b.cli.NetworkInspect(ctx, bTenant, client.NetworkInspectOptions{}); !errdefs.IsNotFound(err) {
+		t.Fatalf("B tenant network remains or lookup failed unexpectedly: %v", err)
+	}
+	for _, id := range bSupport {
+		dockerIntegrationAssertNotAttached(t, ctx, b, id, bTenant)
+		dockerIntegrationAssertAttached(t, ctx, b, id, b.cfg.Network)
 	}
 }
 
@@ -435,5 +585,16 @@ func dockerIntegrationAssertNotAttached(t *testing.T, ctx context.Context, mgr *
 	}
 	if endpoint := inspect.Container.NetworkSettings.Networks[networkName]; endpoint != nil {
 		t.Fatalf("container %s is unexpectedly attached to provider network %s", containerID[:12], networkName)
+	}
+}
+
+func dockerIntegrationAssertAttached(t *testing.T, ctx context.Context, mgr *Manager, containerID, networkName string) {
+	t.Helper()
+	inspect, err := mgr.cli.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
+	if err != nil {
+		t.Fatalf("inspect container %s: %v", containerID, err)
+	}
+	if inspect.Container.NetworkSettings == nil || inspect.Container.NetworkSettings.Networks[networkName] == nil {
+		t.Fatalf("container %s is not attached to network %s", containerID[:12], networkName)
 	}
 }

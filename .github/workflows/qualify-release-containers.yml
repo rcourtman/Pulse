@@ -21,7 +21,7 @@ jobs:
     # Every channel qualifies on a fresh VM so previous source execution cannot
     # influence the Docker daemon, smoke results or filesystem state.
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       VERSION: ${{ inputs.version }}
     steps:
@@ -110,6 +110,26 @@ jobs:
               test ! -x "$sidecar"
             done
           '
+
+      - name: Set up Go for provider-network acceptance
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify two-provider network isolation on live Docker
+        env:
+          PULSE_RUN_PROVIDER_PAIR_DOCKER_INTEGRATION: '1'
+          PULSE_DOCKER_INTEGRATION_IMAGE: pulse-control-plane-candidate:${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          go test -count=1 -timeout 3m ./internal/cloudcp/docker \
+            -run '^TestIntegrationProviderPairNetworkIsolation$' -v \
+            | tee "$RUNNER_TEMP/provider-pair-network-test.log"
+          # A test with its opt-in gate unset exits successfully as SKIP.
+          # Require the exact live test to have run and passed.
+          grep -q '^--- PASS: TestIntegrationProviderPairNetworkIsolation ' \
+            "$RUNNER_TEMP/provider-pair-network-test.log"
 
       - name: Set up Helm
         uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1

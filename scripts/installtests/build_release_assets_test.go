@@ -3701,6 +3701,73 @@ func TestReleaseTrainCITriggersIncludeBuildAndE2E(t *testing.T) {
 	}
 }
 
+func TestProviderPairDockerProofRunsBeforeFreezeAndOnExactCandidate(t *testing.T) {
+	const testName = "TestIntegrationProviderPairNetworkIsolation"
+	const helperImage = "alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6"
+	const liveFlag = "PULSE_RUN_PROVIDER_PAIR_DOCKER_INTEGRATION: '1'"
+	const requiredPass = "grep -q '^--- PASS: " + testName + " '"
+
+	ciBytes, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	branchJob := workflowJobBlock(t, string(ciBytes), "provider-pair-docker")
+	for _, required := range []string{
+		"github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/')",
+		"needs.changes.outputs.code == 'true'",
+		"runs-on: ubuntu-24.04",
+		"ref: ${{ github.sha }}",
+		"persist-credentials: false",
+		"EXPECTED_SOURCE_SHA: ${{ github.sha }}",
+		`test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"`,
+		"docker pull '" + helperImage + "'",
+		liveFlag,
+		"PULSE_DOCKER_INTEGRATION_IMAGE: " + helperImage,
+		"-run '^" + testName + "$' -v",
+		requiredPass,
+	} {
+		if !strings.Contains(branchJob, required) {
+			t.Fatalf("release-line provider pair job missing %q", required)
+		}
+	}
+	if strings.Index(branchJob, "Verify exact release-line source") > strings.Index(branchJob, "Prove provider pair provisioning and cleanup") {
+		t.Fatal("provider pair check ran before exact release-line source verification")
+	}
+
+	qualifiedBytes, err := os.ReadFile(repoFile(".github", "workflows", "qualify-release-containers.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	qualifiedJob := workflowJobBlock(t, string(qualifiedBytes), "qualify")
+	for _, required := range []string{
+		"ref: ${{ github.sha }}",
+		"persist-credentials: false",
+		"--source-sha \"${{ github.sha }}\"",
+		"Verify container binaries match immutable candidate",
+		liveFlag,
+		"PULSE_DOCKER_INTEGRATION_IMAGE: pulse-control-plane-candidate:${{ inputs.version }}",
+		"-run '^" + testName + "$' -v",
+		requiredPass,
+	} {
+		if !strings.Contains(qualifiedJob, required) {
+			t.Fatalf("exact-candidate provider pair job missing %q", required)
+		}
+	}
+	verify := strings.Index(qualifiedJob, "Verify container binaries match immutable candidate")
+	pair := strings.Index(qualifiedJob, "Verify two-provider network isolation on live Docker")
+	helm := strings.Index(qualifiedJob, "Helm smoke test with local release-line image")
+	if verify < 0 || pair <= verify || helm <= pair {
+		t.Fatal("live provider pair check must follow payload digest verification and precede Helm smoke")
+	}
+
+	assertFileContainsAll(t, repoFile("internal", "cloudcp", "docker", "manager_integration_test.go"),
+		"func "+testName+"(t *testing.T)",
+		`os.Getenv("PULSE_RUN_PROVIDER_PAIR_DOCKER_INTEGRATION") != "1"`,
+		"provider A adopted an unowned same-name network",
+		"A cleanup removed B tenant network",
+	)
+}
+
 func TestBenchmarkQualificationRetainsProvenance(t *testing.T) {
 	content, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
 	if err != nil {
