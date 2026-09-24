@@ -593,3 +593,42 @@ func TestProviderMSPTraefikEnvIsMinimalAndDNSProviderOverridable(t *testing.T) {
 		t.Fatal("CF_DNS_API_TOKEN is back in the unconditional required-env list; it must be required only when ACME_DNS_PROVIDER is cloudflare")
 	}
 }
+
+// setup.sh used to finish at "setup prepared" without starting the control
+// plane, so the bootstrap sign-in link it printed as the next step answered
+// 404 until the install proof or a manual compose up happened to start it.
+// Setup must bring the provider services up after the final compose
+// validation, wait for the control plane, and only then run the optional
+// install proof and print the summary.
+func TestProviderMSPSetupLeavesPlatformRunning(t *testing.T) {
+	scriptBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", "setup.sh"))
+	if err != nil {
+		t.Fatalf("read provider MSP setup: %v", err)
+	}
+	script := string(scriptBytes)
+
+	assertContainsAll(t, script,
+		"start_provider_services() {",
+		"docker compose up -d traefik docker-socket-proxy control-plane",
+		"docker compose ps --services --status running",
+		"grep -qx control-plane",
+		"control plane did not reach running state",
+		"Pulse Provider MSP is running.",
+	)
+	assertNotContainsAny(t, script, "Pulse Provider MSP setup prepared.")
+
+	sequence := "  ensure_eval_license\n  validate_compose_config\n  start_provider_services\n  run_install_proof_if_requested\n  print_summary\n"
+	if !strings.Contains(script, sequence) {
+		t.Fatal("setup must start provider services after the licensed compose validation and before the install proof and summary")
+	}
+
+	// The first-run prompt names only what a provider must supply.
+	first := script[strings.Index(script, "Edit it now and set"):]
+	first = first[:strings.Index(first, "EOF")]
+	for _, generatedOrDefaulted := range []string{"TRAEFIK_IMAGE", "CP_PULSE_IMAGE", "PULSE_PROVIDER_MSP_DOCKER_SUBNET", "CP_TRUSTED_PROXY_CIDRS"} {
+		if strings.Contains(first, "  - "+generatedOrDefaulted) {
+			t.Fatalf("first-run prompt still lists %s as a value the provider must set", generatedOrDefaulted)
+		}
+	}
+	assertContainsAll(t, first, "DOMAIN", "ACME_EMAIL", "CF_DNS_API_TOKEN")
+}
