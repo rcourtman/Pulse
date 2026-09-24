@@ -2430,6 +2430,19 @@ which have working defaults or are generated. PR #2212 reports a v6.4.1
 first-run 404 and a 200 after starting the platform; this assigned candidate
 has not repeated that live-host proof.
 
+### Provider MSP clients survive a support-container recreate
+
+Recreating the control plane or Traefik (every `upgrade.sh` run recreates the
+control plane) used to detach them from each client's isolated network. The
+health monitor then saw every client as failing and stopped it, and nothing
+restarted it, so an upgrade on a v6.4.1 install with clients took all of them
+offline. The monitor now reattaches the support containers on startup and on
+every pass, and restarts rather than stops an unhealthy client. Verified on
+2026-09-23 on a v6.4.1 provider bundle with two clients: a control-plane
+recreate rejoined both client networks within a second, a Traefik-only
+recreate had its client routes back on the next 60-second pass, and neither
+ client was stopped.
+
 ### Provider MSP operations accept a renewed licence
 
 `provider-msp preflight`, `proof`, `recover` and `backup` treat a licence
