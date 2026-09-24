@@ -3521,6 +3521,12 @@ network, avoiding a same-host provider stack with the same role label. Regressio
 coverage is in `internal/cloudcp/health_monitor_test.go` and
 `internal/cloudcp/docker/manager_test.go`.
 
+The same boundary applies when removing a client: cleanup only selects that
+managed client's derived, correctly labelled tenant network, and only
+disconnects support containers on this provider ingress that are still
+attached to it. A role label by itself must not select another provider's
+support container for a forced disconnect.
+
 ### Provider MSP status reads client health that any caller can observe
 
 `provider-msp status`, which `upgrade.sh` gates on before every provider

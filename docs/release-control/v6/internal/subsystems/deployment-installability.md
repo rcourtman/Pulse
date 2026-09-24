@@ -2462,6 +2462,15 @@ require exact tenant ownership and tenant-runtime labels on an existing
 isolated network before attaching containers; provisioning refuses an
 unlabelled same-named network instead of adopting it. A legacy client without
 an isolated network remains a reconnection no-op.
+Client removal follows the same installation boundary: the Docker manager
+identifies the managed client's network by its derived name and exact tenant
+and runtime labels, not by a generic tenant-network label alone. It must force
+disconnect only this provider's role-labelled support containers that are
+still attached to that network, selecting them through the configured provider
+ingress network. A recreated or other provider's support container is not a
+cleanup target. `internal/cloudcp/docker/manager_test.go` covers the network
+selection and disconnect filters; source-only coverage does not replace a
+two-provider installed upgrade, recreation and cleanup check.
 
 ### Provider MSP operations accept a renewed licence
 

@@ -737,3 +737,117 @@ func TestEnsureTenantNetworkRejectsUnownedExistingNetwork(t *testing.T) {
 		t.Fatalf("ensureTenantNetwork(empty) = (%q, %v), want rejection", got, err)
 	}
 }
+
+func TestTenantNetworkCleanupSelectsOnlyOwnedNetwork(t *testing.T) {
+	ownedLabels := map[string]string{"pulse.tenant.id": "t-acme", tenantRuntimeNetworkLabel: tenantRuntimeNetworkLabelValue}
+	var containerLabels, targetLabels map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Api-Version", "1.47")
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/containers/client-a/json"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"Id": "client-a", "Config": map[string]any{"Labels": containerLabels},
+				"NetworkSettings": map[string]any{"Networks": map[string]any{
+					"provider-a-tenant-t-acme": map[string]any{},
+					"provider-b-tenant-t-acme": map[string]any{},
+				}},
+			})
+		case strings.HasSuffix(r.URL.Path, "/networks/provider-a-tenant-t-acme"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"Name": "provider-a-tenant-t-acme", "Labels": targetLabels})
+		case strings.HasSuffix(r.URL.Path, "/networks/provider-b-tenant-t-acme"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"Name": "provider-b-tenant-t-acme", "Labels": ownedLabels})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
+	t.Setenv("DOCKER_TLS_VERIFY", "")
+	t.Setenv("DOCKER_CERT_PATH", "")
+
+	mgr, err := NewManager(ManagerConfig{Network: "provider-a", IsolateTenantNetworks: true})
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	t.Cleanup(func() { _ = mgr.Close() })
+	for _, tc := range []struct {
+		name            string
+		containerLabels map[string]string
+		targetLabels    map[string]string
+		want            []string
+	}{
+		{name: "owned", containerLabels: map[string]string{"pulse.tenant.id": "t-acme", "pulse.managed": "true"}, targetLabels: ownedLabels, want: []string{"provider-a-tenant-t-acme"}},
+		{name: "unlabelled network", containerLabels: map[string]string{"pulse.tenant.id": "t-acme", "pulse.managed": "true"}},
+		{name: "wrong network tenant", containerLabels: map[string]string{"pulse.tenant.id": "t-acme", "pulse.managed": "true"}, targetLabels: map[string]string{"pulse.tenant.id": "t-other", tenantRuntimeNetworkLabel: tenantRuntimeNetworkLabelValue}},
+		{name: "unmanaged container", containerLabels: map[string]string{"pulse.tenant.id": "t-acme"}, targetLabels: ownedLabels},
+		{name: "no container tenant", containerLabels: map[string]string{"pulse.managed": "true"}, targetLabels: ownedLabels},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			containerLabels, targetLabels = tc.containerLabels, tc.targetLabels
+			got := mgr.tenantNetworkNamesForContainer(context.Background(), "client-a")
+			if len(got) != len(tc.want) || (len(got) > 0 && got[0] != tc.want[0]) {
+				t.Fatalf("tenantNetworkNamesForContainer = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestTenantNetworkCleanupDisconnectsOnlyAttachedLocalSupport(t *testing.T) {
+	const target = "provider-a-tenant-t-acme"
+	const localAttached = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	const localReplacement = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+	const otherAttached = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	var listFilters map[string]map[string]bool
+	var disconnected []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Api-Version", "1.47")
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/networks/"+target):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"Name": target, "Labels": map[string]string{"pulse.tenant.id": "t-acme", tenantRuntimeNetworkLabel: tenantRuntimeNetworkLabelValue},
+				"Containers": map[string]any{localAttached: map[string]any{}, otherAttached: map[string]any{}},
+			})
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/containers/json"):
+			if err := json.Unmarshal([]byte(r.URL.Query().Get("filters")), &listFilters); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			items := []map[string]string{{"Id": localAttached}, {"Id": localReplacement}}
+			if !listFilters["network"]["provider-a"] {
+				items = append(items, map[string]string{"Id": otherAttached})
+			}
+			_ = json.NewEncoder(w).Encode(items)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/networks/"+target+"/disconnect"):
+			var body struct{ Container string }
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			disconnected = append(disconnected, body.Container)
+			_, _ = w.Write([]byte(`{}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
+	t.Setenv("DOCKER_TLS_VERIFY", "")
+	t.Setenv("DOCKER_CERT_PATH", "")
+
+	mgr, err := NewManager(ManagerConfig{Network: "provider-a", IsolateTenantNetworks: true, SupportContainerLabels: []string{providerSupportTraefikLabel}})
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	t.Cleanup(func() { _ = mgr.Close() })
+	if err := mgr.disconnectSupportContainersFromTenantNetwork(context.Background(), target); err != nil {
+		t.Fatalf("disconnectSupportContainersFromTenantNetwork: %v", err)
+	}
+	if !listFilters["network"]["provider-a"] || !listFilters["label"][providerSupportTraefikLabel] {
+		t.Fatalf("support selection did not identify the local provider: %v", listFilters)
+	}
+	if len(disconnected) != 1 || disconnected[0] != localAttached {
+		t.Fatalf("disconnected = %v, want only attached local support %s", disconnected, localAttached)
+	}
+}
