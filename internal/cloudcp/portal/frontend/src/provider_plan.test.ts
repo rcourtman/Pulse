@@ -197,6 +197,24 @@ describe('installProviderPlan', () => {
     expect(navigate).toHaveBeenCalledWith('https://billing.stripe.com/p/session/test');
   });
 
+  it('updates the manual apply view when a paid licence is already running', async () => {
+    const paid = evaluationPlan({ plan_version: 'msp_solo', evaluation: false, license_id: 'lic_msp_paid', workspace_limit: 3 });
+    api.fetchPlan = vi.fn()
+      .mockResolvedValueOnce(evaluationPlan())
+      .mockResolvedValueOnce(paid);
+    api.refreshLicense = vi.fn().mockResolvedValue({
+      status: 'active', changed: false, restart_scheduled: false,
+      plan_version: paid.plan_version, license_id: paid.license_id, expires_at: paid.expires_at,
+    });
+    const { controller } = install(providerBootstrap());
+    await controller.load();
+    click('[data-provider-plan-action="refresh"]');
+    await flush();
+    expect(controller.view().notice).toBe('Your Solo plan is active.');
+    expect(controller.view().plan).toEqual(paid);
+    expect(toast).not.toHaveBeenCalled();
+  });
+
   it('applies a purchase after checkout returns and shows the new plan once the platform restarts', async () => {
     api.refreshLicense = vi.fn()
       .mockResolvedValueOnce({ status: 'no_paid_subscription' })
@@ -204,7 +222,7 @@ describe('installProviderPlan', () => {
     const { store, controller } = install(providerBootstrap(), '?provider_msp_checkout=complete');
     await controller.load();
     expect(store.getShellState().activeSection).toBe('billing');
-    expect(controller.view().notice).toContain('Payment received');
+    expect(controller.view().notice).toBe('Checking for your paid plan…');
     await flush();
     expect(api.refreshLicense).toHaveBeenCalledTimes(1);
     timers.shift()!();
@@ -223,6 +241,61 @@ describe('installProviderPlan', () => {
     await flush();
     expect(controller.view().notice).toBe('Your Solo plan is active.');
     expect(document.getElementById(PROVIDER_PLAN_ROOT_ID)!.innerHTML).toContain('Manage billing');
+  });
+
+  it('does not claim payment from the checkout return when no paid subscription appears', async () => {
+    const { controller } = install(providerBootstrap(), '?provider_msp_checkout=complete');
+    await controller.load();
+    await flush();
+    for (let attempt = 1; attempt < 12; attempt += 1) {
+      expect(timers).toHaveLength(1);
+      timers.shift()!();
+      await flush();
+    }
+    expect(api.refreshLicense).toHaveBeenCalledTimes(12);
+    expect(timers).toHaveLength(0);
+    expect(controller.view().notice).toContain('could not be confirmed yet');
+    expect(controller.view().notice).not.toContain('Payment received');
+    expect(controller.view().plan?.evaluation).toBe(true);
+  });
+
+  it('confirms an already-applied paid licence without requiring another restart', async () => {
+    const paid = evaluationPlan({
+      plan_version: 'msp_solo', evaluation: false, license_id: 'lic_msp_paid', workspace_limit: 3,
+    });
+    api.fetchPlan = vi.fn().mockResolvedValue(paid);
+    api.refreshLicense = vi.fn().mockResolvedValue({
+      status: 'active', changed: false, restart_scheduled: false,
+      plan_version: paid.plan_version, license_id: paid.license_id, expires_at: paid.expires_at,
+    });
+    const { controller } = install(providerBootstrap(), '?provider_msp_checkout=complete');
+    await controller.load();
+    await flush();
+    expect(controller.view().notice).toBe('Your Solo plan is active.');
+    expect(controller.view().plan).toEqual(paid);
+    expect(timers).toHaveLength(0);
+  });
+
+  it('waits for the matching running plan even when refresh reports an active licence', async () => {
+    const paid = evaluationPlan({
+      plan_version: 'msp_solo', evaluation: false, license_id: 'lic_msp_paid', workspace_limit: 3,
+    });
+    api.fetchPlan = vi.fn()
+      .mockResolvedValueOnce(evaluationPlan())
+      .mockResolvedValueOnce(evaluationPlan())
+      .mockResolvedValueOnce(paid);
+    api.refreshLicense = vi.fn().mockResolvedValue({
+      status: 'active', changed: false, restart_scheduled: false,
+      plan_version: paid.plan_version, license_id: paid.license_id, expires_at: paid.expires_at,
+    });
+    const { controller } = install(providerBootstrap(), '?provider_msp_checkout=complete');
+    await controller.load();
+    await flush();
+    expect(controller.view().notice).toBe('Checking for your paid plan…');
+    expect(timers).toHaveLength(1);
+    timers.shift()!();
+    await flush();
+    expect(controller.view().notice).toBe('Your Solo plan is active.');
   });
 
   it('does not announce the old plan when refresh beats the initial plan request', async () => {

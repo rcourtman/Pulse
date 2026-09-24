@@ -254,7 +254,7 @@ export function installProviderPlan(deps: ProviderPlanDeps): ProviderPlanControl
   var applying: ProviderPlanRefreshResult | null = null;
 
   function isApplied(plan: ProviderPlanState, target: ProviderPlanRefreshResult): boolean {
-    return !!target.plan_version && plan.plan_version === target.plan_version &&
+    return !plan.evaluation && !!target.plan_version && plan.plan_version === target.plan_version &&
       (!target.license_id || plan.license_id === target.license_id) &&
       (!target.expires_at || plan.expires_at === target.expires_at);
   }
@@ -339,7 +339,7 @@ export function installProviderPlan(deps: ProviderPlanDeps): ProviderPlanControl
     later(function() { waitForAppliedPlan(target, 0); }, RESTART_SETTLE_MS);
   }
 
-  async function refresh(manual: boolean): Promise<boolean> {
+  async function refresh(manual: boolean, confirmCurrent = false): Promise<boolean> {
     var current = account();
     if (!current) return false;
     view.busy = 'refresh';
@@ -350,8 +350,20 @@ export function installProviderPlan(deps: ProviderPlanDeps): ProviderPlanControl
         applyRestart(result);
         return true;
       }
+      // The background refresher may have restarted the platform before the
+      // browser returns from checkout. Confirm the running paid plan rather
+      // than waiting for another restart that will never be scheduled.
+      if (confirmCurrent && result.status === 'active' && result.plan_version) {
+        var plan = await deps.api.fetchPlan(current.id);
+        if (isApplied(plan, result)) {
+          finishApplying(plan);
+          return true;
+        }
+      }
       if (manual) {
-        deps.showToast(result.status === 'active' ? 'Your plan is already up to date.' : 'No payment has reached this platform yet. It can take a minute after checkout.');
+        deps.showToast(result.status === 'active'
+          ? 'The updated plan could not be confirmed yet. Try again shortly.'
+          : 'No payment has reached this platform yet. It can take a minute after checkout.');
       }
       return false;
     } catch (error) {
@@ -364,10 +376,10 @@ export function installProviderPlan(deps: ProviderPlanDeps): ProviderPlanControl
   }
 
   function pollAfterCheckout(attempt: number) {
-    void refresh(false).then(function(applied) {
+    void refresh(false, true).then(function(applied) {
       if (applied) return;
       if (attempt + 1 >= APPLY_POLL_ATTEMPTS) {
-        view.notice = 'Payment received. If your plan has not changed in a few minutes, use Apply my purchase now.';
+        view.notice = 'A paid plan could not be confirmed yet. If you completed checkout, wait a minute and use Apply my purchase now.';
         render();
         return;
       }
@@ -428,7 +440,7 @@ export function installProviderPlan(deps: ProviderPlanDeps): ProviderPlanControl
         });
         return;
       case 'refresh':
-        void refresh(true);
+        void refresh(true, true);
         return;
     }
   });
@@ -451,7 +463,7 @@ export function installProviderPlan(deps: ProviderPlanDeps): ProviderPlanControl
     }
     deps.store.setActiveShellSection('billing');
     if (returned === 'complete') {
-      view.notice = 'Payment received. Applying your plan…';
+      view.notice = 'Checking for your paid plan…';
       pollAfterCheckout(0);
     } else if (returned === 'billing') {
       checkAfterBillingReturn(0);
