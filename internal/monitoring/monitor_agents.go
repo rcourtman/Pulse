@@ -1743,7 +1743,7 @@ func (m *Monitor) applyRejectedHostReportLiveness(
 	// clear an offline alert, or renew the accepted telemetry lease.
 	m.state.SetConnectionHealth(hostConnectionPrefix+host.ID, true)
 	m.persistHostContinuity(host, report, order)
-	m.refreshUnifiedResourceStoreAfterAgentStateChange()
+	m.refreshUnifiedResourceStoreAfterAgentReport()
 
 	log.Debug().
 		Str("hostID", host.ID).
@@ -2206,7 +2206,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		if existing.ID != "" {
 			m.state.SetConnectionHealth(dockerConnectionPrefix+existing.ID, true)
 		}
-		m.refreshUnifiedResourceStoreAfterAgentStateChange()
+		m.refreshUnifiedResourceStoreAfterAgentReport()
 		log.Debug().
 			Str("dockerHostID", identifier).
 			Str("sequenceId", report.SequenceID).
@@ -2604,7 +2604,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			Str("dockerHost", host.Hostname).
 			Str("sequenceId", report.SequenceID).
 			Msg("Docker helper status processed without refreshing inventory-derived alerts or metrics")
-		m.refreshUnifiedResourceStoreAfterAgentStateChange()
+		m.refreshUnifiedResourceStoreAfterAgentReport()
 		return host, nil
 	}
 
@@ -2700,7 +2700,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		Int("containers", len(containers)).
 		Msg("Docker host report processed")
 
-	m.refreshUnifiedResourceStoreAfterAgentStateChange()
+	m.refreshUnifiedResourceStoreAfterAgentReport()
 
 	return host, nil
 }
@@ -3800,7 +3800,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	// committed, because ownership is checked against that host ID.
 	m.ApplyProbeAvailabilityResults(host.ID, probeAvailabilityResultsFromReport(report.AvailabilityResults))
 	m.persistHostContinuity(host, report, reportOrder)
-	m.refreshUnifiedResourceStoreAfterAgentStateChange()
+	m.refreshUnifiedResourceStoreAfterAgentReport()
 
 	return host, nil
 }
