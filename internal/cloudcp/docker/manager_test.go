@@ -2,6 +2,7 @@ package docker
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -639,5 +640,100 @@ func TestEnsureSupportContainersOnTenantNetworkSkipsMissingNetwork(t *testing.T)
 	}
 	if len(mutations) != 0 {
 		t.Fatalf("reconcile changed the host for a missing network: %v", mutations)
+	}
+}
+
+func TestEnsureSupportContainersOnTenantNetworkRejectsWrongOwner(t *testing.T) {
+	var mutations []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Api-Version", "1.47")
+		if strings.HasSuffix(r.URL.Path, "/_ping") {
+			_, _ = w.Write([]byte("OK"))
+			return
+		}
+		if r.Method != http.MethodGet {
+			mutations = append(mutations, r.Method+" "+r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"Name":"pulse-provider-msp-tenant-t-acme","Id":"net-1","Labels":{"pulse.tenant.id":"t-other","pulse.provider-msp.network":"tenant"}}`))
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
+	t.Setenv("DOCKER_TLS_VERIFY", "")
+	t.Setenv("DOCKER_CERT_PATH", "")
+
+	mgr, err := NewManager(ManagerConfig{Image: "pulse:test", Network: "pulse-provider-msp", IsolateTenantNetworks: true})
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	t.Cleanup(func() { _ = mgr.Close() })
+
+	if err := mgr.EnsureSupportContainersOnTenantNetwork(context.Background(), "t-acme"); err == nil {
+		t.Fatal("expected wrong-owner network to be rejected")
+	}
+	if len(mutations) != 0 {
+		t.Fatalf("reconcile changed wrong-owner network: %v", mutations)
+	}
+}
+
+func TestEnsureTenantNetworkRejectsUnownedExistingNetwork(t *testing.T) {
+	var labels map[string]string
+	var mutations []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Api-Version", "1.47")
+		if strings.HasSuffix(r.URL.Path, "/_ping") {
+			_, _ = w.Write([]byte("OK"))
+			return
+		}
+		if r.Method != http.MethodGet {
+			mutations = append(mutations, r.Method+" "+r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"Name":   "pulse-provider-msp-tenant-t-acme",
+			"Id":     "net-1",
+			"Labels": labels,
+		})
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
+	t.Setenv("DOCKER_TLS_VERIFY", "")
+	t.Setenv("DOCKER_CERT_PATH", "")
+
+	mgr, err := NewManager(ManagerConfig{Image: "pulse:test", Network: "pulse-provider-msp", IsolateTenantNetworks: true})
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	t.Cleanup(func() { _ = mgr.Close() })
+
+	for _, tc := range []struct {
+		name   string
+		labels map[string]string
+		wantOK bool
+	}{
+		{name: "unlabelled"},
+		{name: "wrong tenant", labels: map[string]string{"pulse.tenant.id": "t-other", tenantRuntimeNetworkLabel: tenantRuntimeNetworkLabelValue}},
+		{name: "missing runtime label", labels: map[string]string{"pulse.tenant.id": "t-acme"}},
+		{name: "wrong runtime label", labels: map[string]string{"pulse.tenant.id": "t-acme", tenantRuntimeNetworkLabel: "ingress"}},
+		{name: "owned tenant network", labels: map[string]string{"pulse.tenant.id": "t-acme", tenantRuntimeNetworkLabel: tenantRuntimeNetworkLabelValue}, wantOK: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			labels = tc.labels
+			mutations = nil
+			got, err := mgr.ensureTenantNetwork(context.Background(), "t-acme")
+			if tc.wantOK {
+				if err != nil || got != "pulse-provider-msp-tenant-t-acme" {
+					t.Fatalf("ensureTenantNetwork = (%q, %v), want owned network", got, err)
+				}
+			} else if err == nil || got != "" {
+				t.Fatalf("ensureTenantNetwork = (%q, %v), want fail closed", got, err)
+			}
+			if len(mutations) != 0 {
+				t.Fatalf("ensureTenantNetwork mutated existing network: %v", mutations)
+			}
+		})
+	}
+	if got, err := mgr.ensureTenantNetwork(context.Background(), ""); err == nil || got != "" {
+		t.Fatalf("ensureTenantNetwork(empty) = (%q, %v), want rejection", got, err)
 	}
 }

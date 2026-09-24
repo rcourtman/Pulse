@@ -3443,10 +3443,16 @@ client's isolated tenant network. Recreating either one, which every
 `upgrade.sh` run does to the control plane, drops those attachments, cutting
 the client's Traefik route and, with the old stop behaviour, taking every
 client offline three minutes later. A client without an isolated network is
-skipped quietly. Regression coverage:
+skipped quietly during recovery. Provisioning may create a missing isolated
+network, but it must not adopt a same-named pre-existing network unless the
+network has the exact tenant ID and provider-MSP tenant-runtime labels; an
+empty tenant ID is invalid. This prevents a foreign or unlabelled network from
+becoming a client's runtime route before support containers are attached.
+Regression coverage:
 `TestHealthMonitorReattachesSupportContainersAndRestartsInsteadOfStopping` in
 `internal/cloudcp/health_monitor_test.go` and
-`TestEnsureSupportContainersOnTenantNetworkSkipsMissingNetwork` in
+`TestEnsureSupportContainersOnTenantNetworkSkipsMissingNetwork` and
+`TestEnsureTenantNetworkRejectsUnownedExistingNetwork` in
 `internal/cloudcp/docker/manager_test.go`.
 
 ### Provider-hosted MSP platforms buy and renew their own licence
@@ -3499,6 +3505,21 @@ coverage:
 `internal/cloudcp/routes_auth_test.go`, and
 `TestProviderMSPWorkspaceLadderRisesFromTheEvaluation` in
 `pkg/licensing/features_test.go`.
+
+### Provider MSP health monitor recovers clients across upgrades
+
+The health monitor rejoins Traefik and the control plane to each active
+client's labelled isolated network on startup and before every health check.
+Recreating either support container drops its tenant-network attachments;
+without reconnection, routes fail and a healthy client can appear unreachable.
+The monitor now restarts an unhealthy client with Docker's restart operation,
+rather than stopping it: `unless-stopped` does not revive a container stopped
+through the API. Missing isolated networks are skipped; a network whose labels
+do not identify that tenant is refused rather than connected. Support containers
+must also have the role label and belong to the configured provider ingress
+network, avoiding a same-host provider stack with the same role label. Regression
+coverage is in `internal/cloudcp/health_monitor_test.go` and
+`internal/cloudcp/docker/manager_test.go`.
 
 ### Provider MSP status reads client health that any caller can observe
 

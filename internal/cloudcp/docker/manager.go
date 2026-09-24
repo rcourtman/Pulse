@@ -365,12 +365,17 @@ func (m *Manager) ensureTenantNetwork(ctx context.Context, tenantID string) (str
 		}
 		return networkName, nil
 	}
+	if strings.TrimSpace(tenantID) == "" {
+		return "", fmt.Errorf("tenant ID is required for an isolated network")
+	}
 
 	networkName := m.tenantNetworkName(tenantID)
 	inspect, err := m.cli.NetworkInspect(ctx, networkName, client.NetworkInspectOptions{})
 	if err == nil {
-		if got := strings.TrimSpace(inspect.Network.Labels["pulse.tenant.id"]); got != "" && got != tenantID {
-			return "", fmt.Errorf("tenant network %q belongs to tenant %q, not %q", networkName, got, tenantID)
+		// A matching name is not evidence that this is our isolated network.
+		// In particular, never adopt a pre-existing unlabelled Docker network.
+		if !isOwnedTenantNetwork(inspect.Network.Labels, tenantID) {
+			return "", fmt.Errorf("network %q is not the isolated network for tenant %q", networkName, tenantID)
 		}
 		return networkName, nil
 	}
@@ -392,6 +397,10 @@ func (m *Manager) ensureTenantNetwork(ctx context.Context, tenantID string) (str
 	return networkName, nil
 }
 
+func isOwnedTenantNetwork(labels map[string]string, tenantID string) bool {
+	return tenantID != "" && labels["pulse.tenant.id"] == tenantID && labels[tenantRuntimeNetworkLabel] == tenantRuntimeNetworkLabelValue
+}
+
 func (m *Manager) connectSupportContainersToTenantNetwork(ctx context.Context, networkName string) error {
 	if m == nil || !m.cfg.IsolateTenantNetworks {
 		return nil
@@ -409,8 +418,15 @@ func (m *Manager) connectSupportContainersToTenantNetwork(ctx context.Context, n
 }
 
 func (m *Manager) connectSupportContainersByLabel(ctx context.Context, networkName, label string) error {
+	providerNetwork := strings.TrimSpace(m.cfg.Network)
+	if providerNetwork == "" {
+		return fmt.Errorf("provider ingress network is required to select support containers")
+	}
 	filters := client.Filters{}
 	filters = filters.Add("label", label)
+	// Role labels are shared by every provider MSP installation on a host.
+	// Never attach another installation's support container to this tenant.
+	filters = filters.Add("network", providerNetwork)
 	result, err := m.cli.ContainerList(ctx, client.ContainerListOptions{
 		Filters: filters,
 	})
@@ -887,11 +903,17 @@ func (m *Manager) EnsureSupportContainersOnTenantNetwork(ctx context.Context, te
 	if networkName == "" {
 		return nil
 	}
-	if _, err := m.cli.NetworkInspect(ctx, networkName, client.NetworkInspectOptions{}); err != nil {
+	inspected, err := m.cli.NetworkInspect(ctx, networkName, client.NetworkInspectOptions{})
+	if err != nil {
 		if errdefs.IsNotFound(err) {
 			return nil
 		}
 		return fmt.Errorf("inspect tenant network %q: %w", networkName, err)
+	}
+	// A name alone does not establish ownership. Never attach provider support
+	// containers to an unrelated network that happens to have the derived name.
+	if !isOwnedTenantNetwork(inspected.Network.Labels, tenantID) {
+		return fmt.Errorf("network %q is not the isolated network for tenant %q", networkName, tenantID)
 	}
 	return m.connectSupportContainersToTenantNetwork(ctx, networkName)
 }
