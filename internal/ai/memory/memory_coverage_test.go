@@ -580,16 +580,10 @@ func TestIncidentStore_SaveAsyncAndPersistence(t *testing.T) {
 	}
 
 	store.saveAsync()
+	store.flush()
 
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for {
-		if _, err := os.Stat(store.filePath); err == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("expected saveAsync to create file")
-		}
-		time.Sleep(10 * time.Millisecond)
+	if _, err := os.Stat(store.filePath); err != nil {
+		t.Fatalf("expected saveAsync to create file: %v", err)
 	}
 }
 
@@ -608,7 +602,12 @@ func TestIncidentStore_SaveAsync_Error(t *testing.T) {
 		filePath: filepath.Join(badDir, incidentFileName),
 	}
 	store.saveAsync()
-	time.Sleep(20 * time.Millisecond)
+	// An unjoined save could run MkdirAll after TempDir cleanup removed the
+	// blocking file, recreating the directory mid-removal.
+	store.flush()
+	if info, err := os.Stat(badDir); err != nil || info.IsDir() {
+		t.Fatalf("failed save must leave the blocking file in place: info=%v err=%v", info, err)
+	}
 }
 
 func TestIncidentStore_SaveToDisk_Scenarios(t *testing.T) {

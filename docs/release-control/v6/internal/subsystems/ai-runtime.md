@@ -76,6 +76,17 @@ does it eliminate snapshot serialization. Proof:
 `internal/ai/memory/incidents_unchanged_test.go` covers unchanged evaluations,
 metadata, restart, resolution/recurrence, file loss and failed-write retry.
 
+Coalesced asynchronous checkpoints are tracked until they finish. A queued save
+still creates the data directory and writes its temp file after the mutation
+returns, so a caller that removes or inspects that directory joins in-flight
+saves through the store's unexported `flush` first. Tests backed by `t.TempDir`
+register it as a cleanup; unjoined saves recreated the removed directory or
+failed its cleanup with "directory not empty" on loaded CI runners. This is an
+internal durability boundary. It does not change checkpoint timing,
+coalescing or the stored format, and it is not a shutdown flush.
+`TestIncidentStoreFlushJoinsQueuedSave` proves the join covers a queued save
+that has not started.
+
 Assistant owns composer registration and focus on every open, rather than only
 on component mount. Closing clears the registered input so later keyboard
 commands cannot target a detached composer. A handoff must leave Escape and
