@@ -2070,6 +2070,70 @@ func TestReleaseContainerQualificationBindsCheckoutToCallerCommit(t *testing.T) 
 	}
 }
 
+func TestProviderPairDockerSecurityAcceptanceRunsBeforeAndAfterFreeze(t *testing.T) {
+	buildBytes, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
+	if err != nil {
+		t.Fatalf("read build-and-test.yml: %v", err)
+	}
+	branchJob := workflowJobBlock(t, string(buildBytes), "provider-pair-docker")
+	for _, required := range []string{
+		"needs: changes",
+		"github.event_name == 'push'",
+		"startsWith(github.ref, 'refs/heads/release/')",
+		"needs.changes.outputs.code == 'true'",
+		"runs-on: ubuntu-24.04",
+		"contents: read",
+		`ref: ${{ github.sha }}`,
+		`persist-credentials: false`,
+		`EXPECTED_SOURCE_SHA: ${{ github.sha }}`,
+		`test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"`,
+		`docker pull 'alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6'`,
+	} {
+		if !strings.Contains(branchJob, required) {
+			t.Fatalf("pre-freeze provider-pair job missing %q", required)
+		}
+	}
+	branchTest := workflowStepBlock(t, branchJob, "Prove provider pair provisioning and cleanup")
+	for _, required := range []string{
+		"PULSE_RUN_PROVIDER_PAIR_DOCKER_INTEGRATION: '1'",
+		"PULSE_DOCKER_INTEGRATION_IMAGE: alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6",
+		"-run '^TestIntegrationProviderPairNetworkIsolation$' -v",
+		"grep -q '^--- PASS: TestIntegrationProviderPairNetworkIsolation '",
+	} {
+		if !strings.Contains(branchTest, required) {
+			t.Fatalf("pre-freeze provider-pair test missing %q", required)
+		}
+	}
+
+	qualifierBytes, err := os.ReadFile(repoFile(".github", "workflows", "qualify-release-containers.yml"))
+	if err != nil {
+		t.Fatalf("read qualify-release-containers.yml: %v", err)
+	}
+	qualifyJob := workflowJobBlock(t, string(qualifierBytes), "qualify")
+	verified := strings.Index(qualifyJob, "- name: Verify container binaries match immutable candidate")
+	paired := strings.Index(qualifyJob, "- name: Verify two-provider network isolation on live Docker")
+	if verified < 0 || paired <= verified {
+		t.Fatal("provider-pair qualification must follow exact-candidate binary verification")
+	}
+	qualifyTest := workflowStepBlock(t, qualifyJob, "Verify two-provider network isolation on live Docker")
+	for _, required := range []string{
+		"PULSE_RUN_PROVIDER_PAIR_DOCKER_INTEGRATION: '1'",
+		"PULSE_DOCKER_INTEGRATION_IMAGE: pulse-control-plane-candidate:${{ inputs.version }}",
+		"-run '^TestIntegrationProviderPairNetworkIsolation$' -v",
+		"grep -q '^--- PASS: TestIntegrationProviderPairNetworkIsolation '",
+	} {
+		if !strings.Contains(qualifyTest, required) {
+			t.Fatalf("exact-candidate provider-pair test missing %q", required)
+		}
+	}
+	assertFileContainsAll(t, repoFile("internal", "cloudcp", "docker", "manager_integration_test.go"),
+		"func TestIntegrationProviderPairNetworkIsolation(t *testing.T)",
+		"a.Remove(ctx, aClient)",
+		"b.Remove(ctx, bClient)",
+		"provider A adopted an unowned same-name network",
+	)
+}
+
 func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 	versionBytes, err := os.ReadFile(repoFile("VERSION"))
 	if err != nil {
