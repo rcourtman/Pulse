@@ -55,7 +55,7 @@
     "@solidjs/router": "^0.10.10",
     "dompurify": "^3.4.15",
     "highlight.js": "^11.12.0",
-    "lucide-solid": "^0.545.0",
+    "lucide-solid": "^1.47.0",
     "marked": "^17.0.1",
     "qrcode": "^1.5.4",
     "solid-js": "^1.9.15"
