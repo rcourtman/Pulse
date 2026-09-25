@@ -1131,6 +1131,8 @@ type Monitor struct {
 	mockUnifiedView            monitorUnifiedStateView
 	mockUnifiedViewVersion     uint64
 	mockUnifiedViewValid       bool
+	storageMetricDedupMu       sync.Mutex
+	storageMetricDedup         map[string]storageMetricSample
 	pveClients                 map[string]PVEClientInterface
 	pbsClients                 map[string]*pbs.Client
 	pmgClients                 map[string]*pmg.Client
@@ -5705,6 +5707,67 @@ func (m *Monitor) syncUnifiedVMMetrics(store ResourceStoreInterface, sinks ...*[
 	}
 }
 
+// storageMetricSample is the last sample persisted to metrics.db for one
+// (resourceType, resourceID, metricType) series, used to suppress writes that would
+// merely restate it. observedAt is the sample's own observation time and is what
+// makes the comparison exact; writtenAt is wall-clock and only expires entries for
+// series that have stopped reporting.
+type storageMetricSample struct {
+	value      float64
+	observedAt time.Time
+	writtenAt  time.Time
+}
+
+// storageMetricDedupTTL drops tracking entries for series that have stopped
+// reporting, so the map cannot grow without bound as resources come and go.
+const storageMetricDedupTTL = 15 * time.Minute
+
+func storageMetricDedupKey(resourceType, resourceID, metricType string) string {
+	return resourceType + "\x00" + resourceID + "\x00" + metricType
+}
+
+// shouldPersistStorageMetric reports whether this sample differs from the one
+// already persisted for the same series.
+//
+// syncUnifiedStorageMetrics runs at every accepted agent-report ingest boundary
+// rather than on a storage poll cycle, so it restates every storage resource
+// roughly once per agent report, while storage data refreshes on its own much
+// slower schedule. The overwhelming majority of those writes therefore carry a
+// value and an observation time the store already holds.
+//
+// The guard is exact rather than time-based: a write is skipped only when both the
+// value and the observation timestamp match what was last persisted. Given rows are
+// keyed on (resource_type, resource_id, metric_type, tier, timestamp), such a write
+// can only ever upsert a row to its own current contents. Anything that moved —
+// including a refreshed observation time carrying an identical reading — is still
+// written immediately, so this costs no fidelity and needs no tunable interval.
+func (m *Monitor) shouldPersistStorageMetric(key string, value float64, observedAt, now time.Time) bool {
+	m.storageMetricDedupMu.Lock()
+	defer m.storageMetricDedupMu.Unlock()
+	if m.storageMetricDedup == nil {
+		m.storageMetricDedup = make(map[string]storageMetricSample)
+	}
+	if prev, ok := m.storageMetricDedup[key]; ok &&
+		prev.value == value &&
+		prev.observedAt.Equal(observedAt) {
+		return false
+	}
+	m.storageMetricDedup[key] = storageMetricSample{value: value, observedAt: observedAt, writtenAt: now}
+	return true
+}
+
+// pruneStorageMetricDedup discards tracking entries not refreshed within
+// storageMetricDedupTTL.
+func (m *Monitor) pruneStorageMetricDedup(now time.Time) {
+	m.storageMetricDedupMu.Lock()
+	defer m.storageMetricDedupMu.Unlock()
+	for key, sample := range m.storageMetricDedup {
+		if now.Sub(sample.writtenAt) > storageMetricDedupTTL {
+			delete(m.storageMetricDedup, key)
+		}
+	}
+}
+
 func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface, sinks ...*[]metrics.WriteMetric) {
 	if store == nil || (m.metricsHistory == nil && m.metricsStore == nil) {
 		return
@@ -5716,9 +5779,16 @@ func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface, sinks 
 	}
 
 	now := time.Now()
+	m.pruneStorageMetricDedup(now)
 	storeWrites := make([]metrics.WriteMetric, 0)
-	appendStoreWrite := func(resourceType, resourceID, metricType string, value float64, observedAt time.Time) {
+	// This guards only the persisted writes. The in-memory metricsHistory series
+	// below is still fed on every pass at full resolution, so the live UI is
+	// unaffected.
+	appendStoreWrite := func(resourceType, resourceID, metricType string, value float64, timestamp time.Time) {
 		if m.metricsStore == nil {
+			return
+		}
+		if !m.shouldPersistStorageMetric(storageMetricDedupKey(resourceType, resourceID, metricType), value, timestamp, now) {
 			return
 		}
 		storeWrites = append(storeWrites, metrics.WriteMetric{
@@ -5726,7 +5796,7 @@ func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface, sinks 
 			ResourceID:   resourceID,
 			MetricType:   metricType,
 			Value:        value,
-			Timestamp:    observedAt,
+			Timestamp:    timestamp,
 			Tier:         metrics.TierRaw,
 		})
 	}
