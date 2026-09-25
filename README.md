@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="docs/images/pulse-logo.svg" alt="Pulse logo" width="112" />
-  <p><strong>Infrastructure monitoring that finds what needs attention.</strong></p>
+  <p><strong>Real-time Proxmox, Docker and Kubernetes monitoring that finds what needs attention.</strong></p>
 
   [![GitHub Stars](https://img.shields.io/github/stars/rcourtman/Pulse?style=flat&logo=github)](https://github.com/rcourtman/Pulse)
   [![GitHub Release](https://img.shields.io/github/v/release/rcourtman/Pulse)](https://github.com/rcourtman/Pulse/releases/latest)
