@@ -214,6 +214,17 @@ own inline boundary. A wearout arm keyed on `> 0` silently exempts the single
 worst reading a disk can publish, which let a spent SSD read critical on the
 Physical Disks surface while raising no alert at all.
 
+Proxmox wearout recovery requires three consecutive reported readings of at
+least 10% remaining life. An absent reading does not prove recovery, and a
+new low reading resets the recovery run; until recovery is confirmed the
+existing alert retains its low-life value and occurrence. This bounds the
+resolved-then-refired notification loop when endurance data briefly looks
+healthy (#2112), while a sustained replacement/corrected reading can still
+resolve. `TestCheckDiskHealthWearoutFlappingDoesNotRepeatNotifications` and
+`TestCheckDiskHealthWearoutRecoveryAlertCleared` pin dispatch/history
+deduplication and confirmed recovery. This is synthetic source proof, not a
+claim that the reporter's installed image has been repaired.
+
 Host SMART counter growth is an event boundary rather than a warning on every
 historical non-zero value. For an agent-only disk, the first reported UDMA CRC
 error count establishes an in-memory baseline and raises no alert. A later
