@@ -294,7 +294,9 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 				existing.Evidence = appendOperationalEvidence(existing.Evidence, envelope.Clone())
 			}
 			applyCanonicalIdentity(existing, alert.CanonicalSpecID, alert.CanonicalKind)
-			m.setActiveAlertNoLock(storageKey, existing)
+			if !m.setActiveAlertNoLock(storageKey, existing) {
+				continue
+			}
 			// Like metric alerts, an existing provider incident becoming critical
 			// must notify again. Keep its lifecycle and all delivery policy gates;
 			// unchanged severity and downgrades must not create notification noise.
@@ -307,7 +309,9 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 		}
 
 		m.preserveAlertState(storageKey, alert)
-		m.setActiveAlertNoLock(storageKey, alert)
+		if !m.setActiveAlertNoLock(storageKey, alert) {
+			continue
+		}
 		m.recentAlerts[canonicalTrackingKeyForAlert(alert)] = alert
 		m.historyManager.AddAlert(*alert)
 		m.recordAlertEvent(eventlog.TypeFired, alert, storageKey, "unified-incident", alert.Message, nil)

@@ -495,7 +495,11 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			alert.AckTime = nil
 			alert.AckUser = ""
 		}
-		m.setActiveAlertNoLock(storageKey, alert)
+		if !m.setActiveAlertNoLock(storageKey, alert) {
+			result.State.State = alertspecs.AlertStateSuppressed
+			result.State.Reason = "operator-suppressed"
+			return result, true
+		}
 		if params.AddToRecent {
 			m.recentAlerts[trackingKey] = alert
 		}
@@ -761,7 +765,13 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		applyCanonicalIdentity(alert, params.Spec.ID, string(params.Spec.Kind))
 		applyCanonicalOperationalEvidence(alert, params.Spec, params.Evidence, time.Now())
 		m.preserveAlertState(storageKey, alert)
-		m.setActiveAlertNoLock(storageKey, alert)
+		if !m.setActiveAlertNoLock(storageKey, alert) {
+			result.State.State = alertspecs.AlertStateSuppressed
+			result.State.Reason = "operator-suppressed"
+			result.State.ActiveSince = time.Time{}
+			result.Transition = nil
+			return result, true
+		}
 		if params.AddToRecent {
 			m.recentAlerts[trackingKey] = alert
 		}

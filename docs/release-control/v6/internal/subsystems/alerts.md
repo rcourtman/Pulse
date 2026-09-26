@@ -2452,6 +2452,15 @@ hidden by expected-offline.
 
 Every active-alert writer passes through the same operator-state gate, and
 notification delivery consults the same decision before quiet-hours policy.
+The active-store writer reports admission explicitly. A detector must not
+record history, recent state, fired events, rate-limit consumption, or delivery
+intent after a rejected write. Lifecycle evaluators report suppression without
+an activation transition. Restore and guest-identity migration must not revive
+acknowledgement or tracking state for rejected alerts. Repeated observations,
+policy removal or expiry, and post-mutation reconciliation are covered in
+`internal/alerts/intent_policy_test.go` across provider incidents, metrics and
+canonical lifecycle writers. This is source-level regression coverage, not an
+installed notification-delivery result.
 Operator suppression is never converted into a quiet-hours replay, including
 for recovery notifications carrying stale replay metadata.
 After a persisted policy mutation, `ReconcileResourceOperatorState` resolves
