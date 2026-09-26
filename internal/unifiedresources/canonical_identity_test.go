@@ -171,6 +171,18 @@ func TestProxmoxDiskAlertAliasIsScopedAndNotPrimaryIdentity(t *testing.T) {
 	assertAlias(ProxmoxPhysicalDiskAlertResourceID("pve-a", "node-2", "/dev/sda"), true)
 	resource.Type = ResourceTypeStorage
 	assertAlias(ProxmoxPhysicalDiskAlertResourceID("pve-a", "node-2", "/dev/sda"), false)
+	resource.Type = ResourceTypePhysicalDisk
+	resource.PhysicalDisk.DevPath = ""
+	assertAlias(ProxmoxPhysicalDiskAlertResourceID("pve-a", "node-2", ""), false)
+}
+
+func TestProxmoxPhysicalDiskAlertResourceIDPreservesEmptyDevicePath(t *testing.T) {
+	if got, want := ProxmoxPhysicalDiskAlertResourceID("pve-a", "node-1", ""), "pve-a:node-1:disk:"; got != want {
+		t.Fatalf("empty device path reference = %q, want %q", got, want)
+	}
+	if got, want := ProxmoxPhysicalDiskAlertResourceID("pve-a", "node-1", "/"), "pve-a:node-1:disk:root"; got != want {
+		t.Fatalf("root device path reference = %q, want %q", got, want)
+	}
 }
 
 func TestUnavailableMemoryFacetsDoNotChangeCanonicalIdentity(t *testing.T) {

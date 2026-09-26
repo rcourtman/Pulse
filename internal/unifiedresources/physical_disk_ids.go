@@ -74,6 +74,11 @@ func ProxmoxPhysicalDiskAlertResourceID(instance, node, device string) string {
 
 func physicalDiskAlertKey(device string) string {
 	trimmed := strings.TrimSpace(device)
+	// Persisted alert references used an empty key when the device path was
+	// absent. Keep that spelling distinct from the root-device key.
+	if trimmed == "" {
+		return ""
+	}
 	if trimmed == "/" {
 		return "root"
 	}

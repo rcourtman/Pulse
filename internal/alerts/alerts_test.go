@@ -429,6 +429,7 @@ func TestProxmoxDiskCanonicalResourceIDTrimsIdentity(t *testing.T) {
 		{"trimmed source identity", " inst ", " node ", "/dev/sda", "inst:node:disk:dev-sda"},
 		{"nested device path", "inst", "node", "/dev/disk/by-id/ATA_DISK", "inst:node:disk:dev-disk-by-id-ata-disk"},
 		{"root path", "inst", "node", "/", "inst:node:disk:root"},
+		{"missing path keeps legacy identity", "inst", "node", "", "inst:node:disk:"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := proxmoxDiskCanonicalResourceID(tt.instance, tt.node, tt.path); got != tt.want {

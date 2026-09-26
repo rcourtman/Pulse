@@ -4489,7 +4489,9 @@ canonical aliases include the persisted PVE disk-alert reference
 one constructor for that legacy reference. It is a lookup alias, never the
 disk's primary canonical ID or source ID, and must not leak across nodes,
 instances or non-disk resources. Ambiguous alias claims still fail closed under
-normal reference resolution. `TestProxmoxDiskAlertAliasIsScopedAndNotPrimaryIdentity`
+normal reference resolution. An absent device path retains the historical
+empty-key alert reference, distinct from the root-device key, but cannot be
+claimed as a disk alias without a device path. `TestProxmoxDiskAlertAliasIsScopedAndNotPrimaryIdentity`
 pins the identity boundary, and the registry-backed monitoring mute test pins
 its operator-state consumer.
 When host-agent SMART and Proxmox physical-disk rows merge, the unified
