@@ -3335,6 +3335,11 @@ confirmation note or rule reason is a `FormTextarea`, and the alert-only
 guidance link is a `ButtonLink`. `PatrolIntelligenceSurface.tsx` passes the
 Patrol findings accessor into the workbench; the workbench does not fetch or
 poll findings itself.
+The feature shell keeps the independent attention workbench mounted when
+Patrol is off or its model needs setup, while retaining the existing setup task
+above it. Desktop and narrow browser checks must show the task and attention
+list together, then allow a selected decision to open and return without
+changing the disabled Patrol controls or overflowing the viewport.
 The objective brief and optional-context fields in `PatrolObjectivesPanel`
 share the same `FormTextarea` ownership contract.
 

@@ -1,18 +1,16 @@
 {
   "version": 1,
-  "base_sha": "e3b1e80c9329bb897d37f82c1ff190a4c95dc9b3",
-  "verified_at": "2026-09-26T19:03:18Z",
+  "base_sha": "c6bc5704395d6cdf10505ef89103278eb43a785c",
+  "verified_at": "2026-09-26T19:16:44Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
-    "frontend-modern/src/components/Settings/ssoProvidersModel.ts"
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "781cbb8913f42008456afa7701351c4828aabc140c9e35595c47fd2330bca0cf",
-    "frontend-modern/src/components/Settings/ssoProvidersModel.ts": "9f10845e553633d73bff7ac5fb295d4ce5cc0c4250d0eef1bac2ce18bb31ef2c"
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "83dfb9eefe57064111244b2fef8e059b02000e5b07844335c0577516b599bf44"
   },
   "routes": [
-    "/browser-tests/sso-mappings-2266.html"
+    "/browser-tests/patrol-off-attention-2257.html"
   ],
   "viewports": [
     {
@@ -25,15 +23,16 @@
     }
   ],
   "states": [
-    "Existing OIDC provider loaded with Server Access=admin from provider detail; edit dialog access restrictions opened",
-    "Mapping edited to add Everyone=viewer on a new line, saved by PUT, reopened from provider detail as Server Access=admin, Everyone=viewer",
-    "Desktop and phone screenshots inspected with the mapping field focused and visible; no clipping or horizontal overflow"
+    "Patrol off with model setup blocked: focused setup task and one independent active attention decision both visible",
+    "Attention list and selected Database VM disk-pressure detail on desktop and phone, then return to list",
+    "Fixture page remounted after closing detail: setup task and attention decision remain visible",
+    "Desktop and phone list/detail screenshots inspected after toggle settled off; no clipping or horizontal overflow"
   ],
   "interactions": [
-    "Open production SSOProvidersPanel edit dialog and expand access restrictions at both widths",
-    "Edit the deepest Group Role Mappings textarea, save, and reopen to verify persisted multi-word group; assert unchanged OIDC scope list",
-    "Scroll and focus the mapping field within the dialog; inspect its bounding box and rendered pixels, then close with Escape"
+    "Load production PatrolIntelligenceSurface in Chromium with a bounded synthetic API and assert the off toggle is aria-pressed=false",
+    "Open Start review, inspect affected resource, consequence and next step, then close detail with the desktop close button or phone Back to list",
+    "Remount the fixture and verify the setup task and independent attention queue persist; inspect four responsive screenshots"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/sso-mappings-2266.cjs (Playwright 1.56.1, Chromium 141.0.7390.37)",
-  "notes": "Synthetic API fixture around the production panel; no live Cloudflare/Google Workspace sign-in, installed instance, containing release or reporter confirmation is claimed. Screenshots and browser log are retained in the lane output directory."
+  "command": "pulse-worker-browser frontend-modern/browser-tests/patrol-off-attention-2257.cjs (Playwright 1.56.1, Chromium 141.0.7390.37)",
+  "notes": "The production Patrol surface uses fixture API responses, not a live Patrol install. No provider acceptance, source integration, containing release or field retest is claimed. Screenshots and log are retained in this lane output directory."
 }
