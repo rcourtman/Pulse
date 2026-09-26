@@ -1,15 +1,20 @@
 {
   "version": 1,
-  "base_sha": "c6bc5704395d6cdf10505ef89103278eb43a785c",
-  "verified_at": "2026-09-26T19:16:44Z",
+  "base_sha": "3829d91456fe4a121e4e6f0cca6a6ef1fe0c7f2a",
+  "verified_at": "2026-09-26T19:37:23Z",
   "result": "passed",
   "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+    "frontend-modern/src/components/Settings/ssoProvidersModel.ts",
     "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx"
   ],
   "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "781cbb8913f42008456afa7701351c4828aabc140c9e35595c47fd2330bca0cf",
+    "frontend-modern/src/components/Settings/ssoProvidersModel.ts": "9f10845e553633d73bff7ac5fb295d4ce5cc0c4250d0eef1bac2ce18bb31ef2c",
     "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "83dfb9eefe57064111244b2fef8e059b02000e5b07844335c0577516b599bf44"
   },
   "routes": [
+    "/browser-tests/sso-mappings-2266.html",
     "/browser-tests/patrol-off-attention-2257.html"
   ],
   "viewports": [
@@ -23,16 +28,18 @@
     }
   ],
   "states": [
-    "Patrol off with model setup blocked: focused setup task and one independent active attention decision both visible",
-    "Attention list and selected Database VM disk-pressure detail on desktop and phone, then return to list",
-    "Fixture page remounted after closing detail: setup task and attention decision remain visible",
-    "Desktop and phone list/detail screenshots inspected after toggle settled off; no clipping or horizontal overflow"
+    "OIDC provider edit dialog with Server Access=admin, Everyone=viewer preserved after save and reopen",
+    "Patrol off with model setup blocked: setup task and independent attention decision visible together",
+    "Selected Database VM disk-pressure detail with impact and next step, then return to attention list",
+    "Patrol page remounted: setup task and attention decision still visible",
+    "Desktop and phone screenshots inspected: mapping field and Patrol list/detail visible without clipping or horizontal overflow"
   ],
   "interactions": [
-    "Load production PatrolIntelligenceSurface in Chromium with a bounded synthetic API and assert the off toggle is aria-pressed=false",
-    "Open Start review, inspect affected resource, consequence and next step, then close detail with the desktop close button or phone Back to list",
-    "Remount the fixture and verify the setup task and independent attention queue persist; inspect four responsive screenshots"
+    "Edit and save OIDC group mappings containing a multi-word group and newline separator, reopen and verify exact map; retain OIDC scopes",
+    "Open access restrictions and role mapping, focus the mapping field, inspect desktop and phone dialogs, dismiss with Escape",
+    "With Patrol off, open Start review, inspect affected resource, consequence and next step, then close detail via desktop close or phone Back to list",
+    "Remount Patrol fixture to verify setup task and independent attention decision persist; inspect four responsive list/detail screenshots"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/patrol-off-attention-2257.cjs (Playwright 1.56.1, Chromium 141.0.7390.37)",
-  "notes": "The production Patrol surface uses fixture API responses, not a live Patrol install. No provider acceptance, source integration, containing release or field retest is claimed. Screenshots and log are retained in this lane output directory."
+  "command": "pulse-worker-browser frontend-modern/browser-tests/sso-mappings-2266.cjs and pulse-worker-browser frontend-modern/browser-tests/patrol-off-attention-2257.cjs (Playwright 1.56.1, Chromium 141.0.7390.37)",
+  "notes": "Both browser scripts ran on the combined candidate source with fixture API responses. Logs and six inspected screenshots are retained in this lane output directory. No deployed installation, provider acceptance, release or field retest is claimed."
 }
