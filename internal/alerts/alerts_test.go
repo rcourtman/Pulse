@@ -430,6 +430,8 @@ func TestProxmoxDiskCanonicalResourceIDTrimsIdentity(t *testing.T) {
 		{path: "/dev/sda", want: "inst:node:disk:dev-sda"},
 		{path: "/dev/nvme0n1", want: "inst:node:disk:dev-nvme0n1"},
 		{path: "/dev/disk/by-id/SSD X", want: "inst:node:disk:dev-disk-by-id-ssd-x"},
+		{path: "/", want: "inst:node:disk:root"},
+		{path: "", want: "inst:node:disk:"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.path, func(t *testing.T) {
