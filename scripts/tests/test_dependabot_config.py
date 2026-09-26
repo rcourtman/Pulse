@@ -150,16 +150,24 @@ class DependabotConfigTest(unittest.TestCase):
         }
         self.assertEqual(
             set(ignored),
-            {"playwright", "playwright-core", "@playwright/test", "typescript"},
+            {
+                "playwright",
+                "playwright-core",
+                "@playwright/test",
+                "typescript",
+                "eslint",
+                "lucide-solid",
+            },
         )
         for browser_runtime in ("playwright", "playwright-core", "@playwright/test"):
             self.assertEqual(ignored[browser_runtime], all_semver)
-        # TypeScript majors must land with the @typescript-eslint peer range
-        # (">=4.8.4 <6.1.0"), so keep them as explicit work.
-        self.assertEqual(
-            ignored["typescript"],
-            {"version-update:semver-major"},
-        )
+        # These majors require an explicit toolchain or icon-import migration.
+        # Minor and patch version updates must remain eligible for Dependabot.
+        for dependency in ("typescript", "eslint", "lucide-solid"):
+            self.assertEqual(
+                ignored[dependency],
+                {"version-update:semver-major"},
+            )
 
     def test_github_actions_updates_preserve_reviewed_action_pins(self) -> None:
         # action_consumer_manifests.json pins each release-consumed action to an
