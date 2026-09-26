@@ -411,7 +411,9 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		if exists && existingAlert != nil {
 			// Update existing alert
 			applyCanonicalIdentity(existingAlert, canonicalSpecID, string(alertspecs.AlertSpecKindMetricThreshold))
-			m.setActiveAlertNoLock(canonicalStateID, existingAlert)
+			if !m.setActiveAlertNoLock(canonicalStateID, existingAlert) {
+				return
+			}
 			existingAlert.LastSeen = time.Now()
 			existingAlert.Value = value
 			if dn := m.resolveNodeDisplayName(existingAlert.Instance, existingAlert.Node); dn != "" {
@@ -537,7 +539,9 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			alert.AckUser = ""
 		}
 		trackingKey = canonicalTrackingKeyOrFallback(alert, canonicalStateID)
-		m.setActiveAlertNoLock(canonicalStateID, alert)
+		if !m.setActiveAlertNoLock(canonicalStateID, alert) {
+			return
+		}
 		m.recentAlerts[trackingKey] = alert
 		m.historyManager.AddAlert(*alert)
 		m.recordAlertEvent(eventlog.TypeFired, alert, canonicalStateID, "metric-threshold", message, nil)
