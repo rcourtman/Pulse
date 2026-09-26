@@ -13,7 +13,7 @@ import (
 )
 
 func proxmoxDiskCanonicalResourceID(instance, node, devPath string) string {
-	return fmt.Sprintf("%s:%s:disk:%s", strings.TrimSpace(instance), strings.TrimSpace(node), sanitizeAlertKey(devPath))
+	return unifiedresources.ProxmoxPhysicalDiskAlertResourceID(instance, node, devPath)
 }
 
 func proxmoxDiskAlertMetadata(disk proxmox.Disk) map[string]interface{} {

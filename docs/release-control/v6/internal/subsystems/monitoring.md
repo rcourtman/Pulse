@@ -17,6 +17,18 @@
 
 ## Purpose
 
+### Restored disk alerts and persisted operator policy — issues #2237/#2112
+
+Alerts can restore before the resource registry and persisted operator state
+are attached. Once monitoring installs the alert-intent resolver, it must
+reconcile already-active alerts against that state and publish the changed
+alert snapshot when suppression clears any occurrence. This closes the
+startup gap for a muted PVE disk's existing wearout alert without turning a
+mute into a recovery notification or suppressing other disks. The resolver
+uses this release line's `MonitorAdapter.ResolveCanonicalResourceID` bridge;
+`TestProxmoxPhysicalDiskMuteResolvesAndSuppressesWearoutAlert` covers the
+active-alert reconciliation, subsequent suppression and unaffected peer.
+
 ### Linked Pulse agent memory for Proxmox LXC — issue #2148 (21 September 2026)
 
 Both LXC memory paths — the efficient `cluster/resources` builder

@@ -15,6 +15,20 @@
 
 ## Purpose
 
+### PVE physical-disk alert identity and mute — issue #2112
+
+PVE disk-health and wearout alerts retain their persisted path-shaped resource
+reference, `instance:node:disk:<sanitised device path>`, and their existing alert
+ID strings. The reference is resolved through the unified-resource physical-disk
+alias before exact operator intent is evaluated. A mute on one identified disk
+must clear its active wearout occurrence and suppress new evaluations for that
+disk without silencing a different device path. Absent wearout readings do not
+prove recovery; the separate confirmed-recovery rule still applies.
+`TestProxmoxDiskCanonicalResourceIDTrimsIdentity` pins representative persisted
+path keys, and monitoring's `TestProxmoxPhysicalDiskMuteResolvesAndSuppressesWearoutAlert`
+pins targeted active/new-alert suppression. These are source checks, not proof of
+installed notification relief for the reporter.
+
 ### Automatic acknowledgement lifecycle
 
 Cleanup-triggered acknowledgement uses the same canonical retention records and

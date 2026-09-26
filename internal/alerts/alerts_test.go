@@ -423,9 +423,21 @@ func TestBuildBackupPVETemplateSubjectKeyTrimsParts(t *testing.T) {
 }
 
 func TestProxmoxDiskCanonicalResourceIDTrimsIdentity(t *testing.T) {
-	got := proxmoxDiskCanonicalResourceID(" inst ", " node ", "/dev/sda")
-	if got != "inst:node:disk:dev-sda" {
-		t.Fatalf("proxmoxDiskCanonicalResourceID() = %q, want %q", got, "inst:node:disk:dev-sda")
+	cases := []struct {
+		path string
+		want string
+	}{
+		{path: "/dev/sda", want: "inst:node:disk:dev-sda"},
+		{path: "/dev/nvme0n1", want: "inst:node:disk:dev-nvme0n1"},
+		{path: "/dev/disk/by-id/SSD X", want: "inst:node:disk:dev-disk-by-id-ssd-x"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			got := proxmoxDiskCanonicalResourceID(" inst ", " node ", tc.path)
+			if got != tc.want {
+				t.Fatalf("proxmoxDiskCanonicalResourceID() = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
