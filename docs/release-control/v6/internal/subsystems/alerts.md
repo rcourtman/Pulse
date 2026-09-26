@@ -15,6 +15,20 @@
 
 ## Purpose
 
+### PVE physical-disk alert identity and mute — issue #2112
+
+PVE disk-health and wearout alerts retain their persisted path-shaped resource
+reference, `instance:node:disk:<sanitised device path>`, and their existing alert
+ID strings. The reference is resolved through the unified-resource physical-disk
+alias before exact operator intent is evaluated. A mute on one identified disk
+must clear its active wearout occurrence and suppress new evaluations for that
+disk without silencing a different device path. Absent wearout readings do not
+prove recovery; the separate confirmed-recovery rule still applies.
+`TestProxmoxDiskCanonicalResourceIDTrimsIdentity` pins representative persisted
+path keys, and monitoring's `TestProxmoxPhysicalDiskMuteResolvesAndSuppressesWearoutAlert`
+pins targeted active/new-alert suppression. These are source checks, not proof of
+installed notification relief for the reporter.
+
 ### Automatic acknowledgement lifecycle
 
 Cleanup-triggered acknowledgement uses the same canonical retention records and
@@ -213,6 +227,17 @@ evaluation must gate on `storagehealth.WearoutReported` rather than carrying its
 own inline boundary. A wearout arm keyed on `> 0` silently exempts the single
 worst reading a disk can publish, which let a spent SSD read critical on the
 Physical Disks surface while raising no alert at all.
+
+Proxmox wearout recovery requires three consecutive reported readings of at
+least 10% remaining life. An absent reading does not prove recovery, and a
+new low reading resets the recovery run; until recovery is confirmed the
+existing alert retains its low-life value and occurrence. This bounds the
+resolved-then-refired notification loop when endurance data briefly looks
+healthy (#2112), while a sustained replacement/corrected reading can still
+resolve. `TestCheckDiskHealthWearoutFlappingDoesNotRepeatNotifications` and
+`TestCheckDiskHealthWearoutRecoveryAlertCleared` pin dispatch/history
+deduplication and confirmed recovery. This is synthetic source proof, not a
+claim that the reporter's installed image has been repaired.
 
 Host SMART counter growth is an event boundary rather than a warning on every
 historical non-zero value. For an agent-only disk, the first reported UDMA CRC
@@ -2452,6 +2477,15 @@ hidden by expected-offline.
 
 Every active-alert writer passes through the same operator-state gate, and
 notification delivery consults the same decision before quiet-hours policy.
+The active-store writer reports admission explicitly. A detector must not
+record history, recent state, fired events, rate-limit consumption, or delivery
+intent after a rejected write. Lifecycle evaluators report suppression without
+an activation transition. Restore and guest-identity migration must not revive
+acknowledgement or tracking state for rejected alerts. Repeated observations,
+policy removal or expiry, and post-mutation reconciliation are covered in
+`internal/alerts/intent_policy_test.go` across provider incidents, metrics and
+canonical lifecycle writers. This is source-level regression coverage, not an
+installed notification-delivery result.
 Operator suppression is never converted into a quiet-hours replay, including
 for recovery notifications carrying stale replay metadata.
 After a persisted policy mutation, `ReconcileResourceOperatorState` resolves

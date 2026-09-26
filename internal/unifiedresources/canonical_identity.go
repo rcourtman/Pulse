@@ -117,6 +117,16 @@ func canonicalAliases(resource Resource, primaryID, platformID, hostname string)
 			strings.TrimSpace(resource.Proxmox.NodeName),
 		)
 		values = append(values, resource.Proxmox.NodeAliases...)
+		// PVE disk alerts predate the unified resource registry and retain a
+		// path-shaped resource reference. Resolve it to this exact physical
+		// disk so a UI mute reaches both new and restored occurrences (#2112).
+		if CanonicalResourceType(resource.Type) == ResourceTypePhysicalDisk && resource.PhysicalDisk != nil &&
+			strings.TrimSpace(resource.Proxmox.Instance) != "" && strings.TrimSpace(resource.Proxmox.NodeName) != "" &&
+			strings.TrimSpace(resource.PhysicalDisk.DevPath) != "" {
+			values = append(values, ProxmoxPhysicalDiskAlertResourceID(
+				resource.Proxmox.Instance, resource.Proxmox.NodeName, resource.PhysicalDisk.DevPath,
+			))
+		}
 	}
 
 	return uniqueTrimmed(values...)
