@@ -4322,6 +4322,12 @@ func TestCheckDiskHealthWearoutRecoveryAlertCleared(t *testing.T) {
 
 	// Wearout recovers (replaced drive, or misread corrected)
 	disk.Wearout = 95
+	for range 2 {
+		m.CheckDiskHealth("test-instance", "pve-node1", disk)
+		if !testHasActiveAlert(t, m, wearoutAlertID) {
+			t.Fatal("wearout alert resolved on an unconfirmed recovery reading")
+		}
+	}
 	m.CheckDiskHealth("test-instance", "pve-node1", disk)
 
 	m.mu.RLock()
