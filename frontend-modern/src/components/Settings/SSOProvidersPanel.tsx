@@ -774,7 +774,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         onInput={(e) => setForm('groupRoleMappings', e.currentTarget.value)}
                         placeholder="admins=admin, ops=operator"
                         textareaBaseClass={controlClass('min-h-[60px]')}
-                        help="Format: group=roleId"
+                        help="Format: group=roleId. Separate mappings with commas or new lines. Group names may contain spaces."
                       />
                     </div>
                   </div>

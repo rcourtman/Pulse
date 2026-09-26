@@ -1,22 +1,18 @@
 {
   "version": 1,
-  "base_sha": "27036a244550f3095aa883a74716374107aaa6cd",
-  "verified_at": "2026-09-26T17:36:07Z",
+  "base_sha": "e3b1e80c9329bb897d37f82c1ff190a4c95dc9b3",
+  "verified_at": "2026-09-26T19:03:18Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
-    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx",
-    "frontend-modern/src/hooks/useWorkloads.ts",
-    "frontend-modern/src/types/workloads.ts"
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+    "frontend-modern/src/components/Settings/ssoProvidersModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "f4f8903e442d92a622fa2517f54288fb0dfa97882136e268e8e0f540390127fe",
-    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "9640df56a51dbf27247613324a4f3fe1b4023e93d4a1efa913e234453acfd270",
-    "frontend-modern/src/hooks/useWorkloads.ts": "0b3ae83f83d2df3e2517d552f51b634e0eedecbfbd1756a2dadd834c81c67bd2",
-    "frontend-modern/src/types/workloads.ts": "4d779f40a56b83b83c8bbcb4b49f88e1db3432d071b8f6326094fa081547c1e6"
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "781cbb8913f42008456afa7701351c4828aabc140c9e35595c47fd2330bca0cf",
+    "frontend-modern/src/components/Settings/ssoProvidersModel.ts": "9f10845e553633d73bff7ac5fb295d4ce5cc0c4250d0eef1bac2ce18bb31ef2c"
   },
   "routes": [
-    "/browser-tests/guest-storage-2263.html"
+    "/browser-tests/sso-mappings-2266.html"
   ],
   "viewports": [
     {
@@ -29,19 +25,15 @@
     }
   ],
   "states": [
-    "Production guest Overview mounted with synthetic agent-linked VM, one guest SMART disk and mdadm RAID; fixture also returns an unrelated host disk to check parent isolation",
-    "Guest SMART disclosure collapsed and keyboard-expanded; health, temperature and counters visible",
-    "Uninstrumented VM: no physical-disk card and no child query",
-    "Child-query HTTP 503: visible unavailable status, no misleading empty card",
-    "Desktop and phone screenshots inspected; no horizontal overflow or browser page errors"
+    "Existing OIDC provider loaded with Server Access=admin from provider detail; edit dialog access restrictions opened",
+    "Mapping edited to add Everyone=viewer on a new line, saved by PUT, reopened from provider detail as Server Access=admin, Everyone=viewer",
+    "Desktop and phone screenshots inspected with the mapping field focused and visible; no clipping or horizontal overflow"
   ],
   "interactions": [
-    "Load current Vite source build in Chromium and inspect the linked guest Overview at 1440px and 390px",
-    "Focus the physical-disk summary and press Enter; inspect rendered SMART counters and adjacent RAID card",
-    "Select No agent and verify that no physical-disk request or card is made",
-    "Select Unavailable query and verify the explicit error status with no disk card",
-    "Assert both requests use type=physical_disk and exact canonical parent ID, never the VMID/table ID; reject unrelated host disk in client display"
+    "Open production SSOProvidersPanel edit dialog and expand access restrictions at both widths",
+    "Edit the deepest Group Role Mappings textarea, save, and reopen to verify persisted multi-word group; assert unchanged OIDC scope list",
+    "Scroll and focus the mapping field within the dialog; inspect its bounding box and rendered pixels, then close with Escape"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/guest-storage-2263.cjs (Playwright 1.56.1, Chromium 141.0.7390.37)",
-  "notes": "Synthetic network fixture mounts production GuestDrawerOverview, GuestPhysicalDisks, RaidCard and useUnifiedResources in Vite; it does not prove installed Proxmox data, full-app navigation, release placement or reporter confirmation. Screenshots and browser command output retained in the lane output directory."
+  "command": "pulse-worker-browser frontend-modern/browser-tests/sso-mappings-2266.cjs (Playwright 1.56.1, Chromium 141.0.7390.37)",
+  "notes": "Synthetic API fixture around the production panel; no live Cloudflare/Google Workspace sign-in, installed instance, containing release or reporter confirmation is claimed. Screenshots and browser log are retained in the lane output directory."
 }

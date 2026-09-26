@@ -98,6 +98,7 @@ import rbacFeatureGateStateSource from '../useRBACFeatureGateState.ts?raw';
 import reportingStateSource from '../useReportingPanelState.ts?raw';
 import ssoProvidersPanelSource from '../SSOProvidersPanel.tsx?raw';
 import ssoProvidersStateSource from '../useSSOProvidersState.ts?raw';
+import ssoProvidersModelSource from '../ssoProvidersModel.ts?raw';
 import useInfrastructureInstallStateSource from '../useInfrastructureInstallState.tsx?raw';
 import useInfrastructureConfiguredNodesStateSource from '../useInfrastructureConfiguredNodesState.ts?raw';
 import useInfrastructureSettingsStateSource from '../useInfrastructureSettingsState.ts?raw';
@@ -1205,6 +1206,12 @@ describe('settings architecture guardrails', () => {
     expect(ssoProvidersStateSource).not.toContain('advanced_sso');
     expect(ssoProvidersStateSource).not.toContain('getUpgradeActionDestination');
     expect(ssoProvidersStateSource).not.toContain('loadRuntimeCapabilities');
+  });
+
+  it('separates SSO mapping entries without splitting spaces inside IdP group names', () => {
+    expect(ssoProvidersModelSource).toContain('input.split(/[,\\r\\n]+/)');
+    expect(ssoProvidersModelSource).not.toContain('splitList(input).forEach');
+    expect(ssoProvidersPanelSource).toContain('Group names may contain spaces.');
   });
 
   it('never offers a localhost SSO endpoint URL as if it were registerable with an IdP', () => {

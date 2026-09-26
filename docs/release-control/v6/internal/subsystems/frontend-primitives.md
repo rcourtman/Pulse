@@ -6318,6 +6318,14 @@ or `advanced_sso` feature probe before opening the SAML provider modal.
 `useSSOProvidersState.ts` must treat provider type as form state only; SSO
 entitlement truth belongs to the backend/runtime capability contract, where
 OIDC, SAML, and multi-provider SSO are Community-tier capabilities.
+The group-to-role mapping form must retain IdP group names with embedded
+spaces through provider detail, edit, payload, and reload. Its entries are
+comma- or newline-delimited `group=roleId` pairs; whitespace within a group
+name is not an entry separator. Keep the existing whitespace parsing for
+OIDC scopes and the other allowed lists separate from mapping parsing.
+`ssoProvidersModel.test.ts` and `SSOProvidersPanel.test.tsx` pin this round
+trip, and browser verification must inspect the saved mapping in the desktop
+and narrow edit dialog.
 `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx` must keep
 page-shell titles, descriptions, and lead panel framing aligned instead of
 letting navigation/header labels drift away from the actual settings surface.
