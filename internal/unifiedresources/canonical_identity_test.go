@@ -64,6 +64,24 @@ func TestProxmoxPhysicalDiskAlertAliasIsScopedToDisk(t *testing.T) {
 			}
 		})
 	}
+	missingPath := Resource{ID: "no-path", Type: ResourceTypePhysicalDisk,
+		Proxmox:      &ProxmoxData{Instance: "pve", NodeName: "rocket"},
+		PhysicalDisk: &PhysicalDiskMeta{}}
+	RefreshCanonicalIdentity(&missingPath)
+	for _, alias := range missingPath.Canonical.Aliases {
+		if alias == ProxmoxPhysicalDiskAlertResourceID("pve", "rocket", "") {
+			t.Fatalf("missing device path claimed persisted empty-key alert reference: %v", missingPath.Canonical.Aliases)
+		}
+	}
+}
+
+func TestProxmoxPhysicalDiskAlertResourceIDPreservesEmptyDevicePath(t *testing.T) {
+	if got, want := ProxmoxPhysicalDiskAlertResourceID("pve", "rocket", ""), "pve:rocket:disk:"; got != want {
+		t.Fatalf("empty device path reference = %q, want %q", got, want)
+	}
+	if got, want := ProxmoxPhysicalDiskAlertResourceID("pve", "rocket", "/"), "pve:rocket:disk:root"; got != want {
+		t.Fatalf("root device path reference = %q, want %q", got, want)
+	}
 }
 
 func TestRefreshCanonicalIdentityPrefersTargetsAndCanonicalHostData(t *testing.T) {
