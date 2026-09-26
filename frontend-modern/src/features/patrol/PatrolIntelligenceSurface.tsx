@@ -97,7 +97,12 @@ export function PatrolIntelligenceSurface() {
       </div>
 
       <Show when={activeView() === 'inbox'}>
-        <div id="patrol-inbox-panel" role="tabpanel" aria-labelledby="patrol-inbox-tab" class="space-y-4">
+        <div
+          id="patrol-inbox-panel"
+          role="tabpanel"
+          aria-labelledby="patrol-inbox-tab"
+          class="space-y-4"
+        >
           <Show when={state.shouldShowPatrolSetupOnly()}>
             <div
               class={`rounded-lg border border-border bg-surface p-4 sm:p-5 ${!state.patrolEnabledLocal() ? 'pointer-events-none opacity-50' : ''}`}
