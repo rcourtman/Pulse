@@ -15,6 +15,20 @@
 
 ## Purpose
 
+### PVE physical-disk alert reference alias — issue #2112
+
+A Proxmox physical-disk resource with a non-empty instance, node name and
+`PhysicalDisk.DevPath` indexes the legacy PVE disk-alert reference as a
+canonical alias. The alias uses the same path sanitisation as alert creation;
+it is not the source ID, canonical primary ID or metrics identity. Non-disk
+resources and incomplete PVE disk identities must not claim that reference.
+Normal registry ambiguity rules still govern resolution when more than one
+resource claims an alias. An absent device path retains the historical
+empty-key alert reference, distinct from the root-device key, but cannot be
+claimed as a disk alias without a device path. `TestProxmoxPhysicalDiskAlertAliasIsScopedToDisk`
+pins the admission boundary; monitoring's targeted-mute test covers the
+registry-to-alert bridge on distinct device paths.
+
 ### System-container linked agent memory read — issue #2148 (21 September 2026)
 
 `ContainerView.LinkedAgentMemory` exposes the linked agent's own memory sample

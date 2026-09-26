@@ -64,6 +64,47 @@ func ProxmoxPhysicalDiskSourceID(instance, node, device, controller, target stri
 	return legacy
 }
 
+// ProxmoxPhysicalDiskAlertResourceID is the persisted resource reference used
+// by PVE disk-health and wearout alerts. Keep this distinct from the disk's
+// source ID: existing alert occurrences use this shape, while the registry
+// needs it as an alias to apply per-disk operator intent.
+func ProxmoxPhysicalDiskAlertResourceID(instance, node, device string) string {
+	return fmt.Sprintf("%s:%s:disk:%s", strings.TrimSpace(instance), strings.TrimSpace(node), physicalDiskAlertKey(device))
+}
+
+func physicalDiskAlertKey(device string) string {
+	trimmed := strings.TrimSpace(device)
+	// Persisted alert references used an empty key when the device path was
+	// absent. Keep that spelling distinct from the root-device key.
+	if trimmed == "" {
+		return ""
+	}
+	if trimmed == "/" {
+		return "root"
+	}
+	trimmed = strings.Trim(trimmed, "/\\ ")
+	if trimmed == "" {
+		trimmed = "root"
+	}
+	var builder strings.Builder
+	previousDash := false
+	for _, r := range strings.ToLower(trimmed) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '.':
+			builder.WriteRune(r)
+			previousDash = false
+		case !previousDash:
+			builder.WriteByte('-')
+			previousDash = true
+		}
+	}
+	key := strings.Trim(builder.String(), "-.")
+	if key == "" {
+		return "disk"
+	}
+	return key
+}
+
 func PhysicalDiskMetricID(disk models.PhysicalDisk) string {
 	if diskinventory.IsUsableHardwareID(disk.Serial) || diskinventory.IsUsableHardwareID(disk.WWN) {
 		return PreferredPhysicalDiskMetricID(disk.Serial, disk.WWN, "")
