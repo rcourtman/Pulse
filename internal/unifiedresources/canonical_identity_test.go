@@ -8,6 +8,82 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
+func TestProxmoxPhysicalDiskAlertAliasIsScopedToDisk(t *testing.T) {
+	alertRef := ProxmoxPhysicalDiskAlertResourceID("pve", "rocket", "/dev/sda")
+	cases := []struct {
+		name     string
+		resource Resource
+		want     bool
+	}{
+		{
+			name: "matching physical disk",
+			resource: Resource{ID: "source-disk", Type: ResourceTypePhysicalDisk,
+				Proxmox:      &ProxmoxData{Instance: "pve", NodeName: "rocket"},
+				PhysicalDisk: &PhysicalDiskMeta{DevPath: "/dev/sda"}},
+			want: true,
+		},
+		{
+			name: "different disk path",
+			resource: Resource{ID: "other-disk", Type: ResourceTypePhysicalDisk,
+				Proxmox:      &ProxmoxData{Instance: "pve", NodeName: "rocket"},
+				PhysicalDisk: &PhysicalDiskMeta{DevPath: "/dev/sdb"}},
+		},
+		{
+			name: "missing instance",
+			resource: Resource{ID: "no-instance", Type: ResourceTypePhysicalDisk,
+				Proxmox:      &ProxmoxData{NodeName: "rocket"},
+				PhysicalDisk: &PhysicalDiskMeta{DevPath: "/dev/sda"}},
+		},
+		{
+			name: "missing device path",
+			resource: Resource{ID: "no-path", Type: ResourceTypePhysicalDisk,
+				Proxmox:      &ProxmoxData{Instance: "pve", NodeName: "rocket"},
+				PhysicalDisk: &PhysicalDiskMeta{}},
+		},
+		{
+			name: "non-disk resource",
+			resource: Resource{ID: "vm", Type: ResourceTypeVM,
+				Proxmox:      &ProxmoxData{Instance: "pve", NodeName: "rocket"},
+				PhysicalDisk: &PhysicalDiskMeta{DevPath: "/dev/sda"}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			RefreshCanonicalIdentity(&tc.resource)
+			if tc.resource.Canonical == nil {
+				t.Fatal("canonical identity missing")
+			}
+			found := false
+			for _, alias := range tc.resource.Canonical.Aliases {
+				if alias == alertRef {
+					found = true
+				}
+			}
+			if found != tc.want {
+				t.Fatalf("alert alias %q present = %t, want %t; aliases = %v", alertRef, found, tc.want, tc.resource.Canonical.Aliases)
+			}
+		})
+	}
+	missingPath := Resource{ID: "no-path", Type: ResourceTypePhysicalDisk,
+		Proxmox:      &ProxmoxData{Instance: "pve", NodeName: "rocket"},
+		PhysicalDisk: &PhysicalDiskMeta{}}
+	RefreshCanonicalIdentity(&missingPath)
+	for _, alias := range missingPath.Canonical.Aliases {
+		if alias == ProxmoxPhysicalDiskAlertResourceID("pve", "rocket", "") {
+			t.Fatalf("missing device path claimed persisted empty-key alert reference: %v", missingPath.Canonical.Aliases)
+		}
+	}
+}
+
+func TestProxmoxPhysicalDiskAlertResourceIDPreservesEmptyDevicePath(t *testing.T) {
+	if got, want := ProxmoxPhysicalDiskAlertResourceID("pve", "rocket", ""), "pve:rocket:disk:"; got != want {
+		t.Fatalf("empty device path reference = %q, want %q", got, want)
+	}
+	if got, want := ProxmoxPhysicalDiskAlertResourceID("pve", "rocket", "/"), "pve:rocket:disk:root"; got != want {
+		t.Fatalf("root device path reference = %q, want %q", got, want)
+	}
+}
+
 func TestRefreshCanonicalIdentityPrefersTargetsAndCanonicalHostData(t *testing.T) {
 	resource := Resource{
 		ID:   "agent-1",

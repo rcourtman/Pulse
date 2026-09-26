@@ -23,6 +23,20 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### PVE physical-disk alert reference alias — issue #2112
+
+A Proxmox physical-disk resource with a non-empty instance, node name and
+`PhysicalDisk.DevPath` indexes the legacy PVE disk-alert reference as a
+canonical alias. The alias uses the same path sanitisation as alert creation;
+it is not the source ID, canonical primary ID or metrics identity. Non-disk
+resources and incomplete PVE disk identities must not claim that reference.
+Normal registry ambiguity rules still govern resolution when more than one
+resource claims an alias. An absent device path retains the historical
+empty-key alert reference, distinct from the root-device key, but cannot be
+claimed as a disk alias without a device path. `TestProxmoxPhysicalDiskAlertAliasIsScopedToDisk`
+pins the admission boundary; monitoring's targeted-mute test covers the
+registry-to-alert bridge on distinct device paths.
+
 Canonical frontend memory withdrawal is explicit: when a resource snapshot omits the canonical memory metric and its Proxmox memory facet marks usageUnavailable, the display merge must clear any previous metric. Plain partial omission remains compatible with richer REST state, and an incoming canonical metric (including measured zero) takes precedence over unavailable raw evidence. The adapter transition tests pin withdrawal and recovery; the hybrid-memory Chromium fixture exercises the rendered table and drawer at 1280px and 390px. Workload details remain canonical-only: withdrawal shows N/A in the table and removes the Memory section rather than manufacturing a raw-facet total; measured-zero recovery restores Total and Free, with screenshot positioning above fixed navigation. This does not change agent-only or arbitrary field-deletion semantics.
 
 **VM-linked agent memory read — issue #1962 (7 September 2026)**

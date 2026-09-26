@@ -95,6 +95,11 @@ func (m *Monitor) installOperatorIntentResolver(store ResourceStoreInterface) {
 		}
 		return context, found || context.MaintenanceEndAt != nil
 	})
+	// Alerts restore before the resource store is attached during startup.
+	// Reconcile that restored set as soon as persisted policy is available.
+	if m.alertManager.ReconcileOperatorIntentState() > 0 && m.state != nil {
+		m.SyncAlertState()
+	}
 }
 
 func (m *Monitor) resolveBackupIntentContext(_ string, instance, node string, vmid int, now time.Time) (alerts.BackupIntentContext, bool) {

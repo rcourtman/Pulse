@@ -100,13 +100,15 @@ func (m *Manager) hasActiveAlertNoLock(id string) bool {
 	return ok
 }
 
-func (m *Manager) setActiveAlertNoLock(storageKey string, alert *Alert) {
+// setActiveAlertNoLock reports whether the alert was admitted. Detector callers
+// must check admission before recording a firing lifecycle or dispatching it.
+func (m *Manager) setActiveAlertNoLock(storageKey string, alert *Alert) bool {
 	if storageKey == "" || alert == nil {
-		return
+		return false
 	}
 	backfillCanonicalIdentity(alert)
 	if suppressed, _ := m.operatorSuppressionForAlertNoLock(alert, time.Now().UTC()); suppressed {
-		return
+		return false
 	}
 	ensureOperationalContract(alert, time.Now())
 	requestedKey := storageKey
@@ -127,6 +129,7 @@ func (m *Manager) setActiveAlertNoLock(storageKey string, alert *Alert) {
 	if m.historyManager != nil {
 		m.historyManager.UpdateAlertOperationalContractForAlert(alert)
 	}
+	return true
 }
 
 func (m *Manager) unregisterActiveAlertAliasNoLock(storageKey string, alert *Alert) {
