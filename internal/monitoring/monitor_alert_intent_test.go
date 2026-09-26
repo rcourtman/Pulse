@@ -39,6 +39,59 @@ func TestInstallOperatorIntentResolverProjectsCanonicalResourcePolicy(t *testing
 	}
 }
 
+func TestProxmoxPhysicalDiskMuteResolvesAndSuppressesWearoutAlert(t *testing.T) {
+	store := unifiedresources.NewMemoryStore()
+	registry := unifiedresources.NewRegistry(store)
+	instance, node := "pve", "rocket"
+	makeDisk := func(path string) models.PhysicalDisk {
+		return models.PhysicalDisk{
+			ID:       unifiedresources.ProxmoxPhysicalDiskSourceID(instance, node, path, "", ""),
+			Instance: instance, Node: node, DevPath: path,
+			Model: "KINGSTON SA400", Type: "ssd", Health: "PASSED", Wearout: 0,
+			LastChecked: time.Now().UTC(),
+		}
+	}
+	registry.IngestSnapshot(models.StateSnapshot{
+		PhysicalDisks: []models.PhysicalDisk{makeDisk("/dev/sda"), makeDisk("/dev/sdb")},
+	})
+	diskID := unifiedresources.ProxmoxPhysicalDiskAlertResourceID(instance, node, "/dev/sda")
+	canonicalID, found := registry.ResolveReferenceID(diskID)
+	if !found {
+		t.Fatalf("PVE wearout alert resource %q did not resolve to a physical disk", diskID)
+	}
+	otherID := unifiedresources.ProxmoxPhysicalDiskAlertResourceID(instance, node, "/dev/sdb")
+	if other, ok := registry.ResolveReferenceID(otherID); !ok || other == canonicalID {
+		t.Fatalf("other PVE disk identity = %q, %v; want a different disk", other, ok)
+	}
+
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	worn := proxmox.Disk{DevPath: "/dev/sda", Model: "KINGSTON SA400", Type: "ssd", Health: "PASSED", Wearout: 0}
+	manager.CheckDiskHealth(instance, node, worn)
+	if got := len(manager.GetActiveAlerts()); got != 1 {
+		t.Fatalf("unmuted worn disk raised %d alerts, want one", got)
+	}
+	if err := store.SetResourceOperatorState(unifiedresources.ResourceOperatorState{
+		CanonicalID: canonicalID, MonitoringMode: unifiedresources.MonitoringModeMuted,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	monitor := &Monitor{alertManager: manager}
+	monitor.installOperatorIntentResolver(unifiedresources.NewMonitorAdapter(registry))
+	if got := len(manager.GetActiveAlerts()); got != 0 {
+		t.Fatalf("mute left %d existing PVE wearout alerts active", got)
+	}
+	manager.CheckDiskHealth(instance, node, worn)
+	if got := len(manager.GetActiveAlerts()); got != 0 {
+		t.Fatalf("muted PVE disk raised %d new wearout alerts", got)
+	}
+	worn.DevPath = "/dev/sdb"
+	manager.CheckDiskHealth(instance, node, worn)
+	if got := len(manager.GetActiveAlerts()); got != 1 {
+		t.Fatalf("other PVE disk raised %d alerts, want one", got)
+	}
+}
+
 func TestInstallOperatorIntentResolverInheritsScopedMaintenanceFromParent(t *testing.T) {
 	store := unifiedresources.NewMemoryStore()
 	registry := unifiedresources.NewRegistry(store)
