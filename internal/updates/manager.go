@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -112,12 +113,20 @@ func updateReleaseDownloadPrefix() string {
 }
 
 func updateReleaseAssetForRuntime(tagName string) (ReleaseAsset, bool) {
-	targetArch, ok := map[string]string{
-		"amd64": "amd64",
-		"arm64": "arm64",
-		"arm":   "armv7",
-		"386":   "386",
-	}[runtime.GOARCH]
+	armVariant := ""
+	if runtime.GOARCH == "arm" {
+		// GOARCH alone cannot distinguish the separately published ARMv6 and
+		// ARMv7 server binaries. Release builds record their GOARM setting.
+		if info, ok := debug.ReadBuildInfo(); ok {
+			for _, setting := range info.Settings {
+				if setting.Key == "GOARM" {
+					armVariant = setting.Value
+					break
+				}
+			}
+		}
+	}
+	targetArch, ok := updateReleaseArchitecture(runtime.GOARCH, armVariant)
 	if !ok {
 		return ReleaseAsset{}, false
 	}
@@ -130,6 +139,20 @@ func updateReleaseAssetForRuntime(tagName string) (ReleaseAsset, bool) {
 		url.PathEscape(assetName),
 	)
 	return ReleaseAsset{Name: assetName, BrowserDownloadURL: downloadURL}, true
+}
+
+func updateReleaseArchitecture(goarch, goarm string) (string, bool) {
+	switch goarch {
+	case "amd64", "arm64", "386":
+		return goarch, true
+	case "arm":
+		// GOARM=5 has no server archive. An absent or unknown variant must not
+		// silently select ARMv7, which may not run on an ARMv6 host.
+		if goarm == "6" || goarm == "7" {
+			return "armv" + goarm, true
+		}
+	}
+	return "", false
 }
 
 func updateReleaseAPIPath() string {
