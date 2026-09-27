@@ -509,16 +509,9 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 			}
 		}
 	}
-
-	// Fallback to any pulse tarball if exact match not found
-	if downloadURL == "" {
-		for _, asset := range release.Assets {
-			if isRuntimeReleaseAssetName(asset.Name) {
-				downloadURL = asset.BrowserDownloadURL
-				break
-			}
-		}
-	}
+	// A missing archive must not fall back to another architecture or to an
+	// agent/MCP tarball, nor advertise an update that cannot be applied.
+	available := latestVer.IsNewerThan(currentVer) && downloadURL != ""
 
 	isMajorUpgrade := latestVer.Major > currentVer.Major
 	// Derive prerelease from the parsed version tag (not GitHub metadata) so the
@@ -526,7 +519,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 	isPrerelease := release.Prerelease || latestVer.IsPrerelease()
 
 	info := &UpdateInfo{
-		Available:      latestVer.IsNewerThan(currentVer),
+		Available:      available,
 		CurrentVersion: currentInfo.Version,
 		LatestVersion:  strings.TrimPrefix(release.TagName, "v"),
 		ReleaseNotes:   release.Body,
