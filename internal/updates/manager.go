@@ -223,6 +223,7 @@ type Manager struct {
 	closeOnce      sync.Once
 	heartbeatWg    sync.WaitGroup
 	closed         bool
+	lastCheck      UpdateCheckObservation // most recent effective-channel check
 	// proCredentialSource lazily supplies download-broker credentials for the
 	// compiled Pro binary (SetProUpdateCredentialSource, wired at startup).
 	// Nil on the community binary.
@@ -363,6 +364,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 	// Get current version first to auto-detect channel if needed
 	currentInfo, err := GetCurrentVersion()
 	if err != nil {
+		m.recordUpdateCheck(m.resolveChannel("", nil), strings.TrimSpace(channel) == "", UpdateCheckOutcomeError, false)
 		m.updateStatus("error", 0, "Failed to get current version")
 		return nil, fmt.Errorf("failed to get current version: %w", err)
 	}
@@ -370,6 +372,9 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 	// Track whether an explicit channel override was provided.
 	explicitChannelProvided := strings.TrimSpace(channel) != ""
 	channel = m.resolveChannel(channel, currentInfo)
+	// Only checks on the install's own channel describe what it is offered;
+	// an explicit override that happens to match still counts.
+	effectiveChannel := !explicitChannelProvided || channel == m.resolveChannel("", currentInfo)
 
 	// Don't use cache when channel is explicitly provided (UI might have changed it)
 	// But DO use cache for auto-detected or default channels
@@ -402,6 +407,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 			m.cacheTime[channel] = time.Now()
 			m.statusMu.Unlock()
 		}
+		m.recordUpdateCheck(channel, effectiveChannel, UpdateCheckOutcomeSkipped, false)
 		m.updateStatus("idle", 0, "Updates not available for source builds")
 		return info, nil
 	}
@@ -409,6 +415,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 	// Parse current version first
 	currentVer, err := ParseVersion(currentInfo.Version)
 	if err != nil {
+		m.recordUpdateCheck(channel, effectiveChannel, UpdateCheckOutcomeError, false)
 		m.updateStatus("error", 0, "Invalid current version")
 		return nil, fmt.Errorf("failed to parse current version: %w", err)
 	}
@@ -419,9 +426,11 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 	if edition.IsPro() {
 		info, proErr := m.checkProUpdates(ctx, channel, currentInfo, currentVer)
 		if proErr != nil {
+			m.recordUpdateCheck(channel, effectiveChannel, updateCheckErrorOutcome(proErr), false)
 			m.updateStatus("error", 0, "Failed to check for Pulse Pro updates", proErr)
 			return nil, proErr
 		}
+		m.recordUpdateCheck(channel, effectiveChannel, availabilityOutcome(info.Available), info.Available)
 		if useCache {
 			m.statusMu.Lock()
 			m.checkCache[channel] = info
@@ -443,6 +452,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 	if err != nil {
 		if errors.Is(err, errGitHubRateLimited) {
 			log.Warn().Err(err).Str("channel", channel).Msg("GitHub rate limit encountered while checking for updates")
+			m.recordUpdateCheck(channel, effectiveChannel, UpdateCheckOutcomeRateLimited, false)
 
 			if options.Force {
 				m.updateStatus("error", 0, "Fresh update check unavailable", err)
@@ -473,6 +483,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 		// Check if this is a "no releases found" error - handle gracefully
 		if strings.Contains(err.Error(), "no releases found") {
 			// No releases available for this channel - return "no update available"
+			m.recordUpdateCheck(channel, effectiveChannel, UpdateCheckOutcomeNoRelease, false)
 			info := &UpdateInfo{
 				Available:      false,
 				CurrentVersion: currentInfo.Version,
@@ -488,6 +499,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 			return info, nil
 		}
 		// For other errors, return the error
+		m.recordUpdateCheck(channel, effectiveChannel, updateCheckErrorOutcome(err), false)
 		m.updateStatus("error", 0, "Failed to check for updates", err)
 		return nil, err
 	}
@@ -495,6 +507,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 	latestVer, err := ParseVersion(release.TagName)
 	if err != nil {
 		parseErr := fmt.Errorf("failed to parse latest version: %w", err)
+		m.recordUpdateCheck(channel, effectiveChannel, UpdateCheckOutcomeMetadataError, false)
 		m.updateStatus("error", 0, "Invalid latest version", parseErr)
 		return nil, parseErr
 	}
@@ -537,6 +550,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 	}
 
 	info.Warning = updateWarning(info.Available, isMajorUpgrade, isPrerelease, currentVer.Major, latestVer.Major)
+	m.recordUpdateCheck(channel, effectiveChannel, availabilityOutcome(info.Available), info.Available)
 
 	// Cache the result (only if using saved channel)
 	if useCache {
@@ -898,7 +912,7 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 		"User-Agent": "Pulse-Update-Checker",
 	}, "fetch GitHub releases")
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch releases: %w", err)
+		return nil, withUpdateCheckOutcome(UpdateCheckOutcomeNetworkError, fmt.Errorf("failed to fetch releases: %w", err))
 	}
 	defer resp.Body.Close()
 
@@ -909,7 +923,7 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 			detail = resp.Status
 		}
 		if strings.TrimSpace(os.Getenv("PULSE_UPDATE_SERVER")) != "" {
-			return nil, fmt.Errorf("update server returned status %d: %s", resp.StatusCode, detail)
+			return nil, withUpdateCheckOutcome(UpdateCheckOutcomeNetworkError, fmt.Errorf("update server returned status %d: %s", resp.StatusCode, detail))
 		}
 
 		log.Warn().
@@ -933,7 +947,7 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 		if detail == "" {
 			detail = resp.Status
 		}
-		return nil, fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, detail)
+		return nil, withUpdateCheckOutcome(UpdateCheckOutcomeNetworkError, fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, detail))
 	}
 
 	releases, err := decodeReleaseList(resp)
@@ -956,9 +970,9 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 					Msg("Got release info from Atom fallback")
 				return feedRelease, nil
 			}
-			return nil, fmt.Errorf("failed to decode releases: %w; release feed fallback failed: %v", err, feedErr)
+			return nil, withUpdateCheckOutcome(UpdateCheckOutcomeMetadataError, fmt.Errorf("failed to decode releases: %w; release feed fallback failed: %v", err, feedErr))
 		}
-		return nil, fmt.Errorf("failed to decode releases: %w", err)
+		return nil, withUpdateCheckOutcome(UpdateCheckOutcomeMetadataError, fmt.Errorf("failed to decode releases: %w", err))
 	}
 
 	// Find latest release based on channel, selecting by version rather than
@@ -1032,6 +1046,13 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 	// No releases found at all for this channel
 	log.Warn().Str("channel", channel).Msg("No releases found for channel")
 	return nil, fmt.Errorf("no releases found for channel %s", channel)
+}
+
+func availabilityOutcome(available bool) string {
+	if available {
+		return UpdateCheckOutcomeAvailable
+	}
+	return UpdateCheckOutcomeUpToDate
 }
 
 func (m *Manager) resolveChannel(requested string, currentInfo *VersionInfo) string {

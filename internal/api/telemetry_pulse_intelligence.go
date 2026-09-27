@@ -71,6 +71,9 @@ func (r *Router) ApplyUpdateTelemetrySnapshot(s *telemetry.Snapshot, now time.Ti
 		return
 	}
 	telemetry.ApplyUpdateTelemetrySnapshot(s, r.updateHistory, now)
+	if r.updateManager != nil {
+		telemetry.ApplyUpdateCheckTelemetrySnapshot(s, r.updateManager.LastUpdateCheck())
+	}
 }
 
 // GetPulseIntelligenceActionTelemetry returns count-only action-governance

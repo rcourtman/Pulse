@@ -2501,7 +2501,7 @@ actor, and every audit row read stay on the install.
 
 ### Telemetry ingestion matches the released sender while storage stays compatible
 
-The active outbound contract is schema v17. Schema v8 added content-free
+The active outbound contract is schema v18. Schema v8 added content-free
 approved-action refusal counters for target change, prerequisite failure, and
 invalid typed contract so agent-side pre-mutation failures no longer collapse
 into `other`. Schema v9 completes that split with a content-free `uncoded`
@@ -2537,6 +2537,18 @@ as investigated, one bucket per finding, and add no finding, resource,
 session, or action identity. The receiver canonicalizes every one of the four
 strings to its released vocabulary or `unknown` and clamps the counts like
 every other counter.
+Schema v18 adds `update_channel`, `update_check_outcome`, and
+`update_available` so the fleet can tell an install whose update check cannot
+complete from one that was offered an update and did not apply it. A failed
+check never reaches the update-history counters because nothing was applied,
+which let a 6.4.3-rc.1 check that failed on every call look healthy (#2285).
+The channel is the install's effective update channel. The outcome is one
+closed category recorded by `internal/updates` for the most recent check on
+that channel only, so a Settings preview of the other channel never leaks into
+it. The sender and receiver both force `update_available` false unless the
+outcome is `available`. No version, release tag, URL, response, or error text
+leaves the install, and the receiver canonicalizes both strings to the released
+vocabulary or `unknown`.
 Patrol run and new-finding volumes use bounded local UTC-day tallies in
 `internal/config/persistence.go`, preserving aggregate activity after the
 operator-facing run history is trimmed. Finding volume has its own persistence
