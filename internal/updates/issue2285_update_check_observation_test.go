@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,10 +34,22 @@ func issue2285Releases(t *testing.T, releases ...ReleaseInfo) string {
 	return string(body)
 }
 
+func issue2285InstallableRelease(t *testing.T, tag string, prerelease bool, published time.Time) ReleaseInfo {
+	t.Helper()
+	asset, ok := updateReleaseAssetForRuntime(tag)
+	if !ok {
+		t.Skip("no server release archive for this architecture")
+	}
+	return ReleaseInfo{
+		TagName: tag, Prerelease: prerelease, PublishedAt: published,
+		Assets: []ReleaseAsset{asset},
+	}
+}
+
 func TestIssue2285LastUpdateCheckRecordsEffectiveChannelOutcome(t *testing.T) {
 	setRetrySettingsForTest(t, 1, time.Millisecond, time.Millisecond)
-	stable := ReleaseInfo{TagName: "v6.4.5", PublishedAt: time.Date(2026, 9, 30, 8, 0, 0, 0, time.UTC)}
-	preview := ReleaseInfo{TagName: "v6.4.6-rc.1", Prerelease: true, PublishedAt: time.Date(2026, 10, 2, 8, 0, 0, 0, time.UTC)}
+	stable := issue2285InstallableRelease(t, "v6.4.5", false, time.Date(2026, 9, 30, 8, 0, 0, 0, time.UTC))
+	preview := issue2285InstallableRelease(t, "v6.4.6-rc.1", true, time.Date(2026, 10, 2, 8, 0, 0, 0, time.UTC))
 
 	for _, tc := range []struct {
 		name          string
@@ -51,6 +64,7 @@ func TestIssue2285LastUpdateCheckRecordsEffectiveChannelOutcome(t *testing.T) {
 		{name: "update offered", current: "6.4.1", channel: "stable", status: http.StatusOK, body: issue2285Releases(t, stable, preview), wantOutcome: UpdateCheckOutcomeAvailable, wantAvailable: true},
 		{name: "already current", current: "6.4.5", channel: "stable", status: http.StatusOK, body: issue2285Releases(t, stable, preview), wantOutcome: UpdateCheckOutcomeUpToDate},
 		{name: "preview channel offered newer prerelease", current: "6.4.5", channel: "rc", status: http.StatusOK, body: issue2285Releases(t, stable, preview), wantOutcome: UpdateCheckOutcomeAvailable, wantAvailable: true},
+		{name: "newer release missing exact archive", current: "6.4.1", channel: "stable", status: http.StatusOK, body: issue2285Releases(t, ReleaseInfo{TagName: stable.TagName, Assets: []ReleaseAsset{{Name: "pulse-agent-v6.4.5-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.invalid/agent"}}}), wantOutcome: UpdateCheckOutcomeMetadataError},
 		{name: "no stable release for channel", current: "6.4.5-rc.3", channel: "stable", status: http.StatusOK, body: issue2285Releases(t, preview), wantOutcome: UpdateCheckOutcomeNoRelease},
 		{name: "malformed metadata", current: "6.4.1", channel: "stable", status: http.StatusOK, body: `{"message":"not a list"}`, wantOutcome: UpdateCheckOutcomeMetadataError, wantErr: true},
 		{name: "server error", current: "6.4.1", channel: "stable", status: http.StatusBadGateway, body: `bad gateway`, wantOutcome: UpdateCheckOutcomeNetworkError, wantErr: true},
@@ -64,9 +78,12 @@ func TestIssue2285LastUpdateCheckRecordsEffectiveChannelOutcome(t *testing.T) {
 				t.Fatalf("before any check LastUpdateCheck = %+v, want not_checked on %s", got, tc.channel)
 			}
 
-			_, err := manager.CheckForUpdates(context.Background())
+			info, err := manager.CheckForUpdates(context.Background())
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("CheckForUpdates error = %v, wantErr %v", err, tc.wantErr)
+			}
+			if err == nil && (info.Available != tc.wantAvailable || (tc.wantAvailable && info.DownloadURL == "") || (tc.name == "newer release missing exact archive" && info.DownloadURL != "")) {
+				t.Fatalf("CheckForUpdates result = %+v, want available %v with matching archive only", info, tc.wantAvailable)
 			}
 			got := manager.LastUpdateCheck()
 			if got.Outcome != tc.wantOutcome || got.Available != tc.wantAvailable || got.Channel != tc.channel || got.CheckedAt.IsZero() {
@@ -80,8 +97,8 @@ func TestIssue2285PreviewOfOtherChannelDoesNotReplaceObservation(t *testing.T) {
 	setRetrySettingsForTest(t, 1, time.Millisecond, time.Millisecond)
 	withBuildVersion(t, "6.4.5")
 	issue2285Server(t, http.StatusOK, issue2285Releases(t,
-		ReleaseInfo{TagName: "v6.4.5"},
-		ReleaseInfo{TagName: "v6.4.6-rc.1", Prerelease: true},
+		issue2285InstallableRelease(t, "v6.4.5", false, time.Time{}),
+		issue2285InstallableRelease(t, "v6.4.6-rc.1", true, time.Time{}),
 	))
 	manager := NewManager(&config.Config{UpdateChannel: "stable"})
 
@@ -95,11 +112,58 @@ func TestIssue2285PreviewOfOtherChannelDoesNotReplaceObservation(t *testing.T) {
 	// The settings UI can preview the preview channel before saving it. That
 	// offer is not what this install is being offered, so it must not leak
 	// into the observation telemetry reports.
-	if _, err := manager.CheckForUpdatesWithChannel(context.Background(), "rc"); err != nil {
+	previewInfo, err := manager.CheckForUpdatesWithChannel(context.Background(), "rc")
+	if err != nil {
 		t.Fatalf("preview-channel check: %v", err)
+	}
+	if !previewInfo.Available || previewInfo.DownloadURL == "" {
+		t.Fatalf("preview-channel check = %+v, want installable preview offer", previewInfo)
 	}
 	if got := manager.LastUpdateCheck(); got.Outcome != UpdateCheckOutcomeUpToDate || got.Available || got.Channel != "stable" {
 		t.Fatalf("after previewing rc LastUpdateCheck = %+v, want stable up_to_date unchanged", got)
+	}
+}
+
+func TestIssue2285UnactivatedProCheckIsNotUpToDateOrCached(t *testing.T) {
+	setupProUpdateTest(t, "6.0.0")
+	manager := NewManager(&config.Config{UpdateChannel: "stable", DataPath: t.TempDir()})
+	manager.SetProUpdateCredentialSource(func() (ProUpdateCredentials, bool) {
+		return ProUpdateCredentials{}, false
+	})
+
+	info, err := manager.CheckForUpdates(context.Background())
+	if err != nil {
+		t.Fatalf("unactivated Pro check: %v", err)
+	}
+	if info.Available || !strings.Contains(info.Warning, "Update checks are unavailable") {
+		t.Fatalf("unactivated Pro result = %+v, want unavailable warning without an offer", info)
+	}
+	if got := manager.LastUpdateCheck(); got.Outcome != UpdateCheckOutcomeSkipped || got.Available || got.Channel != "stable" {
+		t.Fatalf("unactivated Pro observation = %+v, want stable skipped without offer", got)
+	}
+
+	fixture := newProBrokerFixture(t, "6.0.5", false)
+	manager.SetProUpdateCredentialSource(fixture.credentialSource())
+	info, err = manager.CheckForUpdates(context.Background())
+	if err != nil {
+		t.Fatalf("activated Pro check: %v", err)
+	}
+	if fixture.brokerCalls != 1 || !info.Available {
+		t.Fatalf("activated Pro result = %+v, broker calls = %d; want fresh offer", info, fixture.brokerCalls)
+	}
+	if got := manager.LastUpdateCheck(); got.Outcome != UpdateCheckOutcomeAvailable || !got.Available {
+		t.Fatalf("activated Pro observation = %+v, want available", got)
+	}
+
+	previewPin := newProBrokerFixture(t, "6.1.0-rc.1", true)
+	stableManager := NewManager(&config.Config{UpdateChannel: "stable", DataPath: t.TempDir()})
+	stableManager.SetProUpdateCredentialSource(previewPin.credentialSource())
+	info, err = stableManager.CheckForUpdates(context.Background())
+	if err != nil || info.Available || previewPin.brokerCalls != 1 {
+		t.Fatalf("stable Pro check against preview pin = %+v, err=%v, broker calls=%d", info, err, previewPin.brokerCalls)
+	}
+	if got := stableManager.LastUpdateCheck(); got.Outcome != UpdateCheckOutcomeNoRelease || got.Available {
+		t.Fatalf("stable Pro preview-pin observation = %+v, want no_release", got)
 	}
 }
 
