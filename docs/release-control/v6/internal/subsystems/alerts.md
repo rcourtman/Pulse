@@ -279,6 +279,17 @@ own inline boundary. A wearout arm keyed on `> 0` silently exempts the single
 worst reading a disk can publish, which let a spent SSD read critical on the
 Physical Disks surface while raising no alert at all.
 
+Proxmox wearout recovery requires three consecutive reported readings of at
+least 10% remaining life. An absent reading does not prove recovery, and a
+new low reading resets the recovery run; until recovery is confirmed the
+existing alert retains its low-life value and occurrence. This bounds the
+resolved-then-refired notification loop when endurance data briefly looks
+healthy (#2112), while a sustained replacement/corrected reading can still
+resolve. `TestCheckDiskHealthWearoutFlappingDoesNotRepeatNotifications` and
+`TestCheckDiskHealthWearoutRecoveryAlertCleared` pin dispatch/history
+deduplication and confirmed recovery. This is synthetic source proof, not a
+claim that the reporter's installed image has been repaired.
+
 Host SMART counter growth is an event boundary rather than a warning on every
 historical non-zero value. For an agent-only disk, the first reported UDMA CRC
 error count establishes an in-memory baseline and raises no alert. A later
@@ -1653,6 +1664,18 @@ Proxmox disk health alert evaluation now lives in
 identity, disk health assessment alerts, known-firmware health suppression, and
 SSD wearout alerts; future Proxmox disk-health behavior should extend that
 checker owner rather than expanding the central Manager file.
+PVE disk-health and wearout occurrences retain the existing
+`instance:node:disk:sanitized-device-path` resource reference. The shared
+constructor in unified resources must produce the same identity as the alert
+checker; changing occurrence IDs to match registry source IDs would reopen
+historical incidents and can re-notify a worn disk. The registry resolves this
+reference as an alias of the exact physical disk for operator-state lookups.
+Muting one physical disk therefore resolves its active wearout alert and blocks
+later writes and notifications without muting another disk or changing the
+wearout recovery rules. `TestProxmoxDiskCanonicalResourceIDTrimsIdentity` pins
+the persisted identity shape; monitoring's registry-backed
+`TestProxmoxPhysicalDiskMuteResolvesAndSuppressesWearoutAlert` pins the policy
+path. These are source invariants, not evidence of installed field relief.
 Shared metric threshold runtime now lives in
 `internal/alerts/metric_runtime.go`. That file owns metric threshold lookup,
 per-metric delay and intent resolution, reducer input composition, active-alert

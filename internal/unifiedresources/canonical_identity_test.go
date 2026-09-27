@@ -143,6 +143,48 @@ func TestRefreshCanonicalIdentityKeepsProxmoxPresentationSeparateFromNativeAlias
 	}
 }
 
+func TestProxmoxDiskAlertAliasIsScopedAndNotPrimaryIdentity(t *testing.T) {
+	resource := Resource{
+		ID: "physical-disk-1", Type: ResourceTypePhysicalDisk,
+		Proxmox:      &ProxmoxData{Instance: "pve-a", NodeName: "node-1"},
+		PhysicalDisk: &PhysicalDiskMeta{DevPath: "/dev/sda"},
+	}
+	assertAlias := func(want string, present bool) {
+		t.Helper()
+		RefreshCanonicalIdentity(&resource)
+		if resource.Canonical == nil || resource.Canonical.PrimaryID != resource.ID {
+			t.Fatalf("disk alert alias changed primary identity: %+v", resource.Canonical)
+		}
+		found := false
+		for _, alias := range resource.Canonical.Aliases {
+			found = found || alias == want
+		}
+		if found != present {
+			t.Fatalf("alias %q present = %v, want %v; aliases = %v", want, found, present, resource.Canonical.Aliases)
+		}
+	}
+
+	alertID := ProxmoxPhysicalDiskAlertResourceID("pve-a", "node-1", "/dev/sda")
+	assertAlias(alertID, true)
+	resource.Proxmox.NodeName = "node-2"
+	assertAlias(alertID, false)
+	assertAlias(ProxmoxPhysicalDiskAlertResourceID("pve-a", "node-2", "/dev/sda"), true)
+	resource.Type = ResourceTypeStorage
+	assertAlias(ProxmoxPhysicalDiskAlertResourceID("pve-a", "node-2", "/dev/sda"), false)
+	resource.Type = ResourceTypePhysicalDisk
+	resource.PhysicalDisk.DevPath = ""
+	assertAlias(ProxmoxPhysicalDiskAlertResourceID("pve-a", "node-2", ""), false)
+}
+
+func TestProxmoxPhysicalDiskAlertResourceIDPreservesEmptyDevicePath(t *testing.T) {
+	if got, want := ProxmoxPhysicalDiskAlertResourceID("pve-a", "node-1", ""), "pve-a:node-1:disk:"; got != want {
+		t.Fatalf("empty device path reference = %q, want %q", got, want)
+	}
+	if got, want := ProxmoxPhysicalDiskAlertResourceID("pve-a", "node-1", "/"), "pve-a:node-1:disk:root"; got != want {
+		t.Fatalf("root device path reference = %q, want %q", got, want)
+	}
+}
+
 func TestUnavailableMemoryFacetsDoNotChangeCanonicalIdentity(t *testing.T) {
 	total := int64(8 << 30)
 	resource := Resource{

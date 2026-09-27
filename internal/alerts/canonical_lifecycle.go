@@ -40,6 +40,7 @@ type canonicalLifecycleAlertParams struct {
 type canonicalStatefulAlertParams struct {
 	Spec                         alertspecs.ResourceAlertSpec
 	Evidence                     alertspecs.AlertEvidence
+	RecoveryConfirmations        int
 	AlertID                      string
 	AlertType                    string
 	ResourceID                   string
@@ -675,8 +676,9 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		Severity:   severity,
 		ObservedAt: params.Evidence.ObservedAt,
 	}, reducer.DiscreteRule{
-		Confirmations: specConfirmationsRequired(params.Spec),
-		Disabled:      params.Spec.Disabled,
+		Confirmations:         specConfirmationsRequired(params.Spec),
+		RecoveryConfirmations: params.RecoveryConfirmations,
+		Disabled:              params.Spec.Disabled,
 	})
 	primary := reducer.EventType("")
 	if len(events) > 0 {
@@ -722,6 +724,12 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		result.State.ConsecutiveMatches = incident.Confirmations
 		result.State.FirstMatchedAt = incident.StartedAt
 		result.State.ActiveSince = incident.StartedAt
+		// A recovery still inside its confirmation window is not new failing
+		// evidence. Keep the previous alert value and message rather than
+		// projecting a healthy reading onto a still-active warning.
+		if !matched {
+			return result, true
+		}
 		switch {
 		case existing == nil:
 			result.Transition = transition(alertspecs.EvaluationTransitionActivated, alertspecs.AlertStatePending, alertspecs.AlertStateFiring)

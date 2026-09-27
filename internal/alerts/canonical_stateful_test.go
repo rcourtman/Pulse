@@ -9,6 +9,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 func TestCanonicalLifecycleCopiesValidatedAlertCorrelation(t *testing.T) {
@@ -321,5 +322,74 @@ func TestHealthAssessmentEscalationDelivery(t *testing.T) {
 	}
 	if a := testRequireActiveAlert(t, m, params.AlertID); a.Level != AlertLevelCritical {
 		t.Fatalf("rate-limited incident failed to update: %v", a.Level)
+	}
+}
+
+// A single optimistic endurance reading must not close a still-worn disk's
+// occurrence. Otherwise the next physical-disk poll fires and notifies again,
+// as reported in #2112 after the host-agent SMART merge correction shipped.
+func TestCheckDiskHealthWearoutFlappingDoesNotRepeatNotifications(t *testing.T) {
+	m := newEventLogManager(t)
+	m.SetAlertCallback(func(*Alert) {})
+	disk := proxmox.Disk{
+		DevPath: "/dev/sda", Model: "KINGSTON SA400", Serial: "stable-serial",
+		Type: "ssd", Health: "PASSED", Wearout: 0,
+	}
+	check := func(wearout int) {
+		disk.Wearout = wearout
+		m.CheckDiskHealth("pve", "rocket", disk)
+	}
+
+	check(0)
+	active := m.GetActiveAlerts()
+	if len(active) != 1 || active[0].Type != "disk-wearout" {
+		t.Fatalf("spent SSD did not open its wearout alert: %+v", active)
+	}
+	initialID := active[0].ID
+	for range 12 {
+		check(100) // intermittent healthy-looking reading
+		if held := m.GetActiveAlerts(); len(held) != 1 || held[0].Value != 0 || held[0].Message != active[0].Message {
+			t.Fatalf("unconfirmed recovery rewrote the worn-disk warning: %+v", held)
+		}
+		check(0) // unchanged worn drive on the next poll
+	}
+	active = m.GetActiveAlerts()
+	if len(active) != 1 || active[0].ID != initialID || active[0].Value != 0 {
+		t.Fatalf("flapping reading changed the worn disk occurrence: %+v", active)
+	}
+	if got := len(m.historyManager.GetAllHistory(100)); got != 1 {
+		t.Fatalf("flapping produced %d history entries, want one", got)
+	}
+	if got := len(queryAlertEvents(t, m, eventlog.Filter{Types: []string{eventlog.TypeNotificationDispatched}})); got != 1 {
+		t.Fatalf("flapping produced %d dispatches, want one", got)
+	}
+	if got := len(m.GetRecentlyResolved()); got != 0 {
+		t.Fatalf("flapping produced %d resolved occurrences, want none", got)
+	}
+	check(-1)
+	if got := len(m.GetActiveAlerts()); got != 1 {
+		t.Fatalf("unreported wearout incorrectly proved recovery: %d active", got)
+	}
+
+	// A genuinely sustained high reading still resolves; this is a recovery
+	// confirmation, not a permanent wearout-alert latch.
+	check(100)
+	check(100)
+	if got := len(m.GetActiveAlerts()); got != 1 {
+		t.Fatalf("alert recovered before the third healthy reading: %d", got)
+	}
+	check(100)
+	if got := len(m.GetActiveAlerts()); got != 0 {
+		t.Fatalf("alert did not recover after three healthy readings: %d", got)
+	}
+	if got := len(m.GetRecentlyResolved()); got != 1 {
+		t.Fatalf("sustained recovery produced %d resolved occurrences, want one", got)
+	}
+	check(0)
+	if got := len(m.GetActiveAlerts()); got != 1 {
+		t.Fatalf("new low-life reading after confirmed recovery did not alert: %d", got)
+	}
+	if got := len(queryAlertEvents(t, m, eventlog.Filter{Types: []string{eventlog.TypeNotificationDispatched}})); got != 2 {
+		t.Fatalf("genuine recurrence produced %d total dispatches, want two", got)
 	}
 }

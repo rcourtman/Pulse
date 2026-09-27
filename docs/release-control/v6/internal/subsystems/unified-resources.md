@@ -4483,6 +4483,17 @@ Canonical physical-disk views now expose the full disk identity and SMART
 metadata needed by monitoring refresh paths, so physical-disk temperature and
 SMART merges can run from unified `ReadState` instead of from snapshot-owned
 disk arrays.
+For a Proxmox physical disk with a complete instance, node and device path,
+canonical aliases include the persisted PVE disk-alert reference
+`instance:node:disk:sanitized-device-path`. The alert checker and registry use
+one constructor for that legacy reference. It is a lookup alias, never the
+disk's primary canonical ID or source ID, and must not leak across nodes,
+instances or non-disk resources. Ambiguous alias claims still fail closed under
+normal reference resolution. An absent device path retains the historical
+empty-key alert reference, distinct from the root-device key, but cannot be
+claimed as a disk alias without a device path. `TestProxmoxDiskAlertAliasIsScopedAndNotPrimaryIdentity`
+pins the identity boundary, and the registry-backed monitoring mute test pins
+its operator-state consumer.
 When host-agent SMART and Proxmox physical-disk rows merge, the unified
 resource must preserve both the enriched `PhysicalDiskMeta` and the Proxmox
 source payload (`ProxmoxData.NodeName`, `Instance`, and source id). A

@@ -51,7 +51,7 @@ const corpProviderDetails = {
   groupRoleMappings: { admins: 'admin' },
 };
 
-const setupFetch = (providers: unknown[]) => {
+const setupFetch = (providers: unknown[], providerDetails: unknown = corpProviderDetails) => {
   fetchMock.mockImplementation((url: string, options?: RequestInit) => {
     const method = (options?.method ?? 'GET').toUpperCase();
     if (url === '/api/security/sso/providers' && method === 'GET') {
@@ -61,7 +61,7 @@ const setupFetch = (providers: unknown[]) => {
       return Promise.resolve(jsonResponse({ publicUrl: 'https://pulse.example.com' }));
     }
     if (url === '/api/security/sso/providers/corp-oidc' && method === 'GET') {
-      return Promise.resolve(jsonResponse(corpProviderDetails));
+      return Promise.resolve(jsonResponse(providerDetails));
     }
     if (method === 'POST' || method === 'PUT') {
       return Promise.resolve(jsonResponse({ id: 'corp-oidc' }));
@@ -133,6 +133,57 @@ describe('SSOProvidersPanel OIDC scopes', () => {
 
     await waitFor(() => {
       expect(scopesInput().value).toBe('openid profile email groups');
+    });
+  });
+});
+
+describe('SSOProvidersPanel OIDC group role mappings', () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+    notificationSuccessMock.mockReset();
+    notificationErrorMock.mockReset();
+    loggerErrorMock.mockReset();
+    loggerWarnMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+    document.cookie = 'pulse_csrf=test-csrf-token';
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('preserves a multi-word group from provider details through the edit form and PUT', async () => {
+    setupFetch([corpProvider], {
+      ...corpProviderDetails,
+      groupRoleMappings: { 'Server Access': 'admin' },
+    });
+    render(() => <SSOProvidersPanel />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit provider' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Show access restrictions & role mapping' }),
+    );
+
+    const mappings = screen.getByRole('textbox', {
+      name: 'Group Role Mappings',
+    }) as HTMLTextAreaElement;
+    expect(mappings.value).toBe('Server Access=admin');
+    fireEvent.input(mappings, { target: { value: 'Server Access=admin,\nEveryone=viewer' } });
+
+    const saveButton = screen.getByRole('button', { name: 'Save Changes' });
+    fireEvent.submit(saveButton.closest('form')!);
+
+    await waitFor(() => {
+      const saveCall = fetchMock.mock.calls.find(
+        ([url, options]) =>
+          url === '/api/security/sso/providers/corp-oidc' &&
+          (options as RequestInit | undefined)?.method === 'PUT',
+      );
+      expect(saveCall).toBeTruthy();
+      const body = JSON.parse((saveCall![1] as RequestInit).body as string);
+      expect(body.groupRoleMappings).toEqual({ 'Server Access': 'admin', Everyone: 'viewer' });
+      expect(body.oidc.scopes).toEqual(['openid', 'profile', 'email', 'groups']);
     });
   });
 });

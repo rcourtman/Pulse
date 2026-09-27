@@ -423,9 +423,19 @@ func TestBuildBackupPVETemplateSubjectKeyTrimsParts(t *testing.T) {
 }
 
 func TestProxmoxDiskCanonicalResourceIDTrimsIdentity(t *testing.T) {
-	got := proxmoxDiskCanonicalResourceID(" inst ", " node ", "/dev/sda")
-	if got != "inst:node:disk:dev-sda" {
-		t.Fatalf("proxmoxDiskCanonicalResourceID() = %q, want %q", got, "inst:node:disk:dev-sda")
+	for _, tt := range []struct {
+		name, instance, node, path, want string
+	}{
+		{"trimmed source identity", " inst ", " node ", "/dev/sda", "inst:node:disk:dev-sda"},
+		{"nested device path", "inst", "node", "/dev/disk/by-id/ATA_DISK", "inst:node:disk:dev-disk-by-id-ata-disk"},
+		{"root path", "inst", "node", "/", "inst:node:disk:root"},
+		{"missing path keeps legacy identity", "inst", "node", "", "inst:node:disk:"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := proxmoxDiskCanonicalResourceID(tt.instance, tt.node, tt.path); got != tt.want {
+				t.Fatalf("proxmoxDiskCanonicalResourceID() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -4322,6 +4332,12 @@ func TestCheckDiskHealthWearoutRecoveryAlertCleared(t *testing.T) {
 
 	// Wearout recovers (replaced drive, or misread corrected)
 	disk.Wearout = 95
+	for range 2 {
+		m.CheckDiskHealth("test-instance", "pve-node1", disk)
+		if !testHasActiveAlert(t, m, wearoutAlertID) {
+			t.Fatal("wearout alert resolved on an unconfirmed recovery reading")
+		}
+	}
 	m.CheckDiskHealth("test-instance", "pve-node1", disk)
 
 	m.mu.RLock()

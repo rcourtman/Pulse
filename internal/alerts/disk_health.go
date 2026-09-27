@@ -13,7 +13,7 @@ import (
 )
 
 func proxmoxDiskCanonicalResourceID(instance, node, devPath string) string {
-	return fmt.Sprintf("%s:%s:disk:%s", strings.TrimSpace(instance), strings.TrimSpace(node), sanitizeAlertKey(devPath))
+	return unifiedresources.ProxmoxPhysicalDiskAlertResourceID(instance, node, devPath)
 }
 
 func proxmoxDiskAlertMetadata(disk proxmox.Disk) map[string]interface{} {
@@ -36,7 +36,6 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 	canonicalResourceID := proxmoxDiskCanonicalResourceID(instance, node, disk.DevPath)
 	resourceType := unifiedresources.ResourceType("proxmox-disk")
 	canonicalHealthAlertID := buildCanonicalStateID(canonicalResourceID, canonicalResourceID+"-health")
-	canonicalWearoutAlertID := buildCanonicalStateID(canonicalResourceID, canonicalResourceID+"-wearout")
 
 	clearDiskAlert := func(ids ...string) {
 		seen := make(map[string]struct{}, len(ids))
@@ -119,11 +118,10 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 		clearDiskAlert(alertID, canonicalHealthAlertID)
 	}
 
-	// Check for low wearout (SSD life remaining). Gate on the same predicate
-	// the risk assessment uses so a disk cannot read critical in the UI while
-	// staying silent here: 0 from an SSD means no endurance left and must
-	// alert, while -1 and a rotational 0 are absent evidence.
-	if storagehealth.WearoutReported(disk.Wearout, disk.Type) && disk.Wearout < 10 {
+	// Check wearout only when the disk reports endurance. Unknown readings
+	// cannot prove recovery; 0 from an SSD is a real, fully spent reading,
+	// whereas -1 and rotational 0 are absent evidence.
+	if storagehealth.WearoutReported(disk.Wearout, disk.Type) {
 		message := fmt.Sprintf("SSD has less than 10%% life remaining (%d%% wearout)", disk.Wearout)
 		spec, err := buildCanonicalSeverityThresholdSpecWithDirection(canonicalResourceID+"-wearout", canonicalResourceID, resourceName, resourceType, "wearout-remaining", alertspecs.ThresholdDirectionBelow, 10, 0, false)
 		if err != nil {
@@ -138,6 +136,10 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 
 			_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
 				Spec: spec,
+				// Endurance cannot normally improve on the same disk. Require
+				// sustained healthy-looking polls before resolving a worn-disk
+				// occurrence; a new low reading resets the recovery run (#2112).
+				RecoveryConfirmations: 3,
 				Evidence: alertspecs.AlertEvidence{
 					ObservedAt: time.Now(),
 					SeverityThreshold: &alertspecs.SeverityThresholdEvidence{
@@ -160,15 +162,14 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 				AddToHistory: true,
 			})
 
-			log.Warn().
-				Str("node", node).
-				Str("disk", disk.DevPath).
-				Str("model", disk.Model).
-				Int("wearout", disk.Wearout).
-				Msg("Disk wearout alert created")
+			if disk.Wearout < 10 {
+				log.Warn().
+					Str("node", node).
+					Str("disk", disk.DevPath).
+					Str("model", disk.Model).
+					Int("wearout", disk.Wearout).
+					Msg("Disk wearout alert observed")
+			}
 		}
-	} else if disk.Wearout >= 10 {
-		// Wearout is acceptable, clear alert if it exists
-		clearDiskAlert(wearoutAlertID, canonicalWearoutAlertID)
 	}
 }

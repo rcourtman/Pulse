@@ -319,6 +319,11 @@ collapse evidence, protection posture, and lifecycle history, but it must not
 drop those typed fields or replace their server-authored trust state. Decision,
 finding, and approval counts remain distinct API projections and must not be
 presented as interchangeable totals.
+The attention list's authenticated read contract is independent of Patrol's
+model-readiness and on/off state. `PatrolIntelligenceSurface.tsx` must not gate
+the attention transport or its canonical list on `shouldShowPatrolSetupOnly`;
+the setup task remains a separate runtime projection above it. This changes no
+attention route, response shape, token scope, or mutation authority.
 Physical-disk payloads preserve optional SMART counter presence, including
 explicit zero values, and expose provider vendor metadata without converting
 missing data into health. Unified-resource clients may request bounded server

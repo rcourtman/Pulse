@@ -3335,6 +3335,11 @@ confirmation note or rule reason is a `FormTextarea`, and the alert-only
 guidance link is a `ButtonLink`. `PatrolIntelligenceSurface.tsx` passes the
 Patrol findings accessor into the workbench; the workbench does not fetch or
 poll findings itself.
+The feature shell keeps the independent attention workbench mounted when
+Patrol is off or its model needs setup, while retaining the existing setup task
+above it. Desktop and narrow browser checks must show the task and attention
+list together, then allow a selected decision to open and return without
+changing the disabled Patrol controls or overflowing the viewport.
 The objective brief and optional-context fields in `PatrolObjectivesPanel`
 share the same `FormTextarea` ownership contract.
 
@@ -6318,6 +6323,14 @@ or `advanced_sso` feature probe before opening the SAML provider modal.
 `useSSOProvidersState.ts` must treat provider type as form state only; SSO
 entitlement truth belongs to the backend/runtime capability contract, where
 OIDC, SAML, and multi-provider SSO are Community-tier capabilities.
+The group-to-role mapping form must retain IdP group names with embedded
+spaces through provider detail, edit, payload, and reload. Its entries are
+comma- or newline-delimited `group=roleId` pairs; whitespace within a group
+name is not an entry separator. Keep the existing whitespace parsing for
+OIDC scopes and the other allowed lists separate from mapping parsing.
+`ssoProvidersModel.test.ts` and `SSOProvidersPanel.test.tsx` pin this round
+trip, and browser verification must inspect the saved mapping in the desktop
+and narrow edit dialog.
 `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx` must keep
 page-shell titles, descriptions, and lead panel framing aligned instead of
 letting navigation/header labels drift away from the actual settings surface.

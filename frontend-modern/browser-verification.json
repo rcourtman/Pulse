@@ -1,41 +1,16 @@
 {
   "version": 1,
-  "base_sha": "d25403b8c3e28354d0e62fc3fc35898cca3e8f1c",
-  "verified_at": "2026-09-24T19:54:45Z",
+  "base_sha": "cd43b6c692383865592c17a0853d33a229ae46d6",
+  "verified_at": "2026-09-27T00:26:36Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx",
-    "frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts",
-    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
-    "frontend-modern/src/components/shared/InlineNotice.tsx",
-    "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
-    "frontend-modern/src/hooks/useUnifiedResources.ts",
-    "frontend-modern/src/hooks/useWorkloads.ts"
-  ],
+  "changed_paths": ["frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx"],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx": "c112078ff621331510ac28490371ee7ba9099f7a1bbb64d0f66ff96400d4f89a",
-    "frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts": "3678e4b852ae0029760d3295fdd878cec436100f85c945dd46fe760da38887e4",
-    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "7ae6fee729328039f4d1ade064ba5d6e899f0fdf0a72e96a7df7e034b4f464de",
-    "frontend-modern/src/components/shared/InlineNotice.tsx": "1a239f4240c57f83383f0d936f2e90ea6cb122627299e17500c20c7236c04e9d",
-    "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx": "7960f323dde72b2b2f9d961792d410db2bfd95bacd87b1ae55c1ed473737994e",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "808ba390e1978c07f08a033bc23d5cf4d62731b6cc8b388c024180b3914f6fce",
-    "frontend-modern/src/hooks/useUnifiedResources.ts": "c4d2f3c44b19c89d3cf0d15e033f825c37aaab985abfd963ddb5907cbab76fe2",
-    "frontend-modern/src/hooks/useWorkloads.ts": "453b90cfe6df925bd28a8713548c1348767f3c398d08c972b9b1f493e70986ef"
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "1a0b15141ee41e45dc884406bc4689828b034704c80f914fc0d2baa93d0b6edd"
   },
-  "routes": [
-    "/proxmox/overview",
-    "/proxmox/storage",
-    "/alerts/overview",
-    "/settings/infrastructure/agent-doctor"
-  ],
+  "routes": ["/browser-tests/guest-storage-2263.html"],
   "viewports": [
     {
       "width": 1440,
-      "height": 900
-    },
-    {
-      "width": 768,
       "height": 900
     },
     {
@@ -44,21 +19,21 @@
     }
   ],
   "states": [
-    "50-node, 1,508-resource synthetic snapshot with two-second random metric updates and 49 outdated agents",
-    "Proxmox node selection, Workloads search/filter reset, Storage record Overview and History",
-    "Collapsed and keyboard-expanded affected-host notice, upgrade link and Agent Doctor guidance",
-    "Agent Doctor first and later table rows, badge and Seen values, keyboard row expansion and collapse",
-    "Mobile platform switcher open and Escape dismissed; alert Timeline expanded and dismissed",
-    "WebSocket reconnect and reload with no extra /api/state request on reconnect"
+    "Linked Proxmox guest with one physical disk and RAID array: disk row collapsed, SMART detail module not requested",
+    "Keyboard-expanded disk while the SMART module request is held: visible Loading SMART details status, summary retains focus",
+    "Loaded SMART overview: temperature, reallocated sectors, pending sectors and CRC errors visible; module requested once",
+    "SMART History tab selected with empty fixture chart data: chart collection placeholders and range control visible",
+    "Pointer-collapsed and reopened disk: overview restored without reloading the SMART module",
+    "Guest without a linked agent: no physical-disk card and no child-resource request",
+    "Linked guest child-resource request failing with HTTP 503: unavailable message visible, no misleading disk card",
+    "Desktop and phone screenshots inspected for placement, clipping, stacking, scrolling and horizontal overflow"
   ],
   "interactions": [
-    "Hydrate Proxmox Overview, expand a node, filter 929 guests to one named container, clear the filter and navigate to Alerts.",
-    "Switch Storage and Overview through live controls, open a storage record, select History and inspect chart placement and mobile scrolling.",
-    "Focus and activate Show all 49 hosts by keyboard, inspect the full list, collapse it and use the upgrade link to open Agent Doctor.",
-    "Inspect Agent Doctor at 1440, 768 and 390px, including guidance contrast, full badge and Seen text, first and later rows, keyboard expansion and return to Proxmox.",
-    "Open the mobile platform switcher, inspect stacking and clipping, dismiss with Escape. Reconnect WebSocket and reload, confirming resource hydration.",
-    "Navigate to Alerts and expand Timeline at desktop and phone widths; inspect dismissal and adjacent controls."
+    "Focus disk summary and press Enter; hold then release its lazy module request, verifying loading status, focus retention and loaded SMART attributes",
+    "Click History and Overview tabs, verifying selection and the chart/range layout at desktop and phone widths",
+    "Click the summary to close and reopen detail, verifying no second lazy-module request",
+    "Switch to No agent and Unavailable query fixture states; verify exact parent-filtered API requests and absence of unscoped disk fetches"
   ],
-  "command": "Playwright on the final rebuilt 50-node synthetic server at pulse-dev:7703 after the lazy registry index change: qa-agent-doctor-final-20260924.mjs, qa-final-20260924.mjs, qa-adjacent-20260924.mjs, qa-overlays-20260924.mjs, qa-notice-action-20260924.mjs.",
-  "notes": "Final frontend content hashes bind the receipt to every changed frontend runtime file. The browser binary used internal/unifiedresources/registry.go SHA-256 bb4fa4a0d9a635971c93d93282663bb8088e25e020c087e75de5a7b196c7222d. Pixel screenshots inspected at desktop, intermediate and phone widths, including the deepest changed states. No page errors or horizontal overflow. The synthetic fixture does not qualify installed-fleet latency or the remaining roughly 4 MB initial resource stream."
+  "command": "pulse-worker-browser tmp/browser-proof/frontend-modern/browser-tests/guest-storage-2263.cjs (Playwright 1.56.1, Chromium 141.0.7390.37)",
+  "notes": "The browser ran an owned git-archive source copy with final GuestPhysicalDisks.tsx bytes and a bounded #2263 Vite fixture; this is not installed acceptance or a reporter field retest. Passed log and twelve inspected screenshots: /var/lib/pulse-maintainer/worker-outputs/product-intelligence-zf_afcvy/guest-storage-browser-formatted.log and browser-proof/."
 }
