@@ -1,22 +1,13 @@
 {
   "version": 1,
-  "base_sha": "3829d91456fe4a121e4e6f0cca6a6ef1fe0c7f2a",
-  "verified_at": "2026-09-26T19:37:23Z",
+  "base_sha": "cd43b6c692383865592c17a0853d33a229ae46d6",
+  "verified_at": "2026-09-27T00:26:36Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
-    "frontend-modern/src/components/Settings/ssoProvidersModel.ts",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx"
-  ],
+  "changed_paths": ["frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx"],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "781cbb8913f42008456afa7701351c4828aabc140c9e35595c47fd2330bca0cf",
-    "frontend-modern/src/components/Settings/ssoProvidersModel.ts": "9f10845e553633d73bff7ac5fb295d4ce5cc0c4250d0eef1bac2ce18bb31ef2c",
-    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "83dfb9eefe57064111244b2fef8e059b02000e5b07844335c0577516b599bf44"
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "1a0b15141ee41e45dc884406bc4689828b034704c80f914fc0d2baa93d0b6edd"
   },
-  "routes": [
-    "/browser-tests/sso-mappings-2266.html",
-    "/browser-tests/patrol-off-attention-2257.html"
-  ],
+  "routes": ["/browser-tests/guest-storage-2263.html"],
   "viewports": [
     {
       "width": 1440,
@@ -28,18 +19,21 @@
     }
   ],
   "states": [
-    "OIDC provider edit dialog with Server Access=admin, Everyone=viewer preserved after save and reopen",
-    "Patrol off with model setup blocked: setup task and independent attention decision visible together",
-    "Selected Database VM disk-pressure detail with impact and next step, then return to attention list",
-    "Patrol page remounted: setup task and attention decision still visible",
-    "Desktop and phone screenshots inspected: mapping field and Patrol list/detail visible without clipping or horizontal overflow"
+    "Linked Proxmox guest with one physical disk and RAID array: disk row collapsed, SMART detail module not requested",
+    "Keyboard-expanded disk while the SMART module request is held: visible Loading SMART details status, summary retains focus",
+    "Loaded SMART overview: temperature, reallocated sectors, pending sectors and CRC errors visible; module requested once",
+    "SMART History tab selected with empty fixture chart data: chart collection placeholders and range control visible",
+    "Pointer-collapsed and reopened disk: overview restored without reloading the SMART module",
+    "Guest without a linked agent: no physical-disk card and no child-resource request",
+    "Linked guest child-resource request failing with HTTP 503: unavailable message visible, no misleading disk card",
+    "Desktop and phone screenshots inspected for placement, clipping, stacking, scrolling and horizontal overflow"
   ],
   "interactions": [
-    "Edit and save OIDC group mappings containing a multi-word group and newline separator, reopen and verify exact map; retain OIDC scopes",
-    "Open access restrictions and role mapping, focus the mapping field, inspect desktop and phone dialogs, dismiss with Escape",
-    "With Patrol off, open Start review, inspect affected resource, consequence and next step, then close detail via desktop close or phone Back to list",
-    "Remount Patrol fixture to verify setup task and independent attention decision persist; inspect four responsive list/detail screenshots"
+    "Focus disk summary and press Enter; hold then release its lazy module request, verifying loading status, focus retention and loaded SMART attributes",
+    "Click History and Overview tabs, verifying selection and the chart/range layout at desktop and phone widths",
+    "Click the summary to close and reopen detail, verifying no second lazy-module request",
+    "Switch to No agent and Unavailable query fixture states; verify exact parent-filtered API requests and absence of unscoped disk fetches"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/sso-mappings-2266.cjs and pulse-worker-browser frontend-modern/browser-tests/patrol-off-attention-2257.cjs (Playwright 1.56.1, Chromium 141.0.7390.37)",
-  "notes": "Both browser scripts ran on the combined candidate source with fixture API responses. Logs and six inspected screenshots are retained in this lane output directory. No deployed installation, provider acceptance, release or field retest is claimed."
+  "command": "pulse-worker-browser tmp/browser-proof/frontend-modern/browser-tests/guest-storage-2263.cjs (Playwright 1.56.1, Chromium 141.0.7390.37)",
+  "notes": "The browser ran an owned git-archive source copy with final GuestPhysicalDisks.tsx bytes and a bounded #2263 Vite fixture; this is not installed acceptance or a reporter field retest. Passed log and twelve inspected screenshots: /var/lib/pulse-maintainer/worker-outputs/product-intelligence-zf_afcvy/guest-storage-browser-formatted.log and browser-proof/."
 }

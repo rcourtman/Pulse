@@ -49,7 +49,7 @@ describe('GuestPhysicalDisks', () => {
   });
   afterEach(cleanup);
 
-  it('shows the linked guest disk and opens its existing SMART detail', () => {
+  it('shows the linked guest disk and loads its existing SMART detail on expansion', async () => {
     queryState.resources = [disk, { ...disk, id: 'host-disk', parentId: 'pve-node-1' }];
     render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
     expect(queryState.query).toBe('type=physical_disk&parent=vm-resource-101');
@@ -64,7 +64,7 @@ describe('GuestPhysicalDisks', () => {
     const row = within(card).getByTestId('guest-physical-disk') as HTMLDetailsElement;
     row.open = true;
     fireEvent(row, new Event('toggle'));
-    expect(within(card).getByText('Reallocated Sectors')).toBeInTheDocument();
+    expect(await within(card).findByText('Reallocated Sectors')).toBeInTheDocument();
     expect(within(card).getByText('Pending Sectors')).toBeInTheDocument();
     expect(within(card).getByText('CRC Errors')).toBeInTheDocument();
     expect(within(card).getAllByTestId('guest-physical-disk')).toHaveLength(1);

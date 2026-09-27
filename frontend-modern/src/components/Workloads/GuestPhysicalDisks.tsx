@@ -1,5 +1,4 @@
-import { For, Show, createSignal, type Component } from 'solid-js';
-import { DiskDetail } from '@/components/Storage/DiskDetail';
+import { For, Show, Suspense, createSignal, lazy, type Component } from 'solid-js';
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
@@ -9,6 +8,12 @@ import {
 import type { Resource } from '@/types/resource';
 import { formatBytes } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
+
+// SMART history and chart controls are only needed after a disk row is opened.
+// Keep their Storage detail module out of the initial Workloads surface.
+const LazyDiskDetail = lazy(() =>
+  import('@/components/Storage/DiskDetail').then(({ DiskDetail }) => ({ default: DiskDetail })),
+);
 
 const GuestPhysicalDiskRow: Component<{ disk: Resource }> = (props) => {
   const [expanded, setExpanded] = createSignal(false);
@@ -39,7 +44,15 @@ const GuestPhysicalDiskRow: Component<{ disk: Resource }> = (props) => {
       </summary>
       <Show when={expanded()}>
         <div class="mt-2 border-t border-border pt-2">
-          <DiskDetail disk={props.disk} nodes={[]} />
+          <Suspense
+            fallback={
+              <p class="text-xs text-muted" role="status">
+                Loading SMART details…
+              </p>
+            }
+          >
+            <LazyDiskDetail disk={props.disk} nodes={[]} />
+          </Suspense>
         </div>
       </Show>
     </details>
