@@ -98,8 +98,8 @@ func (m *Manager) GetReleaseNotes(ctx context.Context, version string) (*Release
 		return nil, fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, detail)
 	}
 
-	var release ReleaseInfo
-	if err := decodeReleaseMetadata(resp, &release); err != nil {
+	release, err := decodeSingleRelease(resp)
+	if err != nil {
 		return nil, fmt.Errorf("failed to decode release notes: %w", err)
 	}
 
