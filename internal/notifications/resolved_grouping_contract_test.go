@@ -272,19 +272,19 @@ func TestRestartKeepsDueDeliveryPendingUntilConfigured(t *testing.T) {
 	}
 
 	// Production order: construct the manager, then apply saved configuration.
-	m := NewNotificationManagerWithDataDir("", dir)
+	m := NewNotificationManagerWithDeferredQueue("", dir)
 	defer m.Stop()
 	m.webhookClient = server.Client()
 	if err := m.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
 		t.Fatal(err)
 	}
-	// A premature startup wake must not consume the due job before the
-	// destination configuration is restored.
-	time.Sleep(250 * time.Millisecond)
+	// Force the same batch path the five-second ticker uses while saved
+	// configuration is still absent. It must leave the due row pending.
 	queue := m.GetQueue()
 	if queue == nil {
 		t.Fatal("queue unavailable")
 	}
+	queue.processBatch()
 	var status string
 	if err := queue.db.QueryRow(`SELECT status FROM notification_queue WHERE id = 'restart-due'`).Scan(&status); err != nil {
 		t.Fatal(err)
@@ -294,7 +294,7 @@ func TestRestartKeepsDueDeliveryPendingUntilConfigured(t *testing.T) {
 	}
 
 	m.AddWebhook(hook)
-	queue.processBatch()
+	m.StartQueueProcessing()
 	select {
 	case <-received:
 	case <-time.After(5 * time.Second):

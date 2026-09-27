@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -90,7 +89,7 @@ const (
 	defaultUpdateReleaseRepo string = "rcourtman/Pulse"
 	defaultUpdateAPIBaseURL  string = "https://api.github.com"
 	maxReleaseFeedBytes      int64  = 1 << 20   // 1 MiB
-	maxReleaseMetadataBytes  int64  = 1 << 20   // 1 MiB
+	maxReleaseMetadataBytes  int64  = 64 << 20  // 64 MiB, streamed (release_metadata.go)
 	maxReleaseFeedCandidates int    = 20        // Bound asset probes from a feed.
 	maxChecksumFileBytes     int64  = 1 << 20   // 1 MiB
 	maxUpdateDownloadBytes   int64  = 512 << 20 // 512 MiB
@@ -99,17 +98,6 @@ const (
 	updateExtractSafetyBytes int64  = 32 << 20  // 32 MiB
 	maxRetainedUpdateBackups int    = 3
 )
-
-func decodeReleaseMetadata(resp *http.Response, destination any) error {
-	if err := securityutil.LimitResponseBody(resp, maxReleaseMetadataBytes); err != nil {
-		return err
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(body, destination)
-}
 
 func updateReleaseRepo() string {
 	repo := strings.TrimSpace(os.Getenv("PULSE_GITHUB_REPO"))
@@ -505,18 +493,9 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 			}
 		}
 	}
-
-	// Fallback to any pulse tarball if exact match not found
-	if downloadURL == "" {
-		for _, asset := range release.Assets {
-			if strings.HasPrefix(asset.Name, "pulse-") &&
-				strings.Contains(asset.Name, "linux") &&
-				strings.HasSuffix(asset.Name, ".tar.gz") {
-				downloadURL = asset.BrowserDownloadURL
-				break
-			}
-		}
-	}
+	// A missing archive must not fall back to another architecture or to an
+	// agent/MCP tarball, nor advertise an update that cannot be applied.
+	available := latestVer.IsNewerThan(currentVer) && downloadURL != ""
 
 	isMajorUpgrade := latestVer.Major > currentVer.Major
 	// Derive prerelease from the parsed version tag (not GitHub metadata) so the
@@ -524,7 +503,7 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 	isPrerelease := release.Prerelease || latestVer.IsPrerelease()
 
 	info := &UpdateInfo{
-		Available:      latestVer.IsNewerThan(currentVer),
+		Available:      available,
 		CurrentVersion: currentInfo.Version,
 		LatestVersion:  strings.TrimPrefix(release.TagName, "v"),
 		ReleaseNotes:   release.Body,
@@ -934,13 +913,14 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 		return nil, fmt.Errorf("GitHub API returned status %d: %s", resp.StatusCode, detail)
 	}
 
-	var releases []ReleaseInfo
-	if err := decodeReleaseMetadata(resp, &releases); err != nil {
-		// The GitHub collection embeds every asset for every returned release,
-		// so a valid response can outgrow the metadata limit as history grows.
-		// Retain the bound and use GitHub's separately bounded Atom feed only for
-		// that typed condition. A custom update server must not be silently
-		// replaced by github.com, and malformed metadata remains a hard failure.
+	releases, err := decodeReleaseList(resp)
+	if err != nil {
+		// The list is streamed, so the byte bound only trips on a response far
+		// larger than GitHub's current release pages. Keep GitHub's separately
+		// bounded Atom feed as the last resort for that typed condition only;
+		// the feed holds ten entries and cannot be the primary source. A custom
+		// update server must not be silently replaced by github.com, and
+		// malformed metadata remains a hard failure.
 		if securityutil.IsResponseBodyTooLarge(err) && strings.TrimSpace(os.Getenv("PULSE_UPDATE_SERVER")) == "" {
 			log.Warn().
 				Str("channel", channel).

@@ -6,10 +6,89 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+// Monitor construction restores notification destinations before admitting
+// agent observations. A previously queued disk alert must not be cancelled as
+// "delivery disabled" just because its saved webhook has not loaded yet.
+func TestMonitorStartupRetainsQueuedAgentDiskAlertUntilDestinationRestored(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", dir)
+	persistence := config.NewConfigPersistence(dir)
+	if err := persistence.SaveAlertConfig(alerts.AlertConfig{
+		Enabled: true, ActivationState: alerts.ActivationActive,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	hook := notifications.WebhookConfig{
+		ID: "disk-ops", Name: "disk-ops", URL: "http://127.0.0.1:1/alert",
+		Enabled: true, Service: "generic",
+	}
+	if err := persistence.SaveWebhooks([]notifications.WebhookConfig{hook}); err != nil {
+		t.Fatal(err)
+	}
+	configJSON, err := json.Marshal(hook)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seed, err := notifications.NewNotificationQueue(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := seed.Enqueue(&notifications.QueuedNotification{
+		ID: "startup-agent-disk-wearout", Type: "webhook", Status: notifications.QueueStatusPending,
+		DestinationID: hook.ID, Config: configJSON, MaxAttempts: 3,
+		Alerts: []*alerts.Alert{{
+			ID: "disk-wearout", Type: "disk-wearout", ResourceName: "agent-disk",
+			Level: alerts.AlertLevelWarning, StartTime: time.Now().Add(-time.Minute),
+		}},
+	}); err != nil {
+		_ = seed.Stop()
+		t.Fatal(err)
+	}
+	if err := seed.Stop(); err != nil {
+		t.Fatal(err)
+	}
+
+	monitor, err := New(&config.Config{DataPath: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(monitor.Stop)
+	queue := monitor.GetNotificationManager().GetQueue()
+	if queue == nil {
+		t.Fatal("notification queue unavailable")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		stats, err := queue.GetQueueStats()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stats[string(notifications.QueueStatusCancelled)] != 0 {
+			t.Fatalf("queued disk alert cancelled before destination restore: %v", stats)
+		}
+		telemetry, err := queue.GetTelemetryStats(time.Time{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if telemetry.Attempts != 0 {
+			if telemetry.Deliveries != 0 {
+				t.Fatalf("synthetic blocked endpoint unexpectedly delivered: %+v", telemetry)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("restored destination never reached queue processor: %v", stats)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
 
 // Exercise the real skipped-poll path, not just the ID helper: canonical views
 // are converted back into source state and then re-ingested by the adapter.
