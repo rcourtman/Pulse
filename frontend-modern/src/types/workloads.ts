@@ -1,4 +1,4 @@
-import type { VM, Container, DockerContainerUpdateStatus } from './api';
+import type { VM, Container, DockerContainerUpdateStatus, HostRAIDArray } from './api';
 import type {
   ResourceActionReadiness,
   ResourceAvailabilityMeta,
@@ -24,6 +24,8 @@ export type WorkloadGuest = (VM | Container) & {
   workloadType?: WorkloadType;
   /** Backend identities that may own active alerts for this canonical workload. */
   alertResourceIds?: string[];
+  /** Exact unified-resource ID; a Proxmox row ID can be a different VMID-based display key. */
+  canonicalResourceId?: string;
   /** Backend-owned coordinates for metrics history; distinct from the stable workload row id. */
   metricsTarget?: ResourceMetricsTarget;
   /** Canonical unified-resource health, kept separate from runtime power state in `status`. */
@@ -52,6 +54,8 @@ export type WorkloadGuest = (VM | Container) & {
   containerRuntime?: string;
   /** Identifies the producer of agentVersion instead of inferring it from VM type. */
   agentKind?: 'pulse' | 'qemu-guest';
+  /** RAID arrays reported by the linked Pulse agent, not Proxmox virtual disks. */
+  agentRaid?: HostRAIDArray[];
   updateStatus?: DockerContainerUpdateStatus;
   // Server-evaluated capability refusals from the unified resource. The
   // update button reads this to disable itself with the refusal reason
