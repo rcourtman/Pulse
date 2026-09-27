@@ -55,6 +55,34 @@ const props: ComponentProps<typeof GuestDrawerOverview> = {
 describe('GuestDrawerOverview filesystem labels', () => {
   afterEach(cleanup);
 
+  it('shows linked-agent RAID arrays beside the guest storage evidence', () => {
+    render(() => (
+      <GuestDrawerOverview
+        {...props}
+        guest={{
+          ...props.guest,
+          agentRaid: [
+            {
+              device: '/dev/md0',
+              name: 'data',
+              level: 'raid1',
+              state: 'clean',
+              totalDevices: 2,
+              activeDevices: 2,
+              workingDevices: 2,
+              failedDevices: 0,
+              spareDevices: 0,
+            },
+          ],
+        }}
+      />
+    ));
+    expect(screen.getByText('Guest RAID')).toBeInTheDocument();
+    expect(screen.getByText('data')).toBeInTheDocument();
+    expect(screen.getByText('raid1')).toBeInTheDocument();
+    expect(screen.getByText('clean')).toBeInTheDocument();
+  });
+
   it('shows shared-prefix paths above usage, including unknown usage, without relying on hover', () => {
     render(() => <GuestDrawerOverview {...props} />);
     for (const path of paths) {
