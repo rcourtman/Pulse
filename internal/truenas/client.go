@@ -283,7 +283,7 @@ func (c *Client) getSystemTelemetryREST(ctx context.Context) (*SystemInfo, error
 	if start <= 0 {
 		start = end
 	}
-	response, err := c.getReportingDataREST(ctx, legacyRESTReportingGraphs(), map[string]any{
+	response, err := c.getLegacySystemReportingData(ctx, map[string]any{
 		"aggregate": false,
 		"start":     start,
 		"end":       end,
@@ -348,16 +348,73 @@ func latestTimeSeriesValue(series []TimeSeriesPoint) (float64, bool) {
 	return latest.Value, true
 }
 
+// reportingGraph builds a reporting.get_data graph entry in the shape the
+// TrueNAS 13 middleware itself accepts: a graph that is not scoped to a device
+// omits the identifier key entirely rather than sending an explicit null. The
+// native GUI requests CPU, memory and ARC as `{"name":"cpu"}` and only supplies
+// an identifier for parameterized graphs such as `arcresult` (#2077).
+func reportingGraph(name, identifier string) map[string]any {
+	graph := map[string]any{"name": name}
+	if trimmed := strings.TrimSpace(identifier); trimmed != "" {
+		graph["identifier"] = trimmed
+	}
+	return graph
+}
+
 // legacyRESTReportingGraphs is the reporting.get_data graph set used to
-// reconstruct live telemetry and history over the legacy REST transport.
+// reconstruct live telemetry and history over the legacy REST transport. The
+// identifier is omitted for device-independent graphs so the request matches
+// the native contract instead of sending a null identifier that the legacy
+// REST schema can reject for the whole batch (#2077).
 func legacyRESTReportingGraphs() []map[string]any {
 	return []map[string]any{
-		{"name": "cpu", "identifier": nil},
-		{"name": "memory", "identifier": nil},
-		{"name": "arcsize", "identifier": nil},
-		{"name": "interface", "identifier": nil},
-		{"name": "disk", "identifier": nil},
+		reportingGraph("cpu", ""),
+		reportingGraph("memory", ""),
+		reportingGraph("arcsize", ""),
+		reportingGraph("interface", ""),
+		reportingGraph("disk", ""),
 	}
+}
+
+// getLegacySystemReportingData keeps a rejected optional graph from discarding
+// usable CPU/memory readings. Keep the successful batch fast path; only split
+// graph-validation/server errors, never authentication, rate-limit, endpoint,
+// transport or cancellation failures. The query and graph set remain unchanged.
+func (c *Client) getLegacySystemReportingData(ctx context.Context, query map[string]any) ([]trueNASReportingGetDataResponse, error) {
+	graphs := legacyRESTReportingGraphs()
+	response, err := c.getReportingDataREST(ctx, graphs, query)
+	if err == nil || !isReportingGraphFailure(err) {
+		return response, err
+	}
+	batchErr := err
+	var collected []trueNASReportingGetDataResponse
+	for _, graph := range graphs {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		response, err := c.getReportingDataREST(ctx, []map[string]any{graph}, query)
+		if err != nil {
+			if !isReportingGraphFailure(err) {
+				return nil, err
+			}
+			continue
+		}
+		collected = append(collected, response...)
+	}
+	if len(collected) == 0 {
+		return nil, batchErr
+	}
+	return collected, nil
+}
+
+func isReportingGraphFailure(err error) bool {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	return apiErr.StatusCode == http.StatusBadRequest ||
+		apiErr.StatusCode == http.StatusUnprocessableEntity ||
+		apiErr.StatusCode == http.StatusInternalServerError
 }
 
 // getReportingDataREST issues reporting.get_data over the REST v2.0 transport.
@@ -406,7 +463,7 @@ func (c *Client) getSystemMetricHistoryREST(ctx context.Context, duration time.D
 	if start <= 0 {
 		start = end
 	}
-	response, err := c.getReportingDataREST(ctx, legacyRESTReportingGraphs(), map[string]any{
+	response, err := c.getLegacySystemReportingData(ctx, map[string]any{
 		"aggregate": false,
 		"start":     start,
 		"end":       end,
@@ -3171,10 +3228,13 @@ func parseSystemMetricHistory(responses []trueNASReportingGetDataResponse) *Syst
 					history.CPUPercent = appendTimeSeriesPoint(history.CPUPercent, timestamp, value)
 				}
 			case "memory":
+				// FreeBSD active pages are only one used-memory component, not
+				// total usage. Without an explicit used series, let the provider
+				// derive usage from system capacity, free memory and ARC.
 				if value, ok := parseSystemMemoryPercent(values); ok {
 					history.MemoryPercent = appendTimeSeriesPoint(history.MemoryPercent, timestamp, value)
 				}
-				if value, ok := pickReportingValue(values, "used", "memory_used", "used_bytes", "active", "memory"); ok {
+				if value, ok := pickReportingValue(values, "used", "memory_used", "used_bytes", "memory"); ok {
 					history.MemoryUsedBytes = appendTimeSeriesPoint(history.MemoryUsedBytes, timestamp, value)
 				}
 				if value, ok := pickReportingValue(values, "available", "free", "available_bytes", "free_bytes"); ok {
@@ -3442,7 +3502,7 @@ func parseSystemMemoryPercent(values map[string]float64) (float64, bool) {
 	if value, ok := pickReportingValue(values, "usage", "percent", "used_percent", "memory_percent"); ok {
 		return value, true
 	}
-	used, hasUsed := pickReportingValue(values, "used", "memory_used", "used_bytes", "active", "memory")
+	used, hasUsed := pickReportingValue(values, "used", "memory_used", "used_bytes", "memory")
 	total, hasTotal := pickReportingValue(values, "total", "memory_total", "total_bytes", "physical_memory_total")
 	if hasUsed && hasTotal && total > 0 {
 		return (used / total) * 100, true
