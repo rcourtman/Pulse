@@ -4043,6 +4043,12 @@ retry semantics, acknowledgement, or the critical-repeat cadence.
 before returning a monitor that API handlers can publish. The asynchronous
 `Monitor.Start` loop adds lifecycle projection handling and rewires escalation
 with its WebSocket hub, but it is not the first notification-delivery boundary.
+Before those callbacks are installed, the constructor restores saved email,
+Apprise, and webhook destinations, then activates the queue processor. A due
+persisted notification cannot be consumed against an incomplete destination
+list by the queue's five-second ticker during a slow startup. Activation wakes
+the backlog only after the destination load stage completes; it does not
+change alert admission, agent identity, or provider-delivery policy.
 This closes the startup interval in which an immediately reconnecting agent
 could create and persist an active warning while the outbound callback was
 still nil. The constructor-time callbacks use the already loaded alert and
@@ -4050,6 +4056,11 @@ destination configuration; runtime rewiring replaces single callback slots and
 does not duplicate delivery. `TestNewMonitorRoutesStartupCustomSensorWarningBeforeStart`
 in `internal/monitoring/monitor_host_agents_test.go` proves a first custom-sensor
 warning reaches the external path before `Start` runs.
+`TestMonitorStartupRetainsQueuedAgentDiskAlertUntilDestinationRestored` in
+`internal/monitoring/physical_disk_roundtrip_test.go` verifies that the real
+constructor activates a persisted disk-alert job without policy-cancelling it.
+The test uses a deliberately blocked local URL and does not claim provider
+acceptance or installed delivery.
 
 ### Proxmox node unavailability is not credential evidence
 

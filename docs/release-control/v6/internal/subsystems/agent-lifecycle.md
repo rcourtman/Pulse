@@ -7927,13 +7927,21 @@ The monitoring constructor installs external alert callbacks before it returns
 the monitor to API routing. An agent report accepted immediately after process
 startup can therefore create a canonical alert and reach notification and push
 delivery even if the long-running `Monitor.Start` goroutine has not yet begun.
+Before that callback boundary, the constructor restores saved notification
+destinations and activates the queue processor. The five-second queue ticker
+must not process an older agent-disk alert against an empty startup destination
+list; a first accepted agent report then uses the restored routing state rather
+than outrunning delivery readiness. This ordering grants no enrollment, token,
+command, removal, or re-enrollment authority.
 `Start` may replace those single callback slots with runtime-specific WebSocket
 context and add lifecycle projection replay, but it cannot be the first owner
 of outbound alert wiring. This ordering changes no enrollment or token
 authority; it only prevents the first accepted agent observation from losing
 its alert consequence. `TestNewMonitorRoutesStartupCustomSensorWarningBeforeStart`
 in `internal/monitoring/monitor_host_agents_test.go` pins the pre-`Start`
-warning path.
+warning path. `TestMonitorStartupRetainsQueuedAgentDiskAlertUntilDestinationRestored`
+in `internal/monitoring/physical_disk_roundtrip_test.go` covers the adjacent
+persisted-disk-alert queue activation without claiming installed delivery.
 
 ### Alert correlation consumes links without gaining lifecycle authority
 
