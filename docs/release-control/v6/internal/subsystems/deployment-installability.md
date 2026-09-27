@@ -4027,6 +4027,23 @@ contract; the normal apply pipeline must still verify its pinned SSHSIG and
 checksum before installation. A fallback response that advertises an update
 with an empty download URL is a release-blocking defect because the UI cannot
 start the apply request. Proof: `internal/updates/manager_retry_test.go`.
+The Atom feed is a last resort only, never the primary release source: it
+carries just the ten newest entries and every Pulse release now spends three
+of them (the release, its Helm chart release, and a release-convergence tag),
+so it cannot see a stable release that sits behind a preview cycle. The
+release-list path must therefore cope with GitHub's real payload, where each
+6.4.x release embeds hundreds of assets and one 30-release page is several
+megabytes. `internal/updates/release_metadata.go` streams the list and the
+single-release notes response token by token under the
+`maxReleaseMetadataBytes` byte bound, retaining only tag, name, body, draft,
+prerelease, publish time, and the Pulse server archive assets, so memory
+tracks what the updater keeps rather than the response size. Buffering the
+whole response behind a small bound is a release-blocking regression: it made
+every stable-channel check fail on main and left 6.4.3-rc.1, which has the
+bound without the fallback, unable to discover any update (#1881, #2282).
+Malformed metadata stays a hard error and only the typed over-limit condition
+may fall through to the feed. Proof:
+`internal/updates/issue2282_release_metadata_stream_test.go`.
 Those same workflows must also fetch and dispatch the governed release branch
 derived from release-control metadata instead of hardcoding `pulse/v6`,
 `pulse/v6-release`, `main`, or any later branch literal inline; when a stable
