@@ -348,15 +348,31 @@ func latestTimeSeriesValue(series []TimeSeriesPoint) (float64, bool) {
 	return latest.Value, true
 }
 
+// reportingGraph builds a reporting.get_data graph entry in the shape the
+// TrueNAS 13 middleware itself accepts: a graph that is not scoped to a device
+// omits the identifier key entirely rather than sending an explicit null. The
+// native GUI requests CPU, memory and ARC as `{"name":"cpu"}` and only supplies
+// an identifier for parameterized graphs such as `arcresult` (#2077).
+func reportingGraph(name, identifier string) map[string]any {
+	graph := map[string]any{"name": name}
+	if trimmed := strings.TrimSpace(identifier); trimmed != "" {
+		graph["identifier"] = trimmed
+	}
+	return graph
+}
+
 // legacyRESTReportingGraphs is the reporting.get_data graph set used to
-// reconstruct live telemetry and history over the legacy REST transport.
+// reconstruct live telemetry and history over the legacy REST transport. The
+// identifier is omitted for device-independent graphs so the request matches
+// the native contract instead of sending a null identifier that the legacy
+// REST schema can reject for the whole batch (#2077).
 func legacyRESTReportingGraphs() []map[string]any {
 	return []map[string]any{
-		{"name": "cpu", "identifier": nil},
-		{"name": "memory", "identifier": nil},
-		{"name": "arcsize", "identifier": nil},
-		{"name": "interface", "identifier": nil},
-		{"name": "disk", "identifier": nil},
+		reportingGraph("cpu", ""),
+		reportingGraph("memory", ""),
+		reportingGraph("arcsize", ""),
+		reportingGraph("interface", ""),
+		reportingGraph("disk", ""),
 	}
 }
 

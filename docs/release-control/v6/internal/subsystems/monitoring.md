@@ -128,6 +128,20 @@ history query and the unavailable-usage guard. These are synthetic transport
 and projection proofs, not native CORE appliance acceptance or reporter
 confirmation.
 
+The legacy REST graph request also matches the request shape the native TrueNAS
+13 GUI itself sends (#2077): a graph that is not scoped to a device omits the
+`identifier` key instead of sending an explicit null. The reporter's CORE
+13.0-U6.1 WebSocket capture shows `reporting.get_data` graphs as
+`{"name":"cpu"}` (also memory, arcsize, load, swap, cputemp), with an
+`identifier` present only for parameterized graphs such as
+`{"name":"arcresult","identifier":"demand_data"}`. Sending `identifier: null`
+is not the native contract and is a plausible whole-batch rejection that would
+discard otherwise usable CPU and memory telemetry.
+`TestRESTReportingRequestMatchesNativeGraphShape` checks the request against a
+schema-faithful synthetic transport. Native CORE response schema, row
+timestamps/units, appliance acceptance and the reporter's exact result remain
+unproved.
+
 **Availability backfill preserves concurrent discovery changes (7 September 2026)**
 
 The backfill List snapshot is a work list, not an authoritative record to save.
