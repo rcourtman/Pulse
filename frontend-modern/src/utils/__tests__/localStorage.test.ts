@@ -101,7 +101,7 @@ describe('localStorage signals', () => {
     });
 
     it('rejects a second low-priority notice owner in the same session', () => {
-      expect(reserveLowPriorityNoticeSession('telemetry-update')).toBe(true);
+      expect(reserveLowPriorityNoticeSession('release-update')).toBe(true);
       expect(reserveLowPriorityNoticeSession('github-star')).toBe(false);
     });
   });

@@ -1,27 +1,29 @@
 {
   "version": 1,
-  "base_sha": "a1b4e2f7532c8d7ba1cbfcb01ce0971fef42c179",
-  "verified_at": "2026-09-27T10:10:29Z",
+  "base_sha": "ef2a1c5cc0c00a8de32bf54ef3f603120395fe59",
+  "verified_at": "2026-09-28T00:15:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
-    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx",
-    "frontend-modern/src/hooks/useWorkloads.ts",
-    "frontend-modern/src/types/workloads.ts"
+    "frontend-modern/src/components/Settings/Settings.tsx",
+    "frontend-modern/src/components/WhatsNewCard.tsx",
+    "frontend-modern/src/i18n/messages.de.ts",
+    "frontend-modern/src/i18n/messages.es.ts",
+    "frontend-modern/src/i18n/messages.ts",
+    "frontend-modern/src/utils/localStorage.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "f4f8903e442d92a622fa2517f54288fb0dfa97882136e268e8e0f540390127fe",
-    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "1a0b15141ee41e45dc884406bc4689828b034704c80f914fc0d2baa93d0b6edd",
-    "frontend-modern/src/hooks/useWorkloads.ts": "cf1b15b6554858c647108818d07f0f8c31655fdc8e9b8531fb8f9df4c7c41aa5",
-    "frontend-modern/src/types/workloads.ts": "4d779f40a56b83b83c8bbcb4b49f88e1db3432d071b8f6326094fa081547c1e6"
+    "frontend-modern/src/components/Settings/Settings.tsx": "72682c86dd055761cbd68d4f57b684afe4d978a0b53748859d0721e711ce321a",
+    "frontend-modern/src/components/WhatsNewCard.tsx": "90543f19d61e9ba6d93251a7bcc9c179fa8d7ccb6ab3364e364d0ea13b2c31f0",
+    "frontend-modern/src/i18n/messages.de.ts": "f79a2d86dd2484b414706eb05215c3c75696d496b9963f937998eaeef87f6635",
+    "frontend-modern/src/i18n/messages.es.ts": "d43643d4bd6b4480569bf0a23c82217f3c91823f2a020bd8252a7f42c2a6fbf9",
+    "frontend-modern/src/i18n/messages.ts": "d025eb5cdaa327804c447c35ace272d9e40c3e9263ce3d3c15f14ed70acdcbfd",
+    "frontend-modern/src/utils/localStorage.ts": "19a532f55271b2fc696e3ba4ae6ba098e759f0f9df207015c803f7fcc0050bd6"
   },
-  "routes": [
-    "/browser-tests/guest-storage-2263.html"
-  ],
+  "routes": ["/", "/settings/system-general", "/settings/system-general?telemetryAction=disable"],
   "viewports": [
     {
-      "width": 1440,
-      "height": 900
+      "width": 1024,
+      "height": 768
     },
     {
       "width": 390,
@@ -29,18 +31,18 @@
     }
   ],
   "states": [
-    "Linked guest: one physical disk and a clean RAID1 array visible without loading SMART detail",
-    "Expanded disk while lazy detail request is held: loading status visible and keyboard focus retained",
-    "Loaded SMART overview and History: health attributes and empty-history chart placeholders visible",
-    "No-agent guest: no disk card and no child-resource request",
-    "HTTP 503 child-resource query: unavailable status visible instead of an empty disk card"
+    "Local build of this branch stamped v6.4.5, signed in with a test account",
+    "Simulated upgrade from 6.4.4: pulseWhatsNewLastSeen set to 6.4.4 and pulseTelemetryPayloadNoticeSeen absent, the exact condition under which the retired banner appeared",
+    "After reload the post-update check ran (last seen advanced to 6.4.5) and no Telemetry payload updated banner or Disable telemetry action rendered",
+    "Retired telemetryAction=disable deep link opened: telemetry stayed enabled per /api/system/settings and no banner rendered",
+    "390px reload with the payload notice still unacknowledged: no banner, no page-level horizontal overflow",
+    "Desktop and phone screenshots inspected for stray notice placement and overflow"
   ],
   "interactions": [
-    "Expand by keyboard, hold and release the SMART module, then switch History and Overview tabs",
-    "Collapse and reopen by pointer without a second SMART module request",
-    "Switch to no-agent and failing-query fixture states; assert exact parent-filtered disk requests only",
-    "Inspect desktop and phone screenshots for disk/RAID placement and overflow"
-  ],
-  "command": "pulse-worker-browser dist/browser-proof-2263/browser-run.cjs from assigned release/v6.4 workspace root (Playwright 1.56.1, Chromium 141.0.7390.37)",
-  "notes": "Offline synthetic fixture from byte-identical, lock-matched source copy under /workspace/dist/browser-proof-2263/frontend-modern; browser-run.cjs differs from tracked guest-storage-2263.cjs only in the absolute root path. Passed log and 12 inspected desktop/phone screenshots are retained in this release-line worker output. This is not installed or field acceptance."
+    "Signed in through the login form",
+    "Seeded the upgrade baseline in localStorage and reloaded the app",
+    "Opened General settings and read the telemetry preference from the settings API",
+    "Opened the retired telemetryAction=disable deep link and re-read the preference",
+    "Resized to 390x844 and reloaded"
+  ]
 }

@@ -246,13 +246,13 @@ describe('isReleaseVersion', () => {
 });
 
 describe('post-update telemetry disclosure', () => {
-  it('keeps the schema-v2 notice on the shared non-blocking release boundary', () => {
-    expect(whatsNewCardSource).toContain('TELEMETRY_PAYLOAD_NOTICE_VERSION');
-    expect(whatsNewCardSource).toContain('data-testid="telemetry-payload-update-notice"');
-    expect(whatsNewCardSource).toContain('layout="banner"');
-    expect(whatsNewCardSource).toContain("openTelemetrySettings('preview')");
-    expect(whatsNewCardSource).toContain("openTelemetrySettings('disable')");
-    expect(whatsNewCardSource).toContain('PRIVACY_DOC_URL');
+  it('does not announce telemetry payload changes from the release boundary', () => {
+    // Payload changes are disclosed in release notes and the dated
+    // PRIVACY.md changelog. A banner that pairs "we now collect more" with a
+    // one-click disable button reads as an opt-out prompt, so it was retired.
+    expect(whatsNewCardSource).not.toContain('TELEMETRY_PAYLOAD_NOTICE_VERSION');
+    expect(whatsNewCardSource).not.toContain('telemetry-payload-update-notice');
+    expect(whatsNewCardSource).not.toContain('openTelemetrySettings');
   });
 
   it('keeps release details opt-in and coordinates the automatic notice session', () => {

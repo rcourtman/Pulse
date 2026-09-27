@@ -230,8 +230,6 @@ describe('i18n foundation', () => {
 
     for (const locale of FIRST_LOCALIZATION_LOCALES) {
       const telemetryDescription = I18N_MESSAGES[locale]['settings.general.telemetry.description'];
-      const telemetryUpdateNotice =
-        I18N_MESSAGES[locale]['settings.general.telemetry.notice.description'];
 
       expect(I18N_MESSAGES[locale]['settings.general.language.description']).toContain('API');
       expect(telemetryDescription).toContain('Pulse');
@@ -241,8 +239,6 @@ describe('i18n foundation', () => {
       for (const term of telemetryPrivacyTerms[locale]) {
         expect(telemetryDescription, `${locale}:${term}`).toContain(term);
       }
-      expect(telemetryUpdateNotice).toContain('Pulse');
-      expect(telemetryUpdateNotice).not.toMatch(/anonymous/i);
       expect(I18N_MESSAGES[locale]['settings.general.telemetry.copyJson']).toContain('JSON');
       expect(
         t(

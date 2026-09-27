@@ -1,7 +1,5 @@
 import { Show, createEffect, createSignal } from 'solid-js';
-import { useNavigate } from '@solidjs/router';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
-import InfoIcon from 'lucide-solid/icons/info';
 import XIcon from 'lucide-solid/icons/x';
 import { updateStore } from '@/stores/updates';
 import { UpdatesAPI } from '@/api/updates';
@@ -13,12 +11,7 @@ import { InlineNotice } from '@/components/shared/InlineNotice';
 import { buildReleaseNotesUrl, normalizeReleaseVersion } from '@/components/updateVersion';
 import { extractChangelog, isReleaseVersion } from '@/components/whatsNewModel';
 import { renderMarkdown } from '@/components/AI/aiChatUtils';
-import { t } from '@/i18n';
-import { PRIVACY_DOC_URL } from '@/utils/docsLinks';
 import { logger } from '@/utils/logger';
-
-const TELEMETRY_PAYLOAD_NOTICE_VERSION = '2';
-const TELEMETRY_SETTINGS_SECTION_ID = 'usage-telemetry';
 
 const readLastSeenVersion = (): string | null => {
   try {
@@ -36,25 +29,6 @@ const markVersionSeen = (version: string) => {
   }
 };
 
-const readTelemetryPayloadNoticeVersion = (): string | null => {
-  try {
-    return localStorage.getItem(STORAGE_KEYS.TELEMETRY_PAYLOAD_NOTICE_SEEN);
-  } catch {
-    return null;
-  }
-};
-
-const markTelemetryPayloadNoticeSeen = () => {
-  try {
-    localStorage.setItem(
-      STORAGE_KEYS.TELEMETRY_PAYLOAD_NOTICE_SEEN,
-      TELEMETRY_PAYLOAD_NOTICE_VERSION,
-    );
-  } catch {
-    // Private mode / storage disabled: setup and Settings remain the fallback disclosure.
-  }
-};
-
 /**
  * Post-update "What's New" notice. A compact non-blocking notice appears once
  * after the running version changes and only when that release has categorized
@@ -62,26 +36,16 @@ const markTelemetryPayloadNoticeSeen = () => {
  * explicit action. Preparing the notice (or finding no categorized entries)
  * records the version so reloads stay quiet until the next update.
  *
- * This release communication boundary also owns the one-time, non-blocking
- * telemetry schema v2 notice. Existing installations see it once; fresh
- * installs stay quiet because setup already presents the current disclosure.
+ * Telemetry payload changes are not announced here. They are disclosed in
+ * release notes and the dated "Payload changes" section of docs/PRIVACY.md;
+ * the Settings payload preview always shows the exact current contract.
  */
 export function WhatsNewCard() {
-  const navigate = useNavigate();
   const [noticeVisible, setNoticeVisible] = createSignal(false);
   const [dialogVisible, setDialogVisible] = createSignal(false);
-  const [telemetryNoticeVisible, setTelemetryNoticeVisible] = createSignal(false);
   const [version, setVersion] = createSignal('');
   const [changelogHtml, setChangelogHtml] = createSignal('');
-  const hadPriorReleaseBaseline = readLastSeenVersion() !== null;
-  const telemetryNoticeAlreadySeen =
-    readTelemetryPayloadNoticeVersion() === TELEMETRY_PAYLOAD_NOTICE_VERSION;
-  const telemetryNoticeNeedsSession = hadPriorReleaseBaseline && !telemetryNoticeAlreadySeen;
-  if (telemetryNoticeNeedsSession) {
-    reserveLowPriorityNoticeSession('telemetry-update');
-  }
   let checked = false;
-  let telemetryNoticeChecked = false;
 
   const loadNotes = async (currentVersion: string, noticeSlotReserved: boolean) => {
     try {
@@ -142,28 +106,6 @@ export function WhatsNewCard() {
     void loadNotes(currentVersion, noticeSlotReserved);
   });
 
-  createEffect(() => {
-    const info = updateStore.versionInfo();
-    if (!info || telemetryNoticeChecked) return;
-    telemetryNoticeChecked = true;
-
-    if (info.isDevelopment || info.isSourceBuild || !isReleaseVersion(info.version)) {
-      return;
-    }
-
-    if (!hadPriorReleaseBaseline) {
-      // Setup already showed the current telemetry disclosure on a fresh install.
-      markTelemetryPayloadNoticeSeen();
-      return;
-    }
-
-    if (readTelemetryPayloadNoticeVersion() === TELEMETRY_PAYLOAD_NOTICE_VERSION) {
-      return;
-    }
-
-    setTelemetryNoticeVisible(true);
-  });
-
   const dismissNotice = () => {
     setNoticeVisible(false);
   };
@@ -177,63 +119,8 @@ export function WhatsNewCard() {
     setDialogVisible(false);
   };
 
-  const dismissTelemetryNotice = () => {
-    markTelemetryPayloadNoticeSeen();
-    setTelemetryNoticeVisible(false);
-  };
-
-  const openTelemetrySettings = (action: 'preview' | 'disable') => {
-    dismissTelemetryNotice();
-    navigate(`/settings/system-general?telemetryAction=${action}#${TELEMETRY_SETTINGS_SECTION_ID}`);
-  };
-
   return (
     <>
-      <Show when={telemetryNoticeVisible()}>
-        <InlineNotice
-          role="status"
-          data-testid="telemetry-payload-update-notice"
-          tone="info"
-          layout="banner"
-          icon={<InfoIcon class="h-4 w-4" aria-hidden="true" />}
-          onDismiss={dismissTelemetryNotice}
-          dismissLabel={t('settings.general.telemetry.notice.dismissLabel')}
-          dismissTitle={t('settings.general.telemetry.notice.dismissTitle')}
-        >
-          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p class="leading-relaxed">
-              <span class="font-semibold">{t('settings.general.telemetry.notice.title')}.</span>{' '}
-              {t('settings.general.telemetry.notice.description')}
-            </p>
-            <div class="flex shrink-0 flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                size="settingsActionXs"
-                onClick={() => openTelemetrySettings('preview')}
-              >
-                {t('settings.general.telemetry.notice.preview')}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                size="settingsActionXs"
-                onClick={() => openTelemetrySettings('disable')}
-              >
-                {t('settings.general.telemetry.notice.disable')}
-              </Button>
-              <ExternalTextLink
-                href={PRIVACY_DOC_URL}
-                variant="compactInherit"
-                onClick={dismissTelemetryNotice}
-              >
-                {t('settings.general.telemetry.notice.privacy')}
-              </ExternalTextLink>
-            </div>
-          </div>
-        </InlineNotice>
-      </Show>
-
       <Show when={noticeVisible()}>
         <aside
           class="fixed bottom-[var(--pulse-mobile-nav-height)] left-4 right-4 z-30 max-w-sm md:right-auto md:bottom-4"

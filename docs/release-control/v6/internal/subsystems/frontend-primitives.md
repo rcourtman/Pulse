@@ -972,7 +972,9 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
    may be named, while hostnames, credentials, infrastructure identifiers,
    URLs, paths, locale, browser events, prompts, chat messages, command text,
    action output, token values, and personal information must stay explicitly
-   excluded.
+   excluded. The shared settings shell no longer accepts a `telemetryAction`
+   deep link that changes the preference on arrival; the preference changes
+   only from the panel.
 8. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `security-privacy`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
 9. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `security-privacy`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
    These settings panels consume the privileged security-status projection,

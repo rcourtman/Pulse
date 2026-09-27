@@ -138,7 +138,7 @@ export function createLocalStorageStringSignal(
   );
 }
 
-export type LowPriorityNoticeOwner = 'github-star' | 'release-update' | 'telemetry-update';
+export type LowPriorityNoticeOwner = 'github-star' | 'release-update';
 
 export const SESSION_STORAGE_KEYS = {
   LOW_PRIORITY_NOTICE_OWNER: 'pulse-low-priority-notice-owner',
@@ -190,7 +190,6 @@ export const STORAGE_KEYS = {
   // Updates
   UPDATES: 'pulse-updates',
   WHATS_NEW_LAST_SEEN: 'pulseWhatsNewLastSeen',
-  TELEMETRY_PAYLOAD_NOTICE_SEEN: 'pulseTelemetryPayloadNoticeSeen',
 
   // Alert settings
   ALERT_HISTORY_TIME_FILTER: 'alertHistoryTimeFilter',
