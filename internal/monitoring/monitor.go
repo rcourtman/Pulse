@@ -1775,7 +1775,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		metricsStore:               metricsStore,                          // Persistent SQLite storage
 		alertManager:               alerts.NewManagerWithDataDir(cfg.DataPath, alertManagerRestoreOptions()...),
 		incidentStore:              incidentStore,
-		notificationMgr:            notifications.NewNotificationManagerWithDataDir(cfg.PublicURL, cfg.DataPath),
+		notificationMgr:            notifications.NewNotificationManagerWithDeferredQueue(cfg.PublicURL, cfg.DataPath),
 		deadMan:                    newDeadManRuntime(config.ResolveRuntimeDataDir(cfg.DataPath)),
 		configPersist:              config.NewConfigPersistence(cfg.DataPath),
 		discoveryService:           nil, // Will be initialized in Start()
@@ -1921,6 +1921,10 @@ func New(cfg *config.Config) (*Monitor, error) {
 	} else {
 		log.Warn().Err(err).Msg("failed to load webhook configuration")
 	}
+	// The queue worker starts with the manager but has no processor until all
+	// saved destinations are installed. Activate it only after the last load;
+	// a slow migration or config read must not cancel due persisted work.
+	m.notificationMgr.StartQueueProcessing()
 
 	// In mock mode the canonical sampler owns demo chart history by default.
 	// Support-only hybrid runs can opt back into real client initialization.

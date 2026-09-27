@@ -702,6 +702,18 @@ func NewNotificationManager(publicURL string) *NotificationManager {
 // This enables tenant-scoped notification queue persistence in multi-tenant deployments.
 // If dataDir is empty, it uses the global data directory.
 func NewNotificationManagerWithDataDir(publicURL string, dataDir string) *NotificationManager {
+	return newNotificationManagerWithDataDir(publicURL, dataDir, false)
+}
+
+// NewNotificationManagerWithDeferredQueue creates a manager whose persisted
+// deliveries stay idle until StartQueueProcessing is called. Owners that load
+// saved destinations after construction must use this form so a queue ticker
+// cannot interpret incomplete startup configuration as a removed destination.
+func NewNotificationManagerWithDeferredQueue(publicURL string, dataDir string) *NotificationManager {
+	return newNotificationManagerWithDataDir(publicURL, dataDir, true)
+}
+
+func newNotificationManagerWithDataDir(publicURL string, dataDir string, deferQueueProcessing bool) *NotificationManager {
 	cleanURL := strings.TrimRight(strings.TrimSpace(publicURL), "/")
 	if cleanURL != "" {
 		log.Info().Str("publicURL", cleanURL).Msg("notification manager initialized with public URL")
@@ -755,13 +767,10 @@ func NewNotificationManagerWithDataDir(publicURL string, dataDir string) *Notifi
 	// Create webhook client after NotificationManager is initialized
 	nm.webhookClient = nm.createSecureWebhookClient(WebhookTimeout)
 
-	// Wire up the queue processor without waking the worker. Construction runs
-	// before the owner applies saved destination configuration (webhooks,
-	// email, Apprise); waking here would let an already-due persisted job be
-	// processed while the destination list is still empty and be terminally
-	// cancelled as "delivery disabled". The worker's ticker and later enqueues
-	// begin delivery once configuration is present.
-	if queue != nil {
+	// Ordinary callers retain the historical autonomous queue. A bootstrap
+	// owner leaves the processor absent until every saved destination is loaded;
+	// not waking the worker alone cannot guard against its periodic ticker.
+	if queue != nil && !deferQueueProcessing {
 		queue.installProcessor(nm.ProcessQueuedNotification)
 	}
 
@@ -770,6 +779,17 @@ func NewNotificationManagerWithDataDir(publicURL string, dataDir string) *Notifi
 	go nm.cleanupOldNotificationRecords()
 
 	return nm
+}
+
+// StartQueueProcessing activates persisted deliveries after the owner has
+// restored its complete notification policy and destination configuration.
+func (n *NotificationManager) StartQueueProcessing() {
+	n.mu.RLock()
+	queue := n.queue
+	n.mu.RUnlock()
+	if queue != nil {
+		queue.SetProcessor(n.ProcessQueuedNotification)
+	}
 }
 
 // SetTenantIdentityResolver installs an org-backed resolver for the tenant
