@@ -19,6 +19,7 @@ import {
   getPreferredResourceKubernetesContext,
 } from '@/utils/resourceIdentity';
 import type { WorkloadGuest } from '@/types/workloads';
+import type { HostRAIDArray } from '@/types/api';
 import type {
   Resource,
   ResourceActionReadiness,
@@ -134,6 +135,7 @@ type APIResource = {
     agentVersion?: string;
     networkInterfaces?: APINetworkInterface[];
     disks?: APIDiskInfo[];
+    raid?: HostRAIDArray[];
   };
   docker?: {
     containerId?: string;
@@ -522,6 +524,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
 
   return {
     id: guestId,
+    canonicalResourceId: resource.id,
     alertResourceIds: buildAlertResourceIds(resource),
     metricsTarget: resource.metricsTarget,
     vmid: Number.isFinite(vmid) ? vmid : 0,
@@ -575,6 +578,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     osVersion: resource.agent?.osVersion ?? resource.proxmox?.osVersion,
     agentVersion: resource.agent?.agentVersion,
     agentKind: resource.agent?.agentVersion ? 'pulse' : undefined,
+    agentRaid: resource.agent?.raid,
     networkInterfaces: mapNetworkInterfaces(resource.agent?.networkInterfaces),
     networkIn: finiteMetricNumber(resource.metrics?.netIn?.value) ?? 0,
     networkOut: finiteMetricNumber(resource.metrics?.netOut?.value) ?? 0,

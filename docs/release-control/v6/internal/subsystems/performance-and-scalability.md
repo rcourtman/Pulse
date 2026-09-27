@@ -185,6 +185,7 @@ the existing bounded HTTP client and artifact-size checks.
 45. `frontend-modern/src/components/Workloads/useGuestRowState.ts`
 46. `frontend-modern/src/components/Workloads/GuestDrawer.tsx`
 47. `frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`
+47a. `frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx`
 48. `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`
 49. `frontend-modern/src/components/Workloads/guestDrawerModel.ts`
 50. `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`
@@ -3075,6 +3076,17 @@ operator-state read for that selected resource and does not add table-row,
 hover-preview, interval, or websocket work. Saving monitoring or lifecycle
 policy performs one mutation and one selected-resource refetch. The Workloads
 list, selectors, windowing, and polling budgets remain unchanged.
+
+The same selected-guest boundary may read Unified Agent physical disks for an
+open, agent-linked VM drawer. `GuestPhysicalDisks` uses the canonical guest
+resource ID as an exact `parent` filter with `type=physical_disk`, and checks
+each returned row's type and parent again before rendering SMART details. It
+must not expand the Proxmox Overview's VM-only resource query, fetch for
+uninstrumented or unopened guests, or add per-row, hover, interval, or
+whole-estate physical-disk work to Workloads. The guest's existing agent RAID
+snapshot remains local to the opened drawer; an empty or failed child query
+must not imply that host disks belong to the guest. Focused hook and drawer
+tests pin the query and no-data/error presentations.
 
 ### Configuration transfer authorization stays off persistence hot paths
 

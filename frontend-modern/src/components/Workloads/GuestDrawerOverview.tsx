@@ -24,6 +24,8 @@ import {
 } from './guestDrawerModel';
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
 import { WORKLOAD_ACTION_AGENT_LABEL } from './workloadAgentReadiness';
+import { GuestPhysicalDisks } from './GuestPhysicalDisks';
+import { RaidCard } from '@/components/shared/cards/RaidCard';
 
 import type { GuestDrawerProps } from './guestDrawerModel';
 
@@ -276,6 +278,18 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         dataTestId="guest-technical-details"
         sections={[...overviewSections(), ...technicalSections()]}
       />
+      <Show
+        when={
+          props.guest.agentKind === 'pulse' ||
+          props.guest.agentVersion ||
+          props.guest.agentRaid?.length
+        }
+      >
+        <GuestPhysicalDisks parentId={props.guest.canonicalResourceId ?? props.guest.id} />
+      </Show>
+      <Show when={props.guest.agentRaid?.length}>
+        <RaidCard arrays={props.guest.agentRaid} title="Guest RAID" />
+      </Show>
 
       <div class="space-y-3">
         <Show when={props.guest.availability || props.guest.availabilityChecks?.length}>

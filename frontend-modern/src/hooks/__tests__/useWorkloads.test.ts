@@ -78,6 +78,46 @@ describe('useWorkloads', () => {
     resetWorkloadsCacheForTests();
   });
 
+  it('preserves linked-agent RAID arrays from the VM resource for guest detail', async () => {
+    const [snapshot] = createSignal([
+      {
+        ...sampleResource,
+        agent: {
+          agentVersion: '6.4.5',
+          raid: [
+            {
+              device: '/dev/md0',
+              name: 'data',
+              level: 'raid1',
+              state: 'clean',
+              totalDevices: 2,
+              activeDevices: 2,
+              workingDevices: 2,
+              failedDevices: 0,
+              spareDevices: 0,
+            },
+          ],
+        },
+      },
+    ] as any);
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useWorkloads(() => true, { resourceSnapshot: snapshot });
+    });
+    try {
+      await flushAsync();
+      expect(result!.workloads()[0]?.canonicalResourceId).toBe(sampleResource.id);
+      expect(result!.workloads()[0]?.agentRaid).toMatchObject([
+        { device: '/dev/md0', level: 'raid1', state: 'clean' },
+      ]);
+      expect(apiFetchJSONMock).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
   afterEach(() => {
     vi.useRealTimers();
     vi.clearAllMocks();
