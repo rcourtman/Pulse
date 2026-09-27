@@ -4044,6 +4044,16 @@ bound without the fallback, unable to discover any update (#1881, #2282).
 Malformed metadata stays a hard error and only the typed over-limit condition
 may fall through to the feed. Proof:
 `internal/updates/issue2282_release_metadata_stream_test.go`.
+The update check must also leave a content-free record of its own outcome.
+`internal/updates/check_observation.go` stores the closed outcome, the
+effective channel, and whether an update was offered for every check on the
+install's effective channel, and ignores explicit previews of another channel.
+Lookup failures carry their category (`network_error`, `metadata_error`,
+`rate_limited`) without changing the error text operators see, and usage
+telemetry exports only that record at schema v18. An update discovery failure
+that records nothing is a regression, because a failed check never reaches the
+update history and is otherwise invisible in the fleet (#2285). Proof:
+`internal/updates/issue2285_update_check_observation_test.go`.
 Those same workflows must also fetch and dispatch the governed release branch
 derived from release-control metadata instead of hardcoding `pulse/v6`,
 `pulse/v6-release`, `main`, or any later branch literal inline; when a stable

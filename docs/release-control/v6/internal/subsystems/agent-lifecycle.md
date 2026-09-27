@@ -1040,6 +1040,12 @@ usage ledger, and the findings store; it does not read, register, authorize,
 configure, or report a Pulse agent, and no agent token, inventory,
 registration state, host command, or command-channel readiness may feed it or
 be inferred from it.
+Schema v18 update-discovery telemetry assembled through `internal/api/` (the
+effective Pulse server update channel, the closed outcome of the last server
+update check, and whether it offered a newer release) is the same kind of
+adjacent analytics. It reads only the server update manager's last check; it
+does not describe agent binaries, agent auto-update, or agent version skew,
+and agent lifecycle surfaces must not consume it as agent update state.
 Scheduled-report route and background-worker wiring in `internal/api/router.go`
 and the reporting handlers is API/reporting ownership, not agent lifecycle.
 The scheduler may enumerate tenant organization IDs so each workspace can run
