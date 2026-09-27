@@ -195,6 +195,7 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertTrue(recent_count_fields <= projected)
         self.assertIn("alert_ai_enabled", projected)
         self.assertIn("update_last_failure_category", projected)
+        self.assertTrue({"update_channel", "update_check_outcome", "update_available"} <= projected)
         self.assertTrue(set(report.SERVICE_HEALTH_ROW_FIELDS) <= projected)
         self.assertNotIn("business_estate", projected)
 

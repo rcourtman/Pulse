@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "base_sha": "cd43b6c692383865592c17a0853d33a229ae46d6",
-  "verified_at": "2026-09-27T00:26:36Z",
+  "base_sha": "b1e75fb9e4693c5706b2242760d6277e5291e7f9",
+  "verified_at": "2026-09-27T22:55:00Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx"],
+  "changed_paths": ["frontend-modern/src/api/settings.ts"],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "1a0b15141ee41e45dc884406bc4689828b034704c80f914fc0d2baa93d0b6edd"
+    "frontend-modern/src/api/settings.ts": "4172b94c268be6a0ea000e73d155e540f11776e1c59325250e13716722be5aeb"
   },
-  "routes": ["/browser-tests/guest-storage-2263.html"],
+  "routes": ["/settings/system-general", "/docs/PRIVACY"],
   "viewports": [
     {
-      "width": 1440,
-      "height": 900
+      "width": 1024,
+      "height": 768
     },
     {
       "width": 390,
@@ -19,21 +19,18 @@
     }
   ],
   "states": [
-    "Linked Proxmox guest with one physical disk and RAID array: disk row collapsed, SMART detail module not requested",
-    "Keyboard-expanded disk while the SMART module request is held: visible Loading SMART details status, summary retains focus",
-    "Loaded SMART overview: temperature, reallocated sectors, pending sectors and CRC errors visible; module requested once",
-    "SMART History tab selected with empty fixture chart data: chart collection placeholders and range control visible",
-    "Pointer-collapsed and reopened disk: overview restored without reloading the SMART module",
-    "Guest without a linked agent: no physical-disk card and no child-resource request",
-    "Linked guest child-resource request failing with HTTP 503: unavailable message visible, no misleading disk card",
-    "Desktop and phone screenshots inspected for placement, clipping, stacking, scrolling and horizontal overflow"
+    "Local build of this branch signed in with a test account: General settings telemetry card rendered with the Preview payload control",
+    "Telemetry payload preview opened: schema_version 18 with update_channel stable, update_check_outcome skipped (source build, recorded by the background update checker) and update_available false, all three keys present",
+    "Preview at 390px: payload block visible and scrolls within its own box with no page-level horizontal overflow",
+    "Shipped privacy document: schema version 18 disclosure, Update channel, Update check outcome and Update available rows, and the dated schema 18 changelog row present",
+    "Privacy document at 390px: new rows render in the existing table, which scrolls within its container like the neighbouring rows, with no page-level horizontal overflow",
+    "Desktop and phone screenshots inspected for placement, clipping and overflow"
   ],
   "interactions": [
-    "Focus disk summary and press Enter; hold then release its lazy module request, verifying loading status, focus retention and loaded SMART attributes",
-    "Click History and Overview tabs, verifying selection and the chart/range layout at desktop and phone widths",
-    "Click the summary to close and reopen detail, verifying no second lazy-module request",
-    "Switch to No agent and Unavailable query fixture states; verify exact parent-filtered API requests and absence of unscoped disk fetches"
-  ],
-  "command": "pulse-worker-browser tmp/browser-proof/frontend-modern/browser-tests/guest-storage-2263.cjs (Playwright 1.56.1, Chromium 141.0.7390.37)",
-  "notes": "The browser ran an owned git-archive source copy with final GuestPhysicalDisks.tsx bytes and a bounded #2263 Vite fixture; this is not installed acceptance or a reporter field retest. Passed log and twelve inspected screenshots: /var/lib/pulse-maintainer/worker-outputs/product-intelligence-zf_afcvy/guest-storage-browser-formatted.log and browser-proof/."
+    "Signed in through the login form",
+    "Navigated to /settings/system-general and clicked Preview payload",
+    "Parsed the rendered payload JSON and checked the schema 18 fields and closed values",
+    "Resized to 390x844 and rechecked the preview and page overflow",
+    "Navigated to /docs/PRIVACY and scrolled the Update check outcome row into view at desktop and 390px widths"
+  ]
 }

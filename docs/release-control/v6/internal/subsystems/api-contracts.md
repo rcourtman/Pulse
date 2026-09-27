@@ -10328,6 +10328,21 @@ its investigation status when no outcome is recorded. No provider ID, model
 name, endpoint, account identity, exact token count, finding ID, resource ID,
 or session ID may be added to any of these fields.
 
+### Update channel and last update check outcome are a closed contract at schema v18
+
+Schema v18 adds `update_channel` (`stable`, `rc`, or `unknown`) and
+`update_check_outcome` (`not_checked`, `up_to_date`, `available`,
+`no_release`, `rate_limited`, `network_error`, `metadata_error`, `skipped`, or
+`error`) as always-present closed strings, plus the boolean `update_available`.
+The Go sender, the Settings `TelemetryPingPreview` interface, and the Pulse Pro
+receiver keep the same field names and types, and
+`scripts/check_telemetry_schema_parity.py` remains the executable proof. The
+receiver stores an omitted string from a pre-v18 sender as `unknown`, which
+the sender itself never emits for the outcome. `update_available` may only be
+true alongside an `available` outcome, on both sides. No version string,
+release tag, URL, response body, or error text may be added to any of these
+fields.
+
 ### Per-tenant resource stores are released on offboarding and shutdown
 
 `ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the

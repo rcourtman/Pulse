@@ -1123,6 +1123,11 @@ recovery scope, or a storage/recovery-owned secret source.
    ledger, and the findings store. They do not represent backup history,
    recovery points, retention policy, restore evidence, or storage provider
    state, and storage/recovery surfaces must not consume them as such.
+   The schema v18 update-discovery fields assembled through `internal/api/`
+   (effective update channel, last update check outcome, and whether it
+   offered a newer release) describe only Pulse server release discovery.
+   They are not backup, retained-update-backup, rollback, or restore evidence,
+   and storage/recovery surfaces must not consume them as such.
    Commercial migration startup behavior in
    `internal/api/licensing_handlers.go` and `internal/api/licensing_bridge.go`
    remains adjacent cloud-paid/API state. Synthetic mock-license suppression

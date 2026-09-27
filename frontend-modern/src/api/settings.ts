@@ -77,6 +77,9 @@ export interface TelemetryPingPreview {
   update_successes_30d: number;
   update_failures_30d: number;
   update_last_failure_category?: string;
+  update_channel: string;
+  update_check_outcome: string;
+  update_available: boolean;
   service_health_observed: boolean;
   service_health_healthy: boolean;
   service_health_failure_category?: string;
