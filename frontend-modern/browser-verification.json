@@ -1,41 +1,18 @@
 {
   "version": 1,
-  "base_sha": "762aa6fe1a423f03138e8e7e533381f3e086e3c1",
-  "verified_at": "2026-09-28T21:05:00Z",
+  "base_sha": "a866b27f2a7f038ae06d2c2a404ebfe16375b687",
+  "verified_at": "2026-09-28T21:20:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/App.tsx",
-    "frontend-modern/src/AppLayout.tsx",
-    "frontend-modern/src/components/Settings/settingsHeaderMeta.ts",
-    "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
-    "frontend-modern/src/components/shared/KeyboardShortcutsModal.tsx",
-    "frontend-modern/src/components/shared/commandPaletteModel.ts",
-    "frontend-modern/src/components/shared/useCommandPaletteState.ts",
-    "frontend-modern/src/hooks/useKeyboardShortcuts.ts",
-    "frontend-modern/src/i18n/messages.de.ts",
-    "frontend-modern/src/i18n/messages.es.ts",
-    "frontend-modern/src/i18n/messages.ts",
-    "frontend-modern/src/types/config.ts",
-    "frontend-modern/src/utils/updatesPresentation.ts"
+    "frontend-modern/src/features/actions/actionPresentation.ts",
+    "frontend-modern/src/pages/Actions.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/App.tsx": "a6ca67087cce917dc28914701262e6f631eb03621c24c8a773d5d025beb41215",
-    "frontend-modern/src/AppLayout.tsx": "d1d8bd884c43a20c1dbbde2ddb9f3278eb885b02c21e4cc3fa3fa1089cd1d320",
-    "frontend-modern/src/components/Settings/settingsHeaderMeta.ts": "d024df468000f183b2452d6b3fcb60fdce1b050107cd2e9d4ac586c4f13f2ddd",
-    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "8d3bff1c977b9db02c807d03fd80d40dabfc18c6a59809358c52a938a9c97c88",
-    "frontend-modern/src/components/shared/KeyboardShortcutsModal.tsx": "a27ccd1bdccf31f1890779fc661ad4e896786594b99ff419160ce6c556fc7c96",
-    "frontend-modern/src/components/shared/commandPaletteModel.ts": "69a75c17579239c407ba18820e9f4d47d8b8b0e587cdcc3bb154a684b2a17047",
-    "frontend-modern/src/components/shared/useCommandPaletteState.ts": "95ff00c6e790f17fdd849e845b34e9047f655ec89ca279032ab764da283b4cd4",
-    "frontend-modern/src/hooks/useKeyboardShortcuts.ts": "f55d67c136d5d8e21ed220b33eac0512d5fae5b5aa835f60fa2570159c140d30",
-    "frontend-modern/src/i18n/messages.de.ts": "e55a115865e8b2c9cf4352eecac1a2f8996f4e0f51b9c14ddb7cfbe20e5b2f40",
-    "frontend-modern/src/i18n/messages.es.ts": "a348d63dd816e848cd75a0b5114b0f77c719d16117d9c86db719036fbe106af0",
-    "frontend-modern/src/i18n/messages.ts": "728aa1cf4b42698e14f16593825249c6a190c43d4ef28e2d4e28756c7c1990db",
-    "frontend-modern/src/types/config.ts": "49ad539bcefc2f87380b744c1da387401151e3f4af9047db8a85b1ce0b70322e",
-    "frontend-modern/src/utils/updatesPresentation.ts": "4696f8426385aaf287ab610746ca278acc7e23bd377c9739fcfedcf635910634"
+    "frontend-modern/src/features/actions/actionPresentation.ts": "8e67a99e744cf7dbbc1fc53da1d9697af78a90d95779df3553ee8867c3c51496",
+    "frontend-modern/src/pages/Actions.tsx": "88ab28e9333652e81770e570c140aa19f0b6d833be3b65fd41afd2e9614f60c5"
   },
   "routes": [
-    "/settings/system-updates",
-    "/patrol"
+    "/actions"
   ],
   "viewports": [
     {
@@ -43,27 +20,16 @@
       "height": 900
     },
     {
-      "width": 800,
-      "height": 600
-    },
-    {
       "width": 375,
       "height": 812
     }
   ],
   "states": [
-    "AI off (assistantEnabled false, non-mock backend): desktop System nav shows Alerts, Actions, Settings with no Patrol tab and no Assistant edge launcher",
-    "AI off at narrow width: mobile bottom bar shows Alerts, Actions, More with no Patrol slot",
-    "AI off: command palette lists Go to Alerts and Go to Settings only, no Patrol or Assistant commands",
-    "AI off: keyboard shortcuts help lists Go to Alerts and Go to Settings without Go to Patrol",
-    "AI on (mock backend, assistantEnabled true): desktop Patrol tab returns with attention count, Assistant launcher visible",
-    "AI on at 375px: mobile bar shows platform switcher, Alerts, Patrol, Actions, More",
-    "Settings System group reads General, Network, Updates, Recovery; page title Updates with plain-language description; Patrol and Assistant stay listed under Pulse Intelligence"
+    "AI off (assistantEnabled false, non-mock backend) before the fix: empty Open tab read Patrol runs in Watch only mode with a Pulse Pro pitch",
+    "AI off after the fix: empty Open tab reads No actions need attention and Pulse will place proposed or in-progress changes here for review, at 1440px and 375px",
+    "AI on (mock backend): Open tab lists demo actions from Patrol, empty-state guidance not rendered"
   ],
   "interactions": [
-    "Opened the command palette with Cmd+K in both AI states and read the option list",
-    "Opened keyboard shortcuts help with ? while AI was off",
-    "Pressed g then r with AI off (stayed on /settings/system-updates) and with AI on (navigated to /patrol)",
-    "Resized between 1440x900 and 375x812 and reloaded the Updates and Patrol routes"
+    "Reloaded /actions at desktop and phone widths in both AI states"
   ]
 }

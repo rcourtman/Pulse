@@ -4,6 +4,7 @@ import actionsSource from '@/pages/Actions.tsx?raw';
 import { getActionsWatchOnlyEmptyState } from '../actionPresentation';
 
 const base = {
+  aiEnabled: true,
   patrolWatchOnly: true,
   patrolModesUnlocked: false,
   commercialSurfacesHidden: false,
@@ -15,6 +16,14 @@ describe('getActionsWatchOnlyEmptyState', () => {
   it('keeps large action inventories on the shared bounded list renderer', () => {
     expect(actionsSource).toContain('PlatformWindowedList');
     expect(actionsSource).toContain('estimatedItemHeight={92}');
+  });
+
+  it('returns nothing while AI is off, so Patrol is not described as running (#905)', () => {
+    expect(getActionsWatchOnlyEmptyState({ ...base, aiEnabled: false })).toBeUndefined();
+    expect(
+      getActionsWatchOnlyEmptyState({ ...base, aiEnabled: false, patrolModesUnlocked: true }),
+    ).toBeUndefined();
+    expect(actionsSource).toContain('aiEnabled: aiChatStore.enabled === true');
   });
 
   it('returns nothing when Patrol is not in Watch only', () => {

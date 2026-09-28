@@ -7461,3 +7461,13 @@ also follows the outdated-agent action to Agent Doctor with all 49 host IDs.
 The broader palette override should be corrected in its own shared-design
 slice, with background users migrated to explicit alpha utilities so other
 900-level text consumers can use normal opaque color semantics.
+
+### Actions empty state follows the AI capability
+
+`getActionsWatchOnlyEmptyState` takes an explicit `aiEnabled` input, which
+`pages/Actions.tsx` fills from the `assistantEnabled` session capability. While
+AI is off it returns no guidance, so the empty Open inbox keeps its plain copy
+instead of saying Patrol runs in Watch only mode or pitching Pro Patrol modes
+for a feature that is not running (issue #905). With AI on, the Watch only,
+switch and upgrade branches are unchanged. `actionsWatchOnlyEmptyState.test.ts`
+pins both states and the page wiring.
