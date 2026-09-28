@@ -28,8 +28,9 @@ var (
 )
 
 // CollectLocal reads lm-sensors JSON and supplements it with a recognised CPU
-// thermal sysfs source when it contains no CPU chip. Other lm-sensors readings
-// are retained; sysfs is also used when lm-sensors is unavailable or empty.
+// thermal sysfs source when it contains no usable CPU temperature. Other
+// lm-sensors readings are retained; sysfs is also used when lm-sensors is
+// unavailable or empty.
 func CollectLocal(ctx context.Context) (string, error) {
 	ctx = normalizeCollectionContext(ctx)
 
@@ -69,17 +70,16 @@ func CollectLocal(ctx context.Context) (string, error) {
 }
 
 // addMissingSysfsCPU leaves existing output unchanged unless it is a JSON
-// object without a recognised CPU chip and an identified sysfs source is
+// object without a usable CPU reading and an identified sysfs source is
 // available. A failed optional lookup must not discard working sensors data.
 func addMissingSysfsCPU(ctx context.Context, sensorsJSON string) string {
 	var chips map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(sensorsJSON), &chips); err != nil || chips == nil {
 		return sensorsJSON
 	}
-	for name := range chips {
-		if isCPUChip(strings.ToLower(name)) {
-			return sensorsJSON
-		}
+	parsed, err := Parse(sensorsJSON)
+	if err != nil || parsed.CPUPackage > 0 {
+		return sensorsJSON
 	}
 	fallbackJSON, err := collectSysfsCPUTemperature(ctx)
 	if err != nil {

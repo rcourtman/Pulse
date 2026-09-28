@@ -101,6 +101,27 @@ func TestCollectLocal_SensorsJSONGainsMissingSysfsCPU(t *testing.T) {
 	}
 }
 
+func TestCollectLocal_CPUChipWithoutTemperatureGainsSysfsCPU(t *testing.T) {
+	dir := t.TempDir()
+	const original = `{"armada_thermal-virtual-0":{"temp1":{"temp1_input":"bad"}},"nvme-pci-0100":{"Composite":{"temp1_input":39}}}`
+	writeScript(t, dir, "sensors", "#!/bin/sh\necho '"+original+"'\n")
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	thermal, _ := useTestSysfsRoots(t)
+	writeSysfsSensor(t, thermal, "thermal_zone0", "type", "armada_thermal", "57000")
+
+	out, err := CollectLocal(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := Parse(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.CPUPackage != 57 || parsed.NVMe["nvme0"] != 39 {
+		t.Fatalf("unusable CPU chip blocked sysfs or lost lm-sensors data: %+v", parsed)
+	}
+}
+
 func TestCollectLocal_ExistingCPUPrecedesSysfs(t *testing.T) {
 	dir := t.TempDir()
 	const original = `{"coretemp-isa-0000":{"Package id 0":{"temp1_input":42}}}`
