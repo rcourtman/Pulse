@@ -46,7 +46,7 @@ on:
         required: false
         type: string
       hotfix_exception:
-        description: 'Stable only: bypass the 72-hour prerelease soak for urgent customer harm'
+        description: 'Stable only: bypass the 24-hour prerelease soak for urgent customer harm'
         required: false
         type: boolean
         default: false

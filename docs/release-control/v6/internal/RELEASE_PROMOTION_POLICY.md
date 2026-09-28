@@ -278,9 +278,12 @@ without the other lanes changing the candidate underneath it.
    upgrade guide, release records) unless `hotfix_exception` names active
    customer harm. The v6.4.0 promotion, which shipped 64 changed files that
    `v6.4.0-rc.12` had not soaked, is the case this rule prevents.
-4. A minor release (`X.Y.0`) requires a seven day soak of the promoted
-   candidate; patch releases keep the 72 hour minimum. Patch releases are for
-   a named regression or security issue only.
+4. A minor release (`X.Y.0`) and a patch release both require a 24 hour soak
+   of the promoted candidate (founder direction of 28 September 2026; it was
+   seven days for a minor and 72 hours for a patch). Few installs run
+   previews, so the longer soak saw little beyond the first day while stable
+   users waited. Patch releases are for a named regression or security issue
+   only.
 5. "Soaked clean" means all of: the soak has elapsed since the candidate's
    release was published; no open issue reports an unresolved regression,
    security or data-loss problem in the candidate, including any issue
@@ -435,7 +438,7 @@ without the other lanes changing the candidate underneath it.
    - The locked 90-day v5 maintenance-only policy in
      `V5_MAINTENANCE_SUPPORT_POLICY.md` and the exact end-of-support notice
      ready to publish with the promotion.
-7. RC-derived stable promotions require a minimum 72-hour prerelease soak after
+7. RC-derived stable promotions require a minimum 24-hour prerelease soak after
    the candidate is available to internal or staging-like users.
 8. Hotfix exception:
    - Bypassing an RC requirement or shortening an RC soak is allowed only for

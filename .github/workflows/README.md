@@ -194,7 +194,7 @@ Use this decision sequence within the existing release authority:
    This is supersession, not evidence that the old publication was successful
    or that customers pinned to its container version have migrated.
 3. Keep patch scope to named regression/security fixes. A changed patch RC
-   restarts 72 hours of clean soak; an older immutable RC or green main cannot
+   restarts 24 hours of clean soak; an older immutable RC or green main cannot
    lend its qualification to changed bytes. Retain the exact candidate packet
    for release-steward judgment and exact-source admission before stable
    publication. Under standing authority granted on 8 September 2026, the
