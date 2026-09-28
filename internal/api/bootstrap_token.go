@@ -62,7 +62,7 @@ func (r *Router) initializeBootstrapToken() {
 	if created {
 		logger.Warn().
 			Str("token_path", path).
-			Msg("Bootstrap setup token created on disk; reveal it locally with `pulse bootstrap-token` or by reading the token file path")
+			Msg("Bootstrap setup token created; the file is encrypted, so reveal the token with `pulse bootstrap-token` (Docker: `docker exec <container> /app/pulse bootstrap-token`, or `/app/pulse bootstrap-token` from the container console)")
 	} else {
 		logger.Info().
 			Str("token_path", path).

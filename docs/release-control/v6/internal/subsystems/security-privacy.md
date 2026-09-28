@@ -2057,6 +2057,11 @@ plaintext secret file on disk. Canonical runtime persistence must keep the
 token encrypted at rest, and any legacy plaintext bootstrap-token file must be
 treated only as migration input that is rewritten immediately into the
 encrypted canonical format on load.
+Operator guidance for recovering that token, in the startup log and on the
+first-run unlock screen, must name the supported command and never the token
+file, because the file holds ciphertext. The unlock screen lists the host,
+`docker exec`, in-container console (`/app/pulse bootstrap-token`) and
+`pct exec` forms without revealing the server's deployment details.
 Managed first-session proof may reset that boundary only through the dev-only
 `/api/security/dev/reset-first-run` route under authenticated
 `settings:write`; harnesses may not scrape `.env`, delete persisted token

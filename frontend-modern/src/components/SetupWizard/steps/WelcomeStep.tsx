@@ -38,6 +38,13 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
       command: 'docker exec <pulse-container> /app/pulse bootstrap-token',
     },
     {
+      // Unraid, Portainer and TrueNAS open a shell inside the container
+      // itself, so the docker exec prefix above does not apply there.
+      id: 'container-console',
+      label: t('setup.welcome.deploymentLabel.containerConsole'),
+      command: '/app/pulse bootstrap-token',
+    },
+    {
       id: 'lxc',
       label: t('setup.welcome.deploymentLabel.lxc'),
       // pct exec runs with PATH=/sbin:/bin:/usr/sbin:/usr/bin, which excludes
