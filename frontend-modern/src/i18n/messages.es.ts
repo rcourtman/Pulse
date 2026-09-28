@@ -223,18 +223,18 @@ export const ES_MESSAGE_OVERRIDES = {
   'setup.completion.nextStep.detail.agent':
     'Usa Agregar infraestructura cuando quieras para añadir más equipos o conectar una plataforma como Proxmox a través de su API.',
   'setup.completion.nextStep.detail.api':
-    'Usa Agregar infraestructura cuando quieras para conectar más sistemas o instalar Pulse Agent en tus nodos Proxmox y ver temperaturas y estado de discos (SMART).',
+    'Usa Agregar infraestructura cuando quieras para conectar más sistemas o instalar Pulse Agent en nodos Proxmox y obtener telemetría local, como temperaturas y datos SMART cuando estén disponibles.',
   'setup.completion.nextStep.detail.both':
     'Usa Agregar infraestructura cuando quieras para conectar más sistemas por API, con el agente o de ambas formas.',
   'setup.completion.nextStep.detail.empty':
-    'Empieza conectando Proxmox, TrueNAS o VMware a través de su API. En los nodos Proxmox, instala también Pulse Agent para añadir temperaturas y estado de discos (SMART), que la API de Proxmox no informa.',
+    'Conecta Proxmox, TrueNAS o VMware mediante su API, o ejecuta el instalador de Pulse Agent en un equipo independiente. En nodos Proxmox, el agente puede añadir temperaturas locales y datos SMART cuando estén disponibles.',
   'setup.completion.nextStep.label': 'Siguiente paso',
   'setup.completion.nextStep.summary.connected.singular':
     'Abre Infraestructura para revisar tu primer sistema conectado.',
   'setup.completion.nextStep.summary.connected.plural':
     'Abre Infraestructura para revisar tus sistemas conectados.',
   'setup.completion.nextStep.summary.empty':
-    'Abre Agregar infraestructura y elige lo que usas. Pulse puede conectarse a su API, instalar su agente o ambas cosas.',
+    'Abre Agregar infraestructura y elige una conexión por API o un equipo en el que instalar Pulse Agent.',
   'setup.completion.nextStep.title.connected': 'Abrir Infraestructura',
   'setup.completion.nextStep.title.empty': 'Agrega el primer sistema que quieres monitorizar',
   'setup.completion.proActivation.action': 'Introducir clave de activación',
@@ -243,10 +243,10 @@ export const ES_MESSAGE_OVERRIDES = {
   'setup.completion.proActivation.title': 'Activar Pulse Pro',
   'setup.completion.resource.unknownName': 'Desconocido',
   'setup.completion.sourceOptions.agent.description':
-    'Un pequeño programa en un equipo Linux, Windows o macOS, como un nodo Proxmox, que informa de sus temperaturas, estado de discos, Docker y Kubernetes.',
+    'Ejecuta el instalador en un equipo Linux, Windows o macOS. El agente informa de la telemetría del equipo. Las temperaturas, SMART, Docker y Kubernetes dependen de la compatibilidad del equipo y la configuración.',
   'setup.completion.sourceOptions.agent.title': 'Pulse Agent',
   'setup.completion.sourceOptions.both.description':
-    'Conecta Proxmox por API para todo el clúster y añade el agente en los nodos donde quieras ver temperaturas y estado de discos.',
+    'Conecta Proxmox por API para todo el clúster y añade el agente en nodos donde quieras telemetría local, como temperaturas y datos SMART cuando estén disponibles.',
   'setup.completion.sourceOptions.both.title': 'Usar ambos',
   'setup.completion.sourceOptions.platformApi.description':
     'Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, TrueNAS o VMware. Pulse lee VMs, almacenamiento y estado a través de la API de la plataforma.',

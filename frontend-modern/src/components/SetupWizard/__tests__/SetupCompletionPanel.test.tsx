@@ -92,7 +92,22 @@ describe('SetupCompletionPanel', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'A small program on a Linux, Windows, or macOS machine, such as a Proxmox node, that reports its temperatures, disk health, Docker, and Kubernetes.',
+        'Run the installer on a Linux, Windows, or macOS host. Pulse Agent reports host telemetry. Temperatures, SMART, Docker, and Kubernetes are available only where supported.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Connect Proxmox by API for the whole cluster, then add the agent on nodes where you want host-local telemetry such as temperatures and SMART data where available.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Open Add infrastructure and choose a platform API connection or a host to install Pulse Agent on.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Connect Proxmox, TrueNAS, or VMware through their API, or run the Pulse Agent installer on a standalone host. On Proxmox nodes, the agent can add host-local temperatures and SMART data when available.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('What happens next')).not.toBeInTheDocument();
@@ -260,7 +275,7 @@ describe('SetupCompletionPanel', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Use Add infrastructure any time to connect more systems, or to install the Pulse Agent on your Proxmox nodes for temperatures and disk health (SMART).',
+        'Use Add infrastructure any time to connect more systems, or to install Pulse Agent on Proxmox nodes for host-local telemetry such as temperatures and SMART data where available.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Infrastructure' })).toBeInTheDocument();

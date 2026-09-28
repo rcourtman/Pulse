@@ -229,18 +229,18 @@ export const DE_MESSAGE_OVERRIDES = {
   'setup.completion.nextStep.detail.agent':
     'Ueber Infrastruktur hinzufuegen koennen Sie jederzeit weitere Rechner hinzufuegen oder eine Plattform wie Proxmox ueber ihre API verbinden.',
   'setup.completion.nextStep.detail.api':
-    'Ueber Infrastruktur hinzufuegen koennen Sie jederzeit weitere Systeme verbinden oder den Pulse Agent auf Ihren Proxmox-Knoten installieren, um Temperaturen und Festplattenzustand (SMART) zu sehen.',
+    'Ueber Infrastruktur hinzufuegen koennen Sie jederzeit weitere Systeme verbinden oder Pulse Agent auf Proxmox-Knoten fuer lokale Telemetrie wie Temperaturen und SMART-Daten installieren, sofern verfuegbar.',
   'setup.completion.nextStep.detail.both':
     'Ueber Infrastruktur hinzufuegen koennen Sie jederzeit weitere Systeme per API, mit dem Agent oder mit beidem verbinden.',
   'setup.completion.nextStep.detail.empty':
-    'Verbinden Sie zuerst Proxmox, TrueNAS oder VMware ueber ihre API. Installieren Sie auf Proxmox-Knoten zusaetzlich den Pulse Agent, um Temperaturen und Festplattenzustand (SMART) zu erhalten, die die Proxmox-API nicht meldet.',
+    'Verbinden Sie Proxmox, TrueNAS oder VMware ueber ihre API oder fuehren Sie den Pulse Agent-Installer auf einem eigenstaendigen Rechner aus. Auf Proxmox-Knoten kann der Agent verfuegbare lokale Temperaturen und SMART-Daten ergaenzen.',
   'setup.completion.nextStep.label': 'Naechster Schritt',
   'setup.completion.nextStep.summary.connected.singular':
     'Oeffnen Sie Infrastruktur, um Ihr erstes verbundenes System zu pruefen.',
   'setup.completion.nextStep.summary.connected.plural':
     'Oeffnen Sie Infrastruktur, um Ihre verbundenen Systeme zu pruefen.',
   'setup.completion.nextStep.summary.empty':
-    'Oeffnen Sie Infrastruktur hinzufuegen und waehlen Sie aus, was Sie betreiben. Pulse kann sich mit der API verbinden, den Agent installieren oder beides.',
+    'Oeffnen Sie Infrastruktur hinzufuegen und waehlen Sie eine Plattform-API oder einen Rechner, auf dem Sie Pulse Agent installieren.',
   'setup.completion.nextStep.title.connected': 'Infrastruktur oeffnen',
   'setup.completion.nextStep.title.empty': 'Erstes System zur Ueberwachung hinzufuegen',
   'setup.completion.proActivation.action': 'Aktivierungsschluessel eingeben',
@@ -249,10 +249,10 @@ export const DE_MESSAGE_OVERRIDES = {
   'setup.completion.proActivation.title': 'Pulse Pro aktivieren',
   'setup.completion.resource.unknownName': 'Unbekannt',
   'setup.completion.sourceOptions.agent.description':
-    'Ein kleines Programm auf einem Linux-, Windows- oder macOS-Rechner, etwa einem Proxmox-Knoten, das dessen Temperaturen, Festplattenzustand, Docker und Kubernetes meldet.',
+    'Fuehren Sie den Installer auf einem Linux-, Windows- oder macOS-Rechner aus. Der Agent meldet Rechnertelemetrie. Temperaturen, SMART, Docker und Kubernetes sind nur verfuegbar, wenn Rechner und Einrichtung sie unterstuetzen.',
   'setup.completion.sourceOptions.agent.title': 'Pulse Agent',
   'setup.completion.sourceOptions.both.description':
-    'Verbinden Sie Proxmox per API fuer den ganzen Cluster und fuegen Sie den Agent auf den Knoten hinzu, deren Temperaturen und Festplattenzustand Sie sehen wollen.',
+    'Verbinden Sie Proxmox per API fuer den ganzen Cluster und fuegen Sie den Agent auf Knoten hinzu, auf denen Sie lokale Telemetrie wie Temperaturen und SMART-Daten sehen moechten, sofern verfuegbar.',
   'setup.completion.sourceOptions.both.title': 'Beides verwenden',
   'setup.completion.sourceOptions.platformApi.description':
     'Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, TrueNAS oder VMware. Pulse liest VMs, Speicher und Zustand ueber die Plattform-API.',
