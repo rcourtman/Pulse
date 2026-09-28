@@ -35,8 +35,9 @@ func issue2285Releases(t *testing.T, releases ...ReleaseInfo) string {
 
 func TestIssue2285LastUpdateCheckRecordsEffectiveChannelOutcome(t *testing.T) {
 	setRetrySettingsForTest(t, 1, time.Millisecond, time.Millisecond)
-	stable := ReleaseInfo{TagName: "v6.4.5", PublishedAt: time.Date(2026, 9, 30, 8, 0, 0, 0, time.UTC)}
-	preview := ReleaseInfo{TagName: "v6.4.6-rc.1", Prerelease: true, PublishedAt: time.Date(2026, 10, 2, 8, 0, 0, 0, time.UTC)}
+	// The check only offers an update when the exact server archive exists.
+	stable := ReleaseInfo{TagName: "v6.4.5", PublishedAt: time.Date(2026, 9, 30, 8, 0, 0, 0, time.UTC), Assets: []ReleaseAsset{runtimeArchiveFixture(t, "v6.4.5")}}
+	preview := ReleaseInfo{TagName: "v6.4.6-rc.1", Prerelease: true, PublishedAt: time.Date(2026, 10, 2, 8, 0, 0, 0, time.UTC), Assets: []ReleaseAsset{runtimeArchiveFixture(t, "v6.4.6-rc.1")}}
 
 	for _, tc := range []struct {
 		name          string
