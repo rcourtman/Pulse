@@ -1,6 +1,6 @@
 # Pulse v6.4.5-rc.4
 
-This changelog describes the changes since `v6.4.5-rc.3`. It records the reviewed changes since that published candidate. That candidate is replaced for the #2282 updater regression and cannot become stable. RC.4 also includes the later reviewed disk alert, TrueNAS, linked-guest storage and notification repairs. Stable remains `v6.4.1` until this exact candidate qualifies, publishes and completes a clean 24-hour soak under the version-specific release plan.
+This candidate carries the complete `v6.4.2` change set, which was tagged but not published. This changelog describes the changes since `v6.4.5-rc.3`. It records the reviewed changes since that published candidate. That candidate is replaced for the #2282 updater regression and cannot become stable. RC.4 also includes the later reviewed disk alert, TrueNAS, linked-guest storage and notification repairs. Stable remains `v6.4.1` until this exact candidate qualifies, publishes and completes a clean 24-hour soak under the version-specific release plan.
 
 ## Changes since RC.3
 
