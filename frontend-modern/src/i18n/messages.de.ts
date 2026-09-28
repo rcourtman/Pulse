@@ -317,6 +317,8 @@ export const DE_MESSAGE_OVERRIDES = {
     'Pulse scheint in Docker zu laufen. Fuehren Sie den Befehl auf dem Docker-Host aus und ersetzen Sie <pulse-container> durch den Namen des laufenden Pulse-Containers.',
   'setup.welcome.deploymentHint.lxc':
     'Pulse scheint in LXC-Container {ctid} zu laufen. Fuehren Sie den Befehl auf dem Proxmox-Host aus, um in diesen Container zu wechseln und das einmalige Setup-Token auszugeben.',
+  'setup.welcome.deploymentLabel.containerConsole':
+    'Container-Konsole (Unraid, Portainer, TrueNAS-Apps)',
   'setup.welcome.deploymentLabel.containerized': 'Containerisierte Bereitstellung',
   'setup.welcome.deploymentLabel.direct': 'Direkte Host-Installation',
   'setup.welcome.deploymentLabel.docker': 'Docker-Bereitstellung',

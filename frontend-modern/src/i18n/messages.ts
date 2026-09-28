@@ -301,6 +301,8 @@ export const EN_MESSAGES = {
     'Pulse appears to be running in Docker. Run the command on the Docker host and replace <pulse-container> with the running Pulse container name.',
   'setup.welcome.deploymentHint.lxc':
     'Pulse appears to be running in LXC container {ctid}. Run the command on the Proxmox host to execute into that container and print the one-time setup token.',
+  'setup.welcome.deploymentLabel.containerConsole':
+    'Container console (Unraid, Portainer, TrueNAS apps)',
   'setup.welcome.deploymentLabel.containerized': 'Containerized deployment',
   'setup.welcome.deploymentLabel.direct': 'Direct host install',
   'setup.welcome.deploymentLabel.docker': 'Docker deployment',
@@ -694,6 +696,7 @@ export const FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS = [
   'setup.welcome.deploymentHint.dockerNamed',
   'setup.welcome.deploymentHint.dockerUnnamed',
   'setup.welcome.deploymentHint.lxc',
+  'setup.welcome.deploymentLabel.containerConsole',
   'setup.welcome.deploymentLabel.containerized',
   'setup.welcome.deploymentLabel.direct',
   'setup.welcome.deploymentLabel.docker',
