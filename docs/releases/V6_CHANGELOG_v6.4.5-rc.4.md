@@ -1,6 +1,6 @@
 # Pulse v6.4.5-rc.4
 
-This changelog records the reviewed changes since the published `v6.4.5-rc.3`. That candidate is replaced for the #2282 updater regression and cannot become stable. RC.4 also includes the later reviewed disk alert, TrueNAS, linked-guest storage and notification repairs. Stable remains `v6.4.1` until this exact candidate qualifies, publishes and completes a clean 24-hour soak under the version-specific release plan.
+This changelog describes the changes since `v6.4.5-rc.3`. It records the reviewed changes since that published candidate. That candidate is replaced for the #2282 updater regression and cannot become stable. RC.4 also includes the later reviewed disk alert, TrueNAS, linked-guest storage and notification repairs. Stable remains `v6.4.1` until this exact candidate qualifies, publishes and completes a clean 24-hour soak under the version-specific release plan.
 
 ## Changes since RC.3
 
@@ -151,17 +151,10 @@ This changelog records the reviewed changes since the published `v6.4.5-rc.3`. T
   `origin/main` ancestor.
 - Security disclosures route to `security@pulserelay.pro`.
 
-## Changes since published v6.4.5-rc.2
-
-- KnowledgeStore saves are serialized so concurrent AI knowledge writes do not overwrite one another (#2186).
-- PBS Backups History remains on its host target across refreshes and when a connection uses a hostname, IP address or DNS alias (#1723, #2196, #2201).
-- Exact RC-to-stable promotion accepts the governed installer pin update and Go `_test.go` changes required by the stable cut (#2184, #2205).
-- The Profile L row-windowing test receives its declared wait budget under qualification load; product behavior is unchanged.
-
 ## Release Metadata
 
-- Version: `v6.4.5-rc.3`
-- Previous candidate: `v6.4.5-rc.2`, published 2026-09-23. This cut adds KnowledgeStore serialization, PBS History target retention, provider-hosted client isolation and upgrade recovery, organization-owner settings and hosted agent token scoping, the promotion-resolver repair and a qualification test timeout correction to that published preview.
+- Version: `v6.4.5-rc.4`
+- Previous candidate: `v6.4.5-rc.3`, published 2026-09-27. This cut replaces that candidate after the updater regression and adds the reviewed #2282 correction, later alert and storage fixes, and test reliability repairs.
 - Previous stable: `v6.4.1`
 - Rollback target: `v6.4.1`
 - Rollback command: `sudo /bin/update --version v6.4.1`
