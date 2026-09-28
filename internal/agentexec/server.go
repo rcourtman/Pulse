@@ -1580,6 +1580,10 @@ func (s *Server) readLoop(ac *agentConn) {
 		for _, ch := range closeChs {
 			close(ch)
 		}
+		// Results are correlated to this exact session, so nothing can answer
+		// a request it carried once its reader is gone. Release in-flight
+		// dispatches now instead of leaving them to wait out their timeout.
+		ac.signalDone()
 		if err := ac.conn.Close(); err != nil {
 			log.Debug().Err(err).Str("agent_id", agentID).Msg("Failed to close connection during read-loop cleanup")
 		}
