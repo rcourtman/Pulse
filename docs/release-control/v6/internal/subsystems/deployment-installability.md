@@ -5601,12 +5601,19 @@ in release metadata: `VERSION`, the Helm chart version and README, the compose
 default image, `docs/RELEASE_NOTES.md`, `docs/UPGRADE_v6.md` and its shipped
 docs mirror, `docs/releases/`, release-control records, this contract, and
 `status.json`. Any other path refuses the promotion unless `hotfix_exception`
-names active customer harm, because that content was never soaked. Minor
-releases (`X.Y.0`) additionally require a seven day soak; patches keep 72
-hours. `docs/release-control/control_plane.json` declares `release/v6.5` for
+names active customer harm, because that content was never soaked. Since
+the founder direction of 28 September 2026 minor releases (`X.Y.0`) and
+patches both require a 24 hour soak (`MIN_STABLE_SOAK_HOURS` and
+`MIN_MINOR_STABLE_SOAK_HOURS`); it was seven days and 72 hours. The workflow
+and trigger prompts describe the hotfix exception against the same 24 hours.
+A release line cut earlier keeps its own resolver's longer minimum, which the
+maintainer's release admission relaxes to the release plan's soak only
+through that exception and only once the stable source is shown to add
+nothing beyond release metadata. `docs/release-control/control_plane.json` declares `release/v6.5` for
 the first release train so the workflow refuses a v6.5 dispatch from any other
 branch. `scripts/release_control/resolve_release_promotion_test.py` pins the
-allowlist, the drift refusal, the hotfix path, and the minor soak;
+allowlist, the drift refusal, the hotfix path, and the 24 hour minor and
+patch soak;
 `release_promotion_policy_test.py` pins the policy's Release Train section.
 
 ### Provider docs name the Patrol weekly summary schedule kind

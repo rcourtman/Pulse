@@ -566,7 +566,7 @@ Companion drill:
   2. Confirm the candidate commit has already shipped on `rc` through a real
      release-pipeline run, not only workflow lint or static YAML validation.
      Accidental prerelease git tags do not count as shipped prerelease lineage.
-  3. Confirm the candidate satisfies the minimum 72-hour prerelease soak or that a
+  3. Confirm the candidate satisfies the minimum 24-hour prerelease soak or that a
      hotfix exception and reason are recorded explicitly before promotion.
   4. Confirm the previous stable rollback target and exact reinstall or pin
      command are recorded in the release notes or release ticket.

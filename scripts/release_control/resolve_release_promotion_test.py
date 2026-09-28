@@ -1003,7 +1003,7 @@ class ReleaseTrainPromotionTest(unittest.TestCase):
         self.assertEqual(metadata["hotfix_exception"], "true")
 
     def test_repaired_candidate_restarts_full_publication_soak(self) -> None:
-        for version, hours in (("6.5.0", 168), ("6.5.1", 72), ("6.4.5", 72)):
+        for version, hours in (("6.5.0", 24), ("6.5.1", 24), ("6.4.5", 24)):
             tag = f"v{version}-rc.2"
             observed = []
             def publication(candidate):
@@ -1023,13 +1023,15 @@ class ReleaseTrainPromotionTest(unittest.TestCase):
                 self.assertEqual(metadata["soak_hours"], str(hours))
                 self.assertEqual(observed, [tag, tag])
 
-    def test_minor_releases_soak_seven_days_and_patches_seventy_two_hours(self) -> None:
-        with self.assertRaisesRegex(ValueError, "release train requires 168 hours"):
-            self.promote("6.5.0", now_unix_fn=lambda: 100 + (100 * 3600))
-        metadata = self.promote("6.5.1", now_unix_fn=lambda: 100 + (73 * 3600))
-        self.assertEqual(metadata["soak_hours"], "73")
-        with self.assertRaisesRegex(ValueError, "minimum is 72 hours"):
-            self.promote("6.5.1", now_unix_fn=lambda: 100 + (71 * 3600))
+    def test_minor_and_patch_releases_soak_twenty_four_hours(self) -> None:
+        with self.assertRaisesRegex(ValueError, "release train requires 24 hours"):
+            self.promote("6.5.0", now_unix_fn=lambda: 100 + (23 * 3600))
+        metadata = self.promote("6.5.0", now_unix_fn=lambda: 100 + (24 * 3600))
+        self.assertEqual(metadata["soak_hours"], "24")
+        metadata = self.promote("6.5.1", now_unix_fn=lambda: 100 + (25 * 3600))
+        self.assertEqual(metadata["soak_hours"], "25")
+        with self.assertRaisesRegex(ValueError, "minimum is 24 hours"):
+            self.promote("6.5.1", now_unix_fn=lambda: 100 + (23 * 3600))
 
 
 if __name__ == "__main__":
