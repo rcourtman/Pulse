@@ -3774,6 +3774,10 @@ running architecture and tag. A missing exact archive leaves the download URL
 empty and the update unavailable; it must not fall back to another component,
 architecture or version. This keeps an incomplete release visible as metadata
 without presenting an unusable or wrong installation path.
+ARMv6 and ARMv7 are separate server archives despite both binaries reporting
+`GOARCH=arm`; the updater uses the release binary's embedded `GOARM` build
+setting to choose between them, and offers neither if that setting is missing
+or unrecognised. It must not assume ARMv7 for every ARM installation.
 Malformed metadata stays a hard error and only the typed over-limit condition
 may fall through to the feed. Proof:
 `internal/updates/issue2282_release_metadata_stream_test.go`.
