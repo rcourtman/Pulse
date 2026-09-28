@@ -432,18 +432,18 @@ processor exists. An explicit processor attachment must wake the pending backlog
 through the same canonical batch path instead of relying on a separate
 direct-send shortcut or waiting for an unrelated timer tick.
 
-Manager construction is the one attachment that must not wake the worker.
-Construction runs before the owner has applied saved destination configuration
-(webhooks, email, Apprise), so an already-due persisted job would be evaluated
-against a still-empty destination list and terminally cancelled as
-`ErrNotificationDeliverySkipped`. Construction records the processor without
-waking it; the worker's own ticker and any later enqueue begin delivery once
-configuration is present. This preserves the disabled-destination cancellation
-policy at processing time without letting startup order decide it.
-`TestRestartKeepsDueDeliveryPendingUntilConfigured` in
-`resolved_grouping_contract_test.go` seeds a due persisted delivery, constructs
-the manager before restoring its webhook, and proves the row stays `pending`
-until configuration is applied and then delivers.
+The monitor constructs its manager before applying saved destinations (webhooks,
+email, Apprise). It must defer processor installation until those load attempts
+finish: suppressing only the initial wake would still let the five-second queue
+tick consume an already-due job against a still-empty destination list and
+terminally cancel it as `ErrNotificationDeliverySkipped`. Explicit activation
+then wakes the pending backlog through the canonical queue path. Ordinary
+manager constructors retain autonomous processing for callers without a saved
+configuration bootstrap. `TestRestartKeepsDueDeliveryPendingUntilConfigured`
+in `resolved_grouping_contract_test.go` forces a pre-configuration batch,
+proves the due row stays `pending`, then installs the webhook and proves that
+activation delivers it. This preserves disabled-destination policy at
+processing time without letting startup timing decide it.
 Alert delivery cooldown is also owned at this boundary. Normal alert delivery
 must suppress duplicate sends for the same active alert occurrence when
 cooldown is disabled or still active. A manager-admitted increase above the

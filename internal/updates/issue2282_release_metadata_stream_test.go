@@ -205,3 +205,64 @@ func TestIssue2282StreamedDecodeKeepsTypedByteBound(t *testing.T) {
 		t.Fatalf("decodeReleaseList error = %v, want typed response size rejection", err)
 	}
 }
+
+func TestIssue2282OnlyServerArchivesAreRetained(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		want bool
+	}{
+		{"pulse-v6.4.5-linux-amd64.tar.gz", true},
+		{"pulse-v6.4.5-rc.4-linux-arm64.tar.gz", true},
+		{"pulse-agent-v6.4.5-linux-amd64.tar.gz", false},
+		{"pulse-mcp-v6.4.5-linux-amd64.tar.gz", false},
+		{"pulse-agent-helper-v6.4.5-linux-amd64.tar.gz", false},
+		{"pulse-v6.4.5-darwin-arm64.tar.gz", false},
+		{"pulse-v6.4.5-linux-amd64.tar.gz.sshsig", false},
+	} {
+		if got := isRuntimeReleaseAssetName(tc.name); got != tc.want {
+			t.Errorf("isRuntimeReleaseAssetName(%q) = %t, want %t", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestIssue2282UpdateCheckRequiresExactServerArchive(t *testing.T) {
+	withBuildVersion(t, "6.4.0")
+	exact, ok := updateReleaseAssetForRuntime("v99.0.0")
+	if !ok {
+		t.Skip("no release archive for this architecture")
+	}
+	otherArch := "amd64"
+	if strings.HasSuffix(exact.Name, "-amd64.tar.gz") {
+		otherArch = "arm64"
+	}
+	sameArch := strings.TrimSuffix(strings.TrimPrefix(exact.Name, "pulse-v99.0.0-linux-"), ".tar.gz")
+	decoys := []ReleaseAsset{
+		{Name: "pulse-agent-v99.0.0-linux-" + sameArch + ".tar.gz", BrowserDownloadURL: "https://example.invalid/agent"},
+		{Name: "pulse-mcp-v99.0.0-linux-" + sameArch + ".tar.gz", BrowserDownloadURL: "https://example.invalid/mcp"},
+		{Name: "pulse-v99.0.0-linux-" + otherArch + ".tar.gz", BrowserDownloadURL: "https://example.invalid/wrong-arch"},
+		{Name: "pulse-v98.0.0-linux-" + sameArch + ".tar.gz", BrowserDownloadURL: "https://example.invalid/wrong-version"},
+	}
+	for _, tc := range []struct {
+		name, wantURL string
+		wantAvailable bool
+		assets        []ReleaseAsset
+	}{
+		{"missing exact archive", "", false, decoys},
+		{"exact archive after decoys", exact.BrowserDownloadURL, true, append(append([]ReleaseAsset{}, decoys...), exact)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := newReleaseServer(t, []ReleaseInfo{{TagName: "v99.0.0", Assets: tc.assets}}, nil)
+			defer server.Close()
+			t.Setenv("PULSE_UPDATE_SERVER", server.URL)
+
+			manager := NewManager(&config.Config{UpdateChannel: "stable"})
+			info, err := manager.CheckForUpdatesWithChannel(context.Background(), "stable")
+			if err != nil {
+				t.Fatalf("check update: %v", err)
+			}
+			if info.Available != tc.wantAvailable || info.DownloadURL != tc.wantURL {
+				t.Fatalf("update = %+v, want available=%t with download URL %q", info, tc.wantAvailable, tc.wantURL)
+			}
+		})
+	}
+}

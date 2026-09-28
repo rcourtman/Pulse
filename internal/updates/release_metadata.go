@@ -63,12 +63,25 @@ func decodeSingleRelease(resp *http.Response) (ReleaseInfo, error) {
 	return release, nil
 }
 
-// isRuntimeReleaseAssetName matches the Pulse server archives the update check
-// can offer: the exact runtime asset and the any-linux-tarball fallback.
+// isRuntimeReleaseAssetName keeps server archives out of the much larger list
+// of agent, MCP and other release artifacts. The update check still requires
+// the exact release and architecture before offering an archive to the user.
 func isRuntimeReleaseAssetName(name string) bool {
-	return strings.HasPrefix(name, "pulse-") &&
-		strings.Contains(name, "linux") &&
-		strings.HasSuffix(name, ".tar.gz")
+	if !strings.HasPrefix(name, "pulse-v") {
+		return false
+	}
+	for _, suffix := range [...]string{
+		"-linux-amd64.tar.gz",
+		"-linux-arm64.tar.gz",
+		"-linux-armv7.tar.gz",
+		"-linux-armv6.tar.gz",
+		"-linux-386.tar.gz",
+	} {
+		if strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 func decodeReleaseObject(dec *json.Decoder, keepAsset func(string) bool) (ReleaseInfo, error) {

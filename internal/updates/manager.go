@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -112,12 +113,20 @@ func updateReleaseDownloadPrefix() string {
 }
 
 func updateReleaseAssetForRuntime(tagName string) (ReleaseAsset, bool) {
-	targetArch, ok := map[string]string{
-		"amd64": "amd64",
-		"arm64": "arm64",
-		"arm":   "armv7",
-		"386":   "386",
-	}[runtime.GOARCH]
+	armVariant := ""
+	if runtime.GOARCH == "arm" {
+		// GOARCH alone cannot distinguish the separately published ARMv6 and
+		// ARMv7 server binaries. Release builds record their GOARM setting.
+		if info, ok := debug.ReadBuildInfo(); ok {
+			for _, setting := range info.Settings {
+				if setting.Key == "GOARM" {
+					armVariant = setting.Value
+					break
+				}
+			}
+		}
+	}
+	targetArch, ok := updateReleaseArchitecture(runtime.GOARCH, armVariant)
 	if !ok {
 		return ReleaseAsset{}, false
 	}
@@ -130,6 +139,20 @@ func updateReleaseAssetForRuntime(tagName string) (ReleaseAsset, bool) {
 		url.PathEscape(assetName),
 	)
 	return ReleaseAsset{Name: assetName, BrowserDownloadURL: downloadURL}, true
+}
+
+func updateReleaseArchitecture(goarch, goarm string) (string, bool) {
+	switch goarch {
+	case "amd64", "arm64", "386":
+		return goarch, true
+	case "arm":
+		// GOARM=5 has no server archive. An absent or unknown variant must not
+		// silently select ARMv7, which may not run on an ARMv6 host.
+		if goarm == "6" || goarm == "7" {
+			return "armv" + goarm, true
+		}
+	}
+	return "", false
 }
 
 func updateReleaseAPIPath() string {
@@ -522,16 +545,9 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 			}
 		}
 	}
-
-	// Fallback to any pulse tarball if exact match not found
-	if downloadURL == "" {
-		for _, asset := range release.Assets {
-			if isRuntimeReleaseAssetName(asset.Name) {
-				downloadURL = asset.BrowserDownloadURL
-				break
-			}
-		}
-	}
+	// A missing archive must not fall back to another architecture or to an
+	// agent/MCP tarball, nor advertise an update that cannot be applied.
+	available := latestVer.IsNewerThan(currentVer) && downloadURL != ""
 
 	isMajorUpgrade := latestVer.Major > currentVer.Major
 	// Derive prerelease from the parsed version tag (not GitHub metadata) so the
@@ -539,7 +555,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 	isPrerelease := release.Prerelease || latestVer.IsPrerelease()
 
 	info := &UpdateInfo{
-		Available:      latestVer.IsNewerThan(currentVer),
+		Available:      available,
 		CurrentVersion: currentInfo.Version,
 		LatestVersion:  strings.TrimPrefix(release.TagName, "v"),
 		ReleaseNotes:   release.Body,

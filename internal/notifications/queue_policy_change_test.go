@@ -35,6 +35,13 @@ func TestQueuedEmailRoutingChangeAndResolution(t *testing.T) {
 				t.Fatalf("queued email = %v, %v", pending, err)
 			}
 			old := pending[0]
+			// The queue's background worker starts at construction and SetProcessor
+			// wakes it. Keep this row out of GetPending while exercising the
+			// already-fetched worker snapshot synchronously below.
+			futureRetry := time.Now().Add(time.Hour)
+			if _, err := q.db.Exec(`UPDATE notification_queue SET next_retry_at = ? WHERE id = ?`, futureRetry.Unix(), old.ID); err != nil {
+				t.Fatal(err)
+			}
 			n.SetInitialNotifyTarget("webhook")
 			// A fetched worker item must not defeat resolution cancellation.
 			if resolve {
