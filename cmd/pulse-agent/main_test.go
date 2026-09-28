@@ -1891,11 +1891,13 @@ func (s *pendingUpdateSupervisorStub) Rollback(_ context.Context, activation age
 func testPendingUpdate(t *testing.T, stateDir string) *agentupdate.PendingPrivilegedUpdate {
 	t.Helper()
 	activation := agenthelper.UpdateResult{
-		Action:           "pending",
-		ActivationID:     "pulse-agent-0123456789abcdef0123456789abcdef:0123456789abcdef",
-		ActiveSHA256:     strings.Repeat("a", 64),
-		RollbackSHA256:   strings.Repeat("b", 64),
-		RollbackDeadline: time.Now().Add(2 * time.Second).UTC(),
+		Action:         "pending",
+		ActivationID:   "pulse-agent-0123456789abcdef0123456789abcdef:0123456789abcdef",
+		ActiveSHA256:   strings.Repeat("a", 64),
+		RollbackSHA256: strings.Repeat("b", 64),
+		// Leave enough time for the race-instrumented supervisor to be scheduled.
+		// The test below checks the health gates, not the expiry path.
+		RollbackDeadline: time.Now().Add(30 * time.Second).UTC(),
 	}
 	if err := agentupdate.PersistPendingPrivilegedUpdate(stateDir, "1.0.0", activation); err != nil {
 		t.Fatal(err)
@@ -1922,26 +1924,71 @@ func TestPendingPrivilegedUpdateCommitsOnlyAfterReadinessAndAcceptedReport(t *te
 	reportAccepted := make(chan struct{})
 	close(reportAccepted)
 	var ready atomic.Bool
+	notReadyChecks := make(chan struct{}, 2)
+	locallyReady := func() bool {
+		if ready.Load() {
+			return true
+		}
+		select {
+		case notReadyChecks <- struct{}{}:
+		default:
+		}
+		return false
+	}
 	result := make(chan error, 1)
 	go func() {
-		result <- supervisePendingPrivilegedUpdate(context.Background(), stub, pending, stateDir, pending.Activation.ActiveSHA256, ready.Load, reportAccepted, time.Millisecond, nil)
+		result <- supervisePendingPrivilegedUpdate(context.Background(), stub, pending, stateDir, pending.Activation.ActiveSHA256, locallyReady, reportAccepted, time.Millisecond, nil)
 	}()
+	// Observe the supervisor checking the false readiness state on two passes.
+	// A sleep cannot prove it started before we flip readiness under -race.
+	for range 2 {
+		select {
+		case <-notReadyChecks:
+		case <-stub.commitCalls:
+			t.Fatal("pending update committed before local readiness")
+		case err := <-result:
+			t.Fatalf("pending update supervisor stopped before local readiness: %v", err)
+		case <-time.After(10 * time.Second):
+			t.Fatal("pending update supervisor did not check local readiness")
+		}
+	}
 	select {
 	case <-stub.commitCalls:
 		t.Fatal("pending update committed before local readiness")
-	case <-time.After(20 * time.Millisecond):
+	default:
 	}
 	ready.Store(true)
+	var activation agenthelper.UpdateResult
+	finished := false
 	select {
-	case activation := <-stub.commitCalls:
-		if activation != pending.Activation {
-			t.Fatalf("commit activation = %#v", activation)
+	case activation = <-stub.commitCalls:
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("pending update supervisor stopped before committing: %v", err)
 		}
-	case <-time.After(time.Second):
+		finished = true
+		// Commit sends its recorded call before the supervisor can return. If
+		// both channels are ready, selecting result first is still success.
+		select {
+		case activation = <-stub.commitCalls:
+		default:
+			t.Fatal("pending update supervisor returned without committing")
+		}
+	case <-time.After(10 * time.Second):
 		t.Fatal("pending update was not committed after both health signals")
 	}
-	if err := <-result; err != nil {
-		t.Fatal(err)
+	if activation != pending.Activation {
+		t.Fatalf("commit activation = %#v", activation)
+	}
+	if !finished {
+		select {
+		case err := <-result:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("pending update supervisor did not finish after commit")
+		}
 	}
 	if loaded, err := agentupdate.LoadPendingPrivilegedUpdate(stateDir); err != nil || loaded != nil {
 		t.Fatalf("committed handoff = %#v, %v", loaded, err)
