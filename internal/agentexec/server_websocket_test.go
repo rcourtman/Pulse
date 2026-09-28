@@ -2138,3 +2138,38 @@ func TestTypedOperation_TimeoutSendsCancelAndExpiredContextNeverDispatches(t *te
 		}
 	})
 }
+
+// A typed request is correlated to the session that carried it, so once that
+// socket drops nothing can deliver its receipt. The dispatch must report the
+// disconnect instead of waiting out the operation timeout.
+func TestTypedOperation_SocketDropAfterSendUnblocksDispatch(t *testing.T) {
+	admission := AgentAdmission{TokenID: "typed-token", AgentID: "typed-a1", Hostname: "typed-host1", RuntimeRole: RuntimeRoleActionRunner, ActionCapability: ActionCapabilityTypedV1}
+	s := NewServerWithAdmissionValidator(func(token, _, _ string) (AgentAdmission, bool) {
+		return admission, token == admission.TokenID
+	}, func(AgentAdmission) bool { return true })
+	ts := newWSServer(t, s)
+	defer ts.Close()
+	agent := registerTypedCancelTestAgent(t, s, ts.URL)
+
+	request := ProxmoxGuestLifecyclePayload{RequestID: "pve.dropped.1", ActionID: "pve", Operation: "shutdown", GuestKind: "vm", VMID: 101, ExpectedStatus: "running", Timeout: 30}
+	if err := BindProxmoxGuestLifecyclePayload(&request); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := s.ExecuteProxmoxGuestLifecycle(context.Background(), "typed-a1", request)
+		done <- err
+	}()
+	if sent, ok := agent.nextMessage(3 * time.Second); !ok || sent.Type != MsgTypeProxmoxGuestLifecycle {
+		t.Fatalf("dispatched request = %+v", sent)
+	}
+	_ = agent.conn.Close()
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "disconnected before") {
+			t.Fatalf("dropped-session dispatch error = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("dispatch kept waiting on a session whose socket already closed")
+	}
+}
