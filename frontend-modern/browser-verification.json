@@ -1,36 +1,28 @@
 {
   "version": 1,
-  "base_sha": "b1e75fb9e4693c5706b2242760d6277e5291e7f9",
-  "verified_at": "2026-09-27T22:55:00Z",
+  "base_sha": "6d7e3342e56a4f8f2b411acb3df8dc7777d4ec7f",
+  "verified_at": "2026-09-27T23:52:13Z",
   "result": "passed",
   "changed_paths": ["frontend-modern/src/api/settings.ts"],
   "content_sha256": {
     "frontend-modern/src/api/settings.ts": "4172b94c268be6a0ea000e73d155e540f11776e1c59325250e13716722be5aeb"
   },
-  "routes": ["/settings/system-general", "/docs/PRIVACY"],
+  "routes": ["/tmp/telemetry-schema-2285.html"],
   "viewports": [
-    {
-      "width": 1024,
-      "height": 768
-    },
-    {
-      "width": 390,
-      "height": 844
-    }
+    {"width": 1280, "height": 800},
+    {"width": 390, "height": 844}
   ],
   "states": [
-    "Local build of this branch signed in with a test account: General settings telemetry card rendered with the Preview payload control",
-    "Telemetry payload preview opened: schema_version 18 with update_channel stable, update_check_outcome skipped (source build, recorded by the background update checker) and update_available false, all three keys present",
-    "Preview at 390px: payload block visible and scrolls within its own box with no page-level horizontal overflow",
-    "Shipped privacy document: schema version 18 disclosure, Update channel, Update check outcome and Update available rows, and the dated schema 18 changelog row present",
-    "Privacy document at 390px: new rows render in the existing table, which scrolls within its container like the neighbouring rows, with no page-level horizontal overflow",
-    "Desktop and phone screenshots inspected for placement, clipping and overflow"
+    "Production GeneralSettingsPanel mounted in an isolated Vite fixture with a synthetic schema-v18 telemetry-preview API response",
+    "Preview payload displayed stable-channel skipped, metadata_error, and available outcomes with corresponding false, false, and true update_available booleans",
+    "The payload block stayed inside the card; the metadata_error JSON scrolled within the block at 390px without page-level horizontal overflow",
+    "Desktop and phone screenshots for all three outcomes were inspected for placement, clipping and scrolling"
   ],
   "interactions": [
-    "Signed in through the login form",
-    "Navigated to /settings/system-general and clicked Preview payload",
-    "Parsed the rendered payload JSON and checked the schema 18 fields and closed values",
-    "Resized to 390x844 and rechecked the preview and page overflow",
-    "Navigated to /docs/PRIVACY and scrolled the Update check outcome row into view at desktop and 390px widths"
-  ]
+    "Clicked Preview payload and then Refresh payload twice per viewport, replacing the synthetic API outcome on each request",
+    "Parsed the rendered payload JSON and asserted schema_version, update_channel, update_check_outcome and update_available",
+    "Checked page and preview scroll widths at both viewports and checked for uncaught page errors"
+  ],
+  "command": "pulse-worker-browser tmp/browser-proof/telemetry-schema-2285.cjs (Playwright 1.56.1, Chromium 141.0.7390.37)",
+  "notes": "Offline production-component fixture with synthetic API data, not a full application login, installed sender, receiver or release acceptance. The browser result and six screenshots are retained under tmp/browser-proof in this assigned workspace."
 }
