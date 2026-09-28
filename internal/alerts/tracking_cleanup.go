@@ -70,14 +70,24 @@ func (m *Manager) cleanupStaleMaps() {
 	}
 
 	for containerID, firstSeen := range m.dockerUpdateFirstSeen {
-		if now.Sub(firstSeen) > staleThreshold {
+		lastObserved := m.dockerUpdateLastObserved[containerID]
+		if lastObserved.IsZero() {
+			lastObserved = firstSeen
+		}
+		if now.Sub(lastObserved) > staleThreshold {
 			delete(m.dockerUpdateFirstSeen, containerID)
+			delete(m.dockerUpdateLastObserved, containerID)
 			cleaned++
 		}
 	}
 	for containerID, firstSeen := range m.dockerUpdateFirstSeenByIdentity {
-		if now.Sub(firstSeen) > staleThreshold {
+		lastObserved := m.dockerUpdateLastObserved[containerID]
+		if lastObserved.IsZero() {
+			lastObserved = firstSeen
+		}
+		if now.Sub(lastObserved) > staleThreshold {
 			delete(m.dockerUpdateFirstSeenByIdentity, containerID)
+			delete(m.dockerUpdateLastObserved, containerID)
 			cleaned++
 		}
 	}

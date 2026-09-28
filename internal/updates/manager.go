@@ -74,6 +74,10 @@ type UpdateInfo struct {
 	// compiled Pro binary, which cannot self-update in a container and must
 	// never be pointed at the community rcourtman/pulse image.
 	DockerUpdate *DockerUpdateCommands `json:"dockerUpdate,omitempty"`
+	// checkOutcome is only for the content-free observation. It distinguishes a
+	// check that could not run from a completed check with no update; it is not
+	// part of the update API response.
+	checkOutcome string
 }
 
 var (
@@ -453,8 +457,14 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 			m.updateStatus("error", 0, "Failed to check for Pulse Pro updates", proErr)
 			return nil, proErr
 		}
-		m.recordUpdateCheck(channel, effectiveChannel, availabilityOutcome(info.Available), info.Available)
-		if useCache {
+		outcome := availabilityOutcome(info.Available)
+		if info.checkOutcome != "" {
+			outcome = info.checkOutcome
+		}
+		m.recordUpdateCheck(channel, effectiveChannel, outcome, info.Available)
+		// A missing activation can be repaired without restarting Pulse. Do not
+		// cache its unavailable result across the next credentialed check.
+		if useCache && info.checkOutcome != UpdateCheckOutcomeSkipped {
 			m.statusMu.Lock()
 			m.checkCache[channel] = info
 			m.cacheTime[channel] = time.Now()
@@ -566,7 +576,13 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 	}
 
 	info.Warning = updateWarning(info.Available, isMajorUpgrade, isPrerelease, currentVer.Major, latestVer.Major)
-	m.recordUpdateCheck(channel, effectiveChannel, availabilityOutcome(info.Available), info.Available)
+	checkOutcome := availabilityOutcome(info.Available)
+	if latestVer.IsNewerThan(currentVer) && downloadURL == "" {
+		// Metadata for a newer release without this binary's exact archive is
+		// not an offer and is not evidence that the install is up to date.
+		checkOutcome = UpdateCheckOutcomeMetadataError
+	}
+	m.recordUpdateCheck(channel, effectiveChannel, checkOutcome, info.Available)
 
 	// Cache the result (only if using saved channel)
 	if useCache {

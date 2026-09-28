@@ -4065,6 +4065,15 @@ telemetry exports only that record at schema v18. An update discovery failure
 that records nothing is a regression, because a failed check never reaches the
 update history and is otherwise invisible in the fleet (#2285). Proof:
 `internal/updates/issue2285_update_check_observation_test.go`.
+The observation describes installability, not merely version ordering. Positive
+release fixtures must include the exact server archive; a newer release that
+lacks that archive is not offered and records `metadata_error`, rather than
+`up_to_date` or `available`. A compiled Pro install without usable broker
+activation credentials returns its existing operator warning but records
+`skipped`, never `up_to_date`; this unavailable result must not be cached across
+a later activation. A stable-channel Pro check against a prerelease-only broker
+pin records `no_release`. No version, URL, credential or warning text enters
+the telemetry observation.
 Those same workflows must also fetch and dispatch the governed release branch
 derived from release-control metadata instead of hardcoding `pulse/v6`,
 `pulse/v6-release`, `main`, or any later branch literal inline; when a stable
