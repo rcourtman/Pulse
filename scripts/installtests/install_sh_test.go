@@ -1185,6 +1185,11 @@ ARGS
 }
 
 func TestInstallSHRecoversV5ProcessArgsWithoutProcfs(t *testing.T) {
+	// running_agent_arg_stream prefers <proc_root>/<pid>/cmdline and only falls
+	// back to ps when that entry is missing. Point it at an empty proc root so
+	// the stubbed pid never resolves to an unrelated live process on a Linux
+	// host, which made this test fail whenever pid 4242 happened to exist.
+	emptyProcRoot := t.TempDir()
 	script := `
 		PULSE_URL=""
 		PULSE_TOKEN=""
@@ -1221,9 +1226,12 @@ func TestInstallSHRecoversV5ProcessArgsWithoutProcfs(t *testing.T) {
 ` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
 ` + extractTokenRecoveryShellFunctions(t) + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_env_stream") + `
 ` + extractInstallShellFunction(t, "split_recovered_shell_words") + `
 ` + extractInstallShellFunction(t, "running_agent_arg_stream") + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_running_agent") + `
+		eval "installed_running_agent_arg_stream() $(declare -f running_agent_arg_stream | tail -n +2)"
+		running_agent_arg_stream() { installed_running_agent_arg_stream "$1" "` + emptyProcRoot + `"; }
 ` + extractInstallShellFunction(t, "build_exec_arg_items") + `
 ` + extractInstallShellFunction(t, "join_exec_arg_items") + `
 ` + extractInstallShellFunction(t, "build_exec_args") + `
@@ -1248,8 +1256,11 @@ func TestInstallSHRecoversV5ProcessArgsWithoutProcfs(t *testing.T) {
 		t.Fatalf("bash: %v\n%s", err, out)
 	}
 	got := string(out)
+	// "READY" is a substring of "NOT_READY", so check the failure marker.
+	if strings.Contains(got, "NOT_READY") || strings.Contains(got, "command not found") {
+		t.Fatalf("non-procfs process recovery did not recover the running agent:\n%s", got)
+	}
 	for _, needle := range []string{
-		"READY",
 		"URL=http://192.168.2.96:7655",
 		"TOKEN=deadbeef",
 		"DOCKER=true",
