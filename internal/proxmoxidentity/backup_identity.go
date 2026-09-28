@@ -81,9 +81,24 @@ func BackupCommentMatchesGuestName(comment, vmid, guestName string) bool {
 	return subjectName != "" && guestName != "" && subjectName == guestName
 }
 
+// backupCommentMatchesNodeVMIDName recognises a PVE notes template such as
+// "pdm21.21008.pulse" only when all three fields match this guest. The node
+// must match exactly: suffix or name-only matching could attribute a Root PBS
+// snapshot to the wrong PVE connection when CT IDs collide (#2292, #1639).
+func backupCommentMatchesNodeVMIDName(comment, vmid, guestName, nodeName string) bool {
+	vmid = strings.TrimSpace(vmid)
+	guestName = strings.TrimSpace(guestName)
+	nodeName = strings.TrimSpace(nodeName)
+	if vmid == "" || guestName == "" || nodeName == "" {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(comment), nodeName+"."+vmid+"."+guestName)
+}
+
 func BackupGuestMatchScore(namespace, comment, vmid, guestName, instanceName, nodeName string) int {
 	score := NamespaceLocationScore(namespace, instanceName, nodeName) * 10
-	if BackupCommentMatchesGuestName(comment, vmid, guestName) {
+	if BackupCommentMatchesGuestName(comment, vmid, guestName) ||
+		backupCommentMatchesNodeVMIDName(comment, vmid, guestName, nodeName) {
 		score += 5
 	}
 	return score
