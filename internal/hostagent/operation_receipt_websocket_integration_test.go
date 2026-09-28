@@ -1,6 +1,7 @@
 package hostagent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -253,8 +254,23 @@ func TestRealServerActionRunnerCancellationPersistsAndReplaysProxmoxReceiptAfter
 	}))
 	defer httpServer.Close()
 
+	// A runner that drops its session must come back well inside the replay
+	// window rather than after the production reconnect backoff.
+	origReconnectDelay := reconnectDelay
+	reconnectDelay = 50 * time.Millisecond
+	t.Cleanup(func() { reconnectDelay = origReconnectDelay })
+
 	stateDir := t.TempDir()
-	logger := zerolog.Nop()
+	// Keep runner logs so a failure shows why a session dropped. They are only
+	// printed from the cleanup below, never from runner goroutines that can
+	// outlive the test.
+	runnerLogs := &lockedLogBuffer{}
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("action runner log:\n%s", runnerLogs.String())
+		}
+	})
+	logger := zerolog.New(runnerLogs).With().Timestamp().Logger()
 	mutationStarted := make(chan struct{})
 	var startOnce sync.Once
 	var mutationMu sync.Mutex
@@ -373,7 +389,23 @@ func TestRealServerActionRunnerCancellationPersistsAndReplaysProxmoxReceiptAfter
 
 	second, cancelSecond, secondDone := startRunner(t)
 	defer stopRunner(t, second, cancelSecond, secondDone)
-	replayed, err := server.ExecuteProxmoxGuestLifecycle(context.Background(), admission.AgentID, request)
+	// The server publishes the session before the runner finishes activating,
+	// so the replay can land on a session the runner then drops. That request
+	// can never be answered; send the same request again on the session the
+	// runner reconnects with. Every attempt must replay the durable receipt.
+	var replayed *agentexec.ProxmoxGuestLifecycleResultPayload
+	var err error
+	for attempt := 1; ; attempt++ {
+		replayed, err = server.ExecuteProxmoxGuestLifecycle(context.Background(), admission.AgentID, request)
+		if err == nil || attempt == 3 || !strings.Contains(err.Error(), "disconnected before") {
+			break
+		}
+		t.Logf("replay attempt %d lost its session (%v), retrying after reconnect", attempt, err)
+		deadline := time.Now().Add(3 * time.Second)
+		for !server.IsAgentConnected(admission.AgentID) && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
 	if err != nil || replayed == nil || !replayed.MutationStarted || replayed.MutationCompleted || replayed.Error != canceled.Error {
 		t.Fatalf("replayed result = %+v, err=%v", replayed, err)
 	}
@@ -403,4 +435,22 @@ func TestRealServerActionRunnerCancellationPersistsAndReplaysProxmoxReceiptAfter
 	if _, err := server.QueryAgentOperation(context.Background(), admission.AgentID, wrongAgent); !errors.Is(err, operationreceipt.ErrBindingConflict) {
 		t.Fatalf("cross-agent receipt query error = %v", err)
 	}
+}
+
+// lockedLogBuffer collects zerolog output from concurrent runner goroutines.
+type lockedLogBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedLogBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedLogBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
