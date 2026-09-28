@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -108,12 +109,7 @@ func TestCheckForUpdatesWithChannel_AvailableUsesCache(t *testing.T) {
 			Body:        "Release notes",
 			Prerelease:  false,
 			PublishedAt: releaseTime,
-			Assets: []ReleaseAsset{
-				{
-					Name:               "pulse-v99.0.0-linux-amd64.tar.gz",
-					BrowserDownloadURL: "https://example.com/pulse-v99.0.0-linux-amd64.tar.gz",
-				},
-			},
+			Assets:      []ReleaseAsset{runtimeArchiveFixture(t, "v99.0.0")},
 		},
 	}
 
@@ -193,12 +189,7 @@ func TestCheckForUpdates_Wrapper(t *testing.T) {
 			Body:        "Release notes",
 			Prerelease:  false,
 			PublishedAt: time.Date(2024, 2, 3, 4, 5, 6, 0, time.UTC),
-			Assets: []ReleaseAsset{
-				{
-					Name:               "pulse-v99.1.0-linux-amd64.tar.gz",
-					BrowserDownloadURL: "https://example.com/pulse-v99.1.0-linux-amd64.tar.gz",
-				},
-			},
+			Assets:      []ReleaseAsset{runtimeArchiveFixture(t, "v99.1.0")},
 		},
 	}
 
@@ -297,4 +288,17 @@ func TestForcedUpdateCheckDoesNotReturnCachedResultOnRateLimit(t *testing.T) {
 	if manager.GetStatus().Status != "error" {
 		t.Fatalf("status=%+v", manager.GetStatus())
 	}
+}
+
+// runtimeArchiveFixture returns the server archive the update check requires
+// for the architecture running the test. The check offers an update only when
+// that exact archive exists, so a hard-coded linux-amd64 fixture made these
+// tests fail on arm64 hosts.
+func runtimeArchiveFixture(t *testing.T, tag string) ReleaseAsset {
+	t.Helper()
+	asset, ok := updateReleaseAssetForRuntime(tag)
+	if !ok {
+		t.Skipf("no Pulse server archive is published for %s", runtime.GOARCH)
+	}
+	return ReleaseAsset{Name: asset.Name, BrowserDownloadURL: "https://example.com/" + asset.Name}
 }
