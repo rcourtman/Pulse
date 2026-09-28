@@ -234,6 +234,17 @@ describe('Global update progress authorization', () => {
 });
 
 describe('App architecture', () => {
+  it('gates Patrol navigation on the same AI capability as the Assistant launcher (#905)', () => {
+    expect(appSource).toContain('patrolVisible: () => aiChatStore.enabled === true');
+    expect(appSource).toContain('patrolVisible={() => aiChatStore.enabled === true}');
+    expect(appLayoutSource).toMatch(
+      /\.\.\.\(aiChatStore\.enabled === true\s*\?\s*\[\s*\{\s*id: 'ai' as const/,
+    );
+    expect(appRuntimeStateSource).toContain(
+      'aiChatStore.setEnabled(securityData?.sessionCapabilities?.assistantEnabled === true)',
+    );
+  });
+
   it('keeps first-load connection progress understandable and retryable', () => {
     expect(appSource).toContain('fallback={<AppBootstrapStatus />}');
     expect(appSource).not.toContain('<div class="text-muted">Loading...</div>');

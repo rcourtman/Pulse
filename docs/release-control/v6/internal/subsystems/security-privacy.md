@@ -2906,3 +2906,11 @@ trust suite verifies every consumer pin, absence of the affected auth assumption
 workflow trust controls and the retained native Windows command/lifecycle proof
 steps. Native Windows execution remains a hosted check, not a local Linux claim.
 This upgrade is independent of the grouped signing/Docker/Tailscale updates.
+
+### Updates settings copy rename
+
+The System settings item formerly labelled "Pulse server updates" is now
+"Updates" in English, German and Spanish, with a plain-language description
+that still routes agent updates to Infrastructure. This is locale copy only:
+the `system-updates` route id, its `systemSettingsRead` capability gate and
+every update endpoint and authorization check are unchanged.

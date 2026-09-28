@@ -6874,7 +6874,8 @@ and
 
 ### Agent Doctor settings framing
 
-Settings labels the application update panel **Pulse server updates** and keeps
+Settings labels the application update panel **Updates** under the System
+group, whose description sends agent updates to Infrastructure, and keeps
 agent lifecycle triage in the separate **Agent Doctor** dialog. Platform update
 notices, Diagnostics, and Infrastructure rows use the canonical Agent Doctor
 route handoff instead of recreating installer or repair controls. The dialog
@@ -7460,3 +7461,13 @@ also follows the outdated-agent action to Agent Doctor with all 49 host IDs.
 The broader palette override should be corrected in its own shared-design
 slice, with background users migrated to explicit alpha utilities so other
 900-level text consumers can use normal opaque color semantics.
+
+### Actions empty state follows the AI capability
+
+`getActionsWatchOnlyEmptyState` takes an explicit `aiEnabled` input, which
+`pages/Actions.tsx` fills from the `assistantEnabled` session capability. While
+AI is off it returns no guidance, so the empty Open inbox keeps its plain copy
+instead of saying Patrol runs in Watch only mode or pitching Pro Patrol modes
+for a feature that is not running (issue #905). With AI on, the Watch only,
+switch and upgrade branches are unchanged. `actionsWatchOnlyEmptyState.test.ts`
+pins both states and the page wiring.

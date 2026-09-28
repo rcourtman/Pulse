@@ -61,9 +61,9 @@ const SETTINGS_SHELL_ROUTES = [
   },
   {
     route: '/settings/system-updates',
-    title: 'Pulse server updates',
+    title: 'Updates',
     description:
-      'Manage Pulse server runtime version checks, update channels, and automatic updates. Agent updates stay under Infrastructure.',
+      'Check for new Pulse versions, choose an update channel, and manage automatic updates. Agent updates stay under Infrastructure.',
   },
   {
     route: '/settings/system-recovery',

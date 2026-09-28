@@ -474,8 +474,8 @@ export const EN_MESSAGES = {
     'Check on your systems and get alert push notifications anywhere with the Pulse Mobile app — no port forwarding or VPN required.',
   'settings.header.systemRelay.title': 'Remote Access',
   'settings.header.systemUpdates.description':
-    'Manage Pulse server runtime version checks, update channels, and automatic updates. Agent updates stay under Infrastructure.',
-  'settings.header.systemUpdates.title': 'Pulse server updates',
+    'Check for new Pulse versions, choose an update channel, and manage automatic updates. Agent updates stay under Infrastructure.',
+  'settings.header.systemUpdates.title': 'Updates',
   'settings.header.supportDiagnostics.description':
     'Run health checks, validate connectivity, and export troubleshooting snapshots.',
   'settings.header.supportDiagnostics.title': 'Diagnostics & Health',
@@ -519,7 +519,7 @@ export const EN_MESSAGES = {
   'settings.nav.item.sharing': 'Sharing',
   'settings.nav.item.singleSignOn': 'Single Sign-On',
   'settings.nav.item.systemLogs': 'System Logs',
-  'settings.nav.item.updates': 'Pulse server updates',
+  'settings.nav.item.updates': 'Updates',
   'settings.nav.item.users': 'Users',
   'settings.shell.collapseSidebarLabel': 'Collapse settings navigation',
   'settings.shell.configurationLoading': 'Loading configuration...',

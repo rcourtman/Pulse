@@ -5396,3 +5396,11 @@ versus 4.953ms (+0.7%), with unchanged allocations. The 200-host merge was
 4.7µs and 19 allocations. These paired runs remove the observed local ingest
 regression. The revised #2260 CI Benchmarks job passed on commit
 `bbce69ea65` with no benchmark regression gate failure.
+
+### Actions empty-state copy does not touch the action ledger
+
+The Actions page now hides its Patrol Watch only guidance while the
+`assistantEnabled` session capability is false. This is empty-state
+presentation only: the action audit list, approval counts, review dialog,
+routing and every recorded action outcome are read and rendered exactly as
+before, and no resource or action identity changes.

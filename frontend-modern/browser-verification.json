@@ -1,42 +1,35 @@
 {
   "version": 1,
-  "base_sha": "ab4f04da3d67d20c51943666be9bf4515ebb3b3f",
-  "verified_at": "2026-09-28T17:08:52Z",
+  "base_sha": "a866b27f2a7f038ae06d2c2a404ebfe16375b687",
+  "verified_at": "2026-09-28T21:20:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/i18n/messages.de.ts",
-    "frontend-modern/src/i18n/messages.es.ts",
-    "frontend-modern/src/i18n/messages.ts"
+    "frontend-modern/src/features/actions/actionPresentation.ts",
+    "frontend-modern/src/pages/Actions.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/i18n/messages.de.ts": "4300b8dbbc163a1010dfd0c93d4d326b7ef05da02aedabbcfff393ba39b5f220",
-    "frontend-modern/src/i18n/messages.es.ts": "cd15c47444aaf7d823cd82b3b63cdad288a47da7bbb3393089eb8d3130f826a9",
-    "frontend-modern/src/i18n/messages.ts": "3e5f3057c10da70b92bc1c4343cede927c01979af7b1f8d00958d0c1d1ab60a0"
+    "frontend-modern/src/features/actions/actionPresentation.ts": "8e67a99e744cf7dbbc1fc53da1d9697af78a90d95779df3553ee8867c3c51496",
+    "frontend-modern/src/pages/Actions.tsx": "88ab28e9333652e81770e570c140aa19f0b6d833be3b65fd41afd2e9614f60c5"
   },
   "routes": [
-    "/preview/setup-complete?scenario=empty",
-    "/preview/setup-complete?scenario=vmware-api-backed"
+    "/actions"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 800
+      "width": 1440,
+      "height": 900
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "Empty and API-connected setup-completion previews rendered in English, German and Spanish at both widths",
-    "Host installer and conditional temperature/SMART coverage copy displayed without horizontal overflow or uncaught page errors",
-    "Credential section collapsed after activating its disclosure in each of the twelve states"
+    "AI off (assistantEnabled false, non-mock backend) before the fix: empty Open tab read Patrol runs in Watch only mode with a Pulse Pro pitch",
+    "AI off after the fix: empty Open tab reads No actions need attention and Pulse will place proposed or in-progress changes here for review, at 1440px and 375px",
+    "AI on (mock backend): Open tab lists demo actions from Patrol, empty-state guidance not rendered"
   ],
   "interactions": [
-    "Opened empty and API-connected previews for each locale at desktop and narrow widths",
-    "Collapsed the credentials disclosure and verified the preview password was hidden"
-  ],
-  "command": "pulse-worker-browser web-setup-proof.cjs from the exact assigned workspace root; local Vite preview and Chromium 141.0.7390.37",
-  "artifacts": "/var/lib/pulse-maintainer/worker-outputs/web-product-zonkacnc/browser-proof-artifacts",
-  "notes": "No backend or installed release was exercised. Screenshots were inspected for English desktop, English API-connected narrow, German empty narrow and Spanish API-connected narrow; result.json records all twelve rendered states. The proof script is retained beside the artifacts."
+    "Reloaded /actions at desktop and phone widths in both AI states"
+  ]
 }
