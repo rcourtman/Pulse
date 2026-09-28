@@ -216,6 +216,7 @@ Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Tok
 | Platform | Command |
 |----------|---------|
 | **Docker** | `docker exec pulse /app/pulse bootstrap-token` |
+| **Docker app UIs** (Unraid, Portainer, TrueNAS apps) | Open the Pulse container's console and run `/app/pulse bootstrap-token` |
 | **Kubernetes** | `kubectl exec -it <pod> -- /app/pulse bootstrap-token` |
 | **Systemd** | `sudo pulse bootstrap-token` |
 | **Proxmox LXC** | `pct exec <ctid> -- /usr/local/bin/pulse bootstrap-token` (run on the Proxmox host; the installer prints this command with your container ID at the end of the install) |

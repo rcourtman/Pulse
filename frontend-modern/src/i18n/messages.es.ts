@@ -309,6 +309,8 @@ export const ES_MESSAGE_OVERRIDES = {
     'Pulse parece ejecutarse en Docker. Ejecuta el comando en el host Docker y reemplaza <pulse-container> por el nombre del contenedor Pulse en ejecución.',
   'setup.welcome.deploymentHint.lxc':
     'Pulse parece ejecutarse en el contenedor LXC {ctid}. Ejecuta el comando en el host Proxmox para entrar en ese contenedor e imprimir el token de configuración de un solo uso.',
+  'setup.welcome.deploymentLabel.containerConsole':
+    'Consola del contenedor (Unraid, Portainer, apps de TrueNAS)',
   'setup.welcome.deploymentLabel.containerized': 'Despliegue contenedorizado',
   'setup.welcome.deploymentLabel.direct': 'Instalación directa en host',
   'setup.welcome.deploymentLabel.docker': 'Despliegue Docker',
