@@ -4718,9 +4718,8 @@ func (s *State) SyncGuestBackupTimes() {
 	}
 
 	// findBestPBSBackup finds the newest attributable PBS backup for a given
-	// typed VMID and guest location. A positive placement/name score, or a
-	// guarded VMID-only fallback, establishes attribution; score strength must
-	// not let an older snapshot hide a newer completed backup (#2292).
+	// typed VMID and guest location. Match strength decides which guest owns
+	// each snapshot, not whether an older owned snapshot outranks a newer one.
 	// Returns zero time if no suitable backup found. The subject map is a
 	// parameter so the same attribution rules apply to completed snapshots
 	// (feeding LastBackup) and to in-flight ones (feeding BackupInProgress).
@@ -4742,6 +4741,32 @@ func (s *State) SyncGuestBackupTimes() {
 				node,
 			)
 			snapshotKey := pbsSnapshotKey{backupType: backupType, vmid: vmid, unixTime: backup.BackupTime.Unix()}
+			if score > 0 && subjectIsAmbiguous[subjectKey] {
+				// A namespace such as "pve" can match two clusters with the
+				// same node label. A positive score is not attribution when a
+				// different connection matches the same snapshot at least as
+				// strongly. A stronger competitor rules this guest out; a tie
+				// needs independent storage/source evidence below (#2292).
+				strongestOther := 0
+				for _, other := range subjectGuests[subjectKey] {
+					if other.instance == instance {
+						continue
+					}
+					otherScore := proxmoxidentity.BackupGuestMatchScore(
+						backup.Namespace, backup.Comment, backup.VMID,
+						other.name, other.instance, other.node,
+					)
+					if otherScore > strongestOther {
+						strongestOther = otherScore
+					}
+				}
+				if strongestOther > score {
+					continue
+				}
+				if strongestOther == score {
+					score = 0
+				}
+			}
 			if score == 0 {
 				if !subjectIsAmbiguous[subjectKey] {
 					score = 1
