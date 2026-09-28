@@ -1968,18 +1968,37 @@ func TestPendingPrivilegedUpdateCommitsOnlyAfterReadinessAndAcceptedReport(t *te
 	default:
 	}
 	ready.Store(true)
+	var activation agenthelper.UpdateResult
+	finished := false
 	select {
-	case activation := <-stub.commitCalls:
-		if activation != pending.Activation {
-			t.Fatalf("commit activation = %#v", activation)
-		}
+	case activation = <-stub.commitCalls:
 	case err := <-result:
-		t.Fatalf("pending update supervisor stopped before committing: %v", err)
+		if err != nil {
+			t.Fatalf("pending update supervisor stopped before committing: %v", err)
+		}
+		finished = true
+		// Commit sends its recorded call before the supervisor can return. If
+		// both channels are ready, selecting result first is still success.
+		select {
+		case activation = <-stub.commitCalls:
+		default:
+			t.Fatal("pending update supervisor returned without committing")
+		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("pending update was not committed after both health signals")
 	}
-	if err := <-result; err != nil {
-		t.Fatal(err)
+	if activation != pending.Activation {
+		t.Fatalf("commit activation = %#v", activation)
+	}
+	if !finished {
+		select {
+		case err := <-result:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("pending update supervisor did not finish after commit")
+		}
 	}
 	if loaded, err := agentupdate.LoadPendingPrivilegedUpdate(stateDir); err != nil || loaded != nil {
 		t.Fatalf("committed handoff = %#v, %v", loaded, err)
