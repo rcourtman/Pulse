@@ -21,7 +21,7 @@ test.describe("Setup completion Add infrastructure handoff", () => {
     ).toBeVisible();
     await expect(
       page.getByText(
-        "Start by connecting Proxmox, TrueNAS, or VMware through their API. On Proxmox nodes, also install the Pulse Agent to add temperatures and disk health (SMART), which the Proxmox API does not report.",
+        "Connect Proxmox, TrueNAS, or VMware through their API, or run the Pulse Agent installer on a standalone host. On Proxmox nodes, the agent can add host-local temperatures and SMART data when available.",
       ),
     ).toBeVisible();
 
