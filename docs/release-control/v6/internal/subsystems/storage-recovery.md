@@ -6166,3 +6166,11 @@ walk the same group repeatedly during large-estate Storage navigation. The
 windowing test pins the row shape, and the 50-node browser fixture exercises
 expanded rows and History at desktop and phone widths. This is presentation
 work only; it changes no storage evidence, alert state or recovery authority.
+
+### App-shell AI navigation gating opens no recovery path
+
+`App.tsx` now passes the `assistantEnabled` session capability to the keyboard
+shortcuts and the shortcuts help so Patrol entry points hide while AI is off.
+The change is navigation presentation only. It adds no storage, backup,
+snapshot or recovery surface, and it changes no route, authority or recovery
+state. The Recovery settings item and its capability gate are untouched.

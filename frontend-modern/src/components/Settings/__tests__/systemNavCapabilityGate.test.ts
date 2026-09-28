@@ -6,7 +6,7 @@ import {
   type SettingsNavVisibilityContext,
 } from '../settingsNavVisibility';
 
-// System → Network, Pulse server updates, and Recovery are pure instance
+// System → Network, Updates, and Recovery are pure instance
 // administration: the public URL and CORS boundaries, the server update
 // channel, and backup polling plus config export/import. Every route behind
 // them is RequireAdmin + settings:read, so a session without it was offered

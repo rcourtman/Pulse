@@ -6874,7 +6874,8 @@ and
 
 ### Agent Doctor settings framing
 
-Settings labels the application update panel **Pulse server updates** and keeps
+Settings labels the application update panel **Updates** under the System
+group, whose description sends agent updates to Infrastructure, and keeps
 agent lifecycle triage in the separate **Agent Doctor** dialog. Platform update
 notices, Diagnostics, and Infrastructure rows use the canonical Agent Doctor
 route handoff instead of recreating installer or repair controls. The dialog
