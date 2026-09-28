@@ -2792,7 +2792,7 @@ func TestSecureRuntimeQualificationPacketIsHostedAndReleaseBound(t *testing.T) {
 		"release/pulse-secure-runtime-collector-v1-linux-amd64",
 		"release/pulse-secure-runtime-collector-v3-linux-amd64",
 		"qualify-secure-runtime-release.yml/dispatches",
-		`{ref: $tag, return_run_details: true, inputs: {tag: $tag}}`,
+		`{ref: "main", return_run_details: true, inputs: {tag: $tag}}`,
 		"Secure-runtime qualification dispatch did not return an exact workflow run.",
 		"Immutable RC publication did not retain an exact secure-runtime qualification run identity.",
 	} {
@@ -2805,9 +2805,11 @@ func TestSecureRuntimeQualificationPacketIsHostedAndReleaseBound(t *testing.T) {
 	if strings.Contains(qualificationWorkflow, "release:\n    types: [published]") {
 		t.Fatal("secure-runtime qualification must be explicitly dispatched after immutable publication, not rely on suppressed release events")
 	}
+	originIndex := strings.Index(qualificationWorkflow, "Bind canonical Pulse origin")
+	sourceIndex := strings.Index(qualificationWorkflow, "Verify detached release source")
 	preauthenticationIndex := strings.Index(qualificationWorkflow, "Pre-authenticate exact qualification packet")
 	privilegedExecutionIndex := strings.Index(qualificationWorkflow, "docker run")
-	if preauthenticationIndex < 0 || privilegedExecutionIndex < 0 || preauthenticationIndex > privilegedExecutionIndex {
+	if originIndex < 0 || sourceIndex < originIndex || preauthenticationIndex < sourceIndex || privilegedExecutionIndex < preauthenticationIndex {
 		t.Fatal("secure-runtime release packet must be authenticated before any privileged Docker execution")
 	}
 	if strings.Contains(qualificationWorkflow, `$RUNNER_TEMP/secure-runtime-downloads:/release:ro`) {
@@ -2815,8 +2817,11 @@ func TestSecureRuntimeQualificationPacketIsHostedAndReleaseBound(t *testing.T) {
 	}
 	for _, required := range []string{
 		".immutable == true",
-		`test "${GITHUB_REF}" = "refs/tags/${TAG}"`,
-		`test "${GITHUB_SHA}" = "${commit}"`,
+		`test "${GITHUB_REF}" = "refs/heads/main"`,
+		`test "${GITHUB_WORKFLOW_SHA}" = "${GITHUB_SHA}"`,
+		`test "${GITHUB_REPOSITORY}" = "rcourtman/Pulse"`,
+		`https://github.com/rcourtman/Pulse|https://github.com/rcourtman/Pulse.git)`,
+		`git remote set-url origin https://github.com/rcourtman/Pulse.git`,
 		"ca-certificates curl dbus systemd systemd-sysv util-linux",
 		`docker:27.5.1-dind@sha256:f649ef046008ca7f926a2571c32b0ac22e5c59eb61b959617f9acc2a4c638cf5`,
 		`for command in curl docker dockerd id nsenter runuser systemctl`,

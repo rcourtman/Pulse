@@ -1219,7 +1219,16 @@ artifact-selection behaviour.
    Private signing material and publication credentials must never enter the
    compilation job.
    Post-publication secure-runtime qualification must authenticate before it
-   executes. `.github/workflows/qualify-secure-runtime-release.yml` may download
+   executes. The publication workflow dispatches the reviewed qualification
+   control from protected `main`, with the immutable RC tag as its sole source
+   input. The qualification workflow must prove its own repository, workflow
+   ref and workflow SHA are that `main` control, then check out the detached
+   release tag and verify its commit is on the governed release line. Its
+   checkout may report either canonical HTTPS origin spelling, with or without
+   `.git`; it must reject every other origin before normalising to the exact
+   `.git` spelling required by the packet attester. Normalisation must not
+   relax the separate remote tag, branch, release and artifact identity checks.
+   `.github/workflows/qualify-secure-runtime-release.yml` may download
    caller-owned release assets only into a non-executable holding directory.
    `scripts/release_control/secure_runtime_attestation_v7.py` must copy the six
    binaries, four collector signatures, checksum manifest, assembly and
