@@ -4717,8 +4717,10 @@ func (s *State) SyncGuestBackupTimes() {
 		}
 	}
 
-	// findBestPBSBackup finds the best PBS backup for a given typed VMID and guest location.
-	// Placement and guest-name matches are preferred over VMID-only fallback.
+	// findBestPBSBackup finds the newest attributable PBS backup for a given
+	// typed VMID and guest location. A positive placement/name score, or a
+	// guarded VMID-only fallback, establishes attribution; score strength must
+	// not let an older snapshot hide a newer completed backup (#2292).
 	// Returns zero time if no suitable backup found. The subject map is a
 	// parameter so the same attribution rules apply to completed snapshots
 	// (feeding LastBackup) and to in-flight ones (feeding BackupInProgress).
@@ -4730,8 +4732,6 @@ func (s *State) SyncGuestBackupTimes() {
 		}
 
 		var bestTime time.Time
-		bestScore := -1
-
 		for _, backup := range backups {
 			score := proxmoxidentity.BackupGuestMatchScore(
 				backup.Namespace,
@@ -4774,8 +4774,7 @@ func (s *State) SyncGuestBackupTimes() {
 			if score <= 0 {
 				continue
 			}
-			if score > bestScore || (score == bestScore && backup.BackupTime.After(bestTime)) {
-				bestScore = score
+			if backup.BackupTime.After(bestTime) {
 				bestTime = backup.BackupTime
 			}
 		}
