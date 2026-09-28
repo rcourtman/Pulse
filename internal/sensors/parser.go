@@ -126,7 +126,7 @@ func isCPUChip(chipLower string) bool {
 		"it87", "nct6687", "nct6775", "nct6776", "nct6779",
 		"nct6791", "nct6792", "nct6793", "nct6795", "nct6796",
 		"nct6797", "nct6798", "w83627", "f71882",
-		"cpu_thermal", "rp1_adc", "rpitemp",
+		"cpu_thermal", "rp1_adc", "rpitemp", "armada_thermal",
 	}
 
 	for _, chip := range cpuChips {
@@ -166,7 +166,7 @@ func parseCPUTemps(chipMap map[string]interface{}, data *TemperatureData) {
 		// Capture generic temp1 for chips like cpu_thermal (RPi, ARM SoCs)
 		// that don't have labeled sensors
 		if sensorNameLower == "temp1" {
-			if tempVal := extractTempInput(sensorMap); !math.IsNaN(tempVal) && tempVal > 0 {
+			if tempVal := extractTempInput(sensorMap); !math.IsNaN(tempVal) && tempVal > 0 && tempVal < 150 {
 				genericTemp = tempVal
 			}
 		}

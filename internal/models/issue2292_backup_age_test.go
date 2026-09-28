@@ -216,3 +216,94 @@ func TestSyncGuestBackupTimesNewestPBSBackupSameNodeCollision(t *testing.T) {
 		})
 	}
 }
+
+// The reported notes template changed from "pulse" to "pdm21.21008.pulse".
+// Root has no namespace placement, so a colliding CT ID needs the complete
+// node/VMID/name comment to identify which PVE connection owns the newer row.
+func TestSyncGuestBackupTimesNodeVMIDNameCommentForUniqueCT(t *testing.T) {
+	now := time.Now()
+	recent := now.Add(-10 * time.Hour)
+	state := NewState()
+	state.UpdateContainers([]Container{
+		{VMID: 21008, Name: "pulse", Instance: "cluster-a", Node: "pdm21"},
+	})
+	state.mu.Lock()
+	state.PBSBackups = []PBSBackup{
+		{ID: "old", VMID: "21008", BackupType: "ct", BackupTime: now.Add(-29 * 24 * time.Hour),
+			Instance: "pbs-main", Comment: "pulse"},
+		{ID: "recent", VMID: "21008", BackupType: "ct", BackupTime: recent,
+			Instance: "pbs-main", Comment: "pdm21.21008.pulse"},
+	}
+	state.mu.Unlock()
+
+	state.SyncGuestBackupTimes()
+	if got := state.GetSnapshot().Containers[0].LastBackup; !got.Equal(recent) {
+		t.Errorf("unique CT LastBackup = %v, want newer Root snapshot %v", got, recent)
+	}
+}
+
+func TestSyncGuestBackupTimesNodeVMIDNameCommentForCollidingCT(t *testing.T) {
+	now := time.Now()
+	old := now.Add(-29 * 24 * time.Hour)
+	recent := now.Add(-10 * time.Hour)
+	other := now.Add(-2 * time.Hour)
+
+	state := NewState()
+	state.UpdateContainers([]Container{
+		{VMID: 21008, Name: "pulse", Instance: "cluster-a", Node: "pdm21"},
+		{VMID: 21008, Name: "other", Instance: "cluster-b", Node: "pdm22"},
+	})
+	state.mu.Lock()
+	state.PBSBackups = []PBSBackup{
+		{ID: "old", VMID: "21008", BackupType: "ct", BackupTime: old,
+			Instance: "pbs-main", Comment: "pulse"},
+		{ID: "recent", VMID: "21008", BackupType: "ct", BackupTime: recent,
+			Instance: "pbs-main", Comment: "pdm21.21008.pulse"},
+		// An unmarked newer root snapshot is still unsafe to assign to either CT.
+		{ID: "unknown", VMID: "21008", BackupType: "ct", BackupTime: other,
+			Instance: "pbs-unattributed"},
+		{ID: "running", VMID: "21008", BackupType: "ct", BackupTime: now,
+			Instance: "pbs-main", Comment: "pdm21.21008.pulse", InProgress: true},
+	}
+	state.mu.Unlock()
+
+	state.SyncGuestBackupTimes()
+	for _, guest := range state.GetSnapshot().Containers {
+		switch guest.Instance {
+		case "cluster-a":
+			if !guest.LastBackup.Equal(recent) || !guest.BackupInProgress {
+				t.Errorf("cluster-a LastBackup/running = %v/%v, want %v/true", guest.LastBackup, guest.BackupInProgress, recent)
+			}
+		case "cluster-b":
+			if !guest.LastBackup.IsZero() || guest.BackupInProgress {
+				t.Errorf("cluster-b inherited another CT's backup: %v/%v", guest.LastBackup, guest.BackupInProgress)
+			}
+		}
+	}
+}
+
+// A matching node/VMID/name comment is still insufficient when two distinct
+// connections host an indistinguishable CT. The #1639 collision guard wins.
+func TestSyncGuestBackupTimesNodeVMIDNameCommentTieStaysUnattributed(t *testing.T) {
+	now := time.Now()
+	state := NewState()
+	state.UpdateContainers([]Container{
+		{VMID: 21008, Name: "pulse", Instance: "cluster-a", Node: "pdm21"},
+		{VMID: 21008, Name: "pulse", Instance: "cluster-b", Node: "pdm21"},
+	})
+	state.mu.Lock()
+	state.PBSBackups = []PBSBackup{
+		{ID: "tied", VMID: "21008", BackupType: "ct", BackupTime: now.Add(-10 * time.Hour),
+			Instance: "pbs-main", Comment: "pdm21.21008.pulse"},
+		{ID: "running-tied", VMID: "21008", BackupType: "ct", BackupTime: now,
+			Instance: "pbs-main", Comment: "pdm21.21008.pulse", InProgress: true},
+	}
+	state.mu.Unlock()
+
+	state.SyncGuestBackupTimes()
+	for _, guest := range state.GetSnapshot().Containers {
+		if !guest.LastBackup.IsZero() || guest.BackupInProgress {
+			t.Errorf("%s inherited tied CT backup: %v/%v", guest.Instance, guest.LastBackup, guest.BackupInProgress)
+		}
+	}
+}
