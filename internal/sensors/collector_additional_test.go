@@ -82,7 +82,7 @@ func TestCollectLocal_SysfsContinuesPastBadSource(t *testing.T) {
 	}
 }
 
-func TestCollectLocal_SensorsJSONPrecedesSysfs(t *testing.T) {
+func TestCollectLocal_SensorsJSONGainsMissingSysfsCPU(t *testing.T) {
 	dir := t.TempDir()
 	writeScript(t, dir, "sensors", "#!/bin/sh\necho '{\"nvme-pci-0100\":{\"Composite\":{\"temp1_input\":39}}}'\n")
 	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
@@ -92,8 +92,44 @@ func TestCollectLocal_SensorsJSONPrecedesSysfs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "nvme-pci-0100") || strings.Contains(out, "cpu_thermal") {
-		t.Fatalf("lm-sensors result was replaced: %s", out)
+	parsed, err := Parse(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.CPUPackage != 57 || parsed.NVMe["nvme0"] != 39 {
+		t.Fatalf("lm-sensors data and sysfs CPU were not combined: %+v", parsed)
+	}
+}
+
+func TestCollectLocal_ExistingCPUPrecedesSysfs(t *testing.T) {
+	dir := t.TempDir()
+	const original = `{"coretemp-isa-0000":{"Package id 0":{"temp1_input":42}}}`
+	writeScript(t, dir, "sensors", "#!/bin/sh\necho '"+original+"'\n")
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	thermal, _ := useTestSysfsRoots(t)
+	writeSysfsSensor(t, thermal, "thermal_zone0", "type", "armada_thermal", "57000")
+	out, err := CollectLocal(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != original {
+		t.Fatalf("existing CPU reading was changed: %s", out)
+	}
+}
+
+func TestCollectLocal_InvalidSysfsDoesNotDiscardOtherSensors(t *testing.T) {
+	dir := t.TempDir()
+	const original = `{"nvme-pci-0100":{"Composite":{"temp1_input":39}}}`
+	writeScript(t, dir, "sensors", "#!/bin/sh\necho '"+original+"'\n")
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	thermal, _ := useTestSysfsRoots(t)
+	writeSysfsSensor(t, thermal, "thermal_zone0", "type", "armada_thermal", "bad")
+	out, err := CollectLocal(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != original {
+		t.Fatalf("valid lm-sensors data was discarded: %s", out)
 	}
 }
 

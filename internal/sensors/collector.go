@@ -2,6 +2,7 @@ package sensors
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -26,9 +27,9 @@ var (
 	hwmonRoot                = "/sys/class/hwmon"
 )
 
-// CollectLocal reads lm-sensors JSON, or a recognised CPU thermal sysfs source
-// when lm-sensors is unavailable or returns no data. A valid lm-sensors result
-// is kept intact so drive, GPU and fan readings are not lost.
+// CollectLocal reads lm-sensors JSON and supplements it with a recognised CPU
+// thermal sysfs source when it contains no CPU chip. Other lm-sensors readings
+// are retained; sysfs is also used when lm-sensors is unavailable or empty.
 func CollectLocal(ctx context.Context) (string, error) {
 	ctx = normalizeCollectionContext(ctx)
 
@@ -47,7 +48,7 @@ func CollectLocal(ctx context.Context) (string, error) {
 		}
 		outputStr := strings.TrimSpace(string(output))
 		if outputStr != "" && outputStr != "{}" {
-			return outputStr, nil
+			return addMissingSysfsCPU(ctx, outputStr), nil
 		}
 		if cmdCtx.Err() != nil {
 			return "", fmt.Errorf("failed to execute sensors: %w", cmdCtx.Err())
@@ -65,6 +66,37 @@ func CollectLocal(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("lm-sensors unavailable and CPU thermal fallback failed: %w", fallbackErr)
 	}
 	return "", fmt.Errorf("sensors returned empty output and CPU thermal fallback failed: %w", fallbackErr)
+}
+
+// addMissingSysfsCPU leaves existing output unchanged unless it is a JSON
+// object without a recognised CPU chip and an identified sysfs source is
+// available. A failed optional lookup must not discard working sensors data.
+func addMissingSysfsCPU(ctx context.Context, sensorsJSON string) string {
+	var chips map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(sensorsJSON), &chips); err != nil || chips == nil {
+		return sensorsJSON
+	}
+	for name := range chips {
+		if isCPUChip(strings.ToLower(name)) {
+			return sensorsJSON
+		}
+	}
+	fallbackJSON, err := collectSysfsCPUTemperature(ctx)
+	if err != nil {
+		return sensorsJSON
+	}
+	var fallback map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(fallbackJSON), &fallback); err != nil {
+		return sensorsJSON
+	}
+	for name, value := range fallback {
+		chips[name] = value
+	}
+	merged, err := json.Marshal(chips)
+	if err != nil || len(merged) > maxSensorsOutputSizeBytes {
+		return sensorsJSON
+	}
+	return string(merged)
 }
 
 // collectSysfsCPUTemperature deliberately accepts only identified CPU/SoC
