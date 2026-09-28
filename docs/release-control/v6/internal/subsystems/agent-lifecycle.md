@@ -7668,6 +7668,12 @@ kept running on the Proxmox host). Three coupled guarantees:
    answers from the durable receipt; it is never dropped as a duplicate,
    because the server replays exact request IDs to recover receipts and a
    dropped replay would leave the server waiting out the full timeout.
+   Inbound results are correlated to the exact session that carried the
+   request, so once that session's reader exits (socket drop or read error)
+   the server signals the session done and every dispatch still waiting on
+   it fails immediately with a `disconnected before ... receipt` error
+   instead of waiting out its operation timeout. The caller recovers the
+   outcome by replaying the same request ID on the runner's next session.
 3. The unified agent's command client tracks in-flight
    `execute_command`/`read_file` executions and durable host update,
    storage-cleanup, Proxmox guest lifecycle, and container lifecycle/update
@@ -7691,7 +7697,8 @@ Proofs: `internal/agentexec/server_websocket_test.go`
 `TestExecuteCommand_AbandonedCommandSendsCancel`),
 `internal/agentexec/server_websocket_test.go`
 (`TestTypedOperations_AbandonedDispatchSendsExactlyOneCancel`,
-`TestTypedOperation_TimeoutSendsCancelAndExpiredContextNeverDispatches`),
+`TestTypedOperation_TimeoutSendsCancelAndExpiredContextNeverDispatches`,
+`TestTypedOperation_SocketDropAfterSendUnblocksDispatch`),
 `internal/hostagent/operation_receipt_websocket_integration_test.go`
 (`TestRealServerActionRunnerCancellationPersistsAndReplaysProxmoxReceiptAfterReconnect`),
 `internal/hostagent/command_client_test.go`
