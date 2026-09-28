@@ -3630,3 +3630,13 @@ activation semantics. The offline mobile audit explicitly activates the default
 context before it creates and activates isolated organizations, using the normal
 authenticated API. Its route/overflow checks and AppLayout regression cover this
 boundary without granting Community private RBAC or changing CI tier membership.
+
+### AI navigation gating stays outside commercial scope
+
+The app shell hides Patrol navigation and Assistant palette commands while the
+`assistantEnabled` session capability is false. The gate reads only that AI
+capability: it does not consult entitlements, organization scope, hosted
+bootstrap or upgrade state, and it adds no commercial prompt. Paid Patrol
+modes stay governed on the Patrol and Actions surfaces, which remain
+reachable by route. `App.architecture.test.ts` pins that the gate reads the
+same capability as the Assistant launcher.

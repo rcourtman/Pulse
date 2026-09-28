@@ -484,8 +484,8 @@ export const ES_MESSAGE_OVERRIDES = {
     'Consulta tus sistemas y recibe notificaciones push de alertas desde cualquier lugar con la aplicación Pulse Mobile — sin abrir puertos ni VPN.',
   'settings.header.systemRelay.title': 'Acceso remoto',
   'settings.header.systemUpdates.description':
-    'Administra las comprobaciones de versión, los canales y las actualizaciones automáticas del servidor Pulse. Las actualizaciones de agentes permanecen en Infraestructura.',
-  'settings.header.systemUpdates.title': 'Actualizaciones del servidor Pulse',
+    'Busca nuevas versiones de Pulse, elige un canal de actualización y administra las actualizaciones automáticas. Las actualizaciones de agentes permanecen en Infraestructura.',
+  'settings.header.systemUpdates.title': 'Actualizaciones',
   'settings.header.supportDiagnostics.description':
     'Ejecuta comprobaciones de salud, valida conectividad y exporta snapshots de resolución de problemas.',
   'settings.header.supportDiagnostics.title': 'Diagnóstico y salud',
@@ -529,7 +529,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'settings.nav.item.sharing': 'Uso compartido',
   'settings.nav.item.singleSignOn': 'Inicio de sesión único',
   'settings.nav.item.systemLogs': 'Logs del sistema',
-  'settings.nav.item.updates': 'Actualizaciones del servidor Pulse',
+  'settings.nav.item.updates': 'Actualizaciones',
   'settings.nav.item.users': 'Usuarios',
   'settings.shell.collapseSidebarLabel': 'Contraer navegación de ajustes',
   'settings.shell.configurationLoading': 'Cargando configuración...',

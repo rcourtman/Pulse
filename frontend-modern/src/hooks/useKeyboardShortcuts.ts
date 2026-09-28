@@ -27,6 +27,9 @@ type KeyboardShortcutsOptions = {
   onToggleCommandPalette?: () => void;
   onFocusSearch?: () => boolean | void;
   platformVisibility?: Accessor<PlatformNavigationVisibility>;
+  // Patrol navigation exists only while AI is enabled and configured; an
+  // absent accessor keeps the shortcut for callers that do not gate it.
+  patrolVisible?: Accessor<boolean>;
 };
 
 const isEditableTarget = (target: EventTarget | null): boolean => {
@@ -99,7 +102,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
     return {
       ...infrastructureRoutes,
       a: '/alerts',
-      r: '/patrol',
+      ...(options.patrolVisible?.() === false ? {} : { r: '/patrol' }),
       t: '/settings',
     };
   };

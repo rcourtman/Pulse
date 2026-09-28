@@ -491,8 +491,8 @@ export const DE_MESSAGE_OVERRIDES = {
     'Behalten Sie Ihre Systeme von ueberall im Blick und erhalten Sie Alarm-Push-Benachrichtigungen ueber die Pulse-Mobile-App — ohne Portfreigaben oder VPN.',
   'settings.header.systemRelay.title': 'Remote-Zugriff',
   'settings.header.systemUpdates.description':
-    'Verwalten Sie Versionspruefungen, Update-Kanaele und automatische Updates der Pulse-Server-Laufzeit. Agent-Updates bleiben unter Infrastruktur.',
-  'settings.header.systemUpdates.title': 'Pulse-Server-Updates',
+    'Suchen Sie nach neuen Pulse-Versionen, waehlen Sie einen Update-Kanal und verwalten Sie automatische Updates. Agent-Updates bleiben unter Infrastruktur.',
+  'settings.header.systemUpdates.title': 'Updates',
   'settings.header.supportDiagnostics.description':
     'Fuehren Sie Zustandspruefungen aus, validieren Sie Verbindungen und exportieren Sie Troubleshooting-Snapshots.',
   'settings.header.supportDiagnostics.title': 'Diagnose & Zustand',
@@ -536,7 +536,7 @@ export const DE_MESSAGE_OVERRIDES = {
   'settings.nav.item.sharing': 'Freigabe',
   'settings.nav.item.singleSignOn': 'Single Sign-On',
   'settings.nav.item.systemLogs': 'Systemprotokolle',
-  'settings.nav.item.updates': 'Pulse-Server-Updates',
+  'settings.nav.item.updates': 'Updates',
   'settings.nav.item.users': 'Benutzer',
   'settings.shell.collapseSidebarLabel': 'Einstellungsnavigation einklappen',
   'settings.shell.configurationLoading': 'Konfiguration wird geladen...',

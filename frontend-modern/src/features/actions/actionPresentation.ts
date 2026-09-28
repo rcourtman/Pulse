@@ -119,6 +119,9 @@ export const getActionApprovalBadgePresentation = (
 };
 
 export interface ActionsWatchOnlyEmptyStateInput {
+  // False while AI is off or unconfigured: Patrol is not running at all, so
+  // naming its Watch only mode (or pitching Pro modes) would be untrue.
+  aiEnabled: boolean;
   patrolWatchOnly: boolean;
   patrolModesUnlocked: boolean;
   commercialSurfacesHidden: boolean;
@@ -136,7 +139,7 @@ export type ActionsWatchOnlyEmptyStatePresentation =
 export const getActionsWatchOnlyEmptyState = (
   input: ActionsWatchOnlyEmptyStateInput,
 ): ActionsWatchOnlyEmptyStatePresentation | undefined => {
-  if (!input.patrolWatchOnly) return undefined;
+  if (!input.aiEnabled || !input.patrolWatchOnly) return undefined;
   if (input.patrolModesUnlocked) {
     return {
       kind: 'switch',
