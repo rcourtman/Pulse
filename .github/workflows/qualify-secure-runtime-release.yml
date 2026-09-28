@@ -59,6 +59,20 @@ jobs:
           fetch-depth: 0
           ref: ${{ steps.release.outputs.tag }}
 
+      - name: Bind canonical Pulse origin
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "rcourtman/Pulse"
+          # checkout v7 records the canonical HTTPS URL without .git. The
+          # released attestation expects the equivalent .git spelling and
+          # independently checks the remote tag and branch identities.
+          origin_url="$(git remote get-url origin)"
+          case "${origin_url}" in
+            https://github.com/rcourtman/Pulse|https://github.com/rcourtman/Pulse.git) ;;
+            *) echo "::error::Release checkout origin is not canonical Pulse."; exit 1 ;;
+          esac
+          git remote set-url origin https://github.com/rcourtman/Pulse.git
+
       - name: Verify detached release source
         id: source
         env:
@@ -77,8 +91,11 @@ jobs:
           git fetch --no-tags origin \
             "refs/heads/${required_branch}:refs/remotes/origin/${required_branch}"
           commit="$(git rev-parse "${TAG}^{commit}")"
-          test "${GITHUB_REF}" = "refs/tags/${TAG}"
-          test "${GITHUB_SHA}" = "${commit}"
+          # Run reviewed qualification control from protected main, while the
+          # checkout and the packet remain bound to the immutable release tag.
+          test "${GITHUB_REF}" = "refs/heads/main"
+          test "${GITHUB_WORKFLOW_REF}" = "${GITHUB_REPOSITORY}/.github/workflows/qualify-secure-runtime-release.yml@refs/heads/main"
+          test "${GITHUB_WORKFLOW_SHA}" = "${GITHUB_SHA}"
           test "$(git branch --show-current)" = ""
           test -z "$(git status --short --untracked-files=all)"
           git merge-base --is-ancestor "${commit}" "origin/${required_branch}"
