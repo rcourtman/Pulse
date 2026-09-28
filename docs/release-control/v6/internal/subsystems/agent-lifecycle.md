@@ -3293,8 +3293,11 @@ Agent` secondary handoff against the live setup wizard instead of relying
     first source is still pending,
     that same completion narrative must describe Add infrastructure as the
     place where the operator chooses platform API inventory, Pulse Agent
-    telemetry, or both. If the operator selects the direct agent path from that
-    completion surface, the agent install body may prepare the first-host
+    telemetry, or both. The operator-facing copy names those choices in plain
+    words (connect by API, install the Pulse Agent, or both) and names what
+    each one shows, rather than the internal terms inventory, node-local
+    telemetry, estate, or source strategy used in this contract. If the
+    operator selects the direct agent path from that completion surface, the agent install body may prepare the first-host
     scoped install token from setup handoff, and when it names the shared
     settings workspace for follow-up lifecycle control it must use the
     canonical `Infrastructure` label instead of reviving the retired

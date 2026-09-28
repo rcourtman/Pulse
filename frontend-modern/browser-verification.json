@@ -1,22 +1,21 @@
 {
   "version": 1,
-  "base_sha": "75c72ef505b24e31214162b7b46f97e357528ae3",
-  "verified_at": "2026-09-28T14:14:00Z",
+  "base_sha": "ad15366f3dc02480ede74dce80a074c190e83d3c",
+  "verified_at": "2026-09-28T15:10:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx",
     "frontend-modern/src/i18n/messages.de.ts",
     "frontend-modern/src/i18n/messages.es.ts",
     "frontend-modern/src/i18n/messages.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx": "cb25935ec49782592c1602ae1502f5becc94108d61c3a786bbd65654d757e540",
-    "frontend-modern/src/i18n/messages.de.ts": "ca6bd4a42cac62c3bdec6ef25c35b5ec78b886d0455c6eab0ae8f154c0fd3361",
-    "frontend-modern/src/i18n/messages.es.ts": "5b3867658b39164afdece84e7a1eb28195b18d810d9ca9f5ed6761a54e274dcd",
-    "frontend-modern/src/i18n/messages.ts": "9e0bd2b4addcf984e499499460fee59f705d684cffb4fba1d7da0361cfbbdd31"
+    "frontend-modern/src/i18n/messages.de.ts": "ae9c0783b2a2f2a62dcdb19b4478e73dc27acbd1c032632bd73fda369ea83975",
+    "frontend-modern/src/i18n/messages.es.ts": "f0c9cddc79c1e4dbcc64aa58bc661592903817155444fd4a70778627c0ca3b45",
+    "frontend-modern/src/i18n/messages.ts": "ea55b33d3669eab718fab8fb844b3fa340648835f3c1e55dd978995565ca337e"
   },
   "routes": [
-    "/ (first-run unlock screen, fresh container)"
+    "/ (setup completion after unlock and admin creation)",
+    "/settings/infrastructure?add=pick"
   ],
   "viewports": [
     {
@@ -29,15 +28,15 @@
     }
   ],
   "states": [
-    "Fresh rcourtman/pulse:latest (v6.4.1) container in first-run state, serving this branch's vite build via PULSE_FRONTEND_DIR, reached through an SSH tunnel to localhost",
-    "Unlock setup lists four rows: direct host, Docker deployment, the new Container console (Unraid, Portainer, TrueNAS apps) row with /app/pulse bootstrap-token, and LXC",
-    "At 390px the new label wraps to two lines and the command truncates like the existing rows, with no page-level horizontal overflow (scrollWidth 390)",
-    "At 1280px all four commands render in full with no overflow"
+    "Fresh rcourtman/pulse:latest (v6.4.1) container in first-run state serving this branch's vite build via PULSE_FRONTEND_DIR, reached over an SSH tunnel to localhost",
+    "Empty first-source completion state shows Connect your first system, the plain next-step summary and detail, and the Ways to connect list with Connect by API, Pulse Agent and Use both",
+    "At 390px the headings, badge, buttons and list wrap without page-level horizontal overflow (scrollWidth 390)",
+    "At desktop width the credentials card and next-step card render with the new copy and no clipping"
   ],
   "interactions": [
-    "Clicked the copy button on the Container console row and saw the Command copied to clipboard toast and the check icon",
-    "Ran /app/pulse bootstrap-token from a shell inside the container as root and as the pulse user and confirmed it printed the token"
+    "Verified a bootstrap token, created the auto-generated admin, and reached the completion screen",
+    "Clicked Add infrastructure at 390px and confirmed it routes to /settings/infrastructure?add=pick"
   ],
   "command": "Claude desktop browser pane against a pulse-dev probe container",
-  "notes": "Backend was the published v6.4.1 image, not a build of this branch. The frontend is this branch. Telemetry was disabled on the probe containers."
+  "notes": "Copy-only change. Backend was the published v6.4.1 image, frontend is this branch. German and Spanish strings are covered by the localization unit test, not visually checked. Telemetry was disabled on the probe."
 }

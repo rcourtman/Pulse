@@ -35,42 +35,42 @@ export const EN_MESSAGES = {
     'Your admin account is ready and Pulse is already receiving telemetry. Open Infrastructure to inspect the first system, then return to Add infrastructure when you want another platform API or Agent source.',
   'setup.completion.hero.connected.title': 'First monitored system connected',
   'setup.completion.hero.empty.description':
-    'Your admin account is ready. Next, choose how the first system should enter the unified infrastructure model: platform API inventory, Pulse Agent telemetry, or both.',
-  'setup.completion.hero.empty.title': 'Choose your first infrastructure source',
+    'Your admin account is ready. Next, tell Pulse what to monitor: a Proxmox server, a NAS, VMware, or any Linux, Windows, or macOS machine.',
+  'setup.completion.hero.empty.title': 'Connect your first system',
   'setup.completion.nextStep.ariaLabel': 'Setup next step',
   'setup.completion.nextStep.badge': 'Recommended next step',
   'setup.completion.nextStep.detail.agent':
-    'Add infrastructure stays available for more Pulse Agent systems or platform API inventory when a platform manages the estate.',
+    'Use Add infrastructure any time to add more machines, or to connect a platform such as Proxmox through its API.',
   'setup.completion.nextStep.detail.api':
-    'Add infrastructure stays available for more API-backed systems or Pulse Agent telemetry when a system needs node-local coverage.',
+    'Use Add infrastructure any time to connect more systems, or to install the Pulse Agent where you want temperatures and disk health.',
   'setup.completion.nextStep.detail.both':
-    'Add infrastructure stays available any time you want to expand from this first system with another API source, Agent source, or both.',
+    'Use Add infrastructure any time to connect more systems through their API, with the agent, or both.',
   'setup.completion.nextStep.detail.empty':
-    'Start with a platform API when a platform manages the estate. Install Pulse Agent when the system itself should report node-local telemetry.',
+    'Proxmox, TrueNAS, and VMware connect through their API, so there is nothing to install on them. Install the Pulse Agent on a machine when you also want its temperatures, disk health, or Docker containers.',
   'setup.completion.nextStep.label': 'Next step',
   'setup.completion.nextStep.summary.connected.singular':
     'Open Infrastructure to review your first connected system.',
   'setup.completion.nextStep.summary.connected.plural':
     'Open Infrastructure to review your connected systems.',
   'setup.completion.nextStep.summary.empty':
-    'Open Add infrastructure to choose a platform API, Pulse Agent, or both.',
+    'Open Add infrastructure and pick what you run. Pulse can connect to its API, install its agent, or both.',
   'setup.completion.nextStep.title.connected': 'Open Infrastructure',
-  'setup.completion.nextStep.title.empty': 'Choose the first source strategy',
+  'setup.completion.nextStep.title.empty': 'Add the first system to monitor',
   'setup.completion.proActivation.action': 'Enter activation key',
   'setup.completion.proActivation.description':
     'This server is running the Pulse Pro build without an active license. Enter the activation key from your purchase email to unlock Pro features.',
   'setup.completion.proActivation.title': 'Activate Pulse Pro',
   'setup.completion.resource.unknownName': 'Unknown',
   'setup.completion.sourceOptions.agent.description':
-    'Node-local telemetry for standalone hosts, services, Docker, and Kubernetes.',
+    'A small program on a Linux, Windows, or macOS machine that reports its own health, disks, Docker, and Kubernetes.',
   'setup.completion.sourceOptions.agent.title': 'Pulse Agent',
   'setup.completion.sourceOptions.both.description':
-    'Combine platform inventory with Agent telemetry when full coverage matters.',
+    'Connect Proxmox by API for the whole cluster, then add the agent on the nodes where you want temperatures and disk health.',
   'setup.completion.sourceOptions.both.title': 'Use both',
   'setup.completion.sourceOptions.platformApi.description':
-    'Inventory and health from Proxmox, TrueNAS, VMware, PBS, or PMG.',
-  'setup.completion.sourceOptions.platformApi.title': 'Platform API',
-  'setup.completion.sourceOptions.title': 'Source choices',
+    'Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, TrueNAS, or VMware. Pulse reads VMs, storage, and health through the platform API.',
+  'setup.completion.sourceOptions.platformApi.title': 'Connect by API',
+  'setup.completion.sourceOptions.title': 'Ways to connect',
   'setup.progress.ariaLabel': 'Setup progress',
   'setup.progress.state.completed': ', completed',
   'setup.progress.state.current': ', current',

@@ -11,7 +11,7 @@ test.describe("Setup completion Add infrastructure handoff", () => {
     });
 
     await expect(
-      page.getByText("Choose your first infrastructure source"),
+      page.getByText("Connect your first system"),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Add infrastructure", exact: true }),
@@ -21,7 +21,7 @@ test.describe("Setup completion Add infrastructure handoff", () => {
     ).toBeVisible();
     await expect(
       page.getByText(
-        "Start with a platform API when a platform manages the estate. Install Pulse Agent when the system itself should report node-local telemetry.",
+        "Proxmox, TrueNAS, and VMware connect through their API, so there is nothing to install on them. Install the Pulse Agent on a machine when you also want its temperatures, disk health, or Docker containers.",
       ),
     ).toBeVisible();
 
