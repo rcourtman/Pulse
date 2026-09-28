@@ -603,17 +603,25 @@ export function AppLayout(props: AppLayoutProps) {
         breakdown,
         icon: BellIcon,
       },
-      {
-        id: 'ai',
-        label: 'Patrol',
-        route: '/patrol',
-        tooltip: 'Review active operational attention and recent Patrol checks',
-        badge: null,
-        count: patrolAttentionCount() || undefined,
-        countLabel: patrolAttentionCountLabel(),
-        breakdown: undefined,
-        icon: PulsePatrolLogo,
-      },
+      // Patrol cannot run without an enabled, configured AI provider, so its
+      // tab follows the same session capability as the Assistant launcher.
+      // Turning AI off in Settings hides every AI entry point (#905); the
+      // route itself stays reachable for links and the settings handoff.
+      ...(aiChatStore.enabled === true
+        ? [
+            {
+              id: 'ai' as const,
+              label: 'Patrol',
+              route: '/patrol',
+              tooltip: 'Review active operational attention and recent Patrol checks',
+              badge: null,
+              count: patrolAttentionCount() || undefined,
+              countLabel: patrolAttentionCountLabel(),
+              breakdown: undefined,
+              icon: PulsePatrolLogo,
+            },
+          ]
+        : []),
       {
         id: 'actions',
         label: 'Actions',

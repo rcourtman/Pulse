@@ -36,6 +36,10 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
     runAfterPaletteSelection(() => aiChatStore.requestCommand(action));
   };
 
+  // Same session capability that gates the Assistant launcher and the Patrol
+  // tab: with AI off, the palette offers neither Assistant nor Patrol.
+  const aiAvailable = () => aiChatStore.enabled === true;
+
   const commands = createMemo(() =>
     buildCommandPaletteCommands({
       paths: {
@@ -49,23 +53,26 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
         vmwareNetworksPath: buildVmwarePath('networks'),
       },
       platformVisibility: props.platformVisibility(),
+      patrolVisible: aiAvailable(),
       navigate,
       assistantOpenPresentation: {
         label: assistantPageContext().commandLabel,
         description: assistantPageContext().commandDescription,
       },
-      assistantActions: {
-        open: () =>
-          runAfterPaletteSelection(() => aiChatStore.open(assistantPageContext().context)),
-        help: () => requestAssistantCommand('help'),
-        newSession: () => requestAssistantCommand('new'),
-        sessions: () => requestAssistantCommand('sessions'),
-        models: () => requestAssistantCommand('models'),
-        providers: () => requestAssistantCommand('providers'),
-        status: () => requestAssistantCommand('status'),
-        undo: () => requestAssistantCommand('undo'),
-        redo: () => requestAssistantCommand('redo'),
-      },
+      assistantActions: aiAvailable()
+        ? {
+            open: () =>
+              runAfterPaletteSelection(() => aiChatStore.open(assistantPageContext().context)),
+            help: () => requestAssistantCommand('help'),
+            newSession: () => requestAssistantCommand('new'),
+            sessions: () => requestAssistantCommand('sessions'),
+            models: () => requestAssistantCommand('models'),
+            providers: () => requestAssistantCommand('providers'),
+            status: () => requestAssistantCommand('status'),
+            undo: () => requestAssistantCommand('undo'),
+            redo: () => requestAssistantCommand('redo'),
+          }
+        : undefined,
     }),
   );
 

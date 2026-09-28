@@ -8469,3 +8469,18 @@ complete new snapshot, never a partially written file. This is an internal
 durability boundary, not a public API or stored-format change. The
 `TestKnowledgeStore_SaveLoad` cleanup join and the concurrent-save reload
 regression in `internal/ai/adapters/adapters_additional_test.go` enforce it.
+
+### AI entry points follow the assistant session capability
+
+Every AI entry point in the app shell follows the `assistantEnabled` session
+capability (AI enabled and a provider configured, or mock mode). That covers
+the Assistant launcher and Assistant command-palette commands, and the Patrol
+top-level tab, mobile bottom-bar slot, `g r` shortcut, shortcuts-help row and
+`Go to Patrol` palette command. Patrol cannot run without a configured
+provider, so an AI-off install no longer carries navigation that only reaches
+an "off" setup page, which restores the issue #905 behaviour for Patrol. The
+Settings Patrol and Assistant items and the `/patrol` route stay reachable, so
+turning AI back on needs no new path. This is presentation gating only: Patrol
+runtime, findings, schedules and the capability's server derivation are
+unchanged. `AppLayout.test.tsx`, `CommandPaletteModal.test.tsx`,
+`KeyboardShortcutsModal.test.tsx` and `App.architecture.test.ts` pin it.

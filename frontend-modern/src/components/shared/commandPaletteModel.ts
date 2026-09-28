@@ -49,6 +49,8 @@ export type CommandPaletteAssistantOpenPresentation = {
 export function buildCommandPaletteCommands(options: {
   paths: CommandPaletteCommandPaths;
   platformVisibility: PlatformNavigationVisibility;
+  // Omitted means visible, for callers that do not gate Patrol.
+  patrolVisible?: boolean;
   navigate: (path: string) => void;
   assistantActions?: CommandPaletteAssistantActions;
   assistantOpenPresentation?: CommandPaletteAssistantOpenPresentation;
@@ -242,32 +244,34 @@ export function buildCommandPaletteCommands(options: {
     });
   }
 
-  commands.push(
-    {
-      id: 'nav-alerts',
-      label: 'Go to Alerts',
-      description: '/alerts',
-      shortcut: 'g a',
-      keywords: ['alarms', 'notifications'],
-      action: () => options.navigate('/alerts'),
-    },
-    {
+  commands.push({
+    id: 'nav-alerts',
+    label: 'Go to Alerts',
+    description: '/alerts',
+    shortcut: 'g a',
+    keywords: ['alarms', 'notifications'],
+    action: () => options.navigate('/alerts'),
+  });
+
+  if (options.patrolVisible !== false) {
+    commands.push({
       id: 'nav-patrol',
       label: 'Go to Patrol',
       description: '/patrol',
       shortcut: 'g r',
       keywords: ['needs attention', 'patrol', 'findings', 'ai', 'verification'],
       action: () => options.navigate('/patrol'),
-    },
-    {
-      id: 'nav-settings',
-      label: 'Go to Settings',
-      description: '/settings',
-      shortcut: 'g t',
-      keywords: ['preferences', 'config'],
-      action: () => options.navigate('/settings'),
-    },
-  );
+    });
+  }
+
+  commands.push({
+    id: 'nav-settings',
+    label: 'Go to Settings',
+    description: '/settings',
+    shortcut: 'g t',
+    keywords: ['preferences', 'config'],
+    action: () => options.navigate('/settings'),
+  });
 
   return commands;
 }

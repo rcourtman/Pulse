@@ -429,7 +429,7 @@ describe('settings architecture guardrails', () => {
   it('gates the admin-only System tabs on the served systemSettingsRead capability', () => {
     // Same rationale as Infrastructure rather than the paid-feature one: a free
     // install can act on a paid tab by upgrading, but a non-admin cannot grant
-    // themselves admin, so Network / Pulse server updates / Recovery can only
+    // themselves admin, so Network / Updates / Recovery can only
     // end in a panel they will never populate.
     for (const id of ['system-network', 'system-updates', 'system-recovery']) {
       const navBlock = settingsNavCatalogSource.match(
@@ -487,12 +487,12 @@ describe('settings architecture guardrails', () => {
     );
   });
 
-  it('keeps Pulse server updates separate from Agent Doctor lifecycle triage', () => {
+  it('keeps Pulse updates separate from Agent Doctor lifecycle triage', () => {
     const updatesNavBlock = settingsNavCatalogSource.match(
       /id: 'system-updates',[\s\S]*?id: 'system-recovery',/,
     );
-    expect(updatesNavBlock?.[0]).toContain("label: 'Pulse server updates'");
-    expect(settingsHeaderMetaSource).toContain("title: 'Pulse server updates'");
+    expect(updatesNavBlock?.[0]).toContain("label: 'Updates'");
+    expect(settingsHeaderMetaSource).toContain("title: 'Updates'");
     expect(settingsNavCatalogSource).not.toContain("label: 'Agent Doctor'");
   });
 

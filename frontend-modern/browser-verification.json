@@ -1,42 +1,69 @@
 {
   "version": 1,
-  "base_sha": "ab4f04da3d67d20c51943666be9bf4515ebb3b3f",
-  "verified_at": "2026-09-28T17:08:52Z",
+  "base_sha": "762aa6fe1a423f03138e8e7e533381f3e086e3c1",
+  "verified_at": "2026-09-28T21:05:00Z",
   "result": "passed",
   "changed_paths": [
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/Settings/settingsHeaderMeta.ts",
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
+    "frontend-modern/src/components/shared/KeyboardShortcutsModal.tsx",
+    "frontend-modern/src/components/shared/commandPaletteModel.ts",
+    "frontend-modern/src/components/shared/useCommandPaletteState.ts",
+    "frontend-modern/src/hooks/useKeyboardShortcuts.ts",
     "frontend-modern/src/i18n/messages.de.ts",
     "frontend-modern/src/i18n/messages.es.ts",
-    "frontend-modern/src/i18n/messages.ts"
+    "frontend-modern/src/i18n/messages.ts",
+    "frontend-modern/src/types/config.ts",
+    "frontend-modern/src/utils/updatesPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/i18n/messages.de.ts": "4300b8dbbc163a1010dfd0c93d4d326b7ef05da02aedabbcfff393ba39b5f220",
-    "frontend-modern/src/i18n/messages.es.ts": "cd15c47444aaf7d823cd82b3b63cdad288a47da7bbb3393089eb8d3130f826a9",
-    "frontend-modern/src/i18n/messages.ts": "3e5f3057c10da70b92bc1c4343cede927c01979af7b1f8d00958d0c1d1ab60a0"
+    "frontend-modern/src/App.tsx": "a6ca67087cce917dc28914701262e6f631eb03621c24c8a773d5d025beb41215",
+    "frontend-modern/src/AppLayout.tsx": "d1d8bd884c43a20c1dbbde2ddb9f3278eb885b02c21e4cc3fa3fa1089cd1d320",
+    "frontend-modern/src/components/Settings/settingsHeaderMeta.ts": "d024df468000f183b2452d6b3fcb60fdce1b050107cd2e9d4ac586c4f13f2ddd",
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "8d3bff1c977b9db02c807d03fd80d40dabfc18c6a59809358c52a938a9c97c88",
+    "frontend-modern/src/components/shared/KeyboardShortcutsModal.tsx": "a27ccd1bdccf31f1890779fc661ad4e896786594b99ff419160ce6c556fc7c96",
+    "frontend-modern/src/components/shared/commandPaletteModel.ts": "69a75c17579239c407ba18820e9f4d47d8b8b0e587cdcc3bb154a684b2a17047",
+    "frontend-modern/src/components/shared/useCommandPaletteState.ts": "95ff00c6e790f17fdd849e845b34e9047f655ec89ca279032ab764da283b4cd4",
+    "frontend-modern/src/hooks/useKeyboardShortcuts.ts": "f55d67c136d5d8e21ed220b33eac0512d5fae5b5aa835f60fa2570159c140d30",
+    "frontend-modern/src/i18n/messages.de.ts": "e55a115865e8b2c9cf4352eecac1a2f8996f4e0f51b9c14ddb7cfbe20e5b2f40",
+    "frontend-modern/src/i18n/messages.es.ts": "a348d63dd816e848cd75a0b5114b0f77c719d16117d9c86db719036fbe106af0",
+    "frontend-modern/src/i18n/messages.ts": "728aa1cf4b42698e14f16593825249c6a190c43d4ef28e2d4e28756c7c1990db",
+    "frontend-modern/src/types/config.ts": "49ad539bcefc2f87380b744c1da387401151e3f4af9047db8a85b1ce0b70322e",
+    "frontend-modern/src/utils/updatesPresentation.ts": "4696f8426385aaf287ab610746ca278acc7e23bd377c9739fcfedcf635910634"
   },
   "routes": [
-    "/preview/setup-complete?scenario=empty",
-    "/preview/setup-complete?scenario=vmware-api-backed"
+    "/settings/system-updates",
+    "/patrol"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 800
+      "width": 1440,
+      "height": 900
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 800,
+      "height": 600
+    },
+    {
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "Empty and API-connected setup-completion previews rendered in English, German and Spanish at both widths",
-    "Host installer and conditional temperature/SMART coverage copy displayed without horizontal overflow or uncaught page errors",
-    "Credential section collapsed after activating its disclosure in each of the twelve states"
+    "AI off (assistantEnabled false, non-mock backend): desktop System nav shows Alerts, Actions, Settings with no Patrol tab and no Assistant edge launcher",
+    "AI off at narrow width: mobile bottom bar shows Alerts, Actions, More with no Patrol slot",
+    "AI off: command palette lists Go to Alerts and Go to Settings only, no Patrol or Assistant commands",
+    "AI off: keyboard shortcuts help lists Go to Alerts and Go to Settings without Go to Patrol",
+    "AI on (mock backend, assistantEnabled true): desktop Patrol tab returns with attention count, Assistant launcher visible",
+    "AI on at 375px: mobile bar shows platform switcher, Alerts, Patrol, Actions, More",
+    "Settings System group reads General, Network, Updates, Recovery; page title Updates with plain-language description; Patrol and Assistant stay listed under Pulse Intelligence"
   ],
   "interactions": [
-    "Opened empty and API-connected previews for each locale at desktop and narrow widths",
-    "Collapsed the credentials disclosure and verified the preview password was hidden"
-  ],
-  "command": "pulse-worker-browser web-setup-proof.cjs from the exact assigned workspace root; local Vite preview and Chromium 141.0.7390.37",
-  "artifacts": "/var/lib/pulse-maintainer/worker-outputs/web-product-zonkacnc/browser-proof-artifacts",
-  "notes": "No backend or installed release was exercised. Screenshots were inspected for English desktop, English API-connected narrow, German empty narrow and Spanish API-connected narrow; result.json records all twelve rendered states. The proof script is retained beside the artifacts."
+    "Opened the command palette with Cmd+K in both AI states and read the option list",
+    "Opened keyboard shortcuts help with ? while AI was off",
+    "Pressed g then r with AI off (stayed on /settings/system-updates) and with AI on (navigated to /patrol)",
+    "Resized between 1440x900 and 375x812 and reloaded the Updates and Patrol routes"
+  ]
 }
