@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "base_sha": "a5de22f114c723d5f7e2b5c885c7b6d2f836a0d2",
-  "verified_at": "2026-09-28T16:05:00Z",
+  "base_sha": "4de772658b338d5ddca9bf7012b4b7f220edde88",
+  "verified_at": "2026-09-28T16:49:25Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/i18n/messages.de.ts",
@@ -9,13 +9,12 @@
     "frontend-modern/src/i18n/messages.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/i18n/messages.de.ts": "9d2276ee7d3a12bc34981e1fa1d1e11c137fbd867fb529a925408ccae1fc7d74",
-    "frontend-modern/src/i18n/messages.es.ts": "8dff6fb9eb2ef1df2137fc0a947a34dfaa681aa3edde4a069d43ff1911833927",
-    "frontend-modern/src/i18n/messages.ts": "55c9fbf661901f230f12d47b6cd3bbbbf77e2b14a5b54741555ab09da36e3214"
+    "frontend-modern/src/i18n/messages.de.ts": "a670f48140f2d395d59f82c919fdf6d59e9649b224ea9862ee2fd1039e2f2fa4",
+    "frontend-modern/src/i18n/messages.es.ts": "9c4c36c3ab5cccc4880062bda864ec0c6df234d900158de4475c932367d97829",
+    "frontend-modern/src/i18n/messages.ts": "f836ba8cf43d3aa18eed7341d9599983e798eb33d4271315e416804e530a2ae5"
   },
   "routes": [
-    "/ (setup completion after unlock and admin creation)",
-    "/settings/infrastructure?add=pick"
+    "/preview/setup-complete?scenario=empty"
   ],
   "viewports": [
     {
@@ -28,15 +27,15 @@
     }
   ],
   "states": [
-    "Fresh rcourtman/pulse:latest (v6.4.1) container in first-run state serving this branch's vite build via PULSE_FRONTEND_DIR, reached over an SSH tunnel to localhost",
-    "Empty first-source completion state shows Connect your first system, the next-step detail telling users to start with the platform API and add the Pulse Agent on Proxmox nodes for temperatures and SMART disk health, and the Ways to connect list",
-    "At 390px the headings, badge, buttons and list wrap without page-level horizontal overflow (scrollWidth 390)",
-    "At desktop width the credentials card and next-step card render with the new copy and no clipping"
+    "Empty first-source setup-completion preview rendered in English, German and Spanish at both widths",
+    "Revised platform API and Pulse Agent descriptions displayed without horizontal overflow or uncaught page errors",
+    "Credential section collapsed after activating its disclosure in each locale and viewport"
   ],
   "interactions": [
-    "Verified a bootstrap token, created the auto-generated admin, and reached the completion screen",
-    "Clicked Add infrastructure at 390px and confirmed it routes to /settings/infrastructure?add=pick"
+    "Opened each locale preview at desktop and narrow widths",
+    "Collapsed the credentials disclosure and verified the preview password was hidden"
   ],
-  "command": "Claude desktop browser pane against a pulse-dev probe container",
-  "notes": "Copy-only change. Backend was the published v6.4.1 image, frontend is this branch. German and Spanish strings are covered by the localization unit test, not visually checked. Telemetry was disabled on the probe."
+  "command": "pulse-worker-browser web-setup-proof.cjs from the exact assigned workspace root; local Vite preview and Chromium 141.0.7390.37",
+  "artifacts": "/var/lib/pulse-maintainer/worker-outputs/web-product-fowlk7bi/browser-proof-artifacts",
+  "notes": "No backend or installed release was exercised. Screenshots were inspected for English desktop and narrow, German narrow and Spanish narrow; result.json records all six rendered states."
 }

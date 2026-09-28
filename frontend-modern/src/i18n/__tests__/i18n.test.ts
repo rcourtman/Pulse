@@ -53,6 +53,40 @@ describe('i18n foundation', () => {
     expect(t('settings.shell.navigationTitle')).toBe('Ajustes');
   });
 
+  it('describes first-source agent installation and optional coverage accurately in each locale', () => {
+    const expected = {
+      en: {
+        installer: 'Run the installer',
+        supported: 'only where supported',
+        standalone: 'standalone host',
+      },
+      de: {
+        installer: 'Fuehren Sie den Installer',
+        supported: 'nur verfuegbar',
+        standalone: 'eigenstaendigen Rechner',
+      },
+      es: {
+        installer: 'Ejecuta el instalador',
+        supported: 'dependen de la compatibilidad',
+        standalone: 'equipo independiente',
+      },
+    } as const;
+
+    for (const locale of ['en', 'de', 'es'] as const) {
+      const messages = I18N_MESSAGES[locale];
+      expect(messages['setup.completion.sourceOptions.agent.description']).toContain(
+        expected[locale].installer,
+      );
+      expect(messages['setup.completion.sourceOptions.agent.description']).toContain(
+        expected[locale].supported,
+      );
+      expect(messages['setup.completion.nextStep.detail.empty']).toContain(
+        expected[locale].standalone,
+      );
+      expect(messages['setup.completion.nextStep.summary.empty']).toContain('Agent');
+    }
+  });
+
   it('detects initial locale from stored preference before browser language', () => {
     localStorage.setItem(STORAGE_KEYS.LOCALE_PREFERENCE, 'es-MX');
 

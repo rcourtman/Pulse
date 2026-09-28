@@ -92,7 +92,17 @@ describe('SetupCompletionPanel', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'A small program on a Linux, Windows, or macOS machine, such as a Proxmox node, that reports its temperatures, disk health, Docker, and Kubernetes.',
+        'Run the installer on a Linux, Windows, or macOS host. Pulse Agent reports host telemetry. Temperatures, SMART, Docker, and Kubernetes are available only where supported.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Open Add infrastructure and choose a platform API connection or a host to install Pulse Agent on.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Connect Proxmox, TrueNAS, or VMware through their API, or run the Pulse Agent installer on a standalone host. On Proxmox nodes, the agent can add host-local temperatures and SMART data when available.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('What happens next')).not.toBeInTheDocument();
