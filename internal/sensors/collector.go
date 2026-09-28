@@ -90,6 +90,17 @@ func addMissingSysfsCPU(ctx context.Context, sensorsJSON string) string {
 		return sensorsJSON
 	}
 	for name, value := range fallback {
+		if _, exists := chips[name]; exists {
+			// A real lm-sensors chip can have the same name as the synthetic
+			// fallback. Keep its other readings rather than replacing the chip.
+			for suffix := 1; ; suffix++ {
+				alternate := fmt.Sprintf("%s-sysfs-%d", name, suffix)
+				if _, exists := chips[alternate]; !exists {
+					name = alternate
+					break
+				}
+			}
+		}
 		chips[name] = value
 	}
 	merged, err := json.Marshal(chips)

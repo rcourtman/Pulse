@@ -2,6 +2,7 @@ package sensors
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -119,6 +120,34 @@ func TestCollectLocal_CPUChipWithoutTemperatureGainsSysfsCPU(t *testing.T) {
 	}
 	if parsed.CPUPackage != 57 || parsed.NVMe["nvme0"] != 39 {
 		t.Fatalf("unusable CPU chip blocked sysfs or lost lm-sensors data: %+v", parsed)
+	}
+}
+
+func TestCollectLocal_SysfsCPUDoesNotReplaceMatchingSensorChip(t *testing.T) {
+	dir := t.TempDir()
+	const original = `{"cpu_thermal-virtual-0":{"temp1":{"temp1_input":"bad"},"fan1":{"fan1_input":1200}}}`
+	writeScript(t, dir, "sensors", "#!/bin/sh\necho '"+original+"'\n")
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	thermal, _ := useTestSysfsRoots(t)
+	writeSysfsSensor(t, thermal, "thermal_zone0", "type", "armada_thermal", "57000")
+
+	out, err := CollectLocal(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := Parse(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.CPUPackage != 57 || parsed.Fans["cpu_thermal_fan1"] != 1200 {
+		t.Fatalf("sysfs CPU replaced existing chip readings: %+v", parsed)
+	}
+	var chips map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(out), &chips); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := chips["cpu_thermal-virtual-0-sysfs-1"]; !ok {
+		t.Fatalf("expected a distinct sysfs CPU chip, got %s", out)
 	}
 }
 
