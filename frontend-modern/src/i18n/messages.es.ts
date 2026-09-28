@@ -223,11 +223,11 @@ export const ES_MESSAGE_OVERRIDES = {
   'setup.completion.nextStep.detail.agent':
     'Usa Agregar infraestructura cuando quieras para añadir más equipos o conectar una plataforma como Proxmox a través de su API.',
   'setup.completion.nextStep.detail.api':
-    'Usa Agregar infraestructura cuando quieras para conectar más sistemas o instalar Pulse Agent donde quieras ver temperaturas y estado de discos.',
+    'Usa Agregar infraestructura cuando quieras para conectar más sistemas o instalar Pulse Agent en tus nodos Proxmox y ver temperaturas y estado de discos (SMART).',
   'setup.completion.nextStep.detail.both':
     'Usa Agregar infraestructura cuando quieras para conectar más sistemas por API, con el agente o de ambas formas.',
   'setup.completion.nextStep.detail.empty':
-    'Proxmox, TrueNAS y VMware se conectan a través de su API, así que no hay que instalar nada en ellos. Instala Pulse Agent en un equipo cuando también quieras ver sus temperaturas, el estado de sus discos o sus contenedores Docker.',
+    'Empieza conectando Proxmox, TrueNAS o VMware a través de su API. En los nodos Proxmox, instala también Pulse Agent para añadir temperaturas y estado de discos (SMART), que la API de Proxmox no informa.',
   'setup.completion.nextStep.label': 'Siguiente paso',
   'setup.completion.nextStep.summary.connected.singular':
     'Abre Infraestructura para revisar tu primer sistema conectado.',
@@ -243,7 +243,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'setup.completion.proActivation.title': 'Activar Pulse Pro',
   'setup.completion.resource.unknownName': 'Desconocido',
   'setup.completion.sourceOptions.agent.description':
-    'Un pequeño programa en un equipo Linux, Windows o macOS que informa de su propio estado, discos, Docker y Kubernetes.',
+    'Un pequeño programa en un equipo Linux, Windows o macOS, como un nodo Proxmox, que informa de sus temperaturas, estado de discos, Docker y Kubernetes.',
   'setup.completion.sourceOptions.agent.title': 'Pulse Agent',
   'setup.completion.sourceOptions.both.description':
     'Conecta Proxmox por API para todo el clúster y añade el agente en los nodos donde quieras ver temperaturas y estado de discos.',

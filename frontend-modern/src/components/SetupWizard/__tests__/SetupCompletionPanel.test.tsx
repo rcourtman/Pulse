@@ -92,7 +92,7 @@ describe('SetupCompletionPanel', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'A small program on a Linux, Windows, or macOS machine that reports its own health, disks, Docker, and Kubernetes.',
+        'A small program on a Linux, Windows, or macOS machine, such as a Proxmox node, that reports its temperatures, disk health, Docker, and Kubernetes.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('What happens next')).not.toBeInTheDocument();
@@ -260,7 +260,7 @@ describe('SetupCompletionPanel', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Use Add infrastructure any time to connect more systems, or to install the Pulse Agent where you want temperatures and disk health.',
+        'Use Add infrastructure any time to connect more systems, or to install the Pulse Agent on your Proxmox nodes for temperatures and disk health (SMART).',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Infrastructure' })).toBeInTheDocument();

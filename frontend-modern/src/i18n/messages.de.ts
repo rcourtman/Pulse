@@ -229,11 +229,11 @@ export const DE_MESSAGE_OVERRIDES = {
   'setup.completion.nextStep.detail.agent':
     'Ueber Infrastruktur hinzufuegen koennen Sie jederzeit weitere Rechner hinzufuegen oder eine Plattform wie Proxmox ueber ihre API verbinden.',
   'setup.completion.nextStep.detail.api':
-    'Ueber Infrastruktur hinzufuegen koennen Sie jederzeit weitere Systeme verbinden oder den Pulse Agent dort installieren, wo Sie Temperaturen und Festplattenzustand sehen wollen.',
+    'Ueber Infrastruktur hinzufuegen koennen Sie jederzeit weitere Systeme verbinden oder den Pulse Agent auf Ihren Proxmox-Knoten installieren, um Temperaturen und Festplattenzustand (SMART) zu sehen.',
   'setup.completion.nextStep.detail.both':
     'Ueber Infrastruktur hinzufuegen koennen Sie jederzeit weitere Systeme per API, mit dem Agent oder mit beidem verbinden.',
   'setup.completion.nextStep.detail.empty':
-    'Proxmox, TrueNAS und VMware werden ueber ihre API verbunden, dort muss also nichts installiert werden. Installieren Sie den Pulse Agent auf einem Rechner, wenn Sie auch dessen Temperaturen, Festplattenzustand oder Docker-Container sehen wollen.',
+    'Verbinden Sie zuerst Proxmox, TrueNAS oder VMware ueber ihre API. Installieren Sie auf Proxmox-Knoten zusaetzlich den Pulse Agent, um Temperaturen und Festplattenzustand (SMART) zu erhalten, die die Proxmox-API nicht meldet.',
   'setup.completion.nextStep.label': 'Naechster Schritt',
   'setup.completion.nextStep.summary.connected.singular':
     'Oeffnen Sie Infrastruktur, um Ihr erstes verbundenes System zu pruefen.',
@@ -249,7 +249,7 @@ export const DE_MESSAGE_OVERRIDES = {
   'setup.completion.proActivation.title': 'Pulse Pro aktivieren',
   'setup.completion.resource.unknownName': 'Unbekannt',
   'setup.completion.sourceOptions.agent.description':
-    'Ein kleines Programm auf einem Linux-, Windows- oder macOS-Rechner, das dessen Zustand, Festplatten, Docker und Kubernetes meldet.',
+    'Ein kleines Programm auf einem Linux-, Windows- oder macOS-Rechner, etwa einem Proxmox-Knoten, das dessen Temperaturen, Festplattenzustand, Docker und Kubernetes meldet.',
   'setup.completion.sourceOptions.agent.title': 'Pulse Agent',
   'setup.completion.sourceOptions.both.description':
     'Verbinden Sie Proxmox per API fuer den ganzen Cluster und fuegen Sie den Agent auf den Knoten hinzu, deren Temperaturen und Festplattenzustand Sie sehen wollen.',

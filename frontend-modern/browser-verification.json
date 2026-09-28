@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "base_sha": "ad15366f3dc02480ede74dce80a074c190e83d3c",
-  "verified_at": "2026-09-28T15:10:00Z",
+  "base_sha": "a5de22f114c723d5f7e2b5c885c7b6d2f836a0d2",
+  "verified_at": "2026-09-28T16:05:00Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/i18n/messages.de.ts",
@@ -9,9 +9,9 @@
     "frontend-modern/src/i18n/messages.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/i18n/messages.de.ts": "ae9c0783b2a2f2a62dcdb19b4478e73dc27acbd1c032632bd73fda369ea83975",
-    "frontend-modern/src/i18n/messages.es.ts": "f0c9cddc79c1e4dbcc64aa58bc661592903817155444fd4a70778627c0ca3b45",
-    "frontend-modern/src/i18n/messages.ts": "ea55b33d3669eab718fab8fb844b3fa340648835f3c1e55dd978995565ca337e"
+    "frontend-modern/src/i18n/messages.de.ts": "9d2276ee7d3a12bc34981e1fa1d1e11c137fbd867fb529a925408ccae1fc7d74",
+    "frontend-modern/src/i18n/messages.es.ts": "8dff6fb9eb2ef1df2137fc0a947a34dfaa681aa3edde4a069d43ff1911833927",
+    "frontend-modern/src/i18n/messages.ts": "55c9fbf661901f230f12d47b6cd3bbbbf77e2b14a5b54741555ab09da36e3214"
   },
   "routes": [
     "/ (setup completion after unlock and admin creation)",
@@ -29,7 +29,7 @@
   ],
   "states": [
     "Fresh rcourtman/pulse:latest (v6.4.1) container in first-run state serving this branch's vite build via PULSE_FRONTEND_DIR, reached over an SSH tunnel to localhost",
-    "Empty first-source completion state shows Connect your first system, the plain next-step summary and detail, and the Ways to connect list with Connect by API, Pulse Agent and Use both",
+    "Empty first-source completion state shows Connect your first system, the next-step detail telling users to start with the platform API and add the Pulse Agent on Proxmox nodes for temperatures and SMART disk health, and the Ways to connect list",
     "At 390px the headings, badge, buttons and list wrap without page-level horizontal overflow (scrollWidth 390)",
     "At desktop width the credentials card and next-step card render with the new copy and no clipping"
   ],

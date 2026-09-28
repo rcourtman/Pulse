@@ -42,11 +42,11 @@ export const EN_MESSAGES = {
   'setup.completion.nextStep.detail.agent':
     'Use Add infrastructure any time to add more machines, or to connect a platform such as Proxmox through its API.',
   'setup.completion.nextStep.detail.api':
-    'Use Add infrastructure any time to connect more systems, or to install the Pulse Agent where you want temperatures and disk health.',
+    'Use Add infrastructure any time to connect more systems, or to install the Pulse Agent on your Proxmox nodes for temperatures and disk health (SMART).',
   'setup.completion.nextStep.detail.both':
     'Use Add infrastructure any time to connect more systems through their API, with the agent, or both.',
   'setup.completion.nextStep.detail.empty':
-    'Proxmox, TrueNAS, and VMware connect through their API, so there is nothing to install on them. Install the Pulse Agent on a machine when you also want its temperatures, disk health, or Docker containers.',
+    'Start by connecting Proxmox, TrueNAS, or VMware through their API. On Proxmox nodes, also install the Pulse Agent to add temperatures and disk health (SMART), which the Proxmox API does not report.',
   'setup.completion.nextStep.label': 'Next step',
   'setup.completion.nextStep.summary.connected.singular':
     'Open Infrastructure to review your first connected system.',
@@ -62,7 +62,7 @@ export const EN_MESSAGES = {
   'setup.completion.proActivation.title': 'Activate Pulse Pro',
   'setup.completion.resource.unknownName': 'Unknown',
   'setup.completion.sourceOptions.agent.description':
-    'A small program on a Linux, Windows, or macOS machine that reports its own health, disks, Docker, and Kubernetes.',
+    'A small program on a Linux, Windows, or macOS machine, such as a Proxmox node, that reports its temperatures, disk health, Docker, and Kubernetes.',
   'setup.completion.sourceOptions.agent.title': 'Pulse Agent',
   'setup.completion.sourceOptions.both.description':
     'Connect Proxmox by API for the whole cluster, then add the agent on the nodes where you want temperatures and disk health.',
