@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "base_sha": "4de772658b338d5ddca9bf7012b4b7f220edde88",
-  "verified_at": "2026-09-28T16:49:25Z",
+  "base_sha": "ab4f04da3d67d20c51943666be9bf4515ebb3b3f",
+  "verified_at": "2026-09-28T17:08:52Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/i18n/messages.de.ts",
@@ -9,12 +9,13 @@
     "frontend-modern/src/i18n/messages.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/i18n/messages.de.ts": "a670f48140f2d395d59f82c919fdf6d59e9649b224ea9862ee2fd1039e2f2fa4",
-    "frontend-modern/src/i18n/messages.es.ts": "9c4c36c3ab5cccc4880062bda864ec0c6df234d900158de4475c932367d97829",
-    "frontend-modern/src/i18n/messages.ts": "f836ba8cf43d3aa18eed7341d9599983e798eb33d4271315e416804e530a2ae5"
+    "frontend-modern/src/i18n/messages.de.ts": "4300b8dbbc163a1010dfd0c93d4d326b7ef05da02aedabbcfff393ba39b5f220",
+    "frontend-modern/src/i18n/messages.es.ts": "cd15c47444aaf7d823cd82b3b63cdad288a47da7bbb3393089eb8d3130f826a9",
+    "frontend-modern/src/i18n/messages.ts": "3e5f3057c10da70b92bc1c4343cede927c01979af7b1f8d00958d0c1d1ab60a0"
   },
   "routes": [
-    "/preview/setup-complete?scenario=empty"
+    "/preview/setup-complete?scenario=empty",
+    "/preview/setup-complete?scenario=vmware-api-backed"
   ],
   "viewports": [
     {
@@ -27,15 +28,15 @@
     }
   ],
   "states": [
-    "Empty first-source setup-completion preview rendered in English, German and Spanish at both widths",
-    "Revised platform API and Pulse Agent descriptions displayed without horizontal overflow or uncaught page errors",
-    "Credential section collapsed after activating its disclosure in each locale and viewport"
+    "Empty and API-connected setup-completion previews rendered in English, German and Spanish at both widths",
+    "Host installer and conditional temperature/SMART coverage copy displayed without horizontal overflow or uncaught page errors",
+    "Credential section collapsed after activating its disclosure in each of the twelve states"
   ],
   "interactions": [
-    "Opened each locale preview at desktop and narrow widths",
+    "Opened empty and API-connected previews for each locale at desktop and narrow widths",
     "Collapsed the credentials disclosure and verified the preview password was hidden"
   ],
   "command": "pulse-worker-browser web-setup-proof.cjs from the exact assigned workspace root; local Vite preview and Chromium 141.0.7390.37",
-  "artifacts": "/var/lib/pulse-maintainer/worker-outputs/web-product-fowlk7bi/browser-proof-artifacts",
-  "notes": "No backend or installed release was exercised. Screenshots were inspected for English desktop and narrow, German narrow and Spanish narrow; result.json records all six rendered states."
+  "artifacts": "/var/lib/pulse-maintainer/worker-outputs/web-product-zonkacnc/browser-proof-artifacts",
+  "notes": "No backend or installed release was exercised. Screenshots were inspected for English desktop, English API-connected narrow, German empty narrow and Spanish API-connected narrow; result.json records all twelve rendered states. The proof script is retained beside the artifacts."
 }

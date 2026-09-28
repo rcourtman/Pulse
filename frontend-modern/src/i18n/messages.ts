@@ -42,7 +42,7 @@ export const EN_MESSAGES = {
   'setup.completion.nextStep.detail.agent':
     'Use Add infrastructure any time to add more machines, or to connect a platform such as Proxmox through its API.',
   'setup.completion.nextStep.detail.api':
-    'Use Add infrastructure any time to connect more systems, or to install the Pulse Agent on your Proxmox nodes for temperatures and disk health (SMART).',
+    'Use Add infrastructure any time to connect more systems, or to install Pulse Agent on Proxmox nodes for host-local telemetry such as temperatures and SMART data where available.',
   'setup.completion.nextStep.detail.both':
     'Use Add infrastructure any time to connect more systems through their API, with the agent, or both.',
   'setup.completion.nextStep.detail.empty':
@@ -65,7 +65,7 @@ export const EN_MESSAGES = {
     'Run the installer on a Linux, Windows, or macOS host. Pulse Agent reports host telemetry. Temperatures, SMART, Docker, and Kubernetes are available only where supported.',
   'setup.completion.sourceOptions.agent.title': 'Pulse Agent',
   'setup.completion.sourceOptions.both.description':
-    'Connect Proxmox by API for the whole cluster, then add the agent on the nodes where you want temperatures and disk health.',
+    'Connect Proxmox by API for the whole cluster, then add the agent on nodes where you want host-local telemetry such as temperatures and SMART data where available.',
   'setup.completion.sourceOptions.both.title': 'Use both',
   'setup.completion.sourceOptions.platformApi.description':
     'Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, TrueNAS, or VMware. Pulse reads VMs, storage, and health through the platform API.',

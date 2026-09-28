@@ -223,7 +223,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'setup.completion.nextStep.detail.agent':
     'Usa Agregar infraestructura cuando quieras para añadir más equipos o conectar una plataforma como Proxmox a través de su API.',
   'setup.completion.nextStep.detail.api':
-    'Usa Agregar infraestructura cuando quieras para conectar más sistemas o instalar Pulse Agent en tus nodos Proxmox y ver temperaturas y estado de discos (SMART).',
+    'Usa Agregar infraestructura cuando quieras para conectar más sistemas o instalar Pulse Agent en nodos Proxmox y obtener telemetría local, como temperaturas y datos SMART cuando estén disponibles.',
   'setup.completion.nextStep.detail.both':
     'Usa Agregar infraestructura cuando quieras para conectar más sistemas por API, con el agente o de ambas formas.',
   'setup.completion.nextStep.detail.empty':
@@ -246,7 +246,7 @@ export const ES_MESSAGE_OVERRIDES = {
     'Ejecuta el instalador en un equipo Linux, Windows o macOS. El agente informa de la telemetría del equipo. Las temperaturas, SMART, Docker y Kubernetes dependen de la compatibilidad del equipo y la configuración.',
   'setup.completion.sourceOptions.agent.title': 'Pulse Agent',
   'setup.completion.sourceOptions.both.description':
-    'Conecta Proxmox por API para todo el clúster y añade el agente en los nodos donde quieras ver temperaturas y estado de discos.',
+    'Conecta Proxmox por API para todo el clúster y añade el agente en nodos donde quieras telemetría local, como temperaturas y datos SMART cuando estén disponibles.',
   'setup.completion.sourceOptions.both.title': 'Usar ambos',
   'setup.completion.sourceOptions.platformApi.description':
     'Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, TrueNAS o VMware. Pulse lee VMs, almacenamiento y estado a través de la API de la plataforma.',

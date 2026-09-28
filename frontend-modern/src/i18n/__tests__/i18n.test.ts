@@ -59,16 +59,19 @@ describe('i18n foundation', () => {
         installer: 'Run the installer',
         supported: 'only where supported',
         standalone: 'standalone host',
+        availability: 'where available',
       },
       de: {
         installer: 'Fuehren Sie den Installer',
         supported: 'nur verfuegbar',
         standalone: 'eigenstaendigen Rechner',
+        availability: 'sofern verfuegbar',
       },
       es: {
         installer: 'Ejecuta el instalador',
         supported: 'dependen de la compatibilidad',
         standalone: 'equipo independiente',
+        availability: 'cuando estén disponibles',
       },
     } as const;
 
@@ -84,6 +87,12 @@ describe('i18n foundation', () => {
         expected[locale].standalone,
       );
       expect(messages['setup.completion.nextStep.summary.empty']).toContain('Agent');
+      expect(messages['setup.completion.nextStep.detail.api']).toContain(
+        expected[locale].availability,
+      );
+      expect(messages['setup.completion.sourceOptions.both.description']).toContain(
+        expected[locale].availability,
+      );
     }
   });
 
