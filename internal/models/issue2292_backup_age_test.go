@@ -98,11 +98,15 @@ func TestSyncGuestBackupTimesNewestPBSBackupPreservesCollisionGuard(t *testing.T
 			got := make(map[string]time.Time)
 			if backupType == "vm" {
 				for _, guest := range snapshot.VMs {
-					got[guest.Instance] = guest.LastBackup
+					if guest.VMID == 112 {
+						got[guest.Instance] = guest.LastBackup
+					}
 				}
 			} else {
 				for _, guest := range snapshot.Containers {
-					got[guest.Instance] = guest.LastBackup
+					if guest.VMID == 112 {
+						got[guest.Instance] = guest.LastBackup
+					}
 				}
 			}
 			if !got["cluster-a"].Equal(recentA) {
@@ -132,11 +136,13 @@ func TestSyncGuestBackupTimesNewestPBSBackupSameNodeCollision(t *testing.T) {
 				state.UpdateVMs([]VM{
 					{VMID: 112, Name: "guest-a", Instance: "cluster-a", Node: "pve"},
 					{VMID: 112, Name: "guest-b", Instance: "cluster-b", Node: "pve"},
+					{VMID: 113, Name: "other-b", Instance: "cluster-b", Node: "pve"},
 				})
 			} else {
 				state.UpdateContainers([]Container{
 					{VMID: 112, Name: "guest-a", Instance: "cluster-a", Node: "pve"},
 					{VMID: 112, Name: "guest-b", Instance: "cluster-b", Node: "pve"},
+					{VMID: 113, Name: "other-b", Instance: "cluster-b", Node: "pve"},
 				})
 			}
 
@@ -150,6 +156,10 @@ func TestSyncGuestBackupTimesNewestPBSBackupSameNodeCollision(t *testing.T) {
 				// Both guests match node pve, but guest-b is the stronger match.
 				{ID: "recent-b", VMID: "112", BackupType: backupType, BackupTime: recentB,
 					Instance: "pbs-main", Namespace: "pve", Comment: "guest-b"},
+				// B is visible on a different PBS instance. That is not proof
+				// that pbs-main's tied snapshot belongs to A rather than B.
+				{ID: "other-b", VMID: "113", BackupType: backupType, BackupTime: recentB,
+					Instance: "pbs-other"},
 				// Neither guest owns an otherwise indistinguishable newer copy.
 				{ID: "shared-node", VMID: "112", BackupType: backupType, BackupTime: now.Add(-time.Hour),
 					Instance: "pbs-main", Namespace: "pve"},
@@ -167,11 +177,15 @@ func TestSyncGuestBackupTimesNewestPBSBackupSameNodeCollision(t *testing.T) {
 			got := make(map[string]time.Time)
 			if backupType == "vm" {
 				for _, guest := range snapshot.VMs {
-					got[guest.Instance] = guest.LastBackup
+					if guest.VMID == 112 {
+						got[guest.Instance] = guest.LastBackup
+					}
 				}
 			} else {
 				for _, guest := range snapshot.Containers {
-					got[guest.Instance] = guest.LastBackup
+					if guest.VMID == 112 {
+						got[guest.Instance] = guest.LastBackup
+					}
 				}
 			}
 			if !got["cluster-a"].Equal(recentA) {
@@ -182,12 +196,18 @@ func TestSyncGuestBackupTimesNewestPBSBackupSameNodeCollision(t *testing.T) {
 			}
 			if backupType == "vm" {
 				for _, guest := range snapshot.VMs {
+					if guest.VMID != 112 {
+						continue
+					}
 					if guest.BackupInProgress != (guest.Instance == "cluster-b") {
 						t.Errorf("%s BackupInProgress = %v, want only cluster-b running", guest.Instance, guest.BackupInProgress)
 					}
 				}
 			} else {
 				for _, guest := range snapshot.Containers {
+					if guest.VMID != 112 {
+						continue
+					}
 					if guest.BackupInProgress != (guest.Instance == "cluster-b") {
 						t.Errorf("%s BackupInProgress = %v, want only cluster-b running", guest.Instance, guest.BackupInProgress)
 					}

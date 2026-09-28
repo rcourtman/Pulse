@@ -4745,8 +4745,9 @@ func (s *State) SyncGuestBackupTimes() {
 				// A namespace such as "pve" can match two clusters with the
 				// same node label. A positive score is not attribution when a
 				// different connection matches the same snapshot at least as
-				// strongly. A stronger competitor rules this guest out; a tie
-				// needs independent storage/source evidence below (#2292).
+				// strongly. Do not use batch-learned source inference to break a
+				// positive tie: it can see the other connection on another PBS
+				// instance without proving which one wrote this snapshot (#2292).
 				strongestOther := 0
 				for _, other := range subjectGuests[subjectKey] {
 					if other.instance == instance {
@@ -4760,11 +4761,8 @@ func (s *State) SyncGuestBackupTimes() {
 						strongestOther = otherScore
 					}
 				}
-				if strongestOther > score {
+				if strongestOther >= score {
 					continue
-				}
-				if strongestOther == score {
-					score = 0
 				}
 			}
 			if score == 0 {
