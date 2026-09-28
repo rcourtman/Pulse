@@ -2,11 +2,34 @@ package monitoring
 
 import (
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+// This resolver blocks only after metricWindowPoints has captured its history.
+// It lets the test replace that history at an exact point without scheduling
+// sleeps or exposing a production-only hook.
+type blockingMetricTargetStore struct {
+	entered chan struct{}
+	resume  <-chan struct{}
+}
+
+func (*blockingMetricTargetStore) ShouldSkipAPIPolling(string) bool { return false }
+func (*blockingMetricTargetStore) GetPollingRecommendations() map[string]float64 {
+	return nil
+}
+func (*blockingMetricTargetStore) GetAll() []unifiedresources.Resource       { return nil }
+func (*blockingMetricTargetStore) PopulateFromSnapshot(models.StateSnapshot) {}
+func (s *blockingMetricTargetStore) MetricsTargetForResource(string) *unifiedresources.MetricsTarget {
+	s.entered <- struct{}{}
+	<-s.resume
+	return nil
+}
 
 func TestMetricWindowPointsUsesInMemoryMetricAlias(t *testing.T) {
 	now := time.Now().UTC()
@@ -77,33 +100,47 @@ func TestMetricWindowPointsKeepsHistorySnapshotDuringReplacement(t *testing.T) {
 		},
 	}
 
-	history.metricWindowMu.Lock()
-	result := make(chan []alerts.MetricWindowPoint, 1)
+	resume := make(chan struct{})
+	var resumeOnce sync.Once
+	resumeRequest := func() { resumeOnce.Do(func() { close(resume) }) }
+	defer resumeRequest()
+	entered := make(chan struct{}, 1)
+	monitor.resourceStore = &blockingMetricTargetStore{entered: entered, resume: resume}
+	type requestResult struct {
+		points []alerts.MetricWindowPoint
+		err    error
+	}
+	result := make(chan requestResult, 1)
 	go func() {
-		points, _ := monitor.metricWindowPoints(alerts.MetricWindowRequest{
+		points, err := monitor.metricWindowPoints(alerts.MetricWindowRequest{
 			ResourceID:   "vm-1",
 			ResourceType: "vm",
 			Metric:       "cpu",
 			Start:        now.Add(-5 * time.Minute),
 			End:          now,
 		})
-		result <- points
+		result <- requestResult{points: points, err: err}
 	}()
 
-	// Give the request time to snapshot history and block on its cache mutex,
-	// matching the mock seed replacement that exposed the startup panic.
-	time.Sleep(20 * time.Millisecond)
+	select {
+	case <-entered:
+	case <-time.After(10 * time.Second):
+		t.Fatal("metric request did not reach target resolution after snapshot")
+	}
 	monitor.mu.Lock()
 	monitor.metricsHistory = NewMetricsHistory(32, time.Hour)
 	monitor.mu.Unlock()
-	history.metricWindowMu.Unlock()
+	resumeRequest()
 
 	select {
-	case points := <-result:
-		if len(points) != 1 || points[0].Value != 42 {
-			t.Fatalf("metricWindowPoints = %+v, want cached point from the request snapshot", points)
+	case got := <-result:
+		if got.err != nil {
+			t.Fatalf("metricWindowPoints returned error: %v", got.err)
 		}
-	case <-time.After(time.Second):
+		if len(got.points) != 1 || got.points[0].Value != 42 {
+			t.Fatalf("metricWindowPoints = %+v, want cached point from the request snapshot", got.points)
+		}
+	case <-time.After(10 * time.Second):
 		t.Fatal("metricWindowPoints did not finish after history replacement")
 	}
 }
