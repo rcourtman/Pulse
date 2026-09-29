@@ -106,7 +106,7 @@ describe('containerUpdateBadgeModel.branchcov2', () => {
   describe('getUpdateButtonTooltip', () => {
     it('returns the success message for the "success" state', () => {
       expect(getUpdateButtonTooltip({ state: 'success', now: 1000 })).toBe(
-        '✓ Update completed successfully!',
+        'Update action completed. Check the running container and image.',
       );
     });
 
@@ -234,8 +234,8 @@ describe('containerUpdateBadgeModel.branchcov2', () => {
       expect(getUpdateButtonLabel('updating', true)).toBe('Updating...');
     });
 
-    it('returns "Queued!" for the success state', () => {
-      expect(getUpdateButtonLabel('success', true)).toBe('Queued!');
+    it('returns "Completed" for the success state', () => {
+      expect(getUpdateButtonLabel('success', true)).toBe('Completed');
     });
 
     it('returns "Failed" for the error state', () => {

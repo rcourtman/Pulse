@@ -30,7 +30,7 @@ export interface UpdateButtonProps {
 
 // The update click plans a governed action and opens the review dialog, which
 // is the confirmation surface; there is no separate in-row confirming state.
-export type UpdateState = 'idle' | 'updating' | 'success' | 'error';
+export type UpdateState = 'idle' | 'queued' | 'updating' | 'success' | 'error' | 'inconclusive';
 
 export interface ContainerUpdateButtonStoreState {
   startedAt: number;
@@ -103,6 +103,9 @@ export function getUpdateButtonClass(state: UpdateState, unavailable = false): s
   switch (state) {
     case 'updating':
       return `${UPDATE_BUTTON_BASE_CLASS} bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-wait`;
+    case 'queued':
+    case 'inconclusive':
+      return `${UPDATE_BUTTON_BASE_CLASS} bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 cursor-pointer hover:bg-amber-200 dark:hover:bg-amber-800`;
     case 'success':
       return `${UPDATE_BUTTON_BASE_CLASS} bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300`;
     case 'error':
@@ -118,8 +121,11 @@ export function getUpdateButtonLabel(state: UpdateState, settingsLoaded: boolean
   switch (state) {
     case 'updating':
       return 'Updating...';
+    case 'queued':
+    case 'inconclusive':
+      return 'Review action';
     case 'success':
-      return 'Queued!';
+      return 'Completed';
     case 'error':
       return 'Failed';
     default:
@@ -137,6 +143,10 @@ export function getUpdateButtonTooltip(options: {
   const now = options.now ?? Date.now();
 
   switch (options.state) {
+    case 'queued':
+      return 'Action sent. Outcome not yet known. Select to check its receipt. Do not start another update.';
+    case 'inconclusive':
+      return 'Action outcome unknown. Check the running container and image before any retry. Select to review the audit.';
     case 'updating': {
       const elapsed = options.storeState
         ? Math.round((now - options.storeState.startedAt) / 1000)
@@ -148,7 +158,7 @@ export function getUpdateButtonTooltip(options: {
       return `${step} (${elapsed}s)`;
     }
     case 'success':
-      return '✓ Update completed successfully!';
+      return 'Update action completed. Check the running container and image.';
     case 'error':
       return `✗ Update failed: ${options.storeState?.message || options.errorMessage || 'Unknown error'}`;
     default:

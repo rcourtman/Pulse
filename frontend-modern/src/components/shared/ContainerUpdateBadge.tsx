@@ -255,6 +255,13 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
                   <Match when={state.currentState() === 'updating'}>
                     <SpinnerIcon class="w-3 h-3 animate-spin" />
                   </Match>
+                  <Match
+                    when={
+                      state.currentState() === 'queued' || state.currentState() === 'inconclusive'
+                    }
+                  >
+                    <ErrorIndicatorIcon class="w-3 h-3" />
+                  </Match>
                   <Match when={state.currentState() === 'success'}>
                     <CheckIcon class="w-3 h-3" />
                   </Match>
