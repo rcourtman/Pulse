@@ -4,6 +4,7 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 	"github.com/rs/zerolog"
@@ -345,6 +347,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			pbsInst.MemoryTotal = nodeStatus.Memory.Total
 		}
 		pbsInst.Uptime = nodeStatus.Uptime
+		m.recordPBSNodeHistory(pbsInst.ID, nodeStatus, time.Now())
 
 		log.Debug().
 			Str("instance", instanceName).
@@ -603,6 +606,37 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		log.Debug().
 			Str("instance", instanceName).
 			Msg("PBS backup monitoring disabled")
+	}
+}
+
+// recordPBSNodeHistory writes the API-observed CPU and memory measurements to
+// the PBS service's existing metrics target (agent:<PBS source ID>). When no
+// host agent can be corroborated, the Backups drawer still has useful history
+// instead of querying an unwritten key. Host-agent history remains separate and
+// takes precedence in the drawer when a unique host is linked. A failed or
+// incomplete node-status response must never produce an apparent zero sample.
+func (m *Monitor) recordPBSNodeHistory(serviceID string, status *pbs.NodeStatus, observedAt time.Time) {
+	serviceID = strings.TrimSpace(serviceID)
+	if m == nil || status == nil || serviceID == "" || status.Memory.Total <= 0 ||
+		status.Memory.Used < 0 || status.CPU < 0 || math.IsNaN(status.CPU) || math.IsInf(status.CPU, 0) {
+		return
+	}
+
+	cpuPercent := status.CPU
+	if cpuPercent <= 1 {
+		cpuPercent *= 100
+	}
+	memoryPercent := float64(status.Memory.Used) / float64(status.Memory.Total) * 100
+	if m.metricsHistory != nil {
+		key := "agent:" + serviceID
+		m.metricsHistory.AddGuestMetric(key, "cpu", cpuPercent, observedAt)
+		m.metricsHistory.AddGuestMetric(key, "memory", memoryPercent, observedAt)
+	}
+	if m.metricsStore != nil {
+		m.metricsStore.WriteBatchBounded([]metrics.WriteMetric{
+			{ResourceType: "agent", ResourceID: serviceID, MetricType: "cpu", Value: cpuPercent, Timestamp: observedAt, Tier: metrics.TierRaw},
+			{ResourceType: "agent", ResourceID: serviceID, MetricType: "memory", Value: memoryPercent, Timestamp: observedAt, Tier: metrics.TierRaw},
+		})
 	}
 }
 

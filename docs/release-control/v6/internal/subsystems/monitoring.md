@@ -1079,9 +1079,16 @@ clears it. A denied or failed node-status endpoint does not invalidate successfu
 connectivity or independently accessible datastore inventory. In-process state
 copies preserve this evidence; JSON deliberately does not carry it. The
 zero-value compatibility default is not persisted availability evidence.
+Only that successful node-status observation writes CPU and memory percentages
+to the PBS service's `agent:<PBS source ID>` history target. Missing or invalid
+node measurements append no sample, rather than a false zero; measured zero is
+valid. The service series is separate from a correlated Pulse Agent's host
+series and contains no inferred disk, network, or I/O measurements.
 Proof: `internal/models/metrics_types_test.go` and
-`internal/monitoring/monitor_pbs_coverage_test.go`. The latter exercises real
+`internal/monitoring/monitor_pbs_coverage_test.go`; the latter exercises real
 HTTP polling through normal alert-manager publication, not destination delivery.
+`TestPollPBSNodeStatusRecordsServiceHistory` verifies volatile and persisted
+service-history reads plus denial/recovery without fabricated samples.
 
 
 1. `internal/config/host_continuity.go` shared with `agent-lifecycle`: the durable host identity, report-order watermark, and removal tombstone journal is jointly owned by agent lifecycle admission and monitoring report continuity.
