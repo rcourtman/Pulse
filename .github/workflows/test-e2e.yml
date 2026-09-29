@@ -203,9 +203,12 @@ jobs:
       # Runs even when the stable tier failed (its data still counts toward
       # promotion), but not when the stable tier was skipped — that means the
       # environment never came up and every probation spec would fail on it.
+      # Pull requests skip it. It cannot gate a PR, and the promotion rule in
+      # e2e-tiering.mjs counts only main runs, so on a PR it only held each
+      # of the eight shard runners for about eight more minutes.
       - name: Run probation-tier E2E suite (non-gating)
         id: probation
-        if: ${{ !cancelled() && steps.stable.conclusion != 'skipped' }}
+        if: ${{ !cancelled() && github.event_name != 'pull_request' && steps.stable.conclusion != 'skipped' }}
         continue-on-error: true
         # A broken probation surface can otherwise consume the entire 60m job
         # budget through retries and cancel the job before continue-on-error
