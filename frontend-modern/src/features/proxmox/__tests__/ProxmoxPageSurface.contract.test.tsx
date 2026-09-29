@@ -1,6 +1,8 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { UnifiedResourceFacets } from '@/hooks/useUnifiedResources';
 import type { Resource } from '@/types/resource';
 import { ProxmoxPageSurface } from '../ProxmoxPageSurface';
 import proxmoxPageSurfaceSource from '../ProxmoxPageSurface.tsx?raw';
@@ -441,10 +443,11 @@ describe('ProxmoxPageSurface contract', () => {
         value as {
           query: string;
           cacheKey: string;
-          enabled: () => boolean;
+          enabled?: () => boolean;
         },
     );
     expect(options.map((value) => value.cacheKey)).toEqual([
+      'proxmox-tab-evidence',
       'proxmox-overview',
       'proxmox-storage-shell',
       'proxmox-replication-shell',
@@ -453,6 +456,7 @@ describe('ProxmoxPageSurface contract', () => {
       'proxmox-mail',
     ]);
     expect(options.map((value) => value.query)).toEqual([
+      'type=pmg&source=proxmox,pbs,pmg,agent',
       'type=agent,vm,system-container,oci-container&source=proxmox',
       'type=agent,pbs,storage,physical_disk,ceph&source=proxmox,pbs,agent',
       'type=agent&source=proxmox',
@@ -460,8 +464,9 @@ describe('ProxmoxPageSurface contract', () => {
       'type=ceph&source=proxmox',
       'type=pmg&source=pmg',
     ]);
-    expect(options[0].enabled()).toBe(true);
-    expect(options.slice(1).every((value) => value.enabled() === false)).toBe(true);
+    expect(options[0].enabled).toBeUndefined();
+    expect(options[1].enabled?.()).toBe(true);
+    expect(options.slice(2).every((value) => value.enabled?.() === false)).toBe(true);
     expect(proxmoxPageSurfaceSource).not.toContain('backgroundHydrationTabs');
     expect(proxmoxPageSurfaceSource).not.toContain('requestIdleCallback');
     expect(proxmoxPageSurfaceSource).toContain('resourceSource={storageResources}');
@@ -502,9 +507,10 @@ describe('ProxmoxPageSurface contract', () => {
     renderSurface();
 
     const options = mockUseUnifiedResources.mock.calls.map(
-      ([value]) => value as { cacheKey: string; query: string; enabled: () => boolean },
+      ([value]) => value as { cacheKey: string; query: string; enabled?: () => boolean },
     );
-    expect(options.map((value) => value.enabled())).toEqual([
+    expect(options.map((value) => value.enabled?.() ?? true)).toEqual([
+      true,
       true,
       false,
       false,
@@ -512,7 +518,7 @@ describe('ProxmoxPageSurface contract', () => {
       false,
       false,
     ]);
-    expect(options[3]).toMatchObject({
+    expect(options[4]).toMatchObject({
       cacheKey: 'proxmox-backups-shell',
       query: 'type=pbs,agent&source=pbs',
     });
@@ -575,6 +581,53 @@ describe('ProxmoxPageSurface contract', () => {
 
     expect(screen.getByTestId('platform-table-loading-state')).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Proxmox Patrol coverage' })).not.toBeInTheDocument();
+  });
+
+  it('does not advertise optional sections before resource counts arrive', () => {
+    setResourcesSnapshot(undefined, true);
+
+    renderSurface();
+
+    expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute('data-tabs', 'overview');
+    expect(screen.getByTestId('platform-table-loading-state')).toBeInTheDocument();
+  });
+
+  it('hydrates a direct link while counts are unknown, then gates it on actual capabilities', async () => {
+    mockPathname.mockReturnValue('/proxmox/mail');
+    const [facets, setFacets] = createSignal<UnifiedResourceFacets | null>(null);
+    const refetch = vi.fn(async () => []);
+    mockUseUnifiedResources.mockReturnValue({
+      resources: () => [],
+      // Estate-wide counts include unrelated providers and must not unlock tabs.
+      aggregations: () => ({ total: 5, byType: { storage: 1, vm: 1, ceph: 1, pmg: 1 } }),
+      facets,
+      loading: () => false,
+      error: () => null,
+      refetch,
+    });
+
+    renderSurface();
+
+    const tabs = screen.getByTestId('platform-section-tabs');
+    expect(tabs).toHaveAttribute('data-tabs', 'overview');
+    expect(tabs).toHaveAttribute('data-active', 'mail');
+    const options = mockUseUnifiedResources.mock.calls.map(
+      ([value]) => value as { cacheKey: string; enabled: () => boolean },
+    );
+    expect(options.find((option) => option.cacheKey === 'proxmox-mail')?.enabled()).toBe(true);
+    await waitFor(() => expect(refetch).toHaveBeenCalledTimes(1));
+
+    setFacets({ incidentCount: 0, byType: { pbs: 1, pmg: 1 } });
+    await waitFor(() => {
+      expect(tabs).toHaveAttribute('data-tabs', 'overview,backups,mail');
+      expect(tabs).toHaveAttribute('data-active', 'mail');
+    });
+
+    setFacets({ incidentCount: 0, byType: { pbs: 1 } });
+    await waitFor(() => {
+      expect(tabs).toHaveAttribute('data-tabs', 'overview,backups');
+      expect(tabs).toHaveAttribute('data-active', 'overview');
+    });
   });
 
   it('does not surface stale-agent notices for development builds without an agent target', () => {

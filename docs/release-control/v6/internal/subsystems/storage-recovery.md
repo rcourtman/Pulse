@@ -795,6 +795,15 @@ state effects remain dormant and a forced Proxmox storage scope is not
 serialized as redundant URL state. Backups reuses the source-scoped Overview
 guest snapshot and adds only the PBS resource family, so it cannot repeat the
 large VM/LXC enumeration under a second request owner.
+Unknown source-scoped resource facets must not advertise optional Proxmox
+workflows as if their providers are present. Estate-wide aggregations are not
+tab evidence: unrelated provider rows can share VM or storage types. The
+navigation rail may expose Replication from its independent positive job count,
+while Storage, Backups, Ceph, and Mail
+wait for positive resource counts. A direct link keeps its requested route
+hydrating while counts are unknown; after counts arrive, an unsupported route
+renders Overview instead. Hiding a tab is navigation presentation, not a
+verdict about backup coverage, artifact recoverability, or stored history.
 PBS server/datastore rows may display backup counts, but the
 counts must come from the PBS backup API artifact identity, not from a
 datastore-capacity approximation. The table owns which PBS artifact count is

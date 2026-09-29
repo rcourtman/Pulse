@@ -403,6 +403,22 @@ and thermal facts remain discoverable from the PBS surface.
 `ProxmoxBackupServersTable` belongs to the Proxmox Backups tab. Proxmox
 Overview must not duplicate that domain table between its node and guest
 regions; the tab boundary owns PBS server, datastore, and artifact detail.
+The shared Proxmox section rail renders only tabs backed by current capability
+evidence. It reads the source-filtered `facets.byType` from one compact
+`type=pmg&source=proxmox,pbs,pmg,agent` request, not estate-wide
+`aggregations.byType`: unrelated VMware VMs and TrueNAS storage must not
+advertise Proxmox workflows. Agent is included for Proxmox-owned physical
+disks, whose fact source may remain `agent`; because that source is shared, a
+generic agent disk can still expose Storage until the route filters its rows.
+A fresh all-resources cache does not carry source-filtered facets, so the
+compact query must revalidate even when that cache can paint rows. While the
+facets are unknown the rail must not show every optional
+tab as a loading fallback; an independently fetched positive replication-job
+count may still expose Replication. A bookmarked section remains the active
+hydration target until counts can distinguish unavailable from unsupported,
+then unsupported sections fall back to Overview. This rule applies at desktop
+and phone widths and must not rewrite the URL or discard a valid PBS-only
+Backups tab when its count arrives.
 When that surface receives the provider-owned PBS resource and its host Agent
 as separate canonical resources, `ProxmoxBackupServersTable` may assemble a
 presentation-only drawer resource only after one unique normalized host
