@@ -331,6 +331,11 @@ jobs:
             --env "PULSE_SECURE_RUNTIME_TRANSCRIPT_RECORD_PATH=docs/release-control/v6/internal/records/secure-agent-runtime-systemd-transcript-v7-${TAG}.jsonl" \
             "${container}" \
             sh -c 'cd /workspace/scripts/installtests && exec /harness/installtests-linux-amd64.test -test.run "^TestSecureRuntimeSystemdDockerV7Lab$" -test.count=1 -test.v'
+          # The lab writes its receipt and transcript as root inside the
+          # privileged host. Hand the evidence directory to the runner user so
+          # the attester can read it and write the attestation beside it. The
+          # evidence content itself is not touched.
+          docker exec "${container}" chown -R "$(id -u):$(id -g)" /evidence
           elapsed="$(( $(date +%s) - start_epoch ))"
           if [[ "${elapsed}" -lt 1 ]]; then elapsed=1; fi
           echo "elapsed_seconds=${elapsed}" >> "$GITHUB_OUTPUT"
