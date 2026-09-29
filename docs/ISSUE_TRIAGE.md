@@ -15,6 +15,13 @@ Reporters may still write free-form issues, edit form output, or discover a
 second topic during discussion. Triage owns decomposition in those cases; it
 must not require the reporter to refile information they already supplied.
 
+The bug form asks for the version on the failing running instance, not merely
+the version before an upgrade. A running image reference applies only to
+container installs; bare-metal and LXC reporters must not have to attest to
+one. Ask for evidence relevant to the symptom: logs or sanitized diagnostics
+for connection and data failures, and screenshots or exact error text for
+visual failures. Do not make a reporter invent logs where none apply.
+
 ## Required disposition
 
 Before removing `needs-decomposition` or declaring a mixed report triaged:
