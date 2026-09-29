@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 )
 
@@ -110,6 +111,79 @@ func TestPollPBSInstanceDoesNotQueryExcludedDatastoreDetails(t *testing.T) {
 		if strings.Contains(path, "exthdd1500gb") {
 			t.Fatalf("excluded datastore received a detail request: %s", path)
 		}
+	}
+}
+
+// The PBS service's advertised target is agent:<PBS source ID>, not the
+// unrelated Pulse Agent UUID. An API-only PBS or an uncorrelated API+Agent PBS
+// must not offer a permanently empty CPU/memory history when node status is
+// available. Keep failed node-status polls from writing fabricated zeroes.
+func TestPollPBSNodeStatusRecordsServiceHistory(t *testing.T) {
+	fixture := newPBSHealthTestServer(t)
+	instance := config.PBSInstance{Name: "pbs-history", Host: fixture.server.URL, MonitorDatastores: true}
+	monitor := newPBSHealthAuthorityMonitor([]config.PBSInstance{instance})
+	monitor.metricsHistory = NewMetricsHistory(128, 24*time.Hour)
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	monitor.metricsStore = store
+	client := newPBSHealthTestClient(t, instance.Host)
+	serviceID := PBSMonitorResourceID(instance.Name)
+	query := func() map[string][]MetricPoint {
+		return monitor.GetGuestMetricsForChart("agent:"+serviceID, "agent", serviceID, time.Hour)
+	}
+
+	monitor.pollPBSInstance(context.Background(), instance.Name, client)
+	inMemory := query()
+	if got := inMemory["cpu"]; len(got) != 1 || got[0].Value != 15 {
+		t.Fatalf("PBS CPU history = %v, want one 15%% sample", got)
+	}
+	if got := inMemory["memory"]; len(got) != 1 || got[0].Value != 50 {
+		t.Fatalf("PBS memory history = %v, want one 50%% sample", got)
+	}
+	if got := inMemory["disk"]; len(got) != 0 {
+		t.Fatalf("PBS API node status invented disk samples: %v", got)
+	}
+
+	// Drop the volatile ring and prove the same API history query can read the
+	// service samples from the persistent store.
+	monitor.metricsHistory = nil
+	persisted := query()
+	if len(persisted["cpu"]) != 1 || persisted["cpu"][0].Value != 15 ||
+		len(persisted["memory"]) != 1 || persisted["memory"][0].Value != 50 {
+		t.Fatalf("persisted PBS service history = %v, want CPU/memory samples", persisted)
+	}
+
+	fixture.setMode(pbsHealthTestNodeDenied)
+	monitor.pollPBSInstance(context.Background(), instance.Name, client)
+	denied := query()
+	if len(denied["cpu"]) != 1 || len(denied["memory"]) != 1 {
+		t.Fatalf("node-status denial added false samples: %v", denied)
+	}
+
+	fixture.setMode(pbsHealthTestSuccess)
+	monitor.pollPBSInstance(context.Background(), instance.Name, client)
+	recovered := query()
+	if len(recovered["cpu"]) != 2 || len(recovered["memory"]) != 2 {
+		t.Fatalf("PBS recovery did not append observed samples: %v", recovered)
+	}
+}
+
+func TestRecordPBSNodeHistoryRejectsInvalidMeasurements(t *testing.T) {
+	monitor := &Monitor{metricsHistory: NewMetricsHistory(16, time.Hour)}
+	stamp := time.Now()
+	for _, status := range []*pbs.NodeStatus{
+		nil,
+		{CPU: -1, Memory: pbs.Memory{Used: 1, Total: 2}},
+		{CPU: 0.2, Memory: pbs.Memory{Used: 1, Total: 0}},
+		{CPU: 0.2, Memory: pbs.Memory{Used: -1, Total: 2}},
+	} {
+		monitor.recordPBSNodeHistory("pbs-invalid", status, stamp)
+	}
+	if got := monitor.GetGuestMetrics("agent:pbs-invalid", time.Hour); len(got) != 0 {
+		t.Fatalf("invalid PBS status produced history: %v", got)
 	}
 }
 
