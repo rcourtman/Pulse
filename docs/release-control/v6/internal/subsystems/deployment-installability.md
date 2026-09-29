@@ -3774,6 +3774,10 @@ bypass the preflight. That dry run must call `update-demo-server.yml` in
 verification-only mode against the latest stable release. It must prove
 Tailscale, SSH host identity, runtime version, frontend parity, public health,
 and browser smoke without changing the host.
+The reusable demo workflow's resolver must check out the repository before it
+calls `scripts/write_github_output.py` to emit the selected tag and target.
+This checkout is credential-free; a verification-only dry run must not fail
+before its demo checks merely because the output helper is absent.
 That same release-validation boundary also owns draft-versus-published asset
 state. Every normal `.github/workflows/create-release.yml` cut validates the
 uploaded packet while the release is still a draft and must pass `draft=true`

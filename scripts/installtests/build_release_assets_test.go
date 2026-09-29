@@ -2392,6 +2392,29 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 	}
 }
 
+func TestUpdateDemoResolverChecksOutOutputHelperBeforeUse(t *testing.T) {
+	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "update-demo-server.yml"))
+	if err != nil {
+		t.Fatalf("read update-demo-server workflow: %v", err)
+	}
+	workflow := string(workflowBytes)
+	resolveStart := strings.Index(workflow, "\n  resolve:\n")
+	updateStart := strings.Index(workflow, "\n  update-demo:\n")
+	if resolveStart < 0 || updateStart <= resolveStart {
+		t.Fatal("update-demo-server workflow must retain separate resolve and update-demo jobs")
+	}
+	resolve := workflow[resolveStart:updateStart]
+	checkout := strings.Index(resolve, "- name: Checkout repository")
+	target := strings.Index(resolve, "- name: Resolve target tag and demo environment")
+	helper := strings.Index(resolve, "python3 scripts/write_github_output.py tag \"$TAG\"")
+	if checkout < 0 || target <= checkout || helper <= target {
+		t.Fatal("demo resolver must check out its source before using scripts/write_github_output.py")
+	}
+	if !strings.Contains(resolve[checkout:target], "persist-credentials: false") {
+		t.Fatal("demo resolver checkout must not persist GitHub credentials")
+	}
+}
+
 func TestDemoMutationAndRecoverySharePhysicalTargetLock(t *testing.T) {
 	updateBytes, err := os.ReadFile(repoFile(".github", "workflows", "update-demo-server.yml"))
 	if err != nil {

@@ -74,6 +74,13 @@ jobs:
       mock_update_interval: ${{ steps.runtime_profile.outputs.mock_update_interval }}
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+
       - name: Resolve target tag and demo environment
         id: target
         env:
@@ -136,13 +143,6 @@ jobs:
           python3 scripts/write_github_output.py target "$TARGET"
           echo "environment_name=$ENVIRONMENT_NAME" >> "$GITHUB_OUTPUT"
           echo "Resolved demo deployment: tag=${TAG}, target=${TARGET}, environment=${ENVIRONMENT_NAME}"
-
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-          fetch-tags: true
 
       - name: Validate governed release line for selected tag
         env:
