@@ -608,6 +608,10 @@ func (m *Manager) ShouldSuppressNotification(alert *Alert) bool {
 			Msg("Notification suppressed by resource monitoring policy")
 		return true
 	}
+	if isSupportedInfrastructureSymptom(alert) {
+		clearQuietHoursNotificationReplay(alert)
+		return true
+	}
 
 	suppressed, reason := m.shouldSuppressNotification(alert)
 	if suppressed {
