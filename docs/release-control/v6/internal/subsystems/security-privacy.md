@@ -2914,3 +2914,11 @@ The System settings item formerly labelled "Pulse server updates" is now
 that still routes agent updates to Infrastructure. This is locale copy only:
 the `system-updates` route id, its `systemSettingsRead` capability gate and
 every update endpoint and authorization check are unchanged.
+
+### Relay privacy description corrected
+
+`PRIVACY.md` states that the relay connects paired Pulse Mobile devices and
+delivers push notifications, and that it does not provide remote access to the
+web UI. The earlier "secure remote web access" wording described a capability
+that never existed. No data flow changed, and the published docs mirror stays
+identical.

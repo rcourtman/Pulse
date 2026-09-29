@@ -3012,3 +3012,12 @@ or sending provider notifications. Component proof is not installed delivery.
 Formatting-only follow-up retains this warning-level contract. The production-component
 browser matrix was rerun after formatting at desktop and narrow widths, including
 all/critical/warning save/reload, cancel, and warning webhook creation.
+
+### Pulse Mobile push destination without an upsell
+
+The Alerts destinations page renders the mobile push panel only when the
+instance has the `relay` feature. Community installs see no panel and no
+upgrade prompt, and never load or save relay push settings. Licensed instances
+keep the minimum-severity control and the link to Pulse Mobile settings, with
+the 31 March 2027 retirement date in the copy. Webhook, email, Apprise and
+dead-man destinations are unaffected.

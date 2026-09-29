@@ -384,7 +384,7 @@ func TestGetFeatureDisplayName(t *testing.T) {
 		{FeatureAuditLogging, "Audit Logging"},
 		{FeatureSSO, "Core SSO (OIDC/SAML)"},
 		{FeatureAdvancedSSO, "Multi-Provider SSO"},
-		{FeatureRelay, "Pulse Relay (Remote Access)"},
+		{FeatureRelay, "Pulse Relay (Mobile Connection)"},
 		{FeatureMobileApp, "Pulse Mobile Pairing"},
 		{FeaturePushNotifications, "Push Notifications"},
 		{FeatureAdvancedReporting, "PDF/CSV Reporting"},
@@ -428,7 +428,7 @@ func TestSelfHostedFeatureMetadataKeepsCanonicalPlanLabelsAndVisibility(t *testi
 	if !ok {
 		t.Fatalf("expected metadata for %q", FeatureRelay)
 	}
-	if relay.ComparisonName != "Pulse Relay (Remote Access)" {
+	if relay.ComparisonName != "Pulse Relay (Mobile Connection)" {
 		t.Fatalf("ComparisonName = %q, want canonical Relay marketing label", relay.ComparisonName)
 	}
 	if GetSelfHostedFeatureRole(FeatureRelay, TierRelay) != SelfHostedFeatureRolePrimaryPillar {

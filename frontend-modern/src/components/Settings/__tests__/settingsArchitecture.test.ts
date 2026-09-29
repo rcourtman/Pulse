@@ -375,6 +375,10 @@ describe('settings architecture guardrails', () => {
     );
     expect(systemRelayNavBlock?.[0]).toContain("features: ['relay']");
     expect(systemRelayNavBlock?.[0]).toContain('hideWhenUnavailable: true');
+    // Relay only ever connected Pulse Mobile; the section is named for the app,
+    // never as remote access to the web UI.
+    expect(systemRelayNavBlock?.[0]).toContain("label: 'Pulse Mobile'");
+    expect(settingsNavCatalogSource).not.toContain("label: 'Remote Access'");
     expect(settingsHeaderMetaSource).toContain(
       'title: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle',
     );

@@ -39,10 +39,12 @@ const LEGACY_PLAN_VERSION_LABELS: Record<string, string> = {
   pro_plus: 'Legacy Pro Plus',
 };
 
+// Relay was retired on 29 September 2026; Pro is the lowest plan that still
+// carries these capabilities until Pulse Mobile retires on 31 March 2027.
 const FEATURE_MIN_TIER_LABELS: Record<string, string> = {
-  relay: 'Relay',
-  mobile_app: 'Relay',
-  push_notifications: 'Relay',
+  relay: 'Pro',
+  mobile_app: 'Pro',
+  push_notifications: 'Pro',
   multi_tenant: 'MSP',
 };
 
@@ -614,12 +616,10 @@ export const getSelfHostedPlanComparisonPresentation = ({
   entitlements?: LicenseCommercialEntitlements | null;
 }): SelfHostedPlanComparisonPresentation => {
   const normalizedTier = (entitlements?.tier || '').trim().toLowerCase();
+  // Relay was retired on 29 September 2026: it is never offered, and existing
+  // Relay subscribers already carry Pro entitlements, so they see no upsell.
   const comparisonTiers =
-    normalizedTier === 'relay'
-      ? ['pro']
-      : normalizedTier === 'free' || normalizedTier === 'community' || !normalizedTier
-        ? ['relay', 'pro']
-        : [];
+    normalizedTier === 'free' || normalizedTier === 'community' || !normalizedTier ? ['pro'] : [];
 
   return {
     cards: comparisonTiers
@@ -876,14 +876,14 @@ export const getSelfHostedPlanStatusPresentation = (
   items.push(
     buildCapabilityStatusItem({
       capabilities,
-      label: 'Remote access, pairing, and push',
+      label: 'Pulse Mobile pairing and push',
       requiredCapabilities: ['relay', 'mobile_app', 'push_notifications'],
       activeDetail:
-        'Relay, Pulse Mobile pairing, and push notifications are available on this instance.',
+        'Pulse Mobile pairing and push notifications are available on this instance until Pulse Mobile is retired on 31 March 2027.',
       partialDetail:
-        'Some remote-access capabilities are available. Refresh the plan or open recovery if remote access, Pulse Mobile pairing, or push stays unavailable.',
+        'Some Pulse Mobile capabilities are available. Refresh the plan or open recovery if Pulse Mobile pairing or push stays unavailable.',
       missingDetail:
-        'Remote access, Pulse Mobile pairing, or push notifications are not available yet. Refresh the plan or open recovery before relying on Relay.',
+        'Pulse Mobile pairing or push notifications are not available yet. Refresh the plan or open recovery before relying on Pulse Mobile.',
     }),
   );
 

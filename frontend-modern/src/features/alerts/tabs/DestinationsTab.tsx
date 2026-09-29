@@ -1,8 +1,6 @@
 import { AlertQueueActionFeedback } from '../AlertQueueActionFeedback';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { hasFeature } from '@/stores/license';
-import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
-import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { logger } from '@/utils/logger';
 import type { AlertDestinationsDeliveryPausedReason } from '@/utils/alertDestinationsPresentation';
@@ -147,8 +145,6 @@ export function DestinationsTab(props: DestinationsTabProps) {
 
         <AlertPushDestinationsSection
           relayLicensed={hasFeature('relay')}
-          showUpgradePrompts={!presentationPolicyHidesUpgradePrompts()}
-          upgradeDestination={getUpgradeActionDestination('relay')}
           minimumSeverity={props.pushMinimumSeverity()}
           onMinimumSeverityChange={(minimumSeverity) => {
             props.setPushMinimumSeverity(minimumSeverity);

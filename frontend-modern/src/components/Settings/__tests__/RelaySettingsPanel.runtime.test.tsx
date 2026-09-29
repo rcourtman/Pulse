@@ -97,6 +97,7 @@ vi.mock('qrcode', () => ({
 }));
 
 import { RelaySettingsPanel } from '../RelaySettingsPanel';
+import { RELAY_LICENSE_REQUIRED_MESSAGE } from '@/utils/relayPresentation';
 
 describe('RelaySettingsPanel runtime', () => {
   beforeEach(() => {
@@ -178,24 +179,18 @@ describe('RelaySettingsPanel runtime', () => {
     expect(relaySettingsPanelStateSource).not.toContain('commercialPosture()?.trial_eligible');
   });
 
-  it('shows supported Pulse Mobile pairing copy on the relay paywall', async () => {
+  it('explains the Pulse Mobile retirement without an upsell when the plan lacks it', async () => {
     hasFeatureMock.mockReturnValue(false);
 
     render(() => <RelaySettingsPanel canManage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Remote Access (Relay)')).toBeInTheDocument();
+      expect(screen.getByText(RELAY_LICENSE_REQUIRED_MESSAGE)).toBeInTheDocument();
     });
 
-    expect(
-      screen.getByText(
-        'See your infrastructure and get alert push notifications anywhere with the Pulse Mobile app — no port forwarding or VPN required. Available with Relay and Pro plans.',
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'View plans' })).toHaveAttribute(
-      'href',
-      'https://example.com/upgrade',
-    );
+    expect(RELAY_LICENSE_REQUIRED_MESSAGE).toContain('retired on 31 March 2027');
+    expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Remote Access/)).not.toBeInTheDocument();
   });
 
   it('loads connected relay state and generates a pairing QR payload', async () => {
@@ -205,10 +200,10 @@ describe('RelaySettingsPanel runtime', () => {
       expect(screen.getByDisplayValue('wss://relay.example.test/ws/instance')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Pair Pulse Mobile through Relay')).toBeInTheDocument();
+    expect(screen.getByText('Pair Pulse Mobile')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Install the Pulse Mobile app on your phone, then scan a QR code or open a deep link here to securely link it to this Pulse instance. Paired devices receive alert push notifications over an end-to-end encrypted connection.',
+        'Install the Pulse Mobile app on your phone, then scan a QR code or open a deep link here to securely link it to this Pulse instance. Paired devices receive alert push notifications over an end-to-end encrypted connection until Pulse Mobile is retired on 31 March 2027.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Connected')).toBeInTheDocument();
@@ -275,7 +270,7 @@ describe('RelaySettingsPanel runtime', () => {
 
     expect(
       screen.getByText(
-        'Remote Access is enabled, but this instance does not have an active Relay token. Activate a Relay-capable plan or turn Remote Access off before pairing mobile clients.',
+        'Pulse Mobile connections are on, but this instance does not have an active Relay token. Refresh your plan, or turn Pulse Mobile connections off before pairing phones.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('register: no license token available')).not.toBeInTheDocument();

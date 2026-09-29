@@ -137,7 +137,7 @@ This matrix reflects the entitlement keys enforced in code plus the runtime hist
 | Constant | Capability Key | Display Name | Community | Relay | Pro | Cloud | Primary Gating Mechanism / Notes |
 |---|---|---|:---:|:---:|:---:|:---:|---|
 | `FeatureAIPatrol` | `ai_patrol` | Pulse Patrol (Background Health Checks) | Y | Y | Y | Y | Patrol itself is available on Community with your own provider or local model. Higher-autonomy outcomes and fix execution are separately gated. |
-| `FeatureRelay` | `relay` | Remote Access (Mobile Relay) | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., relay, ...)` for relay settings and onboarding endpoints. |
+| `FeatureRelay` | `relay` | Pulse Relay (Mobile Connection) | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., relay, ...)` for relay settings and onboarding endpoints. |
 | `FeatureAIAlerts` | `ai_alerts` | Patrol Investigates Issues and Explains the Root Cause | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., ai_alerts, ...)`. |
 | `FeatureAIAutoFix` | `ai_autofix` | Patrol Applies Safe Fixes and Verifies the Result | N | N | Y | Y | Required for governed fix execution and automatic Patrol actions. |
 | `FeatureKubernetesAI` | `kubernetes_ai` | Kubernetes AI Analysis (Compatibility) | N | N | Y | Y | Legacy compatibility gate for `/api/ai/kubernetes/analyze`; not a primary marketed v6 Pro plan pillar. |

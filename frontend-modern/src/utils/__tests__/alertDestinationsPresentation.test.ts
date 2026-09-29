@@ -8,8 +8,6 @@ import {
   getAlertDestinationsDeliveryPausedDescription,
   getAlertDestinationsDeliveryPausedTitle,
   ALERT_DESTINATIONS_CONFIG_LOAD_ERROR,
-  ALERT_DESTINATIONS_PUSH_GATE_MESSAGE,
-  ALERT_DESTINATIONS_PUSH_GATE_TITLE,
   ALERT_DESTINATIONS_PUSH_PANEL_DESCRIPTION,
   ALERT_DESTINATIONS_PUSH_PANEL_TITLE,
   ALERT_DESTINATIONS_PUSH_READY_MESSAGE,
@@ -146,16 +144,13 @@ describe('alertDestinationsPresentation', () => {
       'Deliver alerts to your phone through the Pulse Mobile app.',
     );
     expect(ALERT_DESTINATIONS_PUSH_READY_MESSAGE).toContain('Pulse Mobile devices paired');
-    expect(ALERT_DESTINATIONS_PUSH_READY_MESSAGE).toContain('Remote Access settings');
+    expect(ALERT_DESTINATIONS_PUSH_READY_MESSAGE).toContain('Pulse Mobile settings');
+    expect(ALERT_DESTINATIONS_PUSH_READY_MESSAGE).toContain('retired on 31 March 2027');
     expect(ALERT_DESTINATIONS_PUSH_MINIMUM_SEVERITY_HELP).toContain('Push copy stays private');
     expect(ALERT_DESTINATIONS_PUSH_MINIMUM_SEVERITY_HELP).toContain(
       'Open Pulse Mobile for current alert state',
     );
-    expect(ALERT_DESTINATIONS_PUSH_SETUP_LINK_LABEL).toBe('Open Remote Access settings');
-    expect(ALERT_DESTINATIONS_PUSH_GATE_TITLE).toBe('Get alerts on your phone');
-    expect(ALERT_DESTINATIONS_PUSH_GATE_MESSAGE).toContain('Pulse Mobile app');
-    expect(ALERT_DESTINATIONS_PUSH_GATE_MESSAGE).toContain('no port forwarding or VPN');
-    expect(ALERT_DESTINATIONS_PUSH_GATE_MESSAGE).toContain('Available with Relay and Pro plans');
+    expect(ALERT_DESTINATIONS_PUSH_SETUP_LINK_LABEL).toBe('Open Pulse Mobile settings');
   });
 
   it('distinguishes retained terminal failures from recoverable retry attempts', () => {

@@ -76,13 +76,10 @@ export const ALERT_DESTINATIONS_PUSH_PANEL_TITLE = 'Mobile push notifications';
 export const ALERT_DESTINATIONS_PUSH_PANEL_DESCRIPTION =
   'Deliver alerts to your phone through the Pulse Mobile app.';
 export const ALERT_DESTINATIONS_PUSH_READY_MESSAGE =
-  'Alerts are pushed to Pulse Mobile devices paired with this instance. Manage pairing and connectivity in Remote Access settings.';
+  'Alerts are pushed to Pulse Mobile devices paired with this instance until Pulse Mobile is retired on 31 March 2027. Manage pairing in Pulse Mobile settings.';
 export const ALERT_DESTINATIONS_PUSH_MINIMUM_SEVERITY_HELP =
   'Choose whether phones receive warning and critical pushes or critical pushes only. Push copy stays private. Open Pulse Mobile for current alert state.';
-export const ALERT_DESTINATIONS_PUSH_SETUP_LINK_LABEL = 'Open Remote Access settings';
-export const ALERT_DESTINATIONS_PUSH_GATE_TITLE = 'Get alerts on your phone';
-export const ALERT_DESTINATIONS_PUSH_GATE_MESSAGE =
-  'Pair the Pulse Mobile app to receive alert push notifications and check on your systems from anywhere — no port forwarding or VPN required. Available with Relay and Pro plans.';
+export const ALERT_DESTINATIONS_PUSH_SETUP_LINK_LABEL = 'Open Pulse Mobile settings';
 export const ALERT_DESTINATIONS_APPRISE_TEST_SUCCESS = 'Test Apprise notification sent.';
 export const ALERT_DESTINATIONS_APPRISE_TEST_FAILURE = 'Unable to send the test notification.';
 export const ALERT_DESTINATIONS_DELIVERY_DEGRADED_TITLE = 'Notification delivery needs attention';

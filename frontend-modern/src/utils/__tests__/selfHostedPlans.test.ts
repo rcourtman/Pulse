@@ -50,7 +50,7 @@ describe('selfHostedPlans', () => {
         },
         {
           key: 'relay',
-          name: 'Pulse Relay (Remote Access)',
+          name: 'Pulse Relay (Mobile Connection)',
           community: false,
           relay: true,
           pro: true,
@@ -104,23 +104,30 @@ describe('selfHostedPlans', () => {
     ]);
     expect(SELF_HOSTED_PLAN_BY_TIER.community.includedExtras).toEqual([]);
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.billingExtrasSummary).toBe(
-      'Remote web access, pairing, and push',
+      'Pulse Mobile pairing and push',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementSummary).toContain(
-      'remote web access, Pulse Mobile pairing, push notifications, and 14-day metric history.',
+      'Pulse Mobile pairing and push notifications until 31 March 2027, and 14-day metric history.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.comparisonSummary).toBe(
-      'Remote web access, Pulse Mobile pairing, push notifications, and 14-day metric history.',
+      'Retired plan: Pulse Mobile pairing and push notifications until 31 March 2027, and 14-day metric history.',
     );
+    // Relay never gave remote web access; no plan copy may claim it.
+    for (const plan of Object.values(SELF_HOSTED_PLAN_BY_TIER)) {
+      expect(
+        `${plan.entitlementSummary} ${plan.comparisonSummary} ${plan.highlights.join(' ')}`,
+      ).not.toMatch(/remote web access/i);
+    }
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementHighlights).toEqual([
-      'Pulse Relay (Remote Access)',
+      'Pulse Relay (Mobile Connection)',
       'Pulse Mobile Pairing',
       'Push Notifications',
       '14-day metric history',
     ]);
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.includedExtras).toEqual([]);
-    expect(SELF_HOSTED_PLAN_BY_TIER.relay.highlights).toContain('Pulse Mobile pairing');
-    expect(SELF_HOSTED_PLAN_BY_TIER.relay.highlights).toContain('No inbound ports required');
+    expect(SELF_HOSTED_PLAN_BY_TIER.relay.highlights).toContain(
+      'Pulse Mobile pairing until 31 March 2027',
+    );
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.highlights.join('\n')).not.toMatch(
       /yourlab\.pulserelay\.pro|custom\s+(?:url|subdomain|domain)/i,
     );
@@ -128,10 +135,10 @@ describe('selfHostedPlans', () => {
       'Patrol modes, history, and team controls',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementSummary).toContain(
-      'Relay connectivity, Pulse Mobile pairing, push notifications, Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.',
+      'Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.comparisonSummary).toBe(
-      'Patrol investigates issues, applies safe fixes, and verifies the result. Relay connectivity is included, plus 90-day metric history and team controls.',
+      'Patrol investigates issues, applies safe fixes, and verifies the result, with 90-day metric history and team controls.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.comparisonSummary).not.toContain('how much control');
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementHighlights).toEqual([
@@ -172,7 +179,7 @@ describe('selfHostedPlans', () => {
       getSelfHostedPlanEntitlementSummary('pro'),
     );
     expect(getSelfHostedPlanEntitlementSummary('pro', 'Legacy Pulse Pro+')).toBe(
-      'Legacy Pulse Pro+ is active on this instance. It includes Relay connectivity, Pulse Mobile pairing, push notifications, Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.',
+      'Legacy Pulse Pro+ is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
     );
 
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementHighlights).toEqual(
@@ -215,7 +222,7 @@ describe('selfHostedPlans', () => {
       {
         tier: 'relay',
         historyDays: 14,
-        extras: 'Remote web access, pairing, and push',
+        extras: 'Pulse Mobile pairing and push',
       },
       { tier: 'pro', historyDays: 90, extras: 'Patrol modes, history, and team controls' },
     ]);

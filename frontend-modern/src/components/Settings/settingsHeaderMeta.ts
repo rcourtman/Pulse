@@ -52,7 +52,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
       'Configure the model-backed service context Assistant and Patrol use. Infrastructure discovery and onboarding stay under Infrastructure.',
   },
   'system-relay': {
-    title: 'Remote Access',
+    title: 'Pulse Mobile',
     description: RELAY_SETTINGS_DESCRIPTION,
   },
   'system-billing': {

@@ -52,7 +52,7 @@ describe('getSelfHostedCurrentPlanPresentation - absent subscription_state hits 
         runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       } as unknown as LicenseCommercialEntitlements,
       displayableCapabilities: [
-        'Pulse Relay (Remote Access)',
+        'Pulse Relay (Mobile Connection)',
         'Patrol Applies Safe Fixes and Verifies the Result',
       ],
     });
@@ -134,7 +134,7 @@ describe('getSelfHostedCurrentPlanPresentation - absent tier (line 663)', () => 
         limits: [],
         upgrade_reasons: [],
       } as unknown as LicenseCommercialEntitlements,
-      displayableCapabilities: ['Pulse Relay (Remote Access)'],
+      displayableCapabilities: ['Pulse Relay (Mobile Connection)'],
     });
     // (current.tier || '') → '' → getSelfHostedPlanLabel(undefined) === 'Unknown'.
     expect(result.title).toBe('Current plan: Unknown');
@@ -167,7 +167,7 @@ describe('getSelfHostedCurrentPlanPresentation - empty extras on a runtime-misma
         upgrade_reasons: [],
         runtime: { build: 'community', label: 'Pulse Community runtime' },
       },
-      displayableCapabilities: ['Pulse Relay (Remote Access)', 'Audit Logging'],
+      displayableCapabilities: ['Pulse Relay (Mobile Connection)', 'Audit Logging'],
     });
     // includedExtras.length === 0 → the `: undefined` arm of the ternary.
     expect(result.includedExtrasLabel).toBeUndefined();
@@ -214,8 +214,8 @@ describe('getSelfHostedPlanStatusPresentation - absent capabilities (line 861)',
     } as unknown as LicenseCommercialEntitlements);
     expect(result).not.toBeNull();
     // (entitlements.capabilities || []) takes the [] arm → empty capability Set
-    // → the remote-access item is fully 'missing'.
-    const remoteAccess = result?.items.find((i) => i.label.includes('Remote access'));
+    // → the Pulse Mobile item is fully 'missing'.
+    const remoteAccess = result?.items.find((i) => i.label.includes('Pulse Mobile'));
     expect(remoteAccess).toMatchObject({
       state: 'missing',
       statusLabel: 'Needs attention',
@@ -258,7 +258,7 @@ describe('getSelfHostedActivationSuccessPresentation - absent tier (line 966)', 
         limits: [],
         upgrade_reasons: [],
       } as unknown as LicenseCommercialEntitlements,
-      displayableCapabilities: ['Pulse Relay (Remote Access)'],
+      displayableCapabilities: ['Pulse Relay (Mobile Connection)'],
       source: 'manual',
     });
     expect(result).not.toBeNull();

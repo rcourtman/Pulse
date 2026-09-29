@@ -8321,3 +8321,9 @@ Doctor's light-tone guidance uses opaque text colors because the current
 are translucent. The 49-agent synthetic browser pass follows the deep link,
 inspects the guidance and status rows at phone and desktop widths, and keeps
 update commands and credential authority unchanged.
+
+### Pulse Mobile pairing copy only
+
+`internal/api/onboarding_handlers.go` changed only the human-readable pairing
+readiness messages so they name Settings > Pulse Mobile. No agent
+registration, lifecycle or install path changed.

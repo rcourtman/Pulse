@@ -111,7 +111,7 @@ describe('licensePresentation', () => {
     expect(getLicenseFeatureLabel('ai_patrol')).toBe('Pulse Patrol');
     expect(getLicenseFeatureLabel('mobile_app')).toBe('Pulse Mobile Pairing');
     expect(getLicenseFeatureLabel('update_alerts')).toBe('Update Alerts');
-    expect(getLicenseFeatureLabel('relay')).toBe('Pulse Relay (Remote Access)');
+    expect(getLicenseFeatureLabel('relay')).toBe('Pulse Relay (Mobile Connection)');
     expect(getLicenseFeatureLabel('custom_feature')).toBe('Custom Feature');
   });
 
@@ -125,7 +125,7 @@ describe('licensePresentation', () => {
   });
 
   it('returns minimum tier labels for gated features', () => {
-    expect(getFeatureMinTierLabel('relay')).toBe('Relay');
+    expect(getFeatureMinTierLabel('relay')).toBe('Pro');
     expect(getFeatureMinTierLabel('multi_tenant')).toBe('MSP');
     expect(getFeatureMinTierLabel('unknown_feature')).toBe('Pro');
   });
@@ -333,13 +333,13 @@ describe('licensePresentation', () => {
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: [
-          'Pulse Relay (Remote Access)',
+          'Pulse Relay (Mobile Connection)',
           'Patrol Applies Safe Fixes and Verifies the Result',
         ],
       }),
     ).toMatchObject({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. It includes Relay connectivity, Pulse Mobile pairing, push notifications, Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.',
+      body: 'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
       supplementalBadges: [],
       supplementalSummary: '',
     });
@@ -355,14 +355,14 @@ describe('licensePresentation', () => {
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: [
-          'Pulse Relay (Remote Access)',
+          'Pulse Relay (Mobile Connection)',
           'Pulse Mobile Pairing',
           'Patrol Applies Safe Fixes and Verifies the Result',
         ],
       }),
     ).toEqual({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. It includes Relay connectivity, Pulse Mobile pairing, push notifications, Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.',
+      body: 'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
         'Patrol Investigates Issues and Explains the Root Cause',
@@ -397,7 +397,7 @@ describe('licensePresentation', () => {
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: [
-          'Pulse Relay (Remote Access)',
+          'Pulse Relay (Mobile Connection)',
           'Pulse Mobile Pairing',
           'Patrol Applies Safe Fixes and Verifies the Result',
         ],
@@ -428,7 +428,7 @@ describe('licensePresentation', () => {
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: [
-          'Pulse Relay (Remote Access)',
+          'Pulse Relay (Mobile Connection)',
           'Pulse Mobile Pairing',
           'Patrol Applies Safe Fixes and Verifies the Result',
         ],
@@ -457,7 +457,7 @@ describe('licensePresentation', () => {
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: [
-          'Pulse Relay (Remote Access)',
+          'Pulse Relay (Mobile Connection)',
           'Pulse Mobile Pairing',
           'Patrol Applies Safe Fixes and Verifies the Result',
         ],
@@ -484,7 +484,7 @@ describe('licensePresentation', () => {
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: [
-          'Pulse Relay (Remote Access)',
+          'Pulse Relay (Mobile Connection)',
           'Pulse Mobile Pairing',
           'Patrol Applies Safe Fixes and Verifies the Result',
         ],
@@ -511,7 +511,7 @@ describe('licensePresentation', () => {
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: [
-          'Pulse Relay (Remote Access)',
+          'Pulse Relay (Mobile Connection)',
           'Pulse Mobile Pairing',
           'Patrol Applies Safe Fixes and Verifies the Result',
         ],
@@ -543,7 +543,7 @@ describe('licensePresentation', () => {
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: [
-          'Pulse Relay (Remote Access)',
+          'Pulse Relay (Mobile Connection)',
           'Pulse Mobile Pairing',
           'Patrol Applies Safe Fixes and Verifies the Result',
         ],
@@ -572,7 +572,7 @@ describe('licensePresentation', () => {
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: [
-          'Pulse Relay (Remote Access)',
+          'Pulse Relay (Mobile Connection)',
           'Pulse Mobile Pairing',
           'Patrol Applies Safe Fixes and Verifies the Result',
         ],
@@ -601,7 +601,7 @@ describe('licensePresentation', () => {
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: [
-          'Pulse Relay (Remote Access)',
+          'Pulse Relay (Mobile Connection)',
           'Pulse Mobile Pairing',
           'Patrol Applies Safe Fixes and Verifies the Result',
         ],
@@ -631,13 +631,13 @@ describe('licensePresentation', () => {
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: [
-          'Pulse Relay (Remote Access)',
+          'Pulse Relay (Mobile Connection)',
           'Patrol Applies Safe Fixes and Verifies the Result',
         ],
       }),
     ).toMatchObject({
       title: 'Current plan: Legacy Pulse Pro+',
-      body: 'Legacy Pulse Pro+ is active on this instance. It includes Relay connectivity, Pulse Mobile pairing, push notifications, Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.',
+      body: 'Legacy Pulse Pro+ is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
         'Patrol Investigates Issues and Explains the Root Cause',
@@ -657,11 +657,11 @@ describe('licensePresentation', () => {
           upgrade_reasons: [],
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
-        displayableCapabilities: ['Pulse Relay (Remote Access)'],
+        displayableCapabilities: ['Pulse Relay (Mobile Connection)'],
       }),
     ).toEqual({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. It includes Relay connectivity, Pulse Mobile pairing, push notifications, Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.',
+      body: 'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
         'Patrol Investigates Issues and Explains the Root Cause',
@@ -700,7 +700,7 @@ describe('licensePresentation', () => {
     expect(
       getSelfHostedCurrentPlanPresentation({
         entitlements,
-        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Audit Logging'],
+        displayableCapabilities: ['Pulse Relay (Mobile Connection)', 'Audit Logging'],
       }),
     ).toMatchObject({
       title: 'Current plan: Pulse Pro',
@@ -720,7 +720,7 @@ describe('licensePresentation', () => {
     expect(
       getSelfHostedActivationSuccessPresentation({
         entitlements,
-        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Audit Logging'],
+        displayableCapabilities: ['Pulse Relay (Mobile Connection)', 'Audit Logging'],
         source: 'manual',
       }),
     ).toMatchObject({
@@ -747,7 +747,7 @@ describe('licensePresentation', () => {
     expect(
       getSelfHostedCurrentPlanPresentation({
         entitlements,
-        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Audit Logging'],
+        displayableCapabilities: ['Pulse Relay (Mobile Connection)', 'Audit Logging'],
       }),
     ).toMatchObject({
       title: 'Current plan: Pulse Pro',
@@ -767,7 +767,7 @@ describe('licensePresentation', () => {
     expect(
       getSelfHostedActivationSuccessPresentation({
         entitlements,
-        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Audit Logging'],
+        displayableCapabilities: ['Pulse Relay (Mobile Connection)', 'Audit Logging'],
         source: 'manual',
       }),
     ).toMatchObject({
@@ -791,7 +791,7 @@ describe('licensePresentation', () => {
           upgrade_reasons: [],
         },
         displayableCapabilities: [
-          'Pulse Relay (Remote Access)',
+          'Pulse Relay (Mobile Connection)',
           'Pulse Mobile Pairing',
           'Push Notifications',
         ],
@@ -809,7 +809,7 @@ describe('licensePresentation', () => {
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: [
-          'Pulse Relay (Remote Access)',
+          'Pulse Relay (Mobile Connection)',
           'Patrol Applies Safe Fixes and Verifies the Result',
         ],
       }).body,
@@ -834,7 +834,7 @@ describe('licensePresentation', () => {
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: [
-          'Pulse Relay (Remote Access)',
+          'Pulse Relay (Mobile Connection)',
           'Patrol Applies Safe Fixes and Verifies the Result',
         ],
       }).patrolControlAction,
@@ -878,7 +878,7 @@ describe('licensePresentation', () => {
           upgrade_reasons: [],
         },
         displayableCapabilities: [
-          'Pulse Relay (Remote Access)',
+          'Pulse Relay (Mobile Connection)',
           'Pulse Mobile Pairing',
           'Push Notifications',
           'Patrol Applies Safe Fixes and Verifies the Result',
@@ -887,7 +887,7 @@ describe('licensePresentation', () => {
     ).toBeUndefined();
   });
 
-  it('builds restrained higher-tier comparison cards for Community and Relay only', () => {
+  it('offers Community only the Pro card and never offers the retired Relay plan', () => {
     expect(
       getSelfHostedPlanComparisonPresentation({
         entitlements: {
@@ -901,22 +901,9 @@ describe('licensePresentation', () => {
     ).toEqual({
       cards: [
         {
-          title: 'Relay plan',
-          body: 'Remote web access, Pulse Mobile pairing, push notifications, and 14-day metric history.',
-          highlights: [
-            'Secure access when you are away from your network',
-            'Remote web access via Relay',
-            'Pulse Mobile pairing',
-            'Push notifications',
-            'No inbound ports required',
-            '14-day metric history',
-          ],
-        },
-        {
           title: 'Pulse Pro plan',
-          body: 'Patrol investigates issues, applies safe fixes, and verifies the result. Relay connectivity is included, plus 90-day metric history and team controls.',
+          body: 'Patrol investigates issues, applies safe fixes, and verifies the result, with 90-day metric history and team controls.',
           highlights: [
-            'Relay connectivity, Pulse Mobile pairing, and push notifications included',
             'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
             'Patrol investigates issues and explains the root cause',
             'Patrol applies safe fixes and verifies the result',
@@ -937,22 +924,7 @@ describe('licensePresentation', () => {
           upgrade_reasons: [],
         },
       }),
-    ).toEqual({
-      cards: [
-        {
-          title: 'Pulse Pro plan',
-          body: 'Patrol investigates issues, applies safe fixes, and verifies the result. Relay connectivity is included, plus 90-day metric history and team controls.',
-          highlights: [
-            'Relay connectivity, Pulse Mobile pairing, and push notifications included',
-            'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
-            'Patrol investigates issues and explains the root cause',
-            'Patrol applies safe fixes and verifies the result',
-            '90-day metric history',
-            'Team controls: RBAC, audit logging, reporting, and agent profiles',
-          ],
-        },
-      ],
-    });
+    ).toEqual({ cards: [] });
 
     expect(
       getSelfHostedPlanComparisonPresentation({
@@ -982,11 +954,11 @@ describe('licensePresentation', () => {
       body: 'These checks show the capabilities this instance can use right now, based on its entitlement and runtime payloads.',
       items: [
         {
-          label: 'Remote access, pairing, and push',
+          label: 'Pulse Mobile pairing and push',
           statusLabel: 'Active',
           state: 'active',
           detail:
-            'Relay, Pulse Mobile pairing, and push notifications are available on this instance.',
+            'Pulse Mobile pairing and push notifications are available on this instance until Pulse Mobile is retired on 31 March 2027.',
         },
         {
           label: '14-day metric history',
@@ -1024,7 +996,7 @@ describe('licensePresentation', () => {
       body: 'Open this only when a Pro capability looks unavailable. Normal setup is choosing Patrol mode.',
       items: [
         { label: 'Pulse Pro runtime', statusLabel: 'Active' },
-        { label: 'Remote access, pairing, and push', statusLabel: 'Active' },
+        { label: 'Pulse Mobile pairing and push', statusLabel: 'Active' },
         { label: '90-day metric history', statusLabel: 'Active' },
         { label: 'Patrol investigation and remediation', statusLabel: 'Active' },
         { label: 'Team controls', statusLabel: 'Active' },
@@ -1042,7 +1014,7 @@ describe('licensePresentation', () => {
     });
     expect(partialProStatus?.items.map((item) => [item.label, item.statusLabel])).toEqual([
       ['Pulse Pro runtime', 'Active'],
-      ['Remote access, pairing, and push', 'Partial'],
+      ['Pulse Mobile pairing and push', 'Partial'],
       ['90-day metric history', 'Partial'],
       ['Patrol investigation and remediation', 'Partial'],
       ['Team controls', 'Needs attention'],
@@ -1099,7 +1071,7 @@ describe('licensePresentation', () => {
 
     const expectedCapabilityItems = [
       ['Pulse Pro runtime', 'Active'],
-      ['Remote access, pairing, and push', 'Active'],
+      ['Pulse Mobile pairing and push', 'Active'],
       ['90-day metric history', 'Active'],
       ['Patrol investigation and remediation', 'Active'],
       ['Team controls', 'Active'],
@@ -1242,7 +1214,7 @@ describe('licensePresentation', () => {
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
         displayableCapabilities: [
-          'Pulse Relay (Remote Access)',
+          'Pulse Relay (Mobile Connection)',
           'Pulse Mobile Pairing',
           'Push Notifications',
           'Patrol Applies Safe Fixes and Verifies the Result',
@@ -1279,7 +1251,7 @@ describe('licensePresentation', () => {
           upgrade_reasons: [],
         },
         displayableCapabilities: [
-          'Pulse Relay (Remote Access)',
+          'Pulse Relay (Mobile Connection)',
           'Pulse Mobile Pairing',
           'Push Notifications',
         ],
@@ -1291,7 +1263,7 @@ describe('licensePresentation', () => {
       body: 'The license key was accepted and this instance is now running Relay.',
       highlightsLabel: 'Available now on this instance',
       highlights: [
-        'Pulse Relay (Remote Access)',
+        'Pulse Relay (Mobile Connection)',
         'Pulse Mobile Pairing',
         'Push Notifications',
         '14-day metric history',

@@ -6174,3 +6174,9 @@ shortcuts and the shortcuts help so Patrol entry points hide while AI is off.
 The change is navigation presentation only. It adds no storage, backup,
 snapshot or recovery surface, and it changes no route, authority or recovery
 state. The Recovery settings item and its capability gate are untouched.
+
+### Pulse Mobile pairing copy only
+
+`internal/api/onboarding_handlers.go` changed only the human-readable pairing
+readiness messages so they name Settings > Pulse Mobile. This opens no new
+storage or recovery path.
