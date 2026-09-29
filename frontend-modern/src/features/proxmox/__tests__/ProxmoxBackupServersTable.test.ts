@@ -146,6 +146,105 @@ const makeCorrelatedAgent = (overrides: Partial<Resource> = {}): Resource =>
   }) as Resource;
 
 describe('buildBackupServerRows PBS host correlation retention', () => {
+  it('keeps the agent UUID through PBS-only to side-by-side PVE/PBS refreshes without nodeName', () => {
+    const retention = createPbsCorrelationRetention();
+    const pbs = makeCorrelatablePbs();
+    pbs.name = 'backup-connection';
+    pbs.displayName = 'Backup connection';
+    pbs.platformId = 'pbs-service';
+    pbs.pbs = {
+      ...pbs.pbs!,
+      instanceId: 'pbs-service',
+      hostname: '10.0.0.5',
+      nodeName: undefined, // API tokens cannot read the PBS /nodes endpoint.
+      linkedAgentId: 'agent-uuid', // Corroborated by the backend's host interface match.
+    };
+    pbs.metricsTarget = { resourceType: 'agent', resourceId: 'pbs-service' };
+    const standalone = makeCorrelatedAgent({
+      id: 'agent-uuid',
+      name: 'backup-host.local',
+      displayName: 'backup-host.local',
+      platformId: 'agent-uuid',
+      agent: { agentId: 'agent-uuid', hostname: 'backup-host.local' },
+      metricsTarget: { resourceType: 'agent', resourceId: 'agent-uuid' },
+    });
+    const pveMerged = {
+      ...standalone,
+      id: 'pve-host',
+      name: 'PVE display label',
+      displayName: 'PVE display label',
+      platformId: 'pve/backup-host',
+      platformType: 'proxmox-pve',
+      sources: ['proxmox', 'agent', 'pbs'],
+      proxmox: { nodeName: 'backup-host' },
+    } as Resource;
+
+    expect(
+      buildBackupServerRows([pbs, standalone], [], retention)[0].resource.metricsTarget,
+    ).toEqual({
+      resourceType: 'agent',
+      resourceId: 'agent-uuid',
+    });
+    expect(
+      buildBackupServerRows([pbs, pveMerged], [], retention)[0].resource.metricsTarget,
+    ).toEqual({
+      resourceType: 'agent',
+      resourceId: 'agent-uuid',
+    });
+    expect(
+      buildBackupServerRows([pbs, pveMerged], [], retention)[0].resource.metricsTarget,
+    ).toEqual({
+      resourceType: 'agent',
+      resourceId: 'agent-uuid',
+    });
+  });
+
+  it('does not replace an explicit PBS host link with a same-name different agent', () => {
+    const pbs = makeCorrelatablePbs();
+    pbs.pbs = { ...pbs.pbs!, linkedAgentId: 'agent-uuid' };
+    const impostor = makeCorrelatedAgent({
+      id: 'agent-other',
+      agent: { agentId: 'agent-other', hostname: 'proxback-vm' },
+      metricsTarget: { resourceType: 'agent', resourceId: 'agent-other' },
+    });
+    expect(buildBackupServerRows([pbs, impostor])[0].resource.metricsTarget?.resourceId).toBe(
+      'proxback',
+    );
+  });
+
+  it('does not mistake a PVE-only node for a second host agent by name', () => {
+    const pbs = makeCorrelatablePbs();
+    const agent = makeCorrelatedAgent();
+    const pveOnly = {
+      ...agent,
+      id: 'pve-only',
+      sources: ['proxmox'],
+      agent: undefined,
+      platformData: { sources: ['proxmox'], proxmox: { nodeName: 'proxback' } },
+      metricsTarget: { resourceType: 'node', resourceId: 'pve-only' },
+    } as Resource;
+
+    expect(buildBackupServerRows([pbs, agent, pveOnly])[0].resource.metricsTarget?.resourceId).toBe(
+      'agent-proxback',
+    );
+  });
+
+  it('invalidates retained history when the corroborated agent identity changes', () => {
+    const retention = createPbsCorrelationRetention();
+    const pbs = makeCorrelatablePbs();
+    pbs.pbs = { ...pbs.pbs!, linkedAgentId: 'agent-proxback' };
+    buildBackupServerRows([pbs, makeCorrelatedAgent()], [], retention);
+
+    const replacement = {
+      ...pbs,
+      pbs: { ...pbs.pbs!, linkedAgentId: 'agent-replacement' },
+    } as Resource;
+    expect(
+      buildBackupServerRows([replacement], [], retention)[0].resource.metricsTarget?.resourceId,
+    ).toBe('proxback');
+    expect(retention.size).toBe(0);
+  });
+
   it('retains the resolved host target while a refresh snapshot omits the host row', () => {
     const retention = createPbsCorrelationRetention();
     const pbs = makeCorrelatablePbs();

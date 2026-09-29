@@ -104,8 +104,23 @@ export function ProxmoxPageSurface() {
     const segment = location.pathname.split('/').filter(Boolean)[1] as ProxmoxPageTabId | undefined;
     return segment && VALID_TABS.has(segment) ? segment : 'overview';
   });
-  const [resourceAggregations, setResourceAggregations] =
-    createSignal<ReturnType<ReturnType<typeof useUnifiedResources>['aggregations']>>(null);
+  // List aggregations count the whole estate, not the query scope. The small
+  // PMG row query returns source-scoped type facets for every Proxmox workflow
+  // without hydrating each inactive section's inventory.
+  const tabEvidence = useUnifiedResources({
+    query: 'type=pmg&source=proxmox,pbs,pmg,agent',
+    cacheKey: 'proxmox-tab-evidence',
+    initialHydration: 'prefer-ws-then-rest',
+  });
+  createEffect(() => {
+    // A fresh all-resources cache can seed rows but not source-filtered facets.
+    // Force this compact query once instead of leaving the rail unresolved
+    // until a websocket event happens to arrive.
+    if (tabEvidence.facets?.() !== null) return;
+    void Promise.resolve()
+      .then(() => tabEvidence.refetch())
+      .catch(() => undefined);
+  });
   // Replication jobs come straight from /api/replication/jobs (they bypass
   // the unified-resource pipeline), so the surface owns the fetch: the job
   // count gates the Replication tab and the same data feeds the table.
@@ -116,18 +131,22 @@ export function ProxmoxPageSurface() {
     replicationJobs.error ? 0 : (replicationJobs() ?? []).length,
   );
   const visibleTabs = createMemo(() => {
-    const aggregations = resourceAggregations();
-    if (aggregations) {
-      return buildVisibleProxmoxTabSpecsFromCounts(aggregations.byType, replicationJobCount());
-    }
-    return PROXMOX_TAB_SPECS;
+    // An unknown snapshot is not evidence that every optional integration is
+    // present. Never use estate-wide aggregations here: unrelated VMware VMs
+    // or TrueNAS storage would otherwise advertise empty Proxmox sections.
+    return buildVisibleProxmoxTabSpecsFromCounts(
+      tabEvidence.facets?.()?.byType ?? {},
+      replicationJobCount(),
+    );
   });
   const visibleTabIds = createMemo(
     () => new Set<ProxmoxPageTabId>(visibleTabs().map((tab) => tab.id)),
   );
   const activeTab = createMemo<ProxmoxPageTabId>(() => {
     const requested = requestedTab();
-    return visibleTabIds().has(requested) ? requested : 'overview';
+    // Do not discard a direct link while counts are still unknown: its own
+    // resource query must be allowed to hydrate before deciding it is absent.
+    return !tabEvidence.facets?.() || visibleTabIds().has(requested) ? requested : 'overview';
   });
   const shouldHydrateTab = (tab: ProxmoxPageTabId) => activeTab() === tab;
   const overviewResources = useUnifiedResources({
@@ -217,10 +236,6 @@ export function ProxmoxPageSurface() {
     activeTab() === 'backups'
       ? Promise.all([overviewResources.refetch(), backupResources.refetch()])
       : resourceState().refetch();
-  createEffect(() => {
-    const next = resourceState().aggregations?.();
-    if (next) setResourceAggregations(next);
-  });
   const normalizeSnapshot = (snapshot: Resource[] | undefined) =>
     Array.isArray(snapshot) ? snapshot : [];
   const buildModel = (snapshot: Resource[] | undefined) =>

@@ -809,7 +809,20 @@ Proxmox physical-disk polling is also a continuity boundary. A failed or
 permission-denied `disks/list` call must remain an error so the monitor can use
 linked host-agent inventory or retain same-instance, same-node prior evidence;
 it must never become a successful empty inventory that removes valid boot or
-data disks. SMART enrichment matches serial, WWN, device path, and controller
+data disks. Between PVE disk polls, readback into `State.PhysicalDisks` accepts
+only a disk with an actual Proxmox source observation. A linked Agent-only
+SMART disk may inherit the PVE instance for presentation, but must not be
+written back as PVE inventory; doing so adds and removes a false source and
+change-journal rows when the PVE inventory is empty. Agent-only disks remain
+visible through their Agent source, and an explicit failed-query Agent fallback
+still supplies PVE inventory. `TestPhysicalDiskSkippedPollDoesNotPromoteAgentOnlySMARTToPVEInventory`
+checks repeated empty-inventory/skipped-poll cycles and journal row counts;
+its serial-bearing fixture yields a tags-only row if the source guard is
+removed, matching the reported history shape without claiming the reporter's
+topology or installed write rate. With the guard, all three cycles add no rows.
+`TestPhysicalDiskSkippedPollPreservesSourceIdentity` checks genuine PVE disk
+continuity. These fixtures do not establish the reporter's installed cause.
+SMART enrichment matches serial, WWN, device path, and controller
 member topology uniquely and fail-closed. Serial and WWN are interchangeable
 hardware-identity carriers across reporters: comparison may case-fold and
 remove only `naa.`, `eui.`, `wwn-`, and `0x` framing, but must reject

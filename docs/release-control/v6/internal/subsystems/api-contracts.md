@@ -9538,6 +9538,16 @@ inconclusive shape as automatic terminalization under reason code
 `operator_force_failed`, attributed to the authenticated operator, with the
 operator's justification preserved verbatim in the terminal audit event.
 
+The browser's `ResourceActionsAPI.forceFailAction` is a thin client for that
+existing route. It sends a non-empty operator reason and consumes the returned
+action detail; it carries no plan hash or new dispatch authority. The Actions
+review may offer it only after an aged `receipt_pending` presentation and a
+fresh detail read, but those are safeguards rather than authorization: the API
+must still enforce the local admin, `settings:write`, action-execute and
+`executing`-only checks, including the already-final conflict on a race. A
+successful response says that the audit wait was closed inconclusively, not
+that the operation failed, stopped or was cancelled.
+
 Typed Docker / Podman container start, stop, and restart operations extend that
 same durable boundary rather than creating a provider-local action protocol.
 The agent wire request is closed and binds the exact action, dispatch attempt,

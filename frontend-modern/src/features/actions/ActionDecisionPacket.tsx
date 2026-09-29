@@ -356,9 +356,11 @@ export const ActionDecisionPacket: Component<{
           <p class="mt-2 text-sm font-medium">
             {props.detail?.receipt
               ? 'One agent receipt is recorded for this action.'
-              : props.detail?.attempt?.state === 'receipt_pending'
-                ? 'The action was sent once and Pulse is waiting for the durable agent receipt.'
-                : 'Pulse recorded the delivery attempt before sending it.'}
+              : props.audit.result?.actionResultV2?.execution.reasonCode === 'operator_force_failed'
+                ? 'The audit was closed without an agent receipt. The operation outcome remains unknown.'
+                : props.detail?.attempt?.state === 'receipt_pending'
+                  ? 'The action was sent once and Pulse is waiting for the durable agent receipt.'
+                  : 'Pulse recorded the delivery attempt before sending it.'}
           </p>
           <p class="mt-1 text-sm text-muted">
             Refreshing or reconnecting re-reads this action record. It does not create another

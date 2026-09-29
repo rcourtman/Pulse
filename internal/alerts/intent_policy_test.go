@@ -315,6 +315,79 @@ func TestCanonicalResourcePolicyCannotEnterQuietHoursReplay(t *testing.T) {
 	}
 }
 
+func TestOperatorPolicySuppressesDirectAlertDispatchWithoutQueueReplay(t *testing.T) {
+	now := time.Now().UTC()
+	end := now.Add(time.Hour)
+	cases := []struct {
+		name       string
+		intent     OperatorIntentContext
+		alertType  string
+		wantReason string
+		wantSend   bool
+	}{
+		{"muted resource", OperatorIntentContext{MonitoringMode: "muted"}, "cpu", "operator_muted", false},
+		{"expected offline", OperatorIntentContext{MonitoringMode: "expected_offline"}, "offline", "operator_expected_offline", false},
+		{"active maintenance", OperatorIntentContext{MaintenanceStartAt: &now, MaintenanceEndAt: &end}, "cpu", "operator_maintenance", false},
+		{"unrelated performance alert", OperatorIntentContext{MonitoringMode: "expected_offline"}, "cpu", AlertDeliveryReasonReady, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newEventLogManager(t)
+			m.SetOperatorIntentContextResolver(func(resourceID string, observedAt time.Time) (OperatorIntentContext, bool) {
+				if resourceID != "vm:101" {
+					t.Fatalf("operator policy queried for %q", resourceID)
+				}
+				return tc.intent, true
+			})
+			delivered := 0
+			m.SetAlertCallback(func(*Alert) { delivered++ })
+			alert := &Alert{
+				ID: "policy-alert", ResourceID: "vm:101", Type: tc.alertType,
+				Level: AlertLevelCritical, StartTime: now, LastSeen: now,
+				Metadata: map[string]interface{}{
+					MetadataQuietHoursSuppressed: true,
+					MetadataQuietHoursReplayAt:   end.Format(time.RFC3339),
+				},
+			}
+			// Simulate an existing alert while a newly saved policy is being
+			// reconciled. Direct dispatch must not turn that policy into replay.
+			m.mu.Lock()
+			m.activeAlerts[alert.ID] = alert
+			m.mu.Unlock()
+			diagnosis, ok := m.DiagnoseAlertDelivery(alert.ID)
+			m.mu.Lock()
+			sent := m.dispatchAlert(alert, false)
+			m.mu.Unlock()
+			wantDelivered := 0
+			if tc.wantSend {
+				wantDelivered = 1
+			}
+			if sent != tc.wantSend || delivered != wantDelivered {
+				t.Fatalf("dispatch = %v, callback count = %d; want send=%v", sent, delivered, tc.wantSend)
+			}
+			if !ok || diagnosis.Reason != tc.wantReason || diagnosis.QuietHoursReplayAt != nil {
+				t.Fatalf("diagnosis = %+v, exists=%v; want reason %q", diagnosis, ok, tc.wantReason)
+			}
+			if hasQuietHoursNotificationReplay(alert) {
+				t.Fatal("operator policy left or created replay metadata")
+			}
+			if !tc.wantSend {
+				if alert.LastNotified != nil {
+					t.Fatal("suppressed alert was marked notified")
+				}
+				suppressed := queryAlertEvents(t, m, eventlog.Filter{Types: []string{eventlog.TypeNotificationSuppressed}})
+				if len(suppressed) != 1 || suppressed[0].Reason != tc.wantReason {
+					t.Fatalf("suppression events = %+v; want one %q event", suppressed, tc.wantReason)
+				}
+				deferred := queryAlertEvents(t, m, eventlog.Filter{Types: []string{eventlog.TypeNotificationDeferred}})
+				if len(deferred) != 0 {
+					t.Fatalf("operator suppression produced deferred events: %+v", deferred)
+				}
+			}
+		})
+	}
+}
+
 func TestLifecycleAlertStartsAtFirstIntentMatch(t *testing.T) {
 	m := NewManagerWithDataDir(t.TempDir())
 	t.Cleanup(m.Stop)

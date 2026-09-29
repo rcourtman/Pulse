@@ -191,6 +191,15 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 			map[string]string{"primaryAlertId": alert.Correlation.PrimaryAlertID})
 		return false
 	}
+	// Resource monitoring policy is a terminal suppression, unlike quiet hours.
+	// An alert already active when the policy changes must not be queued for
+	// replay or reach a callback before reconciliation clears it.
+	if suppressed, reason := m.operatorSuppressionForAlertNoLock(alert, m.policyNow().UTC()); suppressed {
+		clearQuietHoursNotificationReplay(alert)
+		m.recordAlertEvent(eventlog.TypeNotificationSuppressed, alert, "", reason,
+			"Notification suppressed by resource monitoring policy.", nil)
+		return false
+	}
 
 	trackingKey := canonicalTrackingKeyForAlert(alert)
 
@@ -480,10 +489,8 @@ func (m *Manager) shouldSuppressNotification(alert *Alert) (bool, string) {
 	if alert == nil {
 		return false, ""
 	}
-	if suppressed, reason := m.operatorSuppressionForAlertNoLock(alert, time.Now().UTC()); suppressed {
-		return true, reason
-	}
-
+	// Only quiet-hours matches are replayable. Operator policy is checked by
+	// each caller before this helper, because it must drop rather than defer.
 	if !m.isInQuietHours() {
 		return false, ""
 	}
@@ -811,6 +818,14 @@ func (m *Manager) diagnoseActiveAlertLocked(alert *Alert) AlertDeliveryDiagnosis
 		}
 		diagnosis.SuppressedUntil = until
 		diagnosis.setSuppressed(AlertDeliveryReasonSnoozed, "Alert is snoozed, so notifications and escalations are paused until the selected time.")
+		return true
+	}():
+	case func() bool {
+		suppressed, reason := m.operatorSuppressionForAlertNoLock(alert, now.UTC())
+		if !suppressed {
+			return false
+		}
+		diagnosis.setSuppressed(reason, "Alert notification is suppressed by the resource monitoring policy.")
 		return true
 	}():
 	case !m.config.Enabled:

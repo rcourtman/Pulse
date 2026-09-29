@@ -69,11 +69,12 @@ function createGithub({
   return { github, calls };
 }
 
-function createContext({ action = "opened", issue }) {
+function createContext({ action = "opened", issue, previousBody }) {
   return {
     payload: {
       action,
       issue,
+      ...(previousBody === undefined ? {} : { changes: { body: { from: previousBody } } }),
     },
     repo: {
       owner: "rcourtman",
@@ -159,24 +160,52 @@ test("syncLabels marks declared secondary topics for decomposition", async () =>
   ]);
 });
 
-test("syncLabels clears decomposition after every declared topic has a disposition", async () => {
-  const { github, calls } = createGithub({ latestVersion: "6.4.1" });
-  const issue = {
-    number: 1796,
-    title: "Availability workflow feedback",
-    body: "## Additional actionable topics\nNone.\n",
-    labels: [{ name: "enhancement" }, { name: "needs-decomposition" }],
-  };
+test("syncLabels preserves community decomposition on an empty form field", async () => {
+  for (const action of ["edited", "reopened"]) {
+    const { github, calls } = createGithub({ latestVersion: "6.4.1" });
+    const issue = {
+      number: 1796,
+      title: "Availability workflow feedback",
+      body: "## Additional actionable topics\nNone.\n",
+      // A later comment may have raised a distinct topic after this form was filed.
+      labels: [{ name: "enhancement" }, { name: "needs-decomposition" }],
+    };
 
-  await triage.syncLabels({
-    github,
-    context: createContext({ action: "edited", issue }),
-    core: createCore(),
-  });
+    await triage.syncLabels({
+      github,
+      context: createContext({ action, issue }),
+      core: createCore(),
+    });
 
-  assert.equal(calls.createLabel.length, 0);
-  assert.equal(calls.addLabels.length, 0);
-  assert.deepEqual(calls.removeLabel.map(call => call.name), ["needs-decomposition"]);
+    assert.equal(calls.createLabel.length, 0);
+    assert.equal(calls.addLabels.length, 0);
+    assert.deepEqual(calls.removeLabel, []);
+  }
+});
+
+test("syncLabels adds newly declared topics but respects a completed disposition", async () => {
+  const topicBody = "## Additional actionable topics\nAdd a storage filter.\n";
+  const emptyBody = "## Additional actionable topics\nNone.\n";
+  for (const { action, previousBody, expectedAdd } of [
+    { action: "edited", previousBody: emptyBody, expectedAdd: true },
+    { action: "edited", previousBody: topicBody, expectedAdd: false },
+    { action: "edited", expectedAdd: false },
+    { action: "reopened", expectedAdd: false },
+  ]) {
+    const { github, calls } = createGithub();
+    await triage.syncLabels({
+      github,
+      context: createContext({ action, previousBody, issue: {
+        number: 1796,
+        title: "Availability workflow feedback",
+        body: topicBody,
+        labels: [{ name: "enhancement" }],
+      } }),
+      core: createCore(),
+    });
+    assert.deepEqual(calls.addLabels.flatMap(call => call.labels),
+      expectedAdd ? ["needs-decomposition"] : []);
+  }
 });
 
 test("additional topic classification is explicit and fail-quiet for legacy forms", () => {
@@ -232,6 +261,28 @@ test("every actionable issue form exposes the decomposition signal", () => {
       form,
       /id: additional_topics[\s\S]*?validations:\s*\n\s+required: true/
     );
+  }
+});
+
+test("bug and pre-release forms accept truthful evidence for installs that never started", () => {
+  const templateDir = path.resolve(__dirname, "../ISSUE_TEMPLATE");
+  for (const name of ["bug_report.yml", "v6_rc_feedback.yml"]) {
+    const form = fs.readFileSync(path.join(templateDir, name), "utf8");
+    assert.match(form, /id: pulse_version[\s\S]*?failed install[\s\S]*?"unknown"/);
+    assert.match(form, /id: installer_source[\s\S]*?Installer or helper source[\s\S]*?required: false/);
+    assert.match(form, /Do not paste a command containing a token or other secret/);
+    assert.match(form, /for an install that never started/);
+  }
+});
+
+test("bug and pre-release forms accept unsafe one-off failures without a second run", () => {
+  const templateDir = path.resolve(__dirname, "../ISSUE_TEMPLATE");
+  for (const name of ["bug_report.yml", "v6_rc_feedback.yml"]) {
+    const form = fs.readFileSync(path.join(templateDir, name), "utf8");
+    assert.match(form, /do not repeat/i);
+    assert.match(form, /original sequence/i);
+    assert.match(form, /second reproduction is not required/);
+    assert.match(form, /data loss, an outage, duplicate changes, or excessive notifications/);
   }
 });
 
@@ -390,13 +441,13 @@ test("queued label sync cannot overwrite newer Community label decisions", async
   }
 });
 
-test("classification removal tolerates an absent label but propagates access failures", async () => {
+test("version-label removal tolerates an absent label but propagates access failures", async () => {
   for (const status of [404, 403]) {
     const { github } = createGithub();
     github.rest.issues.removeLabel = async () => { throw Object.assign(new Error("API failure"), { status }); };
     const run = triage.syncLabels({ github, core: createCore(), context: createContext({ issue: {
-      number: 1200, title: "Feedback", body: "## Additional actionable topics\nNone.\n",
-      labels: [{ name: "enhancement" }, { name: "needs-decomposition" }],
+      number: 1200, title: "Bug", body: "## Pulse version\n6.0.1\n",
+      labels: [{ name: "bug" }, { name: "affects-6.0.0" }],
     } }) });
     if (status === 404) await assert.doesNotReject(run);
     else await assert.rejects(run, { status: 403 });

@@ -150,20 +150,44 @@ const correlatedAgentKey = (resource: Resource): string | undefined => {
   return undefined;
 };
 
+// PVE-only nodes are also type 'agent'. They must not masquerade as an agent
+// host merely because their hostname matches the PBS service (#1723).
+const isHostWithAgent = (candidate: Resource): boolean =>
+  (candidate.type === 'agent' || isGuestWithAgent(candidate)) &&
+  Boolean(candidate.agent ?? candidate.platformData?.agent);
+
 // Host telemetry can be merged into a PVE guest rather than a standalone
 // agent. Keep the unique-identity check and require an actual agent facet.
 const isCorrelationCandidate = (serverTokens: Set<string>, candidate: Resource): boolean => {
-  if (candidate.type !== 'agent' && !isGuestWithAgent(candidate)) return false;
+  if (!isHostWithAgent(candidate)) return false;
   for (const token of identityTokens(candidate)) {
     if (serverTokens.has(token)) return true;
   }
   return false;
 };
 
+const preferredCorrelatedHost = (matches: readonly Resource[]): Resource | undefined =>
+  matches.find((match) => isGuestWithAgent(match) && match.metricsTarget) ??
+  matches.find((match) => match.metricsTarget) ??
+  matches[0];
+
 const uniquelyCorrelatedAgent = (
   server: Resource,
   candidates: readonly Resource[],
 ): Resource | undefined => {
+  // The backend can corroborate a PBS connection with a unique agent from
+  // its reported interface IP even when the PBS token cannot read nodeName
+  // and the configured connection name differs from the PVE/agent hostname.
+  // An explicit link also vetoes same-name agents with a different ID.
+  const linkedAgentId = server.pbs?.linkedAgentId?.trim();
+  if (linkedAgentId) {
+    return preferredCorrelatedHost(
+      candidates.filter(
+        (candidate) =>
+          isHostWithAgent(candidate) && correlatedAgentKey(candidate) === linkedAgentId,
+      ),
+    );
+  }
   const serverTokens = identityTokens(server);
   if (serverTokens.size === 0) return undefined;
   const matches = candidates.filter((candidate) => isCorrelationCandidate(serverTokens, candidate));
@@ -189,11 +213,7 @@ const uniquelyCorrelatedAgent = (
   }
   if (byAgentKey.size !== 1) return undefined;
   const group = Array.from(byAgentKey.values())[0];
-  return (
-    group.find((match) => isGuestWithAgent(match) && match.metricsTarget) ??
-    group.find((match) => match.metricsTarget) ??
-    group[0]
-  );
+  return preferredCorrelatedHost(group);
 };
 
 // True when the snapshot still offers a host row for this server, even if the
@@ -284,6 +304,13 @@ export function buildBackupServerRows(
       }
       const retained = retention?.get(server.id);
       if (retained) {
+        // A changed backend link is evidence of host replacement; an old
+        // correlation must not survive merely because its row is absent.
+        const linkedAgentId = server.pbs?.linkedAgentId?.trim();
+        if (linkedAgentId && correlatedAgentKey(retained) !== linkedAgentId) {
+          retention?.delete(server.id);
+          return server;
+        }
         const fresh =
           server.lastSeen - retained.lastSeen <= PBS_CORRELATION_RETENTION_MAX_STALENESS_MS;
         if (fresh && !hasCorrelationCandidate(server, servers)) {

@@ -236,7 +236,7 @@ func resourceChangedFields(before, after Resource) []string {
 	if before.CustomURL != after.CustomURL {
 		changed = append(changed, "customUrl")
 	}
-	if !reflect.DeepEqual(before.Identity, after.Identity) {
+	if !resourceIdentityEquivalent(before.Identity, after.Identity) {
 		changed = append(changed, "identity")
 	}
 	if (isAvailabilityOwnedResource(before) || isAvailabilityOwnedResource(after)) &&
@@ -543,6 +543,20 @@ func changeSourceAdapterForDataSource(source DataSource) ChangeSourceAdapter {
 	default:
 		return ""
 	}
+}
+
+// Identity addresses, hostnames and MACs are sets, not ordered observations.
+// Registry merges can reorder them or turn a nil slice into an empty one while
+// the actual identity remains unchanged; those differences must not create
+// configuration-history rows on every poll.
+func resourceIdentityEquivalent(a, b ResourceIdentity) bool {
+	return a.MachineID == b.MachineID &&
+		a.DMIUUID == b.DMIUUID &&
+		a.ClusterName == b.ClusterName &&
+		a.ProxmoxGuestKey == b.ProxmoxGuestKey &&
+		sameStringSet(a.Hostnames, b.Hostnames) &&
+		sameStringSet(a.IPAddresses, b.IPAddresses) &&
+		sameStringSet(a.MACAddresses, b.MACAddresses)
 }
 
 func sameStringSet(a, b []string) bool {

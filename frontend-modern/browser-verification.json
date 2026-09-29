@@ -1,50 +1,23 @@
 {
   "version": 1,
-  "base_sha": "fcbb7e58ad514ac146f666f49075039d40d829e2",
-  "verified_at": "2026-09-29T12:15:52Z",
+  "base_sha": "498e2b12a22510520f9df7a510105d6775ea0522",
+  "verified_at": "2026-09-29T16:42:43Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/RelaySettingsPanel.tsx",
-    "frontend-modern/src/components/Settings/settingsHeaderMeta.ts",
-    "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
-    "frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts",
-    "frontend-modern/src/features/alerts/AlertPushDestinationsSection.tsx",
-    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
-    "frontend-modern/src/i18n/messages.de.ts",
-    "frontend-modern/src/i18n/messages.es.ts",
-    "frontend-modern/src/i18n/messages.ts",
-    "frontend-modern/src/utils/alertDestinationsPresentation.ts",
-    "frontend-modern/src/utils/licensePresentation.ts",
-    "frontend-modern/src/utils/relayPresentation.ts",
-    "frontend-modern/src/utils/selfHostedFeatureCatalog.generated.ts",
-    "frontend-modern/src/utils/selfHostedPlans.ts"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/types/resource.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/RelaySettingsPanel.tsx": "1def33d23464ed3e0a6127e75f16e7da814c9ca7d8fc6a680532fbef05e67755",
-    "frontend-modern/src/components/Settings/settingsHeaderMeta.ts": "4847df256a489833c5836e0babcd651ea85d640a204288979f965bda4ff7432b",
-    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "d4832713b84d88033fa15211342b6ff8a243e20c56732c5431aed8e10b22e9c2",
-    "frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts": "56525ac9bd0f3634adea1cccbc53c557caed8faad223f48d788c074ab2fa8a86",
-    "frontend-modern/src/features/alerts/AlertPushDestinationsSection.tsx": "3a160748f1bd0f42ba412757ca919803a440ad8afb0a946d0d5807188c4bc5a0",
-    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "1e07af69a4f4268601f8227500e79eb6a827c49f7b0d62b283129ff5fa2935f9",
-    "frontend-modern/src/i18n/messages.de.ts": "2daa6b5a6bb2a59bf7846fa2f93310a48065fe7bc3082777cbb51c2fd5f107e2",
-    "frontend-modern/src/i18n/messages.es.ts": "7052ac4596ef1d36b46935f1bf451f552aee87abe45e23840b3e9d570b215205",
-    "frontend-modern/src/i18n/messages.ts": "42c6798b32c5647c89a9f658b40e605773d85e5478a4b889bc0469ef3b2efe8e",
-    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "82980cfc35fab1e91c5484b75e1bc3b84f6c2234e26ed5306b4583e89da3f880",
-    "frontend-modern/src/utils/licensePresentation.ts": "3573f465207e64e2984c5f18dc89f644b6a88de6e124779840714b01f572e3d6",
-    "frontend-modern/src/utils/relayPresentation.ts": "9a0d1000d91e307d31b7176be7d4529a150f7364fd913a4b379e2c96a3aa9e1c",
-    "frontend-modern/src/utils/selfHostedFeatureCatalog.generated.ts": "64baf62ae41b9832381ac2a91f7c9724131e765f2493cb894efabeed2ae16d0e",
-    "frontend-modern/src/utils/selfHostedPlans.ts": "5efab41402fa3409f307398d5feb3b8ccdbf16ac01d6ce0cdacc3024c640b970"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "fc3c71f792c91abe62475be2a341fbedc729dd079b31e2245b5769f969fa6b12",
+    "frontend-modern/src/types/resource.ts": "4e3b64a3799aad0d357b9d8898dd2daf9a557e05c529df3650d2f6d03eb8ca56"
   },
   "routes": [
-    "/settings/system-relay",
-    "/alerts/notifications",
-    "/settings/pulse-intelligence/billing/plan",
-    "/settings/system-general"
+    "/browser-tests/pbs-mixed-source-1723.html (mock-backed current ProxmoxBackupServersTable)"
   ],
   "viewports": [
     {
-      "width": 1024,
-      "height": 768
+      "width": 1365,
+      "height": 900
     },
     {
       "width": 390,
@@ -52,16 +25,93 @@
     }
   ],
   "states": [
-    "Licensed instance (MSP test license from the offline issuer, relay capability present): Settings > Pulse Mobile shows 'Pair Pulse Mobile' with the 31 March 2027 retirement copy, the 'Allow Pulse Mobile connections' toggle, no Remote Access wording and no upgrade prompt",
-    "Licensed instance: Alerts > Notifications shows the Mobile push notifications panel with retirement copy, minimum-severity control and the 'Open Pulse Mobile settings' link",
-    "Licensed instance: Plans & Billing lists the relay feature as 'Pulse Relay (Mobile Connection)' with no Remote Access or remote web access wording",
-    "Community instance (no license): Alerts > Notifications has no Mobile push panel and no Relay upsell while webhook, email and Apprise destinations remain",
-    "Community instance: settings navigation has no Pulse Mobile or Remote Access item; the direct /settings/system-relay route shows the retirement message with no upgrade link",
-    "Community instance: Plans & Billing shows the Community plan with no Relay plan card or remote web access copy"
+    "PBS API + corroborated Agent with token-auth nodeName absent",
+    "same-host PVE API joined alongside a PVE-only name collision",
+    "correlated host row temporarily omitted",
+    "correlated host row restored"
   ],
   "interactions": [
-    "Activated the offline issuer test license through /api/license/activate on the licensed stack and confirmed relay in /api/license/entitlements",
-    "Loaded /settings/system-relay and /alerts/notifications on the licensed stack at 1024px and 390px, checked the toggle and settings link stay inside the viewport with no horizontal overflow",
-    "Loaded /alerts/notifications, /settings/system-general, /settings/system-relay and /settings/system/billing/plan on the Community stack and checked nav items, panels and links"
-  ]
+    "desktop disclosure-button keyboard focus and Enter; phone row click",
+    "open History and select 24h, 6h, 1h and 12h across topology changes",
+    "join PVE API, omit host row, restore host row"
+  ],
+  "command": "pulse-worker-browser frontend-modern/node_modules/proof-pbs-1723.cjs from assigned workspace root; Vite 6.4.3, Chromium 141.0.7390.37, Playwright 1.56.1",
+  "artifacts": [
+    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-8wlxxg93/proof-pbs-1723.cjs",
+    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-8wlxxg93/browser-run.log",
+    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-8wlxxg93/browser-proof-1723/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-8wlxxg93/browser-proof-1723/joined-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-8wlxxg93/browser-proof-1723/joined-390.png"
+  ],
+  "notes": "Fresh offline browser run on supplied main 498e2b12a2 plus unchanged #1723 runtime repair. At desktop and phone widths, History stayed selected with eight plotted paths through initial PBS + Agent, same-host PVE join, transient host omission and restoration. All eight captured history requests targeted agent:agent-uuid, never the PBS service key; joined screenshots were visually inspected. Mock-backed proof is not installed, second-topology or reporter acceptance.",
+  "prior_verifications": [
+    {
+      "version": 1,
+      "base_sha": "fcbb7e58ad514ac146f666f49075039d40d829e2",
+      "verified_at": "2026-09-29T12:15:52Z",
+      "result": "passed",
+      "changed_paths": [
+        "frontend-modern/src/components/Settings/RelaySettingsPanel.tsx",
+        "frontend-modern/src/components/Settings/settingsHeaderMeta.ts",
+        "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
+        "frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts",
+        "frontend-modern/src/features/alerts/AlertPushDestinationsSection.tsx",
+        "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
+        "frontend-modern/src/i18n/messages.de.ts",
+        "frontend-modern/src/i18n/messages.es.ts",
+        "frontend-modern/src/i18n/messages.ts",
+        "frontend-modern/src/utils/alertDestinationsPresentation.ts",
+        "frontend-modern/src/utils/licensePresentation.ts",
+        "frontend-modern/src/utils/relayPresentation.ts",
+        "frontend-modern/src/utils/selfHostedFeatureCatalog.generated.ts",
+        "frontend-modern/src/utils/selfHostedPlans.ts"
+      ],
+      "content_sha256": {
+        "frontend-modern/src/components/Settings/RelaySettingsPanel.tsx": "1def33d23464ed3e0a6127e75f16e7da814c9ca7d8fc6a680532fbef05e67755",
+        "frontend-modern/src/components/Settings/settingsHeaderMeta.ts": "4847df256a489833c5836e0babcd651ea85d640a204288979f965bda4ff7432b",
+        "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "d4832713b84d88033fa15211342b6ff8a243e20c56732c5431aed8e10b22e9c2",
+        "frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts": "56525ac9bd0f3634adea1cccbc53c557caed8faad223f48d788c074ab2fa8a86",
+        "frontend-modern/src/features/alerts/AlertPushDestinationsSection.tsx": "3a160748f1bd0f42ba412757ca919803a440ad8afb0a946d0d5807188c4bc5a0",
+        "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "1e07af69a4f4268601f8227500e79eb6a827c49f7b0d62b283129ff5fa2935f9",
+        "frontend-modern/src/i18n/messages.de.ts": "2daa6b5a6bb2a59bf7846fa2f93310a48065fe7bc3082777cbb51c2fd5f107e2",
+        "frontend-modern/src/i18n/messages.es.ts": "7052ac4596ef1d36b46935f1bf451f552aee87abe45e23840b3e9d570b215205",
+        "frontend-modern/src/i18n/messages.ts": "42c6798b32c5647c89a9f658b40e605773d85e5478a4b889bc0469ef3b2efe8e",
+        "frontend-modern/src/utils/alertDestinationsPresentation.ts": "82980cfc35fab1e91c5484b75e1bc3b84f6c2234e26ed5306b4583e89da3f880",
+        "frontend-modern/src/utils/licensePresentation.ts": "3573f465207e64e2984c5f18dc89f644b6a88de6e124779840714b01f572e3d6",
+        "frontend-modern/src/utils/relayPresentation.ts": "9a0d1000d91e307d31b7176be7d4529a150f7364fd913a4b379e2c96a3aa9e1c",
+        "frontend-modern/src/utils/selfHostedFeatureCatalog.generated.ts": "64baf62ae41b9832381ac2a91f7c9724131e765f2493cb894efabeed2ae16d0e",
+        "frontend-modern/src/utils/selfHostedPlans.ts": "5efab41402fa3409f307398d5feb3b8ccdbf16ac01d6ce0cdacc3024c640b970"
+      },
+      "routes": [
+        "/settings/system-relay",
+        "/alerts/notifications",
+        "/settings/pulse-intelligence/billing/plan",
+        "/settings/system-general"
+      ],
+      "viewports": [
+        {
+          "width": 1024,
+          "height": 768
+        },
+        {
+          "width": 390,
+          "height": 844
+        }
+      ],
+      "states": [
+        "Licensed instance (MSP test license from the offline issuer, relay capability present): Settings > Pulse Mobile shows 'Pair Pulse Mobile' with the 31 March 2027 retirement copy, the 'Allow Pulse Mobile connections' toggle, no Remote Access wording and no upgrade prompt",
+        "Licensed instance: Alerts > Notifications shows the Mobile push notifications panel with retirement copy, minimum-severity control and the 'Open Pulse Mobile settings' link",
+        "Licensed instance: Plans & Billing lists the relay feature as 'Pulse Relay (Mobile Connection)' with no Remote Access or remote web access wording",
+        "Community instance (no license): Alerts > Notifications has no Mobile push panel and no Relay upsell while webhook, email and Apprise destinations remain",
+        "Community instance: settings navigation has no Pulse Mobile or Remote Access item; the direct /settings/system-relay route shows the retirement message with no upgrade link",
+        "Community instance: Plans & Billing shows the Community plan with no Relay plan card or remote web access copy"
+      ],
+      "interactions": [
+        "Activated the offline issuer test license through /api/license/activate on the licensed stack and confirmed relay in /api/license/entitlements",
+        "Loaded /settings/system-relay and /alerts/notifications on the licensed stack at 1024px and 390px, checked the toggle and settings link stay inside the viewport with no horizontal overflow",
+        "Loaded /alerts/notifications, /settings/system-general, /settings/system-relay and /settings/system/billing/plan on the Community stack and checked nav items, panels and links"
+      ]
+    }
+  ],
+  "preserved_candidate_source": "25d6ab2e7a23adf3c74e0c071dfd40e799d2d83d"
 }

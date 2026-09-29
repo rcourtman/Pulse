@@ -368,6 +368,64 @@ func TestIngestSnapshotAssociatesPBSHostAgentByReportedNodeName(t *testing.T) {
 	if !containsDataSource(hostResource.Sources, SourcePBS) {
 		t.Fatalf("PBS host sources = %v, want PBS membership via reported node name", hostResource.Sources)
 	}
+	if pbsResource.PBS.LinkedAgentID != "agent-pbs-1" {
+		t.Fatalf("PBS linked agent = %q, want agent-pbs-1", pbsResource.PBS.LinkedAgentID)
+	}
+}
+
+// A PBS API token cannot read GET /nodes, so its poll has no nodeName. The
+// unique endpoint/interface match still identifies the host, even after PVE
+// is added on that same machine and the agent folds into its PVE node view.
+func TestIngestSnapshotPBSHostLinkSurvivesSideBySidePVEWithToken(t *testing.T) {
+	now := time.Now().UTC()
+	for _, withPVE := range []bool{false, true} {
+		snapshot := models.StateSnapshot{
+			Hosts: []models.Host{{
+				ID: "agent-uuid", Hostname: "backup-host.local", ReportIP: "10.0.0.5",
+				Status: "online", LastSeen: now,
+				NetworkInterfaces: []models.HostNetworkInterface{{
+					Name: "eth0", Addresses: []string{"10.0.0.5/24"},
+				}},
+			}},
+			PBSInstances: []models.PBSInstance{{
+				ID: "pbs-service", Name: "backup-connection", Host: "https://10.0.0.5:8007",
+				Status: "online", LastSeen: now,
+			}},
+		}
+		if withPVE {
+			snapshot.Nodes = []models.Node{{
+				ID: "pve/backup-host", Name: "backup-host", DisplayName: "PVE display label",
+				Instance: "pve-connection", Host: "https://10.0.0.5:8006",
+				LinkedAgentID: "agent-uuid", Status: "online", LastSeen: now,
+			}}
+			snapshot.Hosts[0].LinkedNodeID = "pve/backup-host"
+		}
+		registry := NewRegistry(nil)
+		registry.IngestSnapshot(snapshot)
+		var pbs *Resource
+		var host *Resource
+		for _, resource := range registry.ListForPresentation() {
+			resource := resource
+			if resource.Type == ResourceTypePBS {
+				pbs = &resource
+			}
+			if resource.Agent != nil && resource.Agent.AgentID == "agent-uuid" {
+				host = &resource
+			}
+		}
+		if pbs == nil || host == nil {
+			t.Fatalf("withPVE=%t: missing PBS or host resource: pbs=%+v host=%+v", withPVE, pbs, host)
+		}
+		if pbs.PBS == nil || pbs.PBS.LinkedAgentID != "agent-uuid" {
+			t.Fatalf("withPVE=%t: PBS linked agent = %+v, want agent-uuid", withPVE, pbs.PBS)
+		}
+		if hostTarget := registry.MetricsTarget(host.ID); hostTarget == nil || *hostTarget != (MetricsTarget{ResourceType: "agent", ResourceID: "agent-uuid"}) {
+			t.Fatalf("withPVE=%t: host target = %+v, want agent UUID", withPVE, hostTarget)
+		}
+		if withPVE && host.Proxmox == nil {
+			t.Fatalf("PVE+PBS host lost PVE facet: %+v", host)
+		}
+	}
 }
 
 func containsPlatformScope(values []string, expected string) bool {

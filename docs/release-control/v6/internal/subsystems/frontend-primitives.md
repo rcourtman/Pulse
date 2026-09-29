@@ -403,6 +403,22 @@ and thermal facts remain discoverable from the PBS surface.
 `ProxmoxBackupServersTable` belongs to the Proxmox Backups tab. Proxmox
 Overview must not duplicate that domain table between its node and guest
 regions; the tab boundary owns PBS server, datastore, and artifact detail.
+The shared Proxmox section rail renders only tabs backed by current capability
+evidence. It reads the source-filtered `facets.byType` from one compact
+`type=pmg&source=proxmox,pbs,pmg,agent` request, not estate-wide
+`aggregations.byType`: unrelated VMware VMs and TrueNAS storage must not
+advertise Proxmox workflows. Agent is included for Proxmox-owned physical
+disks, whose fact source may remain `agent`; because that source is shared, a
+generic agent disk can still expose Storage until the route filters its rows.
+A fresh all-resources cache does not carry source-filtered facets, so the
+compact query must revalidate even when that cache can paint rows. While the
+facets are unknown the rail must not show every optional
+tab as a loading fallback; an independently fetched positive replication-job
+count may still expose Replication. A bookmarked section remains the active
+hydration target until counts can distinguish unavailable from unsupported,
+then unsupported sections fall back to Overview. This rule applies at desktop
+and phone widths and must not rewrite the URL or discard a valid PBS-only
+Backups tab when its count arrives.
 When that surface receives the provider-owned PBS resource and its host Agent
 as separate canonical resources, `ProxmoxBackupServersTable` may assemble a
 presentation-only drawer resource only after one unique normalized host
@@ -411,6 +427,12 @@ telemetry, host details, and stored History use the Agent facet and Agent
 metrics target. Zero or multiple matches must leave the PBS resource unchanged
 rather than guessing; this presentation correlation must not mutate either
 canonical input or create a second mobile disclosure interaction.
+When the PBS service has a registry-corroborated `pbs.linkedAgentId`, the
+Backups drawer selects only an Agent-bearing resource with that source-native
+ID, even if same-host PVE API labels or a token-auth PBS connection have no
+matching hostname. PVE-only rows cannot masquerade as a host series. A new
+link cannot reuse a retained old host target, and the displayed PBS row keeps
+its own canonical resource ID while History uses the selected host target.
 
 Presentation helpers that mirror a server-side classification must name the
 predicate they mirror and expose it as a single exported function rather than
@@ -6770,6 +6792,14 @@ action path or verification card when `ActionResultV2` is present. Read-only
 sessions keep the review packet inspectable but must not render approve, reject,
 or run controls, while settled historical records must not be mislabeled as
 expired actionable reviews.
+For an aged, receipt-pending execution, the same responsive review dialog may
+expose an audit-recovery disclosure to an eligible local administrator. It must
+first instruct the operator to check the resource's actual state outside the
+action record, then require a written reason and an explicit acknowledgement
+before a fresh action read and guarded force-fail call. Desktop and phone
+layouts keep this confirmation visible without implying a retry, cancellation
+or failed mutation. Read-only and settled records show no recovery control;
+permission hints in the client never replace the server's authority check.
 Its action controls are also plan-identity-bound: a missing reviewed `planHash`
 renders explicit replan guidance and hides approve, reject, and run controls,
 while an actionable record sends the exact displayed hash on every mutation.

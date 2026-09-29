@@ -313,6 +313,8 @@ Backups hydrates type=pbs,agent with source=pbs and reuses Overview guest invent
 
 The same agent can still arrive as two distinct resources: a PVE guest carrying its telemetry and the standalone `source=pbs` host row. Collapse those candidates by agent identity and resolve the Backups PBS row to the guest target, whose persisted host series the drawer charts; keeping the PBS service target leaves History on a key with no host data. Distinct agent identities stay ambiguous, and a missing agent identity is not sameness proof. Do not add a second guest-estate request to compensate.
 
+For token-auth PBS connections that cannot report `nodeName`, a registry-corroborated `pbs.linkedAgentId` takes precedence over connection labels when selecting the Agent-bearing host row. It must resolve to the same source-native Agent ID on a standalone or PVE-merged host; a PVE-only node with no Agent facet cannot supply host History. The PBS row and service target stay canonical; only its drawer presentation uses the host metrics target. If the explicit link changes, retained correlation to the former host is discarded rather than carrying old charts across a replacement.
+
 A realtime refresh can briefly omit the correlated host row while the PBS server row remains. Retain the last resolved host per PBS server across that omission instead of falling back to the service target, so the drawer's Identity rows and History series stay on the host key. Reuse the remembered host only while it is still fresh relative to the server and drop it once stale, so a removed or replaced host is not advertised indefinitely; a present but ambiguous host still declines.
 
 Verification: ProxmoxBackupServersTable.drawer.test.tsx covers standalone and
@@ -795,6 +797,15 @@ state effects remain dormant and a forced Proxmox storage scope is not
 serialized as redundant URL state. Backups reuses the source-scoped Overview
 guest snapshot and adds only the PBS resource family, so it cannot repeat the
 large VM/LXC enumeration under a second request owner.
+Unknown source-scoped resource facets must not advertise optional Proxmox
+workflows as if their providers are present. Estate-wide aggregations are not
+tab evidence: unrelated provider rows can share VM or storage types. The
+navigation rail may expose Replication from its independent positive job count,
+while Storage, Backups, Ceph, and Mail
+wait for positive resource counts. A direct link keeps its requested route
+hydrating while counts are unknown; after counts arrive, an unsupported route
+renders Overview instead. Hiding a tab is navigation presentation, not a
+verdict about backup coverage, artifact recoverability, or stored history.
 PBS server/datastore rows may display backup counts, but the
 counts must come from the PBS backup API artifact identity, not from a
 datastore-capacity approximation. The table owns which PBS artifact count is
