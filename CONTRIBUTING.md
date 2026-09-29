@@ -15,8 +15,10 @@ and installer tooling.
 
 ## What To Open
 
-- Bug reports: use the bug report issue form and include exact reproduction
-  steps, Pulse version, installation type, and any relevant logs or diagnostics.
+- Bug reports: use the bug report issue form and describe the original sequence,
+  the version on the affected running instance (or the version or release asset
+  attempted if installation never completed), the installation type, and any
+  relevant, safely collected evidence. A second reproduction is not required.
 - Feature requests: open an issue describing the problem you want solved, the
   workflow you are trying to improve, and any constraints that matter.
 - Questions and support requests: use GitHub Discussions when you need help,
@@ -37,10 +39,18 @@ and installer tooling.
 ## How To Make An Issue Useful
 
 - Search existing issues before opening a new one.
-- Keep reproduction steps minimal and exact.
-- State the Pulse version and image or package you are actually running.
-- Include screenshots, logs, API output, or diagnostics when they clarify the
-  problem.
+- Describe what happened before the failure. Do not repeat an action just to
+  produce steps if it could cause data loss, an outage, duplicate changes, or
+  excessive notifications; say why you have not repeated it instead.
+- State the version on the affected running instance. If Pulse never started,
+  give the attempted version or release asset (or say "unknown") and identify
+  the installer or helper when known. Include an image tag or digest only for a
+  running container, not for a bare-metal or LXC install.
+- Include screenshots, redacted logs, API output, or diagnostics when they
+  clarify the problem. If Pulse is running and it is safe to collect, use
+  `Settings -> Diagnostics -> Export for GitHub (sanitized)` for connection or
+  data failures. Never paste credentials, tokens, private keys, or a command
+  line containing them into an issue.
 - Lead with one primary bug or operator outcome. If the context also exposes
   another actionable topic, put it in the issue form's dedicated field. Triage
   will preserve it with a linked disposition; you do not need to refile text
