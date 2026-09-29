@@ -2951,6 +2951,13 @@ missing provenance remains an immediate fail-closed warning rather than hidden
 detail. Actions is the canonical browser hub for action review, execution
 progress, and recorded outcomes; contextual sources such as Patrol link into an
 exact action review instead of duplicating those mutations locally.
+When a user selects a different action before a prior detail read completes,
+only the detail matching the current `action` URL may open the review. Closing
+the review invalidates pending detail and receipt reads, so a late response
+cannot reopen it or substitute another resource's action. The page also keeps
+Open and History list responses scoped to their latest request; an older tab
+result or error cannot replace the current tab. This is a browser ownership
+rule over server-authored action identity, not a new action or receipt state.
 
 APT review presents server-recorded policy provenance and distinguishes the
 elevated update posture from low-risk-eligible cache cleanup. Both typed actions
