@@ -282,3 +282,86 @@ func TestSupportedInfrastructureSymptomUsesPrimaryNotification(t *testing.T) {
 		t.Fatalf("diagnosis = %+v, want correlated-primary suppression", diagnosis)
 	}
 }
+
+func TestSupportedInfrastructureSymptomDoesNotEscalateOrRepeat(t *testing.T) {
+	m := newTestManager(t)
+	now := time.Date(2026, 9, 29, 19, 0, 0, 0, time.UTC)
+	m.now = func() time.Time { return now }
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.ActivationState = ActivationActive
+	m.config.Schedule.Escalation = EscalationConfig{
+		Enabled: true, RepeatCritical: true, RepeatEvery: 5,
+		Levels: []EscalationLevel{{After: 5, Notify: "email"}},
+	}
+	correlation := &AlertCorrelation{
+		Key: "infrastructure:host-offline", Kind: AlertCorrelationKindInfrastructureIncident,
+		Role: AlertCorrelationRoleSupporting, Reason: "Verified host dependency.",
+		Inference: AlertCorrelationInferenceSupportedCause, PrimaryAlertID: "host-offline",
+	}
+	newSymptom := &Alert{
+		ID: "new-symptom", Level: AlertLevelCritical, StartTime: now.Add(-10 * time.Minute),
+		Correlation: cloneAlertCorrelation(correlation),
+	}
+	repeatingSymptom := &Alert{
+		ID: "repeating-symptom", Level: AlertLevelCritical, StartTime: now.Add(-30 * time.Minute),
+		LastEscalation: 1, EscalationTimes: []time.Time{now.Add(-10 * time.Minute)},
+		Correlation: cloneAlertCorrelation(correlation),
+	}
+	observationOnly := &Alert{
+		ID: "observation-only", Level: AlertLevelCritical, StartTime: now.Add(-10 * time.Minute),
+		Correlation: &AlertCorrelation{
+			Key: "infrastructure:unconfirmed", Kind: AlertCorrelationKindInfrastructureIncident,
+			Role: AlertCorrelationRoleSupporting, Reason: "Coincident observations only.",
+			Inference: AlertCorrelationInferenceObservationSet, PrimaryAlertID: "host-offline",
+		},
+	}
+	m.setActiveAlertNoLock(newSymptom.ID, newSymptom)
+	m.setActiveAlertNoLock(repeatingSymptom.ID, repeatingSymptom)
+	m.setActiveAlertNoLock(observationOnly.ID, observationOnly)
+	m.mu.Unlock()
+
+	m.checkEscalations()
+	if newSymptom.LastEscalation != 0 || len(newSymptom.EscalationTimes) != 0 {
+		t.Fatalf("supported symptom scheduled an escalation: %+v", newSymptom)
+	}
+	if repeatingSymptom.LastEscalation != 1 || len(repeatingSymptom.EscalationTimes) != 1 {
+		t.Fatalf("supported symptom repeated an escalation: %+v", repeatingSymptom)
+	}
+	if observationOnly.LastEscalation != 1 || len(observationOnly.EscalationTimes) != 1 {
+		t.Fatalf("uncorroborated observation lost independent escalation: %+v", observationOnly)
+	}
+}
+
+func TestQueuedEscalationRejectsNewlySupportedInfrastructureSymptom(t *testing.T) {
+	m := newTestManager(t)
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.ActivationState = ActivationActive
+	m.config.Schedule.Escalation = EscalationConfig{
+		Enabled: true, Levels: []EscalationLevel{{After: 5, Notify: "email"}},
+	}
+	alert := &Alert{ID: "newly-correlated", Level: AlertLevelCritical, StartTime: time.Now().Add(-10 * time.Minute)}
+	m.setActiveAlertNoLock(alert.ID, alert)
+	snapshot := cloneAlertForOutput(alert)
+	alert.Correlation = &AlertCorrelation{
+		Key: "infrastructure:host-offline", Kind: AlertCorrelationKindInfrastructureIncident,
+		Role: AlertCorrelationRoleSupporting, Reason: "Verified host dependency.",
+		Inference: AlertCorrelationInferenceSupportedCause, PrimaryAlertID: "host-offline",
+	}
+	alert.Metadata = map[string]interface{}{
+		MetadataQuietHoursSuppressed: true,
+		MetadataQuietHoursReplayAt:   time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
+	}
+	m.mu.Unlock()
+
+	if _, _, eligible := m.PrepareEscalationNotification(snapshot, 1); eligible {
+		t.Fatal("queued escalation remained eligible after the symptom gained a supported primary")
+	}
+	if !m.ShouldSuppressNotification(alert) {
+		t.Fatal("supported symptom remained eligible through the public delivery helper")
+	}
+	if hasQuietHoursNotificationReplay(alert) {
+		t.Fatal("supported symptom retained a queued quiet-hours replay")
+	}
+}

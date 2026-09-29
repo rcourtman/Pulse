@@ -600,6 +600,10 @@ func (m *Manager) ShouldSuppressNotification(alert *Alert) bool {
 		clearQuietHoursNotificationReplay(alert)
 		return true
 	}
+	if isSupportedInfrastructureSymptom(alert) {
+		clearQuietHoursNotificationReplay(alert)
+		return true
+	}
 
 	if suppressed, reason := m.operatorSuppressionForAlertNoLock(alert, time.Now().UTC()); suppressed {
 		clearQuietHoursNotificationReplay(alert)
