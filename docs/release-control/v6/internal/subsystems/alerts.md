@@ -2591,7 +2591,14 @@ policy removal or expiry, and post-mutation reconciliation are exercised across
 provider incidents, metric and canonical lifecycle writers in
 `internal/alerts/alert_admission_test.go`.
 Operator suppression is never converted into a quiet-hours replay, including
-for recovery notifications carrying stale replay metadata.
+for recovery notifications carrying stale replay metadata. The internal alert
+dispatch path applies this terminal decision even for an already-active alert
+between a policy save and its reconciliation: it neither invokes a delivery
+callback nor marks the alert notified, and it removes stale replay metadata.
+The read-only delivery diagnosis reports the operator reason as suppressed,
+not as a quiet-hours deferral. `TestOperatorPolicySuppressesDirectAlertDispatchWithoutQueueReplay`
+pins muted, expected-offline, maintenance and unaffected performance cases,
+including the immutable suppression-versus-deferral event distinction.
 After a persisted policy mutation, `ReconcileResourceOperatorState` resolves
 already-active records for that resource immediately; later detector writes
 cannot recreate them while suppression remains active. Existing prefix, tag,
