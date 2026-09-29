@@ -116,18 +116,22 @@ export function ProxmoxPageSurface() {
     replicationJobs.error ? 0 : (replicationJobs() ?? []).length,
   );
   const visibleTabs = createMemo(() => {
-    const aggregations = resourceAggregations();
-    if (aggregations) {
-      return buildVisibleProxmoxTabSpecsFromCounts(aggregations.byType, replicationJobCount());
-    }
-    return PROXMOX_TAB_SPECS;
+    // An unknown snapshot is not evidence that every optional integration is
+    // present. Keep only sections backed by an independent signal until the
+    // resource counts arrive (or if an older response omits them).
+    return buildVisibleProxmoxTabSpecsFromCounts(
+      resourceAggregations()?.byType ?? {},
+      replicationJobCount(),
+    );
   });
   const visibleTabIds = createMemo(
     () => new Set<ProxmoxPageTabId>(visibleTabs().map((tab) => tab.id)),
   );
   const activeTab = createMemo<ProxmoxPageTabId>(() => {
     const requested = requestedTab();
-    return visibleTabIds().has(requested) ? requested : 'overview';
+    // Do not discard a direct link while counts are still unknown: its own
+    // resource query must be allowed to hydrate before deciding it is absent.
+    return !resourceAggregations() || visibleTabIds().has(requested) ? requested : 'overview';
   });
   const shouldHydrateTab = (tab: ProxmoxPageTabId) => activeTab() === tab;
   const overviewResources = useUnifiedResources({

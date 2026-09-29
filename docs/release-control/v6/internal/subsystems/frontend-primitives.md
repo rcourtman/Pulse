@@ -403,6 +403,14 @@ and thermal facts remain discoverable from the PBS surface.
 `ProxmoxBackupServersTable` belongs to the Proxmox Backups tab. Proxmox
 Overview must not duplicate that domain table between its node and guest
 regions; the tab boundary owns PBS server, datastore, and artifact detail.
+The shared Proxmox section rail renders only tabs backed by current capability
+evidence. While resource counts are unknown it must not show every optional
+tab as a loading fallback; an independently fetched positive replication-job
+count may still expose Replication. A bookmarked section remains the active
+hydration target until counts can distinguish unavailable from unsupported,
+then unsupported sections fall back to Overview. This rule applies at desktop
+and phone widths and must not rewrite the URL or discard a valid PBS-only
+Backups tab when its count arrives.
 When that surface receives the provider-owned PBS resource and its host Agent
 as separate canonical resources, `ProxmoxBackupServersTable` may assemble a
 presentation-only drawer resource only after one unique normalized host
