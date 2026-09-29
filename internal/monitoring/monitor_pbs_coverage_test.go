@@ -136,6 +136,7 @@ func TestPollPBSNodeStatusRecordsServiceHistory(t *testing.T) {
 	}
 
 	monitor.pollPBSInstance(context.Background(), instance.Name, client)
+	store.Flush()
 	inMemory := query()
 	if got := inMemory["cpu"]; len(got) != 1 || got[0].Value != 15 {
 		t.Fatalf("PBS CPU history = %v, want one 15%% sample", got)
@@ -158,16 +159,23 @@ func TestPollPBSNodeStatusRecordsServiceHistory(t *testing.T) {
 
 	fixture.setMode(pbsHealthTestNodeDenied)
 	monitor.pollPBSInstance(context.Background(), instance.Name, client)
+	store.Flush()
 	denied := query()
 	if len(denied["cpu"]) != 1 || len(denied["memory"]) != 1 {
 		t.Fatalf("node-status denial added false samples: %v", denied)
 	}
 
-	fixture.setMode(pbsHealthTestSuccess)
+	fixture.setMode(pbsHealthTestLowMemory)
 	monitor.pollPBSInstance(context.Background(), instance.Name, client)
+	store.Flush()
 	recovered := query()
-	if len(recovered["cpu"]) != 2 || len(recovered["memory"]) != 2 {
-		t.Fatalf("PBS recovery did not append observed samples: %v", recovered)
+	// Store buckets are second-resolution, so a fast retest can replace the
+	// first point in the same bucket. The changed measured value must still
+	// supersede it; a denied status must not do so.
+	memory := recovered["memory"]
+	if len(recovered["cpu"]) == 0 || len(memory) == 0 ||
+		memory[len(memory)-1].Value != float64(100)/1024*100 {
+		t.Fatalf("PBS recovery did not record the new measured memory: %v", recovered)
 	}
 }
 
