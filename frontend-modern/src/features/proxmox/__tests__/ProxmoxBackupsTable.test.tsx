@@ -4,6 +4,7 @@ import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProxmoxBackupsTable } from '../ProxmoxBackupsTable';
+import { buildBackupServerRows } from '../ProxmoxBackupServersTable';
 import proxmoxBackupServersTableSource from '../ProxmoxBackupServersTable.tsx?raw';
 import proxmoxBackupsTableSource from '../ProxmoxBackupsTable.tsx?raw';
 import proxmoxPageSurfaceSource from '../ProxmoxPageSurface.tsx?raw';
@@ -212,6 +213,44 @@ beforeEach(() => {
 });
 
 describe('ProxmoxBackupsTable', () => {
+  it('uses a corroborated PBS host link for Backups History despite a PVE-only name collision', () => {
+    const pbs = {
+      ...pbsServerResource,
+      name: 'backup-connection',
+      displayName: 'Backup connection',
+      metricsTarget: { resourceType: 'agent', resourceId: 'pbs-service' },
+      pbs: {
+        ...pbsServerResource.pbs!,
+        hostname: '10.0.0.5',
+        nodeName: undefined,
+        linkedAgentId: 'agent-uuid',
+      },
+    } as Resource;
+    const host = {
+      ...workloadResource,
+      id: 'host-merged-with-pve',
+      type: 'agent',
+      name: 'different-hostname',
+      sources: ['proxmox', 'agent'],
+      agent: { agentId: 'agent-uuid', hostname: 'different-hostname' },
+      metricsTarget: { resourceType: 'agent', resourceId: 'agent-uuid' },
+    } as Resource;
+    const pveOnly = {
+      ...host,
+      id: 'pve-only',
+      name: 'backup-connection',
+      agent: undefined,
+      sources: ['proxmox'],
+      metricsTarget: { resourceType: 'agent', resourceId: 'pve-only' },
+    } as Resource;
+
+    const row = buildBackupServerRows([pbs, pveOnly, host])[0];
+    expect(row.resource.id).toBe(pbs.id);
+    expect(row.resource.pbs?.linkedAgentId).toBe('agent-uuid');
+    expect(row.resource.metricsTarget).toEqual({ resourceType: 'agent', resourceId: 'agent-uuid' });
+    expect(row.resource.agent?.agentId).toBe('agent-uuid');
+  });
+
   it('shows Checking until the canonical posture request resolves', async () => {
     mockBackupAPIs();
     let resolvePosture: ((value: unknown) => void) | undefined;

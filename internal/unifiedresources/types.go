@@ -1246,9 +1246,13 @@ type DockerData struct {
 //
 // NOTE: Some tools need per-datastore details; those are exposed via Datastores.
 type PBSData struct {
-	InstanceID               string                        `json:"instanceId,omitempty"`
-	Hostname                 string                        `json:"hostname,omitempty"`
-	NodeName                 string                        `json:"nodeName,omitempty"`
+	InstanceID string `json:"instanceId,omitempty"`
+	Hostname   string `json:"hostname,omitempty"`
+	NodeName   string `json:"nodeName,omitempty"`
+	// LinkedAgentID is set only when the PBS connection uniquely corroborates
+	// a host agent. API-token connections cannot read the PBS node-name endpoint,
+	// so consumers must not rely on a matching display name for host history.
+	LinkedAgentID            string                        `json:"linkedAgentId,omitempty"`
 	HostURL                  string                        `json:"hostUrl,omitempty"`
 	GuestURL                 string                        `json:"guestUrl,omitempty"`
 	Version                  string                        `json:"version,omitempty"`

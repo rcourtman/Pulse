@@ -61,6 +61,16 @@ func (rr *ResourceRegistry) associatePBSHostAgentResources(
 	}
 
 	hostCanonicalID := rr.bySource[SourceAgent][normalizeSourceID(host.ID)]
+	// Expose the already-corroborated source-native agent identity on the PBS
+	// service. The service and host retain separate resources and metric targets;
+	// this only lets consumers select the host series when names/IP aliases do
+	// not line up (including token-auth PBS connections without nodeName).
+	if pbsResource := rr.resources[pbsParentID]; pbsResource != nil && pbsResource.PBS != nil {
+		if hostResource := rr.resources[hostCanonicalID]; hostResource != nil &&
+			hostResource.Agent != nil && strings.TrimSpace(hostResource.Agent.AgentID) == strings.TrimSpace(host.ID) {
+			pbsResource.PBS.LinkedAgentID = strings.TrimSpace(host.ID)
+		}
+	}
 	attach(
 		fmt.Sprintf("%s/agent:%s", pbsSourceID, strings.TrimSpace(host.ID)),
 		hostCanonicalID,
