@@ -2833,11 +2833,16 @@ notification delivery, with the typed `correlated_primary` reason and primary
 alert ID in the event log. The primary remains the one delivery owner. Supporting
 members also skip escalation levels and critical repeats while that supported
 cause is current; an already queued escalation is revalidated before delivery.
+If the supported primary recovers or the causal link is lost while its symptom
+still fails, the symptom regains independent delivery without a new occurrence.
+It receives its first notification only if it was never dispatched before
+grouping; an already-notified symptom does not duplicate on group dissolution.
+Acknowledgement, rate limits and other ordinary delivery gates still apply.
 `observation-set` members continue to notify independently because Pulse has
 not established causality. `incident_synthesis_test.go` pins classification,
 contradiction downgrade, bounded evidence, duplicate-delivery suppression,
-partial-recovery behavior, escalation suppression, and queued-callback
-revalidation without muting observation sets.
+partial-recovery delivery and no duplicate after prior dispatch, escalation
+suppression, and queued-callback revalidation without muting observation sets.
 
 ### Alert hydration is not resource admission
 
