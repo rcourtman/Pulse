@@ -1,8 +1,9 @@
 // Browser-only resource-hook seam for #2321. The production page and shared
-// tab rail stay real; counts/resources are synthetic and switch on command.
+// tab rail stay real; source-scoped facets/resources are synthetic and switch
+// on command. Global counts deliberately contain unrelated provider rows.
 import { createSignal } from 'solid-js';
 import type { Resource } from '../src/types/resource';
-import type { UnifiedResourceAggregations } from '../src/hooks/useUnifiedResources';
+import type { UnifiedResourceFacets } from '../src/hooks/useUnifiedResources';
 
 export * from '../src/hooks/useUnifiedResources';
 
@@ -18,7 +19,7 @@ const pmg = {
   sources: ['pmg'], status: 'online', lastSeen: Date.now(),
 } as Resource;
 
-const [counts, setCounts] = createSignal<UnifiedResourceAggregations | null>(null);
+const [counts, setCounts] = createSignal<UnifiedResourceFacets | null>(null);
 (window as unknown as { __proxmoxTabProof: { setCounts: typeof setCounts } }).__proxmoxTabProof = {
   setCounts,
 };
@@ -36,8 +37,8 @@ export function useUnifiedResources(options?: { cacheKey?: string }) {
   };
   return {
     resources,
-    aggregations: counts,
-    facets: () => null,
+    aggregations: () => ({ total: 5, byType: { storage: 1, vm: 1, ceph: 1, pmg: 1 } }),
+    facets: options?.cacheKey === 'proxmox-tab-evidence' ? counts : () => null,
     policyPosture: () => null,
     resourceSnapshotChange: () => ({ version: 0, changedIds: null }),
     loading: () => false,

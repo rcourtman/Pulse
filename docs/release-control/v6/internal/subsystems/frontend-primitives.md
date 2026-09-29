@@ -404,7 +404,15 @@ and thermal facts remain discoverable from the PBS surface.
 Overview must not duplicate that domain table between its node and guest
 regions; the tab boundary owns PBS server, datastore, and artifact detail.
 The shared Proxmox section rail renders only tabs backed by current capability
-evidence. While resource counts are unknown it must not show every optional
+evidence. It reads the source-filtered `facets.byType` from one compact
+`type=pmg&source=proxmox,pbs,pmg,agent` request, not estate-wide
+`aggregations.byType`: unrelated VMware VMs and TrueNAS storage must not
+advertise Proxmox workflows. Agent is included for Proxmox-owned physical
+disks, whose fact source may remain `agent`; because that source is shared, a
+generic agent disk can still expose Storage until the route filters its rows.
+A fresh all-resources cache does not carry source-filtered facets, so the
+compact query must revalidate even when that cache can paint rows. While the
+facets are unknown the rail must not show every optional
 tab as a loading fallback; an independently fetched positive replication-job
 count may still expose Replication. A bookmarked section remains the active
 hydration target until counts can distinguish unavailable from unsupported,

@@ -1,47 +1,53 @@
 {
   "version": 1,
-  "base_sha": "c54d361acf0d38d3f90767022513f718e05e1b69",
-  "verified_at": "2026-09-29T11:23:17Z",
+  "base_sha": "efd04b11c944ffccd4ec556f0b35cf2bf80bbbd1",
+  "verified_at": "2026-09-29T13:54:15Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "37ce3942c563770c3bdd494a692ac9fe22cf367479b4f788136ad5d8faaaf625"
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "67da1ba826ad85f30e8b1ab61c3477badf52629ba4d063537bada4003650d5d7"
   },
   "routes": [
     "/proxmox/mail (direct link, synthetic capability fixture)",
     "/proxmox/backups/date (tab navigation, synthetic capability fixture)"
   ],
   "viewports": [
-    { "width": 1365, "height": 900 },
-    { "width": 390, "height": 844 }
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
   ],
   "states": [
-    "unknown resource counts on direct Mail Gateway link",
-    "PBS-only resource counts with Mail Gateway unsupported",
+    "unknown source-scoped facets despite positive unrelated global counts on direct Mail Gateway link",
+    "PBS-only scoped facets with Mail Gateway, Ceph and Storage unsupported despite unrelated global counts",
     "PBS Backups tab active",
-    "positive Storage, Ceph and Mail Gateway counts",
+    "positive scoped Storage, Ceph and Mail Gateway facets",
     "Mail Gateway tab active",
-    "Mail Gateway count removed after navigation",
-    "no optional service counts"
+    "Mail Gateway facet removed after navigation",
+    "no optional service facets"
   ],
   "interactions": [
-    "hydrate bookmarked Mail Gateway route before counts settle",
-    "reveal PBS-only Backups while hiding unsupported Replication, Ceph and Mail Gateway tabs",
+    "hydrate bookmarked Mail Gateway route before source-scoped facets settle",
+    "reveal PBS-only Backups while ignoring unrelated estate-wide aggregation counts",
     "activate Backups by pointer on desktop and keyboard on phone",
-    "activate Mail Gateway after positive counts",
-    "fall back to Overview when Mail Gateway count disappears without rewriting the URL",
+    "activate Mail Gateway after positive scoped facets",
+    "fall back to Overview when Mail Gateway facet disappears without rewriting the URL",
     "verify selected-tab semantics, desktop and phone rail layout, and no document overflow"
   ],
   "command": "pulse-worker-browser frontend-modern/browser-tests/proxmox-tabs-2321.cjs from assigned root, with browser-tests/proxmox-tabs-2321-run.json set to 1365 then 390; Chromium 141.0.7390.37 / Playwright 1.56.1",
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-18cny1xf/browser-2321-desktop.log",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-18cny1xf/browser-2321-phone.log",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-18cny1xf/browser-images/proxmox-tabs-2321-unknown-direct-mail-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-18cny1xf/browser-images/proxmox-tabs-2321-pbs-only-backups-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-18cny1xf/browser-images/proxmox-tabs-2321-available-mail-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-18cny1xf/browser-images/proxmox-tabs-2321-removed-mail-1365.png"
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ycx7l47_/browser-2321-desktop-final.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ycx7l47_/browser-2321-phone-final.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ycx7l47_/browser-images-final/proxmox-tabs-2321-unknown-direct-mail-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ycx7l47_/browser-images-final/proxmox-tabs-2321-pbs-only-backups-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ycx7l47_/browser-images-final/proxmox-tabs-2321-available-mail-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ycx7l47_/browser-images-final/proxmox-tabs-2321-removed-mail-1365.png"
   ],
-  "notes": "Production ProxmoxPageSurface and PlatformSectionTabs were mounted in a Vite/Chromium fixture. Only useUnifiedResources and API responses were synthetic; no installed server, agent, reporter topology or release was exercised. Both runs exited 0 with no page errors or horizontal overflow. Final screenshots were inspected for selected rail, table placement and narrow reachability."
+  "notes": "Production ProxmoxPageSurface and PlatformSectionTabs were mounted in a Vite/Chromium fixture. Only useUnifiedResources and API responses were synthetic; the fixture returns unrelated positive estate-wide aggregations and independent Proxmox-scoped facets. No installed server, agent, reporter topology or release was exercised. Both runs exited 0 with no page errors or horizontal overflow. Selected screenshots were inspected for rail state and narrow reachability."
 }

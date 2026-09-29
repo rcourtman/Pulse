@@ -49,7 +49,7 @@ const { chromium } = require('playwright');
     await page.getByTestId('proxmox-page').waitFor();
     const nav = page.getByRole('navigation', { name: 'Proxmox sections' });
     const labels = async () => (await nav.locator('a').allTextContents()).map((label) => label.trim());
-    const setCounts = async (byType) => page.evaluate((value) => window.__proxmoxTabProof.setCounts({ total: 1, byType: value }), byType);
+    const setCounts = async (byType) => page.evaluate((value) => window.__proxmoxTabProof.setCounts({ incidentCount: 0, byType: value }), byType);
     const screenshot = async (state) => {
       await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const rail = await page.evaluate(() => [...document.querySelectorAll('nav[aria-label="Proxmox sections"] a')].map((link) => ({

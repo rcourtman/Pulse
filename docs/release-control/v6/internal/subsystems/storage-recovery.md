@@ -795,9 +795,11 @@ state effects remain dormant and a forced Proxmox storage scope is not
 serialized as redundant URL state. Backups reuses the source-scoped Overview
 guest snapshot and adds only the PBS resource family, so it cannot repeat the
 large VM/LXC enumeration under a second request owner.
-Unknown resource aggregations must not advertise optional Proxmox workflows as
-if their providers are present. The navigation rail may expose Replication
-from its independent positive job count, while Storage, Backups, Ceph, and Mail
+Unknown source-scoped resource facets must not advertise optional Proxmox
+workflows as if their providers are present. Estate-wide aggregations are not
+tab evidence: unrelated provider rows can share VM or storage types. The
+navigation rail may expose Replication from its independent positive job count,
+while Storage, Backups, Ceph, and Mail
 wait for positive resource counts. A direct link keeps its requested route
 hydrating while counts are unknown; after counts arrive, an unsupported route
 renders Overview instead. Hiding a tab is navigation presentation, not a

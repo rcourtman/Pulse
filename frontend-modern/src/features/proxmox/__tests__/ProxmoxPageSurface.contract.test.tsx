@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { UnifiedResourceAggregations } from '@/hooks/useUnifiedResources';
+import type { UnifiedResourceFacets } from '@/hooks/useUnifiedResources';
 import type { Resource } from '@/types/resource';
 import { ProxmoxPageSurface } from '../ProxmoxPageSurface';
 import proxmoxPageSurfaceSource from '../ProxmoxPageSurface.tsx?raw';
@@ -443,10 +443,11 @@ describe('ProxmoxPageSurface contract', () => {
         value as {
           query: string;
           cacheKey: string;
-          enabled: () => boolean;
+          enabled?: () => boolean;
         },
     );
     expect(options.map((value) => value.cacheKey)).toEqual([
+      'proxmox-tab-evidence',
       'proxmox-overview',
       'proxmox-storage-shell',
       'proxmox-replication-shell',
@@ -455,6 +456,7 @@ describe('ProxmoxPageSurface contract', () => {
       'proxmox-mail',
     ]);
     expect(options.map((value) => value.query)).toEqual([
+      'type=pmg&source=proxmox,pbs,pmg,agent',
       'type=agent,vm,system-container,oci-container&source=proxmox',
       'type=agent,pbs,storage,physical_disk,ceph&source=proxmox,pbs,agent',
       'type=agent&source=proxmox',
@@ -462,8 +464,9 @@ describe('ProxmoxPageSurface contract', () => {
       'type=ceph&source=proxmox',
       'type=pmg&source=pmg',
     ]);
-    expect(options[0].enabled()).toBe(true);
-    expect(options.slice(1).every((value) => value.enabled() === false)).toBe(true);
+    expect(options[0].enabled).toBeUndefined();
+    expect(options[1].enabled?.()).toBe(true);
+    expect(options.slice(2).every((value) => value.enabled?.() === false)).toBe(true);
     expect(proxmoxPageSurfaceSource).not.toContain('backgroundHydrationTabs');
     expect(proxmoxPageSurfaceSource).not.toContain('requestIdleCallback');
     expect(proxmoxPageSurfaceSource).toContain('resourceSource={storageResources}');
@@ -504,9 +507,10 @@ describe('ProxmoxPageSurface contract', () => {
     renderSurface();
 
     const options = mockUseUnifiedResources.mock.calls.map(
-      ([value]) => value as { cacheKey: string; query: string; enabled: () => boolean },
+      ([value]) => value as { cacheKey: string; query: string; enabled?: () => boolean },
     );
-    expect(options.map((value) => value.enabled())).toEqual([
+    expect(options.map((value) => value.enabled?.() ?? true)).toEqual([
+      true,
       true,
       false,
       false,
@@ -514,7 +518,7 @@ describe('ProxmoxPageSurface contract', () => {
       false,
       false,
     ]);
-    expect(options[3]).toMatchObject({
+    expect(options[4]).toMatchObject({
       cacheKey: 'proxmox-backups-shell',
       query: 'type=pbs,agent&source=pbs',
     });
@@ -590,13 +594,16 @@ describe('ProxmoxPageSurface contract', () => {
 
   it('hydrates a direct link while counts are unknown, then gates it on actual capabilities', async () => {
     mockPathname.mockReturnValue('/proxmox/mail');
-    const [aggregations, setAggregations] = createSignal<UnifiedResourceAggregations | null>(null);
+    const [facets, setFacets] = createSignal<UnifiedResourceFacets | null>(null);
+    const refetch = vi.fn(async () => []);
     mockUseUnifiedResources.mockReturnValue({
       resources: () => [],
-      aggregations,
+      // Estate-wide counts include unrelated providers and must not unlock tabs.
+      aggregations: () => ({ total: 5, byType: { storage: 1, vm: 1, ceph: 1, pmg: 1 } }),
+      facets,
       loading: () => false,
       error: () => null,
-      refetch: vi.fn(),
+      refetch,
     });
 
     renderSurface();
@@ -608,14 +615,15 @@ describe('ProxmoxPageSurface contract', () => {
       ([value]) => value as { cacheKey: string; enabled: () => boolean },
     );
     expect(options.find((option) => option.cacheKey === 'proxmox-mail')?.enabled()).toBe(true);
+    await waitFor(() => expect(refetch).toHaveBeenCalledTimes(1));
 
-    setAggregations({ total: 2, byType: { pbs: 1, pmg: 1 } });
+    setFacets({ incidentCount: 0, byType: { pbs: 1, pmg: 1 } });
     await waitFor(() => {
       expect(tabs).toHaveAttribute('data-tabs', 'overview,backups,mail');
       expect(tabs).toHaveAttribute('data-active', 'mail');
     });
 
-    setAggregations({ total: 1, byType: { pbs: 1 } });
+    setFacets({ incidentCount: 0, byType: { pbs: 1 } });
     await waitFor(() => {
       expect(tabs).toHaveAttribute('data-tabs', 'overview,backups');
       expect(tabs).toHaveAttribute('data-active', 'overview');
