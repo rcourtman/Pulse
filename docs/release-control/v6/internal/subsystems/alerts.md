@@ -777,6 +777,8 @@ transition references recovery evidence separate from its trigger evidence.
 5. Update the event-log schema upgrade and history-projection parity proofs
    when lifecycle snapshots, occurrence folding, or alert-history authority
    changes
+6. When notification admission changes, verify firing, recovery, escalation,
+   queued-escalation revalidation, and quiet-hours replay precedence together.
 
 ### Attention projection source contract
 
@@ -1408,6 +1410,16 @@ suppression, monitor-only notification suppression, cooldown decisions, and
 per-alert rate limiting; future notification-gating changes should extend that
 policy owner rather than burying new checks inside metric or resource-specific
 evaluators.
+
+### Monitor-only delivery is terminal
+
+Monitor-only alerts remain visible, but neither a firing nor a recovery
+notification may enter the delivery queue. They must not acquire quiet-hours
+replay metadata or schedule escalation levels and critical repeats. An already
+queued escalation must be revalidated against the current monitor-only state
+before delivery; the read-only delivery diagnosis reports monitor-only
+suppression rather than a replayable quiet-hours deferral.
+
 The same policy owner also exposes the read-only alert delivery diagnosis
 projection used by `/api/alerts/delivery-diagnosis`; that projection may explain
 current gating state, quiet-hours replay timing, cooldown timing, rate-limit
