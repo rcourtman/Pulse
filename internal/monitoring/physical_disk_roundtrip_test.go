@@ -195,7 +195,10 @@ func TestPhysicalDiskSkippedPollDoesNotPromoteAgentOnlySMARTToPVEInventory(t *te
 		ID: "agent", Hostname: "node", LinkedNodeID: "pve-node",
 		Status: "online", LastSeen: now,
 		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
-			Device: "sda", Type: "sata", Health: "PASSED",
+			// A stable serial keeps the canonical identity unchanged; without
+			// the source guard, the false PVE observation produces exactly the
+			// tags-only change reported in #2319 rather than a tags+identity row.
+			Device: "sda", Serial: "disk-serial", Type: "sata", Health: "PASSED",
 		}}},
 	})
 	store := unifiedresources.NewMemoryStore()

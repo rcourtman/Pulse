@@ -522,6 +522,36 @@ func TestBuildResourceChange_ClassifiesConfigUpdate(t *testing.T) {
 	}
 }
 
+func TestResourceChangeIdentityIgnoresSetOrderAndEmptySlices(t *testing.T) {
+	before := Resource{
+		ID: "disk-1", Type: ResourceTypePhysicalDisk, Status: StatusOnline,
+		Identity: ResourceIdentity{
+			MachineID: "serial-1", Hostnames: []string{"node", "node.example"},
+		},
+	}
+	after := before
+	after.Identity = ResourceIdentity{
+		MachineID: "serial-1", Hostnames: []string{"node.example", "node"},
+		IPAddresses: []string{}, MACAddresses: []string{},
+	}
+	if change := buildResourceChange(before, true, after, true, time.Now().UTC(), nil, SourcePulseDiff, ""); change != nil {
+		t.Fatalf("unchanged identity set emitted history: %+v", change)
+	}
+
+	after.Identity.MachineID = "serial-2"
+	change := buildResourceChange(before, true, after, true, time.Now().UTC(), nil, SourcePulseDiff, "")
+	if change == nil || !sameStringSet(mustChangedFields(t, change), []string{"identity"}) {
+		t.Fatalf("real identity change not recorded: %+v", change)
+	}
+
+	after.Identity.MachineID = before.Identity.MachineID
+	after.Identity.IPAddresses = []string{"192.0.2.10"}
+	change = buildResourceChange(before, true, after, true, time.Now().UTC(), nil, SourcePulseDiff, "")
+	if change == nil || !sameStringSet(mustChangedFields(t, change), []string{"identity"}) {
+		t.Fatalf("new identity set member not recorded: %+v", change)
+	}
+}
+
 func mustChangedFields(t *testing.T, change *ResourceChange) []string {
 	t.Helper()
 	raw, ok := change.Metadata["changedFields"]
