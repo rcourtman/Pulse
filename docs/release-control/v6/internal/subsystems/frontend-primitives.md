@@ -6815,6 +6815,13 @@ the matching Open or History subtab from server-authored lifecycle state, and
 removes the query when the dialog closes. Feature pages may summarize action
 context, but they must not recreate approve, reject, run, progress, or outcome
 controls outside the shared Actions review.
+The Actions route owns overlapping reads by request generation. A slower detail
+response or late dialog refresh must not replace a newer URL-selected action or
+reopen a closed review; a mismatched server action id is rejected. An older Open
+or History list response must not overwrite the newer tab's results or error.
+`Actions.requestOwnership.test.tsx` covers both response orders and close while
+a receipt re-read is pending; the browser navigation proof checks the rendered
+dialog and URL at desktop and phone widths without sending an action mutation.
 The Actions ledger is a peer top-level navigation destination. Patrol remains
 the primary detection and investigation home and may expose a route-backed
 Actions handoff, but Actions owns its pending-approval count and selected state.
