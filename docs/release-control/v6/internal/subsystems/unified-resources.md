@@ -2964,7 +2964,10 @@ rollback or automatic retry.
 
 An executing action whose durable dispatch attempt remains `receipt_pending`
 for more than the server's one-hour reconciliation window is still an unknown
-operational outcome. The Actions review may offer the already-authorized local
+operational outcome. At any age, the Actions review labels that wait as receipt
+pending, warns against a new plan, and can re-read the same action by GET without
+dispatching or closing it; this is available even to read-only viewers. The
+Actions review may offer the already-authorized local
 audit force-fail recourse only after direct resource-state checking, a reason,
 acknowledgement and a fresh detail read. This terminalizes the audit row
 inconclusively; it does not stop or retry the agent operation. The shared

@@ -1,18 +1,16 @@
 {
   "version": 1,
-  "base_sha": "498e2b12a22510520f9df7a510105d6775ea0522",
-  "verified_at": "2026-09-29T16:42:43Z",
+  "base_sha": "c2f7aa8b471d6cbb858e8ec71b4e664fded6549c",
+  "verified_at": "2026-09-29T19:09:52Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
-    "frontend-modern/src/types/resource.ts"
+    "frontend-modern/src/features/actions/ActionReviewDialog.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "fc3c71f792c91abe62475be2a341fbedc729dd079b31e2245b5769f969fa6b12",
-    "frontend-modern/src/types/resource.ts": "4e3b64a3799aad0d357b9d8898dd2daf9a557e05c529df3650d2f6d03eb8ca56"
+    "frontend-modern/src/features/actions/ActionReviewDialog.tsx": "9a4af522484b42e37b118e8bfde7c1673122037a54b8bfed249818ba644e6b81"
   },
   "routes": [
-    "/browser-tests/pbs-mixed-source-1723.html (mock-backed current ProxmoxBackupServersTable)"
+    "/browser-tests/action-receipt-wait.html (mock-backed production ActionReviewDialog)"
   ],
   "viewports": [
     {
@@ -25,26 +23,75 @@
     }
   ],
   "states": [
-    "PBS API + corroborated Agent with token-auth nodeName absent",
-    "same-host PVE API joined alongside a PVE-only name collision",
-    "correlated host row temporarily omitted",
-    "correlated host row restored"
+    "fresh executing/receipt_pending, including after a same-action re-read",
+    "failed status re-read with unknown outcome preserved",
+    "completed action after a recorded receipt"
   ],
   "interactions": [
-    "desktop disclosure-button keyboard focus and Enter; phone row click",
-    "open History and select 24h, 6h, 1h and 12h across topology changes",
-    "join PVE API, omit host row, restore host row"
+    "desktop pointer and phone keyboard Check for receipt",
+    "GET same action under pending, read error and completion; no POST",
+    "desktop and phone layout and horizontal-overflow checks"
   ],
-  "command": "pulse-worker-browser frontend-modern/node_modules/proof-pbs-1723.cjs from assigned workspace root; Vite 6.4.3, Chromium 141.0.7390.37, Playwright 1.56.1",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/action-receipt-wait.cjs from assigned workspace root; Vite 6.4.3, Chromium 141.0.7390.37, Playwright 1.56.1",
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-8wlxxg93/proof-pbs-1723.cjs",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-8wlxxg93/browser-run.log",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-8wlxxg93/browser-proof-1723/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-8wlxxg93/browser-proof-1723/joined-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-8wlxxg93/browser-proof-1723/joined-390.png"
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-kp_huwb7/action-receipt-browser.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-kp_huwb7/action-receipt-proof/pending-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-kp_huwb7/action-receipt-proof/read-error-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-kp_huwb7/action-receipt-proof/completed-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-kp_huwb7/action-receipt-proof/pending-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-kp_huwb7/action-receipt-proof/read-error-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-kp_huwb7/action-receipt-proof/completed-390.png"
   ],
-  "notes": "Fresh offline browser run on supplied main 498e2b12a2 plus unchanged #1723 runtime repair. At desktop and phone widths, History stayed selected with eight plotted paths through initial PBS + Agent, same-host PVE join, transient host omission and restoration. All eight captured history requests targeted agent:agent-uuid, never the PBS service key; joined screenshots were visually inspected. Mock-backed proof is not installed, second-topology or reporter acceptance.",
+  "notes": "Production dialog mounted with synthetic recent action data and mocked same-action GET. Both desktop and phone showed explicit receipt-pending/unknown outcome guidance, a non-mutating status refresh, a safe read error, and recorded completion; screenshots inspected. This is not an installed action or reporter retest.",
   "prior_verifications": [
+    {
+      "version": 1,
+      "base_sha": "498e2b12a22510520f9df7a510105d6775ea0522",
+      "verified_at": "2026-09-29T16:42:43Z",
+      "result": "passed",
+      "changed_paths": [
+        "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+        "frontend-modern/src/types/resource.ts"
+      ],
+      "content_sha256": {
+        "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "fc3c71f792c91abe62475be2a341fbedc729dd079b31e2245b5769f969fa6b12",
+        "frontend-modern/src/types/resource.ts": "4e3b64a3799aad0d357b9d8898dd2daf9a557e05c529df3650d2f6d03eb8ca56"
+      },
+      "routes": [
+        "/browser-tests/pbs-mixed-source-1723.html (mock-backed current ProxmoxBackupServersTable)"
+      ],
+      "viewports": [
+        {
+          "width": 1365,
+          "height": 900
+        },
+        {
+          "width": 390,
+          "height": 844
+        }
+      ],
+      "states": [
+        "PBS API + corroborated Agent with token-auth nodeName absent",
+        "same-host PVE API joined alongside a PVE-only name collision",
+        "correlated host row temporarily omitted",
+        "correlated host row restored"
+      ],
+      "interactions": [
+        "desktop disclosure-button keyboard focus and Enter; phone row click",
+        "open History and select 24h, 6h, 1h and 12h across topology changes",
+        "join PVE API, omit host row, restore host row"
+      ],
+      "command": "pulse-worker-browser frontend-modern/node_modules/proof-pbs-1723.cjs from assigned workspace root; Vite 6.4.3, Chromium 141.0.7390.37, Playwright 1.56.1",
+      "artifacts": [
+        "/var/lib/pulse-maintainer/worker-outputs/core-runtime-8wlxxg93/proof-pbs-1723.cjs",
+        "/var/lib/pulse-maintainer/worker-outputs/core-runtime-8wlxxg93/browser-run.log",
+        "/var/lib/pulse-maintainer/worker-outputs/core-runtime-8wlxxg93/browser-proof-1723/result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/core-runtime-8wlxxg93/browser-proof-1723/joined-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/core-runtime-8wlxxg93/browser-proof-1723/joined-390.png"
+      ],
+      "notes": "Fresh offline browser run on supplied main 498e2b12a2 plus unchanged #1723 runtime repair. At desktop and phone widths, History stayed selected with eight plotted paths through initial PBS + Agent, same-host PVE join, transient host omission and restoration. All eight captured history requests targeted agent:agent-uuid, never the PBS service key; joined screenshots were visually inspected. Mock-backed proof is not installed, second-topology or reporter acceptance.",
+      "preserved_candidate_source": "25d6ab2e7a23adf3c74e0c071dfd40e799d2d83d"
+    },
     {
       "version": 1,
       "base_sha": "fcbb7e58ad514ac146f666f49075039d40d829e2",
@@ -112,6 +159,5 @@
         "Loaded /alerts/notifications, /settings/system-general, /settings/system-relay and /settings/system/billing/plan on the Community stack and checked nav items, panels and links"
       ]
     }
-  ],
-  "preserved_candidate_source": "25d6ab2e7a23adf3c74e0c071dfd40e799d2d83d"
+  ]
 }
