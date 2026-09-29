@@ -428,6 +428,171 @@ func TestIngestSnapshotPBSHostLinkSurvivesSideBySidePVEWithToken(t *testing.T) {
 	}
 }
 
+// #1723 includes PBS running inside PVE guests. A token-auth PBS connection
+// cannot supply nodeName, and an in-guest Agent may omit interface addresses;
+// the independently observed PVE guest IP plus the state-owned Agent/VM link
+// still identify the machine without guessing from connection labels.
+func TestIngestSnapshotAssociatesPBSGuestAgentByExactVMIP(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		Hosts: []models.Host{
+			{ID: "agent-one", Hostname: "guest-one", LinkedVMID: "pve:node:103", Status: "online", LastSeen: now},
+			{ID: "agent-two", Hostname: "guest-two", LinkedVMID: "pve:node:203", Status: "online", LastSeen: now},
+		},
+		VMs: []models.VM{
+			{ID: "pve:node:103", VMID: 103, Name: "pbs-vm-one", Instance: "pve", Node: "node", Status: "running", IPAddresses: []string{"10.2.0.13"}, LastSeen: now},
+			{ID: "pve:node:203", VMID: 203, Name: "pbs-vm-two", Instance: "pve", Node: "node", Status: "running", IPAddresses: []string{"10.2.0.23"}, LastSeen: now},
+		},
+		PBSInstances: []models.PBSInstance{
+			{ID: "pbs-one", Name: "backup-one", Host: "https://10.2.0.13:8007", Status: "online", LastSeen: now},
+			{ID: "pbs-two", Name: "backup-two", Host: "https://10.2.0.23:8007", Status: "online", LastSeen: now},
+		},
+	}
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	links := map[string]string{}
+	linkedHosts := map[string]bool{}
+	for _, resource := range registry.ListForPresentation() {
+		if resource.Type == ResourceTypePBS && resource.PBS != nil {
+			links[resource.PBS.InstanceID] = resource.PBS.LinkedAgentID
+		}
+		if resource.Type == ResourceTypeAgent && resource.Agent != nil && containsDataSource(resource.Sources, SourcePBS) {
+			linkedHosts[resource.Agent.AgentID] = true
+			target := registry.MetricsTarget(resource.ID)
+			if target == nil || *target != (MetricsTarget{ResourceType: "agent", ResourceID: resource.Agent.AgentID}) {
+				t.Fatalf("host %s history target = %+v", resource.Agent.AgentID, target)
+			}
+		}
+	}
+	if links["pbs-one"] != "agent-one" || links["pbs-two"] != "agent-two" ||
+		!linkedHosts["agent-one"] || !linkedHosts["agent-two"] {
+		t.Fatalf("guest PBS links = %v, PBS-source hosts = %v", links, linkedHosts)
+	}
+}
+
+// A connection label is chosen by the operator, not reported by PBS as its
+// machine identity. It must not steal a corroborated guest Agent link merely
+// because an unrelated Agent happens to have that hostname.
+func TestIngestSnapshotPBSGuestLinkIgnoresConnectionLabelCollision(t *testing.T) {
+	now := time.Now().UTC()
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID: "unrelated-agent", Hostname: "backup-one", Status: "online", LastSeen: now,
+				Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{Device: "/dev/sda", Serial: "UNRELATED-DISK"}}},
+			},
+			{
+				ID: "guest-agent", Hostname: "guest-one", LinkedVMID: "pve:node:103", Status: "online", LastSeen: now,
+				Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{Device: "/dev/sda", Serial: "GUEST-DISK"}}},
+			},
+		},
+		VMs: []models.VM{{
+			ID: "pve:node:103", VMID: 103, Instance: "pve", Node: "node", Status: "running",
+			IPAddresses: []string{"10.2.0.13"}, LastSeen: now,
+		}},
+		PBSInstances: []models.PBSInstance{{
+			ID: "pbs-one", Name: "backup-one", Host: "https://10.2.0.13:8007", Status: "online", LastSeen: now,
+		}},
+	})
+	var linkedAgentID string
+	for _, resource := range registry.ListForPresentation() {
+		if resource.Type == ResourceTypePBS && resource.PBS != nil {
+			linkedAgentID = resource.PBS.LinkedAgentID
+		}
+		if resource.Agent != nil && resource.Agent.AgentID == "unrelated-agent" && containsDataSource(resource.Sources, SourcePBS) {
+			t.Fatalf("connection label attached unrelated Agent: %+v", resource)
+		}
+		if resource.PhysicalDisk != nil {
+			switch resource.PhysicalDisk.Serial {
+			case "UNRELATED-DISK":
+				if containsDataSource(resource.Sources, SourcePBS) {
+					t.Fatalf("connection label attached unrelated SMART disk: %+v", resource)
+				}
+			case "GUEST-DISK":
+				if !containsDataSource(resource.Sources, SourcePBS) {
+					t.Fatalf("corroborated guest SMART disk lost PBS source: %+v", resource)
+				}
+			}
+		}
+	}
+	if linkedAgentID != "guest-agent" {
+		t.Fatalf("PBS linked agent = %q, want corroborated guest-agent", linkedAgentID)
+	}
+}
+
+func TestIngestSnapshotPBSConnectionLabelAloneDoesNotLinkAgent(t *testing.T) {
+	now := time.Now().UTC()
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{{ID: "unrelated-agent", Hostname: "backup-one", Status: "online", LastSeen: now}},
+		PBSInstances: []models.PBSInstance{{
+			ID: "pbs-one", Name: "backup-one", Host: "https://10.2.0.13:8007", Status: "online", LastSeen: now,
+		}},
+	})
+	for _, resource := range registry.ListForPresentation() {
+		if resource.Type == ResourceTypePBS && resource.PBS != nil && resource.PBS.LinkedAgentID != "" {
+			t.Fatalf("label-only PBS gained Agent link %q", resource.PBS.LinkedAgentID)
+		}
+		if resource.Agent != nil && containsDataSource(resource.Sources, SourcePBS) {
+			t.Fatalf("label-only Agent gained PBS source: %+v", resource)
+		}
+	}
+}
+
+func TestIngestSnapshotPBSGuestIPAssociationFailsClosed(t *testing.T) {
+	now := time.Now().UTC()
+	base := func() models.StateSnapshot {
+		return models.StateSnapshot{
+			Hosts:        []models.Host{{ID: "agent-one", Hostname: "guest-one", LinkedVMID: "pve:node:103", LastSeen: now}},
+			VMs:          []models.VM{{ID: "pve:node:103", VMID: 103, Name: "pbs-vm-one", Instance: "pve", Node: "node", Status: "running", IPAddresses: []string{"10.2.0.13"}, LastSeen: now}},
+			PBSInstances: []models.PBSInstance{{ID: "pbs-one", Name: "backup-one", Host: "https://10.2.0.13:8007", LastSeen: now}},
+		}
+	}
+	for _, test := range []struct {
+		name   string
+		mutate func(*models.StateSnapshot)
+	}{
+		{"same-ip-second-guest", func(s *models.StateSnapshot) {
+			s.VMs = append(s.VMs, models.VM{ID: "pve:node:204", VMID: 204, Name: "unrelated", Instance: "pve", Node: "node", Status: "running", IPAddresses: []string{"10.2.0.13"}, LastSeen: now})
+		}},
+		{"second-agent-on-guest", func(s *models.StateSnapshot) {
+			s.Hosts = append(s.Hosts, models.Host{ID: "agent-two", Hostname: "other", LinkedVMID: "pve:node:103", LastSeen: now})
+		}},
+		{"link-to-other-guest", func(s *models.StateSnapshot) {
+			s.Hosts[0].LinkedVMID = "pve:node:999"
+		}},
+		{"nonunique-endpoint", func(s *models.StateSnapshot) {
+			s.PBSInstances[0].Host = "https://127.0.0.1:8007"
+			s.VMs[0].IPAddresses = []string{"127.0.0.1"}
+		}},
+		{"stopped-guest", func(s *models.StateSnapshot) {
+			s.VMs[0].Status = "stopped"
+		}},
+		{"stale-guest", func(s *models.StateSnapshot) {
+			s.VMs[0].LastSeen = now.Add(-10 * time.Minute)
+		}},
+		{"stale-agent", func(s *models.StateSnapshot) {
+			s.Hosts[0].LastSeen = now.Add(-10 * time.Minute)
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			snapshot := base()
+			test.mutate(&snapshot)
+			registry := NewRegistry(nil)
+			registry.IngestSnapshot(snapshot)
+			for _, resource := range registry.ListForPresentation() {
+				if resource.Type == ResourceTypePBS && resource.PBS != nil && resource.PBS.LinkedAgentID != "" {
+					t.Fatalf("ambiguous PBS gained agent link %q", resource.PBS.LinkedAgentID)
+				}
+				if resource.Type == ResourceTypeAgent && containsDataSource(resource.Sources, SourcePBS) {
+					t.Fatalf("ambiguous host gained PBS source: %+v", resource)
+				}
+			}
+		})
+	}
+}
+
 func containsPlatformScope(values []string, expected string) bool {
 	for _, value := range values {
 		if value == expected {

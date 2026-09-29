@@ -1,9 +1,10 @@
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 import {
   getContainerUpdateState,
   markContainerQueued,
   markContainerUpdateError,
+  markContainerUpdateInconclusive,
   markContainerUpdateSuccess,
   updateStates,
 } from '@/stores/containerUpdates';
@@ -47,12 +48,15 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
     if (stored) {
       switch (stored.state) {
         case 'queued':
+          return 'queued';
         case 'updating':
           return 'updating';
         case 'success':
           return 'success';
         case 'error':
           return 'error';
+        case 'inconclusive':
+          return 'inconclusive';
       }
     }
 
@@ -61,15 +65,6 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
     const local = localState();
     return local === 'planning' ? 'updating' : local;
   };
-
-  createEffect(() => {
-    const stored = storeState();
-    if (stored && (stored.state === 'queued' || stored.state === 'updating')) {
-      if (props.updateStatus?.updateAvailable === false) {
-        markContainerUpdateSuccess(props.agentId, props.containerId);
-      }
-    }
-  });
 
   const hasUpdate = () =>
     hasContainerUpdate(props.updateStatus) ||
@@ -90,17 +85,25 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
   const isUpdateUnavailable = () => Boolean(updateUnavailableReason());
 
   const isButtonDisabled = () =>
-    currentState() === 'updating' || !settingsLoaded() || isUpdateUnavailable();
+    currentState() === 'updating' ||
+    ((currentState() === 'queued' || currentState() === 'inconclusive') &&
+      !storeState()?.actionId) ||
+    !settingsLoaded() ||
+    isUpdateUnavailable();
   const buttonTooltip = () => {
     if (!settingsLoaded()) return 'Loading settings...';
     const refusal = updateUnavailableReason();
     if (refusal) return `Update unavailable: ${refusal}`;
-    return getUpdateButtonTooltip({
-      state: currentState(),
+    const state = currentState();
+    const tooltip = getUpdateButtonTooltip({
+      state,
       updateStatus: props.updateStatus,
       storeState: storeState(),
       errorMessage: errorMessage(),
     });
+    return (state === 'queued' || state === 'inconclusive') && errorMessage()
+      ? `${errorMessage()} ${tooltip}`
+      : tooltip;
   };
   const buttonLabel = () => getUpdateButtonLabel(currentState(), settingsLoaded());
 
@@ -145,6 +148,19 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
     event.preventDefault();
 
     const state = currentState();
+    if (state === 'queued' || state === 'inconclusive') {
+      const actionId = storeState()?.actionId;
+      if (!actionId) return;
+      try {
+        const detail = await ResourceActionsAPI.getAction(actionId);
+        setReviewDetail(detail);
+        handleReviewChanged(detail);
+        setErrorMessage('');
+      } catch {
+        setErrorMessage('Could not re-read the action. No new update was sent.');
+      }
+      return;
+    }
     if (state === 'updating' || state === 'success' || state === 'error') return;
     if (isUpdateUnavailable()) return;
 
@@ -161,15 +177,19 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
     setReviewDetail(detail);
     const state = detail.audit.state;
     if (state === 'executing') {
-      markContainerQueued(props.agentId, props.containerId);
+      markContainerQueued(props.agentId, props.containerId, detail.audit.id);
       props.onUpdateTriggered?.();
       return;
     }
     if (!ACTION_TERMINAL_STATES.includes(state)) return;
     if (state === 'completed') {
-      markContainerQueued(props.agentId, props.containerId);
+      markContainerUpdateSuccess(props.agentId, props.containerId);
       props.onUpdateTriggered?.();
     } else if (state === 'failed') {
+      if (detail.audit.result?.actionResultV2?.execution.reasonCode === 'operator_force_failed') {
+        markContainerUpdateInconclusive(props.agentId, props.containerId, detail.audit.id);
+        return;
+      }
       const message = 'The update action failed. Open Actions for the audit trail.';
       setErrorMessage(message);
       markContainerUpdateError(props.agentId, props.containerId, message);

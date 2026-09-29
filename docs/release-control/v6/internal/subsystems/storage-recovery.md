@@ -315,6 +315,10 @@ The same agent can still arrive as two distinct resources: a PVE guest carrying 
 
 For token-auth PBS connections that cannot report `nodeName`, a registry-corroborated `pbs.linkedAgentId` takes precedence over connection labels when selecting the Agent-bearing host row. It must resolve to the same source-native Agent ID on a standalone or PVE-merged host; a PVE-only node with no Agent facet cannot supply host History. The PBS row and service target stay canonical; only its drawer presentation uses the host metrics target. If the explicit link changes, retained correlation to the former host is discarded rather than carrying old charts across a replacement.
 
+The backend may establish that explicit link through a running PVE guest's unique, fresh endpoint IP and its state-owned Agent/VM link when the in-guest Agent omits interface IPs. It declines reused/non-unique IPs, stopped or stale guests, and competing Agent links. No connection-name guess or VirtualBox host inference is implied by this fallback; when it cannot identify a host, only the separately observed PBS API CPU/memory service History is available.
+
+The operator's PBS connection label is never sufficient backend host identity. A label matching an unrelated Agent must not win over the endpoint's corroborated PVE guest-IP/Agent link or project that Agent's SMART disks under PBS. If only the label matches, the backend leaves the host link absent and the PBS service series separate; Backups presentation has its own correlation boundary.
+
 A realtime refresh can briefly omit the correlated host row while the PBS server row remains. Retain the last resolved host per PBS server across that omission instead of falling back to the service target, so the drawer's Identity rows and History series stay on the host key. Reuse the remembered host only while it is still fresh relative to the server and drop it once stale, so a removed or replaced host is not advertised indefinitely; a present but ambiguous host still declines.
 
 Verification: ProxmoxBackupServersTable.drawer.test.tsx covers standalone and

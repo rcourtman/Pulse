@@ -3,6 +3,7 @@ package unifiedresources
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
@@ -15,8 +16,9 @@ import (
 func (rr *ResourceRegistry) associatePBSHostAgentResources(
 	instance models.PBSInstance,
 	hosts []models.Host,
+	vms []models.VM,
 ) {
-	host := uniquePBSHostAgent(instance, hosts)
+	host := uniquePBSHostAgent(instance, hosts, vms)
 	if host == nil {
 		return
 	}
@@ -89,7 +91,7 @@ func (rr *ResourceRegistry) associatePBSHostAgentResources(
 	rr.viewsDirty = true
 }
 
-func uniquePBSHostAgent(instance models.PBSInstance, hosts []models.Host) *models.Host {
+func uniquePBSHostAgent(instance models.PBSInstance, hosts []models.Host, vms []models.VM) *models.Host {
 	var match *models.Host
 	for index := range hosts {
 		if !pbsInstanceCorroboratesHost(instance, hosts[index]) {
@@ -100,7 +102,62 @@ func uniquePBSHostAgent(instance models.PBSInstance, hosts []models.Host) *model
 		}
 		match = &hosts[index]
 	}
+	if match != nil {
+		return match
+	}
+
+	// A PBS inside a PVE VM may have an API endpoint IP that the in-guest
+	// Pulse Agent does not report as an interface. A state-linked Agent and a
+	// PVE guest observed at that exact IP form a safe alternate chain. Names
+	// alone do not: a PBS connection label is not host identity. Reject reused
+	// guest IPs and multiple agents linked to one guest rather than selecting
+	// an arbitrary host.
+	endpointIP := NormalizeIP(extractHostname(instance.Host))
+	if isNonUniqueIP(endpointIP) {
+		return nil
+	}
+	guestID := ""
+	for _, vm := range vms {
+		if !strings.EqualFold(strings.TrimSpace(vm.Status), "running") ||
+			!pbsGuestLinkObservationFresh(instance.LastSeen, vm.LastSeen) {
+			continue
+		}
+		for _, address := range vm.IPAddresses {
+			if NormalizeIP(address) != endpointIP {
+				continue
+			}
+			id := strings.TrimSpace(vm.ID)
+			if id == "" || guestID != "" && guestID != id {
+				return nil
+			}
+			guestID = id
+			break
+		}
+	}
+	if guestID == "" {
+		return nil
+	}
+	for index := range hosts {
+		if strings.TrimSpace(hosts[index].LinkedVMID) != guestID {
+			continue
+		}
+		if !pbsGuestLinkObservationFresh(instance.LastSeen, hosts[index].LastSeen) {
+			continue
+		}
+		if match != nil {
+			return nil
+		}
+		match = &hosts[index]
+	}
 	return match
+}
+
+func pbsGuestLinkObservationFresh(pbsSeen, peerSeen time.Time) bool {
+	if pbsSeen.IsZero() || peerSeen.IsZero() {
+		return false
+	}
+	delta := pbsSeen.Sub(peerSeen)
+	return delta >= -5*time.Minute && delta <= 5*time.Minute
 }
 
 func pbsInstanceCorroboratesHost(instance models.PBSInstance, host models.Host) bool {
@@ -115,10 +172,9 @@ func pbsInstanceCorroboratesHost(instance models.PBSInstance, host models.Host) 
 	if nodeName := NormalizeHostname(instance.NodeName); nodeName != "" && nodeName == hostName {
 		return true
 	}
-	if instanceName := NormalizeHostname(instance.Name); instanceName != "" && instanceName == hostName {
-		return true
-	}
-
+	// The connection name is operator-chosen display text. Matching it to an
+	// Agent hostname can steal the link from the actual guest (and project its
+	// SMART disks under the wrong PBS server), so it is not identity evidence.
 	endpoint := strings.TrimSpace(strings.ToLower(extractHostname(instance.Host)))
 	if endpoint == "" {
 		return false

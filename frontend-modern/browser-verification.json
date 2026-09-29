@@ -1,16 +1,22 @@
 {
   "version": 1,
-  "base_sha": "fbf17b271abe70ad3e12042506b52f85b6cbc484",
-  "verified_at": "2026-09-29T19:50:45Z",
+  "base_sha": "91d8822d76c5a7214995c0e370be637b6e6336e3",
+  "verified_at": "2026-09-29T22:13:56Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/pages/Actions.tsx"
+    "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx",
+    "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts",
+    "frontend-modern/src/components/shared/useContainerUpdateButtonState.ts",
+    "frontend-modern/src/stores/containerUpdates.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/pages/Actions.tsx": "30e862ecc5125f07cf93f0c1e0b5f58efa023f5fdb56fe4b01721bf9a453e7ce"
+    "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx": "fd88f3e3e275926572126f43cce7296e7361b5e527868dd3c59c7eb951e9f5c9",
+    "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts": "10bc488cb82ae84c6ae46d77ec672d34df2a1b3c28e138ae0f3b4214cccbe37e",
+    "frontend-modern/src/components/shared/useContainerUpdateButtonState.ts": "4b9dd4a42549b0433a1afa56f26183fe721c80626f823fb3c8489934721267c5",
+    "frontend-modern/src/stores/containerUpdates.ts": "b5d47132f7daf7f14bcc38462043288fc211344410af622ada7728694bcd514d"
   },
   "routes": [
-    "/browser-tests/action-review-navigation.html (production Actions page with scripted action reads)"
+    "/browser-tests/update-action-receipt.html (production Docker update button with scripted action reads)"
   ],
   "viewports": [
     {
@@ -23,24 +29,71 @@
     }
   ],
   "states": [
-    "detail for edge-a held while edge-b is selected and rendered",
-    "late edge-a response cannot replace edge-b review or URL",
-    "pending receipt re-read finishes after edge-b review closes"
+    "governed update receipt pending after registry updateAvailable becomes false",
+    "existing action re-opened by GET with no second plan or execute",
+    "recorded completed action after a second GET changes the displayed outcome"
   ],
   "interactions": [
-    "select edge-a then edge-b before the first detail response arrives",
-    "release older response and inspect current review at desktop and phone widths",
-    "start same-action receipt GET, close review, release response; no dialog reopens",
-    "assert all scripted API requests are GET and no horizontal overflow or page errors"
+    "inspect pending button and absence of a Current or Completed claim",
+    "select Review action and inspect receipt-pending dialog",
+    "select Check for receipt and inspect recorded completion",
+    "assert both action requests are GET; no page errors or horizontal overflow"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/action-review-navigation.cjs from assigned workspace root; Vite 6.4.3, Chromium 141.0.7390.37, Playwright 1.56.1",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/update-action-receipt.cjs from assigned workspace root; Vite 6.4.3, Chromium 141.0.7390.37, Playwright 1.56.1",
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-rkmwqerp/action-review-navigation-browser.log",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-rkmwqerp/action-review-navigation-proof/newest-review-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-rkmwqerp/action-review-navigation-proof/newest-review-390.png"
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-browser-final.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-proof-final/pending-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-proof-final/review-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-proof-final/completed-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-proof-final/pending-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-proof-final/review-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-proof-final/completed-390.png"
   ],
-  "notes": "Mock-backed navigation proof of production Actions page; screenshots inspected. No update was executed, no installed or reporter result established.",
+  "notes": "Mock-backed UI proof; six screenshots inspected, including pending and completed phone states. This does not establish installed behaviour or resolve #1891.",
   "prior_verifications": [
+    {
+      "version": 1,
+      "base_sha": "fbf17b271abe70ad3e12042506b52f85b6cbc484",
+      "verified_at": "2026-09-29T19:50:45Z",
+      "result": "passed",
+      "changed_paths": [
+        "frontend-modern/src/pages/Actions.tsx"
+      ],
+      "content_sha256": {
+        "frontend-modern/src/pages/Actions.tsx": "30e862ecc5125f07cf93f0c1e0b5f58efa023f5fdb56fe4b01721bf9a453e7ce"
+      },
+      "routes": [
+        "/browser-tests/action-review-navigation.html (production Actions page with scripted action reads)"
+      ],
+      "viewports": [
+        {
+          "width": 1365,
+          "height": 900
+        },
+        {
+          "width": 390,
+          "height": 844
+        }
+      ],
+      "states": [
+        "detail for edge-a held while edge-b is selected and rendered",
+        "late edge-a response cannot replace edge-b review or URL",
+        "pending receipt re-read finishes after edge-b review closes"
+      ],
+      "interactions": [
+        "select edge-a then edge-b before the first detail response arrives",
+        "release older response and inspect current review at desktop and phone widths",
+        "start same-action receipt GET, close review, release response; no dialog reopens",
+        "assert all scripted API requests are GET and no horizontal overflow or page errors"
+      ],
+      "command": "pulse-worker-browser frontend-modern/browser-tests/action-review-navigation.cjs from assigned workspace root; Vite 6.4.3, Chromium 141.0.7390.37, Playwright 1.56.1",
+      "artifacts": [
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-rkmwqerp/action-review-navigation-browser.log",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-rkmwqerp/action-review-navigation-proof/newest-review-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-rkmwqerp/action-review-navigation-proof/newest-review-390.png"
+      ],
+      "notes": "Mock-backed navigation proof of production Actions page; screenshots inspected. No update was executed, no installed or reporter result established."
+    },
     {
       "version": 1,
       "base_sha": "c2f7aa8b471d6cbb858e8ec71b4e664fded6549c",
