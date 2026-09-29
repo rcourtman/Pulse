@@ -24,6 +24,29 @@ Concurrency groups continue to isolate workflows and refs. Cancellation of an
 obsolete PR run supplies no passing evidence for its replacement, which still
 needs its own checks. Release publication workflows are unaffected.
 
+### Sharded internal/api backend tests
+
+Build and Test runs the `internal/api` race tests as four `Backend tests
+(api-N)` shards instead of one job, because that one package took about 27 of
+the 31 minutes of the old `Backend tests (api)` job and set the critical path
+of every pull request. Each shard lists the package's tests with `go test
+-race -list` from the commit under test and runs one contiguous quarter of
+that list in go test's own order, so the shards cover every test exactly once,
+including tests added later, and a shard that resolves no tests fails. The
+order is kept on purpose. Some `internal/api` tests depend on package state
+left by the tests just before them, and an interleaved split by name broke
+dozens of them. The required check name
+`Backend tests (api)` belongs to a verdict job that passes only when every
+shard succeeded, and `Backend tests (rest-0)` and `Backend tests (rest-1)` keep
+their names and package split. All shards still expand for documentation-only
+changes so no required check is left pending or reads skipped shards as a
+pass. Go test steps are not skipped for frontend-only changes, because Go tests
+read frontend sources (the `internal/api` contract tests, the
+`internal/unifiedresources` code standards walk of `frontend-modern/src`, and
+the `internal/telemetry` repository-wide wording scan). Core E2E runs its
+non-gating probation tier only outside pull requests, since promotion counts
+only main runs.
+
 ### Docker SDK dependency compatibility
 
 The Docker consumers use Moby API v1.56.0 and client v0.6.0 together, without
