@@ -268,7 +268,7 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 	}
 	for _, instance := range snapshot.PBSInstances {
 		rr.ingestPBSInstance(instance)
-		rr.associatePBSHostAgentResources(instance, snapshot.Hosts)
+		rr.associatePBSHostAgentResources(instance, snapshot.Hosts, snapshot.VMs)
 	}
 	for _, instance := range snapshot.PMGInstances {
 		rr.ingestPMGInstance(instance)
