@@ -2835,9 +2835,9 @@ members also skip escalation levels and critical repeats while that supported
 cause is current; an already queued escalation is revalidated before delivery.
 `observation-set` members continue to notify independently because Pulse has
 not established causality. `incident_synthesis_test.go` pins classification,
-contradiction downgrade, bounded evidence, duplicate-delivery suppression, and
-partial-recovery behavior. `escalation_policy_change_test.go` pins escalation
-suppression and queued-callback revalidation without muting observation sets.
+contradiction downgrade, bounded evidence, duplicate-delivery suppression,
+partial-recovery behavior, escalation suppression, and queued-callback
+revalidation without muting observation sets.
 
 ### Alert hydration is not resource admission
 
