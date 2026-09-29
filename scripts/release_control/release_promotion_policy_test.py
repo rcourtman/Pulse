@@ -1615,7 +1615,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
     def test_prerelease_feedback_template_uses_generic_current_rc_wording(self) -> None:
         template = read(".github/ISSUE_TEMPLATE/v6_rc_feedback.yml")
         self.assertIn("placeholder: v6.0.0-rc.N", template)
-        self.assertIn("placeholder: rcourtman/pulse:v6.0.0-rc.N or pulse-linux-amd64", template)
+        self.assertIn("placeholder: rcourtman/pulse:v6.0.0-rc.N or rcourtman/pulse@sha256:...", template)
         self.assertIn("I upgraded to the current v6 RC build", template)
         self.assertNotIn("v6.0.0-rc.1", template)
 
