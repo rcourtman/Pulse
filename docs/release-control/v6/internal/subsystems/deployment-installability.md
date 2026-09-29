@@ -2328,7 +2328,7 @@ not see this; verification on 2026-09-23 used a v6.4.1 bundle with one client
 whose container Docker reported healthy.
 
 The active prerelease `v6.4.5-rc.5` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `6.4.5-rc.5` release version.
-It follows `v6.4.5-rc.5` on the published `v6.4.5` candidate line.
+It follows `v6.4.5-rc.4` on the published `v6.4.5` candidate line.
 This prerelease keeps `rollback_version=v6.4.1`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.
 For the active prerelease `v6.4.5-rc.5` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `6.4.5-rc.5` until the next governed stable cut moves them forward.
 No governed mobile-facing path changed from `v6.4.1`, so the release decision is `no-mobile-impact`; no companion upload or public mobile-store rollout is part of this candidate.
