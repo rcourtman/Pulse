@@ -1616,7 +1616,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         template = read(".github/ISSUE_TEMPLATE/v6_rc_feedback.yml")
         self.assertIn("placeholder: v6.0.0-rc.N", template)
         self.assertIn("placeholder: rcourtman/pulse:v6.0.0-rc.N or pulse-linux-amd64", template)
-        self.assertIn("Upgrade to the current v6 RC build", template)
+        self.assertIn("I upgraded to the current v6 RC build", template)
         self.assertNotIn("v6.0.0-rc.1", template)
 
     def test_demo_site_copy_points_at_current_release_packet_index(self) -> None:

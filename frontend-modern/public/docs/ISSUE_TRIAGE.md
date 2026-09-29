@@ -32,6 +32,14 @@ symptom: logs or sanitized diagnostics for connection and data failures, and
 screenshots or exact error text for visual failures. Do not make a reporter
 invent logs where none apply.
 
+Some failures cannot safely be reproduced: an update may have changed a
+container despite a failed banner, an alert storm may send more notifications,
+or another run may bring down a host. Accept the original sequence, observed
+result, time and sanitized evidence; do not require a second attempt before
+triage. Where the installed state is uncertain, check it before suggesting
+another action. A diagnostics export is useful only when Pulse is running and
+collecting it is safe.
+
 ## Required disposition
 
 Before removing `needs-decomposition` or declaring a mixed report triaged:

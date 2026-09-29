@@ -275,6 +275,17 @@ test("bug and pre-release forms accept truthful evidence for installs that never
   }
 });
 
+test("bug and pre-release forms accept unsafe one-off failures without a second run", () => {
+  const templateDir = path.resolve(__dirname, "../ISSUE_TEMPLATE");
+  for (const name of ["bug_report.yml", "v6_rc_feedback.yml"]) {
+    const form = fs.readFileSync(path.join(templateDir, name), "utf8");
+    assert.match(form, /do not repeat/i);
+    assert.match(form, /original sequence/i);
+    assert.match(form, /second reproduction is not required/);
+    assert.match(form, /data loss, an outage, duplicate changes, or excessive notifications/);
+  }
+});
+
 test("older-version reports cannot trigger event or scheduled retest posting", async () => {
   const issue = {
     number: 1200,

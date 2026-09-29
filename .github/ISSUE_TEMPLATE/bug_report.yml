@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible bug with full version details
+description: Report a bug or unexpected outcome with version details
 title: "[Bug]: "
 labels:
   - bug
@@ -9,8 +9,7 @@ body:
       value: |
         Report the version on the running instance where the bug occurs, not just the version you upgraded from. If installation failed before Pulse could start, give the exact version you tried to install, or write "unknown" and identify the installer or helper below. For container installs, include the running image tag or digest; for other installs, leave the image field blank.
 
-        If your issue is connection- or data-related, include diagnostics from:
-        `Settings -> Diagnostics -> Export for GitHub (sanitized)`.
+        If repeating the action could cause data loss, an outage, duplicate changes, or excessive notifications, do not repeat it just to fill in this form. Describe the original sequence and what you observed instead. If Pulse is running and it is safe to do so, connection- or data-related reports can include diagnostics from `Settings -> Diagnostics -> Export for GitHub (sanitized)`.
 
         Do not post secrets, tokens, private keys, or unsanitized configuration files.
 
@@ -26,12 +25,12 @@ body:
   - type: textarea
     id: reproduce
     attributes:
-      label: To reproduce
-      description: Exact, minimal steps to reproduce the issue.
+      label: Steps or original sequence
+      description: Describe what happened before the failure. If repeating it is unsafe or impossible, say so; a second reproduction is not required.
       placeholder: |
-        1. Go to ...
-        2. Click ...
-        3. Observe ...
+        1. Before the failure, I ...
+        2. I then saw ...
+        3. I have not repeated it because ...
     validations:
       required: true
 
