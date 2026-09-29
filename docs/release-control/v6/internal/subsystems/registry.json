@@ -4511,8 +4511,10 @@
         ".dockerignore",
         ".github/ISSUE_TEMPLATE/v6_rc_feedback.yml",
         ".github/scripts/check-demo-reachability.sh",
+        ".github/scripts/internal-api-test-seconds.txt",
         ".github/scripts/recover-demo-runtime.sh",
         ".github/scripts/resolve-demo-runtime-profile.sh",
+        ".github/scripts/select-internal-api-shard.sh",
         ".github/scripts/setup-demo-ssh.sh",
         ".github/workflows/backfill-release-assets.yml",
         ".github/workflows/build-and-test.yml",
@@ -5035,6 +5037,8 @@
             "label": "frontend dependency security proof",
             "match_prefixes": [],
             "match_files": [
+              ".github/scripts/internal-api-test-seconds.txt",
+              ".github/scripts/select-internal-api-shard.sh",
               ".github/workflows/build-and-test.yml",
               "frontend-modern/package-lock.json",
               "frontend-modern/package.json"

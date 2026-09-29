@@ -30,12 +30,27 @@ Build and Test runs the `internal/api` race tests as four `Backend tests
 (api-N)` shards instead of one job, because that one package took about 27 of
 the 31 minutes of the old `Backend tests (api)` job and set the critical path
 of every pull request. Each shard lists the package's tests with `go test
--race -list` from the commit under test and runs one contiguous quarter of
-that list in go test's own order, so the shards cover every test exactly once,
+-race -list` from the commit under test and runs one contiguous slice of that
+list in go test's own order, so the shards cover every test exactly once,
 including tests added later, and a shard that resolves no tests fails. The
 order is kept on purpose. Some `internal/api` tests depend on package state
 left by the tests just before them, and an interleaved split by name broke
-dozens of them. The required check name
+dozens of them. Slices are cut by estimated run time, not test count.
+Equal-count quarters ran 1.9, 8.0, 1.5 and 10.3 minutes of tests, because one
+contract mock chart test runs about six minutes on the runner and the
+integration server tail about twenty seconds per test.
+`.github/scripts/select-internal-api-shard.sh` weighs each test by its seconds
+in `.github/scripts/internal-api-test-seconds.txt` (the slowest tests only,
+with a small default for every unlisted, new or renamed test), finds the
+smallest per-shard budget that fits the list into the shard count, and fills
+contiguous slices up to it, cutting the tail early if needed so no shard is
+empty. The weights only move cut points. Each test is assigned one shard in a
+single pass, so a stale weights file can unbalance the shards but never drop
+or repeat a test, and the file is refreshed from a `-race -json` run when one
+shard drifts well past the others. A shard holding most of the tests passes
+`-skip` of every other shard's tests instead of naming its own, which runs the
+same tests in the same order and keeps the single argument under the 120,000
+byte ceiling. The required check name
 `Backend tests (api)` belongs to a verdict job that passes only when every
 shard succeeded, and `Backend tests (rest-0)` and `Backend tests (rest-1)` keep
 their names and package split. All shards still expand for documentation-only

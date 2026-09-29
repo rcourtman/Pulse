@@ -3840,11 +3840,17 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 		// The list comes from the commit under test, so a new test cannot be
 		// missed, and contiguous slices of go test's own order put it in
 		// exactly one shard while keeping order-coupled neighbours together.
+		// The checked-in weights only choose where those slices are cut.
 		"go test -race -list . ./internal/api",
-		`'NR > int(total * i / n) && NR <= int(total * (i + 1) / n)'`,
+		"bash .github/scripts/select-internal-api-shard.sh \\\n            .github/scripts/internal-api-test-seconds.txt \"$API_SHARD_COUNT\" \"$API_SHARD_INDEX\")",
 		"resolved to an empty test list",
 		"go test -list found no tests in ./internal/api",
-		`go test -race -timeout 50m -run "$pattern" ./internal/api`,
+		// A shard holding most tests is named by skipping every other
+		// shard's tests, which keeps its argument under the exec limit.
+		`others=$(printf '%s\n' "$tests" | grep -vxF -f <(printf '%s\n' "$selected") || true)`,
+		`filter=(-run . -skip "$pattern")`,
+		`if [ "${#pattern}" -gt 120000 ]; then`,
+		`go test -race -timeout 50m "${filter[@]}" ./internal/api`,
 		"PULSE_DATA_DIR: /tmp/pulse-test-data",
 	} {
 		if !strings.Contains(shards, required) {
@@ -3872,6 +3878,95 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 	}
 	if got := strings.Count(workflow, "name: Backend tests (api)\n"); got != 1 {
 		t.Fatalf("exactly one job may carry the required Backend tests (api) name, found %d", got)
+	}
+
+	assertInternalAPIShardSelectionExhaustive(t, want)
+}
+
+// assertInternalAPIShardSelectionExhaustive runs the shard selector the way
+// the workflow does and proves that, whatever the weights say, the shards are
+// non-empty contiguous slices that together cover the list exactly once in
+// order.
+func assertInternalAPIShardSelectionExhaustive(t *testing.T, workflowShards int) {
+	t.Helper()
+	selector := repoFile(".github", "scripts", "select-internal-api-shard.sh")
+	weightsPath := repoFile(".github", "scripts", "internal-api-test-seconds.txt")
+	weightsContent, err := os.ReadFile(weightsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Weighted names from the checked-in file interleaved with unknown ones,
+	// which stand in for tests added after the weights were measured.
+	var weighted []string
+	for _, line := range strings.Split(string(weightsContent), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 || strings.HasPrefix(fields[0], "#") {
+			continue
+		}
+		if len(fields) != 2 || !strings.HasPrefix(fields[0], "Test") {
+			t.Fatalf("internal/api weights line must be `<TestName> <seconds>`, got %q", line)
+		}
+		if seconds, err := strconv.ParseFloat(fields[1], 64); err != nil || seconds <= 0 {
+			t.Fatalf("internal/api weight for %s must be positive seconds, got %q", fields[0], fields[1])
+		}
+		weighted = append(weighted, fields[0])
+	}
+	if len(weighted) == 0 {
+		t.Fatal("internal/api weights file lists no tests")
+	}
+	var tests []string
+	for i, name := range weighted {
+		tests = append(tests, name)
+		for j := 0; j < 1+i%7; j++ {
+			tests = append(tests, "TestUnweightedShardProbe"+strconv.Itoa(i)+"x"+strconv.Itoa(j))
+		}
+	}
+
+	emptyWeights := filepath.Join(t.TempDir(), "empty.txt")
+	if err := os.WriteFile(emptyWeights, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skewedWeights := filepath.Join(t.TempDir(), "skewed.txt")
+	skewed := tests[len(tests)/3] + " 900\n" + tests[len(tests)-1] + " 450\n"
+	if err := os.WriteFile(skewedWeights, []byte(skewed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	selectShard := func(weights string, count, index int, input []string) ([]string, error) {
+		cmd := exec.Command("bash", selector, weights, strconv.Itoa(count), strconv.Itoa(index))
+		cmd.Stdin = strings.NewReader(strings.Join(input, "\n") + "\n")
+		out, err := cmd.Output()
+		if err != nil {
+			return nil, err
+		}
+		return strings.Fields(string(out)), nil
+	}
+
+	for _, weights := range []string{weightsPath, emptyWeights, skewedWeights} {
+		for _, count := range []int{1, 2, workflowShards, workflowShards + 1, 9} {
+			var combined []string
+			for index := 0; index < count; index++ {
+				selected, err := selectShard(weights, count, index, tests)
+				if err != nil {
+					t.Fatalf("select shard %d of %d with %s: %v", index, count, filepath.Base(weights), err)
+				}
+				if len(selected) == 0 {
+					t.Fatalf("shard %d of %d with %s selected no tests", index, count, filepath.Base(weights))
+				}
+				combined = append(combined, selected...)
+			}
+			if strings.Join(combined, "\n") != strings.Join(tests, "\n") {
+				t.Fatalf("%d shards with %s do not cover the test list exactly once in order", count, filepath.Base(weights))
+			}
+		}
+	}
+
+	if _, err := selectShard(weightsPath, workflowShards, workflowShards, tests); err == nil {
+		t.Fatal("shard selector must reject an index outside the shard count")
+	}
+	if _, err := selectShard(weightsPath, 3, 0, tests[:2]); err == nil {
+		t.Fatal("shard selector must fail when there are fewer tests than shards")
 	}
 }
 
