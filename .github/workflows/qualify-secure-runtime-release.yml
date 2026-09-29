@@ -224,7 +224,7 @@ jobs:
           COPY --from=dind /usr/local/bin/ /usr/local/bin/
           COPY pulse-qualification-docker.service /etc/systemd/system/pulse-qualification-docker.service
           RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-                ca-certificates curl dbus systemd systemd-sysv util-linux && \
+                ca-certificates curl dbus systemd systemd-sysv util-linux iproute2 && \
               apt-get clean && \
               systemctl mask dev-hugepages.mount sys-fs-fuse-connections.mount systemd-remount-fs.service docker.service docker.socket && \
               systemctl enable pulse-qualification-docker.service
@@ -269,7 +269,19 @@ jobs:
             sleep 2
           done
           docker exec "${container}" sh -c \
-            'for command in curl docker dockerd id nsenter runuser systemctl; do command -v "$command" >/dev/null || exit 1; done'
+            'for command in curl docker dockerd id ip nsenter runuser systemctl; do command -v "$command" >/dev/null || exit 1; done'
+          # The immutable RC test needs a reachable non-loopback host-interface
+          # canary to prove that the helper's private network cannot reach it.
+          # Both veth ends stay inside this --network none namespace; neither
+          # endpoint is attached to the runner or an egress bridge.
+          docker exec "${container}" sh -ceu '
+            ip link add pulse-can0 type veth peer name pulse-can1
+            ip address add 192.0.2.1/32 dev pulse-can0
+            ip link set pulse-can1 up
+            ip link set pulse-can0 up
+            test -z "$(ip -4 route show default)"
+            ip -4 address show dev pulse-can0 | grep -F "192.0.2.1/32"
+          '
           docker exec "${container}" systemctl start pulse-qualification-docker.service
           for attempt in $(seq 1 60); do
             if docker exec "${container}" docker info >/dev/null 2>&1; then

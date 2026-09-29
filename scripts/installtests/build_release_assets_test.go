@@ -2392,6 +2392,29 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 	}
 }
 
+func TestUpdateDemoResolverChecksOutOutputHelperBeforeUse(t *testing.T) {
+	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "update-demo-server.yml"))
+	if err != nil {
+		t.Fatalf("read update-demo-server workflow: %v", err)
+	}
+	workflow := string(workflowBytes)
+	resolveStart := strings.Index(workflow, "\n  resolve:\n")
+	updateStart := strings.Index(workflow, "\n  update-demo:\n")
+	if resolveStart < 0 || updateStart <= resolveStart {
+		t.Fatal("update-demo-server workflow must retain separate resolve and update-demo jobs")
+	}
+	resolve := workflow[resolveStart:updateStart]
+	checkout := strings.Index(resolve, "- name: Checkout repository")
+	target := strings.Index(resolve, "- name: Resolve target tag and demo environment")
+	helper := strings.Index(resolve, "python3 scripts/write_github_output.py tag \"$TAG\"")
+	if checkout < 0 || target <= checkout || helper <= target {
+		t.Fatal("demo resolver must check out its source before using scripts/write_github_output.py")
+	}
+	if !strings.Contains(resolve[checkout:target], "persist-credentials: false") {
+		t.Fatal("demo resolver checkout must not persist GitHub credentials")
+	}
+}
+
 func TestDemoMutationAndRecoverySharePhysicalTargetLock(t *testing.T) {
 	updateBytes, err := os.ReadFile(repoFile(".github", "workflows", "update-demo-server.yml"))
 	if err != nil {
@@ -2824,12 +2847,15 @@ func TestSecureRuntimeQualificationPacketIsHostedAndReleaseBound(t *testing.T) {
 		`git remote set-url origin https://github.com/rcourtman/Pulse.git`,
 		"ca-certificates curl dbus systemd systemd-sysv util-linux",
 		`docker:27.5.1-dind@sha256:f649ef046008ca7f926a2571c32b0ac22e5c59eb61b959617f9acc2a4c638cf5`,
-		`for command in curl docker dockerd id nsenter runuser systemctl`,
+		`for command in curl docker dockerd id ip nsenter runuser systemctl`,
 		`--host=unix:///var/run/docker.sock`,
 		`--storage-driver=vfs`,
 		`--bridge=none`,
 		`--iptables=false`,
 		`--network none`,
+		`ip link add pulse-can0 type veth peer name pulse-can1`,
+		`ip address add 192.0.2.1/32 dev pulse-can0`,
+		`test -z "$(ip -4 route show default)"`,
 		`pulse-secure-runtime-fixture:v7`,
 		"--verify-release-packet-only",
 		"--verified-packet-dir",
@@ -2846,6 +2872,16 @@ func TestSecureRuntimeQualificationPacketIsHostedAndReleaseBound(t *testing.T) {
 		if !strings.Contains(qualificationWorkflow, required) {
 			t.Fatalf("post-publication secure-runtime qualification missing %q", required)
 		}
+	}
+	canaryIndex := strings.Index(qualificationWorkflow, `ip link add pulse-can0 type veth peer name pulse-can1`)
+	labIndex := strings.Index(qualificationWorkflow, `--env PULSE_SECURE_RUNTIME_SYSTEMD_LAB=1`)
+	if canaryIndex <= privilegedExecutionIndex || labIndex <= canaryIndex {
+		t.Fatal("the isolated host-interface canary must be configured before running the immutable RC lab")
+	}
+	if !strings.Contains(qualificationWorkflow, `--privileged \
+            --network none \
+            --cgroupns=host`) {
+		t.Fatal("the outer systemd lab must retain its no-network namespace")
 	}
 	for _, forbidden := range []string{
 		`/var/run/docker.sock:/var/run/docker.sock`,

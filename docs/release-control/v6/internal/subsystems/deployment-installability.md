@@ -1296,6 +1296,14 @@ artifact-selection behaviour.
    privileged systemd container must mount that exact snapshot read-only and
    must never execute directly from the download directory. The post-run
    attester must consume the same snapshot paths.
+   The outer systemd qualification container must retain `--network none`:
+   it may create a non-loopback host-interface canary only as a veth pair
+   wholly inside that container's network namespace, with no runner bridge,
+   egress attachment, or default IPv4 route. The immutable RC lab uses this
+   reachable local canary to distinguish host-network access from the typed
+   helper's private network isolation. Canary setup and the no-default-route
+   check must fail qualification before that lab if the boundary is absent;
+   they must not skip the lab or change the release packet under test.
    PVE jobs must consume their runner users' persistent local Go and npm caches
    directly; disposable-runner Actions cache restore/save phases must remain
    disabled because archiving those same caches adds network work after the
@@ -3831,6 +3839,10 @@ bypass the preflight. That dry run must call `update-demo-server.yml` in
 verification-only mode against the latest stable release. It must prove
 Tailscale, SSH host identity, runtime version, frontend parity, public health,
 and browser smoke without changing the host.
+The reusable demo workflow's resolver must check out the repository before it
+calls `scripts/write_github_output.py` to emit the selected tag and target.
+This checkout is credential-free; a verification-only dry run must not fail
+before its demo checks merely because the output helper is absent.
 That same release-validation boundary also owns draft-versus-published asset
 state. Every normal `.github/workflows/create-release.yml` cut validates the
 uploaded packet while the release is still a draft and must pass `draft=true`
