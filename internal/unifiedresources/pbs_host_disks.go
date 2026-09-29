@@ -172,10 +172,9 @@ func pbsInstanceCorroboratesHost(instance models.PBSInstance, host models.Host) 
 	if nodeName := NormalizeHostname(instance.NodeName); nodeName != "" && nodeName == hostName {
 		return true
 	}
-	if instanceName := NormalizeHostname(instance.Name); instanceName != "" && instanceName == hostName {
-		return true
-	}
-
+	// The connection name is operator-chosen display text. Matching it to an
+	// Agent hostname can steal the link from the actual guest (and project its
+	// SMART disks under the wrong PBS server), so it is not identity evidence.
 	endpoint := strings.TrimSpace(strings.ToLower(extractHostname(instance.Host)))
 	if endpoint == "" {
 		return false

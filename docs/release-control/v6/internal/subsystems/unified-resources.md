@@ -506,7 +506,7 @@ about the same disk cannot diverge.
 
 PBS presentation correlation accepts standalone agents and VM/system-container resources with an agent facet. Preserve unique identity matching and canonical metricsTarget type and ID. Guests without telemetry and mixed ambiguous agent/guest matches must not replace the PBS target.
 
-When the registry uniquely corroborates a PBS connection to a host agent by node name, connection name, endpoint hostname or reported interface IP, the PBS service may expose that source-native agent ID as `pbs.linkedAgentId`. This is a presentation link, not a replacement for the PBS service's canonical ID or metrics target. Token-auth connections may lack `nodeName`; consumers must use the explicit link in preference to display-name matching and must not infer one from an IP or name themselves. PVE-only nodes without an actual Agent facet are not host-history candidates, even if their name matches the PBS connection. A changed link invalidates any remembered correlation to an old host.
+When the registry uniquely corroborates a PBS connection to a host agent by PBS-reported node name, configured endpoint hostname or reported interface IP, the PBS service may expose that source-native agent ID as `pbs.linkedAgentId`. The user-editable connection name alone is not host identity: it must not attach an unrelated Agent or preempt a corroborated VM-IP/Agent link. This is a presentation link, not a replacement for the PBS service's canonical ID or metrics target. Token-auth connections may lack `nodeName`; consumers must use the explicit link in preference to display-name matching and must not infer one from an IP or name themselves. PVE-only nodes without an actual Agent facet are not host-history candidates, even if their name matches the PBS connection. A changed link invalidates any remembered correlation to an old host.
 
 For a PBS inside a PVE VM whose in-guest Agent omits interface IPs, the registry may also corroborate a unique Agent-to-VM state link with a unique running VM reporting the PBS endpoint's exact IP. All three observations must be within five minutes, and reused/non-unique IPs, stopped guests or competing Agent links decline to associate. This is an alternate backend evidence chain, not frontend hostname inference; it cannot identify a VirtualBox guest without equivalent observed topology.
 
@@ -5156,9 +5156,10 @@ wire-level contract.
 
 `internal/unifiedresources/pbs_host_disks.go` may add `pbs` source membership
 to an agent host and its agent-reported SMART disk resources only when one
-host is uniquely corroborated by the PBS instance name, endpoint hostname, or
-endpoint IP against the host report and interface addresses. Multiple matches
-are ambiguous and must fail closed without assigning PBS ownership.
+host is uniquely corroborated by the PBS-reported node name, endpoint hostname,
+endpoint IP against the host report and interface addresses, or a fresh PVE
+guest-IP/Agent link. The user-editable connection label is not identity evidence.
+Multiple matches are ambiguous and must fail closed without assigning PBS ownership.
 
 The same unique match may set `PBSData.LinkedAgentID` on the PBS service only
 after the source-native host ID resolves to a canonical resource carrying that
