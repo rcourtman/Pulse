@@ -411,6 +411,12 @@ telemetry, host details, and stored History use the Agent facet and Agent
 metrics target. Zero or multiple matches must leave the PBS resource unchanged
 rather than guessing; this presentation correlation must not mutate either
 canonical input or create a second mobile disclosure interaction.
+When the PBS service has a registry-corroborated `pbs.linkedAgentId`, the
+Backups drawer selects only an Agent-bearing resource with that source-native
+ID, even if same-host PVE API labels or a token-auth PBS connection have no
+matching hostname. PVE-only rows cannot masquerade as a host series. A new
+link cannot reuse a retained old host target, and the displayed PBS row keeps
+its own canonical resource ID while History uses the selected host target.
 
 Presentation helpers that mirror a server-side classification must name the
 predicate they mirror and expose it as a single exported function rather than

@@ -313,6 +313,8 @@ Backups hydrates type=pbs,agent with source=pbs and reuses Overview guest invent
 
 The same agent can still arrive as two distinct resources: a PVE guest carrying its telemetry and the standalone `source=pbs` host row. Collapse those candidates by agent identity and resolve the Backups PBS row to the guest target, whose persisted host series the drawer charts; keeping the PBS service target leaves History on a key with no host data. Distinct agent identities stay ambiguous, and a missing agent identity is not sameness proof. Do not add a second guest-estate request to compensate.
 
+For token-auth PBS connections that cannot report `nodeName`, a registry-corroborated `pbs.linkedAgentId` takes precedence over connection labels when selecting the Agent-bearing host row. It must resolve to the same source-native Agent ID on a standalone or PVE-merged host; a PVE-only node with no Agent facet cannot supply host History. The PBS row and service target stay canonical; only its drawer presentation uses the host metrics target. If the explicit link changes, retained correlation to the former host is discarded rather than carrying old charts across a replacement.
+
 A realtime refresh can briefly omit the correlated host row while the PBS server row remains. Retain the last resolved host per PBS server across that omission instead of falling back to the service target, so the drawer's Identity rows and History series stay on the host key. Reuse the remembered host only while it is still fresh relative to the server and drop it once stale, so a removed or replaced host is not advertised indefinitely; a present but ambiguous host still declines.
 
 Verification: ProxmoxBackupServersTable.drawer.test.tsx covers standalone and

@@ -506,6 +506,8 @@ about the same disk cannot diverge.
 
 PBS presentation correlation accepts standalone agents and VM/system-container resources with an agent facet. Preserve unique identity matching and canonical metricsTarget type and ID. Guests without telemetry and mixed ambiguous agent/guest matches must not replace the PBS target.
 
+When the registry uniquely corroborates a PBS connection to a host agent by node name, connection name, endpoint hostname or reported interface IP, the PBS service may expose that source-native agent ID as `pbs.linkedAgentId`. This is a presentation link, not a replacement for the PBS service's canonical ID or metrics target. Token-auth connections may lack `nodeName`; consumers must use the explicit link in preference to display-name matching and must not infer one from an IP or name themselves. PVE-only nodes without an actual Agent facet are not host-history candidates, even if their name matches the PBS connection. A changed link invalidates any remembered correlation to an old host.
+
 A single agent surfaced as both a VM/system-container guest and a standalone agent row is one identity, not an ambiguous pair. Collapse candidates that share an agent identity before deciding, and prefer the guest's canonical metricsTarget because it names the persisted host series; the PBS service target names the service key and has no host history. Only distinct agent identities, or candidates whose identity cannot be proven equal, decline to choose. Never use input order or a fallback that discards the PBS row id.
 
 A realtime refresh can briefly omit the correlated host row while the PBS server row remains. Retain the last resolved correlation per PBS server across that omission rather than substituting the PBS service target, so the drawer's identity rows and history target stay stable. Reuse the remembered host only while it is still fresh relative to the server and drop it once stale, so a removed or replaced host is not advertised indefinitely; a present but ambiguous host still declines.
@@ -1070,7 +1072,10 @@ container inventory table.
     provider-owned resource to the standalone Machines list. Presentation-only
     correlation retains the canonical PBS row id and service facet, uses the
     canonical host/guest metrics target and telemetry facets, and fails closed when no host
-    matches or more than one candidate matches. It must not alter registry
+    matches or more than one candidate matches. A registry-corroborated
+    `pbs.linkedAgentId` selects the matching Agent facet even when token-auth
+    PBS has no node name or a same-host PVE API node has a different label;
+    a PVE-only row cannot supply host History. It must not alter registry
     identity or treat input order as correlation evidence.
 13. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx` shared with `storage-recovery`: Proxmox workload coverage rows are both a storage/recovery protection-posture surface and a unified-resource identity consumer boundary.
 14. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx` shared with `storage-recovery`: Proxmox recoverable workload table rows are both a storage/recovery coverage surface and a unified-resource platform-table consumer boundary.
@@ -5135,6 +5140,13 @@ to an agent host and its agent-reported SMART disk resources only when one
 host is uniquely corroborated by the PBS instance name, endpoint hostname, or
 endpoint IP against the host report and interface addresses. Multiple matches
 are ambiguous and must fail closed without assigning PBS ownership.
+
+The same unique match may set `PBSData.LinkedAgentID` on the PBS service only
+after the source-native host ID resolves to a canonical resource carrying that
+Agent facet. This link is for Backups host-history presentation; it does not
+merge the PBS service and host, change either metrics target, or turn PBS API
+polls into a host-agent time series. A missing or ambiguous host leaves the
+link absent.
 
 PBS does not supply the SMART inventory. Disk identity, health, temperature,
 and other typed physical-disk facts therefore remain agent-owned, while the

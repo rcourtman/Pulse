@@ -3,6 +3,7 @@ package unifiedresources
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -102,6 +103,38 @@ func TestDockerCollectionModeDoesNotChangeCanonicalIdentity(t *testing.T) {
 		resource.Canonical.Hostname != want.Hostname ||
 		!reflect.DeepEqual(resource.Canonical.Aliases, want.Aliases) {
 		t.Fatalf("collection completeness changed canonical identity: got %+v, want %+v", resource.Canonical, want)
+	}
+}
+
+func TestPBSLinkedAgentDoesNotChangeServiceCanonicalIdentityOrTarget(t *testing.T) {
+	resource := Resource{
+		ID:            "pbs-service",
+		Type:          ResourceTypePBS,
+		Name:          "Backup connection",
+		PBS:           &PBSData{InstanceID: "pbs-service", Hostname: "10.0.0.5"},
+		MetricsTarget: &MetricsTarget{ResourceType: "agent", ResourceID: "pbs-service"},
+	}
+	RefreshCanonicalIdentity(&resource)
+	if resource.Canonical == nil {
+		t.Fatal("PBS canonical identity is nil")
+	}
+	want := *resource.Canonical
+	wantTarget := *resource.MetricsTarget
+
+	resource.PBS.LinkedAgentID = "agent-uuid"
+	RefreshCanonicalIdentity(&resource)
+	if resource.Canonical == nil || !reflect.DeepEqual(*resource.Canonical, want) {
+		t.Fatalf("presentation-only host link changed PBS service identity: got %+v, want %+v", resource.Canonical, want)
+	}
+	if resource.MetricsTarget == nil || *resource.MetricsTarget != wantTarget {
+		t.Fatalf("presentation-only host link changed PBS service target: got %+v, want %+v", resource.MetricsTarget, wantTarget)
+	}
+	encoded, err := json.Marshal(resource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(encoded), `"linkedAgentId":"agent-uuid"`) {
+		t.Fatalf("PBS host link missing from resource JSON: %s", encoded)
 	}
 }
 
