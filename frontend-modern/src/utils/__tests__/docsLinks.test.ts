@@ -131,6 +131,27 @@ describe('docsLinks', () => {
     }
   });
 
+  it('keeps lockout and incident reporting guidance safe for the affected client', () => {
+    const troubleshooting = readFileSync(
+      path.join(repoRoot, 'docs', 'TROUBLESHOOTING.md'),
+      'utf8',
+    );
+    const recovery = troubleshooting.split('### Recovery Mode')[1].split('\n---')[0];
+    expect(recovery).toContain('[I forgot my password](#i-forgot-my-password)');
+    expect(recovery).toContain('browser-bound recovery');
+    expect(recovery).toContain('A successful curl response does not unlock a separate');
+    expect(recovery).toContain('remote and reverse-proxy');
+    expect(recovery).not.toContain('generate_token');
+    expect(recovery).not.toMatch(/```(?:bash|sh)[\s\S]*?X-Recovery-Token/);
+
+    const help = troubleshooting.split('## 🆘 Getting Help')[1];
+    expect(help).toContain('Do not repeat an update, outage or notification storm');
+    expect(help).toContain('Export for GitHub (sanitized)');
+    expect(help).toContain('Review before posting');
+    expect(help).toContain('session cookies, webhook URLs');
+    expect(help).toContain('If installation never started Pulse');
+  });
+
   it('ships a bounded maintenance example separately from incident snoozing', () => {
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     const maintenance = apiReference

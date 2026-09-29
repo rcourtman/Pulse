@@ -309,25 +309,50 @@ check, report the Pulse version and displayed check time/status separately; API
 success alone does not confirm the Pulse display has recovered.
 
 ### Recovery Mode
-If you are completely locked out, you can trigger a recovery token from localhost:
-```bash
-curl -X POST http://localhost:7655/api/security/recovery \
-  -d '{"action":"generate_token","duration":30}'
-```
-Use the returned token in `X-Recovery-Token` when calling `/api/security/recovery` to enable or disable local-only auth bypass (`disable_auth` / `enable_auth`). Token generation is localhost-only.
 
-Example (enable recovery mode):
-```bash
-curl -X POST http://localhost:7655/api/security/recovery \
-  -H "X-Recovery-Token: <token>" \
-  -d '{"action":"disable_auth"}'
-```
+For a forgotten local password, follow [I forgot my password](#i-forgot-my-password)
+above, using the steps for your deployment. Enter the host-only bootstrap token
+in that instance's setup screen; do not paste it into a command or a report.
+For OIDC, SAML or proxy login, use the identity-provider or administrator path
+described there instead.
+
+The advanced `/api/security/recovery` API creates a **browser-bound recovery
+session**, not a server-wide authentication bypass. Despite its legacy name,
+`disable_auth` does not disable authentication for other clients. Recovery
+sessions work only over direct loopback requests; remote and reverse-proxy
+requests cannot use them. A successful curl response does not unlock a separate
+browser: the session cookie belongs to the client that made the request.
+`enable_auth` clears that recovery session; it does not reset a password.
+
+Do not transfer recovery cookies between clients or paste recovery tokens into
+command arguments, URLs, screenshots or GitHub threads. The password-reset steps
+above avoid that credential-handling detour.
 
 ---
 
 ## 🆘 Getting Help
 
 If you're still stuck:
-1. **Check Logs**: `journalctl -u pulse -n 100` or `docker logs --tail 100 pulse`.
-2. **Check Version**: `curl http://localhost:7655/api/version`.
-3. **Open Issue**: Report on [GitHub Issues](https://github.com/rcourtman/Pulse/issues) with your logs and version info.
+
+1. **Keep the original evidence**: note what you did, when it happened and the
+   exact error. Do not repeat an update, outage or notification storm merely to
+   reproduce it. A failed update banner does not prove the action left the
+   target unchanged; check its current state before another attempt.
+2. **Identify the affected version**: give the running Pulse and relevant agent
+   versions, not just the version before an upgrade. For Docker, include the
+   running image tag or digest. If installation never started Pulse, give the
+   attempted release and public installer/helper source, or say "unknown".
+3. **Choose relevant, safe evidence**: if Pulse is running and collection is
+   safe, use **Settings → Diagnostics → Export for GitHub (sanitized)** for
+   connection or data failures. For a visual problem, a screenshot or the exact
+   error may be enough. If logs are needed, inspect a bounded local excerpt
+   (`journalctl -u pulse -n 100 --no-pager` or `docker logs --tail 100 pulse`),
+   not a full configuration or data-directory upload.
+4. **Review before posting**: even a sanitized export or screenshot can contain
+   identifying details. Remove credentials, session cookies, webhook URLs and
+   private host, network or personal information. Never post bootstrap/recovery
+   tokens, `.env` files, private keys or an unsanitized export.
+5. **Use the appropriate thread**: [GitHub Issues](https://github.com/rcourtman/Pulse/issues)
+   for a bug, or [Discussions](https://github.com/rcourtman/Pulse/discussions) for
+   a setup question. Add new evidence to an existing matching report rather
+   than opening a duplicate. Do not refile information you have already supplied.
