@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -600,4 +601,245 @@ func containsPlatformScope(values []string, expected string) bool {
 		}
 	}
 	return false
+}
+
+// Direct PBS/Agent correlation must use the same usable machine addresses as
+// provider-link inference, not host-local addresses repeated on every server.
+func TestPBSDirectHostLinkRejectsUnsafeObservations(t *testing.T) {
+	now := time.Now().UTC()
+	for _, test := range []struct {
+		name     string
+		endpoint string
+		mutate   func(*models.Host)
+	}{
+		{"loopback-report", "127.0.0.1", func(h *models.Host) { h.ReportIP = "127.0.0.1" }},
+		{"ipv6-loopback", "[::1]", func(h *models.Host) { h.ReportIP = "::1" }},
+		{"unspecified-report", "0.0.0.0", func(h *models.Host) { h.ReportIP = "0.0.0.0" }},
+		{"link-local-report", "169.254.2.3", func(h *models.Host) { h.ReportIP = "169.254.2.3" }},
+		{"multicast-report", "224.0.0.2", func(h *models.Host) { h.ReportIP = "224.0.0.2" }},
+		{"loopback-interface", "127.0.0.1", func(h *models.Host) {
+			h.NetworkInterfaces = []models.HostNetworkInterface{{Name: "lo", Addresses: []string{"127.0.0.1/8"}}}
+		}},
+		{"docker-interface", "172.17.0.1", func(h *models.Host) {
+			h.NetworkInterfaces = []models.HostNetworkInterface{{Name: "docker0", Addresses: []string{"172.17.0.1/16"}}}
+		}},
+		{"docker-generated-bridge", "172.22.0.1", func(h *models.Host) {
+			h.NetworkInterfaces = []models.HostNetworkInterface{{Name: "br-abcdef123456", Addresses: []string{"172.22.0.1/16"}}}
+		}},
+		{"stale-report", "10.2.0.13", func(h *models.Host) { h.LastSeen = now.Add(-10 * time.Minute) }},
+		{"missing-report-time", "10.2.0.13", func(h *models.Host) { h.LastSeen = time.Time{} }},
+		{"missing-agent-id", "10.2.0.13", func(h *models.Host) { h.ID = "" }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			host := models.Host{
+				ID: "unrelated-agent", Hostname: "unrelated-host", ReportIP: "10.2.0.13",
+				Status: "online", LastSeen: now,
+				Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{Device: "/dev/sda", Serial: "UNRELATED-DISK"}}},
+			}
+			test.mutate(&host)
+			registry := NewRegistry(nil)
+			registry.IngestSnapshot(models.StateSnapshot{
+				Hosts: []models.Host{host},
+				PBSInstances: []models.PBSInstance{{
+					ID: "pbs-service", Name: "backup", Host: "https://" + test.endpoint + ":8007",
+					Status: "online", LastSeen: now,
+				}},
+			})
+			for _, resource := range registry.ListForPresentation() {
+				if resource.PBS != nil && resource.PBS.LinkedAgentID != "" {
+					t.Errorf("unsafe observation linked PBS to %q", resource.PBS.LinkedAgentID)
+				}
+				if (resource.Agent != nil || resource.PhysicalDisk != nil) && containsDataSource(resource.Sources, SourcePBS) {
+					t.Errorf("unsafe observation lent PBS ownership to %s (%s)", resource.ID, resource.Type)
+				}
+			}
+		})
+	}
+}
+
+// Corroboration stays possible for ordinary private management networks,
+// explicit multi-NIC report-IP hints, and PBS-reported machine hostnames.
+func TestPBSDirectHostLinkPreservesManagementEvidence(t *testing.T) {
+	now := time.Now().UTC()
+	for _, test := range []struct {
+		name     string
+		endpoint string
+		nodeName string
+		host     models.Host
+	}{
+		{"private-report", "10.2.0.13", "", models.Host{Hostname: "different", ReportIP: "10.2.0.13"}},
+		{"interface-without-hostname", "10.2.0.13", "", models.Host{NetworkInterfaces: []models.HostNetworkInterface{{Name: "eth0", Addresses: []string{"10.2.0.13/24"}}}}},
+		{"172-management-report", "172.22.0.1", "", models.Host{Hostname: "different", ReportIP: "172.22.0.1"}},
+		{"management-bridge", "172.22.0.1", "", models.Host{Hostname: "different", NetworkInterfaces: []models.HostNetworkInterface{{Name: "vmbr0", Addresses: []string{"172.22.0.1/24"}}}}},
+		{"custom-management-bridge", "172.22.0.1", "", models.Host{Hostname: "different", NetworkInterfaces: []models.HostNetworkInterface{{Name: "br-management", Addresses: []string{"172.22.0.1/24"}}}}},
+		{"ipv6-management", "[fd00::13]", "", models.Host{Hostname: "different", NetworkInterfaces: []models.HostNetworkInterface{{Name: "eth0", Addresses: []string{"fd00::13/64"}}}}},
+		{"reported-node-name", "10.2.0.13", "backup-host", models.Host{Hostname: "backup-host.local"}},
+		{"endpoint-hostname", "backup-host.local", "", models.Host{Hostname: "backup-host"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			host := test.host
+			host.ID, host.LastSeen = "host-agent", now
+			instance := models.PBSInstance{Host: "https://" + test.endpoint + ":8007", NodeName: test.nodeName, LastSeen: now}
+			if got := uniquePBSHostAgent(instance, []models.Host{host}, nil); got == nil || got.ID != host.ID {
+				t.Fatalf("usable management evidence lost PBS Agent link: %+v", got)
+			}
+		})
+	}
+}
+
+// A previously observed address may be reused. Registry replacement must
+// withdraw the old host link and PBS disk membership, then safely select a
+// fresh unique replacement without changing the service's History target.
+func TestPBSDirectHostLinkWithdrawsAndReplacesStaleAgent(t *testing.T) {
+	now := time.Now().UTC()
+	host := models.Host{
+		ID: "old-agent", Hostname: "backup-host", ReportIP: "10.2.0.13", LastSeen: now,
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{Device: "/dev/sda", Serial: "OLD-DISK"}}},
+	}
+	snapshot := models.StateSnapshot{
+		Hosts:        []models.Host{host},
+		PBSInstances: []models.PBSInstance{{ID: "pbs-service", Host: "https://10.2.0.13:8007", LastSeen: now}},
+	}
+	adapter := NewMonitorAdapter(NewRegistry(nil))
+	for _, phase := range []string{"fresh", "stale", "replaced", "ambiguous"} {
+		switch phase {
+		case "stale":
+			snapshot.PBSInstances[0].LastSeen = now.Add(10 * time.Minute)
+		case "replaced":
+			replacement := host
+			replacement.ID, replacement.Hostname = "new-agent", "replacement-host"
+			replacement.LastSeen = snapshot.PBSInstances[0].LastSeen
+			replacement.Sensors = models.HostSensorSummary{SMART: []models.HostDiskSMART{{Device: "/dev/sda", Serial: "NEW-DISK"}}}
+			snapshot.Hosts = append(snapshot.Hosts, replacement)
+		case "ambiguous":
+			snapshot.Hosts[0].LastSeen = snapshot.PBSInstances[0].LastSeen
+		}
+		adapter.replaceRegistry(snapshot, nil)
+		registry := adapter.currentRegistry()
+		want := ""
+		if phase == "fresh" {
+			want = "old-agent"
+		} else if phase == "replaced" {
+			want = "new-agent"
+		}
+		for _, resource := range registry.List() {
+			if resource.PBS != nil {
+				if resource.PBS.LinkedAgentID != want {
+					t.Errorf("%s: PBS link = %q, want %q", phase, resource.PBS.LinkedAgentID, want)
+				}
+				if got := registry.MetricsTarget(resource.ID); got == nil || *got != (MetricsTarget{ResourceType: "agent", ResourceID: "pbs-service"}) {
+					t.Errorf("%s: PBS service target changed: %+v", phase, got)
+				}
+			}
+			if resource.Agent != nil {
+				if got := containsDataSource(resource.Sources, SourcePBS); got != (resource.Agent.AgentID == want) {
+					t.Errorf("%s: Agent %s PBS membership = %t", phase, resource.Agent.AgentID, got)
+				}
+			}
+			if resource.PhysicalDisk != nil {
+				wantMembership := phase == "fresh" && resource.PhysicalDisk.Serial == "OLD-DISK" ||
+					phase == "replaced" && resource.PhysicalDisk.Serial == "NEW-DISK"
+				if got := containsDataSource(resource.Sources, SourcePBS); got != wantMembership {
+					t.Errorf("%s: disk %s PBS membership = %t", phase, resource.PhysicalDisk.Serial, got)
+				}
+			}
+		}
+	}
+}
+
+// Mirrors #1723's two PVE-hosted PBS machines and one non-PVE machine among
+// nine Agents. The non-PVE case supplies observed interface-IP evidence: the
+// test is not a claim that the reporter's VirtualBox Agent supplies that IP.
+func TestPBSHostHistoryThreeServerTopology(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{}
+	for index := 1; index <= 9; index++ {
+		host := models.Host{
+			ID: fmt.Sprintf("agent-%d", index), Hostname: fmt.Sprintf("machine-%d", index), LastSeen: now,
+			CPUUsage: float64(index * 10), Memory: models.Memory{Total: 1000, Used: int64(index * 100), Usage: float64(index * 10)},
+			Disks:             []models.Disk{{Device: "/dev/sda", Total: 1000, Used: int64(index * 100), Usage: float64(index * 10)}},
+			NetworkInterfaces: []models.HostNetworkInterface{{Name: "eth0", RXBytes: uint64(index * 11), TXBytes: uint64(index * 12)}},
+			NetInRate:         float64(index * 11), NetOutRate: float64(index * 12),
+			DiskReadRate: float64(index * 13), DiskWriteRate: float64(index * 14),
+			DiskIO:  []models.DiskIO{{Device: "sda", ReadBytes: uint64(index * 13), WriteBytes: uint64(index * 14)}},
+			Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{Device: "/dev/sda", Serial: fmt.Sprintf("DISK-%d", index)}}},
+		}
+		if index <= 2 {
+			host.LinkedVMID = fmt.Sprintf("pve:node:%d", index+100)
+			snapshot.VMs = append(snapshot.VMs, models.VM{
+				ID: host.LinkedVMID, VMID: index + 100, Instance: "pve", Node: "node", Name: host.Hostname,
+				Status: "running", IPAddresses: []string{fmt.Sprintf("10.2.0.%d", index)}, LastSeen: now,
+			})
+		} else if index == 3 {
+			host.NetworkInterfaces[0].Addresses = []string{"10.2.0.3/24"}
+		}
+		snapshot.Hosts = append(snapshot.Hosts, host)
+		if index <= 3 {
+			snapshot.PBSInstances = append(snapshot.PBSInstances, models.PBSInstance{
+				ID: fmt.Sprintf("pbs-%d", index), Name: fmt.Sprintf("backup-%d", index), Host: fmt.Sprintf("https://10.2.0.%d:8007", index),
+				Status: "online", LastSeen: now, CPU: float64(index), Memory: float64(index * 2),
+			})
+		}
+	}
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	services, linkedHosts, linkedDisks := 0, 0, 0
+	for _, resource := range registry.ListForPresentation() {
+		if resource.PBS != nil {
+			services++
+			var index int
+			// Registry order is not identity. Extract the fixture's stable ID.
+			if _, err := fmt.Sscanf(resource.PBS.InstanceID, "pbs-%d", &index); err != nil {
+				t.Fatal(err)
+			}
+			if resource.PBS.LinkedAgentID != fmt.Sprintf("agent-%d", index) {
+				t.Errorf("%s linked to %q", resource.PBS.InstanceID, resource.PBS.LinkedAgentID)
+			}
+			if got := registry.MetricsTarget(resource.ID); got == nil || *got != (MetricsTarget{ResourceType: "agent", ResourceID: resource.PBS.InstanceID}) {
+				t.Errorf("service target replaced with a host target: %+v", got)
+			}
+		}
+		if resource.Agent != nil && containsDataSource(resource.Sources, SourcePBS) {
+			linkedHosts++
+			var index int
+			if _, err := fmt.Sscanf(resource.Agent.AgentID, "agent-%d", &index); err != nil || index < 1 || index > 3 {
+				t.Fatalf("unrelated Agent gained PBS membership: %s", resource.Agent.AgentID)
+			}
+			if got := registry.MetricsTarget(resource.ID); got == nil || *got != (MetricsTarget{ResourceType: "agent", ResourceID: resource.Agent.AgentID}) {
+				t.Errorf("host target lost source-native Agent identity: %+v", got)
+			}
+			if resource.Metrics == nil {
+				t.Fatalf("%s lost all Agent metrics", resource.Agent.AgentID)
+			}
+			for name, metric := range map[string]*MetricValue{"memory": resource.Metrics.Memory, "disk": resource.Metrics.Disk} {
+				if metric == nil || metric.Source != SourceAgent || metric.Used == nil || *metric.Used != int64(index*100) {
+					t.Errorf("%s %s lost distinct Agent usage: %+v", resource.Agent.AgentID, name, metric)
+				}
+			}
+			for _, observation := range []struct {
+				name   string
+				metric *MetricValue
+				want   float64
+			}{
+				{"CPU", resource.Metrics.CPU, float64(index * 10)},
+				{"network in", resource.Metrics.NetIn, float64(index * 11)},
+				{"network out", resource.Metrics.NetOut, float64(index * 12)},
+				{"disk read", resource.Metrics.DiskRead, float64(index * 13)},
+				{"disk write", resource.Metrics.DiskWrite, float64(index * 14)},
+			} {
+				if metric := observation.metric; metric == nil || metric.Source != SourceAgent || metric.Value != observation.want {
+					t.Errorf("%s %s lost distinct Agent telemetry (want %g): %+v", resource.Agent.AgentID, observation.name, observation.want, metric)
+				}
+			}
+		}
+		if resource.PhysicalDisk != nil && containsDataSource(resource.Sources, SourcePBS) {
+			linkedDisks++
+			if resource.PhysicalDisk.Serial != "DISK-1" && resource.PhysicalDisk.Serial != "DISK-2" && resource.PhysicalDisk.Serial != "DISK-3" {
+				t.Errorf("unrelated disk gained PBS membership: %s", resource.PhysicalDisk.Serial)
+			}
+		}
+	}
+	if services != 3 || linkedHosts != 3 || linkedDisks != 3 {
+		t.Fatalf("three-server topology: services=%d linked hosts=%d linked disks=%d", services, linkedHosts, linkedDisks)
+	}
 }
