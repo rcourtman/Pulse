@@ -19,6 +19,8 @@ function check(condition, message) {
 
 (async () => {
   fs.mkdirSync(output, { recursive: true });
+  // Tailwind resolves its config/content globs from the frontend working dir.
+  process.chdir(frontend);
   const { createServer } = await import(
     path.join(frontend, 'node_modules', 'vite', 'dist', 'node', 'index.js')
   );
@@ -65,7 +67,7 @@ function check(condition, message) {
       await article.getByRole('link', { name: 'I forgot my password', exact: true }).click();
       await page.waitForFunction(() => document.activeElement?.id === 'i-forgot-my-password');
       check((await page.locator('#i-forgot-my-password').innerText()) === 'I forgot my password', `${size}: reset link reaches the deployment-specific steps`);
-      await article.getByText('Keep the original evidence', { exact: true }).scrollIntoViewIfNeeded();
+      await article.getByText(size === 'phone' ? 'Review before posting' : 'Keep the original evidence', { exact: true }).scrollIntoViewIfNeeded();
       await page.screenshot({ path: path.join(output, `${size}-help.png`) });
     }
     check(errors.length === 0, 'no page errors or failed HTTP responses');
