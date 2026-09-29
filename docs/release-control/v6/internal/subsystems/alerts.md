@@ -777,6 +777,8 @@ transition references recovery evidence separate from its trigger evidence.
 5. Update the event-log schema upgrade and history-projection parity proofs
    when lifecycle snapshots, occurrence folding, or alert-history authority
    changes
+6. When notification admission changes, verify firing, recovery, escalation,
+   queued-escalation revalidation, and quiet-hours replay precedence together.
 
 ### Attention projection source contract
 
@@ -1408,6 +1410,16 @@ suppression, monitor-only notification suppression, cooldown decisions, and
 per-alert rate limiting; future notification-gating changes should extend that
 policy owner rather than burying new checks inside metric or resource-specific
 evaluators.
+
+### Monitor-only delivery is terminal
+
+Monitor-only alerts remain visible, but neither a firing nor a recovery
+notification may enter the delivery queue. They must not acquire quiet-hours
+replay metadata or schedule escalation levels and critical repeats. An already
+queued escalation must be revalidated against the current monitor-only state
+before delivery; the read-only delivery diagnosis reports monitor-only
+suppression rather than a replayable quiet-hours deferral.
+
 The same policy owner also exposes the read-only alert delivery diagnosis
 projection used by `/api/alerts/delivery-diagnosis`; that projection may explain
 current gating state, quiet-hours replay timing, cooldown timing, rate-limit
@@ -2818,11 +2830,14 @@ mute or maintenance state is allowed.
 
 Only a supporting member of a `supported-cause` group suppresses duplicate
 notification delivery, with the typed `correlated_primary` reason and primary
-alert ID in the event log. The primary remains the one delivery owner.
+alert ID in the event log. The primary remains the one delivery owner. Supporting
+members also skip escalation levels and critical repeats while that supported
+cause is current; an already queued escalation is revalidated before delivery.
 `observation-set` members continue to notify independently because Pulse has
 not established causality. `incident_synthesis_test.go` pins classification,
-contradiction downgrade, bounded evidence, duplicate-delivery suppression, and
-partial-recovery behavior.
+contradiction downgrade, bounded evidence, duplicate-delivery suppression,
+partial-recovery behavior, escalation suppression, and queued-callback
+revalidation without muting observation sets.
 
 ### Alert hydration is not resource admission
 
@@ -2984,7 +2999,8 @@ backend deletion or destination delivery.
 
 `PrepareEscalationNotification` rejects asynchronous snapshots after escalation
 or global alert disablement, inactive activation, recovery, acknowledgement,
-snooze, or replacement by another occurrence of the same alert ID. It returns
+snooze, supported-cause symptom correlation, or replacement by another
+occurrence of the same alert ID. It returns
 the current alert and detached current per-level routing, not mutable manager
 state. The monitoring callback must use this admission before enqueueing.
 This check does not recall provider-accepted messages or make the subsequent

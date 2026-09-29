@@ -6794,6 +6794,11 @@ or run controls, while settled historical records must not be mislabeled as
 expired actionable reviews.
 For an aged, receipt-pending execution, the same responsive review dialog may
 expose an audit-recovery disclosure to an eligible local administrator. It must
+show the receipt-pending state to every viewer as an unknown outcome, with a
+non-mutating in-dialog re-read of the same action and a warning not to create a
+second plan while the first outcome is unknown. The re-read remains available
+before the recovery window and in read-only sessions; a failed read retains the
+unknown state and never implies that the action was sent again. Recovery must
 first instruct the operator to check the resource's actual state outside the
 action record, then require a written reason and an explicit acknowledgement
 before a fresh action read and guarded force-fail call. Desktop and phone

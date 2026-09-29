@@ -43,12 +43,15 @@ export const ActionReviewDialog: Component<{
 }> = (props) => {
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal('');
+  const [receiptRefreshError, setReceiptRefreshError] = createSignal('');
   const [clock, setClock] = createSignal(Date.now());
   const [canForceFail, setCanForceFail] = createSignal(false);
   const [recoveryOpen, setRecoveryOpen] = createSignal(false);
   const [recoveryReason, setRecoveryReason] = createSignal('');
   const [recoveryConfirmed, setRecoveryConfirmed] = createSignal(false);
   const audit = () => props.detail?.audit;
+  const receiptWaiting = () =>
+    audit()?.state === 'executing' && props.detail?.attempt?.state === 'receipt_pending';
   const originDestination = () => getActionOriginDestination(audit()?.origin);
   const resource = createMemo(() => {
     const record = audit();
@@ -64,6 +67,7 @@ export const ActionReviewDialog: Component<{
   );
   createEffect(() => {
     const detail = props.detail;
+    setReceiptRefreshError('');
     setRecoveryOpen(false);
     setRecoveryReason('');
     setRecoveryConfirmed(false);
@@ -175,6 +179,21 @@ export const ActionReviewDialog: Component<{
     if (!actionId) return;
     const detail = await ResourceActionsAPI.getAction(actionId);
     await props.onChanged?.(detail);
+  };
+
+  const refreshReceipt = async () => {
+    const actionId = audit()?.id;
+    if (!actionId || !receiptWaiting() || busy()) return;
+    setBusy(true);
+    setReceiptRefreshError('');
+    try {
+      const latest = await ResourceActionsAPI.getAction(actionId);
+      await props.onChanged?.(latest);
+    } catch {
+      setReceiptRefreshError('Could not re-read this action. No new action was sent.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const decide = async (outcome: 'approved' | 'rejected') => {
@@ -369,8 +388,14 @@ export const ActionReviewDialog: Component<{
                   <h2 id="action-review-title" class="text-xl font-semibold">
                     {formatActionName(record().request.capabilityName)}
                   </h2>
-                  <MetadataBadge tone={getActionAuditStatePresentation(record()).tone}>
-                    {getActionAuditStatePresentation(record()).label}
+                  <MetadataBadge
+                    tone={
+                      receiptWaiting() ? 'warning' : getActionAuditStatePresentation(record()).tone
+                    }
+                  >
+                    {receiptWaiting()
+                      ? 'Receipt pending'
+                      : getActionAuditStatePresentation(record()).label}
                   </MetadataBadge>
                 </div>
                 <p class="mt-1 text-sm text-muted">
@@ -401,6 +426,36 @@ export const ActionReviewDialog: Component<{
               </Button>
             </header>
             <div class="overflow-y-auto px-5 py-4">
+              <Show when={receiptWaiting()}>
+                <section
+                  aria-labelledby="action-receipt-waiting-heading"
+                  data-testid="action-receipt-waiting"
+                  class="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm dark:bg-amber-950/40"
+                >
+                  <h3 id="action-receipt-waiting-heading" class="font-semibold">
+                    Waiting for the agent receipt
+                  </h3>
+                  <p class="mt-2">
+                    Pulse sent this action once, but its outcome is not known yet. The agent may
+                    still be working or may have finished. Do not start the action again from a new
+                    plan. Check the actual resource if the wait persists.
+                  </p>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    class="mt-3"
+                    isLoading={busy()}
+                    onClick={() => void refreshReceipt()}
+                  >
+                    Check for receipt
+                  </Button>
+                  <Show when={receiptRefreshError()}>
+                    <p role="alert" class="mt-2 text-red-800 dark:text-red-200">
+                      {receiptRefreshError()}
+                    </p>
+                  </Show>
+                </section>
+              </Show>
               <ActionDecisionPacket audit={record()} detail={props.detail ?? undefined} />
               <Show when={canOfferRecovery()}>
                 <section

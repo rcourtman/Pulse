@@ -200,6 +200,12 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 			"Notification suppressed by resource monitoring policy.", nil)
 		return false
 	}
+	if isMonitorOnlyAlert(alert) {
+		clearQuietHoursNotificationReplay(alert)
+		m.recordAlertEvent(eventlog.TypeNotificationSuppressed, alert, "",
+			AlertDeliveryReasonMonitorOnly, "Notification suppressed: alert is monitor-only.", nil)
+		return false
+	}
 
 	trackingKey := canonicalTrackingKeyForAlert(alert)
 
@@ -273,17 +279,6 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 			map[string]string{"replayAt": replayAt.UTC().Format(time.RFC3339)})
 	} else {
 		clearQuietHoursNotificationReplay(alert)
-	}
-
-	if isMonitorOnlyAlert(alert) {
-		log.Info().
-			Str("alertID", alert.ID).
-			Str("resource", alert.ResourceName).
-			Bool("monitorOnly", true).
-			Msg("Monitor-only alert detected, skipping alert dispatch")
-		m.recordAlertEvent(eventlog.TypeNotificationSuppressed, alert, "",
-			AlertDeliveryReasonMonitorOnly, "Notification suppressed: alert is monitor-only.", nil)
-		return false
 	}
 
 	// Record metric for fired alert
@@ -605,6 +600,10 @@ func (m *Manager) ShouldSuppressNotification(alert *Alert) bool {
 		clearQuietHoursNotificationReplay(alert)
 		return true
 	}
+	if isSupportedInfrastructureSymptom(alert) {
+		clearQuietHoursNotificationReplay(alert)
+		return true
+	}
 
 	if suppressed, reason := m.operatorSuppressionForAlertNoLock(alert, time.Now().UTC()); suppressed {
 		clearQuietHoursNotificationReplay(alert)
@@ -613,6 +612,10 @@ func (m *Manager) ShouldSuppressNotification(alert *Alert) bool {
 			Str("type", alert.Type).
 			Str("operatorPolicy", reason).
 			Msg("Notification suppressed by resource monitoring policy")
+		return true
+	}
+	if isMonitorOnlyAlert(alert) {
+		clearQuietHoursNotificationReplay(alert)
 		return true
 	}
 
@@ -665,6 +668,10 @@ func (m *Manager) ShouldSuppressResolvedNotification(alert *Alert) bool {
 			Str("type", alert.Type).
 			Str("operatorPolicy", reason).
 			Msg("Recovery notification suppressed by resource monitoring policy")
+		return true
+	}
+	if isMonitorOnlyAlert(alert) {
+		clearQuietHoursNotificationReplay(alert)
 		return true
 	}
 
@@ -828,6 +835,8 @@ func (m *Manager) diagnoseActiveAlertLocked(alert *Alert) AlertDeliveryDiagnosis
 		diagnosis.setSuppressed(reason, "Alert notification is suppressed by the resource monitoring policy.")
 		return true
 	}():
+	case isMonitorOnlyAlert(alert):
+		diagnosis.setSuppressed(AlertDeliveryReasonMonitorOnly, "Alert is marked monitor-only, so it stays visible without notification delivery.")
 	case !m.config.Enabled:
 		diagnosis.setSuppressed(AlertDeliveryReasonNotificationsDisabled, "Alert notifications are disabled in the alert configuration.")
 	case m.config.ActivationState != ActivationActive:
@@ -863,8 +872,6 @@ func (m *Manager) diagnoseActiveAlertLocked(alert *Alert) AlertDeliveryDiagnosis
 		diagnosis.Message = "Alert delivery is deferred by quiet-hours policy and will be replayed later."
 		return true
 	}():
-	case isMonitorOnlyAlert(alert):
-		diagnosis.setSuppressed(AlertDeliveryReasonMonitorOnly, "Alert is marked monitor-only, so it stays visible without notification delivery.")
 	default:
 		diagnosis.Status = AlertDeliveryStatusWouldSend
 		diagnosis.Reason = AlertDeliveryReasonReady

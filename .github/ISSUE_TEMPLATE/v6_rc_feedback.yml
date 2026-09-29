@@ -8,7 +8,7 @@ body:
         Use this form for actionable Pulse v6 pre-release feedback.
 
         For general impressions or smaller notes, use the pinned v6 pre-release feedback hub.
-        Include exact version details and sanitized evidence where available. Do not repeat an action just to fill in this form if it could cause data loss, an outage, duplicate changes, or excessive notifications; describe the original sequence instead.
+        Give the version on the affected running instance, or the version or release asset attempted if installation never completed. For a running container (Docker, Compose, or Kubernetes), include the Pulse image tag or digest; non-container installs do not need an image reference. Include sanitized evidence where available. Do not repeat an action just to fill in this form if it could cause data loss, an outage, duplicate changes, or excessive notifications; describe the original sequence instead.
 
         Do not post secrets, tokens, private keys, or unsanitized config files.
 
@@ -38,9 +38,9 @@ body:
   - type: input
     id: image_ref
     attributes:
-      label: Image tag or binary reference
-      description: Exact image tag, digest, or release asset name if you know it.
-      placeholder: rcourtman/pulse:v6.0.0-rc.N or pulse-linux-amd64
+      label: Running Pulse container image tag or digest
+      description: For a running Docker, Compose, or Kubernetes container, give its exact Pulse image tag or digest. Leave blank for LXC, bare metal, and failed installs that never started; put an attempted release asset in Pulse version instead.
+      placeholder: rcourtman/pulse:v6.0.0-rc.N or rcourtman/pulse@sha256:...
 
   - type: dropdown
     id: install_path
@@ -145,15 +145,14 @@ body:
     id: evidence
     attributes:
       label: Logs, screenshots, or diagnostics
-      description: Paste relevant logs, link screenshots, or mention sanitized diagnostics export details if available.
-      render: shell
+      description: Attach screenshots or paste relevant redacted logs. For connection or data failures, include sanitized diagnostics if Pulse is running and it is safe to collect them. Do not include credentials.
 
   - type: checkboxes
     id: confirmations
     attributes:
       label: Confirmations
       options:
-        - label: I gave the running version, or for an install that never started, the attempted version or "unknown".
+        - label: I gave the running Pulse version, or for an install that never started, the attempted version or "unknown"; for a running container I also gave its Pulse image tag or digest.
           required: true
         - label: I searched existing issues and the pinned v6 pre-release feedback hub first.
           required: true

@@ -143,6 +143,45 @@ const waitingDetail = (updatedAt = '2026-07-12T00:02:00Z'): ActionDetailResponse
 };
 
 describe('ActionReviewDialog trust gates', () => {
+  it('re-reads a fresh receipt wait without dispatching again and shows a recorded completion', async () => {
+    const current = waitingDetail(new Date(Date.now() - 5 * 60 * 1000).toISOString());
+    const completed = {
+      ...current,
+      audit: { ...current.audit, state: 'completed' as const },
+      attempt: { ...current.attempt!, state: 'receipt_recorded' as const },
+    };
+    vi.mocked(ResourceActionsAPI.getAction).mockResolvedValueOnce(completed);
+    const [selected, setSelected] = createSignal(current);
+    render(() => (
+      <ActionReviewDialog detail={selected()} onClose={vi.fn()} onChanged={setSelected} />
+    ));
+
+    expect(screen.getByText('Receipt pending')).toBeVisible();
+    expect(screen.getByTestId('action-receipt-waiting')).toHaveTextContent(
+      'Do not start the action again from a new plan.',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Check for receipt' }));
+
+    await waitFor(() => expect(screen.getByText('Completed', { exact: true })).toBeVisible());
+    expect(screen.queryByTestId('action-receipt-waiting')).toBeNull();
+    expect(ResourceActionsAPI.getAction).toHaveBeenCalledWith('action-1');
+    expect(ResourceActionsAPI.executeAction).not.toHaveBeenCalled();
+    expect(ResourceActionsAPI.forceFailAction).not.toHaveBeenCalled();
+  });
+
+  it('keeps an unknown outcome visible when receipt re-read fails', async () => {
+    const current = waitingDetail(new Date(Date.now() - 5 * 60 * 1000).toISOString());
+    vi.mocked(ResourceActionsAPI.getAction).mockRejectedValueOnce(new Error('offline'));
+    render(() => <ActionReviewDialog detail={current} onClose={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Check for receipt' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not re-read this action. No new action was sent.',
+    );
+    expect(screen.getByText('Receipt pending')).toBeVisible();
+    expect(ResourceActionsAPI.executeAction).not.toHaveBeenCalled();
+  });
+
   it('lets an admin close an aged receipt wait only after a direct-check reason and acknowledgement', async () => {
     const current = waitingDetail();
     const terminalAudit: ActionAuditRecord = {
@@ -210,6 +249,7 @@ describe('ActionReviewDialog trust gates', () => {
     const fresh = waitingDetail(new Date(Date.now() - 5 * 60 * 1000).toISOString());
     const freshView = render(() => <ActionReviewDialog detail={fresh} onClose={vi.fn()} />);
     await waitFor(() => expect(SecurityAPI.getStatus).toHaveBeenCalled());
+    expect(screen.getByTestId('action-receipt-waiting')).toBeVisible();
     expect(screen.queryByTestId('action-stuck-recovery')).toBeNull();
     freshView.unmount();
 
@@ -221,6 +261,7 @@ describe('ActionReviewDialog trust gates', () => {
 
     const readOnly = { ...waitingDetail(), readOnly: true };
     const readOnlyView = render(() => <ActionReviewDialog detail={readOnly} onClose={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Check for receipt' })).toBeEnabled();
     expect(screen.queryByTestId('action-stuck-recovery')).toBeNull();
     readOnlyView.unmount();
 

@@ -286,6 +286,19 @@ test("bug and pre-release forms accept unsafe one-off failures without a second 
   }
 });
 
+test("pre-release evidence keeps screenshots visible and asks only running containers for image identity", () => {
+  const form = fs.readFileSync(
+    path.resolve(__dirname, "../ISSUE_TEMPLATE/v6_rc_feedback.yml"),
+    "utf8"
+  );
+  assert.match(form, /id: image_ref[\s\S]*?For a running Docker, Compose, or Kubernetes container/);
+  assert.match(form, /id: image_ref[\s\S]*?Leave blank for LXC, bare metal, and failed installs/);
+  assert.match(form, /for a running container I also gave its Pulse image tag or digest/);
+  const evidenceField = form.split("    id: evidence\n")[1].split("  - type: checkboxes\n")[0];
+  assert.match(evidenceField, /Attach screenshots or paste relevant redacted logs/);
+  assert.doesNotMatch(evidenceField, /render:/);
+});
+
 test("older-version reports cannot trigger event or scheduled retest posting", async () => {
   const issue = {
     number: 1200,
