@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Report the version on the running instance where the bug occurs, not just the version you upgraded from. For container installs, include the running image tag or digest; for other installs, leave the image field blank.
+        Report the version on the running instance where the bug occurs, not just the version you upgraded from. If installation failed before Pulse could start, give the exact version you tried to install, or write "unknown" and identify the installer or helper below. For container installs, include the running image tag or digest; for other installs, leave the image field blank.
 
         If your issue is connection- or data-related, include diagnostics from:
         `Settings -> Diagnostics -> Export for GitHub (sanitized)`.
@@ -56,8 +56,8 @@ body:
     id: pulse_version
     attributes:
       label: Pulse version
-      description: Exact version shown in the UI or logs.
-      placeholder: v6.x.y
+      description: Running version for an existing install; for a failed install, the exact version or release asset attempted, or "unknown" if it was not shown.
+      placeholder: v6.x.y, release asset name, or unknown
     validations:
       required: true
 
@@ -93,6 +93,15 @@ body:
     validations:
       required: true
 
+  - type: input
+    id: installer_source
+    attributes:
+      label: Installer or helper source
+      description: For a failed install, give the public installer/helper URL or command name, if known. Do not paste a command containing a token or other secret.
+      placeholder: Official Pulse installer, helper URL, or command name
+    validations:
+      required: false
+
   - type: textarea
     id: logs
     attributes:
@@ -106,7 +115,7 @@ body:
     attributes:
       label: Confirmations
       options:
-        - label: I checked the Pulse version on the running instance and, for a container install, its running image tag or digest.
+        - label: I gave the running Pulse version, or for an install that never started, the attempted version or "unknown"; for a running container I also gave its image tag or digest.
           required: true
         - label: I searched existing issues for duplicates.
           required: true

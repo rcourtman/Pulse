@@ -264,6 +264,17 @@ test("every actionable issue form exposes the decomposition signal", () => {
   }
 });
 
+test("bug and pre-release forms accept truthful evidence for installs that never started", () => {
+  const templateDir = path.resolve(__dirname, "../ISSUE_TEMPLATE");
+  for (const name of ["bug_report.yml", "v6_rc_feedback.yml"]) {
+    const form = fs.readFileSync(path.join(templateDir, name), "utf8");
+    assert.match(form, /id: pulse_version[\s\S]*?failed install[\s\S]*?"unknown"/);
+    assert.match(form, /id: installer_source[\s\S]*?Installer or helper source[\s\S]*?required: false/);
+    assert.match(form, /Do not paste a command containing a token or other secret/);
+    assert.match(form, /for an install that never started/);
+  }
+});
+
 test("older-version reports cannot trigger event or scheduled retest posting", async () => {
   const issue = {
     number: 1200,

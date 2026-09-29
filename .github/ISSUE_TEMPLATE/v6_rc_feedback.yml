@@ -30,8 +30,8 @@ body:
     id: pulse_version
     attributes:
       label: Pulse version
-      description: Exact version shown in the UI, logs, or release asset.
-      placeholder: v6.0.0-rc.N
+      description: Running version for an existing install; for a failed install, the exact version or release asset attempted, or "unknown" if it was not shown.
+      placeholder: v6.0.0-rc.N, release asset name, or unknown
     validations:
       required: true
 
@@ -67,6 +67,15 @@ body:
         - Other
     validations:
       required: true
+
+  - type: input
+    id: installer_source
+    attributes:
+      label: Installer or helper source
+      description: For a failed install, give the public installer/helper URL or command name, if known. Do not paste a command containing a token or other secret.
+      placeholder: Official Pulse installer, helper URL, or command name
+    validations:
+      required: false
 
   - type: input
     id: environment
@@ -144,7 +153,7 @@ body:
     attributes:
       label: Confirmations
       options:
-        - label: I verified the exact version before filing this report.
+        - label: I gave the running version, or for an install that never started, the attempted version or "unknown".
           required: true
         - label: I searched existing issues and the pinned v6 pre-release feedback hub first.
           required: true
