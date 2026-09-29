@@ -84,6 +84,14 @@ bash install.sh --version "${PULSE_VERSION}"
 )
 ```
 
+The signed server installer uses the `vX.Y.Z` Pulse release, which contains the
+Linux server archive; it does not ask for a GitHub personal access token. A
+`helm-chart-*` release contains a Kubernetes chart, not that archive. If a
+different helper selects a Helm-chart release or asks for a GitHub token, stop
+instead of supplying one or blindly retrying. On the Proxmox host, check
+`pct list` for a partly created Pulse container first; do not run a fresh
+installer over an existing container without checking its state.
+
 > **Note**: The GitHub `install.sh` is the **server** installer. The agent installer is served from your Pulse server at `/install.sh` (see **Settings → Infrastructure → Install on a host**). Do not use the GitHub server installer to install or update `pulse-agent`.
 
 ### Docker
