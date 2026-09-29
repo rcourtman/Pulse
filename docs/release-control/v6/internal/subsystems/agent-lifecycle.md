@@ -136,6 +136,13 @@ monitoring metadata and does not change Agent registration, execution authority,
 or the Agent report wire contract. `internal/models/metrics_types_test.go` covers
 snapshot retention and isolation, and the monitoring collection-trust roundtrip
 covers merged Agent/Proxmox disks without losing the Proxmox source schedule.
+An Agent-only SMART disk linked to a PVE node may carry that node's instance
+for presentation, but the instance is not an Agent report of PVE disk
+inventory. Skipped PVE polls must not round-trip that disk into PVE-owned
+state; the monitoring readback requires an actual Proxmox source observation.
+This leaves Agent source identity, report admission and command authority
+unchanged. The repeated-cycle regression is
+`TestPhysicalDiskSkippedPollDoesNotPromoteAgentOnlySMARTToPVEInventory`.
 
 Assistant historical metric wiring uses the current monitor's retained store
 and registry metrics coordinates. Historical reads do not alter enrollment,
