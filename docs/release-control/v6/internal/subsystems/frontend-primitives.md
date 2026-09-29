@@ -7471,3 +7471,11 @@ instead of saying Patrol runs in Watch only mode or pitching Pro Patrol modes
 for a feature that is not running (issue #905). With AI on, the Watch only,
 switch and upgrade branches are unchanged. `actionsWatchOnlyEmptyState.test.ts`
 pins both states and the page wiring.
+
+### Pulse Mobile settings section label
+
+The `system-relay` settings section is labelled Pulse Mobile in the nav
+catalog, the header metadata and every locale catalog; the product name is not
+translated. Its route id, feature gate and read capability are unchanged.
+Relay never provided remote access to the web UI, so no settings chrome may
+label it Remote Access.

@@ -1586,7 +1586,7 @@ TrueNAS resources (pools, datasets, disks, ZFS snapshots, replication tasks, ale
 
 ---
 
-## 📱 Relay / Mobile Remote Access (Relay and Above)
+## 📱 Relay / Pulse Mobile (retiring 31 March 2027)
 
 End-to-end encrypted relay protocol for mobile connectivity.
 

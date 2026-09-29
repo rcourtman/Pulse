@@ -146,6 +146,18 @@ describe('docsLinks', () => {
     expect(apiReference).toContain('](#resource-maintenance-and-operator-state)');
   });
 
+  it('ships the Pulse Mobile retirement in the published API reference', () => {
+    const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const shippedAPIReference = readFileSync(
+      path.join(frontendRoot, 'public', 'docs', 'API.md'),
+      'utf8',
+    );
+
+    expect(shippedAPIReference).toBe(apiReference);
+    expect(apiReference).toContain('## 📱 Relay / Pulse Mobile (retiring 31 March 2027)');
+    expect(apiReference).not.toContain('Mobile Remote Access');
+  });
+
   it('ships the per-alert snooze and resume API contract', () => {
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     const shippedAPIReference = readFileSync(

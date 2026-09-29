@@ -1,73 +1,67 @@
 {
   "version": 1,
-  "base_sha": "2606c9d36a0b91c40fbc234fecad2167b7979fec",
-  "verified_at": "2026-09-28T22:20:33Z",
+  "base_sha": "fcbb7e58ad514ac146f666f49075039d40d829e2",
+  "verified_at": "2026-09-29T12:15:52Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/App.tsx",
-    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/Settings/RelaySettingsPanel.tsx",
     "frontend-modern/src/components/Settings/settingsHeaderMeta.ts",
     "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
-    "frontend-modern/src/components/shared/KeyboardShortcutsModal.tsx",
-    "frontend-modern/src/components/shared/commandPaletteModel.ts",
-    "frontend-modern/src/components/shared/useCommandPaletteState.ts",
-    "frontend-modern/src/features/actions/actionPresentation.ts",
-    "frontend-modern/src/hooks/useKeyboardShortcuts.ts",
+    "frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts",
+    "frontend-modern/src/features/alerts/AlertPushDestinationsSection.tsx",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
     "frontend-modern/src/i18n/messages.de.ts",
     "frontend-modern/src/i18n/messages.es.ts",
     "frontend-modern/src/i18n/messages.ts",
-    "frontend-modern/src/pages/Actions.tsx",
-    "frontend-modern/src/types/config.ts",
-    "frontend-modern/src/utils/updatesPresentation.ts"
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts",
+    "frontend-modern/src/utils/licensePresentation.ts",
+    "frontend-modern/src/utils/relayPresentation.ts",
+    "frontend-modern/src/utils/selfHostedFeatureCatalog.generated.ts",
+    "frontend-modern/src/utils/selfHostedPlans.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/App.tsx": "a6ca67087cce917dc28914701262e6f631eb03621c24c8a773d5d025beb41215",
-    "frontend-modern/src/AppLayout.tsx": "d1d8bd884c43a20c1dbbde2ddb9f3278eb885b02c21e4cc3fa3fa1089cd1d320",
-    "frontend-modern/src/components/Settings/settingsHeaderMeta.ts": "d024df468000f183b2452d6b3fcb60fdce1b050107cd2e9d4ac586c4f13f2ddd",
-    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "8d3bff1c977b9db02c807d03fd80d40dabfc18c6a59809358c52a938a9c97c88",
-    "frontend-modern/src/components/shared/KeyboardShortcutsModal.tsx": "a27ccd1bdccf31f1890779fc661ad4e896786594b99ff419160ce6c556fc7c96",
-    "frontend-modern/src/components/shared/commandPaletteModel.ts": "69a75c17579239c407ba18820e9f4d47d8b8b0e587cdcc3bb154a684b2a17047",
-    "frontend-modern/src/components/shared/useCommandPaletteState.ts": "95ff00c6e790f17fdd849e845b34e9047f655ec89ca279032ab764da283b4cd4",
-    "frontend-modern/src/features/actions/actionPresentation.ts": "8e67a99e744cf7dbbc1fc53da1d9697af78a90d95779df3553ee8867c3c51496",
-    "frontend-modern/src/hooks/useKeyboardShortcuts.ts": "f55d67c136d5d8e21ed220b33eac0512d5fae5b5aa835f60fa2570159c140d30",
-    "frontend-modern/src/i18n/messages.de.ts": "e55a115865e8b2c9cf4352eecac1a2f8996f4e0f51b9c14ddb7cfbe20e5b2f40",
-    "frontend-modern/src/i18n/messages.es.ts": "a348d63dd816e848cd75a0b5114b0f77c719d16117d9c86db719036fbe106af0",
-    "frontend-modern/src/i18n/messages.ts": "728aa1cf4b42698e14f16593825249c6a190c43d4ef28e2d4e28756c7c1990db",
-    "frontend-modern/src/pages/Actions.tsx": "88ab28e9333652e81770e570c140aa19f0b6d833be3b65fd41afd2e9614f60c5",
-    "frontend-modern/src/types/config.ts": "49ad539bcefc2f87380b744c1da387401151e3f4af9047db8a85b1ce0b70322e",
-    "frontend-modern/src/utils/updatesPresentation.ts": "4696f8426385aaf287ab610746ca278acc7e23bd377c9739fcfedcf635910634"
+    "frontend-modern/src/components/Settings/RelaySettingsPanel.tsx": "1def33d23464ed3e0a6127e75f16e7da814c9ca7d8fc6a680532fbef05e67755",
+    "frontend-modern/src/components/Settings/settingsHeaderMeta.ts": "4847df256a489833c5836e0babcd651ea85d640a204288979f965bda4ff7432b",
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "d4832713b84d88033fa15211342b6ff8a243e20c56732c5431aed8e10b22e9c2",
+    "frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts": "56525ac9bd0f3634adea1cccbc53c557caed8faad223f48d788c074ab2fa8a86",
+    "frontend-modern/src/features/alerts/AlertPushDestinationsSection.tsx": "3a160748f1bd0f42ba412757ca919803a440ad8afb0a946d0d5807188c4bc5a0",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "1e07af69a4f4268601f8227500e79eb6a827c49f7b0d62b283129ff5fa2935f9",
+    "frontend-modern/src/i18n/messages.de.ts": "2daa6b5a6bb2a59bf7846fa2f93310a48065fe7bc3082777cbb51c2fd5f107e2",
+    "frontend-modern/src/i18n/messages.es.ts": "7052ac4596ef1d36b46935f1bf451f552aee87abe45e23840b3e9d570b215205",
+    "frontend-modern/src/i18n/messages.ts": "42c6798b32c5647c89a9f658b40e605773d85e5478a4b889bc0469ef3b2efe8e",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "82980cfc35fab1e91c5484b75e1bc3b84f6c2234e26ed5306b4583e89da3f880",
+    "frontend-modern/src/utils/licensePresentation.ts": "3573f465207e64e2984c5f18dc89f644b6a88de6e124779840714b01f572e3d6",
+    "frontend-modern/src/utils/relayPresentation.ts": "9a0d1000d91e307d31b7176be7d4529a150f7364fd913a4b379e2c96a3aa9e1c",
+    "frontend-modern/src/utils/selfHostedFeatureCatalog.generated.ts": "64baf62ae41b9832381ac2a91f7c9724131e765f2493cb894efabeed2ae16d0e",
+    "frontend-modern/src/utils/selfHostedPlans.ts": "5efab41402fa3409f307398d5feb3b8ccdbf16ac01d6ce0cdacc3024c640b970"
   },
   "routes": [
-    "/actions",
-    "/patrol",
-    "/settings/system-updates",
-    "/preview/setup-complete?scenario=empty",
-    "/preview/setup-complete?scenario=vmware-api-backed"
+    "/settings/system-relay",
+    "/alerts/notifications",
+    "/settings/pulse-intelligence/billing/plan",
+    "/settings/system-general"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 900
+      "width": 1024,
+      "height": 768
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "AI off and AI on with mocked authenticated API responses: Actions empty Open tab, app-shell Patrol navigation, command palette and shortcuts at desktop and phone widths",
-    "AI off: plain Actions empty-state copy; no Patrol navigation, palette command, shortcut help row or g r navigation",
-    "AI on: Watch only guidance and Patrol entry points; g r reaches /patrol",
-    "Empty setup completion preview at desktop and VMware API-backed setup completion preview at phone width show first-source guidance and credential disclosure",
-    "System Updates settings route at desktop and phone widths labels the item Updates and retains the agent-update handoff to Infrastructure"
+    "Licensed instance (MSP test license from the offline issuer, relay capability present): Settings > Pulse Mobile shows 'Pair Pulse Mobile' with the 31 March 2027 retirement copy, the 'Allow Pulse Mobile connections' toggle, no Remote Access wording and no upgrade prompt",
+    "Licensed instance: Alerts > Notifications shows the Mobile push notifications panel with retirement copy, minimum-severity control and the 'Open Pulse Mobile settings' link",
+    "Licensed instance: Plans & Billing lists the relay feature as 'Pulse Relay (Mobile Connection)' with no Remote Access or remote web access wording",
+    "Community instance (no license): Alerts > Notifications has no Mobile push panel and no Relay upsell while webhook, email and Apprise destinations remain",
+    "Community instance: settings navigation has no Pulse Mobile or Remote Access item; the direct /settings/system-relay route shows the retirement message with no upgrade link",
+    "Community instance: Plans & Billing shows the Community plan with no Relay plan card or remote web access copy"
   ],
   "interactions": [
-    "Loaded /actions, opened and closed command palette and keyboard shortcuts, then pressed g r in both AI states at both widths",
-    "Loaded both setup completion previews and checked connection choices, next-step copy and horizontal overflow",
-    "Loaded /settings/system-updates at both widths and checked heading and copy"
-  ],
-  "command": "pulse-worker-browser web-composed-proof.cjs from assigned workspace root; offline Vite preview and Chromium 141.0.7390.37",
-  "artifacts": "/var/lib/pulse-maintainer/worker-outputs/web-product-mc08uh4u/browser-composed-2606c9d36a",
-  "notes": "The browser used mocked API responses and no live backend, paired agent or installed release. Mocked WebSocket reconnect warnings do not establish runtime connectivity. Screenshots of Actions, command palette, shortcut help, setup and Updates at both widths were inspected.",
-  "verified_source_sha": "2606c9d36a0b91c40fbc234fecad2167b7979fec"
+    "Activated the offline issuer test license through /api/license/activate on the licensed stack and confirmed relay in /api/license/entitlements",
+    "Loaded /settings/system-relay and /alerts/notifications on the licensed stack at 1024px and 390px, checked the toggle and settings link stay inside the viewport with no horizontal overflow",
+    "Loaded /alerts/notifications, /settings/system-general, /settings/system-relay and /settings/system/billing/plan on the Community stack and checked nav items, panels and links"
+  ]
 }

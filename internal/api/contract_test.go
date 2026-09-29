@@ -10008,7 +10008,7 @@ func TestContract_OnboardingNotReadyResponseJSONSnapshot(t *testing.T) {
 				Code:     "relay_registration_unavailable",
 				Severity: "error",
 				Field:    "instance_id",
-				Message:  "Remote Access is enabled, but this Pulse instance is not connected to the relay yet. Wait for the status to show Connected before generating a mobile pairing code.",
+				Message:  "Pulse Mobile connections are on, but this Pulse instance is not connected to the relay yet. Wait for the status to show Connected before generating a pairing code.",
 			},
 		},
 	}
@@ -10022,7 +10022,7 @@ func TestContract_OnboardingNotReadyResponseJSONSnapshot(t *testing.T) {
 		"code":"onboarding_not_ready",
 		"error":"Pulse Mobile pairing is not ready yet.",
 		"message":"Pulse Mobile pairing is not ready yet.",
-		"diagnostics":[{"code":"relay_registration_unavailable","severity":"error","message":"Remote Access is enabled, but this Pulse instance is not connected to the relay yet. Wait for the status to show Connected before generating a mobile pairing code.","field":"instance_id"}]
+		"diagnostics":[{"code":"relay_registration_unavailable","severity":"error","message":"Pulse Mobile connections are on, but this Pulse instance is not connected to the relay yet. Wait for the status to show Connected before generating a pairing code.","field":"instance_id"}]
 	}`
 
 	assertJSONSnapshot(t, got, want)

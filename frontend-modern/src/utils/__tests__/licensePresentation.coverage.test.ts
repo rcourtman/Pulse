@@ -99,9 +99,9 @@ describe('getFeatureMinTierLabel - edge cases', () => {
     expect(getFeatureMinTierLabel(undefined)).toBe('Pro');
   });
 
-  it('returns Relay for push_notifications and mobile_app', () => {
-    expect(getFeatureMinTierLabel('push_notifications')).toBe('Relay');
-    expect(getFeatureMinTierLabel('mobile_app')).toBe('Relay');
+  it('returns Pro for push_notifications and mobile_app now that Relay is retired', () => {
+    expect(getFeatureMinTierLabel('push_notifications')).toBe('Pro');
+    expect(getFeatureMinTierLabel('mobile_app')).toBe('Pro');
   });
 });
 
@@ -430,14 +430,13 @@ describe('getBillingAdminTrialStatus - branch coverage', () => {
  * ------------------------------------------------------------------ */
 
 describe('getSelfHostedPlanComparisonPresentation - edge cases', () => {
-  it('shows Relay and Pro cards for null / undefined entitlements', () => {
+  it('shows only the Pro card for null / undefined entitlements', () => {
     const result = getSelfHostedPlanComparisonPresentation({ entitlements: null });
-    expect(result.cards).toHaveLength(2);
-    expect(result.cards[0].title).toBe('Relay plan');
-    expect(result.cards[1].title).toBe('Pulse Pro plan');
+    expect(result.cards).toHaveLength(1);
+    expect(result.cards[0].title).toBe('Pulse Pro plan');
   });
 
-  it('shows Relay and Pro cards for the community tier', () => {
+  it('shows only the Pro card for the community tier', () => {
     const result = getSelfHostedPlanComparisonPresentation({
       entitlements: {
         tier: 'community',
@@ -447,7 +446,7 @@ describe('getSelfHostedPlanComparisonPresentation - edge cases', () => {
         upgrade_reasons: [],
       },
     });
-    expect(result.cards.map((c) => c.title)).toEqual(['Relay plan', 'Pulse Pro plan']);
+    expect(result.cards.map((c) => c.title)).toEqual(['Pulse Pro plan']);
   });
 
   it('returns no cards for an unrecognized tier', () => {
@@ -523,7 +522,7 @@ describe('getSelfHostedCurrentPlanPresentation - trial branch', () => {
         upgrade_reasons: [],
       },
       displayableCapabilities: [
-        'Pulse Relay (Remote Access)',
+        'Pulse Relay (Mobile Connection)',
         'Pulse Mobile Pairing',
         'Push Notifications',
       ],
@@ -562,7 +561,7 @@ describe('getSelfHostedCurrentPlanPresentation - is_lifetime branch', () => {
         runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       },
       displayableCapabilities: [
-        'Pulse Relay (Remote Access)',
+        'Pulse Relay (Mobile Connection)',
         'Patrol Applies Safe Fixes and Verifies the Result',
       ],
     });
@@ -586,7 +585,7 @@ describe('getSelfHostedCurrentPlanPresentation - grace + grandfathered branch', 
         runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       },
       displayableCapabilities: [
-        'Pulse Relay (Remote Access)',
+        'Pulse Relay (Mobile Connection)',
         'Patrol Applies Safe Fixes and Verifies the Result',
       ],
     });
@@ -604,7 +603,7 @@ describe('getSelfHostedCurrentPlanPresentation - fallback branch', () => {
         limits: [],
         upgrade_reasons: [],
       },
-      displayableCapabilities: ['Pulse Relay (Remote Access)'],
+      displayableCapabilities: ['Pulse Relay (Mobile Connection)'],
     });
     expect(result.title).toBe('Current plan: Pulse Pro');
     expect(result.body).toBe(
@@ -626,7 +625,7 @@ describe('getSelfHostedCurrentPlanPresentation - getPatrolControlAction branches
         upgrade_reasons: [],
         runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       },
-      displayableCapabilities: ['Pulse Relay (Remote Access)'],
+      displayableCapabilities: ['Pulse Relay (Mobile Connection)'],
     });
     expect(result.patrolControlAction).toBeUndefined();
   });
@@ -642,7 +641,7 @@ describe('getSelfHostedCurrentPlanPresentation - getPatrolControlAction branches
         runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       },
       displayableCapabilities: [
-        'Pulse Relay (Remote Access)',
+        'Pulse Relay (Mobile Connection)',
         'Patrol Applies Safe Fixes and Verifies the Result',
       ],
       patrolOperatorStatus: {
@@ -801,7 +800,7 @@ describe('getSelfHostedActivationSuccessPresentation - purchase + runtime mismat
         runtime: { build: 'community', label: 'Pulse Community runtime' },
       },
       displayableCapabilities: [
-        'Pulse Relay (Remote Access)',
+        'Pulse Relay (Mobile Connection)',
         'Patrol Applies Safe Fixes and Verifies the Result',
       ],
       source: 'purchase',
@@ -828,7 +827,7 @@ describe('getSelfHostedActivationSuccessPresentation - purchase without patrol a
         upgrade_reasons: [],
       },
       displayableCapabilities: [
-        'Pulse Relay (Remote Access)',
+        'Pulse Relay (Mobile Connection)',
         'Pulse Mobile Pairing',
         'Push Notifications',
       ],
@@ -854,7 +853,7 @@ describe('getSelfHostedActivationSuccessPresentation - manual + runtime mismatch
         limits: [],
         upgrade_reasons: [],
       },
-      displayableCapabilities: ['Pulse Relay (Remote Access)', 'Audit Logging'],
+      displayableCapabilities: ['Pulse Relay (Mobile Connection)', 'Audit Logging'],
       source: 'manual',
     });
     expect(result).not.toBeNull();

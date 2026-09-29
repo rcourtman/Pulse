@@ -2623,11 +2623,17 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
             repo_root / "frontend-modern" / "public" / "docs" / "PRIVACY.md"
         ).read_text(encoding="utf-8")
 
-        expected = "Pulse Mobile pairing for handoff"
-        self.assertIn(expected, canonical)
-        self.assertIn(expected, bundled)
-        self.assertNotIn("mobile app pairing", canonical)
-        self.assertNotIn("mobile app pairing", bundled)
+        for expected in (
+            "paired Pulse Mobile devices can reach this instance and receive push notifications",
+            "Relay does not provide remote access to the web UI",
+        ):
+            self.assertIn(expected, canonical)
+            self.assertIn(expected, bundled)
+        # Relay only ever connected the Pulse Mobile app; the privacy docs must
+        # not describe it as remote web access.
+        for forbidden in ("mobile app pairing", "secure remote web access"):
+            self.assertNotIn(forbidden, canonical)
+            self.assertNotIn(forbidden, bundled)
 
     def test_privacy_docs_disclose_derived_pulse_intelligence_reports(self) -> None:
         repo_root = Path(__file__).resolve().parents[2]

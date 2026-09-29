@@ -4,17 +4,10 @@ import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AlertPushDestinationsSection } from './AlertPushDestinationsSection';
 import {
-  ALERT_DESTINATIONS_PUSH_GATE_MESSAGE,
   ALERT_DESTINATIONS_PUSH_MINIMUM_SEVERITY_HELP,
   ALERT_DESTINATIONS_PUSH_READY_MESSAGE,
   ALERT_DESTINATIONS_PUSH_SETUP_LINK_LABEL,
 } from '@/utils/alertDestinationsPresentation';
-import type { UpgradeDestination } from '@/utils/upgradeNavigation';
-
-const upgradeDestination: UpgradeDestination = {
-  href: '/settings/pulse-intelligence/billing',
-  external: false,
-};
 
 function renderWithRouter(ui: () => JSX.Element) {
   return render(() => (
@@ -29,13 +22,11 @@ describe('AlertPushDestinationsSection', () => {
     cleanup();
   });
 
-  it('points licensed installs at Remote Access settings', () => {
+  it('points licensed installs at Pulse Mobile settings', () => {
     const onMinimumSeverityChange = vi.fn();
     renderWithRouter(() => (
       <AlertPushDestinationsSection
         relayLicensed={true}
-        showUpgradePrompts={true}
-        upgradeDestination={upgradeDestination}
         minimumSeverity="critical"
         onMinimumSeverityChange={onMinimumSeverityChange}
       />
@@ -57,29 +48,11 @@ describe('AlertPushDestinationsSection', () => {
     expect(screen.getByText(ALERT_DESTINATIONS_PUSH_MINIMUM_SEVERITY_HELP)).toBeInTheDocument();
   });
 
-  it('shows the Relay upgrade gate to unlicensed installs', () => {
-    renderWithRouter(() => (
-      <AlertPushDestinationsSection
-        relayLicensed={false}
-        showUpgradePrompts={true}
-        upgradeDestination={upgradeDestination}
-      />
-    ));
+  it('renders nothing for installs without Pulse Mobile, since it is no longer sold', () => {
+    renderWithRouter(() => <AlertPushDestinationsSection relayLicensed={false} />);
 
-    expect(screen.getByText(ALERT_DESTINATIONS_PUSH_GATE_MESSAGE)).toBeInTheDocument();
     expect(screen.queryByText(ALERT_DESTINATIONS_PUSH_READY_MESSAGE)).not.toBeInTheDocument();
-  });
-
-  it('hides the upgrade call-to-action when upgrade prompts are suppressed', () => {
-    renderWithRouter(() => (
-      <AlertPushDestinationsSection
-        relayLicensed={false}
-        showUpgradePrompts={false}
-        upgradeDestination={upgradeDestination}
-      />
-    ));
-
-    expect(screen.getByText(ALERT_DESTINATIONS_PUSH_GATE_MESSAGE)).toBeInTheDocument();
+    expect(screen.queryByText(/Relay/)).not.toBeInTheDocument();
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 });

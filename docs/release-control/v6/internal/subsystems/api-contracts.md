@@ -10981,3 +10981,11 @@ text-input normalization, literal quoted token bytes, root/sudo private-file
 permissions, cleanup and early exit when download or preflight fails. This
 client transport repair does not establish the reporter's native pfSense abort
 cause or successful offline installation.
+
+### Pulse Mobile pairing readiness wording
+
+The onboarding readiness diagnostics for a disabled or unconnected relay name
+the renamed Settings > Pulse Mobile section instead of Remote Access. Codes,
+severities and the response shape are unchanged. The API reference heading
+for the relay protocol records that Pulse Mobile retires on 31 March 2027, and
+the published copy stays identical to `docs/API.md`.
