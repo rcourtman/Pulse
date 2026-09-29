@@ -6770,6 +6770,14 @@ action path or verification card when `ActionResultV2` is present. Read-only
 sessions keep the review packet inspectable but must not render approve, reject,
 or run controls, while settled historical records must not be mislabeled as
 expired actionable reviews.
+For an aged, receipt-pending execution, the same responsive review dialog may
+expose an audit-recovery disclosure to an eligible local administrator. It must
+first instruct the operator to check the resource's actual state outside the
+action record, then require a written reason and an explicit acknowledgement
+before a fresh action read and guarded force-fail call. Desktop and phone
+layouts keep this confirmation visible without implying a retry, cancellation
+or failed mutation. Read-only and settled records show no recovery control;
+permission hints in the client never replace the server's authority check.
 Its action controls are also plan-identity-bound: a missing reviewed `planHash`
 renders explicit replan guidance and hides approve, reject, and run controls,
 while an actionable record sends the exact displayed hash on every mutation.

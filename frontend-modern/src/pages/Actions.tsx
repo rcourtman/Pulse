@@ -26,7 +26,7 @@ import { ACTION_REVIEW_QUERY_PARAM, parseActionReviewId } from '@/features/actio
 import {
   formatActionName,
   getActionOriginLabel,
-  getActionInboxStatePresentation,
+  getActionAuditStatePresentation,
   getActionResourcePresentation,
   getActionsWatchOnlyEmptyState,
   sortOpenActionsForReview,
@@ -262,7 +262,7 @@ export function Actions() {
               windowSize={48}
             >
               {(action) => {
-                const state = () => getActionInboxStatePresentation(action.state);
+                const state = () => getActionAuditStatePresentation(action);
                 const resource = () =>
                   getActionResourcePresentation(action.request.resourceId, action.resource);
                 const title = () => formatActionName(action.request.capabilityName);

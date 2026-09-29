@@ -1,8 +1,11 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ResourceActionsAPI } from '@/api/resourceActions';
+import { SecurityAPI } from '@/api/security';
 import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
+import type { SecurityStatus } from '@/types/config';
 import type { ActionAuditRecord, ActionDetailResponse } from '@/types/actionAudit';
 import { ActionReviewDialog } from '../ActionReviewDialog';
 
@@ -12,16 +15,27 @@ vi.mock('@/api/resourceActions', () => ({
     refreshAction: vi.fn(),
     decideAction: vi.fn(),
     executeAction: vi.fn(),
+    forceFailAction: vi.fn(),
   },
 }));
+vi.mock('@/api/security', () => ({ SecurityAPI: { getStatus: vi.fn() } }));
 vi.mock('@/stores/notifications', () => ({
   notificationStore: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }));
+
+beforeEach(() => {
+  vi.mocked(SecurityAPI.getStatus).mockResolvedValue({
+    hasAuthentication: true,
+    requiresAuth: true,
+    settingsCapabilities: { authenticationWrite: true },
+  } as SecurityStatus);
+});
 
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
   syncSessionPresentationPolicy(null);
+  vi.clearAllMocks();
 });
 
 const makeAudit = (
@@ -114,7 +128,133 @@ const detail = (audit: ActionAuditRecord): ActionDetailResponse => ({
   },
 });
 
+const waitingDetail = (updatedAt = '2026-07-12T00:02:00Z'): ActionDetailResponse => {
+  const current = detail(makeAudit('resolved', '2026-07-12T00:10:00Z'));
+  current.audit.state = 'executing';
+  current.attempt = {
+    id: 'attempt-1',
+    actionId: current.audit.id,
+    state: 'receipt_pending',
+    createdAt: '2026-07-12T00:01:00Z',
+    updatedAt,
+    dispatchCount: 1,
+  };
+  return current;
+};
+
 describe('ActionReviewDialog trust gates', () => {
+  it('lets an admin close an aged receipt wait only after a direct-check reason and acknowledgement', async () => {
+    const current = waitingDetail();
+    const terminalAudit: ActionAuditRecord = {
+      ...current.audit,
+      state: 'failed',
+      result: {
+        success: false,
+        actionResultV2: {
+          version: 2,
+          execution: { status: 'inconclusive', reasonCode: 'operator_force_failed' },
+          verification: { status: 'inconclusive', evidenceClass: 'none' },
+          compensation: { support: 'unavailable', status: 'not_attempted' },
+        },
+      },
+    };
+    const terminal = { ...current, audit: terminalAudit };
+    vi.mocked(ResourceActionsAPI.getAction)
+      .mockResolvedValueOnce(current)
+      .mockResolvedValueOnce(terminal);
+    vi.mocked(ResourceActionsAPI.forceFailAction).mockResolvedValue({
+      actionId: terminalAudit.id,
+      state: 'failed',
+      audit: terminalAudit,
+      result: terminalAudit.result,
+    });
+    const [selected, setSelected] = createSignal(current);
+    const onChanged = vi.fn((next: ActionDetailResponse) => {
+      setSelected(next);
+    });
+    render(() => (
+      <ActionReviewDialog detail={selected()} onClose={vi.fn()} onChanged={onChanged} />
+    ));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Close stuck audit record…' }));
+    expect(screen.getByText(/does not cancel the agent operation/)).toBeVisible();
+    const close = screen.getByRole('button', { name: 'Close audit as inconclusive' });
+    expect(close).toBeDisabled();
+    fireEvent.input(screen.getByLabelText('What did you verify directly?'), {
+      target: { value: 'Checked running container edge; image is already updated.' },
+    });
+    expect(close).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: /I checked the actual resource and understand/,
+      }),
+    );
+    expect(close).toBeEnabled();
+    fireEvent.click(close);
+
+    await waitFor(() => {
+      expect(ResourceActionsAPI.getAction).toHaveBeenCalledTimes(2);
+      expect(ResourceActionsAPI.forceFailAction).toHaveBeenCalledWith(
+        'action-1',
+        'Checked running container edge; image is already updated.',
+      );
+      expect(onChanged).toHaveBeenCalledWith(terminal);
+    });
+    expect(screen.getByText('Outcome unknown')).toBeVisible();
+    expect(screen.getByTestId('action-execution-truth')).toHaveTextContent('Inconclusive');
+    expect(screen.getByText(/audit was closed without an agent receipt/)).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Close audit as inconclusive' })).toBeNull();
+  });
+
+  it('does not expose override for fresh, settled, read-only, or non-admin receipt records', async () => {
+    const fresh = waitingDetail(new Date(Date.now() - 5 * 60 * 1000).toISOString());
+    const freshView = render(() => <ActionReviewDialog detail={fresh} onClose={vi.fn()} />);
+    await waitFor(() => expect(SecurityAPI.getStatus).toHaveBeenCalled());
+    expect(screen.queryByTestId('action-stuck-recovery')).toBeNull();
+    freshView.unmount();
+
+    const settled = waitingDetail();
+    settled.audit.state = 'failed';
+    const settledView = render(() => <ActionReviewDialog detail={settled} onClose={vi.fn()} />);
+    expect(screen.queryByTestId('action-stuck-recovery')).toBeNull();
+    settledView.unmount();
+
+    const readOnly = { ...waitingDetail(), readOnly: true };
+    const readOnlyView = render(() => <ActionReviewDialog detail={readOnly} onClose={vi.fn()} />);
+    expect(screen.queryByTestId('action-stuck-recovery')).toBeNull();
+    readOnlyView.unmount();
+
+    vi.mocked(SecurityAPI.getStatus).mockResolvedValue({
+      hasAuthentication: true,
+      requiresAuth: true,
+      settingsCapabilities: { authenticationWrite: false },
+    } as SecurityStatus);
+    render(() => <ActionReviewDialog detail={waitingDetail()} onClose={vi.fn()} />);
+    await waitFor(() => expect(SecurityAPI.getStatus).toHaveBeenCalled());
+    expect(screen.queryByTestId('action-stuck-recovery')).toBeNull();
+    expect(ResourceActionsAPI.forceFailAction).not.toHaveBeenCalled();
+  });
+
+  it('re-reads the receipt before mutation and refuses a stale override', async () => {
+    const current = waitingDetail();
+    const settled = { ...current, audit: { ...current.audit, state: 'completed' as const } };
+    vi.mocked(ResourceActionsAPI.getAction).mockResolvedValueOnce(settled);
+    const onChanged = vi.fn();
+    render(() => <ActionReviewDialog detail={current} onClose={vi.fn()} onChanged={onChanged} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Close stuck audit record…' }));
+    fireEvent.input(screen.getByLabelText('What did you verify directly?'), {
+      target: { value: 'I checked the running container and its current image.' },
+    });
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: /I checked the actual resource and understand/,
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Close audit as inconclusive' }));
+    await waitFor(() => expect(onChanged).toHaveBeenCalledWith(settled));
+    expect(ResourceActionsAPI.forceFailAction).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('No audit override was sent');
+  });
   it('keeps a rejected action outcome visible without offering execution', () => {
     const audit = makeAudit('resolved', '2026-07-12T00:10:00Z');
     audit.state = 'rejected';

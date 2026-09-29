@@ -2957,6 +2957,16 @@ creating a duplicate. Package cleanup is explicitly irreversible; an
 inconclusive or failed cleanup requires a fresh scan and never presents fake
 rollback or automatic retry.
 
+An executing action whose durable dispatch attempt remains `receipt_pending`
+for more than the server's one-hour reconciliation window is still an unknown
+operational outcome. The Actions review may offer the already-authorized local
+audit force-fail recourse only after direct resource-state checking, a reason,
+acknowledgement and a fresh detail read. This terminalizes the audit row
+inconclusively; it does not stop or retry the agent operation. The shared
+decision packet and Actions history therefore label an operator-force-failed
+record as outcome unknown, not as a proved failed mutation. Terminal records
+and read-only sessions retain their review evidence but no recovery control.
+
 Task 09 owns shared APT telemetry freshness in
 `internal/unifiedresources/host_apt_telemetry.go`. Capability construction,
 finding admission, and execution readiness consume the same dual-timestamp and

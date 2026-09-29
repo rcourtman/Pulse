@@ -2,8 +2,10 @@ import { Show, createEffect, createMemo, createSignal, onCleanup, type Component
 import XIcon from 'lucide-solid/icons/x';
 import ArrowUpRightIcon from 'lucide-solid/icons/arrow-up-right';
 import { ResourceActionsAPI } from '@/api/resourceActions';
+import { SecurityAPI } from '@/api/security';
 import { Button, ButtonLink } from '@/components/shared/Button';
 import { Dialog } from '@/components/shared/Dialog';
+import { FormTextarea } from '@/components/shared/FormTextarea';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { notificationStore } from '@/stores/notifications';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
@@ -11,11 +13,28 @@ import type { ActionDetailResponse } from '@/types/actionAudit';
 import { ActionDecisionPacket } from './ActionDecisionPacket';
 import {
   formatActionName,
-  getActionInboxStatePresentation,
+  getActionAuditStatePresentation,
   getActionOriginDestination,
   getActionResourcePresentation,
 } from './actionPresentation';
 import { getAPTActionPresentation } from './aptActionPresentation';
+
+// The server's bounded reconciliation window is one hour. This is only a
+// presentation threshold: the server remains the authority for every write.
+const RECEIPT_WAIT_RECOVERY_AGE_MS = 60 * 60 * 1000;
+
+const agedReceiptPending = (detail: ActionDetailResponse | null, now: number): boolean => {
+  if (detail?.audit.state !== 'executing' || detail.attempt?.state !== 'receipt_pending') {
+    return false;
+  }
+  const createdAt = Date.parse(detail.attempt.createdAt);
+  const updatedAt = Date.parse(detail.attempt.updatedAt);
+  return (
+    Number.isFinite(createdAt) &&
+    Number.isFinite(updatedAt) &&
+    now >= Math.max(createdAt, updatedAt) + RECEIPT_WAIT_RECOVERY_AGE_MS
+  );
+};
 
 export const ActionReviewDialog: Component<{
   detail: ActionDetailResponse | null;
@@ -25,6 +44,10 @@ export const ActionReviewDialog: Component<{
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal('');
   const [clock, setClock] = createSignal(Date.now());
+  const [canForceFail, setCanForceFail] = createSignal(false);
+  const [recoveryOpen, setRecoveryOpen] = createSignal(false);
+  const [recoveryReason, setRecoveryReason] = createSignal('');
+  const [recoveryConfirmed, setRecoveryConfirmed] = createSignal(false);
   const audit = () => props.detail?.audit;
   const originDestination = () => getActionOriginDestination(audit()?.origin);
   const resource = createMemo(() => {
@@ -36,6 +59,36 @@ export const ActionReviewDialog: Component<{
   const readOnly = createMemo(
     () => props.detail?.readOnly === true || presentationPolicyIsReadOnly(),
   );
+  const canOfferRecovery = createMemo(
+    () => !readOnly() && canForceFail() && agedReceiptPending(props.detail, clock()),
+  );
+  createEffect(() => {
+    const detail = props.detail;
+    setRecoveryOpen(false);
+    setRecoveryReason('');
+    setRecoveryConfirmed(false);
+    setCanForceFail(false);
+    if (
+      detail?.audit.state !== 'executing' ||
+      detail.attempt?.state !== 'receipt_pending' ||
+      readOnly()
+    ) {
+      return;
+    }
+    let current = true;
+    void SecurityAPI.getStatus()
+      .then((status) => {
+        // The route repeats this admin/settings-write gate and additionally
+        // checks action-execute authority. Never infer permission from the UI.
+        if (current) setCanForceFail(status.settingsCapabilities?.authenticationWrite === true);
+      })
+      .catch(() => {
+        if (current) setCanForceFail(false);
+      });
+    onCleanup(() => {
+      current = false;
+    });
+  });
   createEffect(() => {
     if (!props.detail) return;
     setClock(Date.now());
@@ -231,6 +284,72 @@ export const ActionReviewDialog: Component<{
     }
   };
 
+  const closeStuckAudit = async () => {
+    const currentDetail = props.detail;
+    const reason = recoveryReason().trim();
+    if (
+      !currentDetail ||
+      !canOfferRecovery() ||
+      !recoveryOpen() ||
+      !recoveryConfirmed() ||
+      reason.length < 15 ||
+      busy()
+    )
+      return;
+
+    setBusy(true);
+    setError('');
+    let recorded = false;
+    try {
+      const latest = await ResourceActionsAPI.getAction(currentDetail.audit.id);
+      if (
+        !agedReceiptPending(latest, Date.now()) ||
+        latest.attempt?.id !== currentDetail.attempt?.id ||
+        latest.attempt?.updatedAt !== currentDetail.attempt?.updatedAt
+      ) {
+        await props.onChanged?.(latest);
+        setRecoveryOpen(false);
+        setError(
+          'The action changed while you were reviewing it. No audit override was sent. Review its latest outcome.',
+        );
+        return;
+      }
+
+      const outcome = await ResourceActionsAPI.forceFailAction(currentDetail.audit.id, reason);
+      recorded = true;
+      // Keep the server's terminal audit visible even if the follow-up read
+      // fails; do not invite a second override after a successful mutation.
+      let displayed: ActionDetailResponse = { ...latest, audit: outcome.audit };
+      try {
+        displayed = await ResourceActionsAPI.getAction(currentDetail.audit.id);
+      } catch {
+        setError(
+          'The audit was closed, but its latest details could not be loaded. Refresh the action history.',
+        );
+      }
+      await props.onChanged?.(displayed);
+      setRecoveryOpen(false);
+      notificationStore.success(
+        'Audit closed with an unknown operation outcome. Check the resource before any retry.',
+      );
+    } catch (cause) {
+      setError(
+        recorded
+          ? 'The audit was closed, but the view could not refresh. Reload action history before doing anything else.'
+          : actionableErrorMessage(cause, 'The audit could not be closed.'),
+      );
+      if (!recorded) {
+        try {
+          await refresh();
+        } catch {
+          /* preserve the override failure */
+        }
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <Dialog
       isOpen={Boolean(props.detail)}
@@ -250,8 +369,8 @@ export const ActionReviewDialog: Component<{
                   <h2 id="action-review-title" class="text-xl font-semibold">
                     {formatActionName(record().request.capabilityName)}
                   </h2>
-                  <MetadataBadge tone={getActionInboxStatePresentation(record().state).tone}>
-                    {getActionInboxStatePresentation(record().state).label}
+                  <MetadataBadge tone={getActionAuditStatePresentation(record()).tone}>
+                    {getActionAuditStatePresentation(record()).label}
                   </MetadataBadge>
                 </div>
                 <p class="mt-1 text-sm text-muted">
@@ -283,6 +402,78 @@ export const ActionReviewDialog: Component<{
             </header>
             <div class="overflow-y-auto px-5 py-4">
               <ActionDecisionPacket audit={record()} detail={props.detail ?? undefined} />
+              <Show when={canOfferRecovery()}>
+                <section
+                  aria-labelledby="action-stuck-recovery-heading"
+                  data-testid="action-stuck-recovery"
+                  class="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm dark:bg-amber-950/40"
+                >
+                  <h3 id="action-stuck-recovery-heading" class="font-semibold">
+                    Receipt still missing
+                  </h3>
+                  <p class="mt-2">
+                    Pulse sent this action but cannot confirm what the agent did. Check the actual
+                    resource directly before any retry. For a container update, check the running
+                    container and image, not just this audit record.
+                  </p>
+                  <Show
+                    when={recoveryOpen()}
+                    fallback={
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        class="mt-3"
+                        onClick={() => setRecoveryOpen(true)}
+                      >
+                        Close stuck audit record…
+                      </Button>
+                    }
+                  >
+                    <div class="mt-4 space-y-3 border-t border-amber-300 pt-4 dark:border-amber-800">
+                      <p>
+                        This only closes the Pulse audit with an <strong>inconclusive</strong>{' '}
+                        outcome. It does not cancel the agent operation, roll back the change, or
+                        prove that the operation failed.
+                      </p>
+                      <FormTextarea
+                        label="What did you verify directly?"
+                        help="Record the resource state you checked and why the receipt cannot be recovered. This becomes part of the audit."
+                        value={recoveryReason()}
+                        onInput={(event) => setRecoveryReason(event.currentTarget.value)}
+                        maxLength={500}
+                        rows={3}
+                      />
+                      <label class="flex cursor-pointer items-start gap-2">
+                        <input
+                          type="checkbox"
+                          class="mt-1 h-4 w-4"
+                          checked={recoveryConfirmed()}
+                          onChange={(event) => setRecoveryConfirmed(event.currentTarget.checked)}
+                        />
+                        <span>
+                          I checked the actual resource and understand the operation outcome remains
+                          unknown.
+                        </span>
+                      </label>
+                      <div class="flex flex-wrap gap-2">
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          disabled={
+                            busy() || !recoveryConfirmed() || recoveryReason().trim().length < 15
+                          }
+                          onClick={() => void closeStuckAudit()}
+                        >
+                          Close audit as inconclusive
+                        </Button>
+                        <Button size="sm" disabled={busy()} onClick={() => setRecoveryOpen(false)}>
+                          Keep waiting
+                        </Button>
+                      </div>
+                    </div>
+                  </Show>
+                </section>
+              </Show>
               <Show when={invalidActionMessage()}>
                 <div
                   role="alert"
