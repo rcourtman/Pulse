@@ -188,4 +188,29 @@ describe('useAlertDestinationsState', () => {
     expect(result.deadManPingUrl()).toBe('');
     expect(result.pushMinimumSeverity()).toBe('all');
   });
+
+  it('leaves Pulse Mobile push settings alone on instances without it', async () => {
+    // Pulse Mobile is being retired on 31 March 2027 and is no longer sold, so
+    // Community installs never load or write relay push settings.
+    const [activeTab] = createSignal<'overview' | 'destinations'>('destinations');
+    vi.mocked(hasFeature).mockReturnValue(false);
+    vi.mocked(NotificationsAPI.getEmailConfig).mockResolvedValue({ enabled: false } as any);
+    vi.mocked(NotificationsAPI.getAppriseConfig).mockResolvedValue({ enabled: false } as any);
+    vi.mocked(NotificationsAPI.getWebhooks).mockResolvedValue([]);
+    vi.mocked(NotificationsAPI.updateEmailConfig).mockResolvedValue(undefined as any);
+    vi.mocked(NotificationsAPI.updateAppriseConfig).mockResolvedValue({ enabled: false } as any);
+    vi.mocked(AlertsAPI.getDeadManConfig).mockResolvedValue({ pingUrl: '', configured: false });
+    vi.mocked(AlertsAPI.updateDeadManConfig).mockResolvedValue({
+      success: true,
+      configured: false,
+    });
+
+    const { result } = renderHook(() => useAlertDestinationsState({ activeTab }));
+
+    await result.loadDestinations();
+    await result.saveDestinations();
+
+    expect(RelayAPI.getConfig).not.toHaveBeenCalled();
+    expect(RelayAPI.updateConfig).not.toHaveBeenCalled();
+  });
 });

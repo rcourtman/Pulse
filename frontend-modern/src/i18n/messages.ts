@@ -471,8 +471,8 @@ export const EN_MESSAGES = {
     'Manage backup/snapshot polling plus configuration export and import workflows.',
   'settings.header.systemRecovery.title': 'Recovery',
   'settings.header.systemRelay.description':
-    'Check on your systems and get alert push notifications anywhere with the Pulse Mobile app — no port forwarding or VPN required.',
-  'settings.header.systemRelay.title': 'Remote Access',
+    'Connect paired Pulse Mobile devices to this instance. Pulse Mobile is being retired on 31 March 2027, and paired phones keep working until then.',
+  'settings.header.systemRelay.title': 'Pulse Mobile',
   'settings.header.systemUpdates.description':
     'Check for new Pulse versions, choose an update channel, and manage automatic updates. Agent updates stay under Infrastructure.',
   'settings.header.systemUpdates.title': 'Updates',
@@ -512,7 +512,7 @@ export const EN_MESSAGES = {
   'settings.nav.item.plans': 'Plans & Billing',
   'settings.nav.item.providerModels': 'Provider & Models',
   'settings.nav.item.recovery': 'Recovery',
-  'settings.nav.item.remoteAccess': 'Remote Access',
+  'settings.nav.item.remoteAccess': 'Pulse Mobile',
   'settings.nav.item.resourcePrivacy': 'Resource Privacy',
   'settings.nav.item.roles': 'Roles',
   'settings.nav.item.securityOverview': 'Security Overview',

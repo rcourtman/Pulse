@@ -151,7 +151,7 @@ describe('settingsNavigation integration scaffold', () => {
     ).toBe(false);
   });
 
-  it('hides Remote Access navigation for free installs but keeps the direct route available', () => {
+  it('hides Pulse Mobile navigation for free installs but keeps the direct route available', () => {
     expect(
       shouldHideSettingsNavItem('system-relay', {
         hasFeature: hasFeatures([]),
@@ -478,7 +478,7 @@ describe('settingsNavigation integration scaffold', () => {
 
     it('getTabLockReason returns tier-specific reason for locked tabs and null for unlocked', () => {
       const expectedTierLabels: Record<string, string> = {
-        relay: 'Relay',
+        relay: 'Pro',
         multi_tenant: 'MSP',
         audit_logging: 'Pro',
       };

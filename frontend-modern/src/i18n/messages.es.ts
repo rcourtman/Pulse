@@ -481,8 +481,8 @@ export const ES_MESSAGE_OVERRIDES = {
     'Administra sondeos de copias/snapshots y flujos de exportación e importación de configuración.',
   'settings.header.systemRecovery.title': 'Recuperación',
   'settings.header.systemRelay.description':
-    'Consulta tus sistemas y recibe notificaciones push de alertas desde cualquier lugar con la aplicación Pulse Mobile — sin abrir puertos ni VPN.',
-  'settings.header.systemRelay.title': 'Acceso remoto',
+    'Conecta los dispositivos Pulse Mobile emparejados con esta instancia. Pulse Mobile se retirará el 31 de marzo de 2027 y los teléfonos emparejados seguirán funcionando hasta entonces.',
+  'settings.header.systemRelay.title': 'Pulse Mobile',
   'settings.header.systemUpdates.description':
     'Busca nuevas versiones de Pulse, elige un canal de actualización y administra las actualizaciones automáticas. Las actualizaciones de agentes permanecen en Infraestructura.',
   'settings.header.systemUpdates.title': 'Actualizaciones',
@@ -522,7 +522,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'settings.nav.item.plans': 'Planes y facturacion',
   'settings.nav.item.providerModels': 'Proveedores y modelos',
   'settings.nav.item.recovery': 'Recuperación',
-  'settings.nav.item.remoteAccess': 'Acceso remoto',
+  'settings.nav.item.remoteAccess': 'Pulse Mobile',
   'settings.nav.item.resourcePrivacy': 'Privacidad de recursos',
   'settings.nav.item.roles': 'Roles',
   'settings.nav.item.securityOverview': 'Resumen de seguridad',

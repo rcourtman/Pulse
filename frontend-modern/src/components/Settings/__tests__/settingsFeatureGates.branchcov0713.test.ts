@@ -53,11 +53,11 @@ const trackingHas =
 
 // Hand-written snapshot of the exact reason string each gated tab must emit
 // when its required feature is missing. Derived from reading
-// `getFeatureMinTierLabel` (relay -> 'Relay', multi_tenant -> 'MSP',
+// `getFeatureMinTierLabel` (relay -> 'Pro', multi_tenant -> 'MSP',
 // audit_logging -> 'Pro' fallback); NOT computed by calling the helper, so a
 // change to either the tier map or the message template fails this loudly.
 const EXPECTED_LOCK_REASON: Partial<Record<SettingsTab, string>> = {
-  'system-relay': 'This settings section requires Relay.',
+  'system-relay': 'This settings section requires Pro.',
   'security-webhooks': 'This settings section requires Pro.',
   'organization-overview': 'This settings section requires MSP.',
   'organization-access': 'This settings section requires MSP.',

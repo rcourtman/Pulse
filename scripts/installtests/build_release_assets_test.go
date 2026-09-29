@@ -3876,16 +3876,35 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 		// The list comes from the commit under test, so a new test cannot be
 		// missed, and contiguous slices of go test's own order put it in
 		// exactly one shard while keeping order-coupled neighbours together.
+		// The checked-in weights only choose where those slices are cut.
 		"go test -race -list . ./internal/api",
-		`'NR > int(total * i / n) && NR <= int(total * (i + 1) / n)'`,
+		"bash .github/scripts/select-internal-api-shard.sh \\\n            .github/scripts/internal-api-test-seconds.txt \"$API_SHARD_COUNT\" \"$API_SHARD_INDEX\")",
 		"resolved to an empty test list",
 		"go test -list found no tests in ./internal/api",
-		`go test -race -timeout 50m -run "$pattern" ./internal/api`,
+		// A shard holding most tests is named by skipping every other
+		// shard's tests, which keeps its argument under the exec limit.
+		`others=$(printf '%s\n' "$tests" | grep -vxF -f <(printf '%s\n' "$selected") || true)`,
+		`filter=(-skip "$pattern")`,
+		`if [ "${#pattern}" -gt 120000 ]; then`,
+		// Every shard records per-test seconds on the runner through -json
+		// so the weights can be refreshed from CI, while pipefail keeps a
+		// go test failure fatal behind the recorder.
+		"set -euo pipefail",
+		`go test -race -timeout 50m -json "${filter[@]}" ./internal/api \
+            | python3 .github/scripts/record-internal-api-test-seconds.py "$timings/api-${API_SHARD_INDEX}.txt"`,
+		"if: always() && needs.changes.outputs.code == 'true'",
+		"name: internal-api-test-seconds-${{ matrix.index }}",
+		"path: ${{ runner.temp }}/internal-api-test-seconds/",
 		"PULSE_DATA_DIR: /tmp/pulse-test-data",
 	} {
 		if !strings.Contains(shards, required) {
 			t.Fatalf("internal/api shard job missing %q", required)
 		}
+	}
+	// The test binary caches one compiled pattern, so -run next to -skip
+	// recompiles the long skip pattern for every test and subtest.
+	if strings.Contains(shards, "-run . -skip") {
+		t.Fatal("internal/api shards must pass -skip alone; pairing it with -run recompiles the skip pattern per test")
 	}
 	if strings.Contains(shards, "sort") {
 		t.Fatal("internal/api shards must keep go test's run order; sorting splits order-coupled tests")
@@ -3908,6 +3927,159 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 	}
 	if got := strings.Count(workflow, "name: Backend tests (api)\n"); got != 1 {
 		t.Fatalf("exactly one job may carry the required Backend tests (api) name, found %d", got)
+	}
+
+	assertInternalAPIShardSelectionExhaustive(t, want)
+	assertInternalAPITimingRecorderKeepsFailuresVisible(t)
+}
+
+// assertInternalAPITimingRecorderKeepsFailuresVisible feeds the -json
+// recorder a passing, a failing and an unfinished test. Passing output must
+// stay hidden like plain go test, failing and unfinished output must print,
+// any failure must exit non-zero, and every finished top-level test must be
+// written with its seconds.
+func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
+	t.Helper()
+	recorder := repoFile(".github", "scripts", "record-internal-api-test-seconds.py")
+	record := func(events string) (string, string, error) {
+		out := filepath.Join(t.TempDir(), "seconds.txt")
+		cmd := exec.Command("python3", recorder, out)
+		cmd.Stdin = strings.NewReader(events)
+		printed, err := cmd.Output()
+		written, readErr := os.ReadFile(out)
+		if readErr != nil {
+			t.Fatalf("recorder wrote no seconds file: %v", readErr)
+		}
+		return string(printed), string(written), err
+	}
+	const pkg = `"Package":"example/internal/api"`
+	passing := strings.Join([]string{
+		`{"Action":"run",` + pkg + `,"Test":"TestQuiet"}`,
+		`{"Action":"output",` + pkg + `,"Test":"TestQuiet","Output":"quiet log line\n"}`,
+		`{"Action":"pass",` + pkg + `,"Test":"TestQuiet","Elapsed":1.25}`,
+		`{"Action":"output",` + pkg + `,"Output":"ok  \texample/internal/api\t2.000s\n"}`,
+		`{"Action":"pass",` + pkg + `,"Elapsed":2}`,
+	}, "\n") + "\n"
+	printed, written, err := record(passing)
+	if err != nil {
+		t.Fatalf("recorder must pass a passing run: %v", err)
+	}
+	if strings.Contains(printed, "quiet log line") || !strings.Contains(printed, "ok  \texample/internal/api") {
+		t.Fatalf("recorder must print package lines and hide passing test output, printed %q", printed)
+	}
+	if written != "# package-seconds 2.00\nTestQuiet 1.25\n" {
+		t.Fatalf("recorder seconds file = %q", written)
+	}
+
+	failing := strings.Join([]string{
+		`{"Action":"run",` + pkg + `,"Test":"TestBroken"}`,
+		`{"Action":"output",` + pkg + `,"Test":"TestBroken/case","Output":"broken detail\n"}`,
+		`{"Action":"fail",` + pkg + `,"Test":"TestBroken/case","Elapsed":0.5}`,
+		`{"Action":"fail",` + pkg + `,"Test":"TestBroken","Elapsed":0.75}`,
+		`{"Action":"run",` + pkg + `,"Test":"TestHung"}`,
+		`{"Action":"output",` + pkg + `,"Test":"TestHung","Output":"panic: test timed out\n"}`,
+	}, "\n") + "\n"
+	printed, written, err = record(failing)
+	if err == nil {
+		t.Fatal("recorder must exit non-zero when a test fails or never finishes")
+	}
+	for _, want := range []string{"broken detail", "TestHung did not finish", "panic: test timed out"} {
+		if !strings.Contains(printed, want) {
+			t.Fatalf("recorder must print %q for failing or unfinished tests, printed %q", want, printed)
+		}
+	}
+	if written != "TestBroken 0.75\n" {
+		t.Fatalf("recorder must record only finished top-level tests, wrote %q", written)
+	}
+}
+
+// assertInternalAPIShardSelectionExhaustive runs the shard selector the way
+// the workflow does and proves that, whatever the weights say, the shards are
+// non-empty contiguous slices that together cover the list exactly once in
+// order.
+func assertInternalAPIShardSelectionExhaustive(t *testing.T, workflowShards int) {
+	t.Helper()
+	selector := repoFile(".github", "scripts", "select-internal-api-shard.sh")
+	weightsPath := repoFile(".github", "scripts", "internal-api-test-seconds.txt")
+	weightsContent, err := os.ReadFile(weightsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Weighted names from the checked-in file interleaved with unknown ones,
+	// which stand in for tests added after the weights were measured.
+	var weighted []string
+	for _, line := range strings.Split(string(weightsContent), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 || strings.HasPrefix(fields[0], "#") {
+			continue
+		}
+		if len(fields) != 2 || !(strings.HasPrefix(fields[0], "Test") || fields[0] == "DEFAULT_WEIGHT") {
+			t.Fatalf("internal/api weights line must be `<TestName> <seconds>` or `DEFAULT_WEIGHT <seconds>`, got %q", line)
+		}
+		if seconds, err := strconv.ParseFloat(fields[1], 64); err != nil || seconds <= 0 {
+			t.Fatalf("internal/api weight for %s must be positive seconds, got %q", fields[0], fields[1])
+		}
+		if fields[0] == "DEFAULT_WEIGHT" {
+			continue
+		}
+		weighted = append(weighted, fields[0])
+	}
+	if len(weighted) == 0 {
+		t.Fatal("internal/api weights file lists no tests")
+	}
+	var tests []string
+	for i, name := range weighted {
+		tests = append(tests, name)
+		for j := 0; j < 1+i%7; j++ {
+			tests = append(tests, "TestUnweightedShardProbe"+strconv.Itoa(i)+"x"+strconv.Itoa(j))
+		}
+	}
+
+	emptyWeights := filepath.Join(t.TempDir(), "empty.txt")
+	if err := os.WriteFile(emptyWeights, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skewedWeights := filepath.Join(t.TempDir(), "skewed.txt")
+	skewed := "DEFAULT_WEIGHT 7.5\n" + tests[len(tests)/3] + " 900\n" + tests[len(tests)-1] + " 450\n"
+	if err := os.WriteFile(skewedWeights, []byte(skewed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	selectShard := func(weights string, count, index int, input []string) ([]string, error) {
+		cmd := exec.Command("bash", selector, weights, strconv.Itoa(count), strconv.Itoa(index))
+		cmd.Stdin = strings.NewReader(strings.Join(input, "\n") + "\n")
+		out, err := cmd.Output()
+		if err != nil {
+			return nil, err
+		}
+		return strings.Fields(string(out)), nil
+	}
+
+	for _, weights := range []string{weightsPath, emptyWeights, skewedWeights} {
+		for _, count := range []int{1, 2, workflowShards, workflowShards + 1, 9} {
+			var combined []string
+			for index := 0; index < count; index++ {
+				selected, err := selectShard(weights, count, index, tests)
+				if err != nil {
+					t.Fatalf("select shard %d of %d with %s: %v", index, count, filepath.Base(weights), err)
+				}
+				if len(selected) == 0 {
+					t.Fatalf("shard %d of %d with %s selected no tests", index, count, filepath.Base(weights))
+				}
+				combined = append(combined, selected...)
+			}
+			if strings.Join(combined, "\n") != strings.Join(tests, "\n") {
+				t.Fatalf("%d shards with %s do not cover the test list exactly once in order", count, filepath.Base(weights))
+			}
+		}
+	}
+
+	if _, err := selectShard(weightsPath, workflowShards, workflowShards, tests); err == nil {
+		t.Fatal("shard selector must reject an index outside the shard count")
+	}
+	if _, err := selectShard(weightsPath, 3, 0, tests[:2]); err == nil {
+		t.Fatal("shard selector must fail when there are fewer tests than shards")
 	}
 }
 

@@ -81,9 +81,9 @@ export function getSelfHostedPlanEntitlementSummary(
     case 'community':
       return `${planLabel} is active on this instance. It includes self-hosted monitoring, 7-day metric history, watch-only Patrol, update alerts, and SSO.`;
     case 'relay':
-      return `${planLabel} is active on this instance. It includes remote web access, Pulse Mobile pairing, push notifications, and 14-day metric history.`;
+      return `${planLabel} is active on this instance. It includes Pulse Mobile pairing and push notifications until 31 March 2027, and 14-day metric history.`;
     case 'pro':
-      return `${planLabel} is active on this instance. It includes Relay connectivity, Pulse Mobile pairing, push notifications, Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.`;
+      return `${planLabel} is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.`;
   }
 }
 
@@ -129,18 +129,15 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     price: '$39/year',
     subline: 'or $4.99/month',
     metricHistoryDays: 14,
-    billingExtrasSummary: 'Remote web access, pairing, and push',
+    billingExtrasSummary: 'Pulse Mobile pairing and push',
     entitlementSummary: getSelfHostedPlanEntitlementSummary('relay'),
     entitlementHighlights: getTierEntitlementHighlights('relay', 14),
     includedExtras: [],
     comparisonSummary:
-      'Remote web access, Pulse Mobile pairing, push notifications, and 14-day metric history.',
+      'Retired plan: Pulse Mobile pairing and push notifications until 31 March 2027, and 14-day metric history.',
     highlights: [
-      'Secure access when you are away from your network',
-      'Remote web access via Relay',
-      'Pulse Mobile pairing',
+      'Pulse Mobile pairing until 31 March 2027',
       'Push notifications',
-      'No inbound ports required',
       '14-day metric history',
     ],
   },
@@ -155,9 +152,8 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     entitlementHighlights: getTierEntitlementHighlights('pro', 90),
     includedExtras: getTierIncludedExtras('pro'),
     comparisonSummary:
-      'Patrol investigates issues, applies safe fixes, and verifies the result. Relay connectivity is included, plus 90-day metric history and team controls.',
+      'Patrol investigates issues, applies safe fixes, and verifies the result, with 90-day metric history and team controls.',
     highlights: [
-      'Relay connectivity, Pulse Mobile pairing, and push notifications included',
       'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
       'Patrol investigates issues and explains the root cause',
       'Patrol applies safe fixes and verifies the result',

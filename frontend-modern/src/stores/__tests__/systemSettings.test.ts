@@ -111,6 +111,8 @@ describe('systemSettings store', () => {
       'utf8',
     );
 
+    expect(privacyDoc).not.toContain('secure remote web access');
+    expect(privacyDoc).toContain('Relay does not provide remote access to the web UI');
     expect(privacyDoc).toContain('## Usage Data');
     expect(privacyDoc).toContain('Pulse has one outbound usage-data scope');
     expect(privacyDoc).toContain('Commercial activation and license-recovery runtime records');

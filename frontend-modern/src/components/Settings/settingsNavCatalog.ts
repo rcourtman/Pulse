@@ -313,7 +313,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
       },
       {
         id: 'system-relay',
-        label: 'Remote Access',
+        label: 'Pulse Mobile',
         icon: RadioTower,
         iconProps: { strokeWidth: 2 },
         features: ['relay'],

@@ -3640,3 +3640,15 @@ bootstrap or upgrade state, and it adds no commercial prompt. Paid Patrol
 modes stay governed on the Patrol and Actions surfaces, which remain
 reachable by route. `App.architecture.test.ts` pins that the gate reads the
 same capability as the Assistant launcher.
+
+### Relay retired inside the app
+
+Relay left public checkout on 2026-09-29, and existing Relay subscribers carry
+Pro entitlements through the pulse-pro license server. In-app commercial
+presentation therefore never offers Relay: Community sees only the Pro
+comparison card, a Relay-tier license sees none, `FEATURE_MIN_TIER_LABELS`
+maps `relay`, `mobile_app` and `push_notifications` to Pro, and the Pulse
+Mobile settings gate and Alerts push panel carry no upgrade prompt. The
+`relay` feature is labelled "Pulse Relay (Mobile Connection)" because it never
+provided remote access to the web UI. Pulse Mobile retires on 31 March 2027;
+until then licensed instances keep pairing and push unchanged.

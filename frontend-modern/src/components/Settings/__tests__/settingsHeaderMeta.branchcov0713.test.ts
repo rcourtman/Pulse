@@ -165,9 +165,9 @@ describe('getSettingsHeaderMeta', () => {
 
     it('localizes system-relay to the English baseline', () => {
       expect(en['system-relay']).toEqual({
-        title: 'Remote Access',
+        title: 'Pulse Mobile',
         description:
-          'Check on your systems and get alert push notifications anywhere with the Pulse Mobile app — no port forwarding or VPN required.',
+          'Connect paired Pulse Mobile devices to this instance. Pulse Mobile is being retired on 31 March 2027, and paired phones keep working until then.',
       });
     });
 
@@ -440,9 +440,9 @@ describe('getSettingsHeaderMeta', () => {
 
     it('localizes system-relay', () => {
       expect(de['system-relay']).toEqual({
-        title: 'Remote-Zugriff',
+        title: 'Pulse Mobile',
         description:
-          'Behalten Sie Ihre Systeme von ueberall im Blick und erhalten Sie Alarm-Push-Benachrichtigungen ueber die Pulse-Mobile-App — ohne Portfreigaben oder VPN.',
+          'Verbinden Sie gekoppelte Pulse-Mobile-Geraete mit dieser Instanz. Pulse Mobile wird am 31. Maerz 2027 eingestellt. Gekoppelte Telefone funktionieren bis dahin weiter.',
       });
     });
 
@@ -639,9 +639,9 @@ describe('getSettingsHeaderMeta', () => {
 
     it('localizes system-relay', () => {
       expect(es['system-relay']).toEqual({
-        title: 'Acceso remoto',
+        title: 'Pulse Mobile',
         description:
-          'Consulta tus sistemas y recibe notificaciones push de alertas desde cualquier lugar con la aplicación Pulse Mobile — sin abrir puertos ni VPN.',
+          'Conecta los dispositivos Pulse Mobile emparejados con esta instancia. Pulse Mobile se retirará el 31 de marzo de 2027 y los teléfonos emparejados seguirán funcionando hasta entonces.',
       });
     });
 

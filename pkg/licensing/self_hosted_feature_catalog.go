@@ -92,8 +92,8 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 	},
 	FeatureRelay: {
 		Key:                   FeatureRelay,
-		DisplayName:           "Pulse Relay (Remote Access)",
-		ComparisonName:        "Pulse Relay (Remote Access)",
+		DisplayName:           "Pulse Relay (Mobile Connection)",
+		ComparisonName:        "Pulse Relay (Mobile Connection)",
 		ShowInComparisonTable: true,
 		DisplayableInPlanUI:   true,
 		SelfHostedRoles: SelfHostedFeatureRoles{
