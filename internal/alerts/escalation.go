@@ -44,8 +44,9 @@ func (m *Manager) checkEscalations() {
 
 	now := m.policyNow()
 	for _, alert := range m.activeAlerts {
-		// Skip acknowledged alerts
-		if alert.Acknowledged {
+		// Monitor-only alerts remain visible but must never schedule a
+		// notification, including escalation or critical repeats.
+		if alert == nil || alert.Acknowledged || isMonitorOnlyAlert(alert) {
 			continue
 		}
 		if _, snoozed := alertSnoozeUntil(alert, now); snoozed {
@@ -129,7 +130,7 @@ func (m *Manager) PrepareEscalationNotification(snapshot *Alert, level int) (*Al
 		return nil, EscalationLevel{}, false
 	}
 	active, ok := m.getActiveAlertNoLock(snapshot.ID)
-	if !ok || active == nil || !active.StartTime.Equal(snapshot.StartTime) || active.Acknowledged {
+	if !ok || active == nil || !active.StartTime.Equal(snapshot.StartTime) || active.Acknowledged || isMonitorOnlyAlert(active) {
 		return nil, EscalationLevel{}, false
 	}
 	if _, snoozed := alertSnoozeUntil(active, m.policyNow()); snoozed {
