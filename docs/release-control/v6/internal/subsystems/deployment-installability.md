@@ -26,7 +26,7 @@ needs its own checks. Release publication workflows are unaffected.
 
 ### Sharded internal/api backend tests
 
-Build and Test runs the `internal/api` race tests as four `Backend tests
+Build and Test runs the `internal/api` race tests as five `Backend tests
 (api-N)` shards instead of one job, because that one package took about 27 of
 the 31 minutes of the old `Backend tests (api)` job and set the critical path
 of every pull request. Each shard lists the package's tests with `go test
@@ -41,16 +41,35 @@ contract mock chart test runs about six minutes on the runner and the
 integration server tail about twenty seconds per test.
 `.github/scripts/select-internal-api-shard.sh` weighs each test by its seconds
 in `.github/scripts/internal-api-test-seconds.txt` (the slowest tests only,
-with a small default for every unlisted, new or renamed test), finds the
-smallest per-shard budget that fits the list into the shard count, and fills
-contiguous slices up to it, cutting the tail early if needed so no shard is
-empty. The weights only move cut points. Each test is assigned one shard in a
-single pass, so a stale weights file can unbalance the shards but never drop
-or repeat a test, and the file is refreshed from a `-race -json` run when one
-shard drifts well past the others. A shard holding most of the tests passes
-`-skip` of every other shard's tests instead of naming its own, which runs the
-same tests in the same order and keeps the single argument under the 120,000
-byte ceiling. The required check name
+plus a `DEFAULT_WEIGHT` line for every unlisted, new or renamed test), finds
+the smallest per-shard budget that fits the list into the shard count, and
+fills contiguous slices up to it, cutting the tail early if needed so no shard
+is empty. The weights only move cut points. Each test is assigned one shard in
+a single pass, so a stale weights file can unbalance the shards but never drop
+or repeat a test. The weights must describe the GitHub runner, not a
+workstation. A first seeding from one local run scaled by guesswork left the
+four shards at 4.5, 8.8, 17.1 and 12.5 minutes. Every shard therefore runs
+`go test -json` through `.github/scripts/record-internal-api-test-seconds.py`,
+which prints only package lines and the output of failing or unfinished tests
+(as plain `go test` does), exits non-zero on any failure behind `pipefail`,
+and writes each top-level test's seconds to an `internal-api-test-seconds-N`
+artifact that is uploaded even when the shard fails.
+`.github/scripts/refresh-internal-api-test-seconds.py --run <id>` downloads
+those artifacts with `gh run download`, takes each test's median across the
+given runs, and rewrites the weights file with `DEFAULT_WEIGHT` set to the mean
+of the unlisted tests. Until such runs exist, the weights are a local
+`-race -json` run with each region of the list scaled to the seconds the
+runner reported for it across the count-based and weighted runs. Five shards
+put the six minute contract mock chart test with only its next few
+neighbours, and the predicted slowest shard is about 8.5 minutes against about
+10 with four, which keeps a 20% slower runner under the 11 minutes of the
+Frontend and rest checks. A shard holding most of the
+tests passes `-skip` of every other shard's tests instead of naming its own,
+which runs the same tests in the same order and keeps the single argument
+under the 120,000 byte ceiling. It passes `-skip` alone. The test binary
+caches only its last compiled pattern, so `-run .` next to `-skip` recompiled
+the long skip pattern for every test and subtest and roughly doubled that
+shard. The required check name
 `Backend tests (api)` belongs to a verdict job that passes only when every
 shard succeeded, and `Backend tests (rest-0)` and `Backend tests (rest-1)` keep
 their names and package split. All shards still expand for documentation-only

@@ -3848,14 +3848,27 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 		// A shard holding most tests is named by skipping every other
 		// shard's tests, which keeps its argument under the exec limit.
 		`others=$(printf '%s\n' "$tests" | grep -vxF -f <(printf '%s\n' "$selected") || true)`,
-		`filter=(-run . -skip "$pattern")`,
+		`filter=(-skip "$pattern")`,
 		`if [ "${#pattern}" -gt 120000 ]; then`,
-		`go test -race -timeout 50m "${filter[@]}" ./internal/api`,
+		// Every shard records per-test seconds on the runner through -json
+		// so the weights can be refreshed from CI, while pipefail keeps a
+		// go test failure fatal behind the recorder.
+		"set -euo pipefail",
+		`go test -race -timeout 50m -json "${filter[@]}" ./internal/api \
+            | python3 .github/scripts/record-internal-api-test-seconds.py "$timings/api-${API_SHARD_INDEX}.txt"`,
+		"if: always() && needs.changes.outputs.code == 'true'",
+		"name: internal-api-test-seconds-${{ matrix.index }}",
+		"path: ${{ runner.temp }}/internal-api-test-seconds/",
 		"PULSE_DATA_DIR: /tmp/pulse-test-data",
 	} {
 		if !strings.Contains(shards, required) {
 			t.Fatalf("internal/api shard job missing %q", required)
 		}
+	}
+	// The test binary caches one compiled pattern, so -run next to -skip
+	// recompiles the long skip pattern for every test and subtest.
+	if strings.Contains(shards, "-run . -skip") {
+		t.Fatal("internal/api shards must pass -skip alone; pairing it with -run recompiles the skip pattern per test")
 	}
 	if strings.Contains(shards, "sort") {
 		t.Fatal("internal/api shards must keep go test's run order; sorting splits order-coupled tests")
@@ -3881,6 +3894,67 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 	}
 
 	assertInternalAPIShardSelectionExhaustive(t, want)
+	assertInternalAPITimingRecorderKeepsFailuresVisible(t)
+}
+
+// assertInternalAPITimingRecorderKeepsFailuresVisible feeds the -json
+// recorder a passing, a failing and an unfinished test. Passing output must
+// stay hidden like plain go test, failing and unfinished output must print,
+// any failure must exit non-zero, and every finished top-level test must be
+// written with its seconds.
+func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
+	t.Helper()
+	recorder := repoFile(".github", "scripts", "record-internal-api-test-seconds.py")
+	record := func(events string) (string, string, error) {
+		out := filepath.Join(t.TempDir(), "seconds.txt")
+		cmd := exec.Command("python3", recorder, out)
+		cmd.Stdin = strings.NewReader(events)
+		printed, err := cmd.Output()
+		written, readErr := os.ReadFile(out)
+		if readErr != nil {
+			t.Fatalf("recorder wrote no seconds file: %v", readErr)
+		}
+		return string(printed), string(written), err
+	}
+	const pkg = `"Package":"example/internal/api"`
+	passing := strings.Join([]string{
+		`{"Action":"run",` + pkg + `,"Test":"TestQuiet"}`,
+		`{"Action":"output",` + pkg + `,"Test":"TestQuiet","Output":"quiet log line\n"}`,
+		`{"Action":"pass",` + pkg + `,"Test":"TestQuiet","Elapsed":1.25}`,
+		`{"Action":"output",` + pkg + `,"Output":"ok  \texample/internal/api\t2.000s\n"}`,
+		`{"Action":"pass",` + pkg + `,"Elapsed":2}`,
+	}, "\n") + "\n"
+	printed, written, err := record(passing)
+	if err != nil {
+		t.Fatalf("recorder must pass a passing run: %v", err)
+	}
+	if strings.Contains(printed, "quiet log line") || !strings.Contains(printed, "ok  \texample/internal/api") {
+		t.Fatalf("recorder must print package lines and hide passing test output, printed %q", printed)
+	}
+	if written != "# package-seconds 2.00\nTestQuiet 1.25\n" {
+		t.Fatalf("recorder seconds file = %q", written)
+	}
+
+	failing := strings.Join([]string{
+		`{"Action":"run",` + pkg + `,"Test":"TestBroken"}`,
+		`{"Action":"output",` + pkg + `,"Test":"TestBroken/case","Output":"broken detail\n"}`,
+		`{"Action":"fail",` + pkg + `,"Test":"TestBroken/case","Elapsed":0.5}`,
+		`{"Action":"fail",` + pkg + `,"Test":"TestBroken","Elapsed":0.75}`,
+		`{"Action":"run",` + pkg + `,"Test":"TestHung"}`,
+		`{"Action":"output",` + pkg + `,"Test":"TestHung","Output":"panic: test timed out\n"}`,
+	}, "\n") + "\n"
+	printed, written, err = record(failing)
+	if err == nil {
+		t.Fatal("recorder must exit non-zero when a test fails or never finishes")
+	}
+	for _, want := range []string{"broken detail", "TestHung did not finish", "panic: test timed out"} {
+		if !strings.Contains(printed, want) {
+			t.Fatalf("recorder must print %q for failing or unfinished tests, printed %q", want, printed)
+		}
+	}
+	if written != "TestBroken 0.75\n" {
+		t.Fatalf("recorder must record only finished top-level tests, wrote %q", written)
+	}
 }
 
 // assertInternalAPIShardSelectionExhaustive runs the shard selector the way
@@ -3904,11 +3978,14 @@ func assertInternalAPIShardSelectionExhaustive(t *testing.T, workflowShards int)
 		if len(fields) == 0 || strings.HasPrefix(fields[0], "#") {
 			continue
 		}
-		if len(fields) != 2 || !strings.HasPrefix(fields[0], "Test") {
-			t.Fatalf("internal/api weights line must be `<TestName> <seconds>`, got %q", line)
+		if len(fields) != 2 || !(strings.HasPrefix(fields[0], "Test") || fields[0] == "DEFAULT_WEIGHT") {
+			t.Fatalf("internal/api weights line must be `<TestName> <seconds>` or `DEFAULT_WEIGHT <seconds>`, got %q", line)
 		}
 		if seconds, err := strconv.ParseFloat(fields[1], 64); err != nil || seconds <= 0 {
 			t.Fatalf("internal/api weight for %s must be positive seconds, got %q", fields[0], fields[1])
+		}
+		if fields[0] == "DEFAULT_WEIGHT" {
+			continue
 		}
 		weighted = append(weighted, fields[0])
 	}
@@ -3928,7 +4005,7 @@ func assertInternalAPIShardSelectionExhaustive(t *testing.T, workflowShards int)
 		t.Fatal(err)
 	}
 	skewedWeights := filepath.Join(t.TempDir(), "skewed.txt")
-	skewed := tests[len(tests)/3] + " 900\n" + tests[len(tests)-1] + " 450\n"
+	skewed := "DEFAULT_WEIGHT 7.5\n" + tests[len(tests)/3] + " 900\n" + tests[len(tests)-1] + " 450\n"
 	if err := os.WriteFile(skewedWeights, []byte(skewed), 0o644); err != nil {
 		t.Fatal(err)
 	}
