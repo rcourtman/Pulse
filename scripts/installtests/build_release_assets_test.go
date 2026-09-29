@@ -3797,6 +3797,84 @@ func TestBenchmarkQualificationRetainsProvenance(t *testing.T) {
 	}
 }
 
+func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := string(content)
+
+	// Branch protection requires these exact check names. The rest shards stay
+	// matrix entries and internal/api keeps its name on the verdict job.
+	backend := workflowJobBlock(t, workflow, "backend")
+	for _, required := range []string{
+		"name: Backend tests (${{ matrix.shard }})",
+		"shard: [rest-0, rest-1]",
+		"grep -v '/internal/api$'",
+		"go test -race -timeout 50m $pkgs",
+	} {
+		if !strings.Contains(backend, required) {
+			t.Fatalf("backend rest shards missing %q", required)
+		}
+	}
+
+	shards := workflowJobBlock(t, workflow, "backend-api")
+	indexes := regexp.MustCompile(`(?m)^        index: \[([0-9, ]+)\]$`).FindStringSubmatch(shards)
+	count := regexp.MustCompile(`(?m)^      API_SHARD_COUNT: ([0-9]+)$`).FindStringSubmatch(shards)
+	if len(indexes) != 2 || len(count) != 2 {
+		t.Fatal("internal/api shard job must declare its index matrix and API_SHARD_COUNT")
+	}
+	want, _ := strconv.Atoi(count[1])
+	listed := strings.Split(indexes[1], ", ")
+	if want < 2 || len(listed) != want {
+		t.Fatalf("internal/api shard matrix %v must list exactly API_SHARD_COUNT=%d indexes", listed, want)
+	}
+	for i, value := range listed {
+		if value != strconv.Itoa(i) {
+			t.Fatalf("internal/api shard indexes must be 0..%d in order, got %v", want-1, listed)
+		}
+	}
+	for _, required := range []string{
+		"needs: changes",
+		"fail-fast: false",
+		// The list comes from the commit under test, so a new test cannot be
+		// missed, and contiguous slices of go test's own order put it in
+		// exactly one shard while keeping order-coupled neighbours together.
+		"go test -race -list . ./internal/api",
+		`'NR > int(total * i / n) && NR <= int(total * (i + 1) / n)'`,
+		"resolved to an empty test list",
+		"go test -list found no tests in ./internal/api",
+		`go test -race -timeout 50m -run "$pattern" ./internal/api`,
+		"PULSE_DATA_DIR: /tmp/pulse-test-data",
+	} {
+		if !strings.Contains(shards, required) {
+			t.Fatalf("internal/api shard job missing %q", required)
+		}
+	}
+	if strings.Contains(shards, "sort") {
+		t.Fatal("internal/api shards must keep go test's run order; sorting splits order-coupled tests")
+	}
+	if strings.Contains(shards, "\n    if:") {
+		t.Fatal("internal/api shards must expand for every change so the verdict never sees skipped shards")
+	}
+
+	verdict := workflowJobBlock(t, workflow, "backend-api-verdict")
+	for _, required := range []string{
+		"name: Backend tests (api)\n",
+		"needs: backend-api",
+		"if: always()",
+		"API_SHARDS_RESULT: ${{ needs.backend-api.result }}",
+		`if [ "$API_SHARDS_RESULT" != success ]; then`,
+	} {
+		if !strings.Contains(verdict, required) {
+			t.Fatalf("Backend tests (api) verdict missing %q", required)
+		}
+	}
+	if got := strings.Count(workflow, "name: Backend tests (api)\n"); got != 1 {
+		t.Fatalf("exactly one job may carry the required Backend tests (api) name, found %d", got)
+	}
+}
+
 func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	workflowPath := repoFile(".github", "workflows", "build-and-test.yml")
 	assertFileContainsAll(t, workflowPath,
