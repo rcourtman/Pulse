@@ -2327,15 +2327,15 @@ workspaces`. Install proofs that only ever ran against an empty install could
 not see this; verification on 2026-09-23 used a v6.4.1 bundle with one client
 whose container Docker reported healthy.
 
-The active prerelease `v6.4.5-rc.4` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `6.4.5-rc.4` release version.
-It follows `v6.4.5-rc.3` on the published `v6.4.5` candidate line.
+The active prerelease `v6.4.5-rc.5` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `6.4.5-rc.5` release version.
+It follows `v6.4.5-rc.5` on the published `v6.4.5` candidate line.
 This prerelease keeps `rollback_version=v6.4.1`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.
-For the active prerelease `v6.4.5-rc.4` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `6.4.5-rc.4` until the next governed stable cut moves them forward.
+For the active prerelease `v6.4.5-rc.5` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `6.4.5-rc.5` until the next governed stable cut moves them forward.
 No governed mobile-facing path changed from `v6.4.1`, so the release decision is `no-mobile-impact`; no companion upload or public mobile-store rollout is part of this candidate.
 The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode. Stable `v6.4.5` also skips SignPath under the standing unavailable policy.
 These are the selected publication requirements, not a claim that this preparation has been qualified or published. Stable remains subject to actual readiness and promotion evidence.
 
-- The 6.4.5-rc.4 preparation binds version, Compose/installer defaults, Helm metadata and upgrade pointers to the reviewed release/v6.4 repair for updater release selection (#2282), disk and notification correctness, and test reliability. Rollback remains published stable 6.4.1. The candidate retains the known mobile-Safari cold-organization transition risk and requires exact qualification, private pairing, installed delivery/recovery and actual published-candidate observation before stable promotion. Preparation metadata and source CI are not publication or soak evidence.
+- The 6.4.5-rc.5 preparation binds version, Compose/installer defaults, Helm metadata and upgrade pointers to the reviewed release/v6.4 repair for updater release selection (#2282), disk and notification correctness, and test reliability. Rollback remains published stable 6.4.1. The candidate retains the known mobile-Safari cold-organization transition risk and requires exact qualification, private pairing, installed delivery/recovery and actual published-candidate observation before stable promotion. Preparation metadata and source CI are not publication or soak evidence.
 
 Stable rehearsal metadata resolves candidate publication through GitHub using
 only the existing job contents-read token, bound to the resolver step as
@@ -5406,3 +5406,7 @@ requirements and does not change the selected product source or qualification sc
 The metadata regression invokes the full release-body validator, including its
 flat improvement list and per-bullet length bounds, rather than checking
 punctuation alone. Inherited improvements remain in that single customer list.
+
+### RC.5 replacement preparation
+
+RC.5 replaces the published RC.4 for the candidate-only child-alert notification regression repaired in protected #2336. The repair suppresses grouped-child escalation and schedules a continuing symptom after its primary recovers. The release metadata pins RC.5 consistently, mirrors both shipped release and upgrade guides, and retains stable v6.4.1 for rollback. This does not include later main-only repairs or private source changes. Exact qualification, a fresh explicit private pair and publication remain required. A new clean 24-hour soak begins at RC.5 publication.
