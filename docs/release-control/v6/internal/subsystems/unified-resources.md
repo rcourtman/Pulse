@@ -508,6 +508,8 @@ PBS presentation correlation accepts standalone agents and VM/system-container r
 
 When the registry uniquely corroborates a PBS connection to a host agent by node name, connection name, endpoint hostname or reported interface IP, the PBS service may expose that source-native agent ID as `pbs.linkedAgentId`. This is a presentation link, not a replacement for the PBS service's canonical ID or metrics target. Token-auth connections may lack `nodeName`; consumers must use the explicit link in preference to display-name matching and must not infer one from an IP or name themselves. PVE-only nodes without an actual Agent facet are not host-history candidates, even if their name matches the PBS connection. A changed link invalidates any remembered correlation to an old host.
 
+For a PBS inside a PVE VM whose in-guest Agent omits interface IPs, the registry may also corroborate a unique Agent-to-VM state link with a unique running VM reporting the PBS endpoint's exact IP. All three observations must be within five minutes, and reused/non-unique IPs, stopped guests or competing Agent links decline to associate. This is an alternate backend evidence chain, not frontend hostname inference; it cannot identify a VirtualBox guest without equivalent observed topology.
+
 A single agent surfaced as both a VM/system-container guest and a standalone agent row is one identity, not an ambiguous pair. Collapse candidates that share an agent identity before deciding, and prefer the guest's canonical metricsTarget because it names the persisted host series; the PBS service target names the service key and now records only PBS API node-status CPU/memory history, not host-agent disk, network, or I/O. Only distinct agent identities, or candidates whose identity cannot be proven equal, decline to choose. Never use input order or a fallback that discards the PBS row id.
 
 A realtime refresh can briefly omit the correlated host row while the PBS server row remains. Retain the last resolved correlation per PBS server across that omission rather than substituting the PBS service target, so the drawer's identity rows and history target stay stable. Reuse the remembered host only while it is still fresh relative to the server and drop it once stale, so a removed or replaced host is not advertised indefinitely; a present but ambiguous host still declines.
@@ -5170,8 +5172,8 @@ and other typed physical-disk facts therefore remain agent-owned, while the
 PBS source mapping and PBS-parent relationship make the existing disk
 discoverable in Proxmox Backup Server storage context. Canonical parent and
 fact precedence continue to follow the existing source-priority rules.
-`internal/unifiedresources/pbs_pmg_registry_test.go` pins the unique-match and
-ambiguous-match boundaries.
+`internal/unifiedresources/pbs_pmg_registry_test.go` pins the unique-match,
+guest-IP fallback, stale-observation and ambiguous-match boundaries.
 That same shared-consumer boundary now also owns VMware phase-1 detail
 presentation. `frontend-modern/src/components/Infrastructure/`
 `resourceDetailDrawerVmwareModel.ts`,
