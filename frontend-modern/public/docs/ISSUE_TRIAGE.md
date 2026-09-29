@@ -7,13 +7,24 @@ documentation gaps, or operator workflows described in the same report.
 ## Intake contract
 
 Issue forms ask for one primary outcome and provide an **Additional actionable
-topics** field. Entering anything other than `None` applies the
-`needs-decomposition` label automatically. This is a queue-integrity signal,
-not a statement that every topic will be built.
+topics** field. Declaring a topic when opening an issue or newly adding one to
+this field applies the `needs-decomposition` label automatically. This is a
+queue-integrity signal, not a statement that every topic will be built.
+The synchronizer never removes this label, nor restores it after a maintainer
+has cleared it when an unrelated edit or reopen occurs. A later `None` in the
+form does not prove that topics raised in comments were dispositioned; triage
+removes the label only after the linked dispositions below are complete.
 
 Reporters may still write free-form issues, edit form output, or discover a
 second topic during discussion. Triage owns decomposition in those cases; it
 must not require the reporter to refile information they already supplied.
+
+The bug form asks for the version on the failing running instance, not merely
+the version before an upgrade. A running image reference applies only to
+container installs; bare-metal and LXC reporters must not have to attest to
+one. Ask for evidence relevant to the symptom: logs or sanitized diagnostics
+for connection and data failures, and screenshots or exact error text for
+visual failures. Do not make a reporter invent logs where none apply.
 
 ## Required disposition
 
