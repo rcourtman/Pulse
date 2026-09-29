@@ -55,6 +55,8 @@ export function Actions() {
   const [loadError, setLoadError] = createSignal('');
   const [readOnly, setReadOnly] = createSignal(false);
   const [patrolWatchOnly, setPatrolWatchOnly] = createSignal(false);
+  let listRequestGeneration = 0;
+  let detailRequestGeneration = 0;
 
   // The Open tab is where users land wondering why nothing is queued. When
   // Patrol runs Watch only it never proposes fixes, so the calm state must say
@@ -77,18 +79,22 @@ export function Actions() {
   );
 
   const loadActions = async () => {
+    const generation = ++listRequestGeneration;
+    const requestedView = view();
     setLoading(true);
     setLoadError('');
     try {
-      const response = await ResourceActionsAPI.listActions(view());
+      const response = await ResourceActionsAPI.listActions(requestedView);
+      if (generation !== listRequestGeneration) return;
       setActions(response.actions);
       setReadOnly(response.readOnly === true);
     } catch (cause) {
+      if (generation !== listRequestGeneration) return;
       setActions([]);
       setReadOnly(false);
       setLoadError(cause instanceof Error ? cause.message : 'The action store is unavailable.');
     } finally {
-      setLoading(false);
+      if (generation === listRequestGeneration) setLoading(false);
     }
   };
 
@@ -108,14 +114,26 @@ export function Actions() {
     view() === 'pending' ? sortOpenActionsForReview(actions()) : actions(),
   );
 
-  const openActionById = async (actionId: string) => {
-    setDetailError('');
+  const openActionById = async (actionId: string, generation: number) => {
     try {
       const detail = await ResourceActionsAPI.getAction(actionId);
+      if (
+        generation !== detailRequestGeneration ||
+        parseActionReviewId(location.search) !== actionId
+      )
+        return;
+      if (detail.audit.id !== actionId) {
+        setDetailError('Action details did not match the selected action. Open it again.');
+        return;
+      }
       setSelected(detail);
       setView(getInboxViewForState(detail.audit.state));
     } catch (cause) {
-      setSelected(null);
+      if (
+        generation !== detailRequestGeneration ||
+        parseActionReviewId(location.search) !== actionId
+      )
+        return;
       setDetailError(cause instanceof Error ? cause.message : 'Action details are unavailable.');
     }
   };
@@ -125,6 +143,7 @@ export function Actions() {
   };
 
   const closeAction = () => {
+    ++detailRequestGeneration;
     setSelected(null);
     setDetailError('');
     setSearchParams({ [ACTION_REVIEW_QUERY_PARAM]: null }, { replace: true });
@@ -137,7 +156,10 @@ export function Actions() {
 
   createEffect(() => {
     const actionId = parseActionReviewId(location.search);
-    if (actionId) void openActionById(actionId);
+    const generation = ++detailRequestGeneration;
+    setSelected(null);
+    setDetailError('');
+    if (actionId) void openActionById(actionId, generation);
   });
 
   return (
@@ -330,9 +352,17 @@ export function Actions() {
         detail={selected()}
         onClose={closeAction}
         onChanged={async (detail) => {
+          // A read or mutation started in an earlier review must not replace
+          // the action currently selected by the URL (or reopen a closed one).
+          if (
+            selected()?.audit.id !== detail.audit.id ||
+            parseActionReviewId(location.search) !== detail.audit.id
+          )
+            return;
           setSelected(detail);
-          setView(getInboxViewForState(detail.audit.state));
-          await loadActions();
+          const nextView = getInboxViewForState(detail.audit.state);
+          if (view() === nextView) await loadActions();
+          else setView(nextView); // the view effect loads the new list once
         }}
       />
     </div>

@@ -3724,6 +3724,13 @@ vulnerabilities in the current patch level, the canonical fix is to advance the
 governed release toolchain and immutable Go builder digest together, not to
 suppress the scanner or produce release artifacts with an older patched-over
 runtime.
+The hosted control-plane source builder and integration mock builder are both
+on the reviewed `golang:1.26.8-alpine` digest
+`sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c`.
+`TestProviderMSPGoBuilderMatchesIntegrationMock` pins their exact agreement;
+it does not pull the image, prove its registry contents, or qualify a deployed
+control plane. The release publisher's prebuilt control-plane target is a
+separate path and does not rebuild its binary from this stage.
 As of 2026-08-27, the governed release floor is Go `1.26.7`. It supersedes
 `1.26.5`, whose standard library is reachable through seven vulnerable Pulse
 call paths reported by `govulncheck`, including HTTP/TLS, URL parsing, SAML XML

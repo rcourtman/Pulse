@@ -4,11 +4,33 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
 )
+
+func TestProviderMSPGoBuilderMatchesIntegrationMock(t *testing.T) {
+	// These builders use the same Go patch level and immutable image. The
+	// mock's build must not exercise a different compiler from the hosted
+	// control plane merely because Dependabot advanced one Dockerfile.
+	const expected = "golang:1.26.8-alpine@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c"
+	pattern := regexp.MustCompile(`(?m)^FROM (?:--platform=\$BUILDPLATFORM )?(golang:[^[:space:]]+) AS builder$`)
+	for _, path := range [][]string{
+		{"deploy", "provider-msp", "Dockerfile.control-plane"},
+		{"tests", "integration", "mock-github-server", "Dockerfile"},
+	} {
+		content, err := os.ReadFile(repoFile(path...))
+		if err != nil {
+			t.Fatalf("read %s: %v", filepath.Join(path...), err)
+		}
+		match := pattern.FindStringSubmatch(string(content))
+		if len(match) != 2 || match[1] != expected {
+			t.Errorf("%s Go builder = %q, want %q", filepath.Join(path...), match, expected)
+		}
+	}
+}
 
 func TestProviderMSPControlPlaneImageConsumesExactCandidate(t *testing.T) {
 	dockerfileBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", "Dockerfile.control-plane"))

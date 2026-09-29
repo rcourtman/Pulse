@@ -260,6 +260,17 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 		m.clearAlertNoLock(storageKey)
 	}
 
+	// Synthesis replaces its previous links in place. Remember which retained
+	// incidents had a primary delivery owner before that information is cleared.
+	// If the primary recovers while a symptom remains active, the symptom needs
+	// its own first notification even though its occurrence did not restart.
+	previouslySupported := make(map[string]bool)
+	for storageKey := range desired {
+		if existing, exists := m.getActiveAlertNoLock(storageKey); exists && isSupportedInfrastructureSymptom(existing) {
+			previouslySupported[storageKey] = true
+		}
+	}
+
 	// Synthesize over the post-recovery live set before updating or dispatching
 	// any detector. Supporting symptoms retain their independent lifecycle but
 	// can share one evidence-backed incident presentation and delivery decision.
@@ -297,12 +308,19 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 			if !m.setActiveAlertNoLock(storageKey, existing) {
 				continue
 			}
-			// Like metric alerts, an existing provider incident becoming critical
-			// must notify again. Keep its lifecycle and all delivery policy gates;
-			// unchanged severity and downgrades must not create notification noise.
-			if oldLevel != existing.Level && existing.Level == AlertLevelCritical &&
-				!existing.Acknowledged &&
-				m.allowNotificationByRateLimit(storageKey, existing, "critical-escalation") {
+			// A still-failing symptom which loses its supported primary needs its
+			// first notification. An alert already dispatched before grouping must
+			// not be duplicated when the group dissolves. As with metric alerts, a
+			// separate increase to critical may also notify through normal gates.
+			newlyIndependent := previouslySupported[storageKey] &&
+				!isSupportedInfrastructureSymptom(existing) && existing.LastNotified == nil
+			becameCritical := oldLevel != existing.Level && existing.Level == AlertLevelCritical
+			notificationReason := "critical-escalation"
+			if newlyIndependent {
+				notificationReason = "supported-primary-ended"
+			}
+			if (newlyIndependent || becameCritical) && !existing.Acknowledged &&
+				m.allowNotificationByRateLimit(storageKey, existing, notificationReason) {
 				m.dispatchAlert(existing, false)
 			}
 			continue

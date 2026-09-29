@@ -235,6 +235,113 @@ func TestInfrastructureIncidentSynthesisShowsPartialRecovery(t *testing.T) {
 	}
 }
 
+func TestSupportedSymptomNotifiesWhenPrimaryRecoversButSymptomPersists(t *testing.T) {
+	manager := newTestManager(t)
+	configureUnifiedEvalManager(t, manager, unifiedEvalBaseConfig())
+	startedAt := time.Date(2026, 9, 29, 18, 0, 0, 0, time.UTC)
+	hostID := "agent:edge-1"
+	endpointID := "availability:checkout"
+	host := unifiedresources.Resource{
+		ID: hostID, Type: unifiedresources.ResourceTypeAgent, Name: "Edge host", Status: unifiedresources.StatusOffline,
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "agent", NativeID: "edge-1", Code: "agent_offline", Severity: storagehealth.RiskCritical,
+			Source: "agent.heartbeat", Summary: "Edge host is offline", StartedAt: startedAt,
+			ConfirmationsRequired: 1, RecoveryConfirmationsRequired: 1,
+		}},
+	}
+	endpoint := unifiedresources.Resource{
+		ID: endpointID, Type: unifiedresources.ResourceTypeNetworkEndpoint, Name: "Checkout", Status: unifiedresources.StatusOffline,
+		Availability: &unifiedresources.AvailabilityData{AggregateState: "unavailable", TransportOutcome: "unreachable"},
+		Relationships: []unifiedresources.ResourceRelationship{{
+			SourceID: endpointID, TargetID: hostID, Type: unifiedresources.RelChecks, Confidence: 1, Active: true,
+		}},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "availability", NativeID: "checkout", Code: "availability_unreachable", Severity: storagehealth.RiskCritical,
+			Source: "availability.probe", Summary: "Checkout is unreachable", StartedAt: startedAt.Add(time.Second),
+			ConfirmationsRequired: 1, RecoveryConfirmationsRequired: 1,
+		}},
+	}
+	var delivered []string
+	manager.SetAlertCallback(func(alert *Alert) { delivered = append(delivered, alert.ResourceID) })
+
+	manager.SyncUnifiedResourceIncidents([]unifiedresources.Resource{host, endpoint})
+	if len(delivered) != 1 || delivered[0] != hostID {
+		t.Fatalf("grouped delivery = %v, want only the primary host", delivered)
+	}
+	for _, alert := range manager.GetActiveAlerts() {
+		if alert.ResourceID == endpointID && (!isSupportedInfrastructureSymptom(&alert) || alert.LastNotified != nil) {
+			t.Fatalf("grouped symptom = %+v, want supported and not separately dispatched", alert)
+		}
+	}
+
+	// The host is healthy again, but the endpoint still fails. It must regain
+	// its own notification path without requiring a new alert occurrence.
+	host.Status = unifiedresources.StatusOnline
+	host.Incidents = nil
+	manager.SyncUnifiedResourceIncidents([]unifiedresources.Resource{host, endpoint})
+	if len(delivered) != 2 || delivered[1] != endpointID {
+		t.Fatalf("after primary recovery delivery = %v, want continuing symptom", delivered)
+	}
+	manager.SyncUnifiedResourceIncidents([]unifiedresources.Resource{host, endpoint})
+	if len(delivered) != 2 {
+		t.Fatalf("unchanged independent symptom sent again: %v", delivered)
+	}
+}
+
+func TestPreviouslyNotifiedSymptomDoesNotDuplicateWhenPrimaryRecovers(t *testing.T) {
+	manager := newTestManager(t)
+	configureUnifiedEvalManager(t, manager, unifiedEvalBaseConfig())
+	startedAt := time.Date(2026, 9, 29, 18, 0, 0, 0, time.UTC)
+	hostID := "agent:edge-1"
+	endpointID := "availability:checkout"
+	host := unifiedresources.Resource{
+		ID: hostID, Type: unifiedresources.ResourceTypeAgent, Status: unifiedresources.StatusOnline,
+	}
+	endpoint := unifiedresources.Resource{
+		ID: endpointID, Type: unifiedresources.ResourceTypeNetworkEndpoint, Status: unifiedresources.StatusOffline,
+		Availability: &unifiedresources.AvailabilityData{AggregateState: "unavailable", TransportOutcome: "unreachable"},
+		Relationships: []unifiedresources.ResourceRelationship{{
+			SourceID: endpointID, TargetID: hostID, Type: unifiedresources.RelChecks, Confidence: 1, Active: true,
+		}},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "availability", NativeID: "checkout", Code: "availability_unreachable", Severity: storagehealth.RiskCritical,
+			Source: "availability.probe", StartedAt: startedAt.Add(time.Second), ConfirmationsRequired: 1, RecoveryConfirmationsRequired: 1,
+		}},
+	}
+	var delivered []string
+	manager.SetAlertCallback(func(alert *Alert) { delivered = append(delivered, alert.ResourceID) })
+
+	manager.SyncUnifiedResourceIncidents([]unifiedresources.Resource{host, endpoint})
+	if len(delivered) != 1 || delivered[0] != endpointID {
+		t.Fatalf("standalone symptom delivery = %v, want endpoint", delivered)
+	}
+	host.Status = unifiedresources.StatusOffline
+	host.Incidents = []unifiedresources.ResourceIncident{{
+		Provider: "agent", NativeID: "edge-1", Code: "agent_offline", Severity: storagehealth.RiskCritical,
+		Source: "agent.heartbeat", StartedAt: startedAt, ConfirmationsRequired: 1, RecoveryConfirmationsRequired: 1,
+	}}
+	manager.SyncUnifiedResourceIncidents([]unifiedresources.Resource{host, endpoint})
+	if len(delivered) != 2 || delivered[1] != hostID {
+		t.Fatalf("new primary delivery = %v, want endpoint then host", delivered)
+	}
+	var grouped bool
+	for _, alert := range manager.GetActiveAlerts() {
+		if alert.ResourceID == endpointID {
+			grouped = isSupportedInfrastructureSymptom(&alert)
+		}
+	}
+	if !grouped {
+		t.Fatal("endpoint did not gain a supported primary")
+	}
+
+	host.Status = unifiedresources.StatusOnline
+	host.Incidents = nil
+	manager.SyncUnifiedResourceIncidents([]unifiedresources.Resource{host, endpoint})
+	if len(delivered) != 2 {
+		t.Fatalf("already-notified endpoint duplicated after primary recovery: %v", delivered)
+	}
+}
+
 func TestClassifyIncidentFailureSeparatesApplicationCertificateAndCoverage(t *testing.T) {
 	applicationResource := unifiedresources.Resource{Availability: &unifiedresources.AvailabilityData{
 		AggregateState: "unavailable", TransportOutcome: "reachable", ApplicationOutcome: "failed",
