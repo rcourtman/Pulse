@@ -337,9 +337,9 @@ jobs:
       fail-fast: false
       matrix:
         # Keep API_SHARD_COUNT equal to the number of indexes listed here.
-        index: [0, 1, 2, 3]
+        index: [0, 1, 2, 3, 4]
     env:
-      API_SHARD_COUNT: 4
+      API_SHARD_COUNT: 5
 
     steps:
       - name: Report documentation-only change
@@ -387,7 +387,12 @@ jobs:
         # small default weight, and the weights only move the cut points, so
         # coverage never depends on them. Listing with -race builds the same
         # test binary the run then reuses from cache. Benchmarks are left out
-        # because plain go test never runs them.
+        # because plain go test never runs them. The run goes through
+        # -json so every shard records each test's seconds on the runner
+        # (uploaded below and fed back into the weights by
+        # refresh-internal-api-test-seconds.py). The recorder prints only
+        # package lines and the output of failing or unfinished tests, like
+        # plain go test, and pipefail keeps a go test failure fatal.
         run: |
           set -euo pipefail
           listing=$(go test -race -list . ./internal/api)
@@ -406,14 +411,17 @@ jobs:
           others=$(printf '%s\n' "$tests" | grep -vxF -f <(printf '%s\n' "$selected") || true)
           # Name whichever side is shorter. A shard holding most of the tests
           # is passed as -skip of every other shard's tests, which runs the
-          # same set in the same order.
+          # same set in the same order. Never pair -skip with -run. The test
+          # binary caches only the last compiled pattern, so alternating the
+          # two recompiles the long skip pattern for every test and subtest,
+          # which added about seven minutes to such a shard.
           pattern="^($(printf '%s\n' "$selected" | paste -sd '|' -))\$"
           filter=(-run "$pattern")
           if [ -n "$others" ]; then
             skip="^($(printf '%s\n' "$others" | paste -sd '|' -))\$"
             if [ "${#skip}" -lt "${#pattern}" ]; then
               pattern=$skip
-              filter=(-run . -skip "$pattern")
+              filter=(-skip "$pattern")
             fi
           fi
           # Linux rejects a single argument over 128 KiB. Fail with a clear
@@ -423,7 +431,19 @@ jobs:
             exit 1
           fi
           echo "internal/api shard ${API_SHARD_INDEX} of ${API_SHARD_COUNT} runs $(printf '%s\n' "$selected" | wc -l | tr -d ' ') of ${total} tests (${selected%%$'\n'*} .. ${selected##*$'\n'})"
-          go test -race -timeout 50m "${filter[@]}" ./internal/api
+          timings="$RUNNER_TEMP/internal-api-test-seconds"
+          mkdir -p "$timings"
+          go test -race -timeout 50m -json "${filter[@]}" ./internal/api \
+            | python3 .github/scripts/record-internal-api-test-seconds.py "$timings/api-${API_SHARD_INDEX}.txt"
+
+      - name: Upload internal/api test timings
+        if: always() && needs.changes.outputs.code == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: internal-api-test-seconds-${{ matrix.index }}
+          path: ${{ runner.temp }}/internal-api-test-seconds/
+          if-no-files-found: warn
+          retention-days: 30
 
   # Required check name. Branch protection matches `Backend tests (api)`
   # exactly, so this job must keep that name and must fail unless every

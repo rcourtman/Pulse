@@ -7,8 +7,10 @@
 # Shards are contiguous runs of go test's order, because some internal/api
 # tests still depend on package state left by the tests just before them.
 # Cut points are chosen by estimated run time instead of test count. Every
-# test weighs its seconds from the weights file, or DEFAULT_WEIGHT when the
-# file does not name it (new tests, renamed tests). The smallest per-shard
+# test weighs its seconds from the weights file, or the default weight when
+# the file does not name it (new tests, renamed tests). The default weight is
+# the file's `DEFAULT_WEIGHT <seconds>` line, 0.05 when it has none, and a
+# DEFAULT_WEIGHT environment variable overrides both. The smallest per-shard
 # capacity that lets the list be cut into at most <shard-count> contiguous
 # runs is found by binary search, then the list is filled greedily up to that
 # capacity. If fewer runs than shards would result, the tail is cut early so
@@ -39,7 +41,7 @@ if [ ! -f "$weights" ]; then
   exit 2
 fi
 
-awk -v n="$count" -v want="$index" -v default_weight="${DEFAULT_WEIGHT:-0.05}" '
+awk -v n="$count" -v want="$index" -v env_default="${DEFAULT_WEIGHT:-}" '
   function centis(seconds,    c) {
     c = int(seconds * 100 + 0.5)
     return c < 1 ? 1 : c
@@ -64,10 +66,14 @@ awk -v n="$count" -v want="$index" -v default_weight="${DEFAULT_WEIGHT:-0.05}" '
       bad = 1
       exit 1
     }
-    weight[$1] = $2 + 0
+    if ($1 == "DEFAULT_WEIGHT") file_default = $2 + 0
+    else weight[$1] = $2 + 0
     next
   }
   NF {
+    if (!default_weight) {
+      default_weight = env_default != "" ? env_default + 0 : (file_default ? file_default : 0.05)
+    }
     total++
     name[total] = $1
     cost[total] = centis(($1 in weight) ? weight[$1] : default_weight)
