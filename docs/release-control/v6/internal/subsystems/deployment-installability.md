@@ -1304,6 +1304,10 @@ artifact-selection behaviour.
    helper's private network isolation. Canary setup and the no-default-route
    check must fail qualification before that lab if the boundary is absent;
    they must not skip the lab or change the release packet under test.
+   The lab writes its receipt and transcript as root inside that container.
+   After a passing lab and before attestation, the workflow must hand the
+   evidence directory to the runner user without altering its content, so the
+   attester can read the receipt and write the attestation beside it.
    PVE jobs must consume their runner users' persistent local Go and npm caches
    directly; disposable-runner Actions cache restore/save phases must remain
    disabled because archiving those same caches adds network work after the

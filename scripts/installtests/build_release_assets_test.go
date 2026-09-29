@@ -2856,6 +2856,7 @@ func TestSecureRuntimeQualificationPacketIsHostedAndReleaseBound(t *testing.T) {
 		`ip link add pulse-can0 type veth peer name pulse-can1`,
 		`ip address add 192.0.2.1/32 dev pulse-can0`,
 		`test -z "$(ip -4 route show default)"`,
+		`docker exec "${container}" chown -R "$(id -u):$(id -g)" /evidence`,
 		`pulse-secure-runtime-fixture:v7`,
 		"--verify-release-packet-only",
 		"--verified-packet-dir",
@@ -2877,6 +2878,11 @@ func TestSecureRuntimeQualificationPacketIsHostedAndReleaseBound(t *testing.T) {
 	labIndex := strings.Index(qualificationWorkflow, `--env PULSE_SECURE_RUNTIME_SYSTEMD_LAB=1`)
 	if canaryIndex <= privilegedExecutionIndex || labIndex <= canaryIndex {
 		t.Fatal("the isolated host-interface canary must be configured before running the immutable RC lab")
+	}
+	ownershipIndex := strings.Index(qualificationWorkflow, `docker exec "${container}" chown -R "$(id -u):$(id -g)" /evidence`)
+	attestIndex := strings.Index(qualificationWorkflow, `--output "${evidence_dir}/attestation.json"`)
+	if ownershipIndex <= labIndex || attestIndex <= ownershipIndex {
+		t.Fatal("the lab evidence must be handed to the runner user after the lab and before attestation")
 	}
 	if !strings.Contains(qualificationWorkflow, `--privileged \
             --network none \
