@@ -5055,6 +5055,13 @@ for provider-read breadcrumbs such as VMware tasks and events, plus the
 change model instead of introducing a second event shape, and `RecordChange`
 must stay idempotent by canonical change ID so poller refreshes and replayed
 supplemental snapshots do not duplicate resource history.
+Resource identity change emission compares scalar identifiers exactly and
+hostname, IP-address and MAC-address lists as sets. Reordering a source merge
+or changing a list between nil and empty is not an identity change; a changed
+serial/machine ID, guest key or actual set member still is. This prevents
+no-op `identity` configuration rows without weakening canonical matching or
+changing the public resource shape. `TestResourceChangeIdentityIgnoresSetOrderAndEmptySlices`
+pins both the quiet and real-change cases.
 Change emission over registry rebuilds must diff relationships by edge
 identity only: canonical source, canonical target, type, and active state,
 order-insensitive (`relationshipsEquivalent` in `change_emission.go`).

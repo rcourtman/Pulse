@@ -817,6 +817,9 @@ change-journal rows when the PVE inventory is empty. Agent-only disks remain
 visible through their Agent source, and an explicit failed-query Agent fallback
 still supplies PVE inventory. `TestPhysicalDiskSkippedPollDoesNotPromoteAgentOnlySMARTToPVEInventory`
 checks repeated empty-inventory/skipped-poll cycles and journal row counts;
+its serial-bearing fixture yields a tags-only row if the source guard is
+removed, matching the reported history shape without claiming the reporter's
+topology or installed write rate. With the guard, all three cycles add no rows.
 `TestPhysicalDiskSkippedPollPreservesSourceIdentity` checks genuine PVE disk
 continuity. These fixtures do not establish the reporter's installed cause.
 SMART enrichment matches serial, WWN, device path, and controller
