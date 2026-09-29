@@ -4533,6 +4533,14 @@ and button lifecycle, and
 and button tooltip formatting, class selection, and label/state presentation.
 Future container-update work should extend those owners instead of pushing
 store wiring, settings reads, or mutation flow back into the shared shell.
+For governed container updates, the row's current-session pending state is
+bound to the action ID. A changed registry update badge, a legacy command for
+the same container, or elapsed time cannot turn an unconfirmed action green or
+offer a fresh plan. The row reopens that action with a read-only action GET;
+only its recorded completed outcome earns the transient completed state.
+Operator-closed unknown outcomes remain reviewable and must not be presented
+as failed. A browser reload loses this row-local shortcut, not the durable
+Actions audit; the audit remains the authority before any later retry.
 The shared web interface URL field now follows that same owner split.
 `frontend-modern/src/components/shared/WebInterfaceUrlField.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useWebInterfaceUrlFieldState.ts`

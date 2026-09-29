@@ -284,8 +284,13 @@ describe('containerUpdateBadgeModel.branchcov', () => {
         expect(getUpdateButtonLabel('updating', true)).toBe('Updating...');
       });
 
-      it('returns "Queued!" for the success arm', () => {
-        expect(getUpdateButtonLabel('success', true)).toBe('Queued!');
+      it('returns "Completed" for the success arm', () => {
+        expect(getUpdateButtonLabel('success', true)).toBe('Completed');
+      });
+
+      it('keeps unknown governed outcomes in review rather than offering Update', () => {
+        expect(getUpdateButtonLabel('queued', true)).toBe('Review action');
+        expect(getUpdateButtonLabel('inconclusive', true)).toBe('Review action');
       });
 
       it('returns "Failed" for the error arm', () => {
@@ -303,8 +308,15 @@ describe('containerUpdateBadgeModel.branchcov', () => {
     describe('success state', () => {
       it('returns the static success message', () => {
         expect(getUpdateButtonTooltip({ state: 'success' })).toBe(
-          '✓ Update completed successfully!',
+          'Update action completed. Check the running container and image.',
         );
+      });
+    });
+
+    describe('unknown governed outcomes', () => {
+      it('does not call a missing receipt or an inconclusive audit a failed update', () => {
+        expect(getUpdateButtonTooltip({ state: 'queued' })).toContain('Outcome not yet known');
+        expect(getUpdateButtonTooltip({ state: 'inconclusive' })).toContain('outcome unknown');
       });
     });
 
