@@ -1,12 +1,152 @@
 package websocket
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
+
+// Keep the previous per-entry decoder as an independent compatibility oracle.
+// This includes encoding/json's escaped, case-insensitive and duplicate-key
+// handling instead of assuming the first JSON field is the authoritative ID.
+func extractKeyedEntriesIndividually(encoded json.RawMessage, field string) (map[string]json.RawMessage, []string, error) {
+	var entries []json.RawMessage
+	if err := json.Unmarshal(encoded, &entries); err != nil {
+		return nil, nil, err
+	}
+	byID := make(map[string]json.RawMessage)
+	order := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		var identity struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(entry, &identity); err != nil {
+			return nil, nil, err
+		}
+		if identity.ID == "" {
+			return nil, nil, fmt.Errorf("state %s entry is missing id", field)
+		}
+		if _, exists := byID[identity.ID]; exists {
+			return nil, nil, fmt.Errorf("state %s id %q is duplicated", field, identity.ID)
+		}
+		byID[identity.ID] = append(json.RawMessage(nil), entry...)
+		order = append(order, identity.ID)
+	}
+	return byID, order, nil
+}
+
+func assertKeyedEntriesMatchPerEntryDecoding(t *testing.T, encoded []byte) {
+	t.Helper()
+	wantEntries, wantOrder, wantErr := extractKeyedEntriesIndividually(encoded, "resource")
+	gotEntries, gotOrder, gotErr := extractKeyedEntries(encoded, "resource")
+	if (wantErr == nil) != (gotErr == nil) {
+		t.Fatalf("error changed: individual=%v batch=%v; JSON=%q", wantErr, gotErr, encoded)
+	}
+	if wantErr == nil && (!reflect.DeepEqual(gotEntries, wantEntries) || !reflect.DeepEqual(gotOrder, wantOrder)) {
+		t.Fatalf("identity/order/payload changed: individual=%v/%v batch=%v/%v; JSON=%q", wantEntries, wantOrder, gotEntries, gotOrder, encoded)
+	}
+}
+
+func FuzzExtractKeyedEntriesMatchesPerEntryDecoding(f *testing.F) {
+	for _, encoded := range []string{
+		`null`, `[]`, `[{"id":"r-1"},{"id":"r-2"}]`,
+		`[{"name":"before-id","id":"尾\\\"\n\u0026","nested":{"id":"not-the-key"}}]`,
+		`[{"id":"r-1"},{"id":"old","id":"r-3"}]`,
+		`[{"ID":"case-insensitive"}]`, `[{"i\u0064":"escaped-key"}]`,
+		`[{"id":"r-1"},{"id":"r-1"}]`, `[{"id":"r-1"},{}]`,
+		`[null]`, `[{"id":null}]`, `[{"id":42}]`, `[42]`, `{}`, `[{`,
+	} {
+		f.Add([]byte(encoded))
+	}
+	f.Fuzz(assertKeyedEntriesMatchPerEntryDecoding)
+}
+
+func TestExtractKeyedEntriesOwnsEncodedBuffers(t *testing.T) {
+	encoded := []byte(`[{"id":"r-1","name":"alpha"},{"id":"r-2","name":"beta"}]`)
+	entries, order, err := extractKeyedEntries(encoded, "resource")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(order, []string{"r-1", "r-2"}) {
+		t.Fatalf("order = %v", order)
+	}
+	for i := range encoded {
+		encoded[i] = 'x'
+	}
+	if !bytes.Equal(entries["r-1"], []byte(`{"id":"r-1","name":"alpha"}`)) ||
+		!bytes.Equal(entries["r-2"], []byte(`{"id":"r-2","name":"beta"}`)) {
+		t.Fatal("retained entries alias the original encoded buffer")
+	}
+	entries["r-1"][0] = 'x'
+	if entries["r-2"][0] != '{' {
+		t.Fatal("separate keyed entries alias each other")
+	}
+}
+
+// A custom marshaler may preserve the first ID while replacing/reordering the
+// tail. The encoded IDs, not a sampled check of source IDs, own delta identity.
+type encodedStateFixture struct{ encoded json.RawMessage }
+
+func (s encodedStateFixture) MarshalJSON() ([]byte, error) { return s.encoded, nil }
+
+func TestSnapshotDeltaUsesEveryEncodedTailIdentity(t *testing.T) {
+	previous, err := buildClientStateSnapshot(encodedStateFixture{json.RawMessage(`{
+		"resources":[{"id":"r-1"},{"id":"r-2"}],
+		"connectedInfrastructure":[{"id":"i-1"},{"id":"i-2"}],
+		"activeAlerts":[{"id":"a-1"},{"id":"a-2"}]
+	}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := buildClientStateSnapshot(encodedStateFixture{json.RawMessage(`{
+		"resources":[{"id":"r-1"},{"id":"r-3"}],
+		"connectedInfrastructure":[{"id":"i-1"},{"id":"i-3"}],
+		"activeAlerts":[{"id":"a-1"},{"id":"a-3"}]
+	}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	delta, err := buildClientStateDelta(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for field, prefix := range map[string]string{
+		resourceDeltaField: "r", infrastructureDeltaField: "i", activeAlertsDeltaField: "a",
+	} {
+		payload, ok := delta[field].(resourceDeltaPayload)
+		if !ok || !reflect.DeepEqual(payload.Removed, []string{prefix + "-2"}) ||
+			!reflect.DeepEqual(payload.Order, []string{prefix + "-1", prefix + "-3"}) ||
+			len(payload.Upserts) != 1 || string(payload.Upserts[0]) != `{"id":"`+prefix+`-3"}` {
+			t.Fatalf("%s: wrong encoded tail identity: %#v", field, delta[field])
+		}
+	}
+}
+
+func TestFrontendSnapshotValuePointerAndGenericEncodingAgree(t *testing.T) {
+	state := benchmarkFrontendState(100)
+	state.Resources[99].ID = "尾<&\"\\\n"
+	state.ConnectedInfrastructure = []models.ConnectedInfrastructureItemFrontend{{ID: "i-1"}, {ID: "i-2"}}
+	state.ActiveAlerts = []models.Alert{{ID: "a-1"}, {ID: "a-2"}}
+	encoded, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := buildClientStateSnapshot(encodedStateFixture{encoded})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []interface{}{state, &state} {
+		got, err := buildClientStateSnapshot(value)
+		if err != nil || !reflect.DeepEqual(got, want) {
+			t.Fatalf("%T snapshot differs from its encoding: %v", value, err)
+		}
+	}
+}
 
 func TestClientStateDeltaOmitsUnchangedResourcePayload(t *testing.T) {
 	previousState := models.EmptyStateFrontend()
