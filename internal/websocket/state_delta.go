@@ -56,23 +56,31 @@ func extractKeyedEntries(
 	if err := json.Unmarshal(encoded, &entries); err != nil {
 		return nil, nil, fmt.Errorf("decode state %s: %w", field, err)
 	}
-	byID := make(map[string]json.RawMessage)
+	// Decode all identities in one pass rather than allocating a decoder and
+	// throwaway struct for every entry. Keys must come from the encoded entries,
+	// not hints from the source value: checking one hinted ID cannot establish
+	// the identity of the rest, especially if a marshaler changes their order.
+	identities := make([]struct {
+		ID string `json:"id"`
+	}, len(entries))
+	if err := json.Unmarshal(encoded, &identities); err != nil {
+		return nil, nil, fmt.Errorf("decode state %s identity: %w", field, err)
+	}
+
+	byID := make(map[string]json.RawMessage, len(entries))
 	order := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		var identity struct {
-			ID string `json:"id"`
-		}
-		if err := json.Unmarshal(entry, &identity); err != nil {
-			return nil, nil, fmt.Errorf("decode state %s identity: %w", field, err)
-		}
-		if identity.ID == "" {
+	for i, entry := range entries {
+		id := identities[i].ID
+		if id == "" {
 			return nil, nil, fmt.Errorf("state %s entry is missing id", field)
 		}
-		if _, exists := byID[identity.ID]; exists {
-			return nil, nil, fmt.Errorf("state %s id %q is duplicated", field, identity.ID)
+		if _, exists := byID[id]; exists {
+			return nil, nil, fmt.Errorf("state %s id %q is duplicated", field, id)
 		}
-		byID[identity.ID] = append(json.RawMessage(nil), entry...)
-		order = append(order, identity.ID)
+		// RawMessage.UnmarshalJSON already copied each entry into its own buffer.
+		// Retaining that buffer is safe; copying it a second time is redundant.
+		byID[id] = entry
+		order = append(order, id)
 	}
 	return byID, order, nil
 }

@@ -23,6 +23,25 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Allocation-bounded snapshot and clone metadata — issue #2199
+
+WebSocket snapshot extraction decodes every entry's ID from the encoded array
+in one batched pass, preserving standard JSON identity semantics rather than
+trusting source-ID hints after checking only the first entry. Missing/duplicate
+IDs still reject resource keying; infrastructure and alert arrays retain the
+existing whole-field fallback. The decoder-owned raw entry buffers are retained
+without a redundant copy, and must remain isolated from the original encoding
+and from each other. Per-entry reference decoding, malformed/escaped/duplicate
+identity fuzz cases and encoded tail-change deltas pin these boundaries.
+
+Resource clones still refresh canonical metadata on every read, including after
+source, facet or tag edits. Platform membership uses a deduplicated small slice
+with the existing canonical order; sensitivity scans normalized tags once,
+preserving explicit public, restricted, sensitive and resource-type precedence.
+The exhaustive source-combination test and clone scope/policy refresh test
+protect page admission, policy routing and clone isolation. Component benchmarks
+measure allocation/time changes, not installed fleet CPU or write-rate acceptance.
+
 ### Bounded generation change comparison — issue #2199
 
 Accepted snapshot rebuilds compare the previous and replacement registry
