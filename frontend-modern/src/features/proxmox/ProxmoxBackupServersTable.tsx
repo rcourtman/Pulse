@@ -1,4 +1,5 @@
 import { For, Show, createMemo, type Accessor, type JSX } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
@@ -122,6 +123,13 @@ const identityValues = (resource: Resource): Array<string | undefined> => [
 const identityTokens = (resource: Resource): Set<string> =>
   new Set(identityValues(resource).flatMap((value) => getNormalizedIdentityLookupVariants(value)));
 
+// This line has no backend linkedAgentId contract. Bind retention to the
+// existing selector evidence instead, including the reported node name even
+// when another field supplies the same token. Changed or withdrawn identity
+// evidence must not reuse a host selected for the previous machine.
+const correlationEvidenceKey = (server: Resource): string =>
+  JSON.stringify(identityValues(server).map((value) => value?.trim().toLowerCase() ?? ''));
+
 const stringValues = (...candidates: unknown[]): string[] =>
   candidates.flatMap((candidate) =>
     Array.isArray(candidate)
@@ -211,7 +219,12 @@ const hasCorrelationCandidate = (server: Resource, candidates: readonly Resource
 // only across such an omission, and only while the remembered host is still
 // plausibly current, so a genuinely removed or replaced host is not advertised
 // indefinitely. A host that is present but ambiguous still declines.
-export type PbsCorrelationRetention = Map<string, Resource>;
+interface RetainedPbsCorrelation {
+  agent: Resource;
+  evidenceKey: string;
+}
+
+export type PbsCorrelationRetention = Map<string, RetainedPbsCorrelation>;
 
 export const createPbsCorrelationRetention = (): PbsCorrelationRetention => new Map();
 
@@ -276,17 +289,23 @@ export function buildBackupServerRows(
     .map((server) => {
       const agent = uniquelyCorrelatedAgent(server, servers);
       if (agent) {
-        retention?.set(server.id, agent);
+        retention?.set(server.id, { agent, evidenceKey: correlationEvidenceKey(server) });
         return mergePBSAgentPresentation(server, agent);
       }
       const retained = retention?.get(server.id);
       if (retained) {
-        const fresh =
-          server.lastSeen - retained.lastSeen <= PBS_CORRELATION_RETENTION_MAX_STALENESS_MS;
-        if (fresh && !hasCorrelationCandidate(server, servers)) {
-          return mergePBSAgentPresentation(server, retained);
+        if (correlationEvidenceKey(server) !== retained.evidenceKey) {
+          retention?.delete(server.id);
+          return server;
         }
-        if (!fresh) retention?.delete(server.id);
+        const fresh =
+          server.lastSeen - retained.agent.lastSeen <= PBS_CORRELATION_RETENTION_MAX_STALENESS_MS;
+        if (fresh && !hasCorrelationCandidate(server, servers)) {
+          return mergePBSAgentPresentation(server, retained.agent);
+        }
+        // An ambiguous snapshot revokes the remembered choice. A subsequent
+        // host-row omission must not resurrect an identity already declined.
+        retention?.delete(server.id);
       }
       return server;
     })
@@ -304,7 +323,6 @@ export function buildBackupServerRows(
       .sort((left, right) => left.name.localeCompare(right.name));
     const memoryTotal = server.memory?.total ?? 0;
     const host = {
-      resource: server,
       serverName: server.name,
       online: serverIsOnline(server),
       connectionLabel: connectionLabel(server),
@@ -320,14 +338,18 @@ export function buildBackupServerRows(
       memoryTotal: memoryTotal > 0 ? memoryTotal : undefined,
       uptimeSeconds: server.uptime ?? server.pbs?.uptimeSeconds,
     };
+    // Keyed rows reconcile independently. Do not let joining or revoking a
+    // host mutate the reusable service DTO or another datastore's identity.
+    const resourceSnapshot = () => structuredClone(unwrap(server));
     if (datastores.length === 0) {
-      rows.push({ key: server.id, ...host, backupCount: 0 });
+      rows.push({ key: server.id, ...host, resource: resourceSnapshot(), backupCount: 0 });
       continue;
     }
     for (const datastore of datastores) {
       rows.push({
         key: `${server.id}:${datastore.name}`,
         ...host,
+        resource: resourceSnapshot(),
         // Row stores reconcile independently from the nested PBS snapshot. Do
         // not alias its datastore object: a reordered snapshot reconciles that
         // array by position and would overwrite this row's datastore identity.

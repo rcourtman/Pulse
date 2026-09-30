@@ -405,3 +405,59 @@ describe('ProxmoxBackupServersTable details', () => {
     );
   });
 });
+
+describe('PBS retained host revocation in an open drawer', () => {
+  const service = (): Resource => {
+    const pbs = makePbsResource();
+    pbs.sources = ['pbs'];
+    pbs.sourceType = 'api';
+    pbs.platformData = { sources: ['pbs'], pbs: { instanceId: 'pbs-main' } };
+    pbs.pbs = { ...pbs.pbs!, hostname: 'pbs-machine', nodeName: 'pbs-machine' };
+    pbs.metricsTarget = { resourceType: 'agent', resourceId: 'pbs-service' };
+    return pbs;
+  };
+  const host = (id = 'host-a'): Resource => ({
+    id,
+    type: 'agent',
+    name: 'pbs-machine',
+    displayName: 'pbs-machine',
+    platformId: id,
+    platformType: 'proxmox-pbs',
+    sourceType: 'agent',
+    status: 'online',
+    lastSeen: 1_700_000_000_000,
+    agent: { agentId: id, hostname: 'pbs-machine' },
+    metricsTarget: { resourceType: 'agent', resourceId: id },
+  });
+
+  it.each(['changed-node', 'ambiguity-then-omission'])(
+    'drops the old host target after %s without remounting the drawer',
+    async (scenario) => {
+      const pbs = service();
+      const [servers, setServers] = createSignal<Resource[]>([pbs, host()]);
+      render(() => <ProxmoxBackupServersTable servers={servers()} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Expand details for pbs-main' }));
+      const detail = screen.getByTestId('pbs-resource-detail');
+      expect(detail).toHaveAttribute('data-metrics-resource-id', 'host-a');
+      const mounts = resourceDetailDrawerMount.mock.calls.length;
+
+      if (scenario === 'changed-node') {
+        setServers([{ ...pbs, pbs: { ...pbs.pbs!, nodeName: 'replacement-machine' } }]);
+      } else {
+        setServers([pbs, host(), host('host-b')]);
+        await waitFor(() =>
+          expect(detail).toHaveAttribute('data-metrics-resource-id', 'pbs-service'),
+        );
+        setServers([pbs]);
+      }
+      await waitFor(() =>
+        expect(detail).toHaveAttribute('data-metrics-resource-id', 'pbs-service'),
+      );
+      expect(detail).not.toHaveAttribute('data-agent-id');
+      expect(screen.getByTestId('pbs-resource-detail')).toBe(detail);
+      expect(resourceDetailDrawerMount.mock.calls.length).toBe(mounts);
+      expect(pbs.metricsTarget?.resourceId).toBe('pbs-service');
+      expect(pbs.agent).toBeUndefined();
+    },
+  );
+});
