@@ -254,6 +254,7 @@ const (
 	ServiceHealthFailureStartup         = "startup"
 	ServiceHealthFailureRuntime         = "runtime"
 	ServiceHealthFailureAPIConnectivity = "api_connectivity"
+	ServiceHealthFailureTimeout         = "timeout"
 	ServiceHealthFailureAPIStatus       = "api_status"
 	ServiceHealthFailureUIStatus        = "ui_status"
 	ServiceHealthFailureFrontendAssets  = "frontend_assets"
