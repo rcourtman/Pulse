@@ -221,18 +221,16 @@ func TestServiceHealthFailureCategoriesSerializeAndPersist(t *testing.T) {
 }
 
 func TestTelemetryStartDoesNotWaitForServiceHealth(t *testing.T) {
-	originalDelay := startupDelay
-	startupDelay = 0
-	defer func() { startupDelay = originalDelay }()
 	ctx, cancel := context.WithCancel(context.Background())
 	entered, release, started := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	dir := t.TempDir()
 	t.Cleanup(func() { close(release); cancel(); Stop() })
 	go func() {
-		Start(ctx, Config{Enabled: true, Version: "6.4.6", DataDir: t.TempDir(), GetServiceHealth: func() ServiceHealthObservation {
+		startWithDelay(ctx, Config{Enabled: true, Version: "6.4.6", DataDir: dir, GetServiceHealth: func() ServiceHealthObservation {
 			close(entered)
 			<-release
 			return ServiceHealthObservation{Observed: true, Healthy: true}
-		}})
+		}}, 0)
 		close(started)
 	}()
 	select {
