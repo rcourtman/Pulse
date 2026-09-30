@@ -178,6 +178,54 @@ describe('buildBackupServerRows PBS host correlation retention', () => {
     const ambiguous = buildBackupServerRows([pbs, agent, otherAgent], [], retention);
 
     expect(ambiguous[0].resource.metricsTarget?.resourceId).toBe('proxback');
+    expect(retention.size).toBe(0);
+
+    const omitted = buildBackupServerRows([pbs], [], retention);
+    expect(omitted[0].resource.metricsTarget?.resourceId).toBe('proxback');
+  });
+
+  it.each(['nodeName', 'hostname'] as const)(
+    'revokes a remembered host when the PBS %s changes or disappears',
+    (field) => {
+      for (const nextValue of ['replacement-host', undefined]) {
+        const retention = createPbsCorrelationRetention();
+        const pbs = makeCorrelatablePbs();
+        pbs.pbs = { ...pbs.pbs!, [field]: 'proxback' };
+        buildBackupServerRows([pbs, makeCorrelatedAgent()], [], retention);
+
+        const replacement = {
+          ...pbs,
+          lastSeen: pbs.lastSeen + 1000,
+          pbs: { ...pbs.pbs!, [field]: nextValue },
+        };
+        const rows = buildBackupServerRows([replacement], [], retention);
+        expect(rows[0].resource.metricsTarget?.resourceId).toBe('proxback');
+        expect(rows[0].resource.agent).toBeUndefined();
+        expect(retention.size).toBe(0);
+      }
+    },
+  );
+
+  it('does not treat identity casing and whitespace as a replacement', () => {
+    const retention = createPbsCorrelationRetention();
+    const pbs = makeCorrelatablePbs();
+    pbs.pbs = { ...pbs.pbs!, nodeName: 'proxback' };
+    buildBackupServerRows([pbs, makeCorrelatedAgent()], [], retention);
+
+    const refreshed = { ...pbs, pbs: { ...pbs.pbs!, nodeName: ' PROXBACK ' } };
+    const rows = buildBackupServerRows([refreshed], [], retention);
+    expect(rows[0].resource.metricsTarget?.resourceId).toBe('agent-proxback');
+  });
+
+  it('isolates each row from its source resource and sibling datastore', () => {
+    const pbs = makePbsResource({
+      metricsTarget: { resourceType: 'agent', resourceId: 'pbs-service' },
+    });
+    const rows = buildBackupServerRows([pbs]);
+    expect(rows).toHaveLength(2);
+    rows[0].resource.metricsTarget!.resourceId = 'wrong-host';
+    expect(pbs.metricsTarget?.resourceId).toBe('pbs-service');
+    expect(rows[1].resource.metricsTarget?.resourceId).toBe('pbs-service');
   });
 
   it('drops a remembered host once it is stale relative to the server', () => {
