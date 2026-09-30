@@ -75,6 +75,11 @@ class NpmAuditRetryTest(unittest.TestCase):
                         fi
                         exit 1
                         ;;
+                      captured-report)
+                        # Malformed reports must remain the same on retry.
+                        cat "$FAKE_NPM_REPORT"
+                        exit 1
+                        ;;
                       garbage)
                         echo 'not json'
                         exit 1
@@ -235,6 +240,104 @@ class NpmAuditRetryTest(unittest.TestCase):
         self.assertEqual(finding.get("via"), [{"title": title}], result.stdout)
         self.assertNotIn("\n::error::injected", result.stdout)
         self.assertNotIn("\x1b", result.stdout)
+
+    def test_package_findings_fail_even_when_summary_is_missing_or_zero(self) -> None:
+        for metadata in [None, {}, {"vulnerabilities": {"total": 0}}]:
+            for require in ["true", "false"]:
+                with self.subTest(metadata=metadata, require=require):
+                    report = {
+                        "vulnerabilities": {
+                            "dependency": {"name": "dependency", "severity": "high"}
+                        }
+                    }
+                    if metadata is not None:
+                        report["metadata"] = metadata
+                    result, calls = self.run_check(
+                        "captured-vulnerability", "all", require=require, report=report
+                    )
+                    self.assertEqual(result.returncode, 1, result.stdout)
+                    self.assertEqual(calls, ["audit --json"], result.stdout)
+                    self.assertIn("vulnerabilities present", result.stdout)
+                    self.assertIn("package_records=1", result.stdout)
+                    self.assertNotIn("no vulnerabilities", result.stdout)
+
+    def test_positive_severity_counts_fail_without_a_consistent_total(self) -> None:
+        for severity in ["info", "low", "moderate", "high", "critical"]:
+            for total in [None, 0]:
+                with self.subTest(severity=severity, total=total):
+                    counts = {severity: 1}
+                    if total is not None:
+                        counts["total"] = total
+                    report = {
+                        "metadata": {"vulnerabilities": counts},
+                        "error": {"code": "ETIMEDOUT"},
+                    }
+                    result, calls = self.run_check(
+                        "captured-vulnerability", "production",
+                        require="false", report=report,
+                    )
+                    self.assertEqual(result.returncode, 1, result.stdout)
+                    self.assertEqual(calls, ["audit --json --omit=dev"], result.stdout)
+                    self.assertIn("vulnerabilities present", result.stdout)
+
+    def test_malformed_zero_verdicts_cannot_pass_as_clean(self) -> None:
+        zero_counts = dict.fromkeys(
+            ["info", "low", "moderate", "high", "critical", "total"], 0
+        )
+        reports = [
+            {"metadata": {"vulnerabilities": {**zero_counts, "total": value}}}
+            for value in [None, False, -1, 0.0, "0", [], {}]
+        ]
+        reports.extend([
+            {"metadata": {"vulnerabilities": {**zero_counts, "high": "0"}}},
+            {"metadata": {"vulnerabilities": {**zero_counts, "high": None}}},
+            {"metadata": {"vulnerabilities": {"total": 0}}},
+            {"metadata": {"vulnerabilities": zero_counts}, "vulnerabilities": []},
+            {"metadata": {"vulnerabilities": zero_counts}, "vulnerabilities": None},
+            {
+                "metadata": {"vulnerabilities": zero_counts},
+                "error": {"code": "ENOAUDIT"},
+            },
+        ])
+        for report in reports:
+            for require in ["true", "false"]:
+                with self.subTest(report=report, require=require):
+                    result, calls = self.run_check(
+                        "captured-report", "all", require=require, report=report
+                    )
+                    self.assertEqual(
+                        result.returncode, 1 if require == "true" else 0, result.stdout
+                    )
+                    self.assertEqual(calls, ["audit --json"] * 3, result.stdout)
+                    self.assertNotIn("no vulnerabilities", result.stdout)
+                    self.assertIn("could not reach", result.stdout)
+                    if require == "false":
+                        self.assertIn("::warning::", result.stdout)
+
+    def test_summary_cannot_emit_untrusted_metadata_as_workflow_commands(self) -> None:
+        unsafe = "0\n::error::injected metadata\x1b[31m"
+        report = {"metadata": {"vulnerabilities": {"total": 1, "high": unsafe}}}
+        result, calls = self.run_check("captured-vulnerability", "all", report=report)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertEqual(calls, ["audit --json"])
+        self.assertIn("vulnerabilities present", result.stdout)
+        self.assertIn("high=unknown", result.stdout)
+        self.assertNotIn("injected metadata", result.stdout)
+        self.assertNotIn("\x1b", result.stdout)
+
+    def test_passes_a_complete_zero_summary_and_empty_package_map(self) -> None:
+        report = {
+            "metadata": {
+                "vulnerabilities": dict.fromkeys(
+                    ["info", "low", "moderate", "high", "critical", "total"], 0
+                )
+            },
+            "vulnerabilities": {},
+        }
+        result, calls = self.run_check("captured-report", "all", report=report)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(calls, ["audit --json"])
+        self.assertIn("no vulnerabilities", result.stdout)
 
     def test_persistent_outage_fails_when_a_result_is_required(self) -> None:
         result, calls = self.run_check("transient-failure", "all")

@@ -4645,7 +4645,17 @@ no JavaScript. It separates the two and nothing else. A conclusive result is
 acted on immediately and any vulnerability at any severity still fails, even
 if the same response also carries a transport error, so a severity threshold
 must never be introduced; only an unreachable endpoint is
-retried. Finding diagnostics must use that same captured JSON response, never
+retried. A nonempty package-finding map or any positive integer
+summary count must fail immediately, even when the total is missing or
+contradicts that evidence; a later response must not replace a known finding.
+A clean verdict requires all six known summary counts to be integer zero,
+no endpoint error and an absent or empty package-finding map. Booleans,
+strings, nulls, negative counts and partial summaries are not zero-finding
+evidence. Without positive evidence, malformed reports retain the existing
+bounded outage policy, never a clean verdict. Summary diagnostics may print
+only validated nonnegative integer counts (or `unknown`) and the package-record
+count, not raw metadata strings capable of emitting workflow commands.
+Finding diagnostics must use that same captured JSON response, never
 a second registry request: such a request could hang outside the watchdog or
 describe a different verdict. Logs retain the affected package, severity,
 range, locked paths, advisory source/title/link and fix availability through
@@ -4654,7 +4664,9 @@ details. Missing package-level detail leaves the vulnerability failure intact;
 it must not trigger another request. `scripts/tests/test_npm_audit_retry.py`
 executes changed-second-response, missing-detail, escaping and single-request
 fixtures, including production argument forwarding and findings accompanied by
-transport errors. Retrying is bounded by wall clock and not by attempt count alone,
+transport errors, positive package/severity evidence with missing or zero
+totals, malformed zero summaries under both outage modes, and metadata
+annotation injection. Retrying is bounded by wall clock and not by attempt count alone,
 because npm's own `fetch-timeout` defaults to five minutes and it retries
 internally: on 2026-09-04 three attempts against a hanging endpoint ran for
 10m56s and cancelled the Frontend job at its own timeout with every test
