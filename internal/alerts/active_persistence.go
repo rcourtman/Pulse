@@ -20,31 +20,71 @@ import (
 )
 
 func (m *Manager) saveActiveAlertsAsync(context string) {
-	m.stopMu.RLock()
-	if m.stopping {
-		m.stopMu.RUnlock()
-		return
+	if m.queueActiveAlertsSave(context) {
+		go m.runActiveAlertsSaveWorker(m.SaveActiveAlerts)
 	}
-	m.workerWG.Add(1)
-	m.stopMu.RUnlock()
+}
 
-	go func() {
-		defer m.workerWG.Done()
-		defer func() {
-			if r := recover(); r != nil {
+// queueActiveAlertsSave reserves at most one worker and one follow-up snapshot.
+// Callers may hold m.mu; never wait for a checkpoint under stopMu.
+func (m *Manager) queueActiveAlertsSave(context string) bool {
+	m.stopMu.Lock()
+	defer m.stopMu.Unlock()
+	if m.stopping {
+		return false
+	}
+	m.activeSavePending = true
+	m.activeSaveContext = context
+	if m.activeSaveRunning {
+		return false
+	}
+	m.activeSaveRunning = true
+	// Add under the shutdown admission lock, before Stop can begin waiting.
+	m.workerWG.Add(1)
+	return true
+}
+
+// Each pass takes a fresh snapshot. Requests arriving during a pass mark
+// one follow-up, not another goroutine/full snapshot per mutation. No timer
+// delays alert persistence, and lifecycle events remain independently durable.
+func (m *Manager) runActiveAlertsSaveWorker(save func() error) {
+	defer m.workerWG.Done()
+	for {
+		m.stopMu.Lock()
+		if m.stopping || !m.activeSavePending {
+			m.activeSaveRunning = false
+			m.activeSavePending = false
+			m.activeSaveContext = ""
+			m.stopMu.Unlock()
+			// Stop drains this in-flight worker and owns the final synchronous
+			// checkpoint; do not drain redundant queued snapshots at shutdown.
+			return
+		}
+		context := m.activeSaveContext
+		m.activeSavePending = false
+		m.activeSaveContext = ""
+		m.stopMu.Unlock()
+
+		// Recover per pass so a failed checkpoint cannot strand later requests
+		// or leave worker admission permanently occupied. Retry only on another
+		// request (or the existing periodic/shutdown save), never in a busy loop.
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().
+						Interface("panic", r).
+						Str("context", context).
+						Msg("Panic in SaveActiveAlerts goroutine")
+				}
+			}()
+			if err := save(); err != nil {
 				log.Error().
-					Interface("panic", r).
+					Err(err).
 					Str("context", context).
-					Msg("Panic in SaveActiveAlerts goroutine")
+					Msg("Failed to save active alerts")
 			}
 		}()
-		if err := m.SaveActiveAlerts(); err != nil {
-			log.Error().
-				Err(err).
-				Str("context", context).
-				Msg("Failed to save active alerts")
-		}
-	}()
+	}
 }
 
 // SaveActiveAlerts persists active alerts to disk.

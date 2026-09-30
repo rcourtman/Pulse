@@ -145,6 +145,11 @@ type Manager struct {
 	stopMu        sync.RWMutex
 	stopping      bool
 	workerWG      sync.WaitGroup
+	// stopMu protects checkpoint worker admission and its coalesced request.
+	// The worker releases stopMu before taking saveMu or the manager state lock.
+	activeSaveRunning bool
+	activeSavePending bool
+	activeSaveContext string
 }
 
 type ackRecord struct {

@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"testing"
@@ -21558,5 +21560,82 @@ func TestIntentCheckpointRetriesFailedWrite(t *testing.T) {
 	}
 	if string(got) != "[]" {
 		t.Fatalf("retry wrote %q", got)
+	}
+}
+
+// A slow checkpoint must not turn an alert burst into one blocked worker per
+// mutation. Exercise the real asynchronous entry point and real JSON writer.
+func TestAsyncActiveCheckpointBurstIsBounded(t *testing.T) {
+	dir := t.TempDir()
+	id, alert := testNewCanonicalAlert("checkpoint-host", "metric-threshold:cpu", "host", "cpu")
+	now := time.Now().UTC()
+	alert.Level, alert.StartTime, alert.LastSeen = AlertLevelWarning, now.Add(-time.Hour), now
+	m := &Manager{
+		alertsDir:     filepath.Join(dir, "alerts"),
+		activeAlerts:  map[string]*Alert{id: alert},
+		intentPending: make(map[string]IntentPendingState),
+	}
+	m.saveMu.Lock()
+	locked := true
+	defer func() {
+		if locked {
+			m.saveMu.Unlock()
+		}
+		m.workerWG.Wait()
+	}()
+	const requests = 512
+	for range requests {
+		m.saveActiveAlertsAsync("burst checkpoint")
+	}
+	var stacks bytes.Buffer
+	if err := pprof.Lookup("goroutine").WriteTo(&stacks, 2); err != nil {
+		t.Fatal(err)
+	}
+	workers := strings.Count(stacks.String(), "created by github.com/rcourtman/pulse-go-rewrite/internal/alerts.(*Manager).saveActiveAlertsAsync")
+	t.Logf("blocked asynchronous checkpoint workers: %d for %d requests", workers, requests)
+	if workers != 1 {
+		t.Errorf("burst started %d checkpoint workers, want one", workers)
+	}
+
+	// State changed while the first checkpoint was blocked must reach both
+	// restart files, not the snapshot that existed at request admission.
+	m.mu.Lock()
+	alert.Acknowledged, alert.AckUser, alert.AckTime = true, "checkpoint-operator", &now
+	alert.LastSeen = now.Add(time.Second)
+	alert.Metadata["checkpoint"] = "latest"
+	m.intentPending["pending-cpu"] = IntentPendingState{
+		TrackingKey: "pending-cpu", ResourceID: "checkpoint-host", Signal: "cpu",
+		FirstMatchedAt: now.Add(-time.Minute), LastObservedAt: now, ElapsedNanos: int64(time.Minute),
+	}
+	m.mu.Unlock()
+	m.saveActiveAlertsAsync("latest state")
+	m.saveMu.Unlock()
+	locked = false
+	m.workerWG.Wait()
+
+	data, err := os.ReadFile(filepath.Join(m.alertsDir, "active-alerts.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var persisted []*Alert
+	if err := json.Unmarshal(data, &persisted); err != nil {
+		t.Fatal(err)
+	}
+	if len(persisted) != 1 || !persisted[0].Acknowledged || persisted[0].AckUser != "checkpoint-operator" ||
+		!persisted[0].StartTime.Equal(alert.StartTime) || !persisted[0].LastSeen.Equal(alert.LastSeen) ||
+		persisted[0].Metadata["checkpoint"] != "latest" {
+		t.Fatalf("checkpoint lost latest incident state: %s", data)
+	}
+	restarted := NewManagerWithDataDir(dir)
+	t.Cleanup(restarted.Stop)
+	restored := testRequireActiveAlert(t, restarted, id)
+	if !restored.Acknowledged || restored.AckUser != "checkpoint-operator" || !restored.StartTime.Equal(alert.StartTime) {
+		t.Fatalf("restart lost acknowledgement or incident age: %+v", restored)
+	}
+	restarted.mu.RLock()
+	pending := restarted.intentPending["pending-cpu"]
+	restarted.mu.RUnlock()
+	if pending.ElapsedNanos != int64(time.Minute) || pending.ResourceID != "checkpoint-host" {
+		t.Fatalf("restart lost latest pending intent: %+v", pending)
 	}
 }
