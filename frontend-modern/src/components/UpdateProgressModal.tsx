@@ -1,4 +1,4 @@
-import { createSignal, Show, onCleanup, createEffect } from 'solid-js';
+import { createSignal, Show, onCleanup, createEffect, untrack } from 'solid-js';
 import { UpdatesAPI, type UpdateStatus } from '@/api/updates';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
@@ -11,7 +11,16 @@ import { ProgressBar } from '@/components/shared/ProgressBar';
 import { apiFetch } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 import { updateStore } from '@/stores/updates';
-import { resolvePostUpdateReload } from '@/components/updateReadinessModel';
+import {
+  RESTART_SUSPECT_POLL_FAILURES,
+  UPDATE_PROGRESS_STALL_TIMEOUT_MS,
+  UPDATE_STATUS_POLL_INTERVAL_MS,
+  UPDATE_STREAM_SILENCE_FALLBACK_MS,
+  isLateUpdateStage,
+  isUpdateInProgressStage,
+  resolvePostUpdateReload,
+  shouldApplyUpdateStatus,
+} from '@/components/updateReadinessModel';
 import XIcon from 'lucide-solid/icons/x';
 
 interface UpdateProgressModalProps {
@@ -29,14 +38,37 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
   const [isRestarting, setIsRestarting] = createSignal(false);
   const [wsDisconnected, setWsDisconnected] = createSignal(false);
   const [healthCheckAttempts, setHealthCheckAttempts] = createSignal(0);
+  const [progressStalled, setProgressStalled] = createSignal(false);
   let pollInterval: number | undefined;
   let healthCheckTimer: number | undefined;
+  let streamSilenceTimer: number | undefined;
+  let progressStallTimer: number | undefined;
   let eventSource: EventSource | undefined;
   // The version that started this update. The backend keeps serving (and
   // answering health checks) for a grace period after reporting 'completed',
   // so "different version than this" is the only trustworthy restart signal.
   let preUpdateVersion: string | null = null;
   let sameVersionHealthyAttempts = 0;
+  // Set while a terminal status is being resolved (version probe in flight),
+  // so SSE and polling reporting the same terminal status act on it once.
+  let resolvingTerminalStatus = false;
+  // Bumped on every open/close so late async results from a previous open
+  // cannot drive the current one.
+  let session = 0;
+  // True once the backend itself reported 'restarting' or 'completed'. Only
+  // then may the modal stop listening for status and, as a last resort,
+  // reload on an unchanged version. A restart inferred from failing
+  // requests stays unconfirmed: the feeds keep running so a late progress
+  // or error event can still correct it.
+  let restartConfirmed = false;
+  let consecutivePollFailures = 0;
+  // Identifies the live health-check loop. Clearing the timer alone cannot
+  // stop a probe already in flight from re-arming itself.
+  let healthCheckLoop = 0;
+  // Set when a version probe fails after confirmed completion: the old
+  // process was seen going away, so the next healthy answer is the new one.
+  let restartObserved = false;
+  let baselineFetchInFlight = false;
 
   const resetModalState = () => {
     setStatus(null);
@@ -45,8 +77,62 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
     setIsRestarting(false);
     setWsDisconnected(false);
     setHealthCheckAttempts(0);
+    setProgressStalled(false);
     preUpdateVersion = updateStore.versionInfo()?.version ?? null;
     sameVersionHealthyAttempts = 0;
+    resolvingTerminalStatus = false;
+    restartConfirmed = false;
+    consecutivePollFailures = 0;
+    restartObserved = false;
+    baselineFetchInFlight = false;
+  };
+
+  // The pre-update version is only trustworthy while the old process is
+  // certainly the one answering: before any restart signal, and before a
+  // terminal or fresh-process status.
+  const canAdoptBaseline = () => {
+    if (preUpdateVersion || restartConfirmed || isRestarting() || resolvingTerminalStatus) {
+      return false;
+    }
+    const current = status()?.status;
+    return current !== 'restarting' && current !== 'completed' && current !== 'idle';
+  };
+
+  const adoptBaseline = (version: string, source: string) => {
+    if (!version || !canAdoptBaseline()) {
+      return;
+    }
+    preUpdateVersion = version;
+    logger.info('Captured pre-update version for restart detection', { version, source });
+  };
+
+  // The global watcher can open the modal before the update store has loaded
+  // the running version. Without that baseline an old-process answer looks
+  // like the new one, so fetch it directly while the old process is serving.
+  const fetchBaseline = () => {
+    if (baselineFetchInFlight || !canAdoptBaseline()) {
+      return;
+    }
+    baselineFetchInFlight = true;
+    const fetchSession = session;
+    void (async () => {
+      try {
+        const response = await apiFetch('/api/version', { cache: 'no-store' });
+        if (fetchSession !== session || !response.ok) {
+          return;
+        }
+        const info = (await response.json()) as { version?: unknown };
+        if (fetchSession === session && typeof info.version === 'string') {
+          adoptBaseline(info.version, 'version-probe');
+        }
+      } catch (error) {
+        logger.warn('Could not read the pre-update version, will retry', error);
+      } finally {
+        if (fetchSession === session) {
+          baselineFetchInFlight = false;
+        }
+      }
+    })();
   };
 
   // Probe the backend and reload only once it reports a different version
@@ -57,6 +143,9 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
       const response = await apiFetch('/api/version', { cache: 'no-store' });
       if (!response.ok) {
         sameVersionHealthyAttempts = 0;
+        if (restartConfirmed) {
+          restartObserved = true;
+        }
         return false;
       }
       const info = (await response.json()) as { version?: unknown };
@@ -65,6 +154,8 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
         preUpdateVersion,
         reportedVersion,
         sameVersionHealthyAttempts,
+        completionConfirmed: restartConfirmed,
+        restartObserved,
       });
       if (decision === 'reload') {
         logger.info('Backend ready after update, reloading...', {
@@ -80,12 +171,16 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
       // Connection refused here usually means the restart is actually
       // happening now; the pre-restart healthy answers no longer count.
       sameVersionHealthyAttempts = 0;
+      if (restartConfirmed) {
+        restartObserved = true;
+      }
       logger.warn('Version probe failed while waiting for restart, will retry', error);
       return false;
     }
   };
 
   const clearHealthCheckTimer = () => {
+    healthCheckLoop += 1;
     if (healthCheckTimer !== undefined) {
       clearTimeout(healthCheckTimer);
       healthCheckTimer = undefined;
@@ -99,13 +194,194 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
     }
   };
 
+  const clearStreamSilenceTimer = () => {
+    if (streamSilenceTimer !== undefined) {
+      clearTimeout(streamSilenceTimer);
+      streamSilenceTimer = undefined;
+    }
+  };
+
+  const clearProgressStallTimer = () => {
+    if (progressStallTimer !== undefined) {
+      clearTimeout(progressStallTimer);
+      progressStallTimer = undefined;
+    }
+  };
+
   const closeSSE = () => {
+    clearStreamSilenceTimer();
     if (!eventSource) {
       return;
     }
     eventSource.close();
     eventSource = undefined;
     logger.info('SSE connection closed');
+  };
+
+  // Stop the status feeds (stream and poll); restart detection and the stall
+  // timer are managed separately.
+  const stopStatusFeeds = () => {
+    closeSSE();
+    clearPollInterval();
+  };
+
+  const stopEverything = () => {
+    stopStatusFeeds();
+    clearHealthCheckTimer();
+    clearProgressStallTimer();
+  };
+
+  // Any real movement (new stage, new progress, entering the restart) pushes
+  // the "may have finished" fallback back out. Repeated identical answers do
+  // not, so a stream or poll that keeps echoing one stage still times out.
+  const armProgressStallTimer = () => {
+    clearProgressStallTimer();
+    setProgressStalled(false);
+    progressStallTimer = window.setTimeout(() => {
+      progressStallTimer = undefined;
+      if (!isComplete()) {
+        logger.warn('Update progress stalled, offering a manual reload');
+        setProgressStalled(true);
+      }
+    }, UPDATE_PROGRESS_STALL_TIMEOUT_MS);
+  };
+
+  // A quiet stream is not a closed stream. If nothing arrives for a while,
+  // poll as well rather than trusting the open EventSource.
+  const armStreamSilenceWatchdog = () => {
+    clearStreamSilenceTimer();
+    streamSilenceTimer = window.setTimeout(() => {
+      streamSilenceTimer = undefined;
+      if (!eventSource || isComplete() || restartConfirmed) {
+        return;
+      }
+      logger.warn('Update progress stream went quiet, polling status as well');
+      startPolling();
+    }, UPDATE_STREAM_SILENCE_FALLBACK_MS);
+  };
+
+  // The backend reported the restart itself: stop listening for status and
+  // wait for the new version to serve.
+  const enterConfirmedRestartPhase = () => {
+    restartConfirmed = true;
+    stopStatusFeeds();
+    armProgressStallTimer();
+    // A suspected restart already has a health-check loop running; it reads
+    // the confirmation on its next probe.
+    if (!isRestarting()) {
+      setIsRestarting(true);
+      startHealthCheckPolling();
+    }
+  };
+
+  // Requests are failing late in the update, which usually means the old
+  // process just exited. Probe for the new version, but keep the status
+  // feeds running so a status from a still-running old process wins.
+  const enterSuspectedRestartPhase = () => {
+    if (isRestarting()) {
+      return;
+    }
+    logger.warn('Status requests failing late in the update, probing for the restarted backend');
+    setIsRestarting(true);
+    startHealthCheckPolling();
+  };
+
+  const leaveSuspectedRestartPhase = () => {
+    if (!isRestarting() || restartConfirmed) {
+      return;
+    }
+    setIsRestarting(false);
+    clearHealthCheckTimer();
+    setHealthCheckAttempts(0);
+  };
+
+  const finishWithResult = (failed: boolean) => {
+    stopStatusFeeds();
+    clearHealthCheckTimer();
+    clearProgressStallTimer();
+    setProgressStalled(false);
+    // A failure reported while a restart was only suspected ends that too.
+    setIsRestarting(false);
+    setIsComplete(true);
+    if (failed) {
+      setHasError(true);
+    }
+  };
+
+  // Single entry point for statuses from the SSE stream and from polling.
+  const handleStatus = (next: UpdateStatus) => {
+    if (isComplete() || restartConfirmed || resolvingTerminalStatus) {
+      return;
+    }
+    const previous = status();
+    if (!shouldApplyUpdateStatus(previous, next)) {
+      return;
+    }
+
+    if (next.status === 'idle') {
+      handleIdleStatus(previous);
+      return;
+    }
+
+    setStatus(next);
+    if (!previous || previous.status !== next.status || previous.progress !== next.progress) {
+      armProgressStallTimer();
+    }
+    // Still no baseline: retry while the old process is known to be serving.
+    fetchBaseline();
+
+    if (next.status === 'restarting') {
+      enterConfirmedRestartPhase();
+      return;
+    }
+
+    if (next.status === 'error' || (next.status === 'completed' && next.error)) {
+      finishWithResult(true);
+      return;
+    }
+
+    if (next.status === 'completed') {
+      // Reported by the old process just before it exits. Reload once the
+      // new version is serving.
+      restartConfirmed = true;
+      resolvingTerminalStatus = true;
+      stopStatusFeeds();
+      const probeSession = session;
+      void attemptReadyReload().then((reloaded) => {
+        if (reloaded || probeSession !== session) {
+          return;
+        }
+        resolvingTerminalStatus = false;
+        // Backend not on the new version yet — restart in progress.
+        enterConfirmedRestartPhase();
+      });
+      return;
+    }
+
+    // Any other live status means the old process is still answering.
+    leaveSuspectedRestartPhase();
+  };
+
+  // 'idle' is what a freshly started process reports, so it is the restart
+  // signal when the stream was held open and never delivered 'completed'.
+  // It is also what an update check reports, so it only ends the update
+  // once the version has actually moved; otherwise the feeds keep running.
+  const handleIdleStatus = (previous: UpdateStatus | null) => {
+    const updateWasRunning = previous !== null && isUpdateInProgressStage(previous.status);
+    resolvingTerminalStatus = true;
+    if (!updateWasRunning) {
+      stopStatusFeeds();
+    }
+    const probeSession = session;
+    void attemptReadyReload().then((reloaded) => {
+      if (reloaded || probeSession !== session) {
+        return;
+      }
+      resolvingTerminalStatus = false;
+      if (!updateWasRunning) {
+        finishWithResult(false);
+      }
+    });
   };
 
   const setupSSE = () => {
@@ -115,48 +391,18 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
     try {
       // Create EventSource connection to SSE endpoint
       eventSource = new EventSource('/api/updates/stream');
+      // Armed before the connection opens: a request that never connects is
+      // as silent as one that connects and then stops delivering.
+      armStreamSilenceWatchdog();
 
       eventSource.onopen = () => {
         logger.info('SSE connection established');
       };
 
       eventSource.onmessage = (event) => {
+        armStreamSilenceWatchdog();
         try {
-          const updateStatus = JSON.parse(event.data) as UpdateStatus;
-          setStatus(updateStatus);
-
-          // Check if restarting
-          if (updateStatus.status === 'restarting') {
-            setIsRestarting(true);
-            closeSSE();
-            startHealthCheckPolling();
-            return;
-          }
-
-          // Check if complete or error
-          if (
-            updateStatus.status === 'completed' ||
-            updateStatus.status === 'idle' ||
-            updateStatus.status === 'error'
-          ) {
-            if (updateStatus.status === 'completed' && !updateStatus.error) {
-              closeSSE();
-              void attemptReadyReload().then((reloaded) => {
-                if (!reloaded) {
-                  // Backend not on the new version yet — restart in progress.
-                  setIsRestarting(true);
-                  startHealthCheckPolling();
-                }
-              });
-              return;
-            }
-
-            setIsComplete(true);
-            if (updateStatus.status === 'error' || updateStatus.error) {
-              setHasError(true);
-            }
-            closeSSE();
-          }
+          handleStatus(JSON.parse(event.data) as UpdateStatus);
         } catch (error) {
           logger.error('Failed to parse SSE update status', error);
         }
@@ -178,73 +424,43 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
 
   const startPolling = () => {
     // Don't start polling if already polling
-    if (pollInterval !== undefined) {
+    if (pollInterval !== undefined || isComplete() || restartConfirmed) {
       return;
     }
 
-    logger.info('Starting status polling (SSE not available)');
-    pollStatus();
-    pollInterval = setInterval(pollStatus, 2000) as unknown as number;
+    logger.info('Starting update status polling');
+    void pollStatus();
+    pollInterval = setInterval(pollStatus, UPDATE_STATUS_POLL_INTERVAL_MS) as unknown as number;
   };
 
   const pollStatus = async () => {
+    const pollSession = session;
     try {
       const currentStatus = await UpdatesAPI.getUpdateStatus();
-      setStatus(currentStatus);
-
-      // Check if restarting
-      if (currentStatus.status === 'restarting') {
-        setIsRestarting(true);
-        clearPollInterval();
-        // Start health check polling
-        startHealthCheckPolling();
+      if (pollSession !== session) {
         return;
       }
-
-      // Check if complete or error
-      if (
-        currentStatus.status === 'completed' ||
-        currentStatus.status === 'idle' ||
-        currentStatus.status === 'error'
-      ) {
-        // If completed successfully, reload once the new version is serving
-        if (currentStatus.status === 'completed' && !currentStatus.error) {
-          clearPollInterval();
-          if (await attemptReadyReload()) {
-            return;
-          }
-          // Backend not on the new version yet — restart in progress.
-          setIsRestarting(true);
-          startHealthCheckPolling();
-          return;
-        }
-
-        setIsComplete(true);
-        if (currentStatus.status === 'error' || currentStatus.error) {
-          setHasError(true);
-        }
-        clearPollInterval();
-      }
+      consecutivePollFailures = 0;
+      handleStatus(currentStatus);
     } catch (error) {
-      logger.error('Failed to poll update status', error);
-      // If we get errors during update, assume we're restarting
-      const currentStatus = status();
-      const shouldAssumeRestart =
-        !isRestarting() &&
-        (!currentStatus || (currentStatus.status !== 'idle' && currentStatus.status !== 'error'));
-
-      if (shouldAssumeRestart) {
-        if (!currentStatus) {
-          setStatus({
-            status: 'restarting',
-            progress: 95,
-            message: 'Restarting service...',
-            updatedAt: new Date().toISOString(),
-          });
-        }
-        setIsRestarting(true);
-        clearPollInterval();
-        startHealthCheckPolling();
+      if (pollSession !== session || isComplete() || restartConfirmed || resolvingTerminalStatus) {
+        return;
+      }
+      consecutivePollFailures += 1;
+      logger.warn('Failed to poll update status, will retry', {
+        consecutiveFailures: consecutivePollFailures,
+        error,
+      });
+      // One failed poll proves nothing: a transient network error or a 500
+      // during a long download must not end the session. Treat failures as
+      // restart evidence only when the stream has also closed, several polls
+      // in a row failed, and the update had reached the stage that restarts.
+      if (
+        !eventSource &&
+        consecutivePollFailures >= RESTART_SUSPECT_POLL_FAILURES &&
+        isLateUpdateStage(status()?.status)
+      ) {
+        enterSuspectedRestartPhase();
       }
     }
   };
@@ -252,16 +468,25 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
   const startHealthCheckPolling = () => {
     clearHealthCheckTimer();
     setHealthCheckAttempts(0);
+    // clearHealthCheckTimer (also run on close and on leaving a suspected
+    // restart) moves the loop id on, retiring this loop even mid-probe.
+    const loop = healthCheckLoop;
 
     const checkHealth = async () => {
+      healthCheckTimer = undefined;
+      if (loop !== healthCheckLoop) {
+        return;
+      }
       if (await attemptReadyReload()) {
+        return;
+      }
+      if (loop !== healthCheckLoop) {
         return;
       }
 
       const attempt = Math.min(healthCheckAttempts(), 3);
       const nextDelay = Math.min(2000 * Math.pow(2, attempt), 15000);
       setHealthCheckAttempts((current) => current + 1);
-      clearHealthCheckTimer();
       healthCheckTimer = window.setTimeout(checkHealth, nextDelay);
     };
 
@@ -295,24 +520,37 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
     }
   });
 
-  // Start/stop SSE or polling based on modal visibility
+  // Start/stop SSE or polling based on modal visibility. Only isOpen is
+  // tracked: the setup reads other signals (versionInfo, isComplete), and a
+  // change in any of them must not tear down and restart a live session.
   createEffect(() => {
-    if (props.isOpen) {
-      resetModalState();
-      // Try SSE first, will fall back to polling if it fails
-      setupSSE();
-    } else {
-      // Stop everything when modal closes
-      closeSSE();
-      clearPollInterval();
-      clearHealthCheckTimer();
+    const open = props.isOpen;
+    untrack(() => {
+      session += 1;
+      stopEverything();
+      if (open) {
+        resetModalState();
+        fetchBaseline();
+        armProgressStallTimer();
+        // Try SSE first; a stream error or prolonged silence adds polling.
+        setupSSE();
+      }
+    });
+  });
+
+  // Take the baseline from the store as soon as it loads, if the modal opened
+  // first. canAdoptBaseline refuses it once a restart may be under way.
+  createEffect(() => {
+    const version = updateStore.versionInfo()?.version;
+    if (!props.isOpen || !version) {
+      return;
     }
+    untrack(() => adoptBaseline(version, 'update-store'));
   });
 
   onCleanup(() => {
-    closeSSE();
-    clearPollInterval();
-    clearHealthCheckTimer();
+    session += 1;
+    stopEverything();
   });
 
   const getStageIcon = () => {
@@ -466,7 +704,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
                 </Show>
               </CalloutCard>
             </Show>
-            <Show when={!isRestarting()}>
+            <Show when={!isRestarting() && !progressStalled()}>
               <CalloutCard
                 tone="warning"
                 scale="compact"
@@ -479,6 +717,32 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
                   </span>
                 }
               />
+            </Show>
+            <Show when={progressStalled()}>
+              <CalloutCard
+                tone="warning"
+                scale="compact"
+                padding="md"
+                class="mt-6"
+                icon={<AlertTriangleIcon class="h-5 w-5" aria-hidden="true" />}
+                title="No progress reported for a while"
+                description={
+                  <span class="text-sm">
+                    The update may have finished already. Reload the page to check. Pulse keeps
+                    updating on the server either way.
+                  </span>
+                }
+              >
+                <Button
+                  onClick={() => window.location.reload()}
+                  variant="primary"
+                  size="sm"
+                  class="mt-2"
+                  type="button"
+                >
+                  Reload to check
+                </Button>
+              </CalloutCard>
             </Show>
           </Show>
         </div>

@@ -58,12 +58,55 @@ describe('resolvePostUpdateReload', () => {
     ).toBe('wait');
   });
 
-  it('reloads on the first healthy response when no pre-update version is known', () => {
+  it('never reloads without a pre-update version while completion is unconfirmed', () => {
+    // An old process answering healthy is indistinguishable from the new one.
+    for (const completionConfirmed of [undefined, false]) {
+      expect(
+        resolvePostUpdateReload({
+          preUpdateVersion: null,
+          reportedVersion: '6.1.0-rc.4',
+          sameVersionHealthyAttempts: MAX_SAME_VERSION_HEALTHY_ATTEMPTS + 10,
+          completionConfirmed,
+          restartObserved: true,
+        }),
+      ).toBe('wait');
+    }
+  });
+
+  it('without a pre-update version, reloads after confirmed completion once the restart was seen', () => {
+    const base = {
+      preUpdateVersion: null,
+      reportedVersion: '6.1.0-rc.4',
+      completionConfirmed: true,
+    };
+    // The about-to-exit process still answers right after 'completed'.
+    expect(resolvePostUpdateReload({ ...base, sameVersionHealthyAttempts: 0 })).toBe('wait');
+    expect(
+      resolvePostUpdateReload({ ...base, sameVersionHealthyAttempts: 0, restartObserved: true }),
+    ).toBe('reload');
     expect(
       resolvePostUpdateReload({
-        preUpdateVersion: null,
-        reportedVersion: '6.1.0-rc.4',
+        ...base,
+        sameVersionHealthyAttempts: MAX_SAME_VERSION_HEALTHY_ATTEMPTS,
+      }),
+    ).toBe('reload');
+  });
+
+  it('never falls back to a same-version reload while completion is unconfirmed', () => {
+    expect(
+      resolvePostUpdateReload({
+        preUpdateVersion: '6.4.5-rc.5',
+        reportedVersion: '6.4.5-rc.5',
+        sameVersionHealthyAttempts: MAX_SAME_VERSION_HEALTHY_ATTEMPTS + 10,
+        completionConfirmed: false,
+      }),
+    ).toBe('wait');
+    expect(
+      resolvePostUpdateReload({
+        preUpdateVersion: '6.4.5-rc.5',
+        reportedVersion: '6.4.5',
         sameVersionHealthyAttempts: 0,
+        completionConfirmed: false,
       }),
     ).toBe('reload');
   });
