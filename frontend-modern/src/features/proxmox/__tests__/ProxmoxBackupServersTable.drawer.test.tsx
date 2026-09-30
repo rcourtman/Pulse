@@ -348,11 +348,22 @@ describe('ProxmoxBackupServersTable details', () => {
     pbs.name = 'proxback';
     pbs.displayName = 'proxback';
     pbs.platformId = 'pbs-1';
-    pbs.pbs = { ...pbs.pbs!, instanceId: 'proxback', hostname: 'proxback-vm' };
+    // The reported node, not the configured endpoint, corroborates this host.
+    pbs.pbs = {
+      ...pbs.pbs!,
+      instanceId: 'proxback',
+      hostname: 'proxback-vm',
+      nodeName: 'proxback-vm',
+    };
     pbs.metricsTarget = { resourceType: 'agent', resourceId: 'pbs-1' };
     pbs.platformData = {
       sources: ['pbs'],
-      pbs: { instanceId: 'proxback', hostname: 'proxback-vm', datastoreCount: 1 },
+      pbs: {
+        instanceId: 'proxback',
+        hostname: 'proxback-vm',
+        nodeName: 'proxback-vm',
+        datastoreCount: 1,
+      },
     };
     const sharedAgent = { agentId: 'agent-proxback', hostname: 'proxback-vm' };
     const guest = {
@@ -412,6 +423,7 @@ describe('ProxmoxBackupServersTable details', () => {
       pbs.pbs = {
         instanceId: 'proxback',
         hostname: 'proxback-vm',
+        linkedAgentId: 'agent-proxback',
         version: '3.2.1',
         connectionHealth: 'healthy',
         datastores: [{ name: 'tank', total: 1000, used: 400, available: 600, usagePercent: 40 }],
