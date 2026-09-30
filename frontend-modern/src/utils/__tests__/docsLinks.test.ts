@@ -149,6 +149,28 @@ describe('docsLinks', () => {
     expect(help).toContain('If installation never started Pulse');
   });
 
+  it('keeps port troubleshooting specific without exposing deployment credentials', () => {
+    const troubleshooting = readFileSync(path.join(repoRoot, 'docs', 'TROUBLESHOOTING.md'), 'utf8');
+    const ports = troubleshooting.split("### Port change didn't take effect")[1].split('\n### ')[0];
+
+    expect(ports).toContain('CONFIGURATION.md#common-overrides-environment-variables');
+    expect(ports).toContain('`PORT` alias applies only when `FRONTEND_PORT` is unset');
+    expect(ports).toContain('`frontendPort` in `system.json` has no effect');
+    expect(ports).toContain('separate agent listener, not the web UI port');
+    expect(ports).toContain('`systemctl is-active pulse`');
+    expect(ports).toContain('`sudo systemctl daemon-reload`');
+    expect(ports).toContain('inside\n  the Pulse container, not on the Proxmox host');
+    expect(ports).toContain('`docker compose up -d pulse`');
+    expect(ports).toContain('same image and mounted data volume');
+    expect(ports).toContain('Restarting an existing container does not apply a new port mapping');
+    expect(ports).toContain('do not delete the volume');
+    expect(ports).toContain('Do not post full service environments');
+    expect(ports).not.toContain('--property=Environment');
+    expect(ports).not.toMatch(
+      /`(?:sudo )?(?:systemctl (?:status|cat)|docker inspect|docker compose config)[^`]*`(?! output)/,
+    );
+  });
+
   it('keeps clone identity recovery separate from destructive OS or credential resets', () => {
     const troubleshooting = readFileSync(path.join(repoRoot, 'docs', 'TROUBLESHOOTING.md'), 'utf8');
     const agentGuide = readFileSync(path.join(repoRoot, 'docs', 'UNIFIED_AGENT.md'), 'utf8');
