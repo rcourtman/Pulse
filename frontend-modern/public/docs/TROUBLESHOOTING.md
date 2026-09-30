@@ -58,9 +58,35 @@ screen for this instance and do not paste it into support requests or issue
 reports.
 
 ### Port change didn't take effect
-1. Check which service is running: `systemctl status pulse` (legacy installs may use `pulse-backend`).
-2. Verify environment override: `systemctl show pulse --property=Environment`.
-3. Docker: Ensure you updated the `-p` flag (e.g., `-p 8080:7655`).
+
+The web UI and API listen on `FRONTEND_PORT` (default `7655`). The deprecated
+`PORT` alias applies only when `FRONTEND_PORT` is unset; changing
+`frontendPort` in `system.json` has no effect. `PULSE_AGENT_INGEST_PORT` is a
+separate agent listener, not the web UI port. See
+[Port configuration](CONFIGURATION.md#common-overrides-environment-variables).
+
+- **Systemd / Proxmox LXC**: identify the active service with
+  `systemctl is-active pulse` (legacy installs may use `pulse-backend`). Inspect
+  only the port setting in its managed configuration locally. If you change a
+  unit or drop-in, run `sudo systemctl daemon-reload`, then restart the affected
+  service during a suitable maintenance window. For LXC, run these checks inside
+  the Pulse container, not on the Proxmox host.
+- **Docker / Compose**: distinguish the published host port from the listener
+  inside the container. With the default listener, `8080:7655` exposes the UI on
+  host port `8080`; changing the host port does not require `FRONTEND_PORT`.
+  In the repository's Compose file, `PULSE_PORT` controls this host-side mapping.
+  Save the mapping in your existing Compose project and apply it with
+  `docker compose up -d pulse`, keeping the same image and mounted data volume.
+  Restarting an existing container does not apply a new port mapping. For other
+  container managers, use their recreate/redeploy action while preserving the
+  data mount; do not delete the volume.
+- **Reverse proxy**: check its upstream port and the firewall separately. A
+  working agent connection on a split-port deployment does not prove that the
+  web UI is reachable.
+
+Do not post full service environments, `docker inspect` output or resolved
+`docker compose config` output: they can include passwords and tokens. Share
+only the relevant port numbers and a redacted error if help is needed.
 
 ### "Connection Refused"
 - Check if Pulse is running.
