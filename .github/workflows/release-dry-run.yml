@@ -7,8 +7,8 @@ on:
   # week at a time instead of piling up until an RC publish. Scheduled runs
   # carry no workflow_dispatch inputs (GitHub does not apply input defaults to
   # schedule events), so the rehearsal step derives the rollback target as the
-  # latest stable tag preceding VERSION. Manual dispatches must still supply
-  # rollback_version explicitly.
+  # latest stable tag preceding VERSION. The fixed on-demand watchdog uses the
+  # same envelope; ordinary manual rehearsals still supply rollback explicitly.
   schedule:
     - cron: '0 7 * * 2'
   workflow_dispatch:

@@ -1713,7 +1713,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn(promotion_metadata_envelope(), normalize_ws(template))
         self.assertIn("rc-to-ga-rehearsal-summary", workflow)
         self.assertIn("build_release_candidate:", workflow)
-        self.assertIn("if: ${{ inputs.version != '' }}", workflow)
+        self.assertIn("if: ${{ inputs.watchdog != true && inputs.version != '' }}", workflow)
         self.assertIn("require_macos_signing: true", workflow)
         self.assertIn(
             "require_windows_signing: false",
@@ -2200,12 +2200,19 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         dry_run_workflow = read(".github/workflows/release-dry-run.yml")
         self.assertIn("Required rollback stable version to rehearse", dry_run_workflow)
         self.assertIn("rollback_version:\n        description: 'Required rollback stable version to rehearse", dry_run_workflow)
-        self.assertIn("required: true", dry_run_workflow)
-        # Scheduled watchdog runs carry no dispatch inputs, so the rehearsal
-        # step must derive the rollback target; the derive flag stays gated on
-        # the schedule event so manual dispatches keep explicit rollback.
+        # The fixed watchdog has no rollback override, so its dispatch schema
+        # must permit omission. Ordinary manual rehearsals still require an
+        # explicit rollback in the pre-checkout admission shell.
+        dry_run = yaml.safe_load(dry_run_workflow)
+        inputs = dry_run.get("on", dry_run.get(True))["workflow_dispatch"]["inputs"]
+        self.assertIs(inputs["rollback_version"]["required"], False)
+        self.assertIn('workflow_dispatch:false)', dry_run_workflow)
+        self.assertIn('[ -z "${ROLLBACK_VERSION_INPUT:-}" ]', dry_run_workflow)
+        self.assertIn('Candidate rehearsal requires explicit rollback and no watchdog SHA.', dry_run_workflow)
+        # Both admitted watchdog modes derive rollback; a candidate rehearsal
+        # can never reach that derivation, including when the input is absent.
         self.assertIn(
-            'if [ "${EVENT_NAME}" = "schedule" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then',
+            'if [ "${WATCHDOG_MODE}" = "true" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then',
             dry_run_workflow,
         )
         self.assertIn("--derive-rollback-latest-stable", dry_run_workflow)
