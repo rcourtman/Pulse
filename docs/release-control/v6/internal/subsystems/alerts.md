@@ -1411,6 +1411,21 @@ per-alert rate limiting; future notification-gating changes should extend that
 policy owner rather than burying new checks inside metric or resource-specific
 evaluators.
 
+### Configured flapping thresholds remain reachable
+
+Every accepted positive `FlappingThreshold`, including values above ten, must
+be reachable by current observations inside `FlappingWindowSeconds`. Per-key
+history retains at most `max(10, FlappingThreshold)` timestamps after window
+pruning; it must not grow with repeated attempts during an active cooldown.
+Only the threshold-crossing attempt opens that cooldown. Later attempts keep
+its original deadline even after the observation window drains, and a served
+cooldown resets the episode so a later storm can arm it again. Lowering the
+threshold applies the new history bound and threshold on the next check. The
+read-only delivery diagnosis must explain the same threshold and suppression
+actually enforced at dispatch. `internal/alerts/flapping_threshold_test.go`
+pins these boundaries through normal configuration updates and notification
+callbacks, alongside the existing flapping cooldown and one-shot callback tests.
+
 ### Monitor-only delivery is terminal
 
 Monitor-only alerts remain visible, but neither a firing nor a recovery

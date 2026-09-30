@@ -122,8 +122,12 @@ func (m *Manager) checkFlappingLocked(trackingKey string) (suppress bool, justTr
 			validHistory = append(validHistory, t)
 		}
 	}
-	// Limit to max 10 entries to prevent unbounded growth
-	const maxFlappingHistory = 10
+	// Keep enough observations to reach the configured threshold. A fixed
+	// ten-entry cap silently disabled flapping suppression for accepted
+	// thresholds above ten. Retain the old diagnostic allowance for smaller
+	// thresholds, while still bounding history by configuration rather than
+	// the number of dispatch attempts.
+	maxFlappingHistory := max(10, m.config.FlappingThreshold)
 	if len(validHistory) > maxFlappingHistory {
 		validHistory = validHistory[len(validHistory)-maxFlappingHistory:]
 	}
