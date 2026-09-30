@@ -132,10 +132,7 @@ describe('docsLinks', () => {
   });
 
   it('keeps lockout and incident reporting guidance safe for the affected client', () => {
-    const troubleshooting = readFileSync(
-      path.join(repoRoot, 'docs', 'TROUBLESHOOTING.md'),
-      'utf8',
-    );
+    const troubleshooting = readFileSync(path.join(repoRoot, 'docs', 'TROUBLESHOOTING.md'), 'utf8');
     const recovery = troubleshooting.split('### Recovery Mode')[1].split('\n---')[0];
     expect(recovery).toContain('[I forgot my password](#i-forgot-my-password)');
     expect(recovery).toContain('browser-bound recovery');
@@ -153,14 +150,8 @@ describe('docsLinks', () => {
   });
 
   it('keeps clone identity recovery separate from destructive OS or credential resets', () => {
-    const troubleshooting = readFileSync(
-      path.join(repoRoot, 'docs', 'TROUBLESHOOTING.md'),
-      'utf8',
-    );
-    const agentGuide = readFileSync(
-      path.join(repoRoot, 'docs', 'UNIFIED_AGENT.md'),
-      'utf8',
-    );
+    const troubleshooting = readFileSync(path.join(repoRoot, 'docs', 'TROUBLESHOOTING.md'), 'utf8');
+    const agentGuide = readFileSync(path.join(repoRoot, 'docs', 'UNIFIED_AGENT.md'), 'utf8');
     const shortGuide = troubleshooting
       .split('#### Docker hosts appearing/disappearing')[1]
       .split('\n### ')[0];
