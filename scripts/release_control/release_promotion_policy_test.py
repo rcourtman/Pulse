@@ -408,6 +408,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         dry_run = jobs["dry-run"]
         steps = dry_run["steps"]
         names = [step["name"] for step in steps]
+        self.assertLess(names.index("Validate release ref"), names.index("Checkout repository"))
         self.assertLess(names.index("Resolve required release branch"),
                         names.index("Select exact rehearsal source"))
         self.assertLess(names.index("Select exact rehearsal source"),
@@ -415,6 +416,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         source = next(step for step in steps if step.get("id") == "source")
         self.assertEqual(source["env"]["REQUIRED_BRANCH"],
                          "${{ steps.branch_policy.outputs.required_branch }}")
+        self.assertEqual(source["env"]["WATCHDOG_MODE"], "${{ steps.mode.outputs.watchdog }}")
         self.assertIn('git checkout --detach "${TESTED_SHA}"', source["run"])
         self.assertIn('"${TESTED_SHA}" != "${GITHUB_SHA}"', source["run"])
         metadata = next(step for step in steps if step.get("id") == "rehearsal")
@@ -424,9 +426,13 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                       metadata["run"])
         self.assertIn('if [ "$FILE_VERSION" != "$VERSION" ]; then', metadata["run"])
         self.assertIn(
-            'if [ "${EVENT_NAME}" = "schedule" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then',
+            'if [ "${WATCHDOG_MODE}" = "true" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then',
             metadata["run"],
         )
+        self.assertEqual(metadata["env"]["WATCHDOG_MODE"], "${{ steps.mode.outputs.watchdog }}")
+        self.assertEqual(jobs["build_release_candidate"]["if"],
+                         "${{ inputs.watchdog != true && inputs.version != '' }}")
+        self.assertIn("Release Watchdog at {0}", yaml.safe_load(workflow)["run-name"])
         for key in ("tested_sha", "tested_branch"):
             self.assertEqual(dry_run["outputs"][key],
                              "${{ steps.source.outputs." + key + " }}")

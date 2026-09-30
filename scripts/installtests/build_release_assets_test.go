@@ -2415,6 +2415,35 @@ func TestUpdateDemoResolverChecksOutOutputHelperBeforeUse(t *testing.T) {
 	}
 }
 
+func TestReleaseWatchdogIsControlBoundAndCannotBuildCandidate(t *testing.T) {
+	workflow, err := os.ReadFile(repoFile(".github", "workflows", "release-dry-run.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(workflow)
+	for _, required := range []string{
+		"Release Watchdog at {0}",
+		"if: ${{ inputs.watchdog != true && inputs.version != '' }}",
+		`[ "${EXPECTED_WORKFLOW_SHA_INPUT}" != "${GITHUB_SHA}" ]`,
+		`[ "${GITHUB_REF}" != "refs/heads/main" ]`,
+		`Candidate rehearsal requires explicit rollback and no watchdog SHA.`,
+		`Watchdog refuses candidate input ${name}.`,
+		`Watchdog refuses exception input ${name}.`,
+		"WATCHDOG_MODE: ${{ steps.mode.outputs.watchdog }}",
+		"verify_only: true",
+		`require_result "stable demo no-mutation verification" "$DEMO_RESULT" success`,
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("fixed release watchdog missing safety contract: %s", required)
+		}
+	}
+	guard := strings.Index(text, "- name: Validate release ref")
+	checkout := strings.Index(text, "- name: Checkout repository")
+	if guard < 0 || checkout <= guard {
+		t.Fatal("watchdog control identity and envelope must be checked before checkout")
+	}
+}
+
 func TestDemoMutationAndRecoverySharePhysicalTargetLock(t *testing.T) {
 	updateBytes, err := os.ReadFile(repoFile(".github", "workflows", "update-demo-server.yml"))
 	if err != nil {
