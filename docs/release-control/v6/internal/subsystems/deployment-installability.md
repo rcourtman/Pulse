@@ -4645,7 +4645,16 @@ no JavaScript. It separates the two and nothing else. A conclusive result is
 acted on immediately and any vulnerability at any severity still fails, even
 if the same response also carries a transport error, so a severity threshold
 must never be introduced; only an unreachable endpoint is
-retried. Retrying is bounded by wall clock and not by attempt count alone,
+retried. Finding diagnostics must use that same captured JSON response, never
+a second registry request: such a request could hang outside the watchdog or
+describe a different verdict. Logs retain the affected package, severity,
+range, locked paths, advisory source/title/link and fix availability through
+allowlisted, JSON-escaped fields, not arbitrary registry text or transport-error
+details. Missing package-level detail leaves the vulnerability failure intact;
+it must not trigger another request. `scripts/tests/test_npm_audit_retry.py`
+executes changed-second-response, missing-detail, escaping and single-request
+fixtures, including production argument forwarding and findings accompanied by
+transport errors. Retrying is bounded by wall clock and not by attempt count alone,
 because npm's own `fetch-timeout` defaults to five minutes and it retries
 internally: on 2026-09-04 three attempts against a hanging endpoint ran for
 10m56s and cancelled the Frontend job at its own timeout with every test
