@@ -1,16 +1,18 @@
 {
   "version": 1,
-  "base_sha": "21a35494aecb335755de773dd099e1364e65b3e0",
-  "verified_at": "2026-09-30T20:12:09Z",
+  "base_sha": "f3c92a242ebf9b7062dfc9f6ff711a56639f536c",
+  "verified_at": "2026-09-30T22:39:35Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"
+    "frontend-modern/src/components/UpdateProgressModal.tsx",
+    "frontend-modern/src/components/updateReadinessModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "b2b31441b19c2e50283ceedf319cd09a1f94791750cd424c052717a4957fdc67"
+    "frontend-modern/src/components/UpdateProgressModal.tsx": "d51df7a98a379e313f306b68529c8db0687ff91176af23869411c4b46feb2599",
+    "frontend-modern/src/components/updateReadinessModel.ts": "b25bf82441fc6572b95891af48a1ed2a0e8ea1f4e583c171ea9352a1e67d76ce"
   },
   "routes": [
-    "/browser-tests/pbs-identity-boundary.html (production PBS table and real resource History renderer; synthetic API data)"
+    "/browser-tests/update-progress-modal.html (production UpdateProgressModal with a scripted update stream and scripted /api/updates/status and /api/version)"
   ],
   "viewports": [
     {
@@ -23,38 +25,102 @@
     }
   ],
   "states": [
-    "corroborated host with seven observed metric paths",
-    "uncached range replacement pending with no old paths",
-    "new range loaded before the old range response",
-    "withdrawn host link with replacement target pending",
-    "replacement target returns 503 with no former-host history",
-    "service-only response retains CPU/memory, not host disk/network/I/O",
-    "locked 14-day range issues no history read"
+    "stream delivers one downloading 10% event then stays open and silent; fallback polling advances the modal through 35, 70, 80 and 90% (applying)",
+    "stream closed during download with a single unreachable status poll between two successful ones; download progress continues and the restart phase is never entered",
+    "restarting status from polling, then /api/version unreachable twice, then the new version reported; Pulse is restarting shown, then exactly one page reload",
+    "pre-update version unavailable (503), late polls failing and a new version plus idle answering without a restarting or completed status; modal stays on Pulse is restarting with no reload and no completion claim",
+    "stream delivers downloading, verifying, extracting, backing-up, applying and completed; old version answers once, becomes unreachable, then the new version; exactly one reload and no fallback polls"
   ],
   "interactions": [
-    "desktop keyboard Enter / phone row click to open PBS details",
-    "select 6h while its GET is held; select 1h, then fulfil the obsolete 6h request",
-    "withdraw third host link while service GET is held, then return 503",
-    "select 6h after failure and inspect the service-only response",
-    "select locked 14d; check all ten screenshots, retained History tab, zero horizontal overflow and no page errors"
+    "emit scripted SSE statuses and hold the stream silent past the 6s silence window; assert the first fallback poll lands after it and the stream stays open",
+    "fail the stream and abort one status poll mid-download; assert no restart text ever rendered (MutationObserver) and the do-not-close warning remains",
+    "count document loads of the harness to assert a single reload after real restart evidence, and none without a baseline or backend confirmation",
+    "inspect screenshots at desktop and phone widths; assert no page errors, no horizontal overflow and the dialog inside the viewport"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/pbs-history-source-isolation.cjs from assigned workspace root; Vite 6.4.3, Chromium 141.0.7390.37, Playwright 1.56.1",
+  "command": "NODE_PATH=<playwright 1.56.1 node_modules> PULSE_BROWSER_ARTIFACTS=<proof dir> PULSE_CHROMIUM_PATH=<cached chrome-headless-shell 151.0.7922.34> node frontend-modern/browser-tests/update-progress-modal.cjs from the worktree root; Vite dev server on 127.0.0.1:5208, Playwright 1.56.1, Chromium headless shell 151.0.7922.34",
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/receipts/history-browser-final.log",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/host-loaded-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/host-loaded-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/range-loading-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/range-loading-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/service-loaded-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/service-loaded-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-failed-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-failed-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-loading-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-loading-390.png"
+    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/harness-rebased-3.log",
+    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/a-polled-90pct-1365.png",
+    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/a-polled-90pct-390.png",
+    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/a-stream-10pct-1365.png",
+    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/a-stream-10pct-390.png",
+    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/b-after-failed-poll-80pct-1365.png",
+    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/b-after-failed-poll-80pct-390.png",
+    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/c-reloaded-1365.png",
+    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/c-reloaded-390.png",
+    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/c-restarting-1365.png",
+    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/c-restarting-390.png",
+    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/d-unconfirmed-waiting-1365.png",
+    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/d-unconfirmed-waiting-390.png",
+    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/e-reloaded-1365.png",
+    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/e-reloaded-390.png",
+    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/e-restarting-1365.png",
+    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/e-restarting-390.png",
+    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/e-stream-applying-1365.png",
+    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/e-stream-applying-390.png"
   ],
-  "notes": "Ten final screenshots inspected. The superseded GET is observed ERR_ABORTED at both widths; the unit regression also resolves mocks that ignore cancellation. Mock-backed proof establishes source/range isolation, not installed PBS collection, VirtualBox telemetry, all three #1723 drawers or release availability. Earlier unconfigured-CSS red/attempt-one results are retained separately.",
+  "notes": [
+    "Mock-backed UI proof of the production modal; all five scenarios passed at 1365x900 and 390x844 and the screenshots were inspected. The same harness run against the pre-fix UpdateProgressModal and updateReadinessModel (fa1d9eb36) fails scenario (a), staying on 10% (pre-fix/run.log). This does not exercise the backend SSE endpoint, a real proxy, or an installed update. Re-run after rebasing onto 8d5969fb3 (lockfile-only brace-expansion/DOMPurify floors); both full runs passed all five scenarios at both viewports with unchanged component content hashes.",
+    "Re-run after rebasing onto f3c92a242; all five scenarios passed at both viewports with unchanged component content hashes."
+  ],
   "prior_verifications": [
+    {
+      "version": 1,
+      "base_sha": "21a35494aecb335755de773dd099e1364e65b3e0",
+      "verified_at": "2026-09-30T20:12:09Z",
+      "result": "passed",
+      "changed_paths": [
+        "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"
+      ],
+      "content_sha256": {
+        "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "b2b31441b19c2e50283ceedf319cd09a1f94791750cd424c052717a4957fdc67"
+      },
+      "routes": [
+        "/browser-tests/pbs-identity-boundary.html (production PBS table and real resource History renderer; synthetic API data)"
+      ],
+      "viewports": [
+        {
+          "width": 1365,
+          "height": 900
+        },
+        {
+          "width": 390,
+          "height": 844
+        }
+      ],
+      "states": [
+        "corroborated host with seven observed metric paths",
+        "uncached range replacement pending with no old paths",
+        "new range loaded before the old range response",
+        "withdrawn host link with replacement target pending",
+        "replacement target returns 503 with no former-host history",
+        "service-only response retains CPU/memory, not host disk/network/I/O",
+        "locked 14-day range issues no history read"
+      ],
+      "interactions": [
+        "desktop keyboard Enter / phone row click to open PBS details",
+        "select 6h while its GET is held; select 1h, then fulfil the obsolete 6h request",
+        "withdraw third host link while service GET is held, then return 503",
+        "select 6h after failure and inspect the service-only response",
+        "select locked 14d; check all ten screenshots, retained History tab, zero horizontal overflow and no page errors"
+      ],
+      "command": "pulse-worker-browser frontend-modern/browser-tests/pbs-history-source-isolation.cjs from assigned workspace root; Vite 6.4.3, Chromium 141.0.7390.37, Playwright 1.56.1",
+      "artifacts": [
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/receipts/history-browser-final.log",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/host-loaded-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/host-loaded-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/range-loading-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/range-loading-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/service-loaded-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/service-loaded-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-failed-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-failed-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-loading-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-loading-390.png"
+      ],
+      "notes": "Ten final screenshots inspected. The superseded GET is observed ERR_ABORTED at both widths; the unit regression also resolves mocks that ignore cancellation. Mock-backed proof establishes source/range isolation, not installed PBS collection, VirtualBox telemetry, all three #1723 drawers or release availability. Earlier unconfigured-CSS red/attempt-one results are retained separately."
+    },
     {
       "version": 1,
       "base_sha": "6ade01cbd4d02cd25b691f9ff5919206cceae764",

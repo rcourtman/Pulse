@@ -2640,6 +2640,13 @@ vdev layout is reported` in
 
 ## Current State
 
+### Update progress stream delivery
+
+Update progress delivery changes observation only. Streaming or polling a
+`backing-up`, `restoring` or `completed` stage does not create a backup,
+perform rollback or establish recovery success. Update history and retained
+backups remain the recovery authority, independent of `/api/updates/stream`.
+
 ### Hosted install tokens persist like any other workspace token
 
 Hosted client workspaces now mint agent install tokens where they previously

@@ -4579,6 +4579,19 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Update progress stream delivery
+
+`GET /api/updates/stream` answers `text/event-stream` with
+`Cache-Control: no-cache, no-transform`, `X-Accel-Buffering: no`, and no
+content encoding. The first flushed frames are a `: connected` comment and a
+`data:` event carrying the current `UpdateStatus`, so a connecting client never
+waits for the next stage change. Later statuses are `data:` events in emission
+order, each flushed on write, with `: heartbeat` comments between them. The
+payload shape is the same `UpdateStatus` returned by `/api/updates/status`,
+which stays the polling fallback for clients whose stream goes quiet. The
+stream handler tests in `internal/api/updates_test.go` cover this transport
+contract.
+
 ### Hosted install command payloads carry a minted token
 
 `POST /api/agent-install-command` returns a non-empty `token` (and, for

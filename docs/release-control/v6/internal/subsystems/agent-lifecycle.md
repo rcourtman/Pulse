@@ -3452,6 +3452,14 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Update progress stream delivery
+
+Server update progress delivery is owned by internal/updates and its API
+adapter. Immediate status on connect, ordered flushed events, and the modal's
+polling fallback change how progress is observed only. They grant no agent
+update, installation or command-execution authority, and a completed server
+update is not evidence that any agent was upgraded.
+
 ### Hosted runtimes always mint agent install tokens
 
 `POST /api/agent-install-command` mints and embeds an agent install token
