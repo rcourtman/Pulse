@@ -2674,6 +2674,23 @@ parity is unchanged.
 `frontend-modern/src/security/__tests__/dependencySecurity.test.ts` pins the
 manifest ranges and locked floors so a later downgrade is rejected.
 
+### Reviewed brace-expansion and DOMPurify advisory floors (30 Sep 2026)
+
+`frontend-modern/package-lock.json` moves every locked `brace-expansion` copy
+to 1.1.21 or 5.0.12 for `GHSA-q2hr-2g5m-vwhr` (quadratic `{a},b}` rewrite CPU
+denial of service, affecting below 1.1.21 and 4.0.0 to 5.0.11), which failed
+the required frontend dependency audit on every pull request. `brace-expansion`
+is reached only through build and lint tooling. The locked `dompurify` moves
+from 3.4.15 to 3.4.16 for `GHSA-p98j-92pf-mc4p` (an `IN_PLACE` `afterSanitize`
+hook that removes a node could leave detached event handlers armed, affecting
+3.4.13 to 3.4.15). DOMPurify ships in the frontend bundle, and the change is a
+patch release inside the reviewed `^3` range. The change is lockfile only, with
+no manifest range change, and leaves the installer, artifact, signing,
+promotion and rollback boundary unchanged.
+`frontend-modern/src/security/__tests__/dependencySecurity.test.ts` raises the
+`brace-expansion` floors to 1.1.21 and 5.0.12 and the reviewed `dompurify`
+floor to 3.4.16, so a later downgrade is rejected.
+
 ### Reviewed @types/node 26.6.2 refresh
 
 The 2026-09-23 `npm-minor-patch` group (Dependabot #2189) advances the
