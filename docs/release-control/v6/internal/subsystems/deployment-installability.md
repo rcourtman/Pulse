@@ -5442,3 +5442,21 @@ investigation. It does not reproduce a crash, inspect an existing database or
 executable, diagnose the retained crash, or clear its adverse evidence. The
 upstream advisory benchmark and this line's performance and exact qualification
 checks remain separate from source scope and integrity-floor verification.
+
+
+### v6.4 DOMPurify security backport (30 September 2026)
+
+Reviewed upstream `6ad6e18d53794145bd027df78513d625073f10e6` (Pulse #2349)
+raises the locked DOMPurify from 3.4.13 to 3.4.16 for
+`GHSA-p98j-92pf-mc4p`: an `IN_PLACE` `afterSanitize` hook that removes a node
+can leave detached event handlers armed in 3.4.13 through 3.4.15. DOMPurify
+ships in the frontend bundle. This line takes only that advisory repair,
+within its existing manifest range; all other locked packages and dependency
+edges are unchanged. The already retained brace-expansion 1.1.21 and 5.0.12
+repairs cover `GHSA-q2hr-2g5m-vwhr`. The dependency-security tests enforce
+all three patched floors to reject a later downgrade.
+
+Installer, signing, update selection, promotion and rollback boundaries are
+unchanged. Exact-lock installation, frontend validation and the enforced
+complete-graph audit remain necessary; a security-floor assertion alone is
+not an audit or release qualification.
