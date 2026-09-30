@@ -403,6 +403,43 @@ func TestTelemetryUpdate_NoMutationOnPersistFailure(t *testing.T) {
 	}
 }
 
+func TestTelemetryUpdate_OnlyPreferenceTransitionsToggle(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath: tempDir, ConfigPath: tempDir, TelemetryEnabled: true,
+		EnvOverrides: make(map[string]bool),
+	}
+	handler, persistence, token := setupTelemetryTest(t, cfg)
+	settings := config.DefaultSystemSettings()
+	enabled := true
+	settings.TelemetryEnabled = &enabled
+	if err := persistence.SaveSystemSettings(*settings); err != nil {
+		t.Fatal(err)
+	}
+	var toggles []bool
+	handler.SetTelemetryToggleFunc(func(value bool) { toggles = append(toggles, value) })
+	for i, value := range []bool{true, true, false, false, true, true} {
+		body, err := json.Marshal(map[string]interface{}{"telemetryEnabled": value})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/system-settings", bytes.NewReader(body))
+		req.Header.Set("X-API-Token", token)
+		rec := httptest.NewRecorder()
+		handler.HandleUpdateSystemSettings(rec, req)
+		if rec.Code != http.StatusOK || cfg.TelemetryEnabled != value {
+			t.Fatalf("save %d returned %d, enabled=%v: %s", i, rec.Code, cfg.TelemetryEnabled, rec.Body.String())
+		}
+		persisted, err := persistence.LoadSystemSettings()
+		if err != nil || persisted.TelemetryEnabled == nil || *persisted.TelemetryEnabled != value {
+			t.Fatalf("save %d did not preserve requested preference: settings=%#v error=%v", i, persisted, err)
+		}
+	}
+	if len(toggles) != 2 || toggles[0] != false || toggles[1] != true {
+		t.Fatalf("runtime toggles = %v, want only the disable and re-enable transitions", toggles)
+	}
+}
+
 func TestTelemetryUpdate_UnrelatedUpdateDoesNotToggle(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -13,6 +15,58 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 	"github.com/rs/zerolog"
 )
+
+func TestServiceHealthProbeHandlesWildcardListeners(t *testing.T) {
+	for _, test := range []struct {
+		name, network, address, wantHost string
+	}{
+		{"ipv4", "tcp4", "0.0.0.0:0", "127.0.0.1"},
+		{"dual-stack", "tcp", "[::]:0", "127.0.0.1"},
+		{"ipv6-only", "tcp6", "[::]:0", "::1"},
+	} {
+		for _, tlsEnabled := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/tls=%v", test.name, tlsEnabled), func(t *testing.T) {
+				listener, err := net.Listen(test.network, test.address)
+				if err != nil {
+					if test.network != "tcp4" {
+						t.Skipf("IPv6 listener unavailable: %v", err)
+					}
+					t.Fatal(err)
+				}
+				server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					switch r.URL.Path {
+					case "/api/health":
+						fmt.Fprint(w, `{"status":"healthy"}`)
+					case "/":
+						fmt.Fprint(w, `<html><script src="/assets/app.js"></script></html>`)
+					case "/assets/app.js":
+						fmt.Fprint(w, "console.log('ok')")
+					default:
+						http.NotFound(w, r)
+					}
+				}))
+				_ = server.Listener.Close()
+				server.Listener = listener
+				if tlsEnabled {
+					server.StartTLS()
+				} else {
+					server.Start()
+				}
+				t.Cleanup(server.Close)
+
+				baseURL, ok := localServiceHealthBaseURL(listener, tlsEnabled)
+				parsed, err := url.Parse(baseURL)
+				if !ok || err != nil || parsed.Hostname() != test.wantHost {
+					t.Fatalf("probe target = %q, want bound listener reachable through %s", baseURL, test.wantHost)
+				}
+				got := newServiceHealthProbe(listener, tlsEnabled)()
+				if !got.Observed || !got.Healthy || got.FailureCategory != "" {
+					t.Fatalf("reachable listener reported unhealthy: %#v", got)
+				}
+			})
+		}
+	}
+}
 
 func TestServiceHealthProbeCoversAPIUIAndFrontendAssets(t *testing.T) {
 	tests := []struct {

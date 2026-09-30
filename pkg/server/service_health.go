@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
@@ -99,7 +100,7 @@ func localServiceHealthBaseURL(listener net.Listener, tlsEnabled bool) (string, 
 	}
 	ip := tcpAddr.IP
 	if ip == nil || ip.IsUnspecified() {
-		if ip != nil && ip.To4() == nil {
+		if ip != nil && ip.To4() == nil && !serviceHealthListenerAcceptsIPv4(listener) {
 			ip = net.IPv6loopback
 		} else {
 			ip = net.IPv4(127, 0, 0, 1)
@@ -110,6 +111,28 @@ func localServiceHealthBaseURL(listener net.Listener, tlsEnabled bool) (string, 
 		scheme = "https"
 	}
 	return fmt.Sprintf("%s://%s", scheme, net.JoinHostPort(ip.String(), fmt.Sprintf("%d", tcpAddr.Port))), true
+}
+
+// An IPv6 wildcard TCP listener can also serve IPv4. Prefer IPv4 loopback
+// when its socket actually accepts it: IPv6 can be disabled on loopback even
+// while this listener serves the UI/API normally over IPv4. Keep IPv6-only
+// listeners on their own address rather than probing another socket's port.
+func serviceHealthListenerAcceptsIPv4(listener net.Listener) bool {
+	socket, ok := listener.(syscall.Conn)
+	if !ok {
+		return false
+	}
+	raw, err := socket.SyscallConn()
+	if err != nil {
+		return false
+	}
+	dualStack := false
+	if err := raw.Control(func(fd uintptr) {
+		dualStack = serviceHealthSocketIsDualStack(fd)
+	}); err != nil {
+		return false
+	}
+	return dualStack
 }
 
 func frontendAssetPaths(index []byte) []string {

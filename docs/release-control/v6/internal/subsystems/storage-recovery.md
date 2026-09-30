@@ -2778,6 +2778,15 @@ fields. Persisted `system.json` files that still carry the legacy keys load
 cleanly with the keys ignored, so tenant workspace preservation and recovery
 flows that copy `system.json` forward are unaffected.
 
+### Shared telemetry preference updates preserve recovery ownership
+
+Telemetry preference updates remain durable before the sender callback.
+Resubmitting the current effective boolean persists the preference without
+restarting the sender. The settings document and recovery ownership retain
+their existing shapes. A degraded active-alert persistence gauge separately
+records the presence of its recovery marker and must not be interpreted as a
+specific disk, database, or migration diagnosis without local evidence.
+
 ### Shared system-settings boundary gained an SSH backoff reset side effect
 
 The shared `internal/api` system-settings surface this subsystem consumes

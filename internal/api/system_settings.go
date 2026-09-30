@@ -55,7 +55,7 @@ type SystemSettingsHandler struct {
 	// runtime, so the router can reconfigure the monitor's checker and
 	// collector without a restart.
 	guestDockerInventoryToggleFunc func()
-	mtMonitor                interface {
+	mtMonitor                      interface {
 		GetMonitor(string) (*monitoring.Monitor, error)
 	}
 	defaultMonitor SystemSettingsMonitor
@@ -1069,7 +1069,8 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 			Bool("enabled", settings.EnableProxmoxGuestDockerInventory).
 			Msg("Proxmox guest Docker inventory opt-in changed via settings")
 	}
-	if _, ok := rawRequest["telemetryEnabled"]; ok && settings.TelemetryEnabled != nil {
+	if _, ok := rawRequest["telemetryEnabled"]; ok && settings.TelemetryEnabled != nil &&
+		h.config.TelemetryEnabled != *settings.TelemetryEnabled {
 		h.config.TelemetryEnabled = *settings.TelemetryEnabled
 		if h.telemetryToggleFunc != nil {
 			h.telemetryToggleFunc(*settings.TelemetryEnabled)

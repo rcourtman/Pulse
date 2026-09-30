@@ -1502,6 +1502,15 @@ error, account, customer, or infrastructure identity may enter the payload or
 persisted receiver row. The previous-release fields are direct adjacent-release
 observations, not 30-day update counters, and are the only valid basis for a
 before/after release-health cohort in the adoption report.
+For an unspecified IPv6 TCP listener, the probe inspects the bound socket's
+IPv6-only option. A dual-stack socket uses IPv4 loopback, including when IPv6
+is disabled on loopback, while an IPv6-only socket retains IPv6 loopback.
+Saving an unchanged effective `telemetryEnabled` value must not restart the
+sender. Only a persisted preference transition invokes its live toggle.
+The `startup` event also follows a genuine telemetry re-enable, so its count
+alone does not establish process restarts. A degraded active-alert persistence
+gauge establishes a recovery marker, not its filesystem or database cause.
+Neither anonymous signal identifies a customer or proves a release regression.
 That same outbound usage telemetry floor now also permits only content-free Pulse
 Patrol control and governed Pulse Intelligence operations adoption flags and
 counters inside the same rotating 30-day telemetry window:

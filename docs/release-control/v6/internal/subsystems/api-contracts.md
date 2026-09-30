@@ -4729,6 +4729,14 @@ ignores them without a validation error and never writes them back into
 `internal/api/system_settings_telemetry_test.go` and the response snapshot in
 `internal/api/contract_test.go` pin that payload shape.
 
+### Telemetry preference saves preserve the sender lifecycle
+
+The telemetry preference callback is change-driven after durable persistence.
+Resubmitting the current `telemetryEnabled` boolean saves the preference
+without restarting or stopping its sender. Actual disable/re-enable transitions
+still invoke the live callback. `TestTelemetryUpdate_OnlyPreferenceTransitionsToggle`
+pins repeated saves, both transitions, and the persisted boolean.
+
 ### System settings save clears the temperature SSH failure backoff
 
 A successful `POST /api/system-settings` save now also calls
