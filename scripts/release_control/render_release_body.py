@@ -360,6 +360,33 @@ def strip_validation_status_block(text: str) -> str:
     return _canonical_body(stripped.lstrip("\n"))
 
 
+def validate_server_updater_guidance(text: str) -> None:
+    """Every executable updater example needs its own nearby ownership scope.
+
+    A warning in a distant highlight does not make an unqualified install or
+    rollback command safe. This covers authored bullets as well as the generated
+    sections, without rewriting the author's instructions or rollback target.
+    """
+    command = re.compile(r"(?<![\w/])/bin/update\s+--version\b")
+    ownership = re.compile(
+        r"only when\s+`?/bin/update`?\s+was installed by\s+the Pulse server installer",
+        re.IGNORECASE,
+    )
+    for section in re.split(r"(?m)^#{1,6}[ \t]+.*$", _normalize_newlines(text)):
+        for match in command.finditer(section):
+            paragraphs = re.split(r"\n[ \t]*\n", section[:match.start()])
+            context = paragraphs[-1]
+            # The generated command is in a fence, immediately after the scoped
+            # paragraph. Do not borrow a warning from an earlier bullet/section.
+            if re.fullmatch(r"\s*```[A-Za-z0-9_-]*\s*(?:sudo\s+)?", context):
+                context = paragraphs[-2] if len(paragraphs) > 1 else ""
+            if not ownership.search(context):
+                raise ReleaseBodyIntegrityError(
+                    "each /bin/update --version command must say nearby that it is "
+                    "only for the helper installed by the Pulse server installer"
+                )
+
+
 def validate_release_body_shape(
     body: str,
     version: str,
@@ -412,6 +439,7 @@ def validate_release_body_shape(
         )
     authored_notes = authored_prefix.split(visual_heading, 1)[0]
     validate_release_notes_shape(authored_notes, version)
+    validate_server_updater_guidance(clean_body)
 
     if expected_body is not None:
         expected_clean = strip_validation_status_block(expected_body)

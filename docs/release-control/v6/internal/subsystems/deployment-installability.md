@@ -6026,3 +6026,20 @@ offline dependency snapshot for the updated lockfile, which is not present in
 the current assignment; a host dependency acquisition on the next launch is
 required before this contract's Go evidence can be produced. No passing Go
 suite, installed build or release acceptance is claimed here.
+
+## Release-body updater ownership (30 September 2026)
+
+Each executable `/bin/update --version` example in a published body must carry
+its own nearby condition: only use it when that helper was installed by the
+Pulse server installer. A warning in a distant highlight does not scope an
+unqualified install, rollback or authored Before-you-upgrade command. The
+existing generated sections retain their signed, version-pinned installer
+fallback for community-scripts installations or an unknown helper owner.
+
+`validate_release_body_shape` applies `validate_server_updater_guidance` to
+the complete body before accepting it; it rejects unsafe examples rather than
+rewriting the author's instructions or selecting another rollback version.
+`render_release_body_test.py` exercises all three unsafe published contexts,
+distant-scope rejection, and valid generated and inline ownership conditions.
+This changes publication validation, not installer behaviour, immutable release
+contents or proof of an installed upgrade/rollback.
