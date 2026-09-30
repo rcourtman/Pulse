@@ -3908,11 +3908,7 @@ func extractHostname(raw string) string {
 	}
 	parsed, err := url.Parse(raw)
 	if err == nil && parsed.Host != "" {
-		host := parsed.Host
-		if strings.Contains(host, ":") {
-			host = strings.Split(host, ":")[0]
-		}
-		return host
+		return parsed.Hostname()
 	}
 
 	if strings.Contains(raw, "/") {
