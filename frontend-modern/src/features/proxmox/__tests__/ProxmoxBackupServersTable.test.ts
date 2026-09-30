@@ -145,6 +145,98 @@ const makeCorrelatedAgent = (overrides: Partial<Resource> = {}): Resource =>
     ...overrides,
   }) as Resource;
 
+describe('buildBackupServerRows PBS machine-identity boundary', () => {
+  it.each(['name', 'displayName', 'platformId', 'instanceId', 'canonicalIdentity', 'identity'])(
+    'does not import an unrelated guest History or host disks from a PBS %s collision',
+    (field) => {
+      const pbs = makeCorrelatablePbs();
+      pbs.name = 'backup-connection';
+      pbs.displayName = 'Backup connection';
+      pbs.platformId = 'pbs-service';
+      pbs.pbs = { ...pbs.pbs!, instanceId: 'pbs-service', hostname: '10.2.0.13' };
+      if (field === 'instanceId') pbs.pbs.instanceId = 'other-host';
+      else if (field === 'canonicalIdentity') {
+        pbs.canonicalIdentity = { hostname: 'other-host', platformId: 'other-host' };
+      } else if (field === 'identity') pbs.identity = { hostname: 'other-host', ips: ['10.9.0.13'] };
+      else pbs[field as 'name' | 'displayName' | 'platformId'] = 'other-host';
+      const unrelated = makeCorrelatedAgent({
+        id: 'vm-other',
+        type: 'vm',
+        name: 'other-host',
+        agent: { agentId: 'agent-other', hostname: 'other-host', disks: [{ mountpoint: '/wrong-host' }] },
+        disk: { current: 99 },
+        metricsTarget: { resourceType: 'vm', resourceId: 'vm-other' },
+      });
+
+      const row = buildBackupServerRows([pbs, unrelated])[0];
+      expect(row.resource.metricsTarget).toEqual(pbs.metricsTarget);
+      expect(row.resource.agent).toBeUndefined();
+      expect(row.resource.disk).toBeUndefined();
+      expect(row.resource.sourceType).toBe('api');
+    },
+  );
+
+  it('does not correlate different endpoint IPs through their first dotted token', () => {
+    const pbs = makeCorrelatablePbs();
+    pbs.name = 'backup-connection';
+    pbs.pbs = { ...pbs.pbs!, hostname: '10.2.0.13' };
+    const unrelated = makeCorrelatedAgent({
+      name: 'other-host',
+      agent: { agentId: 'agent-other', hostname: 'other-host' },
+      identity: { ips: ['10.9.0.13'] },
+    });
+    expect(buildBackupServerRows([pbs, unrelated])[0].resource.metricsTarget).toEqual(pbs.metricsTarget);
+  });
+
+  it('does not use a guessed endpoint-to-Agent match without backend corroboration', () => {
+    const pbs = makeCorrelatablePbs();
+    pbs.pbs = { ...pbs.pbs!, hostname: '10.2.0.13' };
+    const unrelated = makeCorrelatedAgent({ identity: { ips: ['10.2.0.13'] } });
+    expect(buildBackupServerRows([pbs, unrelated])[0].resource.metricsTarget).toEqual(pbs.metricsTarget);
+  });
+
+  it('does not let a present label-colliding guest undo backend link withdrawal', () => {
+    const retention = createPbsCorrelationRetention();
+    const pbs = makeCorrelatablePbs();
+    pbs.pbs = { ...pbs.pbs!, hostname: '10.2.0.13', linkedAgentId: 'agent-proxback' };
+    buildBackupServerRows([pbs, makeCorrelatedAgent()], [], retention);
+    const withdrawn = { ...pbs, pbs: { ...pbs.pbs!, linkedAgentId: undefined } };
+    const unrelated = makeCorrelatedAgent({
+      id: 'vm-other',
+      type: 'vm',
+      agent: { agentId: 'agent-other', hostname: pbs.name },
+      metricsTarget: { resourceType: 'vm', resourceId: 'vm-other' },
+      disk: { current: 99 },
+    });
+    for (let refresh = 0; refresh < 2; refresh++) {
+      const row = buildBackupServerRows([withdrawn, unrelated], [], retention);
+      expect(row[0].resource.metricsTarget).toEqual(pbs.metricsTarget);
+      expect(row[0].resource.agent).toBeUndefined();
+      expect(row[0].resource.disk).toBeUndefined();
+      expect(retention.size).toBe(0);
+    }
+  });
+
+  it('does not match a reported PBS node to a guest display name instead of its Agent hostname', () => {
+    const pbs = makeCorrelatablePbs();
+    pbs.pbs = { ...pbs.pbs!, nodeName: 'real-pbs.example' };
+    const unrelated = makeCorrelatedAgent({
+      name: 'real-pbs.example',
+      agent: { agentId: 'agent-other', hostname: 'other-host.example' },
+    });
+    expect(buildBackupServerRows([pbs, unrelated])[0].resource.metricsTarget).toEqual(pbs.metricsTarget);
+  });
+
+  it('does not treat different qualified machine names as the same host', () => {
+    const pbs = makeCorrelatablePbs();
+    pbs.pbs = { ...pbs.pbs!, nodeName: 'backup.production.example' };
+    const unrelated = makeCorrelatedAgent({
+      agent: { agentId: 'agent-other', hostname: 'backup.test.example' },
+    });
+    expect(buildBackupServerRows([pbs, unrelated])[0].resource.metricsTarget).toEqual(pbs.metricsTarget);
+  });
+});
+
 describe('buildBackupServerRows PBS host correlation retention', () => {
   it('keeps three PBS guests on their own History targets across PVE and VirtualBox hosts', () => {
     const pbsServers = ['one', 'two', 'three'].map((suffix) => {
