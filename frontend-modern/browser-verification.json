@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "base_sha": "6ade01cbd4d02cd25b691f9ff5919206cceae764",
-  "verified_at": "2026-09-30T01:40:13Z",
+  "base_sha": "21a35494aecb335755de773dd099e1364e65b3e0",
+  "verified_at": "2026-09-30T20:12:09Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "ed7207456ebbc990ada34b0c739e29565d90cfe1998415a781d87f3067d69c36"
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "b2b31441b19c2e50283ceedf319cd09a1f94791750cd424c052717a4957fdc67"
   },
   "routes": [
-    "/browser-tests/pbs-identity-boundary.html (production PBS table, resource drawer and History with bounded synthetic resource props)"
+    "/browser-tests/pbs-identity-boundary.html (production PBS table and real resource History renderer; synthetic API data)"
   ],
   "viewports": [
     {
@@ -23,32 +23,89 @@
     }
   ],
   "states": [
-    "three unlinked PBS services alongside six label/IP-colliding Agents",
-    "explicit backend links for two PVE guests and a standalone host, with same-Agent guest/host deduplication",
-    "unchanged links with host rows omitted and restored",
-    "withdrawn third link with real and colliding host rows still present",
-    "fresh exact PBS nodeName to Agent hostname match with mismatched display labels"
+    "corroborated host with seven observed metric paths",
+    "uncached range replacement pending with no old paths",
+    "new range loaded before the old range response",
+    "withdrawn host link with replacement target pending",
+    "replacement target returns 503 with no former-host history",
+    "service-only response retains CPU/memory, not host disk/network/I/O",
+    "locked 14-day range issues no history read"
   ],
   "interactions": [
-    "desktop keyboard disclosure and phone row activation for all three PBS drawers",
-    "inspect Metrics Target, reject wrong-host disks, select History and 6h/1h ranges",
-    "join, omit, restore and withdraw links while keeping the drawer open; verify only service History remains after withdrawal",
-    "24 target/layout observations; 76 History GETs, zero unrelated targets, page errors or horizontal overflow"
+    "desktop keyboard Enter / phone row click to open PBS details",
+    "select 6h while its GET is held; select 1h, then fulfil the obsolete 6h request",
+    "withdraw third host link while service GET is held, then return 503",
+    "select 6h after failure and inspect the service-only response",
+    "select locked 14d; check all ten screenshots, retained History tab, zero horizontal overflow and no page errors"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/pbs-identity-boundary.cjs; Vite 6.4.3, Playwright 1.56.1, Chromium 141.0.7390.37",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/pbs-history-source-isolation.cjs from assigned workspace root; Vite 6.4.3, Chromium 141.0.7390.37, Playwright 1.56.1",
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final.log",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-identity-boundary.cjs",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/unlinked-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/linked-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/withdrawn-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/unlinked-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/linked-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/withdrawn-390.png"
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/receipts/history-browser-final.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/host-loaded-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/host-loaded-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/range-loading-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/range-loading-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/service-loaded-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/service-loaded-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-failed-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-failed-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-loading-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-loading-390.png"
   ],
-  "notes": "All six screenshots inspected. Mock-backed UI proof, not installed topology, actual persisted host History or full #1723 relief. First browser failure retained separately; source snapshot isolation fixes that observed revocation failure.",
+  "notes": "Ten final screenshots inspected. The superseded GET is observed ERR_ABORTED at both widths; the unit regression also resolves mocks that ignore cancellation. Mock-backed proof establishes source/range isolation, not installed PBS collection, VirtualBox telemetry, all three #1723 drawers or release availability. Earlier unconfigured-CSS red/attempt-one results are retained separately.",
   "prior_verifications": [
+    {
+      "version": 1,
+      "base_sha": "6ade01cbd4d02cd25b691f9ff5919206cceae764",
+      "verified_at": "2026-09-30T01:40:13Z",
+      "result": "passed",
+      "changed_paths": [
+        "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+      ],
+      "content_sha256": {
+        "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "ed7207456ebbc990ada34b0c739e29565d90cfe1998415a781d87f3067d69c36"
+      },
+      "routes": [
+        "/browser-tests/pbs-identity-boundary.html (production PBS table, resource drawer and History with bounded synthetic resource props)"
+      ],
+      "viewports": [
+        {
+          "width": 1365,
+          "height": 900
+        },
+        {
+          "width": 390,
+          "height": 844
+        }
+      ],
+      "states": [
+        "three unlinked PBS services alongside six label/IP-colliding Agents",
+        "explicit backend links for two PVE guests and a standalone host, with same-Agent guest/host deduplication",
+        "unchanged links with host rows omitted and restored",
+        "withdrawn third link with real and colliding host rows still present",
+        "fresh exact PBS nodeName to Agent hostname match with mismatched display labels"
+      ],
+      "interactions": [
+        "desktop keyboard disclosure and phone row activation for all three PBS drawers",
+        "inspect Metrics Target, reject wrong-host disks, select History and 6h/1h ranges",
+        "join, omit, restore and withdraw links while keeping the drawer open; verify only service History remains after withdrawal",
+        "24 target/layout observations; 76 History GETs, zero unrelated targets, page errors or horizontal overflow"
+      ],
+      "command": "pulse-worker-browser frontend-modern/browser-tests/pbs-identity-boundary.cjs; Vite 6.4.3, Playwright 1.56.1, Chromium 141.0.7390.37",
+      "artifacts": [
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final.log",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-identity-boundary.cjs",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/unlinked-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/linked-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/withdrawn-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/unlinked-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/linked-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/withdrawn-390.png"
+      ],
+      "notes": "All six screenshots inspected. Mock-backed UI proof, not installed topology, actual persisted host History or full #1723 relief. First browser failure retained separately; source snapshot isolation fixes that observed revocation failure."
+    },
     {
       "version": 1,
       "base_sha": "c3e8b6dd6dff36b5396ba2eb147d4e58d23001a6",
