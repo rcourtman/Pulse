@@ -234,7 +234,12 @@ const hasCorrelationCandidate = (server: Resource, candidates: readonly Resource
 // only across such an omission, and only while the remembered host is still
 // plausibly current, so a genuinely removed or replaced host is not advertised
 // indefinitely. A host that is present but ambiguous still declines.
-export type PbsCorrelationRetention = Map<string, Resource>;
+interface RetainedPbsCorrelation {
+  agent: Resource;
+  linkedAgentId?: string;
+}
+
+export type PbsCorrelationRetention = Map<string, RetainedPbsCorrelation>;
 
 export const createPbsCorrelationRetention = (): PbsCorrelationRetention => new Map();
 
@@ -299,22 +304,26 @@ export function buildBackupServerRows(
     .map((server) => {
       const agent = uniquelyCorrelatedAgent(server, servers);
       if (agent) {
-        retention?.set(server.id, agent);
+        retention?.set(server.id, {
+          agent,
+          linkedAgentId: server.pbs?.linkedAgentId?.trim() || undefined,
+        });
         return mergePBSAgentPresentation(server, agent);
       }
       const retained = retention?.get(server.id);
       if (retained) {
-        // A changed backend link is evidence of host replacement; an old
-        // correlation must not survive merely because its row is absent.
-        const linkedAgentId = server.pbs?.linkedAgentId?.trim();
-        if (linkedAgentId && correlatedAgentKey(retained) !== linkedAgentId) {
+        // A changed or withdrawn backend link is evidence that the old host
+        // correlation is no longer trusted. A transiently missing row is not
+        // enough to keep advertising that host's History after revocation.
+        const linkedAgentId = server.pbs?.linkedAgentId?.trim() || undefined;
+        if (linkedAgentId !== retained.linkedAgentId) {
           retention?.delete(server.id);
           return server;
         }
         const fresh =
-          server.lastSeen - retained.lastSeen <= PBS_CORRELATION_RETENTION_MAX_STALENESS_MS;
+          server.lastSeen - retained.agent.lastSeen <= PBS_CORRELATION_RETENTION_MAX_STALENESS_MS;
         if (fresh && !hasCorrelationCandidate(server, servers)) {
-          return mergePBSAgentPresentation(server, retained);
+          return mergePBSAgentPresentation(server, retained.agent);
         }
         if (!fresh) retention?.delete(server.id);
       }
