@@ -608,6 +608,34 @@ Controls remain readable without horizontal scrolling.
             body,
         )
 
+    def test_updater_ownership_scope_cannot_be_borrowed_from_a_distant_warning(self) -> None:
+        args = type("Args", (), {"version": "6.3.2", "rollback_target": "v6.3.1",
+                                "rollback_command": "sudo /bin/update --version v6.3.1"})()
+        authored = "# Pulse v6.3.2 Release Notes\n\nSummary.\n\n## Before you upgrade\n\n"
+        install = render_release_body.build_installation_section("6.3.2")
+        rollback = render_release_body.build_rollback_section(args)
+        safe = authored + "Keep a backup.\n\n" + install + "\n\n" + rollback
+        render_release_body.validate_release_body_shape(safe, "6.3.2")
+        unsafe = (
+            safe.replace("Use this CLI command only when `/bin/update` was installed by the Pulse server installer:",
+                         "For systemd and Proxmox LXC installs, use:"),
+            safe.replace("For systemd and Proxmox LXC servers, use this command only when "
+                         "`/bin/update` was installed by the Pulse server installer:", "Run:"),
+            safe.replace("Keep a backup.", "On systemd and Proxmox LXC installs, use "
+                         "`sudo /bin/update --version v6.3.1`."),
+            safe.replace("Keep a backup.", "Use this CLI command only when `/bin/update` was installed "
+                         "by the Pulse server installer.\n\nA separate unrelated bullet.\n\n"
+                         "```bash\nsudo /bin/update --version v6.3.1\n```"),
+        )
+        for body in unsafe:
+            with self.subTest(body=body), self.assertRaisesRegex(
+                    render_release_body.ReleaseBodyIntegrityError, "each /bin/update"):
+                render_release_body.validate_release_body_shape(body, "6.3.2")
+        render_release_body.validate_server_updater_guidance(
+            "Use this command only when `/bin/update` was installed by\n"
+            "the Pulse server installer: `sudo /bin/update --version v6.3.1`."
+        )
+
     def test_flattened_release_notes_fail_closed(self) -> None:
         flattened = (
             "# Pulse v6.1.0-rc.2 Release Notes"

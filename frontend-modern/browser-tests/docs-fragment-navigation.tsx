@@ -20,6 +20,7 @@ const targets: Record<string, string> = {
   reload: '/docs/API#resource-maintenance-and-operator-state',
   malformed: '/docs/API#%invalid',
   missing: '/docs/API#does-not-exist',
+  troubleshooting: '/docs/TROUBLESHOOTING#recovery-mode',
 };
 
 window.history.replaceState({}, '', targets[scenario] ?? targets.plain);

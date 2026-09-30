@@ -1,4 +1,5 @@
 import { For, Show, createMemo, type Accessor, type JSX } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
@@ -23,7 +24,7 @@ import {
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { PBSBackup } from '@/types/api';
 import type { Resource, ResourcePBSDatastore } from '@/types/resource';
-import { getNormalizedIdentityLookupVariants } from '@/utils/resourceIdentity';
+import { getPlatformAgentRecord } from '@/utils/agentResources';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 
@@ -103,27 +104,19 @@ function usageToneClass(pct: number | undefined): string {
   return 'text-base-content';
 }
 
-const identityValues = (resource: Resource): Array<string | undefined> => [
-  resource.canonicalIdentity?.hostname,
-  resource.canonicalIdentity?.platformId,
-  resource.identity?.hostname,
-  ...(resource.identity?.ips ?? []),
-  resource.agent?.hostname,
-  resource.pbs?.hostname,
-  // The node hostname PBS reports about itself is machine identity. The
-  // connection may be configured by an IP or DNS alias the agent never
-  // reports, so without this the host correlation can drop out between
-  // snapshots and the drawer falls back to the service history target
-  // (#1723).
-  resource.pbs?.nodeName,
-  resource.pbs?.instanceId,
-  resource.platformId,
-  resource.name,
-  resource.displayName,
-];
+// Only the hostname PBS reports about itself can corroborate a host without
+// a backend link. Connection labels, instance IDs, canonical presentation
+// fields and configured endpoints are not machine identity. In particular,
+// the shared dotted-token helper would make unrelated IPs/FQDNs collide.
+const machineHostname = (value: unknown): string =>
+  typeof value === 'string' ? value.trim().toLowerCase().replace(/\.$/, '') : '';
 
-const identityTokens = (resource: Resource): Set<string> =>
-  new Set(identityValues(resource).flatMap((value) => getNormalizedIdentityLookupVariants(value)));
+const correlationEvidenceKey = (server: Resource): string | undefined => {
+  const linkedAgentId = server.pbs?.linkedAgentId?.trim();
+  if (linkedAgentId) return `agent:${linkedAgentId}`;
+  const nodeName = machineHostname(server.pbs?.nodeName);
+  return nodeName ? `node:${nodeName}` : undefined;
+};
 
 const stringValues = (...candidates: unknown[]): string[] =>
   candidates.flatMap((candidate) =>
@@ -156,14 +149,32 @@ const isHostWithAgent = (candidate: Resource): boolean =>
   (candidate.type === 'agent' || isGuestWithAgent(candidate)) &&
   Boolean(candidate.agent ?? candidate.platformData?.agent);
 
-// Host telemetry can be merged into a PVE guest rather than a standalone
-// agent. Keep the unique-identity check and require an actual agent facet.
-const isCorrelationCandidate = (serverTokens: Set<string>, candidate: Resource): boolean => {
-  if (!isHostWithAgent(candidate)) return false;
-  for (const token of identityTokens(candidate)) {
-    if (serverTokens.has(token)) return true;
+const matchingAgentHosts = (server: Resource, candidates: readonly Resource[]): Resource[] => {
+  // Endpoint/interface and provider guest links belong to the backend. An
+  // explicit link also vetoes same-name Agents with a different identity.
+  const linkedAgentId = server.pbs?.linkedAgentId?.trim();
+  if (linkedAgentId) {
+    return candidates.filter(
+      (candidate) => isHostWithAgent(candidate) && correlatedAgentKey(candidate) === linkedAgentId,
+    );
   }
-  return false;
+  const nodeName = machineHostname(server.pbs?.nodeName);
+  if (!nodeName) return [];
+  return candidates.filter((candidate) => {
+    if (!isHostWithAgent(candidate) || !correlatedAgentKey(candidate)) return false;
+    const agent = candidate.agent ?? getPlatformAgentRecord(candidate);
+    // Do not let stale host observations undo a withdrawn backend link.
+    const reportSeen =
+      typeof agent?.lastReportAt === 'string' ? Date.parse(agent.lastReportAt) : candidate.lastSeen;
+    const delta = Math.abs(server.lastSeen - reportSeen);
+    return (
+      agent?.stale !== true &&
+      server.lastSeen > 0 &&
+      reportSeen > 0 &&
+      delta <= PBS_CORRELATION_RETENTION_MAX_STALENESS_MS &&
+      machineHostname(agent?.hostname) === nodeName
+    );
+  });
 };
 
 const preferredCorrelatedHost = (matches: readonly Resource[]): Resource | undefined =>
@@ -175,22 +186,7 @@ const uniquelyCorrelatedAgent = (
   server: Resource,
   candidates: readonly Resource[],
 ): Resource | undefined => {
-  // The backend can corroborate a PBS connection with a unique agent from
-  // its reported interface IP even when the PBS token cannot read nodeName
-  // and the configured connection name differs from the PVE/agent hostname.
-  // An explicit link also vetoes same-name agents with a different ID.
-  const linkedAgentId = server.pbs?.linkedAgentId?.trim();
-  if (linkedAgentId) {
-    return preferredCorrelatedHost(
-      candidates.filter(
-        (candidate) =>
-          isHostWithAgent(candidate) && correlatedAgentKey(candidate) === linkedAgentId,
-      ),
-    );
-  }
-  const serverTokens = identityTokens(server);
-  if (serverTokens.size === 0) return undefined;
-  const matches = candidates.filter((candidate) => isCorrelationCandidate(serverTokens, candidate));
+  const matches = matchingAgentHosts(server, candidates);
   if (matches.length === 0) return undefined;
   if (matches.length === 1) return matches[0];
 
@@ -221,11 +217,8 @@ const uniquelyCorrelatedAgent = (
 // distinction matters for correlation retention: a snapshot that simply omits
 // the host row is a transient refresh gap, while an ambiguous snapshot is a
 // deliberate decline that must not be papered over with a remembered guess.
-const hasCorrelationCandidate = (server: Resource, candidates: readonly Resource[]): boolean => {
-  const serverTokens = identityTokens(server);
-  if (serverTokens.size === 0) return false;
-  return candidates.some((candidate) => isCorrelationCandidate(serverTokens, candidate));
-};
+const hasCorrelationCandidate = (server: Resource, candidates: readonly Resource[]): boolean =>
+  matchingAgentHosts(server, candidates).length > 0;
 
 // A live refresh can briefly omit the correlated host row (for example while a
 // realtime snapshot replaces the merged estate), which used to flip the Backups
@@ -234,7 +227,12 @@ const hasCorrelationCandidate = (server: Resource, candidates: readonly Resource
 // only across such an omission, and only while the remembered host is still
 // plausibly current, so a genuinely removed or replaced host is not advertised
 // indefinitely. A host that is present but ambiguous still declines.
-export type PbsCorrelationRetention = Map<string, Resource>;
+interface RetainedPbsCorrelation {
+  agent: Resource;
+  evidenceKey?: string;
+}
+
+export type PbsCorrelationRetention = Map<string, RetainedPbsCorrelation>;
 
 export const createPbsCorrelationRetention = (): PbsCorrelationRetention => new Map();
 
@@ -299,24 +297,29 @@ export function buildBackupServerRows(
     .map((server) => {
       const agent = uniquelyCorrelatedAgent(server, servers);
       if (agent) {
-        retention?.set(server.id, agent);
+        retention?.set(server.id, {
+          agent,
+          evidenceKey: correlationEvidenceKey(server),
+        });
         return mergePBSAgentPresentation(server, agent);
       }
       const retained = retention?.get(server.id);
       if (retained) {
-        // A changed backend link is evidence of host replacement; an old
-        // correlation must not survive merely because its row is absent.
-        const linkedAgentId = server.pbs?.linkedAgentId?.trim();
-        if (linkedAgentId && correlatedAgentKey(retained) !== linkedAgentId) {
+        // A changed or withdrawn backend link is evidence that the old host
+        // correlation is no longer trusted. A transiently missing row is not
+        // enough to keep advertising that host's History after revocation.
+        if (correlationEvidenceKey(server) !== retained.evidenceKey) {
           retention?.delete(server.id);
           return server;
         }
         const fresh =
-          server.lastSeen - retained.lastSeen <= PBS_CORRELATION_RETENTION_MAX_STALENESS_MS;
+          server.lastSeen - retained.agent.lastSeen <= PBS_CORRELATION_RETENTION_MAX_STALENESS_MS;
         if (fresh && !hasCorrelationCandidate(server, servers)) {
-          return mergePBSAgentPresentation(server, retained);
+          return mergePBSAgentPresentation(server, retained.agent);
         }
-        if (!fresh) retention?.delete(server.id);
+        // An ambiguous match revokes the remembered choice too; a later
+        // omission must not resurrect an identity we already declined.
+        retention?.delete(server.id);
       }
       return server;
     })
@@ -334,7 +337,6 @@ export function buildBackupServerRows(
       .sort((left, right) => left.name.localeCompare(right.name));
     const memoryTotal = server.memory?.total ?? 0;
     const host = {
-      resource: server,
       serverName: server.name,
       online: serverIsOnline(server),
       connectionLabel: connectionLabel(server),
@@ -350,14 +352,20 @@ export function buildBackupServerRows(
       memoryTotal: memoryTotal > 0 ? memoryTotal : undefined,
       uptimeSeconds: server.uptime ?? server.pbs?.uptimeSeconds,
     };
+    // Each keyed row has a reconciled Solid store. Give it its own JSON DTO
+    // snapshot: otherwise joining an Agent mutates the source's service
+    // metricsTarget (or another datastore row), defeating later revocation.
+    // Unwrap reactive source DTOs before cloning; never clone their proxies.
+    const resourceSnapshot = () => structuredClone(unwrap(server));
     if (datastores.length === 0) {
-      rows.push({ key: server.id, ...host, backupCount: 0 });
+      rows.push({ key: server.id, ...host, resource: resourceSnapshot(), backupCount: 0 });
       continue;
     }
     for (const datastore of datastores) {
       rows.push({
         key: `${server.id}:${datastore.name}`,
         ...host,
+        resource: resourceSnapshot(),
         // Row stores reconcile independently from the nested PBS snapshot. Do
         // not alias its datastore object: a reordered snapshot reconciles that
         // array by position and would overwrite this row's datastore identity.

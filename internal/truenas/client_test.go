@@ -1088,8 +1088,8 @@ func TestGetSystemMetricHistoryUsesReportingRPC(t *testing.T) {
 			t.Fatalf("unexpected history graphs: %#v", params[0])
 		}
 		query, ok := params[1].(map[string]any)
-		if !ok || query["aggregate"] != false {
-			t.Fatalf("expected aggregate=false history query, got %#v", params[1])
+		if !ok || query["aggregate"] != true {
+			t.Fatalf("expected aggregate=true history query, got %#v", params[1])
 		}
 
 		now := time.Now().UTC().Truncate(time.Second)
@@ -1529,8 +1529,8 @@ func TestGetDiskTemperatureHistoryUsesReportingRPC(t *testing.T) {
 		if !ok {
 			t.Fatalf("unexpected history query: %#v", params[1])
 		}
-		if aggregate := query["aggregate"]; aggregate != false {
-			t.Fatalf("expected aggregate=false for history query, got %#v", aggregate)
+		if aggregate := query["aggregate"]; aggregate != true {
+			t.Fatalf("expected aggregate=true for history query, got %#v", aggregate)
 		}
 
 		now := time.Now().UTC().Truncate(time.Second)
@@ -2139,7 +2139,7 @@ func (s *isolatedReportingTransport) RoundTrip(r *http.Request) (*http.Response,
 		return nil, err
 	}
 	status, body := s.status, `[]`
-	if r.Method != http.MethodPost || len(request.Graphs) == 0 || request.Query["aggregate"] != false || request.Query["end"].(float64) <= request.Query["start"].(float64) {
+	if r.Method != http.MethodPost || len(request.Graphs) == 0 || request.Query["aggregate"] != true || request.Query["end"].(float64) <= request.Query["start"].(float64) {
 		return nil, fmt.Errorf("invalid reporting request")
 	}
 	if status == 0 {

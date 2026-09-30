@@ -95,7 +95,8 @@ for (const width of [1280, 390]) {
       id: `pbs-${type}`, type: 'pbs', name: `backup-${type}`, displayName: `backup-${type}`,
       platformId: `backup-${type}`, platformType: 'proxmox-pbs', sources: ['pbs'],
       metricsTarget: { resourceType: 'agent', resourceId: `wrong-${type}` },
-      pbs: { instanceId: `backup-${type}`, hostname: `backup-${type}`, datastores: [] },
+      // Correlate with the machine name PBS reports, never its presentation label.
+      pbs: { instanceId: `backup-${type}`, nodeName: `backup-${type}`, datastores: [] },
     }));
     const hosts = ['vm', 'agent'].map(type => ({ ...common, id: `host-${type}`, type,
       name: `backup-${type}`, displayName: `backup-${type}`, platformId: `host-${type}`,

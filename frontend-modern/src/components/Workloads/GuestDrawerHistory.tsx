@@ -427,17 +427,21 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
         range: props.range,
       };
     },
-    fetcher: async (key) =>
+    fetcher: async (key, signal) =>
       normalizeHistoryResponse(
         await ChartsAPI.getMetricsHistory({
           resourceType: key.resourceType,
           resourceId: key.resourceId,
           range: key.range,
           maxPoints: GUEST_DRAWER_HISTORY_MAX_POINTS,
+          signal,
         }),
       ),
     initialValue: EMPTY_HISTORY_RESPONSE,
     cacheKey: (key) => `guest-drawer-history:${key.resourceType}:${key.resourceId}:${key.range}`,
+    // Former-host or former-range observations are not evidence for this
+    // target. Matching cached reads and same-source polling remain retained.
+    retainPreviousValueOnSourceChange: false,
     pollMs: GUEST_DRAWER_HISTORY_POLL_MS,
   });
 

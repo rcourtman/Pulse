@@ -4118,7 +4118,8 @@ func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	)
 	// The gate itself must stay strict. An unreachable endpoint may be
 	// retried, but no severity threshold may be introduced that lets a real
-	// advisory through, and any vulnerability total must still fail.
+	// advisory through. Any positive package, severity or total evidence
+	// must fail, even when the summary is missing or contradictory.
 	runnerPath := repoFile("scripts", "npm-audit-retry.sh")
 	runner, err := os.ReadFile(runnerPath)
 	if err != nil {
@@ -4130,8 +4131,13 @@ func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	assertFileContainsAll(t, runnerPath,
 		`NPM_AUDIT_REQUIRE_RESULT:-true`,
 		`AUDIT_ARGS=("$@")`,
-		`if isinstance(vulns, dict) and "total" in vulns:`,
-		`print("vulnerable" if total else "clean")`,
+		`if type(value) is int and value >= 0:`,
+		`has_findings = isinstance(findings, dict) and bool(findings)`,
+		`if has_findings or any(count > 0 for count in counts.values()):`,
+		`print("vulnerable")`,
+		`isinstance(report, dict) and not report.get("error")`,
+		`len(counts) == len(count_names) and all(count == 0 for count in counts.values())`,
+		`and ("vulnerabilities" not in report or isinstance(findings, dict))`,
 	)
 	// Retrying must be bounded by wall clock, not by attempt count alone.
 	// npm's own fetch-timeout defaults to five minutes and it retries

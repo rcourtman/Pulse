@@ -1,22 +1,16 @@
 {
   "version": 1,
-  "base_sha": "91d8822d76c5a7214995c0e370be637b6e6336e3",
-  "verified_at": "2026-09-29T22:13:56Z",
+  "base_sha": "21a35494aecb335755de773dd099e1364e65b3e0",
+  "verified_at": "2026-09-30T20:12:09Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx",
-    "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts",
-    "frontend-modern/src/components/shared/useContainerUpdateButtonState.ts",
-    "frontend-modern/src/stores/containerUpdates.ts"
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx": "fd88f3e3e275926572126f43cce7296e7361b5e527868dd3c59c7eb951e9f5c9",
-    "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts": "10bc488cb82ae84c6ae46d77ec672d34df2a1b3c28e138ae0f3b4214cccbe37e",
-    "frontend-modern/src/components/shared/useContainerUpdateButtonState.ts": "4b9dd4a42549b0433a1afa56f26183fe721c80626f823fb3c8489934721267c5",
-    "frontend-modern/src/stores/containerUpdates.ts": "b5d47132f7daf7f14bcc38462043288fc211344410af622ada7728694bcd514d"
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "b2b31441b19c2e50283ceedf319cd09a1f94791750cd424c052717a4957fdc67"
   },
   "routes": [
-    "/browser-tests/update-action-receipt.html (production Docker update button with scripted action reads)"
+    "/browser-tests/pbs-identity-boundary.html (production PBS table and real resource History renderer; synthetic API data)"
   ],
   "viewports": [
     {
@@ -29,28 +23,187 @@
     }
   ],
   "states": [
-    "governed update receipt pending after registry updateAvailable becomes false",
-    "existing action re-opened by GET with no second plan or execute",
-    "recorded completed action after a second GET changes the displayed outcome"
+    "corroborated host with seven observed metric paths",
+    "uncached range replacement pending with no old paths",
+    "new range loaded before the old range response",
+    "withdrawn host link with replacement target pending",
+    "replacement target returns 503 with no former-host history",
+    "service-only response retains CPU/memory, not host disk/network/I/O",
+    "locked 14-day range issues no history read"
   ],
   "interactions": [
-    "inspect pending button and absence of a Current or Completed claim",
-    "select Review action and inspect receipt-pending dialog",
-    "select Check for receipt and inspect recorded completion",
-    "assert both action requests are GET; no page errors or horizontal overflow"
+    "desktop keyboard Enter / phone row click to open PBS details",
+    "select 6h while its GET is held; select 1h, then fulfil the obsolete 6h request",
+    "withdraw third host link while service GET is held, then return 503",
+    "select 6h after failure and inspect the service-only response",
+    "select locked 14d; check all ten screenshots, retained History tab, zero horizontal overflow and no page errors"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/update-action-receipt.cjs from assigned workspace root; Vite 6.4.3, Chromium 141.0.7390.37, Playwright 1.56.1",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/pbs-history-source-isolation.cjs from assigned workspace root; Vite 6.4.3, Chromium 141.0.7390.37, Playwright 1.56.1",
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-browser-final.log",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-proof-final/pending-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-proof-final/review-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-proof-final/completed-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-proof-final/pending-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-proof-final/review-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-proof-final/completed-390.png"
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/receipts/history-browser-final.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/host-loaded-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/host-loaded-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/range-loading-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/range-loading-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/service-loaded-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/service-loaded-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-failed-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-failed-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-loading-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-loading-390.png"
   ],
-  "notes": "Mock-backed UI proof; six screenshots inspected, including pending and completed phone states. This does not establish installed behaviour or resolve #1891.",
+  "notes": "Ten final screenshots inspected. The superseded GET is observed ERR_ABORTED at both widths; the unit regression also resolves mocks that ignore cancellation. Mock-backed proof establishes source/range isolation, not installed PBS collection, VirtualBox telemetry, all three #1723 drawers or release availability. Earlier unconfigured-CSS red/attempt-one results are retained separately.",
   "prior_verifications": [
+    {
+      "version": 1,
+      "base_sha": "6ade01cbd4d02cd25b691f9ff5919206cceae764",
+      "verified_at": "2026-09-30T01:40:13Z",
+      "result": "passed",
+      "changed_paths": [
+        "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+      ],
+      "content_sha256": {
+        "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "ed7207456ebbc990ada34b0c739e29565d90cfe1998415a781d87f3067d69c36"
+      },
+      "routes": [
+        "/browser-tests/pbs-identity-boundary.html (production PBS table, resource drawer and History with bounded synthetic resource props)"
+      ],
+      "viewports": [
+        {
+          "width": 1365,
+          "height": 900
+        },
+        {
+          "width": 390,
+          "height": 844
+        }
+      ],
+      "states": [
+        "three unlinked PBS services alongside six label/IP-colliding Agents",
+        "explicit backend links for two PVE guests and a standalone host, with same-Agent guest/host deduplication",
+        "unchanged links with host rows omitted and restored",
+        "withdrawn third link with real and colliding host rows still present",
+        "fresh exact PBS nodeName to Agent hostname match with mismatched display labels"
+      ],
+      "interactions": [
+        "desktop keyboard disclosure and phone row activation for all three PBS drawers",
+        "inspect Metrics Target, reject wrong-host disks, select History and 6h/1h ranges",
+        "join, omit, restore and withdraw links while keeping the drawer open; verify only service History remains after withdrawal",
+        "24 target/layout observations; 76 History GETs, zero unrelated targets, page errors or horizontal overflow"
+      ],
+      "command": "pulse-worker-browser frontend-modern/browser-tests/pbs-identity-boundary.cjs; Vite 6.4.3, Playwright 1.56.1, Chromium 141.0.7390.37",
+      "artifacts": [
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final.log",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-identity-boundary.cjs",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/unlinked-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/linked-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/withdrawn-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/unlinked-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/linked-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-f2zda9of/pbs-browser-final-artifacts/withdrawn-390.png"
+      ],
+      "notes": "All six screenshots inspected. Mock-backed UI proof, not installed topology, actual persisted host History or full #1723 relief. First browser failure retained separately; source snapshot isolation fixes that observed revocation failure."
+    },
+    {
+      "version": 1,
+      "base_sha": "c3e8b6dd6dff36b5396ba2eb147d4e58d23001a6",
+      "verified_at": "2026-09-29T23:04:22Z",
+      "result": "passed",
+      "changed_paths": [
+        "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+      ],
+      "content_sha256": {
+        "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "7172690587f8e642ee30492481abbe76ee79d277aad290c3b50310dd1c0b282b"
+      },
+      "routes": [
+        "/pbs-correlation-proof.html (production PBS backup-server table and resource drawer with scripted, source-scoped resources)"
+      ],
+      "viewports": [
+        {
+          "width": 1365,
+          "height": 900
+        },
+        {
+          "width": 390,
+          "height": 844
+        }
+      ],
+      "states": [
+        "three PBS services with distinct corroborated Agent links, including two PVE guests and one standalone host",
+        "host rows omitted in a transient refresh while the backend link is unchanged",
+        "third backend link withdrawn while the Agent row remains omitted"
+      ],
+      "interactions": [
+        "open all three PBS drawers and inspect their Metrics Target identity",
+        "omit host rows and confirm targets stay on the correlated hosts",
+        "withdraw the third link and confirm its drawer returns to agent:pbs-three, with no page errors or horizontal overflow"
+      ],
+      "command": "pulse-worker-browser pbs-browser-proof.cjs from assigned workspace root; Vite 6.4.3, Playwright 1.56.1, Chromium desktop/phone",
+      "artifacts": [
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-sfkzldum/pbs-browser-proof-final.log",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-sfkzldum/pbs-browser-proof.cjs",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-sfkzldum/pbs-browser-proof-artifacts/pbs-1365-linked.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-sfkzldum/pbs-browser-proof-artifacts/pbs-1365-withdrawn.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-sfkzldum/pbs-browser-proof-artifacts/pbs-390-linked.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-sfkzldum/pbs-browser-proof-artifacts/pbs-390-withdrawn.png"
+      ],
+      "notes": "Mock-backed proof of the real PBS table and drawer; all four screenshots inspected. It does not establish installed #1723 relief or observed Agent History series."
+    },
+    {
+      "version": 1,
+      "base_sha": "91d8822d76c5a7214995c0e370be637b6e6336e3",
+      "verified_at": "2026-09-29T22:13:56Z",
+      "result": "passed",
+      "changed_paths": [
+        "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx",
+        "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts",
+        "frontend-modern/src/components/shared/useContainerUpdateButtonState.ts",
+        "frontend-modern/src/stores/containerUpdates.ts"
+      ],
+      "content_sha256": {
+        "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx": "fd88f3e3e275926572126f43cce7296e7361b5e527868dd3c59c7eb951e9f5c9",
+        "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts": "10bc488cb82ae84c6ae46d77ec672d34df2a1b3c28e138ae0f3b4214cccbe37e",
+        "frontend-modern/src/components/shared/useContainerUpdateButtonState.ts": "4b9dd4a42549b0433a1afa56f26183fe721c80626f823fb3c8489934721267c5",
+        "frontend-modern/src/stores/containerUpdates.ts": "b5d47132f7daf7f14bcc38462043288fc211344410af622ada7728694bcd514d"
+      },
+      "routes": [
+        "/browser-tests/update-action-receipt.html (production Docker update button with scripted action reads)"
+      ],
+      "viewports": [
+        {
+          "width": 1365,
+          "height": 900
+        },
+        {
+          "width": 390,
+          "height": 844
+        }
+      ],
+      "states": [
+        "governed update receipt pending after registry updateAvailable becomes false",
+        "existing action re-opened by GET with no second plan or execute",
+        "recorded completed action after a second GET changes the displayed outcome"
+      ],
+      "interactions": [
+        "inspect pending button and absence of a Current or Completed claim",
+        "select Review action and inspect receipt-pending dialog",
+        "select Check for receipt and inspect recorded completion",
+        "assert both action requests are GET; no page errors or horizontal overflow"
+      ],
+      "command": "pulse-worker-browser frontend-modern/browser-tests/update-action-receipt.cjs from assigned workspace root; Vite 6.4.3, Chromium 141.0.7390.37, Playwright 1.56.1",
+      "artifacts": [
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-browser-final.log",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-proof-final/pending-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-proof-final/review-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-proof-final/completed-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-proof-final/pending-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-proof-final/review-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-ahrmjhme/update-action-receipt-proof-final/completed-390.png"
+      ],
+      "notes": "Mock-backed UI proof; six screenshots inspected, including pending and completed phone states. This does not establish installed behaviour or resolve #1891."
+    },
     {
       "version": 1,
       "base_sha": "fbf17b271abe70ad3e12042506b52f85b6cbc484",

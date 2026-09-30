@@ -58,9 +58,35 @@ screen for this instance and do not paste it into support requests or issue
 reports.
 
 ### Port change didn't take effect
-1. Check which service is running: `systemctl status pulse` (legacy installs may use `pulse-backend`).
-2. Verify environment override: `systemctl show pulse --property=Environment`.
-3. Docker: Ensure you updated the `-p` flag (e.g., `-p 8080:7655`).
+
+The web UI and API listen on `FRONTEND_PORT` (default `7655`). The deprecated
+`PORT` alias applies only when `FRONTEND_PORT` is unset; changing
+`frontendPort` in `system.json` has no effect. `PULSE_AGENT_INGEST_PORT` is a
+separate agent listener, not the web UI port. See
+[Port configuration](CONFIGURATION.md#common-overrides-environment-variables).
+
+- **Systemd / Proxmox LXC**: identify the active service with
+  `systemctl is-active pulse` (legacy installs may use `pulse-backend`). Inspect
+  only the port setting in its managed configuration locally. If you change a
+  unit or drop-in, run `sudo systemctl daemon-reload`, then restart the affected
+  service during a suitable maintenance window. For LXC, run these checks inside
+  the Pulse container, not on the Proxmox host.
+- **Docker / Compose**: distinguish the published host port from the listener
+  inside the container. With the default listener, `8080:7655` exposes the UI on
+  host port `8080`; changing the host port does not require `FRONTEND_PORT`.
+  In the repository's Compose file, `PULSE_PORT` controls this host-side mapping.
+  Save the mapping in your existing Compose project and apply it with
+  `docker compose up -d pulse`, keeping the same image and mounted data volume.
+  Restarting an existing container does not apply a new port mapping. For other
+  container managers, use their recreate/redeploy action while preserving the
+  data mount; do not delete the volume.
+- **Reverse proxy**: check its upstream port and the firewall separately. A
+  working agent connection on a split-port deployment does not prove that the
+  web UI is reachable.
+
+Do not post full service environments, `docker inspect` output or resolved
+`docker compose config` output: they can include passwords and tokens. Share
+only the relevant port numbers and a redacted error if help is needed.
 
 ### "Connection Refused"
 - Check if Pulse is running.
@@ -155,11 +181,19 @@ repair an older generated unit rather than adding a JSON-parsing wrapper.
 - See [Temperature Monitoring](TEMPERATURE_MONITORING.md).
 
 #### Docker hosts appearing/disappearing
-- **Duplicate IDs**: Cloned VMs often share `/etc/machine-id`.
-- **Fix**: Run `rm /etc/machine-id && systemd-machine-id-setup` on the clone.
-- **Identity note**: The displayed IP is not the durable identity. Pulse uses
-  the machine ID or an explicit agent ID, so two clones with the same value can
-  collapse into one record even when their hostnames or IP addresses differ.
+
+Cloned hosts can share a **saved Pulse agent ID**, not just an OS machine ID.
+The agent uses an explicit ID first, then its saved `agent-id` file, and derives
+one from the machine only when neither is available. Changing a hostname, IP or
+`/etc/machine-id` therefore does not necessarily change its Pulse identity.
+
+Compare the affected hosts in **Agent Doctor** and inspect only their configured
+`agent-id` files locally. Do not delete the OS machine ID, agent state or Pulse
+history as a troubleshooting step. If a duplicate is confirmed, give only the
+clone a stable, unique ID in its managed service or container configuration;
+leave the original host unchanged. Follow
+[Clone identity recovery](UNIFIED_AGENT.md#duplicate-agents) for the configuration
+precedence, systemd example and checks after restart.
 
 ### Notifications
 
@@ -309,25 +343,50 @@ check, report the Pulse version and displayed check time/status separately; API
 success alone does not confirm the Pulse display has recovered.
 
 ### Recovery Mode
-If you are completely locked out, you can trigger a recovery token from localhost:
-```bash
-curl -X POST http://localhost:7655/api/security/recovery \
-  -d '{"action":"generate_token","duration":30}'
-```
-Use the returned token in `X-Recovery-Token` when calling `/api/security/recovery` to enable or disable local-only auth bypass (`disable_auth` / `enable_auth`). Token generation is localhost-only.
 
-Example (enable recovery mode):
-```bash
-curl -X POST http://localhost:7655/api/security/recovery \
-  -H "X-Recovery-Token: <token>" \
-  -d '{"action":"disable_auth"}'
-```
+For a forgotten local password, follow [I forgot my password](#i-forgot-my-password)
+above, using the steps for your deployment. Enter the host-only bootstrap token
+in that instance's setup screen; do not paste it into a command or a report.
+For OIDC, SAML or proxy login, use the identity-provider or administrator path
+described there instead.
+
+The advanced `/api/security/recovery` API creates a **browser-bound recovery
+session**, not a server-wide authentication bypass. Despite its legacy name,
+`disable_auth` does not disable authentication for other clients. Recovery
+sessions work only over direct loopback requests; remote and reverse-proxy
+requests cannot use them. A successful curl response does not unlock a separate
+browser: the session cookie belongs to the client that made the request.
+`enable_auth` clears that recovery session; it does not reset a password.
+
+Do not transfer recovery cookies between clients or paste recovery tokens into
+command arguments, URLs, screenshots or GitHub threads. The password-reset steps
+above avoid that credential-handling detour.
 
 ---
 
 ## 🆘 Getting Help
 
 If you're still stuck:
-1. **Check Logs**: `journalctl -u pulse -n 100` or `docker logs --tail 100 pulse`.
-2. **Check Version**: `curl http://localhost:7655/api/version`.
-3. **Open Issue**: Report on [GitHub Issues](https://github.com/rcourtman/Pulse/issues) with your logs and version info.
+
+1. **Keep the original evidence**: note what you did, when it happened and the
+   exact error. Do not repeat an update, outage or notification storm merely to
+   reproduce it. A failed update banner does not prove the action left the
+   target unchanged; check its current state before another attempt.
+2. **Identify the affected version**: give the running Pulse and relevant agent
+   versions, not just the version before an upgrade. For Docker, include the
+   running image tag or digest. If installation never started Pulse, give the
+   attempted release and public installer/helper source, or say "unknown".
+3. **Choose relevant, safe evidence**: if Pulse is running and collection is
+   safe, use **Settings → Diagnostics → Export for GitHub (sanitized)** for
+   connection or data failures. For a visual problem, a screenshot or the exact
+   error may be enough. If logs are needed, inspect a bounded local excerpt
+   (`journalctl -u pulse -n 100 --no-pager` or `docker logs --tail 100 pulse`),
+   not a full configuration or data-directory upload.
+4. **Review before posting**: even a sanitized export or screenshot can contain
+   identifying details. Remove credentials, session cookies, webhook URLs and
+   private host, network or personal information. Never post bootstrap/recovery
+   tokens, `.env` files, private keys or an unsanitized export.
+5. **Use the appropriate thread**: [GitHub Issues](https://github.com/rcourtman/Pulse/issues)
+   for a bug, or [Discussions](https://github.com/rcourtman/Pulse/discussions) for
+   a setup question. Add new evidence to an existing matching report rather
+   than opening a duplicate. Do not refile information you have already supplied.

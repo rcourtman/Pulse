@@ -94,7 +94,9 @@ func (rr *ResourceRegistry) associatePBSHostAgentResources(
 func uniquePBSHostAgent(instance models.PBSInstance, hosts []models.Host, vms []models.VM) *models.Host {
 	var match *models.Host
 	for index := range hosts {
-		if !pbsInstanceCorroboratesHost(instance, hosts[index]) {
+		if strings.TrimSpace(hosts[index].ID) == "" ||
+			!pbsHostLinkObservationFresh(instance.LastSeen, hosts[index].LastSeen) ||
+			!pbsInstanceCorroboratesHost(instance, hosts[index]) {
 			continue
 		}
 		if match != nil {
@@ -119,7 +121,7 @@ func uniquePBSHostAgent(instance models.PBSInstance, hosts []models.Host, vms []
 	guestID := ""
 	for _, vm := range vms {
 		if !strings.EqualFold(strings.TrimSpace(vm.Status), "running") ||
-			!pbsGuestLinkObservationFresh(instance.LastSeen, vm.LastSeen) {
+			!pbsHostLinkObservationFresh(instance.LastSeen, vm.LastSeen) {
 			continue
 		}
 		for _, address := range vm.IPAddresses {
@@ -141,7 +143,8 @@ func uniquePBSHostAgent(instance models.PBSInstance, hosts []models.Host, vms []
 		if strings.TrimSpace(hosts[index].LinkedVMID) != guestID {
 			continue
 		}
-		if !pbsGuestLinkObservationFresh(instance.LastSeen, hosts[index].LastSeen) {
+		if strings.TrimSpace(hosts[index].ID) == "" ||
+			!pbsHostLinkObservationFresh(instance.LastSeen, hosts[index].LastSeen) {
 			continue
 		}
 		if match != nil {
@@ -152,7 +155,10 @@ func uniquePBSHostAgent(instance models.PBSInstance, hosts []models.Host, vms []
 	return match
 }
 
-func pbsGuestLinkObservationFresh(pbsSeen, peerSeen time.Time) bool {
+// Endpoint addresses and machine names can be reused after replacement. A
+// current PBS observation must not borrow identity from an old Agent report,
+// whether corroboration is direct or passes through a PVE guest.
+func pbsHostLinkObservationFresh(pbsSeen, peerSeen time.Time) bool {
 	if pbsSeen.IsZero() || peerSeen.IsZero() {
 		return false
 	}
@@ -162,9 +168,6 @@ func pbsGuestLinkObservationFresh(pbsSeen, peerSeen time.Time) bool {
 
 func pbsInstanceCorroboratesHost(instance models.PBSInstance, host models.Host) bool {
 	hostName := NormalizeHostname(host.Hostname)
-	if hostName == "" {
-		return false
-	}
 	// The node hostname the PBS API reports about itself is machine identity.
 	// It is the strongest evidence when the connection is configured by IP or
 	// a DNS alias the agent never reports, which the connection label and the
@@ -180,18 +183,14 @@ func pbsInstanceCorroboratesHost(instance models.PBSInstance, host models.Host) 
 		return false
 	}
 	if ip := NormalizeIP(endpoint); ip != "" {
-		if NormalizeIP(host.ReportIP) == ip {
+		if providerLinkIP(host.ReportIP) == ip {
 			return true
 		}
-		for _, iface := range host.NetworkInterfaces {
-			for _, address := range iface.Addresses {
-				if NormalizeIP(address) == ip {
-					return true
-				}
-			}
+		if _, ok := providerLinkNetworkIPs(host.NetworkInterfaces)[ip]; ok {
+			return true
 		}
 		return false
 	}
 
-	return NormalizeHostname(endpoint) == hostName
+	return hostName != "" && NormalizeHostname(endpoint) == hostName
 }

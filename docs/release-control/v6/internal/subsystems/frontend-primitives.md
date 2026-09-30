@@ -308,6 +308,19 @@ keeps the tallest, so uniform tables still measure their real row height while
 mixed group/content lists keep a content-scale estimate.
 
 Shared workload, node, Docker-host, and resource-drawer history presentation
+must scope retained observations to the exact resource type, resource ID and
+range. An uncached target or range change clears the former points while its
+read is pending, including when a PBS host link is withdrawn. A failed
+replacement must never cache former-host points under the new target. Matching
+cached reads and same-source background polls retain their chart without a
+loading flash. Superseded, locked, unavailable and unmounted requests propagate
+the query's abort signal to the Charts API; late results cannot replace current
+observations. `GuestDrawerHistory.source-isolation.test.tsx` exercises the real
+renderer, cache readback and cancellation, not a mocked chart. The mock-backed
+PBS browser runner verifies delayed range and withdrawn-target reads at desktop
+and phone widths; neither proof establishes installed collection or #1723 relief.
+
+Shared workload, node, Docker-host, and resource-drawer history presentation
 keeps current readings separate from stored samples. A current metric may
 populate the legend while history is still being collected, but it must never
 be expanded into synthetic timestamps or chart geometry. An empty stored

@@ -54,6 +54,32 @@ func TestRefreshPlatformScopes_TrueNASAppContainerKeepsOwningPlatform(t *testing
 	assertStringSliceEqual(t, resource.PlatformScopes, []string{"truenas"})
 }
 
+func TestRefreshPlatformScopesAllSourceCombinations(t *testing.T) {
+	// Include every membership combination, reverse input ordering, duplicates
+	// and unknown sources: changing the membership representation must not
+	// change page admission or canonical ordering.
+	sources := []DataSource{SourceAgent, SourceTrueNAS, SourceProxmox, SourcePBS, SourcePMG, SourceDocker, SourceK8s, SourceVMware, SourceAvailability}
+	for mask := 0; mask < 1<<len(sources); mask++ {
+		resource := Resource{Type: ResourceTypeVM, Sources: []DataSource{"unknown"}, PlatformScopes: []string{"stale"}}
+		var want []string
+		for i, source := range sources {
+			if mask&(1<<i) != 0 {
+				want = append(want, platformScopeForSource(source))
+			}
+		}
+		for i := len(sources) - 1; i >= 0; i-- {
+			if mask&(1<<i) != 0 {
+				resource.Sources = append(resource.Sources, sources[i], sources[i])
+			}
+		}
+		RefreshPlatformScopes(&resource)
+		assertStringSliceEqual(t, resource.PlatformScopes, want)
+		if mask == 0 && resource.PlatformScopes != nil {
+			t.Fatal("absent membership should remain nil")
+		}
+	}
+}
+
 func assertStringSliceEqual(t *testing.T, got, want []string) {
 	t.Helper()
 	if len(got) != len(want) {

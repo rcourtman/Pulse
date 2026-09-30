@@ -2768,6 +2768,7 @@
               "internal/alerts/eventlog/reader_isolation_test.go",
               "internal/alerts/external_probe_test.go",
               "internal/alerts/filter_evaluation_test.go",
+              "internal/alerts/flapping_threshold_test.go",
               "internal/alerts/guest_snapshot_test.go",
               "internal/alerts/history_concurrency_test.go",
               "internal/alerts/history_migration_test.go",
