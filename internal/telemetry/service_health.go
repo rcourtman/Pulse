@@ -85,6 +85,7 @@ func canonicalServiceHealthFailureCategory(value string) string {
 		ServiceHealthFailureStartup,
 		ServiceHealthFailureRuntime,
 		ServiceHealthFailureAPIConnectivity,
+		ServiceHealthFailureTimeout,
 		ServiceHealthFailureAPIStatus,
 		ServiceHealthFailureUIStatus,
 		ServiceHealthFailureFrontendAssets:
