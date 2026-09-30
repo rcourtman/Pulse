@@ -1,16 +1,18 @@
 {
   "version": 1,
-  "base_sha": "21a35494aecb335755de773dd099e1364e65b3e0",
-  "verified_at": "2026-09-30T20:12:09Z",
+  "base_sha": "781cbfa98e04d7f83f0acb0bd45996a7a0de3bf3",
+  "verified_at": "2026-09-30T22:01:47Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/hooks/createNonSuspendingQuery.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "b2b31441b19c2e50283ceedf319cd09a1f94791750cd424c052717a4957fdc67"
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "102bfe19203a3a333397c3a33f408ff40e43331c0b39bc399e548fcb28814903",
+    "frontend-modern/src/hooks/createNonSuspendingQuery.ts": "64401ad5317013604145f9a1d3ccff74342e3810ea8b2288d86f940a9ba0de79"
   },
   "routes": [
-    "/browser-tests/pbs-identity-boundary.html (production PBS table and real resource History renderer; synthetic API data)"
+    "/browser-tests/pbs-history-refresh.html (direct production GuestDrawerHistory and shared query; synthetic host/service API responses, not the complete PBS table/drawer)"
   ],
   "viewports": [
     {
@@ -23,38 +25,100 @@
     }
   ],
   "states": [
-    "corroborated host with seven observed metric paths",
-    "uncached range replacement pending with no old paths",
-    "new range loaded before the old range response",
-    "withdrawn host link with replacement target pending",
-    "replacement target returns 503 with no former-host history",
-    "service-only response retains CPU/memory, not host disk/network/I/O",
-    "locked 14-day range issues no history read"
+    "light/dark current host history",
+    "real 30-second poll fails while matching points remain explicitly labelled",
+    "keyboard retry held with busy/activation guard and retained points",
+    "successful retry keeps keyboard focus and updates the same control",
+    "real background polling supersedes a slow foreground read and settles loading",
+    "late aborted response cannot replace current paths",
+    "uncached service-target failure has neither former-host points nor a collecting claim",
+    "service-target retry renders CPU/memory only",
+    "locked range exposes no read or refresh action"
   ],
   "interactions": [
-    "desktop keyboard Enter / phone row click to open PBS details",
-    "select 6h while its GET is held; select 1h, then fulfil the obsolete 6h request",
-    "withdraw third host link while service GET is held, then return 503",
-    "select 6h after failure and inspect the service-only response",
-    "select locked 14d; check all ten screenshots, retained History tab, zero horizontal overflow and no page errors"
+    "Enter retry twice while its GET is held; exactly one retry read starts",
+    "fulfil retry; inspect warning removal, changed paths and retained focus",
+    "hold manual refresh across the real polling interval; inspect loading settlement and aborted read",
+    "switch to service target, fail its GET, retry the same key, select locked 14d"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/pbs-history-source-isolation.cjs from assigned workspace root; Vite 6.4.3, Chromium 141.0.7390.37, Playwright 1.56.1",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/pbs-history-refresh.cjs --phone; then the same command without --phone, from assigned workspace root. Native polling timers, Vite 6.4.3, Chromium 141.0.7390.37, Playwright 1.56.1 (integration-lock parity verified).",
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/receipts/history-browser-final.log",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/host-loaded-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/host-loaded-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/range-loading-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/range-loading-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/service-loaded-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/service-loaded-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-failed-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-failed-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-loading-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-loading-390.png"
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/receipts/renderer-browser-phone.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/receipts/renderer-browser-desktop.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/receipts/browser-phone-result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/receipts/browser-desktop-result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/refresh-failed-dark-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/refresh-failed-dark-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/refresh-failed-light-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/refresh-failed-light-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/replacement-failed-dark-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/replacement-failed-dark-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/replacement-failed-light-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/replacement-failed-light-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/retry-recovered-dark-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/retry-recovered-dark-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/retry-recovered-light-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/retry-recovered-light-390.png"
   ],
-  "notes": "Ten final screenshots inspected. The superseded GET is observed ERR_ABORTED at both widths; the unit regression also resolves mocks that ignore cancellation. Mock-backed proof establishes source/range isolation, not installed PBS collection, VirtualBox telemetry, all three #1723 drawers or release availability. Earlier unconfigured-CSS red/attempt-one results are retained separately.",
+  "notes": "All 12 final screenshots inspected. These are direct production-renderer and real query proofs, not containing-build #1723 acceptance, screen-reader announcement quality, or a complete PBS drawer/browser update journey. Earlier broader fixture/copy/cache/timeout failures are retained in the outcome receipts; no broad pass is claimed. A diagnostic stage label was clarified after desktop launch; no tested runtime content or assertions changed.",
   "prior_verifications": [
+    {
+      "version": 1,
+      "base_sha": "21a35494aecb335755de773dd099e1364e65b3e0",
+      "verified_at": "2026-09-30T20:12:09Z",
+      "result": "passed",
+      "changed_paths": [
+        "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"
+      ],
+      "content_sha256": {
+        "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "b2b31441b19c2e50283ceedf319cd09a1f94791750cd424c052717a4957fdc67"
+      },
+      "routes": [
+        "/browser-tests/pbs-identity-boundary.html (production PBS table and real resource History renderer; synthetic API data)"
+      ],
+      "viewports": [
+        {
+          "width": 1365,
+          "height": 900
+        },
+        {
+          "width": 390,
+          "height": 844
+        }
+      ],
+      "states": [
+        "corroborated host with seven observed metric paths",
+        "uncached range replacement pending with no old paths",
+        "new range loaded before the old range response",
+        "withdrawn host link with replacement target pending",
+        "replacement target returns 503 with no former-host history",
+        "service-only response retains CPU/memory, not host disk/network/I/O",
+        "locked 14-day range issues no history read"
+      ],
+      "interactions": [
+        "desktop keyboard Enter / phone row click to open PBS details",
+        "select 6h while its GET is held; select 1h, then fulfil the obsolete 6h request",
+        "withdraw third host link while service GET is held, then return 503",
+        "select 6h after failure and inspect the service-only response",
+        "select locked 14d; check all ten screenshots, retained History tab, zero horizontal overflow and no page errors"
+      ],
+      "command": "pulse-worker-browser frontend-modern/browser-tests/pbs-history-source-isolation.cjs from assigned workspace root; Vite 6.4.3, Chromium 141.0.7390.37, Playwright 1.56.1",
+      "artifacts": [
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/receipts/history-browser-final.log",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/host-loaded-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/host-loaded-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/range-loading-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/range-loading-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/service-loaded-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/service-loaded-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-failed-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-failed-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-loading-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-j4h_mbv3/history-browser-final/target-loading-390.png"
+      ],
+      "notes": "Ten final screenshots inspected. The superseded GET is observed ERR_ABORTED at both widths; the unit regression also resolves mocks that ignore cancellation. Mock-backed proof establishes source/range isolation, not installed PBS collection, VirtualBox telemetry, all three #1723 drawers or release availability. Earlier unconfigured-CSS red/attempt-one results are retained separately."
+    },
     {
       "version": 1,
       "base_sha": "6ade01cbd4d02cd25b691f9ff5919206cceae764",
