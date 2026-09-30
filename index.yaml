@@ -15,6 +15,52 @@ entries:
           description: Smoke tests with kind cluster deployment
       artifacthub.io/links: |
         - name: Documentation
+          url: https://github.com/rcourtman/Pulse/blob/v6.4.5-rc.5/docs/KUBERNETES.md
+        - name: Support
+          url: https://github.com/rcourtman/Pulse/discussions
+      artifacthub.io/maintainers: |
+        - name: rcourtman
+          email: pulse@rcourtman.dev
+      org.opencontainers.image.description: Helm chart for deploying Pulse monitoring
+        system
+      org.opencontainers.image.licenses: MIT
+      org.opencontainers.image.source: https://github.com/rcourtman/Pulse
+    apiVersion: v2
+    appVersion: 6.4.5-rc.5
+    created: "2026-09-30T14:03:53.061288596Z"
+    description: Helm chart for deploying the Pulse hub and optional Docker, Kubernetes,
+      or OpenShift monitoring agent.
+    digest: de8edcbb1155805f841becd59a6199c0b61666d1cf6b1dc132b44ccc18172b44
+    home: https://github.com/rcourtman/Pulse
+    icon: https://raw.githubusercontent.com/rcourtman/Pulse/v6.4.5-rc.5/docs/images/pulse-logo.svg
+    keywords:
+    - monitoring
+    - proxmox
+    - observability
+    maintainers:
+    - email: pulse@rcourtman.dev
+      name: Pulse Maintainers
+    name: pulse
+    sources:
+    - https://github.com/rcourtman/Pulse
+    type: application
+    urls:
+    - https://github.com/rcourtman/Pulse/releases/download/helm-chart-6.4.5-rc.5/pulse-6.4.5-rc.5.tgz
+    version: 6.4.5-rc.5
+  - annotations:
+      artifacthub.io/changes: |
+        - kind: added
+          description: GitHub Pages Helm repository distribution (no authentication required)
+        - kind: added
+          description: values.schema.json for configuration validation
+        - kind: added
+          description: ServiceMonitor template for Prometheus integration
+        - kind: added
+          description: Automated chart documentation generation with helm-docs
+        - kind: added
+          description: Smoke tests with kind cluster deployment
+      artifacthub.io/links: |
+        - name: Documentation
           url: https://github.com/rcourtman/Pulse/blob/v6.4.5-rc.4/docs/KUBERNETES.md
         - name: Support
           url: https://github.com/rcourtman/Pulse/discussions
@@ -5226,4 +5272,4 @@ entries:
     urls:
     - https://github.com/rcourtman/Pulse/releases/download/helm-chart-4.28.0/pulse-4.28.0.tgz
     version: 4.28.0
-generated: "2026-09-28T20:14:03.742116922Z"
+generated: "2026-09-30T14:03:53.060205444Z"
