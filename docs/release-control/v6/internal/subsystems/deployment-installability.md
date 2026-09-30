@@ -2527,6 +2527,41 @@ artifact-selection behaviour.
 
 ## Current State
 
+### Update progress stream delivery
+
+`GET /api/updates/stream` is the in-app updater's progress feed and must never
+look like a stalled update. The handler marks the response `text/event-stream`
+with `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no` so
+reverse proxies and compressing intermediaries do not hold events back, and the
+gzip middleware keeps excluding event streams. `SSEBroadcaster.AddClient` in
+`internal/updates/sse.go` writes the connection preamble and the current cached
+status and flushes them before returning, and every later broadcast reaches a
+client through that client's single ordered writer under the client lock, so
+stages arrive in emission order and no two goroutines write one
+ResponseWriter. Write failures remove the client off the writer goroutine so
+removal never waits on the broadcaster lock while holding a client lock.
+Comment heartbeats run every 15 seconds. `UpdateProgressModal` must not trust
+an open-but-silent EventSource. It also polls `/api/updates/status` after
+`UPDATE_STREAM_SILENCE_FALLBACK_MS` without a stream message, ignores polled
+stages that would move progress backwards or are update-check chatter, keeps
+reloading only once `/api/version` reports a different version, and after
+`UPDATE_PROGRESS_STALL_TIMEOUT_MS` without movement shows a reload-to-check
+state instead of an endless spinner. A failed status poll is never restart
+evidence on its own. The modal enters its restart phase only when the backend
+reports `restarting` or `completed`, or, unconfirmed, when the stream has
+closed and consecutive polls fail after the update reached `applying` or
+`restoring`. An unconfirmed restart keeps polling so a later progress or
+`error` status still wins, and the same-version reload fallback in
+`resolvePostUpdateReload` applies only after a confirmed restart. When the
+modal opens before the running version is known it fetches `/api/version`
+immediately and also adopts the update store's version once it loads, but
+only while no restart signal has been seen. With no baseline it never reloads
+on unconfirmed completion, and after confirmed completion it reloads only
+once a probe has seen the old process go away, or after the bounded fallback. `internal/updates/sse_test.go`, the
+stream handler tests in `internal/api/updates_test.go`, and
+`frontend-modern/src/components/__tests__/UpdateProgressModal.test.tsx` are
+the proof surface.
+
 ### Provider MSP upgrades move an install to a new release bundle
 
 `setup.sh` resolves the image pins in `.env` to digests once, so `upgrade.sh`

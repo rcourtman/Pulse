@@ -298,7 +298,7 @@ func NewManager(cfg *config.Config) *Manager {
 	// Clean up old temp directories and stale update backups from previous runs.
 	go m.cleanupOldUpdateArtifacts()
 
-	// Start heartbeat for SSE connections (every 30 seconds)
+	// Start heartbeat for SSE connections (see sseHeartbeatInterval)
 	m.heartbeatWg.Add(1)
 	go m.sseHeartbeatLoop()
 
@@ -2280,11 +2280,15 @@ func (m *Manager) updateStatus(status string, progress int, message string, err 
 	}
 }
 
+// sseHeartbeatInterval keeps idle update streams under common reverse-proxy
+// read timeouts (nginx defaults to 60s) during long download stages.
+const sseHeartbeatInterval = 15 * time.Second
+
 // sseHeartbeatLoop sends periodic heartbeats to SSE clients
 func (m *Manager) sseHeartbeatLoop() {
 	defer m.heartbeatWg.Done()
 
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(sseHeartbeatInterval)
 	defer ticker.Stop()
 
 	for {
