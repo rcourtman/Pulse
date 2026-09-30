@@ -1980,3 +1980,16 @@ func TestUnraidArrayDiskCountAdapters(t *testing.T) {
 		}
 	}
 }
+
+func TestProviderURLHostnamePreservesIPv6(t *testing.T) {
+	for _, test := range []struct{ endpoint, want string }{
+		{"https://[fd00::13]:8007", "fd00::13"},
+		{"https://[::1]:8007", "::1"},
+		{"https://backup-host.local:8007", "backup-host.local"},
+		{"https://10.2.0.13:8007", "10.2.0.13"},
+	} {
+		if got := extractHostname(test.endpoint); got != test.want {
+			t.Errorf("extractHostname(%q) = %q, want %q", test.endpoint, got, test.want)
+		}
+	}
+}
