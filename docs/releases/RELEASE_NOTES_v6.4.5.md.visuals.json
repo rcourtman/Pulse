@@ -1,0 +1,5 @@
+{
+  "captures": [],
+  "decision": "The release owner selected zero captures. Stable v6.4.5 promotes the published v6.4.5-rc.5 unchanged apart from release metadata, and its changes are behavioural fixes that a static image cannot establish.",
+  "schema_version": 1
+}
