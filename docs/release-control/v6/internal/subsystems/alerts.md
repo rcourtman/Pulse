@@ -3044,6 +3044,34 @@ starting database workers, including restart loading and Unix hardening. The
 active mirror's unchanged fast path alone does not cover this companion file.
 This is a narrow write contributor, not aggregate installed-write acceptance.
 
+### Coalesced asynchronous active-alert checkpoints
+
+`active_persistence.go` admits one asynchronous checkpoint worker per Manager,
+not one goroutine and full serialization per mutation. Admission is protected
+by the shutdown lock. A worker starts immediately, takes fresh state through
+`SaveActiveAlerts`, and retains one follow-up request for mutations arriving
+during its current pass. Returning to idle and accepting another request share
+the same lock, so requests cannot be stranded at the idle boundary. The worker
+never holds the shutdown lock while acquiring persistence or manager-state
+locks; callers may request a checkpoint while holding the manager-state lock.
+
+This coalesces derived snapshots, not lifecycle events or notification work.
+Synchronous lifecycle durability, checkpoint revision/failure-epoch checks,
+recovery-mirror replacement, intent timing and periodic saves are unchanged.
+An error or recovered panic releases admission after any requested follow-up;
+there is no automatic busy-loop retry. Once shutdown closes admission, the
+worker finishes only its in-flight pass; `Stop` joins it and writes the final
+current snapshot synchronously instead of draining redundant queued snapshots.
+
+`TestAsyncActiveCheckpointBurstIsBounded` in `internal/alerts/alerts_test.go`
+blocks the real checkpoint writer, bounds a 512-request burst to one worker,
+then verifies current acknowledgement, incident age, metadata and pending intent
+through actual JSON persistence and a fresh Manager. The scheduler regressions
+in `internal/alerts/async_checkpoint_test.go` pin one follow-up for 10,000
+in-flight requests, idle restart, error/panic recovery, retry after a real file
+failure, and shutdown admission/draining. These checks establish bounded
+checkpoint work, not the installed CPU/write rate or any reporter's recovery.
+
 ### Warning-level destination preference persistence
 
 Email API decoding and encoding, plus webhook edit/create and list presentation,
