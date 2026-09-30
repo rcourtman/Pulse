@@ -1,18 +1,14 @@
 {
   "version": 1,
-  "base_sha": "781cbfa98e04d7f83f0acb0bd45996a7a0de3bf3",
-  "verified_at": "2026-09-30T22:01:47Z",
+  "base_sha": "0d3e5a801ab8fd1c1d224ef561cbf99e169c589f",
+  "verified_at": "2026-09-30T23:28:26Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
-    "frontend-modern/src/hooks/createNonSuspendingQuery.ts"
-  ],
+  "changed_paths": ["frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "102bfe19203a3a333397c3a33f408ff40e43331c0b39bc399e548fcb28814903",
-    "frontend-modern/src/hooks/createNonSuspendingQuery.ts": "64401ad5317013604145f9a1d3ccff74342e3810ea8b2288d86f940a9ba0de79"
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "327e75cabb99edffc712302c00645f06d92dc44dbebdd00aef08074e7fa53eb2"
   },
   "routes": [
-    "/browser-tests/pbs-history-refresh.html (direct production GuestDrawerHistory and shared query; synthetic host/service API responses, not the complete PBS table/drawer)"
+    "/browser-tests/pbs-history-refresh.html (direct production GuestDrawerHistory/query with production CSS and synthetic metrics API data; not a complete PBS drawer or installed acceptance)"
   ],
   "viewports": [
     {
@@ -25,51 +21,127 @@
     }
   ],
   "states": [
-    "light/dark current host history",
-    "real 30-second poll fails while matching points remain explicitly labelled",
-    "keyboard retry held with busy/activation guard and retained points",
-    "successful retry keeps keyboard focus and updates the same control",
-    "real background polling supersedes a slow foreground read and settles loading",
-    "late aborted response cannot replace current paths",
-    "uncached service-target failure has neither former-host points nor a collecting claim",
-    "service-target retry renders CPU/memory only",
-    "locked range exposes no read or refresh action"
+    "light/dark ordered and sparse stored series",
+    "native focus with a 2px blue outline, measured contrast 3.68:1 light and 3.98:1 dark against the chart surface",
+    "missing series at a selected timestamp stay missing, not nearby or live values",
+    "same-source refresh adds samples without changing the selected timestamp or keyboard focus",
+    "failed refresh retains inspectable matching observations and honest warning",
+    "single stored observation has a dated description but no fabricated trend or pointless slider",
+    "empty store/current readings expose no inspection control",
+    "held replacement target has no former-host points or selection; new target starts at its own latest observation",
+    "licence-locked range has no reads or inspection action"
   ],
   "interactions": [
-    "Enter retry twice while its GET is held; exactly one retry read starts",
-    "fulfil retry; inspect warning removal, changed paths and retained focus",
-    "hold manual refresh across the real polling interval; inspect loading settlement and aborted read",
-    "switch to service target, fail its GET, retry the same key, select locked 14d"
+    "Tab from History range through Refresh to the native observation slider; Home, ArrowRight, End and ArrowLeft select actual stored times with no extra API reads",
+    "refresh through the existing real query while the input stays focused; new sample indexes do not move the selected timestamp",
+    "move and leave the plot while the slider is focused; then blur and confirm existing mouse hover still works",
+    "Chromium/WebKit phone touch taps at both ends of the 44px-high native control update the selected stored values",
+    "fail a refresh, inspect retained observations; replace with a single sample and then no history; switch resource while its GET is held; load the service response; select locked 14d"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/pbs-history-refresh.cjs --phone; then the same command without --phone, from assigned workspace root. Native polling timers, Vite 6.4.3, Chromium 141.0.7390.37, Playwright 1.56.1 (integration-lock parity verified).",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/history-inspection.cjs --engine=chromium; the same command with --phone; --engine=firefox; --engine=webkit --phone. All from the assigned workspace root, Vite 6.4.3 / Playwright 1.56.1 (integration-lock parity verified).",
+  "browser_versions": {
+    "chromium": "141.0.7390.37",
+    "firefox": "142.0.1",
+    "webkit": "26.0"
+  },
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/receipts/renderer-browser-phone.log",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/receipts/renderer-browser-desktop.log",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/receipts/browser-phone-result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/receipts/browser-desktop-result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/refresh-failed-dark-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/refresh-failed-dark-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/refresh-failed-light-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/refresh-failed-light-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/replacement-failed-dark-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/replacement-failed-dark-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/replacement-failed-light-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/replacement-failed-light-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/retry-recovered-dark-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/retry-recovered-dark-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/retry-recovered-light-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/retry-recovered-light-390.png"
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-1365/selected-sparse-time-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-1365/failed-refresh-inspection-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-1365/selected-sparse-time-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-1365/failed-refresh-inspection-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-1365/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-390/selected-sparse-time-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-390/failed-refresh-inspection-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-390/selected-sparse-time-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-390/failed-refresh-inspection-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-390/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/firefox-1365/selected-sparse-time-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/firefox-1365/failed-refresh-inspection-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/firefox-1365/selected-sparse-time-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/firefox-1365/failed-refresh-inspection-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/firefox-1365/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/webkit-390/selected-sparse-time-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/webkit-390/failed-refresh-inspection-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/webkit-390/selected-sparse-time-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/webkit-390/failed-refresh-inspection-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/webkit-390/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/receipts/browser-chromium-desktop.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/receipts/browser-chromium-phone.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/receipts/browser-firefox-desktop.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/receipts/browser-webkit-phone.log"
   ],
-  "notes": "All 12 final screenshots inspected. These are direct production-renderer and real query proofs, not containing-build #1723 acceptance, screen-reader announcement quality, or a complete PBS drawer/browser update journey. Earlier broader fixture/copy/cache/timeout failures are retained in the outcome receipts; no broad pass is claimed. A diagnostic stage label was clarified after desktop launch; no tested runtime content or assertions changed.",
+  "notes": "All 16 final screenshots inspected. Eight engine/viewport/theme cases pass native keyboard, touch, state and layout assertions with no page errors. Semantic snapshots exercise native slider names/value text, not actual screen-reader speech quality. Initial dependency-copy/install failures, unsupported helper invocation, preliminary browser sequence exit 143 with unknown cause and the corrected dark-focus-colour defect remain in output receipts. No real PBS telemetry, full drawer, in-browser update, installed upgrade/rollback, containing-line or release availability claim. Copy-lint failure source-zhg72ioz at unshared 7c625696... is retained. Its semicolon-separated accessible value text is replaced by sentences; that unshared candidate was abandoned at the supplied base, not amended or integrated. All four browser commands and all 16 inspected screenshots now bind the corrected runtime. No failed earlier pass or shared history is rewritten.",
   "prior_verifications": [
+    {
+      "version": 1,
+      "base_sha": "781cbfa98e04d7f83f0acb0bd45996a7a0de3bf3",
+      "verified_at": "2026-09-30T22:01:47Z",
+      "result": "passed",
+      "changed_paths": [
+        "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+        "frontend-modern/src/hooks/createNonSuspendingQuery.ts"
+      ],
+      "content_sha256": {
+        "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "102bfe19203a3a333397c3a33f408ff40e43331c0b39bc399e548fcb28814903",
+        "frontend-modern/src/hooks/createNonSuspendingQuery.ts": "64401ad5317013604145f9a1d3ccff74342e3810ea8b2288d86f940a9ba0de79"
+      },
+      "routes": [
+        "/browser-tests/pbs-history-refresh.html (direct production GuestDrawerHistory and shared query; synthetic host/service API responses, not the complete PBS table/drawer)"
+      ],
+      "viewports": [
+        {
+          "width": 1365,
+          "height": 900
+        },
+        {
+          "width": 390,
+          "height": 844
+        }
+      ],
+      "states": [
+        "light/dark current host history",
+        "real 30-second poll fails while matching points remain explicitly labelled",
+        "keyboard retry held with busy/activation guard and retained points",
+        "successful retry keeps keyboard focus and updates the same control",
+        "real background polling supersedes a slow foreground read and settles loading",
+        "late aborted response cannot replace current paths",
+        "uncached service-target failure has neither former-host points nor a collecting claim",
+        "service-target retry renders CPU/memory only",
+        "locked range exposes no read or refresh action"
+      ],
+      "interactions": [
+        "Enter retry twice while its GET is held; exactly one retry read starts",
+        "fulfil retry; inspect warning removal, changed paths and retained focus",
+        "hold manual refresh across the real polling interval; inspect loading settlement and aborted read",
+        "switch to service target, fail its GET, retry the same key, select locked 14d"
+      ],
+      "command": "pulse-worker-browser frontend-modern/browser-tests/pbs-history-refresh.cjs --phone; then the same command without --phone, from assigned workspace root. Native polling timers, Vite 6.4.3, Chromium 141.0.7390.37, Playwright 1.56.1 (integration-lock parity verified).",
+      "artifacts": [
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/receipts/renderer-browser-phone.log",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/receipts/renderer-browser-desktop.log",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/receipts/browser-phone-result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/receipts/browser-desktop-result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/refresh-failed-dark-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/refresh-failed-dark-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/refresh-failed-light-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/refresh-failed-light-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/replacement-failed-dark-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/replacement-failed-dark-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/replacement-failed-light-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/replacement-failed-light-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/retry-recovered-dark-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/retry-recovered-dark-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/retry-recovered-light-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-jybdl1pm/browser-final/retry-recovered-light-390.png"
+      ],
+      "notes": "All 12 final screenshots inspected. These are direct production-renderer and real query proofs, not containing-build #1723 acceptance, screen-reader announcement quality, or a complete PBS drawer/browser update journey. Earlier broader fixture/copy/cache/timeout failures are retained in the outcome receipts; no broad pass is claimed. A diagnostic stage label was clarified after desktop launch; no tested runtime content or assertions changed."
+    },
     {
       "version": 1,
       "base_sha": "21a35494aecb335755de773dd099e1364e65b3e0",
       "verified_at": "2026-09-30T20:12:09Z",
       "result": "passed",
-      "changed_paths": [
-        "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"
-      ],
+      "changed_paths": ["frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"],
       "content_sha256": {
         "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "b2b31441b19c2e50283ceedf319cd09a1f94791750cd424c052717a4957fdc67"
       },
@@ -124,9 +196,7 @@
       "base_sha": "6ade01cbd4d02cd25b691f9ff5919206cceae764",
       "verified_at": "2026-09-30T01:40:13Z",
       "result": "passed",
-      "changed_paths": [
-        "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
-      ],
+      "changed_paths": ["frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"],
       "content_sha256": {
         "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "ed7207456ebbc990ada34b0c739e29565d90cfe1998415a781d87f3067d69c36"
       },
@@ -175,9 +245,7 @@
       "base_sha": "c3e8b6dd6dff36b5396ba2eb147d4e58d23001a6",
       "verified_at": "2026-09-29T23:04:22Z",
       "result": "passed",
-      "changed_paths": [
-        "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
-      ],
+      "changed_paths": ["frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"],
       "content_sha256": {
         "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "7172690587f8e642ee30492481abbe76ee79d277aad290c3b50310dd1c0b282b"
       },
@@ -273,9 +341,7 @@
       "base_sha": "fbf17b271abe70ad3e12042506b52f85b6cbc484",
       "verified_at": "2026-09-29T19:50:45Z",
       "result": "passed",
-      "changed_paths": [
-        "frontend-modern/src/pages/Actions.tsx"
-      ],
+      "changed_paths": ["frontend-modern/src/pages/Actions.tsx"],
       "content_sha256": {
         "frontend-modern/src/pages/Actions.tsx": "30e862ecc5125f07cf93f0c1e0b5f58efa023f5fdb56fe4b01721bf9a453e7ce"
       },
@@ -316,9 +382,7 @@
       "base_sha": "c2f7aa8b471d6cbb858e8ec71b4e664fded6549c",
       "verified_at": "2026-09-29T19:09:52Z",
       "result": "passed",
-      "changed_paths": [
-        "frontend-modern/src/features/actions/ActionReviewDialog.tsx"
-      ],
+      "changed_paths": ["frontend-modern/src/features/actions/ActionReviewDialog.tsx"],
       "content_sha256": {
         "frontend-modern/src/features/actions/ActionReviewDialog.tsx": "9a4af522484b42e37b118e8bfde7c1673122037a54b8bfed249818ba644e6b81"
       },
