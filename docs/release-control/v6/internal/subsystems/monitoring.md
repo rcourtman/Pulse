@@ -122,6 +122,25 @@ cycles, completion timestamps and unchanged failure backoff. These are synthetic
 runtime proofs, not native firmware timeout or reporter-resolution evidence.
 
 
+### TrueNAS reporting summaries preserve raw History — issue #2346
+
+Every reporting time-range query requests `aggregate: true`, the TrueNAS
+default, through the shared `reportingRangeQuery`: JSON-RPC host/disk-temperature
+History and short temperature reads, plus legacy REST host History/live telemetry.
+SCALE 25.04.2.6 rejects `aggregate: false` because its response schema requires
+the min/mean/max fields omitted by that option. These summaries accompany the
+raw `data` series; History still parses only raw samples, with the same
+start/end window, timestamps, units and default duration. There is no new
+retry, error suppression, transport selection or graph-isolation policy.
+
+`TestReportingHistorySupportsSCALE2504Aggregations` models the supplied
+ReportingGetDataResult/EINVAL failure and preserves 3,600 raw samples through
+system and disk History. `TestReportingAggregationsPreserveRPCFailures` keeps
+validation, access and missing-method errors visible. The REST default-summary
+regression and existing CORE graph-isolation/live-memory tests retain legacy
+telemetry and canonical CPU/memory History projections. Synthetic transports
+are not native appliance or containing-release acceptance.
+
 **TrueNAS legacy-REST memory telemetry — issue #2077 (20 September 2026)**
 
 A connection proven to run a recognized legacy CORE/FreeNAS release has no

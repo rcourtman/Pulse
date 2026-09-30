@@ -283,11 +283,7 @@ func (c *Client) getSystemTelemetryREST(ctx context.Context) (*SystemInfo, error
 	if start <= 0 {
 		start = end
 	}
-	response, err := c.getLegacySystemReportingData(ctx, map[string]any{
-		"aggregate": false,
-		"start":     start,
-		"end":       end,
-	})
+	response, err := c.getLegacySystemReportingData(ctx, reportingRangeQuery(start, end))
 	if err != nil {
 		return nil, err
 	}
@@ -359,6 +355,18 @@ func reportingGraph(name, identifier string) map[string]any {
 		graph["identifier"] = trimmed
 	}
 	return graph
+}
+
+// reportingRangeQuery requests the default min/mean/max summaries alongside
+// the unchanged raw data series. SCALE 25.04 validates those summaries even
+// when aggregate=false would omit them (#2346). Parsers use data, not summaries;
+// enabling aggregation does not change the requested window or sample timestamps.
+func reportingRangeQuery(start, end int64) map[string]any {
+	return map[string]any{
+		"aggregate": true,
+		"start":     start,
+		"end":       end,
+	}
 }
 
 // legacyRESTReportingGraphs is the reporting.get_data graph set used to
@@ -463,11 +471,7 @@ func (c *Client) getSystemMetricHistoryREST(ctx context.Context, duration time.D
 	if start <= 0 {
 		start = end
 	}
-	response, err := c.getLegacySystemReportingData(ctx, map[string]any{
-		"aggregate": false,
-		"start":     start,
-		"end":       end,
-	})
+	response, err := c.getLegacySystemReportingData(ctx, reportingRangeQuery(start, end))
 	if err != nil {
 		return nil, err
 	}
@@ -2868,11 +2872,7 @@ func (c *trueNASRPCClient) getSystemMetricHistory(ctx context.Context, duration 
 		{"name": "arcsize", "identifier": nil},
 		{"name": "interface", "identifier": nil},
 		{"name": "disk", "identifier": nil},
-	}, map[string]any{
-		"aggregate": false,
-		"start":     start,
-		"end":       end,
-	})
+	}, reportingRangeQuery(start, end))
 	if err != nil {
 		return nil, err
 	}
@@ -2965,11 +2965,7 @@ func (c *trueNASRPCClient) getDiskTemperatureHistory(ctx context.Context, identi
 		})
 	}
 
-	response, err := c.getReportingDataWithQuery(ctx, graphs, map[string]any{
-		"aggregate": false,
-		"start":     start,
-		"end":       end,
-	})
+	response, err := c.getReportingDataWithQuery(ctx, graphs, reportingRangeQuery(start, end))
 	if err != nil {
 		return nil, err
 	}
@@ -2990,11 +2986,7 @@ func (c *trueNASRPCClient) getReportingData(ctx context.Context, graphs []map[st
 		start = end
 	}
 
-	return c.getReportingDataWithQuery(ctx, graphs, map[string]any{
-		"aggregate": true,
-		"start":     start,
-		"end":       end,
-	})
+	return c.getReportingDataWithQuery(ctx, graphs, reportingRangeQuery(start, end))
 }
 
 func (c *trueNASRPCClient) getReportingDataWithQuery(ctx context.Context, graphs []map[string]any, query map[string]any) ([]trueNASReportingGetDataResponse, error) {
