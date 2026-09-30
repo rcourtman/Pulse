@@ -408,6 +408,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         dry_run = jobs["dry-run"]
         steps = dry_run["steps"]
         names = [step["name"] for step in steps]
+        self.assertLess(names.index("Validate release ref"), names.index("Checkout repository"))
         self.assertLess(names.index("Resolve required release branch"),
                         names.index("Select exact rehearsal source"))
         self.assertLess(names.index("Select exact rehearsal source"),
@@ -415,6 +416,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         source = next(step for step in steps if step.get("id") == "source")
         self.assertEqual(source["env"]["REQUIRED_BRANCH"],
                          "${{ steps.branch_policy.outputs.required_branch }}")
+        self.assertEqual(source["env"]["WATCHDOG_MODE"], "${{ steps.mode.outputs.watchdog }}")
         self.assertIn('git checkout --detach "${TESTED_SHA}"', source["run"])
         self.assertIn('"${TESTED_SHA}" != "${GITHUB_SHA}"', source["run"])
         metadata = next(step for step in steps if step.get("id") == "rehearsal")
@@ -424,9 +426,13 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                       metadata["run"])
         self.assertIn('if [ "$FILE_VERSION" != "$VERSION" ]; then', metadata["run"])
         self.assertIn(
-            'if [ "${EVENT_NAME}" = "schedule" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then',
+            'if [ "${WATCHDOG_MODE}" = "true" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then',
             metadata["run"],
         )
+        self.assertEqual(metadata["env"]["WATCHDOG_MODE"], "${{ steps.mode.outputs.watchdog }}")
+        self.assertEqual(jobs["build_release_candidate"]["if"],
+                         "${{ inputs.watchdog != true && inputs.version != '' }}")
+        self.assertIn("Release Watchdog at {0}", yaml.safe_load(workflow)["run-name"])
         for key in ("tested_sha", "tested_branch"):
             self.assertEqual(dry_run["outputs"][key],
                              "${{ steps.source.outputs." + key + " }}")
@@ -1707,7 +1713,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn(promotion_metadata_envelope(), normalize_ws(template))
         self.assertIn("rc-to-ga-rehearsal-summary", workflow)
         self.assertIn("build_release_candidate:", workflow)
-        self.assertIn("if: ${{ inputs.version != '' }}", workflow)
+        self.assertIn("if: ${{ inputs.watchdog != true && inputs.version != '' }}", workflow)
         self.assertIn("require_macos_signing: true", workflow)
         self.assertIn(
             "require_windows_signing: false",
@@ -2194,12 +2200,19 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         dry_run_workflow = read(".github/workflows/release-dry-run.yml")
         self.assertIn("Required rollback stable version to rehearse", dry_run_workflow)
         self.assertIn("rollback_version:\n        description: 'Required rollback stable version to rehearse", dry_run_workflow)
-        self.assertIn("required: true", dry_run_workflow)
-        # Scheduled watchdog runs carry no dispatch inputs, so the rehearsal
-        # step must derive the rollback target; the derive flag stays gated on
-        # the schedule event so manual dispatches keep explicit rollback.
+        # The fixed watchdog has no rollback override, so its dispatch schema
+        # must permit omission. Ordinary manual rehearsals still require an
+        # explicit rollback in the pre-checkout admission shell.
+        dry_run = yaml.safe_load(dry_run_workflow)
+        inputs = dry_run.get("on", dry_run.get(True))["workflow_dispatch"]["inputs"]
+        self.assertIs(inputs["rollback_version"]["required"], False)
+        self.assertIn('workflow_dispatch:false)', dry_run_workflow)
+        self.assertIn('[ -z "${ROLLBACK_VERSION_INPUT:-}" ]', dry_run_workflow)
+        self.assertIn('Candidate rehearsal requires explicit rollback and no watchdog SHA.', dry_run_workflow)
+        # Both admitted watchdog modes derive rollback; a candidate rehearsal
+        # can never reach that derivation, including when the input is absent.
         self.assertIn(
-            'if [ "${EVENT_NAME}" = "schedule" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then',
+            'if [ "${WATCHDOG_MODE}" = "true" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then',
             dry_run_workflow,
         )
         self.assertIn("--derive-rollback-latest-stable", dry_run_workflow)

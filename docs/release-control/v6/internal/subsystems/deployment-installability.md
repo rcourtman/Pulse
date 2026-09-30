@@ -131,11 +131,22 @@ product checks use the selected checkout; a missing branch or policy mismatch
 fails closed rather than falling back to main.
 
 Manual dispatch retains its governed event branch and exact event SHA, VERSION
-equality and explicit rollback requirement. Only scheduled runs may derive the
-preceding stable rollback target. Summaries distinguish workflow event revision
+equality and explicit rollback requirement. The one additional dispatch mode
+is a fixed no-publication watchdog: `watchdog=true` plus the exact reviewed
+main `expected_workflow_sha`, with no candidate, exception, mobile or note
+inputs. It checks the main ref and event SHA before checkout, then uses the
+same one-fetch governed-source selection and preceding stable rollback
+derivation as the schedule. A moving control head fails closed. Ordinary
+candidate dispatches cannot use the watchdog SHA or omit explicit rollback.
+Summaries distinguish workflow event revision
 from tested branch and revision; unresolved selection is not test evidence.
 This watchdog is not an admitted release candidate and cannot qualify or
-replace the fixed release packet.
+replace the fixed release packet. Its distinct `Release Watchdog at <sha>`
+title cannot satisfy an exact-version candidate rehearsal. The candidate-build
+job is always skipped in watchdog mode; actual preflight, demo resolver,
+no-mutation verification and definitive verdict must all succeed. Delivery's
+reviewed dispatcher fixes repository, workflow, main and both inputs, retains
+intent before POST and never replays a refused or uncertain watchdog attempt.
 
 Verification: `rehearsal_source_test.py` executes the source-selection shell
 against local Git fixtures. `release_promotion_policy_test.py` pins workflow
@@ -3869,13 +3880,14 @@ for stable-versus-prerelease metadata validation shared by `.github/workflows/re
 and `.github/workflows/create-release.yml`. Promotion rollback targets, promoted
 prerelease lineage, soak checks, and GA/v5 notice metadata may not drift between those
 two workflows through duplicated inline shell validation.
-One scoped exception keeps the weekly drift watchdog viable: scheduled
+One scoped exception keeps the drift watchdog viable: scheduled
 `release-dry-run.yml` runs carry no `workflow_dispatch` inputs (GitHub does
 not apply input defaults to `schedule` events), so the rehearsal step passes
 `--derive-rollback-latest-stable` and the resolver fills the empty
 `rollback_version` with the latest stable repository tag preceding the
-rehearsal version. The derivation flag is gated on the `schedule` event in
-the workflow; manual rehearsal dispatches and real promotions must still
+rehearsal version. The derivation flag is gated on admitted watchdog mode
+(schedule or the exact-main, candidate-input-free dispatch envelope described
+above); ordinary candidate rehearsal dispatches and real promotions must still
 supply an explicit stable `rollback_version`, and the resolver still fails
 closed when the input is empty and the flag is absent.
 `scripts/release_control/validate_artifact_release_line.py` is the canonical
