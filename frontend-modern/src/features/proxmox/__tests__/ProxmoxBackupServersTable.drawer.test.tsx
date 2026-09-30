@@ -46,6 +46,7 @@ const makePbsResource = (): Resource =>
     memory: { current: 40, total: 8_000, used: 3_200, free: 4_800 },
     pbs: {
       instanceId: 'pbs-main',
+      nodeName: 'pbs-main.local',
       version: '3.2.1',
       connectionHealth: 'healthy',
       datastores: [{ name: 'tank', total: 1_000, used: 400, available: 600, usagePercent: 40 }],
@@ -185,6 +186,70 @@ describe('ProxmoxBackupServersTable details', () => {
       'data-metrics-resource-id',
       'pbs-main',
     );
+  });
+
+  it('updates an open drawer to the service target when the link is withdrawn beside a colliding guest', async () => {
+    const pbs = makePbsResource();
+    pbs.agent = undefined;
+    pbs.platformData = { sources: ['pbs'] };
+    pbs.pbs = { ...pbs.pbs!, nodeName: undefined, linkedAgentId: 'agent-pbs-1' };
+    pbs.metricsTarget = { resourceType: 'agent', resourceId: 'pbs-main' };
+    const host = {
+      ...pbs,
+      id: 'agent-pbs-1',
+      type: 'agent',
+      pbs: undefined,
+      agent: { agentId: 'agent-pbs-1', hostname: 'real-host' },
+      metricsTarget: { resourceType: 'agent', resourceId: 'agent-pbs-1' },
+    } as Resource;
+    const unrelated = {
+      ...host,
+      id: 'vm-other',
+      type: 'vm',
+      name: pbs.name,
+      agent: { agentId: 'agent-other', hostname: pbs.name },
+      metricsTarget: { resourceType: 'vm', resourceId: 'vm-other' },
+    } as Resource;
+    const [servers, setServers] = createSignal([pbs, host, unrelated]);
+    render(() => <ProxmoxBackupServersTable servers={servers()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Expand details for pbs-main' }));
+    const detail = screen.getByTestId('pbs-resource-detail');
+    expect(detail).toHaveAttribute('data-metrics-resource-id', 'agent-pbs-1');
+
+    setServers([{ ...pbs, pbs: { ...pbs.pbs!, linkedAgentId: undefined } }, host, unrelated]);
+    await waitFor(() => expect(detail).toHaveAttribute('data-metrics-resource-id', 'pbs-main'));
+    expect(detail).not.toHaveAttribute('data-agent-id');
+    expect(resourceDetailDrawerMount).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not mutate reusable service/Agent snapshots while joining and withdrawing host History', async () => {
+    const pbs = makePbsResource();
+    pbs.pbs = { ...pbs.pbs!, nodeName: undefined };
+    pbs.platformData = { sources: ['pbs'] };
+    pbs.metricsTarget = { resourceType: 'agent', resourceId: 'pbs-main' };
+    const host = {
+      ...pbs,
+      id: 'agent-pbs-1',
+      type: 'agent',
+      pbs: undefined,
+      agent: { agentId: 'agent-pbs-1', hostname: 'real-host' },
+      metricsTarget: { resourceType: 'agent', resourceId: 'agent-pbs-1' },
+    } as Resource;
+    const original = JSON.stringify([pbs, host]);
+    const [servers, setServers] = createSignal([pbs, host]);
+    render(() => <ProxmoxBackupServersTable servers={servers()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Expand details for pbs-main' }));
+    const detail = screen.getByTestId('pbs-resource-detail');
+    expect(detail).toHaveAttribute('data-metrics-resource-id', 'pbs-main');
+
+    setServers([{ ...pbs, pbs: { ...pbs.pbs!, linkedAgentId: 'agent-pbs-1' } }, host]);
+    await waitFor(() => expect(detail).toHaveAttribute('data-metrics-resource-id', 'agent-pbs-1'));
+    expect(JSON.stringify([pbs, host])).toBe(original);
+    setServers([pbs, host]);
+    await waitFor(() => expect(detail).toHaveAttribute('data-metrics-resource-id', 'pbs-main'));
+    expect(detail).not.toHaveAttribute('data-agent-id');
+    expect(JSON.stringify([pbs, host])).toBe(original);
+    expect(resourceDetailDrawerMount).toHaveBeenCalledTimes(1);
   });
 
   it.each(['agent', 'vm'] as const)(
