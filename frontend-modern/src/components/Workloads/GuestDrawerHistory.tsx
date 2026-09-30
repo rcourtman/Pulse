@@ -10,6 +10,9 @@ import {
 } from '@/api/charts';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { filterSelectClass } from '@/components/shared/FilterToolbar';
+import { Button } from '@/components/shared/Button';
+import { InlineNotice } from '@/components/shared/InlineNotice';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import {
   HISTORY_CHART_RANGES,
   formatHistoryChartTooltipValue,
@@ -447,7 +450,14 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
 
   const metrics = createMemo(() => historyQuery.value().metrics ?? {});
   const groups = createMemo(() => props.groups ?? GUEST_DRAWER_HISTORY_GROUPS);
-  const errorText = createMemo(() => (historyQuery.error() ? 'Failed to load history data' : ''));
+  const hasHistoryPoints = createMemo(() =>
+    groups().some((group) =>
+      group.series.some(
+        (series) =>
+          normalizeGuestDrawerHistoryPoints(metrics()[series.metric], series.unit).length > 0,
+      ),
+    ),
+  );
 
   return (
     <Show
@@ -464,14 +474,40 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
             </div>
           }
         >
-          <Show
-            when={!errorText()}
-            fallback={
-              <div class="rounded-sm border border-red-500/30 bg-red-500/10 p-5 text-sm text-red-300">
-                {errorText()}
-              </div>
-            }
-          >
+          <div class="flex flex-wrap items-start justify-end gap-3">
+            <div
+              class="min-w-0 flex-1"
+              role="status"
+              aria-label="History refresh status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              <Show when={historyQuery.error()}>
+                <InlineNotice tone={hasHistoryPoints() ? 'warning' : 'danger'}>
+                  {hasHistoryPoints()
+                    ? 'History refresh failed. Showing previously loaded history.'
+                    : 'Failed to load history data'}
+                </InlineNotice>
+              </Show>
+            </div>
+            <Button
+              size="sm"
+              class="min-h-11 shrink-0 aria-disabled:opacity-50 sm:min-h-8"
+              aria-busy={historyQuery.loading()}
+              aria-disabled={historyQuery.loading()}
+              onClick={() => {
+                // Keep the control focusable through a retry, but reject repeat
+                // activation until the current read settles.
+                if (!historyQuery.loading()) void historyQuery.refetch();
+              }}
+            >
+              <Show when={historyQuery.loading()}>
+                <LoadingSpinner size="sm" tone="current" class="mr-2" />
+              </Show>
+              {historyQuery.error() ? 'Retry history' : 'Refresh history'}
+            </Button>
+          </div>
+          <Show when={!historyQuery.error() || hasHistoryPoints()}>
             <div class={`grid gap-3 ${groups().length > 3 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}>
               <For each={groups()}>
                 {(group) => (

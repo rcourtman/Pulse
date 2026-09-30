@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import {
   createNonSuspendingQuery,
@@ -265,3 +265,49 @@ describe('createNonSuspendingQuery', () => {
     });
   });
 });
+
+it.each(['success', 'failure'] as const)(
+  'settles a foreground loading state when its latest background replacement ends in %s',
+  async (outcome) => {
+    vi.useFakeTimers();
+    let finishManual!: (value: string) => void;
+    const manual = new Promise<string>((resolve) => {
+      finishManual = resolve;
+    });
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce('first')
+      .mockReturnValueOnce(manual)
+      .mockImplementationOnce(() =>
+        outcome === 'success'
+          ? Promise.resolve('latest')
+          : Promise.reject(new Error('Unavailable')),
+      );
+    const Probe = () => {
+      const query = createNonSuspendingQuery({
+        source: () => 'pbs-host',
+        fetcher,
+        initialValue: '',
+        pollMs: 30_000,
+      });
+      return (
+        <>
+          <button onClick={() => void query.refetch()}>Refresh</button>
+          <output data-testid="query">{`${query.value()}|loading:${query.loading()}`}</output>
+        </>
+      );
+    };
+    render(() => <Probe />);
+    await vi.advanceTimersByTimeAsync(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(screen.getByTestId('query')).toHaveTextContent('first|loading:true');
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher.mock.calls[1][1].aborted).toBe(true);
+    const expected = outcome === 'success' ? 'latest|loading:false' : 'first|loading:false';
+    expect(screen.getByTestId('query')).toHaveTextContent(expected);
+    finishManual('obsolete');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByTestId('query')).toHaveTextContent(expected);
+  },
+);

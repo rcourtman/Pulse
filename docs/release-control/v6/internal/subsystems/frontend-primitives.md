@@ -320,6 +320,20 @@ renderer, cache readback and cancellation, not a mocked chart. The mock-backed
 PBS browser runner verifies delayed range and withdrawn-target reads at desktop
 and phone widths; neither proof establishes installed collection or #1723 relief.
 
+Failed same-source history refreshes keep valid previously loaded observations
+visible with an explicit warning, rather than hiding the entire chart. Initial
+or uncached replacement failures show unavailable history, never borrowed points
+or a collecting claim. The existing target/range owns every manual refresh;
+locked or absent targets expose no refresh control. The control remains mounted
+and focusable through retry and recovery, rejects activation while busy, and
+updates a pre-mounted polite status region without exposing transport diagnostics.
+The latest query read settles loading even when background polling supersedes
+a foreground refresh; late superseded results remain inert. Verification:
+`GuestDrawerHistory.refresh.test.tsx`, `createNonSuspendingQuery.test.tsx`, and
+`browser-tests/pbs-history-refresh.cjs` (direct production History renderer, scripted failures,
+keyboard retry, overlap, target withdrawal, phone/desktop and light/dark themes).
+These proofs establish presentation/recovery, not installed collection or delivery.
+
 Shared workload, node, Docker-host, and resource-drawer history presentation
 keeps current readings separate from stored samples. A current metric may
 populate the legend while history is still being collected, but it must never
