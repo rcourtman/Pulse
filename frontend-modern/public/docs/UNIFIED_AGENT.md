@@ -412,7 +412,7 @@ sudo chmod 0700 /usr/local/libexec/pulse-queue-depth
 | `--insecure` | `PULSE_INSECURE_SKIP_VERIFY` | Skip TLS verification | `false` |
 | `--allow-plaintext-http` | `PULSE_AGENT_ALLOW_PLAINTEXT_HTTP` | Allow plain HTTP to a Pulse server that does not look local (private IP, single-label, `.local`/`.lan`/`.home`/`.home.arpa`/`.internal`, or resolves to private addresses). Sends the API token in cleartext; only for networks you fully control, e.g. internal networks numbered from public IP space | `false` |
 | `--hostname` | `PULSE_HOSTNAME` | Override hostname | *(OS hostname)* |
-| `--agent-id` | `PULSE_AGENT_ID` | Unique agent identifier | *(machine-id)* |
+| `--agent-id` | `PULSE_AGENT_ID` | Unique agent identifier | *(saved ID, then machine ID)* |
 | `--report-ip` | `PULSE_REPORT_IP` | Override reported IP (multi-NIC) | *(auto)* |
 | `--disable-ceph` | `PULSE_DISABLE_CEPH` | Disable local Ceph status polling | `false` |
 | `--tag` | `PULSE_TAGS` | Apply tags (repeatable or CSV) | *(none)* |
@@ -834,20 +834,53 @@ file and re-run the installer to pick up the rotating configuration.
   identity evidence. The endpoint reports repair handoffs but does not run them.
 
 ### Duplicate Agents
-If cloned VMs appear as the same agent:
-```bash
-sudo rm /etc/machine-id && sudo systemd-machine-id-setup
-```
 
-Or set a unique agent ID:
-```bash
---agent-id my-unique-agent-id
-```
+Cloning an installed agent can copy its saved identity and credentials. Different
+hostnames, MAC addresses or IPs do not make those agents distinct in Pulse.
+Identity selection is:
 
-The displayed or reported IP is not the durable agent identity. Pulse normally
-uses the machine ID (or an explicit `--agent-id`), so cloned systems must have
-unique machine and agent IDs even when their hostnames, MAC addresses, and IPs
-differ.
+1. An explicit `--agent-id` argument (which overrides `PULSE_AGENT_ID`).
+2. `PULSE_AGENT_ID` when no explicit argument is supplied.
+3. The saved `agent-id` file, when no override is set.
+4. The machine-derived ID, with hostname as a fallback, when no saved ID exists.
+
+First compare the affected hosts in **Agent Doctor**. Inspect the identity file
+locally: the default Linux path is `/var/lib/pulse-agent/agent-id`; `--state-dir`
+changes that directory and `--agent-id-file` or `PULSE_AGENT_ID_FILE` can select
+another file. Do not upload `connection.env`, token files or whole service and
+environment dumps; older installations can contain credentials there.
+
+**Do not delete `/etc/machine-id`, agent state or Pulse history to repair a
+duplicate.** A saved agent ID survives an OS machine-ID change, and changing the
+OS identity affects more than Pulse. Prepare OS identities when provisioning a
+clone, using the distribution's instructions, not during live Pulse diagnosis.
+
+For a confirmed duplicate, keep the original host unchanged and choose one
+stable, unique override for the clone. Persist it in the configuration that
+actually starts that agent, rather than launching a second agent process:
+
+- **Systemd, without an existing `--agent-id` argument**: use
+  `sudo systemctl edit pulse-agent.service` and add the following drop-in,
+  replacing the example ID with the clone's unique ID:
+
+  ```ini
+  [Service]
+  Environment="PULSE_AGENT_ID=vm-clone-02"
+  ```
+
+  Then restart only that agent with `sudo systemctl restart pulse-agent.service`.
+  If its managed launch command already supplies `--agent-id`, change that
+  existing override instead: the argument wins over the environment variable.
+- **Docker Compose**: set `PULSE_AGENT_ID` for the clone's agent service, keeping
+  its existing volumes, collector options and token-file configuration. An
+  existing `--agent-id` in `command` takes precedence; update it instead if set.
+
+Keep the override across restarts and upgrades. After restart, verify that both
+hosts report fresh, distinct IDs in Agent Doctor and that each row's metrics
+belong to the correct host. Changing an ID does not split or recover historical
+data already combined under the old ID. If authentication or reporting fails,
+keep the bounded, redacted error for diagnosis; do not delete tokens, re-enrol
+blindly or remove the original host's record.
 
 ### Permission Denied (Docker)
 Ensure the agent can access the Docker socket:

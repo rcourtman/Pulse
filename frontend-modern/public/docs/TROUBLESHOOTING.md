@@ -155,11 +155,19 @@ repair an older generated unit rather than adding a JSON-parsing wrapper.
 - See [Temperature Monitoring](TEMPERATURE_MONITORING.md).
 
 #### Docker hosts appearing/disappearing
-- **Duplicate IDs**: Cloned VMs often share `/etc/machine-id`.
-- **Fix**: Run `rm /etc/machine-id && systemd-machine-id-setup` on the clone.
-- **Identity note**: The displayed IP is not the durable identity. Pulse uses
-  the machine ID or an explicit agent ID, so two clones with the same value can
-  collapse into one record even when their hostnames or IP addresses differ.
+
+Cloned hosts can share a **saved Pulse agent ID**, not just an OS machine ID.
+The agent uses an explicit ID first, then its saved `agent-id` file, and derives
+one from the machine only when neither is available. Changing a hostname, IP or
+`/etc/machine-id` therefore does not necessarily change its Pulse identity.
+
+Compare the affected hosts in **Agent Doctor** and inspect only their configured
+`agent-id` files locally. Do not delete the OS machine ID, agent state or Pulse
+history as a troubleshooting step. If a duplicate is confirmed, give only the
+clone a stable, unique ID in its managed service or container configuration;
+leave the original host unchanged. Follow
+[Clone identity recovery](UNIFIED_AGENT.md#duplicate-agents) for the configuration
+precedence, systemd example and checks after restart.
 
 ### Notifications
 

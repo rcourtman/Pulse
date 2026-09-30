@@ -152,6 +152,37 @@ describe('docsLinks', () => {
     expect(help).toContain('If installation never started Pulse');
   });
 
+  it('keeps clone identity recovery separate from destructive OS or credential resets', () => {
+    const troubleshooting = readFileSync(
+      path.join(repoRoot, 'docs', 'TROUBLESHOOTING.md'),
+      'utf8',
+    );
+    const agentGuide = readFileSync(
+      path.join(repoRoot, 'docs', 'UNIFIED_AGENT.md'),
+      'utf8',
+    );
+    const shortGuide = troubleshooting
+      .split('#### Docker hosts appearing/disappearing')[1]
+      .split('\n### ')[0];
+    const cloneGuide = agentGuide.split('### Duplicate Agents')[1].split('\n### ')[0];
+
+    expect(shortGuide).toContain('UNIFIED_AGENT.md#duplicate-agents');
+    for (const section of [shortGuide, cloneGuide]) {
+      expect(section).toContain('saved');
+      expect(section).toContain('Agent Doctor');
+      expect(section).toContain('original host unchanged');
+      expect(section).not.toContain('systemd-machine-id-setup');
+      expect(section).not.toMatch(/(?:sudo\s+)?rm\s+(?:-\S+\s+)*\/etc\/machine-id/);
+    }
+    expect(cloneGuide).toContain('argument wins over the environment variable');
+    expect(cloneGuide).toContain('PULSE_AGENT_ID_FILE');
+    expect(cloneGuide).toContain('Environment="PULSE_AGENT_ID=vm-clone-02"');
+    expect(cloneGuide).toContain('fresh, distinct IDs');
+    expect(cloneGuide).toContain('does not split or recover historical');
+    expect(cloneGuide).toContain('Do not upload `connection.env`, token files');
+    expect(cloneGuide).toContain('do not delete tokens, re-enrol');
+  });
+
   it('ships a bounded maintenance example separately from incident snoozing', () => {
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     const maintenance = apiReference
