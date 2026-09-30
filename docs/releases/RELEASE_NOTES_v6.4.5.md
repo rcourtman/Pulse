@@ -1,78 +1,81 @@
-# Pulse v6.4.5 Release Notes
+# Pulse v6.4.5
 
-`v6.4.5` is a stable patch release. It promotes the `v6.4.5-rc.5` release candidate and replaces stable `v6.4.1`.
+The first stable release since v6.4.1. It brings everyone the fixes that have been in the v6.4.5 previews over the past month: quieter and more accurate alerts, fewer disk writes, working updates and Windows agent installs, and better PBS, TrueNAS, vSphere and Docker support.
 
-This stable release brings the fixes from the v6.4.5 preview series to everyone on v6.4.1. It is promoted from `v6.4.5-rc.5` on the founder's decision, with one known PBS History issue listed below and fixed in the next patch.
+## Highlights
 
-## What's improved
+- **Far fewer false disk-wear alerts.** Endurance counters no longer raise false disk-wear warnings, disk I/O totals are no longer inflated, and a recovered or excluded disk stops re-alerting (#2112).
+- **Stable updates work again.** The updater reads the full release information and offers the right build, including on ARMv6 and ARMv7 (#2282).
+- **Windows agent installs and auto-updates work again.** Downloads no longer fail with HTTP 404 (#1820, #2125).
+- **Machines with the same name stay separate.** Hosts, Docker, Kubernetes and Proxmox systems that share a short name or token no longer get their alerts, metrics or actions mixed up (#1753, #1930).
+- **Less writing to SSD and flash storage.** Pulse no longer rewrites unchanged alert state on every cycle (#1966).
+- **Large alert histories no longer freeze Pulse.** They load gradually instead of blocking the server, and a slow start now shows its status with a retry button (#2129, #2146).
 
-- **Continuing symptoms are notified once** - Grouped child alerts no longer escape through duplicate escalation. A child that outlives its primary receives its first notification after the primary recovers (#2336).
+## Alerts and notifications
 
-- **Same-name systems stay separate** - Stronger host, Docker, Kubernetes and Proxmox identity checks keep alerts, metrics, actions and removal tied to the right machine even when short names or shared tokens repeat (#1753, #1930).
-- **Windows agent delivery is restored** - Unified Agent downloads resolve canonical signed `.exe` assets and their signature sidecars, so installation and auto-update no longer fail with HTTP 404 (#1820, #2125).
-- **Large Availability estates scan faster** - Estates with 20 or more checks open in fleet view, and the chosen table or fleet presentation stays stable across refreshes and shareable URLs.
-- **Slow starts are recoverable** - A delayed or stalled startup now shows connection status and a retry, and large alert histories catch up incrementally instead of blocking the server (#2129).
-- **Disk I/O totals are more accurate** - Partition accounting no longer inflates whole-device traffic, and endurance counters stop raising false disk-wear warnings (#2112).
-- **Duplicate disk rows are reduced** - Linked PVE and agent observations can safely correlate the same USB disk when one source lacks a stable ID, while conflicting and ambiguous devices remain separate (#2076).
-- **Backup alerts stay truthful** - A PBS host or config backup no longer raises a repeated guest backup-age alert, while a guest backed up locally and copied to a PBS is still counted once (#1741, #1721, #2136).
-- **PBS History keeps its identity** - Linked rows correlate only with proven identity, and datastores stay distinct across refreshes (#1723). Some API-plus-Agent PBS History layouts remain unresolved.
-- **PBS capacity follows policy** - Datastore capacity health uses the configured warning and critical thresholds instead of fixed percentages (#1448).
-- **Alert history reads stay bounded** - Repeated attention polls reuse the folded alert history instead of re-walking the whole event log, so a large history no longer starves metric writes or freezes an LXC (#2146).
-- **Alert thresholds lists stay complete** - The Alert Thresholds instance list keeps every host row visible while scrolling instead of dropping rows as the window estimate drifts (#2130).
-- **Alerts overview counts and layout align** - Overview statistics match the underlying incidents, and the alert-card footer Started run now shares the baseline of the delivery-status run (#2119).
-- **Alert checkpoint writes are bounded** - Byte-identical pending-intent checkpoints and oversized alert event-log snapshots are no longer rewritten on every cycle, reducing write volume on flash storage (#1966).
-- **Resolved alert bursts respect grouping** - Concurrent recoveries use the configured destination and grouping window across restarts instead of creating one delivery per alert and overwhelming the queue (#2160).
-- **Due notifications survive startup** - A persisted notification already due at startup is no longer processed before saved webhook, email and Apprise destinations are applied, so a grouped recovery is not cancelled as "delivery disabled" (#2160).
-- **Critical escalations are delivered** - When an active warning becomes critical, the higher severity can bypass only the same-occurrence cooldown and records its destination delivery in notification history (#1801).
-- **Escalations use current policy** - Escalation callbacks re-check the current rule, occurrence, acknowledgement and snooze state before admitting a delayed escalation, and an automatic acknowledgement survives a re-fire (#2173).
-- **The resource drawer keeps its tab** - Selecting a drawer tab no longer snaps back to Overview when a live data refresh briefly omits a field that gates that tab, such as a merged metrics target on the Proxmox Backups History view (#1723).
-- **Filesystem paths stay distinguishable** - Long mount paths use the full Filesystems-panel width and wrap above the usage bar instead of collapsing to identical prefixes (#2121).
-- **TrueNAS compatibility improves** - AMD temperature aggregates are rejected instead of inflated, CORE memory uses the legacy mapping, and idle sessions follow a bounded poll cadence (#2122, #2077, #1893).
-- **vSphere enrichment recovers** - VMware requests send the expected JSON type names, probe the current 8.0.3 release shape, and surface API fault detail instead of failing with HTTP 500 (#2070).
-- **Container update checks match the running image** - All local RepoDigests are treated as the current image, so PostgreSQL and other containers stop reporting a false update (#2110).
-- **Failed updates leave no stale state** - A failed staging attempt discards its configuration backup, and a completed update clears its trap so success is not reported as failure (#2127, #2128).
-- **FreeBSD and pfSense installs are safer** - The installer verifies agent checksums without GNU coreutils, and commands copied from the web interface preserve the line breaks required by Bash (#2123).
-- **Derived agent identity heals safely** - Re-enrolling a forked identity honours the removal block, and the event-log volume stays bounded through the heal (#2113, #1586).
-- **Host continuity survives upgrades** - v5 to v6 upgrade paths preserve live host state instead of losing continuity (#1913).
-- **AI Patrol prompts are cached** - The stable system prompt prefix is cached so repeated Patrol runs cost less (#2118).
-- **Saved Patrol objectives recover** - A saved Patrol objective whose in-memory observer was lost or rejected is reconciled from retained intent and rechecked at run admission instead of staying uncovered (#2147).
-- **Provider-hosted clients survive upgrades** - Client workspaces reconcile their own networks and health during provider MSP upgrades, avoiding stranded clients and interrupted renewal (#2247).
-- **Provider client networks stay separate** - An existing provider install does not reuse another tenant's Docker network when provisioning or cleaning up clients (#2226).
-- **Organization owners see available settings** - Owners can reach the settings routes their own organization is allowed to use (#2208).
-- **Hosted agent setup mints scoped tokens** - Agent installation tokens are created inside the selected client workspace rather than from another provider context (#2209).
-- **AI knowledge saves stay consistent** - Concurrent AI knowledge-store saves are serialized behind a single writer, so a rapid sequence of saves can no longer defeat the atomic temp-file rename or recreate files during cleanup.
-- **Proxmox LXC memory uses the linked agent** - A correlated online Pulse agent inside a Proxmox LXC supplies the container memory reading instead of the cache-inclusive cluster value when the agent total matches the provisioned limit (#2148).
-- **Ollama and security settings persist** - Ollama Basic Auth configuration, the configured-admin authorizer and security-setup preferences survive save and restart.
-- **Verify SSL choices stick** - A node's "Verify SSL Certificate" setting is preserved through agent re-registration and PVE instance consolidation, and an explicit PBS choice is no longer silently overwritten (#2140).
-- **Community-scripts update guidance is corrected** - The upgrade documentation warns that `/bin/update` is the community-scripts updater on some Proxmox helper-script containers and points those users at the signed, version-pinned installer flow (#2129).
-- **Metric samples stay consistent** - Replayed unified metric samples are dropped, and metrics store shutdown, rollups and upgrades are hardened.
+- A problem that continues after its parent recovers now gets its own notification, and grouped alerts no longer repeat (#2336).
+- Many alerts recovering at once are grouped into one notification instead of flooding your notification queue (#2160).
+- Notifications due at startup wait until your webhook, email and Apprise settings have loaded, so they are no longer dropped (#2160).
+- A warning that becomes critical is now delivered, escalations respect current acknowledgements and snoozes, and an automatic acknowledgement survives the alert firing again (#1801, #2173).
+- Removed or suppressed resources stop creating alerts (#2237).
+- The Alerts overview counts now match the incidents shown, alert-card footers line up, and the Alert Thresholds list keeps every host visible while scrolling (#2119, #2130).
 
-- **Stable updates become installable again** - Full release metadata is read, offers require the matching server archive, and ARMv6/ARMv7 installs select the correct server build (#2282).
-- **Older previews may need manual repair** - An install stuck on a broken self-update path may need a manual, version-pinned update instead of relying on that updater (#2282).
-- **Disk wearout warnings follow confirmed recovery** - Corrected PVE SMART warning handling avoids repeating a warning for a recovered or explicitly excluded disk (#2112). The reporter's same-disk email result still needs an installed retest.
-- **Retired resources stop generating incidents** - Operator-suppressed or removed resources no longer create the repeated alert activity observed in #2237, installation-level confirmation is pending.
-- **TrueNAS CORE charts retain CPU and memory data** - The legacy REST request shape and optional graph failures no longer suppress otherwise available host telemetry (#2077).
-- **Linked guests show physical disks** - VM and container storage views retain linked-agent filesystem, SMART and RAID details when that evidence exists (#2263).
-- **Queued notifications wait for destinations** - Startup dispatch waits until destination configuration is available, avoiding lost or misrouted recovery messages (#2160).
+## Disks and storage
+
+- The same USB disk seen by both Proxmox and the agent can now be shown once when one source lacks a stable ID, while ambiguous or conflicting disks stay separate (#2076).
+- VMs and containers show the physical disks, SMART and RAID details reported by their linked agent (#2263).
+- Long mount paths in the Filesystems panel are shown in full instead of being cut to identical prefixes (#2121).
+
+## Proxmox, PBS and backups
+
+- PBS host and config backups no longer trigger repeated guest backup-age alerts, and a guest backed up locally and copied to PBS is counted once (#1741, #1721, #2136).
+- PBS History keeps each host and datastore separate across refreshes (#1723).
+- PBS datastore health uses your warning and critical thresholds (#1448).
+- Proxmox LXC memory uses the reading from an online Pulse agent inside the container, which excludes the page cache, when the agent's total matches the container's limit (#2148).
+- The resource drawer stays on the tab you picked during live refreshes (#1723).
+- Your "Verify SSL Certificate" choice for a node or PBS is kept through agent re-registration and cluster changes (#2140).
+
+## TrueNAS, vSphere and Docker
+
+- TrueNAS: AMD temperatures are no longer inflated, TrueNAS CORE memory is read correctly, CPU and memory charts keep their data, and idle sessions poll less often (#2122, #2077, #1893).
+- vSphere: enrichment works again with vSphere 8.0.3 and shows the actual API error instead of HTTP 500 (#2070).
+- Docker: containers such as PostgreSQL no longer show a false "update available" (#2110).
+
+## Install, updates and agents
+
+- A failed update no longer leaves stale backups behind, and a successful one is no longer reported as failed (#2127, #2128).
+- FreeBSD and pfSense agent installs verify checksums without GNU tools, and the copied install command keeps its line breaks (#2123).
+- Agents that re-enroll with a changed identity heal cleanly without a burst of events, and a removed agent stays removed (#2113, #1586).
+- Upgrades from v5 keep your existing hosts (#1913).
+- The upgrade guide warns that on some Proxmox community-script containers `/bin/update` is the community-scripts updater, and shows the signed Pulse installer instead (#2129).
+- Previews stuck on the old broken self-updater may need one manual, version-pinned update (#2282).
+
+## Pulse Pro, AI and hosted
+
+- AI Patrol caches its system prompt, so repeated runs cost less (#2118), and a saved Patrol objective whose watcher was lost or rejected is restored instead of going unchecked (#2147).
+- AI knowledge saves no longer conflict when made quickly one after another.
+- Ollama Basic Auth, the configured-admin setting and security setup choices survive saving and restarting.
+- Provider (MSP) installs keep each client's networks separate and client workspaces healthy through upgrades, and agent install tokens are created in the right client workspace (#2247, #2226, #2209).
+- Organization owners can reach the settings their organization allows (#2208).
+
+## Other improvements
+
+- Availability views with 20 or more checks open in the fleet view, and your chosen table or fleet view stays put across refreshes and shared links.
+- The metrics store drops replayed samples and is more robust across shutdowns, rollups and upgrades.
 
 ## Known issues
 
-- PBS History for a replaced or re-identified PBS host can reappear. If a PBS host's identity changes, or it is briefly ambiguous and then omitted, the former host's History may be retained and shown again. Monitoring data is not lost. The fix is scheduled for v6.4.6 (#2343).
-- The corrected retired-resource alert path has not yet been confirmed on the affected installation (#2237).
-
-- Installed confirmation of the corrected PBS History identity on API-only nodes, agent-linked nodes, standalone PBS systems and multi-datastore systems remains outstanding.
-- Native pfSense GUI installation, service start and reboot confirmation remains outstanding.
-- Native confirmation of the mixed-source disk correlation remains outstanding.
-- Aggregate alert-engine write volume and old duplicate incidents reported in #1966 are reduced but not fully resolved. Monitor write activity on flash storage.
-- Some v5 to v6 deployment-specific upgrade problems remain unresolved (#1913).
-- TrueNAS CPU and memory graph acceptance on affected CORE appliances remains incomplete.
-- Notification-provider acceptance for the corrected escalation and recovery journeys remains incomplete. Notification delivery still depends on destination configuration and provider responses. Do not delete alert or queue files as a workaround.
+- **PBS History for a replaced PBS host can reappear.** If a PBS host's identity changes, its old History may show again. No monitoring data is lost. The fix is planned for v6.4.6 (#2343).
+- **The update screen can stay on "Downloading update… 10%".** The update still completes in the background. Refresh the page after a minute to see the new version. A fix is planned for v6.4.6.
+- Some PBS History layouts that combine the API and an agent are still not fully resolved (#1723).
+- Disk writes are much lower but not yet at their final level on busy installs. Keep an eye on write activity if you run on flash storage, and some older duplicate incidents may remain (#1966).
+- A small number of v5 to v6 upgrade problems remain for specific setups (#1913).
 
 ## Before you upgrade
 
-- This release carries every change from the `v6.4.2` packet, which was tagged but never published. If you run `v6.4.1`, read the `v6.4.2` notes for the administrator-boundary changes as well.
-- On an SSO-only deployment, map at least one trusted IdP group to the built-in `admin` role before upgrading so an intended administrator retains access.
-- Back up the complete Pulse data directory and configuration before upgrading, and keep the backup until health and data continuity are verified.
-- Windows Unified Agent binaries are not Authenticode-signed while SignPath remains unavailable and may show an Unknown Publisher warning. Verify downloads with the published checksums and detached signatures.
-- Pulse Mobile remains compatible. This release does not require a companion mobile release.
-- The rollback target is stable `v6.4.1`. On systemd and Proxmox LXC installs, use `sudo /bin/update --version v6.4.1` to return to the previous stable release. For Docker Compose, pin `rcourtman/pulse:6.4.1` and recreate the container.
+- Back up your Pulse data directory and configuration, and keep the backup until you have checked everything works.
+- This release includes the changes from v6.4.2, which was never published. If you use SSO only, map at least one trusted identity-provider group to the built-in `admin` role before upgrading so you keep admin access.
+- Windows Unified Agent binaries are not Authenticode-signed while SignPath remains unavailable, so Windows may show an Unknown Publisher warning. Verify downloads with the published checksums and detached signatures.
+- Pulse Mobile works with this release unchanged.
+- The rollback target is stable `v6.4.1`. On systemd and Proxmox LXC installs, use `sudo /bin/update --version v6.4.1`. For Docker Compose, pin `rcourtman/pulse:6.4.1` and recreate the container.
+
