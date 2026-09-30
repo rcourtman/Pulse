@@ -9,18 +9,65 @@ Pulse provides a comprehensive REST API for automation and integration.
 Most API requests require authentication via one of the following methods:
 
 ### API Token (Recommended)
-Pass the token in the `X-API-Token` header.
+
+Create an API token in Pulse's **API Access** settings with only the scopes
+needed for your task. The read-only example below requires `monitoring:read`.
+Pass the token in the `X-API-Token` header, using a private header file so the
+secret does not appear in shell history or process arguments.
+
+On the machine running curl, prepare the file and open it in an editor:
+
 ```bash
-curl -H "X-API-Token: your-token" http://localhost:7655/api/health
+umask 077
+mkdir -p "$HOME/.config/pulse"
+touch "$HOME/.config/pulse/api-header"
+chmod 600 "$HOME/.config/pulse/api-header"
+vi "$HOME/.config/pulse/api-header"
 ```
 
-### Bearer Token
+In the editor, save just this line, replacing `<token>` with the API token:
+
+```text
+X-API-Token: <token>
+```
+
+Then make a read-only request (curl 7.76 or later):
+
 ```bash
-curl -H "Authorization: Bearer your-token" http://localhost:7655/api/health
+curl --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  http://127.0.0.1:7655/api/state/summary
+```
+
+This loopback URL applies only when curl runs on the Pulse host. For remote
+access, use your Pulse HTTPS URL and keep certificate verification enabled;
+do not use `--insecure`. On an authentication-enabled instance, the protected
+summary checks token access; `/api/health` is public and does not verify authentication.
+`--fail-with-body` returns a non-zero exit on HTTP errors, including 401 and
+403, while retaining the error response.
+
+Do not paste tokens into command lines, URLs or issue reports. Keep the header
+file private and outside shared repositories and diagnostics; do not use curl
+verbose/trace output when sharing a result. Share only the relevant redacted
+error, not the whole infrastructure response. Revoke tokens that are no longer
+needed in Pulse's API Access settings.
+
+### Bearer Token
+
+The same API token can use a Bearer header instead. Replace the header file's
+line in the editor with the following, then use the same curl command above;
+do not send both authentication headers:
+
+```text
+Authorization: Bearer <token>
 ```
 
 ### Session Cookie
-Standard browser session cookie (used by the UI).
+
+For one-off read-only diagnostics, use your signed-in Pulse browser to open
+the API path on that same instance. Do not extract or paste its session cookie
+into a command or report; use the scoped token-file method above for automation.
+State-changing session requests also require Pulse's CSRF protection, which
+the UI handles.
 
 Session endpoints:
 - `POST /api/login` (sets `pulse_session` + `pulse_csrf`)
