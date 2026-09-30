@@ -111,7 +111,8 @@ run_audit() {
   return 0
 }
 
-# Classify one audit run. Prints a verdict word on stdout:
+# Classify one audit run. Prints a verdict word, summary and (for a finding)
+# allowlisted, JSON-escaped package/advisory details from that same response:
 #   clean          — audit completed, no vulnerabilities
 #   vulnerable     — audit completed, vulnerabilities present
 #   unreachable    — npm could not get an answer from the advisory endpoint
@@ -141,6 +142,42 @@ if isinstance(vulns, dict) and "total" in vulns:
     )
     print("vulnerable" if total else "clean")
     print(f"total={total} {detail}")
+    if total:
+        # Do not query npm again for human-readable detail. A second request
+        # can hang outside the watchdog or return different advisory evidence.
+        # JSON encoding keeps registry text from becoming terminal escapes or
+        # GitHub workflow commands; transport errors and unknown fields stay out.
+        findings = report.get("vulnerabilities")
+        emitted = False
+        if isinstance(findings, dict):
+            for name, finding in sorted(findings.items()):
+                if not isinstance(finding, dict):
+                    continue
+                projected = {"name": name}
+                for key in ("name", "severity", "isDirect", "range", "nodes"):
+                    if key in finding:
+                        projected[key] = finding[key]
+                via = finding.get("via")
+                if isinstance(via, list):
+                    projected["via"] = [
+                        {key: advisory[key] for key in
+                         ("source", "name", "dependency", "title", "url", "severity", "range")
+                         if key in advisory}
+                        if isinstance(advisory, dict) else advisory
+                        for advisory in via if isinstance(advisory, (dict, str))
+                    ]
+                fix = finding.get("fixAvailable")
+                if isinstance(fix, bool):
+                    projected["fixAvailable"] = fix
+                elif isinstance(fix, dict):
+                    projected["fixAvailable"] = {
+                        key: fix[key] for key in ("name", "version", "isSemVerMajor")
+                        if key in fix
+                    }
+                print("audit finding " + json.dumps(projected, ensure_ascii=True, sort_keys=True))
+                emitted = True
+        if not emitted:
+            print("npm audit: package-level detail unavailable in captured verdict")
     sys.exit(0)
 
 if isinstance(report, dict) and report.get("error"):
@@ -194,9 +231,9 @@ while [ "${attempt}" -le "${ATTEMPTS}" ]; do
     vulnerable)
       echo "npm audit (${SCOPE}): vulnerabilities present (${summary})"
       echo "::error::npm audit (${SCOPE}) found vulnerabilities: ${summary}"
-      # Re-run without --json so the log carries the human-readable advisory
-      # detail a maintainer needs to act on.
-      "${NPM_BIN}" audit "${AUDIT_ARGS[@]}" "${SCOPE_ARGS[@]}" || true
+      # Keep diagnostics bound to the conclusive response, with no extra
+      # registry request outside the attempt/total wall-clock limits.
+      printf '%s\n' "${verdict_output}" | tail -n +3
       exit 1
       ;;
     *)
