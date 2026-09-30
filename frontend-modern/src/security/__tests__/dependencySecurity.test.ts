@@ -54,10 +54,11 @@ const lockedVersions = (packageName: string): string[] =>
 
 const braceExpansionIsPatched = (version: string): boolean => {
   const [major] = parseVersion(version);
-  if (major === 1) return atLeast(version, [1, 1, 18]);
+  // GHSA-q2hr-2g5m-vwhr (quadratic {a},b} rewrite) is fixed in 1.1.21 and 5.0.12.
+  if (major === 1) return atLeast(version, [1, 1, 21]);
   if (major === 2) return atLeast(version, [2, 1, 4]);
   if (major === 3) return atLeast(version, [3, 0, 6]);
-  return major >= 5 && atLeast(version, [5, 0, 9]);
+  return major >= 5 && atLeast(version, [5, 0, 12]);
 };
 
 const nanoidIsPatched = (version: string): boolean => {
@@ -178,7 +179,8 @@ describe('frontend dependency security floors', () => {
     // downgrade is rejected. The 2026-09-23 refresh raises @types/node to
     // 26.6.2 in frontend-modern and tests/integration.
     const floors: Array<[string, [number, number, number]]> = [
-      ['dompurify', [3, 4, 15]],
+      // GHSA-p98j-92pf-mc4p (IN_PLACE afterSanitize hook XSS) affects 3.4.13-3.4.15.
+      ['dompurify', [3, 4, 16]],
       ['highlight.js', [11, 12, 0]],
       ['solid-js', [1, 9, 15]],
       ['@types/node', [26, 6, 2]],
