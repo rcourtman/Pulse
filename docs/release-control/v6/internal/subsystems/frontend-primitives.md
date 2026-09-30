@@ -20,6 +20,24 @@
 
 ## Purpose
 
+### Release-line PBS retention revocation — 30 September 2026
+
+PBS drawer host-target retention is bound to the unchanged identity evidence
+used by this line's existing selector, including the reported PBS node name.
+Changed or withdrawn evidence and a present ambiguous host snapshot revoke the
+remembered host; a subsequent omission cannot resurrect it. An unchanged, fresh
+identity still survives a transient omitted host row. Each keyed datastore row
+receives its own unwrapped resource snapshot, so Solid reconciliation cannot
+mutate the service target or a sibling row.
+
+This bounded adaptation of main `3df86570396a` repairs retention added after
+stable v6.4.1. It does not introduce main's backend `pbs.linkedAgentId` producer,
+change the line's direct correlation selector or establish installed #1723
+relief. Builder and open-drawer regressions in `ProxmoxBackupServersTable.test.ts`
+and `ProxmoxBackupServersTable.drawer.test.tsx`, plus desktop/phone production
+drawer verification in `browser-tests/pbs-retention-guard.cjs`, pin the boundary.
+
+
 ### Ollama credential editing
 The provider panel exposes the existing Basic Auth configuration. Saved passwords
 are represented by presence text, never a placeholder secret or input value.

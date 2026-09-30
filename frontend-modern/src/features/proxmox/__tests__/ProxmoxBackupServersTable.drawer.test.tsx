@@ -406,7 +406,6 @@ describe('ProxmoxBackupServersTable details', () => {
   });
 });
 
-
 describe('PBS retained host revocation in an open drawer', () => {
   const service = (): Resource => {
     const pbs = makePbsResource();
@@ -421,7 +420,9 @@ describe('PBS retained host revocation in an open drawer', () => {
     id,
     type: 'agent',
     name: 'pbs-machine',
+    displayName: 'pbs-machine',
     platformId: id,
+    platformType: 'proxmox-pbs',
     sourceType: 'agent',
     status: 'online',
     lastSeen: 1_700_000_000_000,
@@ -444,10 +445,14 @@ describe('PBS retained host revocation in an open drawer', () => {
         setServers([{ ...pbs, pbs: { ...pbs.pbs!, nodeName: 'replacement-machine' } }]);
       } else {
         setServers([pbs, host(), host('host-b')]);
-        await waitFor(() => expect(detail).toHaveAttribute('data-metrics-resource-id', 'pbs-service'));
+        await waitFor(() =>
+          expect(detail).toHaveAttribute('data-metrics-resource-id', 'pbs-service'),
+        );
         setServers([pbs]);
       }
-      await waitFor(() => expect(detail).toHaveAttribute('data-metrics-resource-id', 'pbs-service'));
+      await waitFor(() =>
+        expect(detail).toHaveAttribute('data-metrics-resource-id', 'pbs-service'),
+      );
       expect(detail).not.toHaveAttribute('data-agent-id');
       expect(screen.getByTestId('pbs-resource-detail')).toBe(detail);
       expect(resourceDetailDrawerMount.mock.calls.length).toBe(mounts);
