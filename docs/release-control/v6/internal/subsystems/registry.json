@@ -2778,6 +2778,7 @@
               "internal/alerts/incident_synthesis_test.go",
               "internal/alerts/intent_policy_test.go",
               "internal/alerts/operational_contract_test.go",
+              "internal/alerts/quiet_hours_test.go",
               "internal/alerts/reducer/ack_test.go",
               "internal/alerts/reducer/discrete_test.go",
               "internal/alerts/reducer/intent_test.go",

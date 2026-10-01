@@ -70,6 +70,25 @@ class TrueNASDocsTest(unittest.TestCase):
         self.assertIn("does not establish a live reading", text)
         self.assertIn("Do not upload a full browser network capture", text)
 
+    def test_core_graph_guidance_distinguishes_request_from_reply(self):
+        text = DOC.read_text().split("### Inventory works but CPU, memory or History is missing", 1)[1]
+        text = text.split("### Stale TrueNAS data", 1)[0]
+        for required in (
+            "signed-in **TrueNAS** browser session, not the Pulse page",
+            "In Firefox on macOS", "**WS**", "**Response** pane",
+            "Show **All** messages", "clear any message search for `reporting.get_data`",
+            'outgoing `"msg":"method"`', 'incoming `"msg":"result"`',
+            "**same `id` as that request**", "expand its `result` (or `error`)",
+            "`cputemp` is temperature, not CPU usage",
+            "response, not the\n   outgoing request's `params`",
+            "one `data`\n   row", "no matching incoming reply",
+            "Omit authentication messages, keys, cookies, private hostnames and addresses",
+            "Do not upload a full browser network capture or paste code into the browser",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, text)
+        self.assertNotIn("```", text)
+
     def test_preparation_protects_new_and_existing_payload(self):
         preparation, _ = commands()
         with tempfile.TemporaryDirectory() as temporary:
