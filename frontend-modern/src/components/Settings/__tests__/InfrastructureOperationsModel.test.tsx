@@ -287,7 +287,9 @@ describe('infrastructure operations model', () => {
     expect(infrastructureInstallerSectionSource).toContain(
       'Generate an install token first. Then copy the command for the target host and',
     );
-    expect(infrastructureInstallerSectionSource).toContain('follow its credential-entry instructions.');
+    expect(infrastructureInstallerSectionSource).toContain(
+      'follow its credential-entry instructions.',
+    );
     expect(infrastructureInstallerSectionSource).toContain(
       'commands keep it separate: copy the command first, then use Show token only.',
     );
