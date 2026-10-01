@@ -155,6 +155,7 @@ describe('systemSettings store', () => {
     for (const copy of [securityDoc, publicSecurityDoc]) {
       expect(copy).toContain('### Existing Mobile Pairings (Retirement)');
       expect(copy).toContain('Pulse Mobile and Relay retire on **31 March 2027**');
+      expect(copy).toContain('Existing paired phones keep\nworking until then');
       expect(copy).toContain('Relay is no longer sold');
       expect(copy).toContain('receive Pro features at their current price');
       expect(copy).toContain('Paired-app access remains license-gated until retirement');
