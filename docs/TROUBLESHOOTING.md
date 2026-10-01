@@ -250,32 +250,72 @@ A healthy heartbeat indicates Pulse monitoring-loop progress, not successful
 delivery of every resource alert or external reachability of your services.
 Continue checking delivery activity for destination failures.
 
+#### Test succeeds but real alerts are missing
+
+A test sends directly to its destination: it skips the persistent delivery queue
+and is not listed in **Recent delivery activity**. It does not prove that a real
+alert was generated, routed or delivered to the intended recipient.
+
+- Open **Alerts → Notifications**. If **Notifications are paused** is shown,
+  configured destinations and a successful test do not enable real delivery.
+  Turn delivery on there only when you intend to send alerts.
+- Check the affected alert, the destination's **Enabled** state, minimum alert
+  severity and tag filters. Review quiet hours and any mute, acknowledgement or
+  maintenance policy before treating an absent attempt as a transport failure.
+- Use **Recent delivery activity** to correlate the original alert, destination
+  and absolute timestamp, including held-notification reasons. An empty window
+  is not proof of healthy delivery; an **unavailable** read is not an empty log.
+  Do not create an outage or repeat a notification storm to populate it.
+
+#### Recover retained delivery failures
+
+Pulse shows a delivery warning for failed or dead-lettered notifications in its
+persistent queue, not for every recoverable retry. **Recent delivery activity**
+includes safely redacted provider errors; completed attempts remain for 7 days
+and dead-letter attempts for 30 days. Start with the failure class and timestamp:
+
+| Failure | Check before retrying |
+| --- | --- |
+| Authentication | Destination credentials and account permissions, locally; never post them. |
+| Rate limited | Provider limits and delivery volume; repeated tests or retries can make this worse. |
+| Connectivity | DNS, firewall, proxy and reachability from the Pulse server, not just your browser. |
+| TLS | Certificate trust, expiry and hostname matching; do not disable verification to diagnose it. |
+| Configuration / rejected | Enabled destination, required fields and the provider's endpoint or payload requirements. |
+| Server error / unknown | Destination service status and a relevant, bounded local error excerpt. |
+
+Save the corrected destination settings and send one test; check receipt at the
+intended destination. **Retry retained deliveries** gives terminal failures a
+fresh retry budget, but a destination that accepted an earlier attempt may
+receive a duplicate. Review the confirmation's delivery count and provider
+limits before retrying. A successful test does not itself retry retained items.
+
+Use **Dismiss retained failures** only when those deliveries should not be sent.
+Dismissal clears the warning without retrying them; delivery history remains.
+Neither action deletes the audit trail. Do not delete `notification_queue.db`
+or audit data to clear the warning.
+
 #### Emails not sending
-- Open **Alerts → Notifications** first. Pulse shows a delivery warning when
-  failed or dead-lettered notifications remain in the persistent queue; a
-  missing queue-health read is shown as unavailable rather than healthy.
-- **Recent delivery activity** appears directly below that warning. It names
-  the destination and affected alert, shows an absolute timestamp for timeline
-  correlation, and includes safely redacted provider errors. Completed attempts
-  remain for 7 days and dead-letter attempts remain for 30 days.
-- After correcting the destination, use **Retry retained deliveries**. Use
-  **Dismiss retained failures** only when those deliveries should not be sent.
-  Both actions preserve delivery history; do not delete `notification_queue.db`
-  to clear the warning.
-- Check SMTP settings in **Alerts → Notifications**.
-- Check logs: `docker logs pulse | grep email`.
-- Ensure your SMTP provider allows the connection (e.g., Gmail App Passwords).
+
+Follow [retained-failure recovery](#recover-retained-delivery-failures) first.
+Check SMTP host, port, sender, recipients, authentication and TLS settings in
+**Alerts → Notifications** against your provider's requirements (some providers
+require an app password). Keep passwords in the settings form, not a diagnostic
+command or report. If the delivery error is insufficient, inspect
+[bounded notification logs](#inspect-notification-logs) locally.
 
 #### Webhooks failing
-- Check the delivery warning in **Alerts → Notifications** and use **Send test**
-  after correcting the destination. Recoverable retries do not trigger the
-  warning; retained terminal failures do.
-- If the test succeeds, use **Retry retained deliveries** to give the retained
-  items a fresh retry budget. Dismiss them only when delivery is no longer
-  wanted; neither action deletes the audit trail.
-- Verify the URL is reachable from the Pulse server.
-- If targeting private IPs, allow them in **Settings → System → Network → Webhook Security**.
-- Check Pulse logs for HTTP status codes and response bodies.
+
+Follow [retained-failure recovery](#recover-retained-delivery-failures) first.
+Use the failure class and HTTP status to check the provider's endpoint and
+payload requirements. Verify reachability from the Pulse server. For an intended
+private destination, review **Settings → System → Network → Webhook Security**;
+do not broadly weaken network or TLS controls just to make a test pass.
+
+Prefer the redacted delivery error over raw provider response bodies. A provider
+can echo credentials or private content in its response; do not post it wholesale
+or enable debug logging just to collect it. If needed, inspect
+[bounded notification logs](#inspect-notification-logs) and share only the
+consequential, manually redacted error.
 
 ### TrueNAS
 
@@ -308,6 +348,40 @@ Continue checking delivery activity for destination failures.
 ---
 
 ## 🛠️ Advanced Diagnostics
+
+### Inspect Notification Logs
+
+Prefer **Recent delivery activity** in **Alerts → Notifications**. If a local log
+is needed, run only the command for your deployment, on the Pulse host with an
+account authorised to read its logs. For Proxmox LXC, run the systemd command
+inside the Pulse container, not on the Proxmox host. Adjust the time window to
+the original incident and substitute your actual service or container name
+(`pulse-backend` on some older systemd installs). These examples read at most
+200 records from the last 15 minutes; they do not follow the log or send a test.
+
+```bash
+# systemd / Proxmox LXC
+journalctl -u pulse --since '15 minutes ago' --lines 200 --no-pager
+```
+
+```bash
+# Docker
+docker logs --since 15m --tail 200 pulse
+```
+
+Docker can write application logs to either stdout or stderr; inspect both.
+Do not pipe the reader into `grep email`: it can miss SMTP or webhook errors
+and hide a failed read behind a matching partial line. A nonzero reader exit,
+access error or missing service/container is a failed read, not “no delivery
+errors”. Even a successful empty read is inconclusive: the window, retained
+logs or selected instance may differ.
+
+These local excerpts are **not sanitised**. Do not post them wholesale. Share
+only the relevant timestamp, method, HTTP status or SMTP error code and a
+manually redacted error. Remove credentials, cookies, secret URLs, addresses
+and private host or personal information, including anything echoed by the
+provider. Never upload full environments, configuration, a queue database or
+audit data. See [Getting Help](#-getting-help).
 
 ### Correlate Logs with Requests
 
