@@ -824,8 +824,10 @@ func TestDockerUpdateRestartRestoresActivePendingAge(t *testing.T) {
 					m.dockerUpdateFirstSeen[resourceID] = first
 					m.dockerUpdateFirstSeenByIdentity[trackingKey] = first
 					m.mu.Unlock()
+					var initialDeliveries atomic.Int32
+					m.SetAlertCallback(func(*Alert) { initialDeliveries.Add(1) })
 					m.CheckDockerHost(host)
-					if got := m.GetActiveAlerts(); len(got) != 1 || !got[0].StartTime.Equal(first) {
+					if got := m.GetActiveAlerts(); len(got) != 1 || !got[0].StartTime.Equal(first) || initialDeliveries.Load() != 1 {
 						t.Fatalf("initial pending update = %+v", got)
 					}
 					if acknowledged {
