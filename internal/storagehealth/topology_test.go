@@ -23,6 +23,58 @@ func TestAssessHostRAIDArrayDegraded(t *testing.T) {
 	}
 }
 
+func TestIssue2369CleanArrayWithSpare(t *testing.T) {
+	// The count tuple supplied in #2369, without the new field: servers must
+	// also correct the alert while an older collector is still installed.
+	got := AssessHostRAIDArray(models.HostRAIDArray{
+		Device: "/dev/md1", Level: "raid5", State: "clean",
+		TotalDevices: 5, ActiveDevices: 4, WorkingDevices: 5, SpareDevices: 1,
+	})
+	if got.Level != RiskHealthy || len(got.Reasons) != 0 {
+		t.Fatalf("healthy four-member array plus spare: level=%s reasons=%+v", got.Level, got.Reasons)
+	}
+}
+
+func TestRAIDRequiredMemberHealth(t *testing.T) {
+	tests := []struct {
+		name       string
+		array      models.HostRAIDArray
+		want       RiskLevel
+		degraded   bool
+		rebuilding bool
+	}{
+		{"mdadm healthy spare", models.HostRAIDArray{State: "clean", RequiredDevices: 4, TotalDevices: 5, ActiveDevices: 4, WorkingDevices: 5, SpareDevices: 1}, RiskHealthy, false, false},
+		{"legacy active healthy spare", models.HostRAIDArray{State: "active", TotalDevices: 5, ActiveDevices: 4, WorkingDevices: 5, SpareDevices: 1}, RiskHealthy, false, false},
+		{"legacy mdstat healthy spare", models.HostRAIDArray{State: "active", TotalDevices: 4, ActiveDevices: 4, WorkingDevices: 5, SpareDevices: 1}, RiskHealthy, false, false},
+		{"missing member not replaced by spare", models.HostRAIDArray{State: "clean", RequiredDevices: 4, TotalDevices: 4, ActiveDevices: 3, WorkingDevices: 4, SpareDevices: 1}, RiskCritical, true, false},
+		{"mdstat deficit without failed counter", models.HostRAIDArray{State: "active", RequiredDevices: 4, TotalDevices: 4, ActiveDevices: 3, WorkingDevices: 4, SpareDevices: 1}, RiskCritical, true, false},
+		{"legacy mdstat deficit", models.HostRAIDArray{State: "active, degraded", TotalDevices: 4, ActiveDevices: 3, WorkingDevices: 4, FailedDevices: 1, SpareDevices: 1}, RiskCritical, true, false},
+		{"legacy unreconciled count deficit", models.HostRAIDArray{State: "clean", TotalDevices: 4, ActiveDevices: 3, WorkingDevices: 3, SpareDevices: 1}, RiskCritical, true, false},
+		{"legacy negative total cannot corroborate spare", models.HostRAIDArray{State: "clean", TotalDevices: -1, ActiveDevices: 4, WorkingDevices: -1, SpareDevices: 1}, RiskHealthy, false, false},
+		{"legacy missing state is not healthy corroboration", models.HostRAIDArray{TotalDevices: 5, ActiveDevices: 4, WorkingDevices: 5, SpareDevices: 1}, RiskCritical, true, false},
+		{"failed member despite spare", models.HostRAIDArray{State: "clean", RequiredDevices: 4, TotalDevices: 6, ActiveDevices: 4, WorkingDevices: 5, FailedDevices: 1, SpareDevices: 1}, RiskCritical, true, false},
+		{"explicit degraded state wins", models.HostRAIDArray{State: "clean, degraded", RequiredDevices: 4, TotalDevices: 5, ActiveDevices: 4, WorkingDevices: 5, SpareDevices: 1}, RiskCritical, true, false},
+		{"zero active known members", models.HostRAIDArray{State: "active", RequiredDevices: 4, TotalDevices: 1, WorkingDevices: 1, SpareDevices: 1}, RiskCritical, true, false},
+		{"legacy unknown active count", models.HostRAIDArray{State: "active", TotalDevices: 4}, RiskHealthy, false, false},
+		{"healthy spare under scrub", models.HostRAIDArray{State: "clean", RequiredDevices: 4, TotalDevices: 5, ActiveDevices: 4, SpareDevices: 1, Operation: "check", RebuildPercent: 25}, RiskHealthy, false, false},
+		{"healthy spare under resync", models.HostRAIDArray{State: "active", RequiredDevices: 4, TotalDevices: 5, ActiveDevices: 4, SpareDevices: 1, Operation: "resync", RebuildPercent: 25}, RiskHealthy, false, false},
+		{"spare under recovery stays warning", models.HostRAIDArray{State: "active", RequiredDevices: 4, TotalDevices: 5, ActiveDevices: 4, SpareDevices: 1, Operation: "recovery", RebuildPercent: 25}, RiskWarning, false, true},
+		{"spare under reshape stays warning", models.HostRAIDArray{State: "active", RequiredDevices: 4, TotalDevices: 5, ActiveDevices: 4, SpareDevices: 1, Operation: "reshape", RebuildPercent: 25}, RiskWarning, false, true},
+		{"degraded recovery stays critical", models.HostRAIDArray{State: "active", RequiredDevices: 4, TotalDevices: 4, ActiveDevices: 3, SpareDevices: 1, Operation: "recovery", RebuildPercent: 25}, RiskCritical, true, true},
+		{"scrub cannot mask deficit", models.HostRAIDArray{State: "active", RequiredDevices: 4, TotalDevices: 4, ActiveDevices: 3, SpareDevices: 1, Operation: "check", RebuildPercent: 25}, RiskCritical, true, false},
+		{"offline array stays critical", models.HostRAIDArray{State: "offline", RequiredDevices: 4, TotalDevices: 5, ActiveDevices: 4, SpareDevices: 1}, RiskCritical, false, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.array.Device = "/dev/md1"
+			got := AssessHostRAIDArray(tc.array)
+			if got.Level != tc.want || hasReasonCode(got, "raid_degraded") != tc.degraded || hasReasonCode(got, "raid_rebuilding") != tc.rebuilding {
+				t.Fatalf("assessment=%+v, want level=%s degraded=%v rebuilding=%v", got, tc.want, tc.degraded, tc.rebuilding)
+			}
+		})
+	}
+}
+
 func TestAssessHostRAIDArrayRebuilding(t *testing.T) {
 	assessment := AssessHostRAIDArray(models.HostRAIDArray{
 		Device:         "/dev/md3",

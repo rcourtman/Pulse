@@ -21,6 +21,19 @@
 
 ## Purpose
 
+### RAID required-member count evidence — issue #2369
+
+Canonical host RAID metadata carries optional `requiredDevices`, excluding
+spares, separately from source-native attached/bitmap totals. Array protection
+risk follows the shared required-member assessment rather than assuming that
+every attached spare is a missing active member. Missing configured members,
+failed devices and explicit degraded state remain critical; maintenance and
+spare presence cannot erase those risks. A healthy spare is not recovery proof,
+backup coverage or storage mutation authority. Collector, ingestion and
+canonical event-ledger tests distinguish that correction from genuine member
+recovery, which resolves the existing health incident only after the reported
+active set again meets its requirement.
+
 ### Release-line PBS retention revocation — 30 September 2026
 
 PBS drawer host-target retention is bound to the unchanged identity evidence

@@ -15,6 +15,18 @@
 
 ## Purpose
 
+### Canonical RAID configured-member evidence — issue #2369
+
+Host RAID metadata and read views retain optional `requiredDevices` (configured
+members excluding spares) without rewriting source-native `totalDevices`.
+Clones preserve both values and isolate caller mutation. The shared storage
+health assessment owns per-array risk and aggregate protection posture: a full
+member set with a hot spare must not become critical, while a configured member
+deficit remains critical even if active plus spares equals the attached count.
+Adapter, clone and monitoring readback tests pin these boundaries. Count
+evidence does not establish backup coverage, native array recovery or any
+storage mutation authority; the field adds no resource or action identity.
+
 ### Release-line PBS retention revocation — 30 September 2026
 
 PBS drawer host-target retention is bound to the unchanged identity evidence

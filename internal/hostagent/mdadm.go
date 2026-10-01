@@ -213,6 +213,7 @@ func parseMDStatArraySection(deviceName string, section []string) agentshost.RAI
 			total, _ := strconv.Atoi(matches[1])
 			active, _ := strconv.Atoi(matches[2])
 			array.TotalDevices = total
+			array.RequiredDevices = total
 			array.ActiveDevices = active
 		}
 
@@ -246,7 +247,7 @@ func parseMDStatArraySection(deviceName string, section []string) agentshost.RAI
 			workingDevices++
 		}
 	}
-	if array.ActiveDevices == 0 {
+	if array.ActiveDevices == 0 && array.RequiredDevices == 0 {
 		array.ActiveDevices = workingDevices - spareDevices
 	}
 	if array.TotalDevices == 0 {
@@ -257,6 +258,7 @@ func parseMDStatArraySection(deviceName string, section []string) agentshost.RAI
 		// as [24/2] [UU______________________], while their active members use
 		// roles 24 and 25. Those unused bitmap positions are not failed disks.
 		array.TotalDevices = array.ActiveDevices
+		array.RequiredDevices = array.ActiveDevices
 	}
 	if array.TotalDevices > array.ActiveDevices && !strings.Contains(array.State, "degraded") {
 		array.State = appendMDStatState(array.State, "degraded")
@@ -344,6 +346,10 @@ func appendMDStatState(state, suffix string) string {
 }
 
 func mergeMDStatFallback(array, fallback agentshost.RAIDArray) agentshost.RAIDArray {
+	// A detail report with a configured requirement can legitimately have no
+	// active members. Do not turn that observed zero into kernel-fallback
+	// members from a different probe in the same collection cycle.
+	detailRequirementKnown := array.RequiredDevices > 0
 	if strings.TrimSpace(array.Device) == "" {
 		array.Device = fallback.Device
 	}
@@ -353,10 +359,13 @@ func mergeMDStatFallback(array, fallback agentshost.RAIDArray) agentshost.RAIDAr
 	if strings.TrimSpace(array.State) == "" {
 		array.State = fallback.State
 	}
+	if array.RequiredDevices == 0 {
+		array.RequiredDevices = fallback.RequiredDevices
+	}
 	if array.TotalDevices == 0 {
 		array.TotalDevices = fallback.TotalDevices
 	}
-	if array.ActiveDevices == 0 {
+	if array.ActiveDevices == 0 && !detailRequirementKnown {
 		array.ActiveDevices = fallback.ActiveDevices
 	}
 	if array.WorkingDevices == 0 {
@@ -482,6 +491,12 @@ func parseMdadmDetail(device, output string) (agentshost.RAIDArray, error) {
 				array.Level = strings.ToLower(value)
 			case "State":
 				array.State = strings.ToLower(value)
+			case "Raid Devices":
+				requiredDevices, err := parseIntField(device, key, value)
+				if err != nil {
+					return host.RAIDArray{}, err
+				}
+				array.RequiredDevices = requiredDevices
 			case "Total Devices":
 				totalDevices, err := parseIntField(device, key, value)
 				if err != nil {
@@ -549,6 +564,9 @@ func parseIntField(device, key, value string) (int, error) {
 	n, err := strconv.Atoi(strings.TrimSpace(value))
 	if err != nil {
 		return 0, fmt.Errorf("parse %s for %s from %q: %w", key, device, value, err)
+	}
+	if n < 0 {
+		return 0, fmt.Errorf("parse %s for %s: device count must not be negative", key, device)
 	}
 	return n, nil
 }

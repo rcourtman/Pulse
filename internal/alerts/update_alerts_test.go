@@ -1,9 +1,12 @@
 package alerts
 
 import (
+	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -791,5 +794,141 @@ func TestDockerUpdateTrackingContainerKeyFallbackOrder(t *testing.T) {
 				t.Fatalf("expected container key %q, got %q", tt.want, got)
 			}
 		})
+	}
+}
+
+// Positive cached reports after restart must refresh the persisted occurrence,
+// not silently spend another entire delay window below threshold. Exercise the
+// public host checker, both checkpoints, real housekeeping and lifecycle events.
+func TestDockerUpdateRestartRestoresActivePendingAge(t *testing.T) {
+	for _, durable := range []bool{false, true} {
+		for _, delay := range []int{24, 48} {
+			for _, acknowledged := range []bool{false, true} {
+				t.Run(fmt.Sprintf("durable=%t/delay=%d/ack=%t", durable, delay, acknowledged), func(t *testing.T) {
+					dir := t.TempDir()
+					m := newCleanupRetentionManager(t, dir, durable)
+					m.mu.Lock()
+					m.config.DockerDefaults.UpdateAlertDelayHours = delay
+					m.mu.Unlock()
+					pending := &models.DockerContainerUpdateStatus{
+						UpdateAvailable: true, CurrentDigest: "sha256:old", LatestDigest: "sha256:new",
+						LastChecked: time.Now().Add(-6 * time.Hour),
+					}
+					container := models.DockerContainer{ID: "container", Name: "web", Image: "mongo:7", State: "running", UpdateStatus: pending}
+					host := models.DockerHost{ID: "host", AgentID: "agent", Hostname: "host", Containers: []models.DockerContainer{container}}
+					resourceID := DockerResourceID(host.ID, container.ID)
+					canonicalID := buildCanonicalStateID(resourceID, resourceID+"-image-update")
+					trackingKey := dockerUpdateTrackingKey(host, container)
+					first := time.Now().Add(-time.Duration(delay+2) * time.Hour)
+					m.mu.Lock()
+					m.dockerUpdateFirstSeen[resourceID] = first
+					m.dockerUpdateFirstSeenByIdentity[trackingKey] = first
+					m.mu.Unlock()
+					var initialDeliveries atomic.Int32
+					m.SetAlertCallback(func(*Alert) { initialDeliveries.Add(1) })
+					m.CheckDockerHost(host)
+					if got := m.GetActiveAlerts(); len(got) != 1 || !got[0].StartTime.Equal(first) || initialDeliveries.Load() != 1 {
+						t.Fatalf("initial pending update = %+v", got)
+					}
+					if acknowledged {
+						if err := m.AcknowledgeAlert(canonicalID, "operator"); err != nil {
+							t.Fatal(err)
+						}
+					}
+					// Model a saved occurrence awaiting its first report after a long
+					// restart. Do not sleep for a day or change cleanup thresholds.
+					m.mu.Lock()
+					active, _ := m.getActiveAlertNoLock(canonicalID)
+					aged := active.Clone()
+					aged.LastSeen = time.Now().Add(-25 * time.Hour)
+					stored := m.setActiveAlertNoLock(canonicalID, aged)
+					m.mu.Unlock()
+					if !stored {
+						t.Fatal("could not checkpoint the aged occurrence")
+					}
+					m.Stop()
+
+					restarted := newCleanupRetentionManager(t, dir, durable)
+					restarted.mu.Lock()
+					restarted.config.DockerDefaults.UpdateAlertDelayHours = delay
+					restarted.mu.Unlock()
+					loaded := restarted.GetActiveAlerts()
+					if len(loaded) != 1 || !loaded[0].StartTime.Equal(first) || !loaded[0].LastSeen.Equal(aged.LastSeen) {
+						t.Fatalf("checkpoint did not restore the aged occurrence: %+v", loaded)
+					}
+					var firings, resolutions, deliveries atomic.Int32
+					restarted.SetAlertCallback(func(*Alert) { deliveries.Add(1) })
+					restarted.SubscribeLifecycleCallback(func(event LifecycleEvent) {
+						switch event.Type {
+						case eventlog.TypeFired, eventlog.TypeRefired:
+							firings.Add(1)
+						case eventlog.TypeResolved:
+							resolutions.Add(1)
+						}
+					})
+					observedAfter := time.Now()
+					for _, status := range []*models.DockerContainerUpdateStatus{pending, nil, {Error: "registry unavailable"}, pending} {
+						host.Containers[0].UpdateStatus = status
+						restarted.CheckDockerHost(host)
+						restarted.cleanupStaleMaps()      // Hourly tracking and stale-alert cleanup.
+						restarted.Cleanup(24 * time.Hour) // Escalation's retention sweep.
+						got := restarted.GetActiveAlerts()
+						if len(got) != 1 || got[0].ID != loaded[0].ID || !got[0].StartTime.Equal(first) || got[0].LastSeen.Before(observedAfter) || got[0].Acknowledged != acknowledged || got[0].AckUser != loaded[0].AckUser {
+							t.Fatalf("restart/report/housekeeping lost continuing occurrence: %+v; firings=%d resolutions=%d", got, firings.Load(), resolutions.Load())
+						}
+						if got[0].LastNotified == nil || loaded[0].LastNotified == nil || !got[0].LastNotified.Equal(*loaded[0].LastNotified) {
+							t.Fatal("continuing report changed notification identity")
+						}
+						restarted.mu.RLock()
+						resourceAge := restarted.dockerUpdateFirstSeen[resourceID]
+						identityAge := restarted.dockerUpdateFirstSeenByIdentity[trackingKey]
+						restarted.mu.RUnlock()
+						if !resourceAge.Equal(first) || !identityAge.Equal(first) {
+							t.Fatalf("restored pending age = %s/%s, want %s", resourceAge, identityAge, first)
+						}
+					}
+					if firings.Load() != 0 || resolutions.Load() != 0 || deliveries.Load() != 0 {
+						t.Fatalf("continuation invented transitions/delivery: %d/%d/%d", firings.Load(), resolutions.Load(), deliveries.Load())
+					}
+					if got := len(restarted.GetAlertHistory(0)); got != 1 {
+						t.Fatalf("continuation created %d history occurrences, want one", got)
+					}
+					if durable {
+						events := queryAlertEvents(t, restarted, eventlog.Filter{Types: []string{eventlog.TypeFired, eventlog.TypeRefired, eventlog.TypeResolved}})
+						if len(events) != 1 || events[0].Type != eventlog.TypeFired {
+							t.Fatalf("restart/cleanup invented durable lifecycle events: %+v", events)
+						}
+					}
+
+					// A different host with the same container ID cannot inherit age.
+					otherHost := host
+					otherHost.ID, otherHost.AgentID, otherHost.Hostname = "other-host", "other-agent", "other-host"
+					restarted.CheckDockerHost(otherHost)
+					if got := restarted.GetActiveAlerts(); len(got) != 1 {
+						t.Fatalf("other host inherited an old occurrence: %+v", got)
+					}
+
+					// Explicit recovery retires age; another pending update must wait
+					// its normal delay rather than reuse the resolved occurrence.
+					host.Containers[0].UpdateStatus = &models.DockerContainerUpdateStatus{LastChecked: time.Now()}
+					restarted.CheckDockerHost(host)
+					if len(restarted.GetActiveAlerts()) != 0 || resolutions.Load() != 1 {
+						t.Fatal("affirmative recovery did not resolve exactly once")
+					}
+					host.Containers[0].UpdateStatus = pending
+					restarted.CheckDockerHost(host)
+					if len(restarted.GetActiveAlerts()) != 0 || firings.Load() != 0 || deliveries.Load() != 0 {
+						t.Fatal("new update skipped its delay or reused a resolved occurrence")
+					}
+					restarted.mu.RLock()
+					newFirst := restarted.dockerUpdateFirstSeenByIdentity[trackingKey]
+					restarted.mu.RUnlock()
+					if newFirst.Before(observedAfter) {
+						t.Fatalf("new update inherited old pending age: %s", newFirst)
+					}
+					t.Log("positive/unknown/error reports, both cleanup paths, isolated host and affirmative recovery preserved restart lifecycle")
+				})
+			}
+		}
 	}
 }

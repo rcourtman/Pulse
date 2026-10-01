@@ -15,6 +15,23 @@
 
 ## Purpose
 
+### MD RAID required members and spares — issue #2369
+
+Host RAID reports carry optional `requiredDevices`: the configured member count
+from mdadm's `Raid Devices` or mdstat's required/active bitmap, excluding spares.
+Zero/omission means unknown. `totalDevices` retains its existing source-native
+meaning: attached devices including spares for mdadm, bitmap width for mdstat.
+The existing QNAP sparse-role normalization applies to both bitmap counts.
+Invalid or negative detail counts fall back to the kernel report, and missing
+detail requirements may be enriched from that report. This is read-only
+collection, not permission to change array membership or perform recovery.
+Collector-to-wire/health/alert tests cover healthy spares, missing and failed
+members, mdstat-only and malformed-detail fallback, and maintenance/recovery.
+Report serialization and `buildReport` must preserve both counts independently.
+An explicit zero active count under a known requirement is retained; neither
+device-token inference nor a different kernel fallback probe may fill it in.
+The collector/report controls exercise both zero-active boundaries.
+
 ### Command-channel registration frame ordering
 
 The server reserves each new session's write lock while still holding the
