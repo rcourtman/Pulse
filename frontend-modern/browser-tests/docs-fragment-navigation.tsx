@@ -16,6 +16,7 @@ const scenario = new URLSearchParams(window.location.search).get('scenario') ?? 
 
 const targets: Record<string, string> = {
   plain: '/docs/API',
+  plans: '/docs/PULSE_PRO',
   direct: '/docs/API#resource-maintenance-and-operator-state',
   reload: '/docs/API#resource-maintenance-and-operator-state',
   malformed: '/docs/API#%invalid',

@@ -4579,6 +4579,25 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Credential-safe container diagnostics response (1 October 2026)
+
+`POST /api/diagnostics/docker/prepare-token` retains its fields and durable,
+tenant-bound monitoring-token issuance. Only the separate `token` field may
+contain the credential; `installCommand` is now a credential-free single line
+with complete download, installer preflight, then root/sudo private terminal
+input and token-file handoff. The response is `Cache-Control: no-store`.
+`systemdServiceSnippet` is a default-Linux reference to the installer's private
+state file, with no raw token in environment or process arguments. It explicitly
+instructs callers to use `installCommand` for the complete service and retain
+installer-generated units for custom state/privilege profiles. Unit URL data is
+quoted with literal percent specifiers; structural control characters fail
+before token issuance. Existing module flags/scopes, optional-token omission,
+normalised target and plain-HTTP policy are unchanged. No new endpoint,
+credential authority, execution scope or trust exception is introduced.
+`agent_install_command_shared_test.go`, `contract_test.go`,
+`router_low_coverage_additional_test.go` and `security_regression_test.go` pin
+the response, hosted-origin boundary, persisted scope and safe unit grammar.
+
 ### Credential-safe Proxmox bootstrap (1 October 2026)
 
 The current Proxmox setup artifact supersedes the former token-bearing command/download contract: `command`, `commandWithEnv` and `commandWithoutEnv` are identical credential-free, single-line transports. `downloadURL` equals the tokenless `url`; downloads embed no setup token. `setupToken` (or agent-install `token`) is returned separately through the authenticated issuance response for an explicit reveal, never interpolated by the consumer. Settings uses the existing token-reveal dialog and tells users to run the command before pasting at its silent terminal prompt. Setup cache remains bound to endpoint/mode/live five-minute expiry and is discarded on modal close. The rendered scripts accept a bounded private `PULSE_SETUP_TOKEN_FILE` before mutation, unexport the secret, and put registration credentials in stdin, not process arguments. Legacy explicit query-token downloads remain accepted for compatibility, but no current artifact generates those URLs. Failed attempted registration returns nonzero and never echoes the response body. Runtime and root-installer consumers validate either the complete new artifact or the coherent old-server artifact; mixed transports fail closed.
@@ -4746,6 +4765,17 @@ ignores them without a validation error and never writes them back into
 `system.json`. `TestSystemSettingsUpdate_LegacyAutoUpdateFieldsIgnored` in
 `internal/api/system_settings_telemetry_test.go` and the response snapshot in
 `internal/api/contract_test.go` pin that payload shape.
+
+### Telemetry preference saves preserve the sender lifecycle
+
+The telemetry preference callback runs only after durable persistence of an
+explicit boolean that changes the effective runtime value. Resubmitting that
+value still saves it, including correction of a stale disk preference, without
+restarting or stopping the sender. Null and omitted preferences preserve the
+runtime value and the stored preference; failed saves never invoke the toggle.
+`TestTelemetryUpdate_OnlyPreferenceTransitionsToggle` pins ordering and both
+transitions; the stale-disk/null and persistence-failure tests pin those edges.
+The settings payload and administration/tenant authority are unchanged.
 
 ### System settings save clears the temperature SSH failure backoff
 
@@ -10996,19 +11026,37 @@ status-only or unrelated test for the setup contract. The registry routes only `
 setup proof policy; unrelated API runtime paths retain their existing verification
 requirements. No runtime paths or required contract updates are exempted.
 
-### Single-line Unix client install transport
+### Single-line private Unix client install transport
 
-`frontend-modern/src/utils/agentInstallCommand.ts` emits a single-line Unix
-bootstrap with explicit shell separators so text-input paste normalization
-cannot join shell statements (#2123). It retains the canonical URL, quoted
-credential-to-private-file transport, custom CA/insecure continuity, and
-preflight-before-install ordering; no API request, response or auth scope changes.
-Normalized values containing CR/LF are rejected, not rewritten. Regression
-coverage in `agentInstallCommand.test.ts` checks shell syntax after
-text-input normalization, literal quoted token bytes, root/sudo private-file
-permissions, cleanup and early exit when download or preflight fails. This
-client transport repair does not establish the reporter's native pfSense abort
-cause or successful offline installation.
+`frontend-modern/src/utils/agentInstallCommand.ts` retains explicit single-line
+shell grammar for paste hosts (#2123), canonical URLs, custom CA/insecure
+continuity and complete-download-before-execution. Token values select private
+entry only and never become shell source, argv or environment. The privileged
+Bash child uses the bounded Core bootstrap reader; 4096-character input is
+preserved, overflow is drained before returning to the caller, and terminal
+modes and temporary 0700/0600 files are restored/removed on exit. Download and
+unprivileged preflight precede credential entry and installation; sudo
+validation precedes the download so authentication cannot consume token input.
+
+A no-terminal command can use an absolute local `tokenFilePath`. It requires a
+privileged-user-owned regular non-symlink 0600 file in an owned non-symlink 0700
+parent, passes only its path, and leaves this operator-owned file untouched.
+The existing installer's bounded trusted token reader still validates content
+and ancestor trust. The FreeBSD card explains this existing private-file route
+and does not put credentials in GUI command fields. It does not claim a GUI can
+create private files or establish native appliance installation.
+
+Unix install, credential replacement, upgrade and uninstall use the shared
+transport. Explicit replacement/uninstall retain canonical agent ID and host;
+ordinary updates recover their existing credential/identity from installer
+state without a new prompt. Uninstall skips new-binary preflight so detachment
+is not blocked by availability of an unrelated replacement binary. Server
+minting, scope, TLS choice, execution opt-in and response shapes are unchanged.
+Windows command transport is unchanged and remains separate unfinished work.
+`agentInstallCommand.test.ts` exercises actual shells, PTYs, private-file
+boundaries and failures; `infrastructureAgentDoctorModel.test.ts` exercises the
+real lifecycle closures. These are modelled installer/privilege probes, not
+native system installation or publication.
 
 ### Pulse Mobile pairing readiness wording
 

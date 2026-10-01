@@ -810,6 +810,30 @@ inspectability, or convert missing/stale evidence into health.
 
 ## Current State
 
+### Active Docker update pending age survives restart
+
+A positive Docker image-update report reuses the matching active occurrence's
+`StartTime` as its pending-age authority. Resource and stable-identity timer maps
+are process-local; restoring the active alert must not impose another 24/48-hour
+delay during which positive reports fail to refresh `LastSeen`. Both cleanup
+paths must retain the observed occurrence, acknowledgement and notification
+identity without manufacturing recovery, refiring or duplicate delivery.
+Only the same resource's active `docker-container-update` occurrence supplies
+age. Another host/container and a resolved occurrence cannot lend their timers;
+affirmative recovery still retires tracking and a new update waits its normal
+delay. Absent/failed checks remain unknown, not recovery. An unactivated pending
+timer remains process-local; this does not infer an update's first detection
+from its cached registry-check timestamp.
+
+`TestDockerUpdateRestartRestoresActivePendingAge` in `update_alerts_test.go`
+exercises the public host checker, real JSON/durable checkpoint and restart,
+24/48-hour delays, acknowledged/unacknowledged incidents, stale saved observation,
+cached positive/absent/error reports, hourly and retention cleanup, lifecycle and
+delivery callbacks, isolated hosts and affirmative recovery/new-delay controls.
+The saved observation is aged deliberately; this is deterministic source-level
+restart/housekeeping proof, not a naturally elapsed day, live registry or
+destination result, or reporter confirmation of #2353's full daily cycle.
+
 ### Continuing unacknowledged alerts survive age-based cleanup
 
 `MaxAlertAgeDays` removes an unacknowledged alert only when both its occurrence

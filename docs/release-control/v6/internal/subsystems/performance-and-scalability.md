@@ -15,6 +15,42 @@
 
 ## Purpose
 
+### Bounded confidence/priority work in broadcast grouping — issue #2199
+
+The general identity matcher retains every confidence, reason, ordering and
+review flag. Top-level grouping requests only its existing high-confidence
+floor (0.90), so hostname-only and IP-only peer sets are not built when no
+eligible composite signal exists. High-confidence results are identical to
+filtering the full general matcher; machine ID, UUID and hostname+MAC still
+keep their existing precedence. Host/IP fallback still requires exactly one
+strictly better-priority owner. Equal/worse-priority peers are discarded before
+allocating/sorting fallback candidates, and a best-priority group has no possible
+attachment target. No identity, ambiguity, count, group ID or explanation rule
+changes, and no cached output hides live transitions.
+
+Independent pre-repair matching/grouping oracles, candidate-floor differential
+cases/fuzzing, a discarded-peer allocation bound, mixed grouping records and the
+complete existing identity/topology suites protect these constraints. The
+residual synthetic broadcast profile identified discarded matching/grouping as
+the dominant cost; it is not a profile of the reporter's installed agent fleet.
+
+### Connected-dashboard snapshot ownership — issue #2199
+
+Concrete frontend snapshots encode resources individually into immutable owned
+buffers, avoiding a whole-state resources encode/decode/copy round trip. Each
+resource identity is decoded from its encoded bytes, including every tail entry;
+source ID hints are never authoritative. Unknown shapes and custom marshalers
+retain full generic encoding. The remaining top-level fields use that same
+generic path, preserving future fields, nil/empty/omitempty semantics and keyed
+alert/infrastructure fallback. Reconnect baselines, removals, ordering, queue
+failure and REST-hydration frame limits keep their existing ownership.
+
+Full-wire differential tests and fuzzing compare typed value/pointer snapshots,
+errors and encoded identities with generic encoding; mutation tests protect
+retained buffers. Complete broadcast benchmarks include projection and delta
+queues rather than treating an ID-only or component allocation result as field
+CPU relief. Installed connected/closed-dashboard CPU remains separate evidence.
+
 The resource adapter fast delta path must remain content-equivalent to the full merge for explicit Proxmox memory withdrawal. An absent canonical metric plus incoming Proxmox usageUnavailable clears the old display value; store patch operations must emit that clear even when only the raw facet key changed. This bounded per-changed-row check must not introduce an estate-wide scan or defeat untouched-row identity preservation. Adapter tests cover both delta paths and store writes, including trusted-zero recovery and ordinary partial omission.
 
 The PR #1935 log-level parser benchmark remains an unresolved environment-bound

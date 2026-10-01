@@ -391,6 +391,59 @@ assert_runtime() {
     fi
 }
 
+# Only bounded, non-secret intent fields leave the disposable install. A failed
+# read is not an absent timer or a disabled setting.
+auto_update_snapshot() {
+    cexec 'set -euo pipefail
+config=absent
+if [[ -e "$DATA_DIR/system.json" ]]; then
+    config=$(jq -er '\''if type != "object" then error("invalid system settings")
+        elif has("autoUpdateEnabled") then
+            if .autoUpdateEnabled == true then "enabled"
+            elif .autoUpdateEnabled == false then "disabled"
+            else error("invalid auto-update choice") end
+        else "absent" end'\'' "$DATA_DIR/system.json")
+fi
+load=$(systemctl show -p LoadState --value pulse-update.timer)
+case "$load" in
+    not-found) enabled=absent; active=absent ;;
+    loaded)
+        enabled=$(systemctl is-enabled pulse-update.timer || true)
+        active=$(systemctl is-active pulse-update.timer || true)
+        case "$enabled" in
+            enabled|enabled-runtime|disabled|masked|masked-runtime|static|indirect|linked|linked-runtime|generated|transient) ;;
+            *) exit 1 ;;
+        esac
+        case "$active" in
+            active|inactive|failed|activating|deactivating|reloading) ;;
+            *) exit 1 ;;
+        esac ;;
+    *) exit 1 ;;
+esac
+printf "%s\t%s\t%s\n" "$config" "$enabled" "$active"' "DATA_DIR=${DATA_DIR}"
+}
+
+check_auto_update_intent() {
+    local label="$1" current before_config before_enabled before_active config enabled active
+    if [[ ! -s "${WORK_DIR}/state/auto-updates.baseline.tsv" ]] \
+            || ! current=$(auto_update_snapshot); then
+        note_failure "${label}: auto-update intent could not be read or has no baseline"
+        return 1
+    fi
+    IFS=$'\t' read -r before_config before_enabled before_active < "${WORK_DIR}/state/auto-updates.baseline.tsv"
+    IFS=$'\t' read -r config enabled active <<< "$current"
+    # A newly persisted false is equivalent to an absent opt-in, not permission
+    # to enable the timer. Preserve enabled and masked timer choices exactly.
+    if [[ "$config" != "$before_config" \
+            && ! ( "$config" != enabled && "$before_config" != enabled ) ]] \
+            || [[ "$enabled" != "$before_enabled" || "$active" != "$before_active" ]]; then
+        note_failure "${label}: auto-update choice or timer enablement/activity changed"
+        return 1
+    fi
+    printf '%s\n' "$current" > "${WORK_DIR}/state/auto-updates.${label}.tsv"
+    PHASE_UNITS="${PHASE_UNITS}; auto-updates ${config}/${enabled}/${active} preserved"
+}
+
 api_status() {
     # api_status METHOD PATH [auth: none|token|basic] [body]
     cexec 'args=(-sS -o /dev/null -w "%{http_code}" -X "$METHOD")
@@ -626,6 +679,9 @@ phase_seed() {
         note_failure "could not record ${DATA_DIR} (or it has no .encryption.key)"
         PHASE_DATADIR="not recorded"
     fi
+    if ! auto_update_snapshot > "${WORK_DIR}/state/auto-updates.baseline.tsv"; then
+        note_failure "could not record the installed auto-update choice and timer state"
+    fi
     record_phase "2. seed" "$FROM_TAG" "-" "-" "$PHASE_SETTINGS" "$PHASE_DATADIR" "-"
 }
 
@@ -650,6 +706,7 @@ phase_upgrade() {
     log "Phase 3: upgrade with /bin/update --version ${TO_TAG}"
     run_updater "$TO_TAG" upgrade || true
     assert_runtime "$TO_TAG"
+    check_auto_update_intent upgrade || true
     check_settings upgrade || true
     check_datadir upgrade || true
     record_phase "3. upgrade (/bin/update)" "$TO_TAG" "$PHASE_VERSION" "$PHASE_HEALTH" "$PHASE_SETTINGS" "$PHASE_DATADIR" "$PHASE_UNITS"
@@ -660,6 +717,7 @@ phase_rollback() {
     log "Phase 4: roll back with /bin/update --version ${FROM_TAG}"
     run_updater "$FROM_TAG" rollback || true
     assert_runtime "$FROM_TAG"
+    check_auto_update_intent rollback || true
     check_settings rollback || true
     check_datadir rollback || true
     record_phase "4. rollback (/bin/update)" "$FROM_TAG" "$PHASE_VERSION" "$PHASE_HEALTH" "$PHASE_SETTINGS" "$PHASE_DATADIR" "$PHASE_UNITS"

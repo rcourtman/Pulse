@@ -15,6 +15,18 @@
 
 ## Purpose
 
+### Continuity-aware broadcast read ownership
+
+Broadcast state takes its single resource list from the current continuity-aware
+read view, not a preliminary registry clone discarded before that view is
+resolved. The resulting presentation slice is caller-owned; URL/health
+decoration cannot mutate nested registry data. Ignored/re-enrollment surfaces,
+parent identities and agent action targets remain unchanged, and a prior client
+baseline must survive later mutable updates. No freshness cache substitutes for
+live reads. `TestBroadcastProjectionListsRegistryOnceAndKeepsLiveChanges` checks
+same-freshness changes and ignored-host inventory; the previous-pipeline JSON
+oracle checks split-host identity/action/infrastructure composition.
+
 ### Import preview lifetime and setup authority
 
 The node credential editor binds each monitored-system impact preview to the
@@ -3452,6 +3464,25 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Credential-safe container diagnostics bootstrap (1 October 2026)
+
+The existing container-runtime migration command now shares the Proxmox
+complete-download/preflight/private-input implementation in
+`internal/api/configapi/install_command.go`. The authenticated response keeps
+its separate `token` field; `installCommand` never interpolates it. A terminal
+prompt inside the root/sudo child creates a bounded 0700/0600 handoff, passes
+only its path, and removes it on success, failure or handled signals. Optional
+auth needs neither a credential nor a terminal. Default host-plus-Docker and
+explicit workload-only modes, their persisted scopes, 30-second interval and
+plain-HTTP continuity remain unchanged; neither mode adds command execution.
+The diagnostic systemd reference uses the default installer's protected
+`/var/lib/pulse-agent/token`, not a token literal or secret environment value.
+It is not a replacement for the complete installer-generated unit, especially
+on custom-state or privilege-profile installations. Executable root/sudo,
+history, argv, cleanup and real TLS-download fixtures are in
+`configapi/container_install_command_test.go`; they are not native installation
+or Docker/Podman estate acceptance.
+
 ### Credential-safe Proxmox bootstrap (1 October 2026)
 
 Proxmox initial bootstrap keeps credentials out of copied shell source. The current PVE/PBS agent command fetches a complete installer, runs its credential-free preflight, then privately prompts inside the root/sudo Bash child. Its 0700 directory and 0600 token file are owned by that child, passed only by path and removed on exit or handled signals. The UI reveals credentials separately, clears cached setup material on close and discards late issuance after close/reset. No exec scope is added. Existing fleet reporting is unchanged; newly enrolling an older agent with a newer server requires the current installer. New agents and the root installer still validate coherent old-server artifacts during rolling upgrades, but never execute their command strings.
@@ -3654,6 +3685,16 @@ removed the never-consumed `autoUpdateCheckInterval` / `autoUpdateTime`
 fields. No agent-lifecycle behavior keyed off them — agent update targeting
 and command admission are unaffected — and the extension-point expectations
 on the system-settings boundary are otherwise unchanged.
+
+### Shared telemetry settings preserve sender lifecycle ownership
+
+Telemetry preference saves invoke the sender callback only after a persisted
+explicit boolean changes the effective runtime value. Repeated saves and
+null/omitted preferences do not restart it. This lifecycle belongs to telemetry
+reporting, not agent registration or command admission. A telemetry `startup`
+event also follows a genuine sender re-enable or ID reset and therefore cannot
+serve as a count of agent or server restarts. Settings transition/persistence
+tests pin this shared boundary without changing agent lifecycle authority.
 
 ### Shared system-settings boundary gained an SSH backoff reset side effect
 
@@ -8313,20 +8354,37 @@ Focused proof lives in `internal/hostagent/agent_new_test.go`
 `TestGetReliableMachineIDNormalizesWindowsBraces`); the Windows recovery file is
 cross-compiled with `GOOS=windows go build ./internal/hostagent/`.
 
-### Unix bootstrap survives single-line command fields
+### Private Unix lifecycle bootstrap
 
-The shared frontend Unix installer command uses explicit shell statement
-separators rather than literal newlines or backslash-newline continuations.
-This preserves its grammar when copied into a single-line command field (#2123).
-The builder rejects embedded CR/LF in its normalized inputs rather than silently
-altering a quoted URL, credential, CA path or option. Shell quoting is unchanged.
-Download and unprivileged preflight still precede token-file creation and sudo
-installation. Root and sudo paths retain private token directories, file modes,
-TLS options, non-interactive operation and cleanup on success or failure.
-`agentInstallCommand.test.ts` covers normalized-input syntax and
-synthetic root/sudo execution under sh and Bash, including download, preflight
-and install failures. A clipboard fixture proves input compatibility, not native
-FreeBSD installation, offline dependency availability or service persistence.
+The shared frontend Unix installer preserves single-line paste grammar,
+quoted destinations, explicit custom CA/insecure continuity and profile flags.
+Issued credentials are separate from copied commands. A privileged Bash child
+owns the Core-aligned silent bounded reader and temporary 0700/0600 handoff;
+maximum-size input must survive unchanged, overflow must not reach the caller's
+history, and every exit must restore terminal modes and remove temporary files.
+Download/preflight failures never reach credential entry or installation.
+Sudo validation occurs before download; download and unprivileged preflight
+still precede privileged installation. Token-optional and saved-state update
+paths need no terminal or replacement credential.
+
+For non-terminal FreeBSD command fields, the existing page offers an absolute
+local private-token-file variant, with ownership/regular-file/symlink/mode
+checks and the installer's bounded trusted reader. The operator provisions and
+removes that file through a trusted file path; the command neither contains its
+contents nor deletes it. A GUI without private file provisioning requires a
+console/SSH session; native pfSense/FreeBSD installation is not inferred.
+
+Unix upgrades, explicit credential repairs and uninstall now share this
+complete-download transport rather than executing a partial fetch pipe or
+putting tokens in argv. Repairs/removal retain canonical ID and hostname;
+ordinary updates preserve their saved-state credential/identity route. Removal
+skips new-binary preflight, which is not a detachment prerequisite. Issuance,
+scopes, tenant/host binding, TLS and command-execution opt-in are unchanged.
+Windows credential handling is deliberately unchanged pending its own complete
+validated step. `agentInstallCommand.test.ts` is the executable helper proof;
+`infrastructureAgentDoctorModel.test.ts` verifies the real operations closures
+and existing credential/identity choices. Browser receipts cover real settings
+components with synthetic APIs, not installed outcome or reporter acceptance.
 
 ### Agent Doctor handoff stays readable on a phone
 

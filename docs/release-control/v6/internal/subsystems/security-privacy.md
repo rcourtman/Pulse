@@ -956,6 +956,23 @@ tokens, and path-normalization variants.
 
 ## Current State
 
+### Container diagnostics keeps copied material credential-free (1 October 2026)
+
+Container migration-token issuance returns its secret separately on the
+existing authenticated route, with a no-store response. Copied install source,
+download URLs and the diagnostic systemd reference must never contain that
+secret, a raw token process argument or a secret-bearing environment directive.
+The installer receives a bounded private file only after complete download and
+preflight, from silent root/sudo terminal input; failure and handled signals
+clean the handoff. The service reference points to the canonical default
+Linux private state file and does not replace installer-owned profile policy.
+URL percent specifiers are literal in the systemd environment, and structural
+control characters are rejected before minting. Monitoring scopes, tenant
+resolution, persistence rollback and HTTPS verification remain unchanged.
+`TestSecurityContainerDiagnosticsRejectsUnitInjectionBeforeTokenIssuance` and
+`TestSecurityContainerDiagnosticsServiceReferenceUsesPrivateState` exercise
+that boundary, including real systemd grammar validation without installation.
+
 ### Node TLS verification preference is operator-owned
 
 A PVE connection's `VerifySSL` value is security-relevant, so the stored
@@ -1503,8 +1520,11 @@ persisted receiver row. The previous-release fields are direct adjacent-release
 observations, not 30-day update counters, and are the only valid basis for a
 before/after release-health cohort in the adoption report.
 The service-health self-check must preserve the explicit bound TCP address and
-port; wildcard IPv6/unspecified-family listeners try IPv4 and IPv6 loopback,
-while an IPv4-only wildcard remains IPv4-only. No external address discovery,
+port. It inspects the IPv6-only option of a bound IPv6 wildcard socket: only a
+proven dual-stack listener tries IPv4 then IPv6 loopback. IPv6-only or
+uninspectable IPv6 wildcards remain IPv6-only, while IPv4-only and nil-IP
+wildcards remain IPv4-only. Another socket on the same port is not evidence of
+this listener's health. No external address discovery,
 proxy, redirect, or remote frontend asset fetch is permitted. One bounded
 settling retry may follow a failed observation in the telemetry background
 runner: at most two five-second attempts, separated by one second. Each attempt
@@ -1515,6 +1535,14 @@ the fixed `timeout` bucket; other failure classes remain visible. Tests must
 cover unavailable IPv6 with working IPv4, IPv6-only serving, a stalled family,
 startup recovery, final timeouts, explicit addresses, HTTPS, redirect refusal,
 bounded bodies/assets, closed-category serialization and background execution.
+`service_health_socket_test.go` also pins real HTTP/HTTPS wildcard socket modes,
+both healthy/unhealthy same-port isolation directions, and unavailable socket
+inspection. Socket-mode inspection does not add a telemetry field or export
+its result, target or error. Telemetry preference saves invoke the live toggle
+only for persisted explicit boolean transitions; unchanged/null/omitted values
+do not restart the sender. A `startup` event also follows re-enabling telemetry
+or resetting its ID, so its count alone does not establish process restarts or
+a release regression. Existing payload confidentiality remains unchanged.
 That same outbound usage telemetry floor now also permits only content-free Pulse
 Patrol control and governed Pulse Intelligence operations adoption flags and
 counters inside the same rotating 30-day telemetry window:

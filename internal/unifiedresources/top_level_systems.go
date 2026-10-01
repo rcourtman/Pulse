@@ -122,7 +122,7 @@ func ResolveTopLevelSystems(resources []Resource) TopLevelSystemResolver {
 		matcher.Add(matcherID, nodes[i].identity)
 	}
 	for i := range nodes {
-		matches := matcher.FindCandidates(nodes[i].identity)
+		matches := matcher.findCandidatesAtLeast(nodes[i].identity, HighConfidenceThreshold)
 		for _, match := range matches {
 			if match.Confidence < HighConfidenceThreshold {
 				continue
@@ -137,12 +137,18 @@ func ResolveTopLevelSystems(resources []Resource) TopLevelSystemResolver {
 
 	for {
 		initialGroups := buildTopLevelSystemResolvedGroups(nodes, parent, groupEvidence)
+		bestPriority := int(^uint(0) >> 1)
+		for _, group := range initialGroups {
+			if group.priority < bestPriority {
+				bestPriority = group.priority
+			}
+		}
 		hostOwners, ipOwners := buildTopLevelSystemFallbackOwners(initialGroups)
 		hostFormOwners := buildTopLevelSystemHostFormOwners(initialGroups)
 		attached := false
 
 		for groupRoot, group := range initialGroups {
-			if !group.attachByHost {
+			if !group.attachByHost || group.priority <= bestPriority {
 				continue
 			}
 			target, ok := uniqueBetterTopLevelSystemTarget(groupRoot, group, hostOwners, ipOwners, hostFormOwners, initialGroups)
@@ -480,17 +486,21 @@ func uniqueBetterTopLevelSystemTarget(
 			continue
 		}
 		for root := range hostFormOwners[comparable] {
-			candidateRoots[root] = struct{}{}
+			if root != groupRoot && groups[root].priority < group.priority {
+				candidateRoots[root] = struct{}{}
+			}
 		}
 		if short := NormalizeHostname(comparable); short != "" && short != comparable {
 			for root := range hostFormOwners[short] {
-				candidateRoots[root] = struct{}{}
+				if root != groupRoot && groups[root].priority < group.priority {
+					candidateRoots[root] = struct{}{}
+				}
 			}
 		}
 	}
 
 	for _, host := range topLevelSystemSortedSet(group.exactHosts) {
-		for _, targetRoot := range topLevelSystemSortedRoots(hostOwners[host]) {
+		for _, targetRoot := range topLevelSystemBetterRoots(hostOwners[host], groups, group.priority) {
 			if targetRoot == groupRoot {
 				continue
 			}
@@ -529,7 +539,7 @@ func uniqueBetterTopLevelSystemTarget(
 		}
 	}
 	for _, ip := range topLevelSystemSortedSet(group.exactIPs) {
-		for _, targetRoot := range topLevelSystemSortedRoots(ipOwners[ip]) {
+		for _, targetRoot := range topLevelSystemBetterRoots(ipOwners[ip], groups, group.priority) {
 			if targetRoot == groupRoot {
 				continue
 			}
@@ -955,6 +965,19 @@ func topLevelSystemSortedRoots(values map[int]struct{}) []int {
 	out := make([]int, 0, len(values))
 	for value := range values {
 		out = append(out, value)
+	}
+	sort.Ints(out)
+	return out
+}
+
+// Discard ineligible equal/worse-priority peers before allocating and sorting
+// candidate lists. They could never win the existing attachment rule.
+func topLevelSystemBetterRoots(values map[int]struct{}, groups map[int]topLevelSystemResolvedGroup, priority int) []int {
+	var out []int
+	for root := range values {
+		if groups[root].priority < priority {
+			out = append(out, root)
+		}
 	}
 	sort.Ints(out)
 	return out

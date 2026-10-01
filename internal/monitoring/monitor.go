@@ -4340,13 +4340,18 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateS
 	unifiedView := m.currentUnifiedStateView()
 	metricsTargetResolver := broadcastMetricsTargetResolver(unifiedView.readState)
 	broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)
-	broadcastResources = m.applyPersistedMetadataToUnifiedResources(broadcastResources)
-	broadcastResources = unifiedresources.AttachResourceHealth(
-		broadcastResources,
-		resourceHealthAlerts(frontendState.ActiveAlerts),
-		time.Now().UTC(),
+	// Coalescing owns the outer slice. Decorate that one projection in place,
+	// not three full-resource copies; nested store data is still read-only.
+	healthAlerts := resourceHealthAlerts(frontendState.ActiveAlerts)
+	now := time.Now().UTC()
+	for i := range broadcastResources {
+		m.applyPersistedMetadataToUnifiedResource(&broadcastResources[i])
+		health := unifiedresources.EvaluateResourceHealth(broadcastResources[i], healthAlerts, now)
+		broadcastResources[i].Health = &health
+	}
+	broadcastFrontendResources, broadcastCatalogs := convertPresentationResourcesForBroadcast(
+		attachBroadcastMetricsTargets(broadcastResources, metricsTargetResolver),
 	)
-	broadcastFrontendResources, broadcastCatalogs := convertResourcesForBroadcast(broadcastResources, metricsTargetResolver)
 	frontendState.Resources = broadcastFrontendResources
 	frontendState.CapabilityCatalog = broadcastCatalogs.capabilities
 	frontendState.PolicyCatalog = broadcastCatalogs.policies
@@ -4968,17 +4973,18 @@ func (m *Monitor) currentUnifiedStateView() monitorUnifiedStateView {
 		return m.unifiedStateViewWithStandaloneHostContinuity(monitorUnifiedStateViewFromSnapshot(m.GetState()))
 	}
 
-	resources := store.GetAll()
 	freshness := unifiedResourceFreshness(store, state)
 
 	if readState, ok := store.(unifiedresources.ReadState); ok {
+		// The continuity view lists this same store (or its overlay) below.
+		// Cloning here too discarded a complete registry on every broadcast.
 		return m.unifiedStateViewWithStandaloneHostContinuity(monitorUnifiedStateView{
-			resources: resources,
 			readState: readState,
 			freshness: freshness,
 		})
 	}
 
+	resources := store.GetAll()
 	if len(resources) > 0 || state == nil {
 		return m.unifiedStateViewWithStandaloneHostContinuity(monitorUnifiedStateViewFromResources(resources, freshness))
 	}
@@ -6132,42 +6138,46 @@ func (m *Monitor) applyPersistedMetadataToUnifiedResources(resources []unifiedre
 	out := make([]unifiedresources.Resource, len(resources))
 	copy(out, resources)
 	for i := range out {
-		resource := &out[i]
-
-		switch unifiedresources.ContractResourceType(*resource) {
-		case unifiedresources.ResourceTypeAppContainer:
-			if resource.Docker == nil {
-				continue
-			}
-			hostID := strings.TrimSpace(resource.Docker.HostSourceID)
-			containerID := strings.TrimSpace(resource.Docker.ContainerID)
-			if hostID == "" {
-				continue
-			}
-			if customURL, ok := m.dockerAppContainerCustomURL(*resource, hostID, containerID); ok {
-				// The metadata record is authoritative even when empty: an
-				// explicit clear must remove a stale URL still carried by an
-				// older unified-resource snapshot.
-				resource.CustomURL = strings.TrimSpace(customURL)
-			}
-		case unifiedresources.ResourceTypePod,
-			unifiedresources.ResourceTypeK8sDeployment,
-			unifiedresources.ResourceTypeK8sService:
-			if customURL, ok := m.kubernetesWorkloadCustomURL(*resource); ok {
-				resource.CustomURL = strings.TrimSpace(customURL)
-			}
-		case unifiedresources.ResourceTypeAgent,
-			unifiedresources.ResourceType("docker-host"),
-			unifiedresources.ResourceTypePBS,
-			unifiedresources.ResourceTypePMG,
-			unifiedresources.ResourceTypeK8sCluster,
-			unifiedresources.ResourceTypeK8sNode:
-			if customURL, ok := m.hostResourceCustomURL(*resource); ok {
-				resource.CustomURL = customURL
-			}
-		}
+		m.applyPersistedMetadataToUnifiedResource(&out[i])
 	}
 	return out
+}
+
+// applyPersistedMetadataToUnifiedResource changes only a caller-owned resource
+// value, never its nested registry state. Empty persisted values clear stale URLs.
+func (m *Monitor) applyPersistedMetadataToUnifiedResource(resource *unifiedresources.Resource) {
+	switch unifiedresources.ContractResourceType(*resource) {
+	case unifiedresources.ResourceTypeAppContainer:
+		if resource.Docker == nil {
+			return
+		}
+		hostID := strings.TrimSpace(resource.Docker.HostSourceID)
+		containerID := strings.TrimSpace(resource.Docker.ContainerID)
+		if hostID == "" {
+			return
+		}
+		if customURL, ok := m.dockerAppContainerCustomURL(*resource, hostID, containerID); ok {
+			// The metadata record is authoritative even when empty: an
+			// explicit clear must remove a stale URL still carried by an
+			// older unified-resource snapshot.
+			resource.CustomURL = strings.TrimSpace(customURL)
+		}
+	case unifiedresources.ResourceTypePod,
+		unifiedresources.ResourceTypeK8sDeployment,
+		unifiedresources.ResourceTypeK8sService:
+		if customURL, ok := m.kubernetesWorkloadCustomURL(*resource); ok {
+			resource.CustomURL = strings.TrimSpace(customURL)
+		}
+	case unifiedresources.ResourceTypeAgent,
+		unifiedresources.ResourceType("docker-host"),
+		unifiedresources.ResourceTypePBS,
+		unifiedresources.ResourceTypePMG,
+		unifiedresources.ResourceTypeK8sCluster,
+		unifiedresources.ResourceTypeK8sNode:
+		if customURL, ok := m.hostResourceCustomURL(*resource); ok {
+			resource.CustomURL = customURL
+		}
+	}
 }
 
 func appendUniqueMetadataCandidate(candidates []string, seen map[string]struct{}, value string) []string {
@@ -6346,19 +6356,25 @@ func convertResourcesForBroadcast(
 		firstBroadcastMetricsTargetResolver(metricsTargetResolvers),
 	)
 	allResources = unifiedresources.CoalescePresentationHostResources(allResources)
-	type broadcastResource struct {
-		input      models.ResourceConvertInput
-		sortKey    string
-		resourceID string
+	return convertPresentationResourcesForBroadcast(allResources)
+}
+
+// convertPresentationResourcesForBroadcast consumes an already-coalesced
+// projection. Sorting the final rows avoids retaining a second estate-sized
+// array of conversion inputs and coalescing the same hosts a second time.
+func convertPresentationResourcesForBroadcast(allResources []unifiedresources.Resource) ([]models.ResourceFrontend, broadcastResourceCatalogs) {
+	if len(allResources) == 0 {
+		return []models.ResourceFrontend{}, broadcastResourceCatalogs{}
 	}
 
-	converted := make([]broadcastResource, 0, len(allResources))
+	result := make([]models.ResourceFrontend, len(allResources))
+	sortKeys := make([]string, len(allResources))
 	catalogs := broadcastResourceCatalogs{
 		capabilities:    make(map[string]json.RawMessage),
 		policies:        make(map[string]json.RawMessage),
 		aiSafeSummaries: make(map[string]string),
 	}
-	for _, r := range allResources {
+	for i, r := range allResources {
 		input := monitorResourceToConvertInput(r)
 		if len(input.Capabilities) > 0 {
 			id := capabilityCatalogID(input.Capabilities)
@@ -6385,24 +6401,11 @@ func convertResourcesForBroadcast(
 		if sortKey == "" {
 			sortKey = strings.ToLower(input.Name)
 		}
-		converted = append(converted, broadcastResource{
-			input:      input,
-			sortKey:    sortKey,
-			resourceID: input.ID,
-		})
+		sortKeys[i] = sortKey
+		result[i] = models.ConvertResourceToFrontend(input)
 	}
 
-	sort.Slice(converted, func(i, j int) bool {
-		if converted[i].sortKey == converted[j].sortKey {
-			return converted[i].resourceID < converted[j].resourceID
-		}
-		return converted[i].sortKey < converted[j].sortKey
-	})
-
-	result := make([]models.ResourceFrontend, len(converted))
-	for i, resource := range converted {
-		result[i] = models.ConvertResourceToFrontend(resource.input)
-	}
+	sort.Sort(broadcastFrontendSort{resources: result, keys: sortKeys})
 	if len(catalogs.capabilities) == 0 {
 		catalogs.capabilities = nil
 	}
@@ -6413,6 +6416,24 @@ func convertResourcesForBroadcast(
 		catalogs.aiSafeSummaries = nil
 	}
 	return result, catalogs
+}
+
+// Keep each precomputed sort key beside its row while sorting in place.
+type broadcastFrontendSort struct {
+	resources []models.ResourceFrontend
+	keys      []string
+}
+
+func (s broadcastFrontendSort) Len() int { return len(s.resources) }
+func (s broadcastFrontendSort) Less(i, j int) bool {
+	if s.keys[i] == s.keys[j] {
+		return s.resources[i].ID < s.resources[j].ID
+	}
+	return s.keys[i] < s.keys[j]
+}
+func (s broadcastFrontendSort) Swap(i, j int) {
+	s.resources[i], s.resources[j] = s.resources[j], s.resources[i]
+	s.keys[i], s.keys[j] = s.keys[j], s.keys[i]
 }
 
 func broadcastMetricsTargetResolver(source interface{}) MetricsTargetResourceStore {

@@ -277,9 +277,7 @@ describe('infrastructure operations model', () => {
       'Use Availability checks for ping-only or agentless device monitoring.',
     );
     expect(infrastructureInstallerSectionSource).toContain('checks this Pulse URL and');
-    expect(infrastructureInstallerSectionSource).toContain(
-      'before asking for administrator privileges',
-    );
+    expect(infrastructureInstallerSectionSource).toContain('before reading a Unix token');
     expect(infrastructureInstallerSectionSource).toContain(
       'For Proxmox, start with a dedicated read-only or narrowly scoped API token',
     );
@@ -287,7 +285,13 @@ describe('infrastructure operations model', () => {
     expect(infrastructureInstallerSectionSource).toContain('augmentation.');
     expect(infrastructureInstallerSectionSource).toContain('Installation commands');
     expect(infrastructureInstallerSectionSource).toContain(
-      'Generate an install token first. Pulse will then build copy-ready commands',
+      'Generate an install token first. Then copy the command for the target host and',
+    );
+    expect(infrastructureInstallerSectionSource).toContain(
+      'follow its credential-entry instructions.',
+    );
+    expect(infrastructureInstallerSectionSource).toContain(
+      'commands keep it separate: copy the command first, then use Show token only.',
     );
     expect(infrastructureInstallerSectionSource).toContain(
       'Install the transitional combined runtime that can accept server command requests',
@@ -472,13 +476,9 @@ describe('infrastructure operations model', () => {
     expect(agentUpgradeStart).toBeGreaterThanOrEqual(0);
     expect(agentUpgradeEnd).toBeGreaterThan(agentUpgradeStart);
     const agentUpgradeSource = operationsStateSource.slice(agentUpgradeStart, agentUpgradeEnd);
-    const unixUpgradeStart = agentUpgradeSource.indexOf('let command = `curl');
-    expect(unixUpgradeStart).toBeGreaterThanOrEqual(0);
-    const unixUpgradeSource = agentUpgradeSource.slice(unixUpgradeStart);
-
-    expect(agentUpgradeSource).toContain(
-      '| bash -s -- --update --url ${shellQuoteArg(url)} --non-interactive',
-    );
+    expect(agentUpgradeSource).toContain("const extraArgs = ['--update', ...installFlags];");
+    expect(agentUpgradeSource).toContain('token: replaceCredential ? token : null,');
+    expect(agentUpgradeSource).toContain('buildUnixAgentInstallCommand({');
     const requiresTokenEnd = operationsStateSource.indexOf('return {', agentUpgradeEnd);
     expect(requiresTokenEnd).toBeGreaterThan(agentUpgradeEnd);
     const requiresTokenSource = operationsStateSource.slice(agentUpgradeEnd, requiresTokenEnd);
@@ -487,9 +487,9 @@ describe('infrastructure operations model', () => {
     );
     expect(requiresTokenSource).toContain("=== 'windows'");
     expect(requiresTokenSource).toContain('installState.requiresToken()');
-    expect(unixUpgradeSource).not.toContain('command += ` --token ${shellQuoteArg(token)}`;');
-    expect(unixUpgradeSource).not.toContain('--agent-id');
-    expect(unixUpgradeSource).not.toContain('--hostname');
+    expect(agentUpgradeSource).not.toContain('command += ` --token ${shellQuoteArg(token)}`;');
+    // Identity overrides remain inside the explicit credential-replacement branch.
+    expect(agentUpgradeSource).toContain('if (replaceCredential) {');
   });
 
   it('resolves connection upgrade platforms through the shared caption-tolerant resolver', async () => {

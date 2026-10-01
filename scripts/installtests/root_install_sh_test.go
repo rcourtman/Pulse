@@ -1480,6 +1480,21 @@ func TestRootInstallScriptUpdateFlowsRefreshExistingAutoUpdateAssets(t *testing.
 	}
 }
 
+// The tested --version, menu-update and menu-reinstall paths must all use the
+// same affirmative-only prompt; a new inline default-yes branch is unsafe.
+func TestRootInstallExistingFlowsShareExplicitAutoUpdateChoice(t *testing.T) {
+	main := extractRootInstallShellFunction(t, "main")
+	if got := strings.Count(main, "offer_existing_auto_updates"); got != 3 {
+		t.Fatalf("expected three existing-install consent calls, found %d", got)
+	}
+	if strings.Contains(main, `Enable auto-updates? [Y/n]`) || strings.Contains(main, `Re-enable auto-updates? [Y/n]`) {
+		t.Fatal("existing install must not default to enabling auto-updates")
+	}
+	if !strings.Contains(main, `safe_read_with_default "Enable auto-updates? [y/N]: " enable_updates "n"`) {
+		t.Fatal("fresh-install consent must remain opt-in")
+	}
+}
+
 // Regression test for #1526 (and the earlier #1396): when the installer is piped
 // to bash (curl ... | bash) there is no source file, so BASH_SOURCE is unset.
 // The "am I being sourced?" guard must default the lookup or `set -u` aborts the

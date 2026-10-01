@@ -16,6 +16,8 @@ const bootstrapPTYRunner = `
 import errno, fcntl, json, os, pty, select, signal, subprocess, sys, termios, time
 p = json.load(sys.stdin)
 master, slave = pty.openpty()
+tty_watch = os.dup(slave)
+initial_tty = termios.tcgetattr(tty_watch)
 def session():
     os.setsid()
     fcntl.ioctl(0, termios.TIOCSCTTY, 0)
@@ -48,6 +50,12 @@ else:
     os.killpg(child.pid, signal.SIGKILL)
     output += b"\nPTY fixture deadline expired\n"
 code = child.wait()
+final_tty = termios.tcgetattr(tty_watch)
+mode_mask = termios.ECHO | termios.ICANON
+if (initial_tty[3] & mode_mask) != (final_tty[3] & mode_mask):
+    output += b"\nBootstrap did not restore terminal echo/canonical mode\n"
+    code = 1
+os.close(tty_watch)
 os.close(master)
 sys.stdout.buffer.write(output)
 sys.exit(code if code >= 0 else 128 - code)

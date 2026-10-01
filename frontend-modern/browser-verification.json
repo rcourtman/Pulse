@@ -1,23 +1,17 @@
 {
   "version": 1,
-  "base_sha": "6b23876ec8104965c7842e194e055f3206134d4f",
-  "verified_at": "2026-10-01T04:21:56.727078Z",
+  "base_sha": "1a0cd7c9d5aa02de754535a293dc0cacd4ef6fa0",
+  "verified_at": "2026-10-01T18:27:14.912695Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/nodes.ts",
-    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
-    "frontend-modern/src/components/Settings/useNodeModalState.ts",
-    "frontend-modern/src/stores/tokenReveal.ts"
+    "frontend-modern/src/features/docs/docMarkdown.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/nodes.ts": "398f3b87ce192c7650a9e34f184ecdca0e8baf35b57d90ef5f8f697348675fec",
-    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx": "e4168945744f8ec20b5439f5730b1ecd8b4811b29ec00da4e7e3798f868a1b41",
-    "frontend-modern/src/components/Settings/useNodeModalState.ts": "9372c3a4b346a0e31733a7042c0a65b5ebe3518b12595c6c6a68b1cadd667dcd",
-    "frontend-modern/src/stores/tokenReveal.ts": "c21ac970bde6229506f7d6e627430b6e91c9ea983f705a28e3d149e4415c39b7"
+    "frontend-modern/src/features/docs/docMarkdown.ts": "572a3b4bc5bc1114adef5aa64bb0ea833c0dbe5865bbd57d3dc767fd1965aa55"
   },
   "routes": [
-    "/browser-tests/proxmox-private-input.html?type=pve",
-    "/browser-tests/proxmox-private-input.html?type=pbs"
+    "/docs/PULSE_PRO",
+    "/browser-tests/docs-fragment-navigation.html?scenario=plans"
   ],
   "viewports": [
     {
@@ -30,34 +24,26 @@
     }
   ],
   "states": [
-    "Actual settings state/setup section and existing token-reveal dialog with production CSS; synthetic server artifacts and no installed bootstrap execution",
-    "Separate command and credential copy for API Inventory and Host Telemetry Agent; raw secrets absent from copied shell text",
-    "PVE/PBS tokenless script download reuses live bootstrap metadata; credential cache clears on close/reopen",
-    "Held setup and agent issuance completed after modal close is discarded: no secret cache and no reveal dialog",
-    "Default TLS verification and monitoring-only agent request (enableCommands=false) unchanged",
-    "Desktop light and phone-emulated WebKit dark token reveal is readable; screenshots visually inspected"
+    "Production Docs page/router/styles with the current shipped eight-column plan comparison, not a replacement table fixture",
+    "Every sanitized thead TH has trusted scope=col and all eight native columnheader roles; document role/scope/class remain stripped",
+    "Desktop Chromium light and phone-emulated WebKit dark; table-local horizontal scrolling and outer-page containment; four final full-page/header screenshots inspected",
+    "This establishes browser accessibility roles, not screen-reader speech or published availability"
   ],
   "interactions": [
-    "Copy command; copy token via Enter and pointer; Escape and Dismiss close token dialog",
-    "Close/reopen setup; download script; switch API/Agent paths",
-    "Hold setup/agent response, close modal, then release response and verify no late reveal/cache"
+    "Navigate to the real plans document and inspect table DOM and accessibility snapshot",
+    "On phone, scroll the table horizontally without moving the outer page; bring its header into view"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/proxmox-private-input.cjs; pulse-worker-browser frontend-modern/browser-tests/proxmox-private-input.cjs --phone (separate commands from assigned workspace root)",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/docs-table-headers.cjs",
   "browser_versions": {
     "playwright": "1.56.1",
     "chromium": "141.0.7390.37",
     "webkit": "26.0"
   },
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-desktop/pbs-agent.png",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-desktop/pbs-setup.png",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-desktop/pve-agent.png",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-desktop/pve-setup.png",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-desktop/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-phone/pbs-agent.png",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-phone/pbs-setup.png",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-phone/pve-agent.png",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-phone/pve-setup.png",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-phone/result.json"
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/docs/chromium-after.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/docs/chromium-headers.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/docs/webkit-after.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/docs/webkit-headers.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/docs/after.json"
   ]
 }

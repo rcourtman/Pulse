@@ -2572,6 +2572,30 @@ artifact-selection behaviour.
 
 ## Current State
 
+### Existing-install auto-update consent (1 October 2026)
+
+A manual update, version-pinned rollback or reinstall is not consent to turn
+on unattended updates. The root server installer's three existing-install
+prompt paths share `offer_existing_auto_updates`: missing timers and explicitly
+disabled settings default to **No**, including Enter and non-TTY reads. Only
+`y`/`yes` (case-insensitive), or the existing explicit enable option, opts in.
+Explicit CLI choices are not prompted again. Existing enabled or disabled timer
+assets still refresh without changing their enablement; fresh installs remain
+opt-in. Readiness, signature validation and persistent-data backup are unchanged.
+
+`auto_update_intent_test.go` executes the real main flows for update, rollback,
+same-version reinstall and both menu actions, covering absent/disabled/enabled
+timers, Enter, EOF, invalid/no/affirmative input and explicit CLI choices.
+`root_install_sh_test.go` binds those paths to the shared choice, and
+`build_release_assets_test.go` binds the signed published lifecycle rehearsal to
+its new intent check. The rehearsal now retains only the boolean choice and
+timer enablement/activity before and after upgrade and rollback, fails changed
+or unavailable observations, and does not pass a disable flag to hide the bug.
+Its Python tests execute the observer/comparator against intact, changed and
+unreadable fixtures. These source proofs are not native installed acceptance;
+the published containing installer and both actual lifecycle phases still need
+their terminal observations.
+
 ### Credential-safe Proxmox bootstrap (1 October 2026)
 
 Current PVE auto-registration metadata accepts the credential-free setup artifact: all command aliases use a private-file handoff and `downloadURL` equals the tokenless script URL. This replaces earlier requirements to embed setup tokens in commands/URLs. The older coherent server artifact is accepted read-only during upgrades, never executed. Host, type, canonical filename/URL, masked hint and live expiry remain required. Root-installer JSON parsing and registration pass secrets through descriptor/stdin input rather than Python/curl argv, and the setup response is no longer persisted as a plaintext /tmp diagnostic. No install source, API scope, trust exception, release selector or success condition is widened.
@@ -4090,8 +4114,23 @@ hostnames or Tailscale IPs, rather than silently depending on public SSH
 reachability from GitHub-hosted runners. The workflow must use the current
 pinned Tailscale GitHub Action, its target `ping` readiness gate, and the shared
 `.github/scripts/check-demo-reachability.sh` TCP/22 diagnostic before SSH key
-capture. A successful tailnet join alone is not connectivity proof. After that
-network preflight, shared SSH
+capture. A successful tailnet join alone is not connectivity proof.
+
+The shared helper's `diagnose` mode is local-only after a failed setup action:
+it must not ping the peer or attempt direct TCP as a fallback. Its `check` mode
+requires recognised local `Running` state before any probe, then a successful
+tailnet ping before TCP/22. Missing, malformed or non-running daemon state is
+an incomplete setup result, not proof that the demo is down. Failed ping is
+retained without another diagnostic ping or TCP attempt. Status diagnostics
+report only allowlisted backend states and peer-presence/online/active booleans;
+they never print tailnet addresses, DNS names, tags, relay locations, raw JSON
+or local CLI errors. Tailnet and TCP probe stdout/stderr are also suppressed
+on both success and failure; their exits and bounded, topology-free verdicts
+remain visible. Diagnostic success cannot establish connectivity or
+installed acceptance, and neither mode changes credentials or authorises
+replaying a provider refusal.
+
+After that network preflight, shared SSH
 setup must wait for configured demo hostnames to resolve, accept configured IP
 literals without a DNS precheck, and then capture host keys with bounded
 short retries before any installer or binary copy runs; a long `ssh-keyscan`

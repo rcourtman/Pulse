@@ -118,26 +118,26 @@ func containerRuntimeAgentHostFlag(enableHost bool) string {
 }
 
 func buildContainerRuntimeAgentInstallCommand(baseURL string, token string, enableHost bool) string {
-	normalizedBaseURL := normalizeAgentInstallBaseURL(baseURL)
-	installScriptURL := normalizedBaseURL + "/install.sh"
-	command := fmt.Sprintf(`curl -fsSL %s | bash -s -- \
-  --url %s \
-  --enable-docker \
-  %s \
-  --interval 30s`,
-		posixShellQuote(installScriptURL), posixShellQuote(normalizedBaseURL), containerRuntimeAgentHostFlag(enableHost))
+	return configapi.BuildContainerRuntimeAgentInstallCommand(baseURL, token, enableHost)
+}
 
-	if trimmedToken := strings.TrimSpace(token); trimmedToken != "" {
-		command += fmt.Sprintf(` \
-  --token %s`, posixShellQuote(trimmedToken))
+// The diagnostic reference must not compete with the installer's complete
+// service renderer or expose the issued token. Its default Linux state path
+// matches scripts/install.sh; custom/least-privilege profiles keep their
+// installer-generated unit instead of replacing it with this reference.
+func buildContainerRuntimeAgentServiceSnippet(baseURL string, enableHost bool) (string, error) {
+	baseURL = normalizeAgentInstallBaseURL(baseURL)
+	// Environment= does not expand shell variables, but systemd does expand %
+	// specifiers. Escape those as well as the unit's quoting/control boundary.
+	urlLine, err := quoteSystemdEnvironment("PULSE_URL", strings.ReplaceAll(baseURL, "%", "%%"))
+	if err != nil {
+		return "", err
 	}
-
-	if installBaseURLRequiresInsecure(normalizedBaseURL) {
-		command += ` \
-  --insecure`
+	trustArgs := ""
+	if installBaseURLRequiresInsecure(baseURL) {
+		trustArgs = " --insecure"
 	}
-
-	return withPrivilegeEscalation(command)
+	return fmt.Sprintf("# Default Linux reference only. Run installCommand to create the private token file and complete service.\n# Keep the installer-generated unit for custom state directories or privilege profiles.\n[Service]\nType=simple\n%s\nExecStart=/usr/local/bin/pulse-agent --url ${PULSE_URL} --token-file /var/lib/pulse-agent/token --enable-docker %s --interval 30s%s\nRestart=always\nRestartSec=5s\nUser=root", urlLine, containerRuntimeAgentHostFlag(enableHost), trustArgs), nil
 }
 
 func buildSetupScriptCommand(scriptURL string, token string) string {

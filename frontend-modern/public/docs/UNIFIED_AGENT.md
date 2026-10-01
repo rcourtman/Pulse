@@ -968,10 +968,73 @@ keep the bounded, redacted error for diagnosis; do not delete tokens, re-enrol
 blindly or remove the original host's record.
 
 ### Permission Denied (Docker)
-Ensure the agent can access the Docker socket:
+
+Check the account that actually runs the agent, not your interactive `$USER`.
+For a systemd installation, these read-only checks show the service account and
+the default socket's ownership; they do not print service environments or tokens:
+
 ```bash
-sudo usermod -aG docker $USER
+systemctl show pulse-agent.service --property=User --property=Group --property=SupplementaryGroups
+ls -l /var/run/docker.sock
 ```
+
+A blank systemd `User` means the service runs as root. Adding your login user to
+the `docker` group does not change a different agent service account. Access to
+a rootful Docker socket, including membership of its `docker` group, is
+root-equivalent; do not make the socket world-writable or expose the daemon over
+unauthenticated TCP to clear an error.
+
+Use the [supported collector profile](AGENT_SECURITY.md#safe-profile-support-and-qualification-matrix)
+for that service account. The least-privilege profile intentionally limits a
+rootful runtime to typed-helper summary inventory; full collection needs a
+collector-owned rootless socket or an explicitly chosen full-telemetry profile.
+Keep that distinction when diagnosing missing statistics, Swarm data or actions:
+summary-only collection is not a socket-permission defect.
+
+### Docker visible in one LXC but missing in another
+
+Proxmox-side discovery uses the **owning node's** connected command-capable
+agent, not the agent on whichever node hosts Pulse. Check **Discover Docker in
+LXC guests** in Settings → System → General and any configured
+`PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS` allowlist. Collection skips stopped
+guests and guests already linked to an online guest-local agent. In the latter
+case, check that guest agent's Docker monitoring instead.
+
+The host-side path requires the guest's `docker` executable and
+`/var/run/docker.sock` in the root `pct exec` context. A working Docker CLI in a
+user's login session does not prove that this context can reach the daemon;
+rootless or non-default sockets may need guest-local agent monitoring. Different
+Debian or Docker versions alone do not establish the cause.
+
+If the Proxmox node and guest are healthy, run this **once** on the owning node
+as root, replacing `123` with the affected LXC's VMID:
+
+```bash
+timeout --kill-after=2s 15s pct exec 123 -- sh -c '
+  command -v docker || exit
+  if test -S /var/run/docker.sock; then
+    printf "default_socket=present\n"
+  else
+    printf "default_socket=absent\n"
+  fi
+  docker version --format "server={{.Server.Version}}" || exit
+  docker ps -a --format "{{.State}}"
+'
+```
+
+This checks guest entry, the default socket, daemon access and container listing
+without printing container names, images, environment values or credentials.
+`default_socket=absent` explains why the host-side probe skips that guest even if
+another Docker context works. A CLI/daemon error is different from a successful
+empty list. If these checks pass but Pulse still omits the guest, keep the
+bounded error from the existing collection logs and whether the working and
+missing guests share the same PVE node; do not enable debug logging for the whole
+server just to collect this distinction.
+
+Exit `124` means the check timed out; stop rather than loop or restart the host.
+Review output before posting and redact any private endpoint in an error. Do not
+change LXC privilege, `keyctl`, socket permissions or Docker versions merely to
+test a guess.
 
 ### Check Status
 ```bash
@@ -1004,10 +1067,10 @@ If your Docker Swarm cluster isn't being detected:
    # Should show "Swarm: active"
    ```
 
-4. **Check socket permissions**: The agent needs access to the Docker socket:
-   ```bash
-   ls -la /var/run/docker.sock
-   ```
+4. **Check the service account and collector profile**: follow
+   [Permission Denied (Docker)](#permission-denied-docker). A rootful
+   typed-helper summary does not include Swarm inventory; granting broader
+   socket access is a security decision, not a routine permission repair.
 
 5. **Enable debug logging**: For more detail:
    ```bash

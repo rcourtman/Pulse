@@ -144,6 +144,30 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 	}
 }
 
+// A no-flag, signed published-installer rehearsal must catch re-enabling after
+// a version change. The install smoke's explicit disable flag alone cannot.
+func TestPublishedLifecycleRehearsalPreservesAutoUpdateChoice(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "release_lifecycle_rehearsal.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{
+		`auto_update_snapshot > "${WORK_DIR}/state/auto-updates.baseline.tsv"`,
+		`check_auto_update_intent upgrade || true`,
+		`check_auto_update_intent rollback || true`,
+		`cexec '/bin/update --version "$TARGET"'`,
+	} {
+		if !strings.Contains(string(content), required) {
+			t.Fatalf("published installer lifecycle proof missing %s", required)
+		}
+	}
+	for _, line := range strings.Split(string(content), "\n") {
+		if strings.Contains(line, "/bin/update --version") && strings.Contains(line, "--disable-auto-updates") {
+			t.Fatal("lifecycle proof must observe installer consent, not bypass it")
+		}
+	}
+}
+
 func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 	content, err := os.ReadFile(repoFile(".github", "workflows", "security-scan.yml"))
 	if err != nil {
@@ -825,14 +849,8 @@ func TestHelmChartShipsOpenShiftProfile(t *testing.T) {
 			t.Fatalf("Helm CI missing OpenShift render assertion %q", required)
 		}
 	}
-	if !strings.Contains(docs, "--set openShift.enabled=true") ||
-		!strings.Contains(docs, "--set openShift.kubernetesAgent.enabled=true") ||
-		!strings.Contains(docs, "create secret generic pulse-server-env") ||
-		!strings.Contains(docs, "create secret generic pulse-agent-env") {
-		t.Fatal("Kubernetes guide must document the shipped OpenShift profile")
-	}
-	if strings.Contains(docs, "--set-string agent.secretEnv.data.PULSE_TOKEN") {
-		t.Fatal("OpenShift guide must not persist the agent token in Helm release values")
+	if issues := openShiftDocsIssues(docs); len(issues) > 0 {
+		t.Fatalf("Kubernetes guide must document the shipped credential-safe OpenShift profile: %v", issues)
 	}
 }
 
@@ -2581,8 +2599,8 @@ func TestDemoReachabilityHelperSeparatesTailnetAndSshTransportProof(t *testing.T
 		`tailscale status --json`,
 		`tailscale ping --c 3 --timeout 10s "$DEMO_SERVER_HOST"`,
 		`nc -z -w 5 "$DEMO_SERVER_HOST" "$TCP_PORT"`,
-		`Runner Tailscale DNS:`,
-		`Runner Tailscale tags:`,
+		`Tailscale backend:`,
+		`Diagnostic mode is local-only`,
 		`Demo peer is not present in the runner peer map yet.`,
 		`Verify sshd and the host firewall on tailscale0.`,
 	} {
@@ -2623,7 +2641,7 @@ exit 1
 	if err != nil {
 		t.Fatalf("demo reachability helper failed: %v\n%s", err, output)
 	}
-	for _, needle := range []string{"Tailscale backend: Running", "Demo peer state: online=True active=True relay=lhr", "Demo SSH transport is reachable over Tailscale."} {
+	for _, needle := range []string{"Tailscale backend: Running", "Demo peer state: online=True active=True", "Demo SSH transport is reachable over Tailscale."} {
 		if !strings.Contains(string(output), needle) {
 			t.Fatalf("demo reachability output missing %q: %s", needle, output)
 		}
