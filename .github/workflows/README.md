@@ -140,6 +140,17 @@ and verifies the live service health and exact version. The privileged systemd
 smoke environment is digest-pinned because a floating container image would
 otherwise be an unreviewed code path inside the release gate.
 
+`release-lifecycle-rehearsal.yml` is a daily shadow rehearsal of the systemd
+lifecycle between two published releases, in the same digest-pinned systemd
+container. It installs the older release with its signature-verified
+`install.sh --version`, seeds real settings through the API, upgrades with the
+installed `/bin/update --version <to>` helper and rolls back with the documented
+`/bin/update --version <from>`, checking version, health, unit state, settings
+and data-dir survival after each step. It is read-only, uploads nothing and gates
+nothing; results are in the job log and step summary. Run
+`scripts/release_lifecycle_rehearsal.sh --from <tag> --to <tag>` to reproduce
+it locally (`PULSE_REHEARSAL_ENGINE=podman` on hosts without Docker).
+
 The shared `install-sh-smoke-body.yml` inherits its caller's token permissions;
 keep it free of workflow- or job-level permission overrides. Continuity calls
 that body directly with `contents: read`. The existing `install-sh-smoke.yml`

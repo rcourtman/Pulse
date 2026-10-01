@@ -4536,6 +4536,7 @@
         ".github/workflows/recover-release-activation.yml",
         ".github/workflows/release-convergence.yml",
         ".github/workflows/release-dry-run.yml",
+        ".github/workflows/release-lifecycle-rehearsal.yml",
         ".github/workflows/retry-release-convergence.yml",
         ".github/workflows/update-demo-server.yml",
         ".github/workflows/validate-release-assets.yml",
@@ -4630,6 +4631,8 @@
         "scripts/release_control/secure_runtime_source_manifest_v7.json",
         "scripts/release_control/validate_artifact_release_line.py",
         "scripts/release_ldflags.sh",
+        "scripts/release_lifecycle_rehearsal.sh",
+        "scripts/release_lifecycle_rehearsal_versions.py",
         "scripts/release_update_key.go",
         "scripts/run-release-backend-tests.sh",
         "scripts/run-release-preflight.sh",
@@ -4815,6 +4818,21 @@
               "scripts/release_control/resolve_release_promotion_test.py",
               "scripts/release_control/validate_artifact_release_line_test.py",
               "scripts/release_control/verify_github_release_integrity_test.py"
+            ]
+          },
+          {
+            "id": "release-lifecycle-rehearsal",
+            "label": "published-release install, upgrade and rollback rehearsal proof",
+            "match_prefixes": [],
+            "match_files": [
+              ".github/workflows/release-lifecycle-rehearsal.yml",
+              "scripts/release_lifecycle_rehearsal.sh",
+              "scripts/release_lifecycle_rehearsal_versions.py"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/tests/test_release_lifecycle_rehearsal.py"
             ]
           },
           {
