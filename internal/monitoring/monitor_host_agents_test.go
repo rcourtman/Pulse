@@ -6630,3 +6630,72 @@ func TestGetLiveHostsSnapshotCopiesOnlyHosts(t *testing.T) {
 		t.Fatalf("GetLiveHostsSnapshot allocated %.0f times with 1 host and 1000 guests; it is copying guests", allocs)
 	}
 }
+
+// Reads model the completed-ingest boundary without persistence/background work.
+// The real adapter still owns clone isolation, mutable facets and identity.
+type broadcastProjectionCountingStore struct {
+	*unifiedresources.MonitorAdapter
+	reads int
+}
+
+func (s *broadcastProjectionCountingStore) GetAll() []unifiedresources.Resource {
+	s.reads++
+	return s.MonitorAdapter.GetAll()
+}
+func (*broadcastProjectionCountingStore) TryReplaceRegistryForRead(models.StateSnapshot, time.Duration, func() map[unifiedresources.DataSource][]unifiedresources.IngestRecord) bool {
+	return false
+}
+
+func TestBroadcastProjectionListsRegistryOnceAndKeepsLiveChanges(t *testing.T) {
+	m, adapter, _ := newReadStateCloneTestMonitor(t, 4)
+	store := &broadcastProjectionCountingStore{MonitorAdapter: adapter}
+	m.resourceStore = store
+	first := m.BuildFrontendState()
+	if store.reads != 1 {
+		t.Fatalf("GetAll calls=%d, want one owned continuity-aware clone", store.reads)
+	}
+	if len(first.Resources) != 4 {
+		t.Fatalf("resources=%d", len(first.Resources))
+	}
+	oldCPU := first.Resources[0].CPU.Current
+	changed := store.GetAll()
+	// Keep LastSeen/overall freshness unchanged: a timestamp-only cache would
+	// miss these metric/status/label changes.
+	changed[0].Metrics.CPU.Value = 77
+	changed[0].Labels = map[string]string{"new": "label"}
+	changed[0].Status = unifiedresources.StatusOffline
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestResources(changed)
+	store.MonitorAdapter = unifiedresources.NewMonitorAdapter(registry)
+	m.state.UpdateActiveAlerts([]models.Alert{{ID: "live-alert", ResourceID: changed[0].ID, Level: "critical", Type: "cpu"}})
+	m.state.RemovedHostAgents = []models.RemovedHostAgent{{ID: "ignored", Hostname: "ignored.local", RemovedAt: time.Now()}}
+	store.reads = 0
+	second := m.BuildFrontendState()
+	if store.reads != 1 {
+		t.Fatalf("next GetAll calls=%d", store.reads)
+	}
+	var row *models.ResourceFrontend
+	for i := range second.Resources {
+		if second.Resources[i].ID == changed[0].ID {
+			row = &second.Resources[i]
+		}
+	}
+	if row == nil || row.CPU.Current != 77 || row.Labels["new"] != "label" {
+		t.Fatalf("mutable row was stale: %#v", row)
+	}
+	if first.Resources[0].CPU.Current != oldCPU {
+		t.Fatal("later projection mutated an accepted baseline")
+	}
+	if len(second.ActiveAlerts) != 1 || second.ActiveAlerts[0].ID != "live-alert" {
+		t.Fatal("live alert disappeared")
+	}
+	foundIgnored := false
+	for _, item := range second.ConnectedInfrastructure {
+		if item.Status == "ignored" && item.Name == "ignored.local" {
+			foundIgnored = true
+		}
+	}
+	if !foundIgnored {
+		t.Fatal("removed host lifecycle surface disappeared")
+	}
+}
