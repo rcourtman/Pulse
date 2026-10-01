@@ -918,10 +918,10 @@ func trueNASReclaimableARC(system SystemInfo) int64 {
 
 // trueNASMemoryUsageKnown reports whether the appliance supplied an available
 // memory reading. Without it the ARC-aware used figure cannot be derived, and
-// treating the zero value as a measurement reports total capacity as 100% used
-// (#2077, legacy REST transport on TrueNAS CORE).
+// an unobserved numeric zero must not report total capacity as 100% used. A
+// genuinely observed zero remains valid (#2077, legacy REST on TrueNAS CORE).
 func trueNASMemoryUsageKnown(system SystemInfo) bool {
-	return system.MemoryAvailableBytes > 0
+	return systemTelemetryAvailability(system).Memory && system.MemoryAvailableBytes >= 0
 }
 
 // trueNASEffectiveMemoryUsed treats the ZFS ARC as reclaimable cache, the
@@ -938,12 +938,12 @@ func trueNASEffectiveMemoryUsed(system SystemInfo) int64 {
 }
 
 func metricsFromTrueNASSystem(system SystemInfo, totalCapacity, totalUsed int64) *unifiedresources.ResourceMetrics {
-	hasRealtimeTelemetry := !system.CollectedAt.IsZero() || system.IntervalSeconds > 0
+	availability := systemTelemetryAvailability(system)
 	metrics := &unifiedresources.ResourceMetrics{
 		Disk: diskMetric(totalCapacity, totalUsed),
 	}
 
-	if hasRealtimeTelemetry {
+	if availability.CPU {
 		metrics.CPU = &unifiedresources.MetricValue{
 			Value:   system.CPUPercent,
 			Percent: system.CPUPercent,
@@ -965,22 +965,28 @@ func metricsFromTrueNASSystem(system SystemInfo, totalCapacity, totalUsed int64)
 		metrics.Memory = memory
 	}
 
-	if hasRealtimeTelemetry {
+	if availability.NetIn {
 		metrics.NetIn = &unifiedresources.MetricValue{
 			Value:  system.NetInRate,
 			Unit:   "bytes/s",
 			Source: unifiedresources.SourceTrueNAS,
 		}
+	}
+	if availability.NetOut {
 		metrics.NetOut = &unifiedresources.MetricValue{
 			Value:  system.NetOutRate,
 			Unit:   "bytes/s",
 			Source: unifiedresources.SourceTrueNAS,
 		}
+	}
+	if availability.DiskRead {
 		metrics.DiskRead = &unifiedresources.MetricValue{
 			Value:  system.DiskReadRate,
 			Unit:   "bytes/s",
 			Source: unifiedresources.SourceTrueNAS,
 		}
+	}
+	if availability.DiskWrite {
 		metrics.DiskWrite = &unifiedresources.MetricValue{
 			Value:  system.DiskWriteRate,
 			Unit:   "bytes/s",
@@ -3046,6 +3052,10 @@ func clonePools(pools []Pool) []Pool {
 
 func cloneSystemInfo(system SystemInfo) SystemInfo {
 	cloned := system
+	if system.Telemetry != nil {
+		availability := *system.Telemetry
+		cloned.Telemetry = &availability
+	}
 	if len(system.TemperatureCelsius) > 0 {
 		cloned.TemperatureCelsius = make(map[string]float64, len(system.TemperatureCelsius))
 		for key, value := range system.TemperatureCelsius {

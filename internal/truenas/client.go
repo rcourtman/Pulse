@@ -232,6 +232,7 @@ func systemInfoFromResponse(response systemInfoResponse) *SystemInfo {
 		MachineID:        machineID,
 		CPUCount:         cpuCount,
 		MemoryTotalBytes: response.Physmem,
+		Telemetry:        &SystemTelemetryAvailability{},
 	}
 }
 
@@ -289,42 +290,48 @@ func (c *Client) getSystemTelemetryREST(ctx context.Context) (*SystemInfo, error
 	}
 	history := parseSystemMetricHistory(response)
 	if history == nil {
-		return nil, fmt.Errorf("truenas legacy REST reporting returned no system telemetry")
+		return nil, errNoSystemTelemetry
 	}
 	return systemInfoFromMetricHistory(history), nil
 }
 
 // systemInfoFromMetricHistory maps the latest reporting sample onto live system
-// telemetry. Series that the appliance did not report stay zero so callers can
-// distinguish "absent" from a genuine zero.
+// telemetry. Numeric fields alone cannot distinguish absent from zero; retain
+// presence independently so one successful graph cannot fabricate its siblings.
 func systemInfoFromMetricHistory(history *SystemMetricHistory) *SystemInfo {
 	if history == nil {
 		return nil
 	}
-	system := &SystemInfo{CollectedAt: time.Now().UTC()}
+	system := &SystemInfo{CollectedAt: time.Now().UTC(), Telemetry: &SystemTelemetryAvailability{}}
 	if value, ok := latestTimeSeriesValue(history.CPUPercent); ok {
 		system.CPUPercent = value
+		system.Telemetry.CPU = true
 	}
 	if value, ok := latestTimeSeriesValue(history.MemoryTotalBytes); ok {
 		system.MemoryTotalBytes = int64(value)
 	}
 	if value, ok := latestTimeSeriesValue(history.MemoryAvailableBytes); ok {
 		system.MemoryAvailableBytes = int64(value)
+		system.Telemetry.Memory = value >= 0
 	}
 	if value, ok := latestTimeSeriesValue(history.ARCSizeBytes); ok {
 		system.ARCSizeBytes = int64(value)
 	}
 	if value, ok := latestTimeSeriesValue(history.NetInRate); ok {
 		system.NetInRate = value
+		system.Telemetry.NetIn = true
 	}
 	if value, ok := latestTimeSeriesValue(history.NetOutRate); ok {
 		system.NetOutRate = value
+		system.Telemetry.NetOut = true
 	}
 	if value, ok := latestTimeSeriesValue(history.DiskReadRate); ok {
 		system.DiskReadRate = value
+		system.Telemetry.DiskRead = true
 	}
 	if value, ok := latestTimeSeriesValue(history.DiskWriteRate); ok {
 		system.DiskWriteRate = value
+		system.Telemetry.DiskWrite = true
 	}
 	return system
 }
@@ -2036,7 +2043,11 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetch truenas system info: %w", err)
 	}
-	if telemetry, err := c.GetSystemTelemetry(ctx); err == nil && telemetry != nil {
+	if telemetry, err := c.GetSystemTelemetry(ctx); err != nil {
+		// Inventory remains usable. Retain only a fixed error category/status,
+		// never the provider's body, endpoint, credentials or raw error text.
+		system.Telemetry = systemTelemetryFailure(err)
+	} else if telemetry != nil {
 		mergeSystemTelemetry(system, telemetry)
 	}
 
@@ -2101,7 +2112,7 @@ func mergeSystemTelemetry(system *SystemInfo, telemetry *SystemInfo) {
 	if telemetry.MemoryTotalBytes > 0 {
 		system.MemoryTotalBytes = telemetry.MemoryTotalBytes
 	}
-	if telemetry.MemoryAvailableBytes > 0 {
+	if telemetry.MemoryAvailableBytes > 0 || (telemetry.Telemetry != nil && telemetry.Telemetry.Memory) {
 		system.MemoryAvailableBytes = telemetry.MemoryAvailableBytes
 	}
 	if telemetry.ARCSizeBytes > 0 {
@@ -2120,6 +2131,10 @@ func mergeSystemTelemetry(system *SystemInfo, telemetry *SystemInfo) {
 	}
 	if !telemetry.CollectedAt.IsZero() {
 		system.CollectedAt = telemetry.CollectedAt
+	}
+	if telemetry.Telemetry != nil {
+		availability := *telemetry.Telemetry
+		system.Telemetry = &availability
 	}
 }
 
@@ -3084,20 +3099,14 @@ func parseRealtimeFields(message trueNASRPCResponse, collectionPrefix string) (m
 }
 
 func parseSystemTelemetry(fields map[string]any, intervalSeconds int, collectedAt time.Time) *SystemInfo {
-	if len(fields) == 0 {
-		return &SystemInfo{
-			IntervalSeconds: intervalSeconds,
-			CollectedAt:     collectedAt,
-		}
-	}
-
 	telemetry := &SystemInfo{
 		IntervalSeconds: intervalSeconds,
 		CollectedAt:     collectedAt,
+		Telemetry:       &SystemTelemetryAvailability{},
 	}
 
 	cpu := readMapAny(fields, "cpu")
-	cpuPercent := readFloatAny(cpu,
+	cpuPercent, hasCPU := readFloatValueAny(cpu,
 		"usage",
 		"percent",
 		"usage_percent",
@@ -3106,18 +3115,21 @@ func parseSystemTelemetry(fields map[string]any, intervalSeconds int, collectedA
 		"total",
 		"overall",
 	)
-	if cpuPercent == 0 {
+	if !hasCPU {
 		if usage := readMapAny(cpu, "usage", "total"); len(usage) > 0 {
-			cpuPercent = readFloatAny(usage, "percent", "value", "usage")
+			cpuPercent, hasCPU = readFloatValueAny(usage, "percent", "value", "usage")
 		}
 	}
 	telemetry.CPUPercent = cpuPercent
+	telemetry.Telemetry.CPU = hasCPU
 
 	memory := readMapAny(fields, "memory")
 	total := readInt64Any(memory, "physical_memory_total", "total", "memory_total", "total_bytes")
 	available := readInt64Any(memory, "physical_memory_available", "available", "free", "available_bytes", "free_bytes")
+	_, hasMemory := readFloatValueAny(memory, "physical_memory_available", "available", "free", "available_bytes", "free_bytes")
 	telemetry.MemoryTotalBytes = total
 	telemetry.MemoryAvailableBytes = available
+	telemetry.Telemetry.Memory = hasMemory && available >= 0
 	telemetry.ARCSizeBytes = readInt64Any(memory, "arc_size")
 
 	interfaces := readMapAny(fields, "interfaces")
@@ -3126,7 +3138,7 @@ func parseSystemTelemetry(fields map[string]any, intervalSeconds int, collectedA
 		if !ok {
 			continue
 		}
-		telemetry.NetInRate += readFloatAny(record,
+		in, hasIn := readFloatValueAny(record,
 			"rx_bytes",
 			"received_bytes",
 			"received_bytes_rate",
@@ -3134,7 +3146,7 @@ func parseSystemTelemetry(fields map[string]any, intervalSeconds int, collectedA
 			"bytes_recv",
 			"bytes_received",
 		)
-		telemetry.NetOutRate += readFloatAny(record,
+		out, hasOut := readFloatValueAny(record,
 			"tx_bytes",
 			"sent_bytes",
 			"sent_bytes_rate",
@@ -3142,6 +3154,10 @@ func parseSystemTelemetry(fields map[string]any, intervalSeconds int, collectedA
 			"bytes_sent",
 			"bytes_transmitted",
 		)
+		telemetry.NetInRate += in
+		telemetry.NetOutRate += out
+		telemetry.Telemetry.NetIn = telemetry.Telemetry.NetIn || hasIn
+		telemetry.Telemetry.NetOut = telemetry.Telemetry.NetOut || hasOut
 	}
 
 	disks := readMapAny(fields, "disks", "disls")
@@ -3150,8 +3166,12 @@ func parseSystemTelemetry(fields map[string]any, intervalSeconds int, collectedA
 		if !ok {
 			continue
 		}
-		telemetry.DiskReadRate += readFloatAny(record, "read_bytes", "read_bytes_rate", "bytes_read")
-		telemetry.DiskWriteRate += readFloatAny(record, "write_bytes", "write_bytes_rate", "bytes_written")
+		read, hasRead := readFloatValueAny(record, "read_bytes", "read_bytes_rate", "bytes_read")
+		write, hasWrite := readFloatValueAny(record, "write_bytes", "write_bytes_rate", "bytes_written")
+		telemetry.DiskReadRate += read
+		telemetry.DiskWriteRate += write
+		telemetry.Telemetry.DiskRead = telemetry.Telemetry.DiskRead || hasRead
+		telemetry.Telemetry.DiskWrite = telemetry.Telemetry.DiskWrite || hasWrite
 	}
 
 	return telemetry
@@ -3634,11 +3654,11 @@ func extractReportingLegendFloatValues(raw any, legends []string) map[string]flo
 			}
 		}
 		if len(values) == 0 && len(legends) == 1 {
-			for _, value := range typed {
-				if parsed, ok := parseFloat64Any(value); ok {
-					values[legends[0]] = parsed
-					break
-				}
+			// A missing/null legend value must not fall back to an unrelated
+			// numeric field (notably the row's timestamp). Keep only supported
+			// generic single-series value aliases.
+			if parsed, ok := readFloatValueAny(typed, "value", "y", "temperature"); ok {
+				values[legends[0]] = parsed
 			}
 		}
 	}

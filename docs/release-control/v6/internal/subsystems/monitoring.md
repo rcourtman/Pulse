@@ -150,9 +150,9 @@ host-chart history are reconstructed from the REST reporting API
 `query` parameters). The reporting `memory` and `arcsize` graphs supply the
 available and ARC readings that the JSON-RPC realtime subscription otherwise
 provides. When no available-memory reading can be established, the provider
-must not derive usage from a zero available value: the system memory metric is
+must not derive usage from an absent available value: the system memory metric is
 omitted and agent memory is projected as usage-unavailable with its known total,
-so a CORE appliance is never reported as 100% used. This is a behavioral
+so missing data never reports a CORE appliance as 100% used. This is a behavioral
 correctness repair with no public API or schema delta.
 `TestRESTSystemTelemetryReadsReportingMemory`,
 `TestRESTSystemMetricHistoryUsesReporting` and
@@ -161,6 +161,43 @@ correctness repair with no public API or schema delta.
 history query and the unavailable-usage guard. These are synthetic transport
 and projection proofs, not native CORE appliance acceptance or reporter
 confirmation.
+
+
+
+### TrueNAS partial samples and nonblocking telemetry diagnostics — issue #2077
+
+Live system identity and both telemetry parsers carry explicit per-metric
+availability. A reporting timestamp or realtime interval is not evidence that
+CPU, memory or any sibling I/O series was measured. Each canonical metric is
+omitted unless its own reading exists; observed zeros remain valid, including
+zero free memory. Capacity-only snapshots keep hardware capacity and mark
+usage unavailable. Older static snapshots retain their compatibility projection;
+no live client uses that fallback. Null/malformed single-series objects never
+substitute a timestamp or another arbitrary numeric field for the missing value.
+Supported generic `value`, `y` and `temperature` row aliases remain supported.
+
+Optional telemetry failure must not discard inventory or degrade a successful
+inventory poll. Existing connection diagnostics expose optional
+`observed.telemetry` with six availability booleans (`cpu`, `memory`, `netIn`,
+`netOut`, `diskRead`, `diskWrite`), a fixed `errorCategory` and, for HTTP failures,
+`httpStatus`. No raw response body, endpoint, key, hostname or arbitrary provider
+error text is copied into this projection. Error categories record the observed
+collection result, not its cause. A later refresh replaces availability and
+clears obsolete failures; snapshot and connection-summary copies cannot mutate
+shared state. This is an additive diagnostic field on the existing read surface,
+not a separate resource, route, telemetry store or alert policy.
+
+`TestRESTReportingObservationPresence`,
+`TestRESTSnapshotRetainsSanitizedTelemetryFailure`, `TestRealtimeObservationPresence`
+and `TestSystemTelemetryFailureCategoriesAreBounded` in
+`internal/truenas/client_test.go` pin repeated full snapshots, canonical rows,
+native History/zero semantics and bounded failure/recovery controls.
+`TestTrueNASPartialReportingPipeline` in
+`internal/monitoring/truenas_poller_test.go` exercises the HTTP client, poller,
+registry, memory metadata, shared metrics writer and in-memory/persisted chart
+readbacks across partial, missing and zero-valued cycles. These synthetic proofs
+are not the reporter's native response schema, installed CORE acceptance or a
+claim that #2077's missing graph journey is resolved.
 
 
 **Legacy reporting failure isolation and memory components — issue #2077**

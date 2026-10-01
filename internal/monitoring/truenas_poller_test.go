@@ -2,6 +2,8 @@ package monitoring
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -16,8 +18,10 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
 func TestTrueNASPollerPollsConfiguredConnections(t *testing.T) {
@@ -2203,5 +2207,157 @@ func TestTrueNASSuccessfulPollCadenceIncludesBoundedIdleGap(t *testing.T) {
 				t.Error("failure backoff changed")
 			}
 		})
+	}
+}
+
+// HTTP/client -> poller -> registry -> row/metric writer -> chart readback.
+// Synthetic response shapes prove omission/zero handling, not CORE acceptance.
+func TestTrueNASPartialReportingPipeline(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+	cycles := []struct {
+		body          string
+		status        int
+		want          map[string]float64
+		errorCategory string
+	}{
+		{`[{"name":"memory","legend":["free"],"data":[[1789000060,8]]}]`, 200, map[string]float64{"memory": 50}, ""},
+		{`[{"name":"cpu","legend":["usage"],"data":[[1789000060,0]]}]`, 200, map[string]float64{"cpu": 0}, ""},
+		{`provider-private-text`, 401, nil, "authentication"},
+		{`[{"name":"cpu","legend":["usage"],"data":[[1789000060,0]]},{"name":"memory","legend":["free"],"data":[[1789000060,0]]},{"name":"interface","legend":["received"],"data":[[1789000060,0]]},{"name":"disk","legend":["write"],"data":[[1789000060,0]]}]`, 200, map[string]float64{"cpu": 0, "memory": 100, "netin": 0, "diskwrite": 0}, ""},
+	}
+	var current atomic.Int64
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v2.0/system/info":
+			_, _ = w.Write([]byte(`{"hostname":"synthetic-core","version":"TrueNAS-13.0-U6.1","cores":8,"physmem":16}`))
+		case "/api/v2.0/pool":
+			_, _ = w.Write([]byte(`[{"id":1,"name":"tank","status":"ONLINE","size":100,"allocated":50,"free":50}]`))
+		case "/api/v2.0/pool/dataset", "/api/v2.0/disk", "/api/v2.0/alert/list":
+			_, _ = w.Write([]byte(`[]`))
+		case "/api/v2.0/reporting/get_data":
+			cycle := cycles[current.Load()]
+			w.WriteHeader(cycle.status)
+			_, _ = w.Write([]byte(cycle.body))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	fingerprint := fmt.Sprintf("%x", sha256.Sum256(server.Certificate().Raw))
+	// Trust only this fixture certificate via VerifyConnection, rather than
+	// requiring httptest's self-signed certificate to have a public CA chain.
+	// Fingerprint pinning remains enforced (including the existing mismatch
+	// controls in internal/truenas); no production TLS setting is changed.
+	client, err := truenas.NewClient(truenas.ClientConfig{Host: server.URL, APIKey: "synthetic", Fingerprint: fingerprint, InsecureSkipVerify: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	provider := truenas.NewLiveProviderForConnection(&truenas.APIFetcher{Client: client}, "synthetic-connection")
+	instance := config.TrueNASInstance{ID: "synthetic-connection", Host: server.URL, Enabled: true}
+	poller := NewTrueNASPoller(nil, 0, nil)
+	poller.providersByOrg["default"] = map[string]*truenas.Provider{instance.ID: provider}
+	poller.configsByOrg["default"] = map[string]config.TrueNASInstance{instance.ID: instance}
+	resourceStore := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(unifiedresources.NewMemoryStore()))
+	persistent, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = persistent.Close() }()
+	monitor := &Monitor{metricsHistory: NewMetricsHistory(1024, 24*time.Hour), metricsStore: persistent}
+	counts := make(map[string]int)
+	observedAt := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Second)
+	for index, cycle := range cycles {
+		current.Store(int64(index))
+		// Model the next due poll, not an absent deadline: a zero deadline
+		// is deliberately reconstructed from the previous attempt's cadence.
+		poller.ensureConnectionRuntimeStatusLocked("default", instance.ID).nextPollAt = time.Now().Add(-time.Second)
+		poller.pollAll(context.Background())
+		summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{instance})[instance.ID]
+		if summary.Poll == nil || summary.Poll.LastSuccessAt == nil || summary.Poll.LastError != nil || summary.Poll.ConsecutiveFailures != 0 || summary.Observed == nil || summary.Observed.StoragePools != 1 {
+			t.Fatalf("cycle %d lost successful inventory health: %+v", index, summary)
+		}
+		availability := summary.Observed.Telemetry
+		if availability == nil || availability.ErrorCategory != cycle.errorCategory {
+			t.Fatalf("cycle %d lost telemetry result: %+v", index, availability)
+		}
+		for key, present := range map[string]bool{"cpu": availability.CPU, "memory": availability.Memory, "netin": availability.NetIn, "netout": availability.NetOut, "diskread": availability.DiskRead, "diskwrite": availability.DiskWrite} {
+			_, want := cycle.want[key]
+			if present != want {
+				t.Errorf("cycle %d diagnostics %s presence=%v, want %v", index, key, present, want)
+			}
+		}
+		serialized, err := json.Marshal(summary)
+		if err != nil || strings.Contains(string(serialized), "provider-private-text") || strings.Contains(string(serialized), "synthetic\"") {
+			t.Fatalf("cycle %d secret-bearing diagnostic: %s %v", index, serialized, err)
+		}
+		availability.ErrorCategory = "mutated"
+		if poller.ConnectionSummaries("default", []config.TrueNASInstance{instance})[instance.ID].Observed.Telemetry.ErrorCategory != cycle.errorCategory {
+			t.Fatal("connection diagnostics share mutable provider state")
+		}
+		records := poller.GetCurrentRecordsForOrg("default")
+		// Space the modeled poll observations apart without a wall-clock sleep;
+		// the writer/store deliberately coalesce identical second timestamps.
+		for i := range records {
+			records[i].Resource.LastSeen = observedAt.Add(time.Duration(index) * time.Minute)
+			records[i].Resource.UpdatedAt = records[i].Resource.LastSeen
+		}
+		resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{unifiedresources.SourceTrueNAS: records})
+		var host *unifiedresources.Resource
+		for _, resource := range resourceStore.GetAll() {
+			if resource.Type == unifiedresources.ResourceTypeAgent {
+				host = &resource
+			}
+		}
+		if host == nil || host.Agent == nil || host.Agent.CPUCount != 8 || host.Agent.Memory == nil || host.Agent.Memory.Total != 16 {
+			t.Fatalf("cycle %d lost host/capacity: %+v", index, host)
+		}
+		if host.Agent.Memory.UsageUnavailable != !availability.Memory {
+			t.Fatalf("cycle %d stale/fabricated memory metadata: %+v", index, host.Agent.Memory)
+		}
+		var writes []metrics.WriteMetric
+		monitor.syncUnifiedAgentMetrics(resourceStore, &writes)
+		seen := make(map[string]bool)
+		for _, write := range writes {
+			want, present := cycle.want[write.MetricType]
+			if write.MetricType == "disk" {
+				want, present = 50, true // independently collected pool capacity
+			}
+			if !present || write.Value != want || write.ResourceID != instance.ID || write.ResourceType != "agent" || seen[write.MetricType] {
+				t.Errorf("cycle %d wrong/duplicate/missing-source write: %+v", index, write)
+			}
+			seen[write.MetricType] = true
+			counts[write.MetricType]++
+		}
+		if len(writes) != len(cycle.want)+1 {
+			t.Fatalf("cycle %d writes=%+v, want only observed metrics plus pool usage", index, writes)
+		}
+		persistent.WriteBatchSync(writes)
+		inMemory := monitor.GetGuestMetrics("agent:"+instance.ID, time.Hour)
+		chart := monitor.GetGuestMetricsForChart("agent:"+instance.ID, "agent", instance.ID, time.Hour)
+		for _, key := range []string{"cpu", "memory", "disk", "netin", "netout", "diskread", "diskwrite"} {
+			if len(inMemory[key]) != counts[key] || len(chart[key]) != counts[key] {
+				t.Errorf("cycle %d %s chart contains fabricated/lost points: memory=%d chart=%d want=%d", index, key, len(inMemory[key]), len(chart[key]), counts[key])
+			}
+		}
+		id, native, err := provider.SystemMetricHistory(context.Background(), time.Hour)
+		if cycle.status != 200 {
+			if err == nil {
+				t.Fatal("failed native History read was disguised as success")
+			}
+			continue
+		}
+		if err != nil || id != instance.ID || len(native) != len(cycle.want) {
+			t.Fatalf("cycle %d native History=%+v id=%q err=%v", index, native, id, err)
+		}
+		for key, want := range cycle.want {
+			points := native[key]
+			if len(points) != 1 || points[0].Value != want || points[0].Timestamp.Unix() != 1789000060 {
+				t.Errorf("cycle %d %s native data/timestamp altered: %+v", index, key, points)
+			}
+		}
 	}
 }
