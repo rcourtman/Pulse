@@ -15,6 +15,7 @@ This maintenance preview keeps Backup Server History attached to the right host 
 ## Before you upgrade
 
 - Back up your Pulse configuration and data before trying this preview. Keep production installations on the stable channel unless you intend to test a preview.
+- If you sign in through SSO, map at least one trusted IdP group to the built-in `admin` role so an administrator can still manage settings.
 - Windows Unified Agent binaries are not Authenticode-signed while SignPath remains unavailable and may show an Unknown Publisher warning. Verify downloads with the published checksums and detached signatures.
 - Pulse Mobile remains compatible. This candidate does not require a companion mobile release.
 - The rollback target is stable `v6.4.5`. On systemd and Proxmox LXC installs, use this command only when `/bin/update` was installed by the Pulse server installer: `sudo /bin/update --version v6.4.5` to return to the previous stable release. For Docker Compose, pin `rcourtman/pulse:6.4.5` and recreate the container.
