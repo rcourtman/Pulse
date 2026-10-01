@@ -525,7 +525,7 @@ func normalizeMockMetricTimestamp(at time.Time, interval time.Duration) time.Tim
 
 func canonicalMetricSeries(resourceType, resourceID, metric string, timestamps []time.Time) []float64 {
 	return canonicalMetricSeriesWithSampler(
-		mock.NewMetricSampler(mock.CurrentFixtureGraph()),
+		mock.CurrentMetricSampler(),
 		resourceType,
 		resourceID,
 		metric,

@@ -3,6 +3,7 @@ package mock
 import (
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mockmodel"
@@ -216,6 +217,36 @@ func metricBoundsForRole(resourceClass, metric, role string) (float64, float64) 
 // fixture update is initializing.
 type MetricSampler struct {
 	roles map[string]string
+}
+
+// runtimeMetricSampler caches only derived, immutable roles. The graph data
+// version changes on both metric ticks and structural updates, so new series
+// observe the current canonical fixture while existing samplers remain bound
+// to their captured graph. Private graph/global persona updates cannot replace
+// this canonical snapshot.
+var runtimeMetricSampler struct {
+	sync.Mutex
+	version uint64
+	sampler MetricSampler
+}
+
+// CurrentMetricSampler avoids cloning the entire demo estate and resolving
+// every resource's persona for every chart series. Graph publication and the
+// version read share dataMu; the cached role map is never mutated after return.
+func CurrentMetricSampler() MetricSampler {
+	dataMu.RLock()
+	defer dataMu.RUnlock()
+	if !enabled.Load() {
+		return MetricSampler{}
+	}
+	runtimeMetricSampler.Lock()
+	defer runtimeMetricSampler.Unlock()
+	version := fixtureDataVersion.Load()
+	if runtimeMetricSampler.sampler.roles == nil || runtimeMetricSampler.version != version {
+		runtimeMetricSampler.sampler = NewMetricSampler(mockGraph)
+		runtimeMetricSampler.version = version
+	}
+	return runtimeMetricSampler.sampler
 }
 
 func NewMetricSampler(graph FixtureGraph) MetricSampler {
