@@ -2805,6 +2805,16 @@ fields. Persisted `system.json` files that still carry the legacy keys load
 cleanly with the keys ignored, so tenant workspace preservation and recovery
 flows that copy `system.json` forward are unaffected.
 
+### Shared telemetry preference updates preserve recovery ownership
+
+Telemetry preference updates remain durable before the sender callback. An
+explicit boolean equal to the effective runtime value still repairs a stale
+disk preference but must not restart the sender. Null/omitted values leave that
+preference alone, and a failed save neither mutates runtime nor invokes the
+callback. The document shape and recovery ownership are unchanged.
+`system_settings_telemetry_test.go` pins repeated saves, transitions, durable
+callback ordering, stale preferences, null input and failed persistence.
+
 ### Shared system-settings boundary gained an SSH backoff reset side effect
 
 The shared `internal/api` system-settings surface this subsystem consumes

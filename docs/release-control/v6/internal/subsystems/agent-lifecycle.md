@@ -3686,6 +3686,16 @@ fields. No agent-lifecycle behavior keyed off them — agent update targeting
 and command admission are unaffected — and the extension-point expectations
 on the system-settings boundary are otherwise unchanged.
 
+### Shared telemetry settings preserve sender lifecycle ownership
+
+Telemetry preference saves invoke the sender callback only after a persisted
+explicit boolean changes the effective runtime value. Repeated saves and
+null/omitted preferences do not restart it. This lifecycle belongs to telemetry
+reporting, not agent registration or command admission. A telemetry `startup`
+event also follows a genuine sender re-enable or ID reset and therefore cannot
+serve as a count of agent or server restarts. Settings transition/persistence
+tests pin this shared boundary without changing agent lifecycle authority.
+
 ### Shared system-settings boundary gained an SSH backoff reset side effect
 
 The shared `internal/api` system-settings surface this subsystem consumes
