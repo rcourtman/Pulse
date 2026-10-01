@@ -55,7 +55,7 @@ type SystemSettingsHandler struct {
 	// runtime, so the router can reconfigure the monitor's checker and
 	// collector without a restart.
 	guestDockerInventoryToggleFunc func()
-	mtMonitor                interface {
+	mtMonitor                      interface {
 		GetMonitor(string) (*monitoring.Monitor, error)
 	}
 	defaultMonitor SystemSettingsMonitor
@@ -1069,10 +1069,12 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 			Bool("enabled", settings.EnableProxmoxGuestDockerInventory).
 			Msg("Proxmox guest Docker inventory opt-in changed via settings")
 	}
-	if _, ok := rawRequest["telemetryEnabled"]; ok && settings.TelemetryEnabled != nil {
-		h.config.TelemetryEnabled = *settings.TelemetryEnabled
+	// A null/omitted preference is not a transition, even if disk and runtime
+	// differ. Repeated saves must not restart the telemetry sender either.
+	if updates.TelemetryEnabled != nil && h.config.TelemetryEnabled != *updates.TelemetryEnabled {
+		h.config.TelemetryEnabled = *updates.TelemetryEnabled
 		if h.telemetryToggleFunc != nil {
-			h.telemetryToggleFunc(*settings.TelemetryEnabled)
+			h.telemetryToggleFunc(*updates.TelemetryEnabled)
 		}
 	}
 	if _, ok := rawRequest["publicURL"]; ok {

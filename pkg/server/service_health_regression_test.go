@@ -18,8 +18,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 )
 
-// Override only Addr, retaining the real listener for serving. This models an
-// IPv6 wildcard reported on an install where IPv6 loopback is unavailable.
+// Address-only listeners have no inspectable socket. IPv6 wildcards must stay
+// conservative rather than treating an IPv4 response as evidence of their mode.
 type serviceHealthAddrListener struct {
 	net.Listener
 	addr net.Addr
@@ -49,8 +49,8 @@ func TestServiceHealthWildcardFamiliesAndExplicitAddresses(t *testing.T) {
 		tls  bool
 		want []string
 	}{
-		{"IPv6 wildcard", &net.TCPAddr{IP: net.IPv6unspecified, Port: 7655}, false, []string{"http://127.0.0.1:7655", "http://[::1]:7655"}},
-		{"unspecified family", &net.TCPAddr{Port: 7655}, false, []string{"http://127.0.0.1:7655", "http://[::1]:7655"}},
+		{"uninspectable IPv6 wildcard", &net.TCPAddr{IP: net.IPv6unspecified, Port: 7655}, false, []string{"http://[::1]:7655"}},
+		{"unspecified family", &net.TCPAddr{Port: 7655}, false, []string{"http://127.0.0.1:7655"}},
 		{"IPv4 wildcard", &net.TCPAddr{IP: net.IPv4zero, Port: 7655}, false, []string{"http://127.0.0.1:7655"}},
 		{"explicit IPv4", &net.TCPAddr{IP: net.ParseIP("192.0.2.1"), Port: 7655}, false, []string{"http://192.0.2.1:7655"}},
 		{"explicit IPv6", &net.TCPAddr{IP: net.IPv6loopback, Port: 7655}, true, []string{"https://[::1]:7655"}},
@@ -72,6 +72,15 @@ func TestServiceHealthWildcardFamiliesAndExplicitAddresses(t *testing.T) {
 }
 
 func TestServiceHealthIPv4SurvivesUnavailableIPv6(t *testing.T) {
+	listener, err := net.Listen("tcp", "[::]:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	targets := localServiceHealthBaseURLs(listener, false)
+	if len(targets) != 2 {
+		t.Fatalf("required dual-stack listener targets = %v", targets)
+	}
 	for _, failure := range []error{errors.New("IPv6 disabled"), errors.New("IPv6 unreachable"), context.DeadlineExceeded} {
 		client := &http.Client{Transport: serviceHealthRoundTripper(func(r *http.Request) (*http.Response, error) {
 			if r.URL.Hostname() == "::1" {
@@ -87,7 +96,6 @@ func TestServiceHealthIPv4SurvivesUnavailableIPv6(t *testing.T) {
 		if old.Healthy || !old.Observed {
 			t.Fatalf("IPv6-only control = %#v", old)
 		}
-		targets := localServiceHealthBaseURLs(serviceHealthAddrListener{addr: &net.TCPAddr{IP: net.IPv6unspecified, Port: 7655}}, false)
 		got := serviceHealthProbe(targets, client, time.Second, 0)()
 		if !got.Observed || !got.Healthy || got.FailureCategory != "" {
 			t.Fatalf("wildcard with available IPv4 = %#v", got)
@@ -98,9 +106,9 @@ func TestServiceHealthIPv4SurvivesUnavailableIPv6(t *testing.T) {
 func TestServiceHealthWildcardOnRealIPv4AndIPv6OnlyListeners(t *testing.T) {
 	for _, network := range []string{"tcp4", "tcp6"} {
 		t.Run(network, func(t *testing.T) {
-			address := "127.0.0.1:0"
+			address := "0.0.0.0:0"
 			if network == "tcp6" {
-				address = "[::1]:0"
+				address = "[::]:0"
 			}
 			listener, err := net.Listen(network, address)
 			if err != nil {
@@ -114,9 +122,7 @@ func TestServiceHealthWildcardOnRealIPv4AndIPv6OnlyListeners(t *testing.T) {
 			done := make(chan struct{})
 			go func() { defer close(done); _ = server.Serve(listener) }()
 			t.Cleanup(func() { _ = server.Close(); <-done })
-			bound := listener.Addr().(*net.TCPAddr)
-			wildcard := serviceHealthAddrListener{Listener: listener, addr: &net.TCPAddr{IP: net.IPv6unspecified, Port: bound.Port}}
-			got := newServiceHealthProbe(wildcard, false)()
+			got := newServiceHealthProbe(listener, false)()
 			if !got.Observed || !got.Healthy || got.FailureCategory != "" {
 				t.Fatalf("real %s server through wildcard = %#v", network, got)
 			}
