@@ -467,10 +467,15 @@ func (h *UpdateHandlers) HandleUpdateStream(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Set SSE headers
+	// Set SSE headers. no-transform and X-Accel-Buffering keep reverse
+	// proxies (nginx, Cloudflare, compressing ingresses) from buffering or
+	// re-encoding the stream: a buffered stream looks exactly like an update
+	// that stopped reporting progress. The gzip middleware already skips
+	// text/event-stream, so this is the only encoding the stream ever has.
 	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "no-cache, no-transform")
 	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	// Generate client ID
@@ -489,9 +494,10 @@ func (h *UpdateHandlers) HandleUpdateStream(w http.ResponseWriter, r *http.Reque
 		Str("client_ip", clientIP).
 		Msg("Update progress SSE stream started")
 
-	// Send initial connection message
-	fmt.Fprintf(w, ": connected\n\n")
-	client.Flusher.Flush()
+	// AddSSEClient has already written the connection preamble and the
+	// current status and flushed them. All further writes go through the
+	// broadcaster under the client's lock; writing here as well would race
+	// the broadcaster on a ResponseWriter that is not safe for concurrent use.
 
 	// Wait for client disconnect or context cancellation
 	select {

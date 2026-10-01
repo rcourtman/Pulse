@@ -594,6 +594,27 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
             {"healthy": 1, "frontend_assets": 1},
         )
 
+    def test_target_release_service_health_keeps_timeouts_distinct_from_connectivity(self) -> None:
+        now = datetime(2026, 9, 30, 20, tzinfo=timezone.utc)
+        rows = {
+            category: {
+                "received_at": "2026-09-30 19:00:00",
+                "version": "6.4.6",
+                "service_health_observed": 1,
+                "service_health_healthy": 0,
+                "service_health_failure_category": category,
+            }
+            for category in ("timeout", "api_connectivity")
+        }
+        summary = report.summarize_target_release_service_health(
+            rows, {"6.4.6"}, "6.4.6", now=now
+        )
+        self.assertEqual(summary["unhealthy_installs"], 2)
+        self.assertEqual(
+            {entry["category"]: entry["installs"] for entry in summary["failure_categories"]},
+            {"timeout": 1, "api_connectivity": 1},
+        )
+
     def test_target_release_followup_excludes_first_heartbeat_baselines_and_flags_rollbacks(self) -> None:
         now = datetime(2026, 8, 19, 12, tzinfo=timezone.utc)
 
