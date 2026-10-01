@@ -2350,6 +2350,30 @@ review, exact qualification and a new-source terminal no-mutation watchdog.
 
 ## Current State
 
+### Existing-install auto-update consent (1 October 2026)
+
+A manual update, version-pinned rollback or reinstall is not consent to turn
+on unattended updates. The root server installer's three existing-install
+prompt paths share `offer_existing_auto_updates`: missing timers and explicitly
+disabled settings default to **No**, including Enter and non-TTY reads. Only
+`y`/`yes` (case-insensitive), or the existing explicit enable option, opts in.
+Explicit CLI choices are not prompted again. Existing enabled or disabled timer
+assets still refresh without changing their enablement; fresh installs remain
+opt-in. Readiness, signature validation and persistent-data backup are unchanged.
+
+The compatible backport of main `eb7e70135d4e51d6215b33626175bb7313759ac1`
+keeps the existing line's bootstrap, installer and qualification paths rather
+than importing main's later lifecycle-rehearsal infrastructure.
+`auto_update_intent_test.go` executes the real main flows for update, rollback,
+same-version reinstall and both menu actions, covering absent/disabled/enabled
+timers, Enter, EOF, invalid/no/affirmative input and explicit CLI choices.
+`root_install_sh_test.go` binds those paths to the shared choice. These confined
+fixtures do not establish native installed acceptance: containing-release
+signed-installer upgrade and rollback still need actual configuration/timer
+readback through Delivery's existing lifecycle ownership. The hosted update
+helper fetches the latest stable installer; RC source placement alone does not
+establish that the installed helper uses this repair.
+
 ### Update progress stream delivery
 
 `GET /api/updates/stream` is the in-app updater's progress feed and must never
