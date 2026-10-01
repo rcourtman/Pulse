@@ -564,7 +564,7 @@ func TestQuietHoursClockDispatchAndDiagnosis(t *testing.T) {
 				}
 				if deferred {
 					want, _ := time.Parse(time.RFC3339, tc.replay)
-					if diagnosis.Status != AlertDeliveryStatusDeferred || diagnosis.Reason != AlertDeliveryReasonQuietHours || diagnosis.QuietHoursReplayAt == nil || !diagnosis.QuietHoursReplayAt.Equal(want) {
+					if diagnosis.Status != AlertDeliveryStatusDeferred || diagnosis.Reason != AlertDeliveryReasonQuietHours+":non-critical" || diagnosis.QuietHoursReplayAt == nil || !diagnosis.QuietHoursReplayAt.Equal(want) {
 						t.Fatalf("diagnosis disagrees with local-clock policy: %+v", diagnosis)
 					}
 				} else if diagnosis.Status != AlertDeliveryStatusWouldSend || diagnosis.Reason != AlertDeliveryReasonReady {
