@@ -165,3 +165,82 @@ func TestServiceHealthStateRejectsTamperedPreviousVersion(t *testing.T) {
 		t.Fatalf("tampered previous release escaped local boundary: %#v", ping)
 	}
 }
+
+// Closed categories survive both the outbound JSON payload and the persisted
+// adjacent-version cohort. No transport error text is part of either shape.
+func TestServiceHealthFailureCategoriesSerializeAndPersist(t *testing.T) {
+	categories := []string{
+		ServiceHealthFailureListener, ServiceHealthFailureStartup,
+		ServiceHealthFailureRuntime, ServiceHealthFailureAPIConnectivity,
+		ServiceHealthFailureTimeout, ServiceHealthFailureAPIStatus,
+		ServiceHealthFailureUIStatus, ServiceHealthFailureFrontendAssets,
+		ServiceHealthFailureUnknown,
+	}
+	for _, category := range categories {
+		t.Run(category, func(t *testing.T) {
+			dir := t.TempDir()
+			cfg := Config{Version: "6.4.6", DataDir: dir, GetServiceHealth: func() ServiceHealthObservation {
+				return ServiceHealthObservation{Observed: true, FailureCategory: "  " + strings.ToUpper(category) + "  "}
+			}}
+			ping, err := buildPingAt(cfg, "startup", time.Now().UTC())
+			if err != nil {
+				t.Fatal(err)
+			}
+			encoded, err := json.Marshal(ping)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var fields map[string]interface{}
+			if err := json.Unmarshal(encoded, &fields); err != nil {
+				t.Fatal(err)
+			}
+			if fields["service_health_failure_category"] != category || fields["service_health_observed"] != true || fields["service_health_healthy"] != false {
+				t.Fatalf("serialized service-health fields = %#v", fields)
+			}
+			record := readServiceHealthRecord(dir)
+			if record.CurrentFailureCategory != category || !record.CurrentObserved || record.CurrentHealthy {
+				t.Fatalf("persisted observation = %#v", record)
+			}
+			cfg.Version = "6.4.7"
+			cfg.GetServiceHealth = func() ServiceHealthObservation { return ServiceHealthObservation{Observed: true, Healthy: true} }
+			recovered, err := buildPingAt(cfg, "startup", time.Now().UTC())
+			if err != nil {
+				t.Fatal(err)
+			}
+			record = readServiceHealthRecord(dir)
+			if recovered.ServiceHealthFailureCategory != "" || !recovered.ServiceHealthHealthy || record.PreviousFailureCategory != category || record.PreviousHealthy {
+				t.Fatalf("recovery lost the previous failure: %#v / %#v", recovered, record)
+			}
+		})
+	}
+	for _, category := range []string{"api_timeout: GET http://192.0.2.1/private", "timeout private.js", "timeout\nAuthorization"} {
+		if got := canonicalServiceHealthFailureCategory(category); got != ServiceHealthFailureUnknown {
+			t.Fatalf("free-form category accepted: %q -> %q", category, got)
+		}
+	}
+}
+
+func TestTelemetryStartDoesNotWaitForServiceHealth(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	entered, release, started := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	dir := t.TempDir()
+	t.Cleanup(func() { close(release); cancel(); Stop() })
+	go func() {
+		startWithDelay(ctx, Config{Enabled: true, Version: "6.4.6", DataDir: dir, GetServiceHealth: func() ServiceHealthObservation {
+			close(entered)
+			<-release
+			return ServiceHealthObservation{Observed: true, Healthy: true}
+		}}, 0)
+		close(started)
+	}()
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("background probe did not begin")
+	}
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("telemetry startup blocked on its service-health probe")
+	}
+}

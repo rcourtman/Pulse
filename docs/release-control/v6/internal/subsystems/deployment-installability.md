@@ -5446,3 +5446,53 @@ punctuation alone. Inherited improvements remain in that single customer list.
 ### RC.5 replacement preparation
 
 RC.5 replaces the published RC.4 for the candidate-only child-alert notification regression repaired in protected #2336. The repair suppresses grouped-child escalation and schedules a continuing symptom after its primary recovers. The release metadata pins RC.5 consistently, mirrors both shipped release and upgrade guides, and retains stable v6.4.1 for rollback. This does not include later main-only repairs or private source changes. Exact qualification, a fresh explicit private pair and publication remain required. A new clean 24-hour soak begins at RC.5 publication.
+
+
+### v6.4 storage-driver integrity backport
+
+The v6.4 patch line takes only the persisted-data integrity portion of reviewed
+main `c6546fce74d7e4155ab4bd55ca579ab49040586f`: `modernc.org/sqlite`
+1.53.0 -> 1.59.0, `modernc.org/libc` 1.73.4 -> 1.75.7,
+`modernc.org/memory` 1.11.0 -> 1.12.1 and `github.com/mattn/go-isatty`
+0.0.20 -> 0.0.24. The qualified upstream driver includes its journal-rollback
+corruption repair. This is a data-loss-prevention backport for the next patch,
+not an unrelated dependency-cohort or main merge. The driver and libc manifests
+require Go 1.25, x/sys 0.47.0 and mathutil 1.7.1, all already satisfied by this
+line. Existing crypto, term, text, Kubernetes and toolchain versions and their
+security checks are unchanged.
+
+`scripts/tests/test-hot-dev-runtime.sh` carries the original upstream storage
+floor case: sqlite >= 1.59.0 and libc >= 1.75.7. It uses the resolved module
+versions and rejects a downgrade without pinning future safe upgrades. The
+four module archives and their generated eight checksum additions exactly
+match reviewed upstream. Other existing checksums are retained. Offline tidy
+cannot complete with the launch snapshots: dependency test/generator sources
+are missing, including pprof, fileutil and the libc generation toolchain. Exact
+line graph acquisition, complete tidy verification, the full dev-runtime shell
+suite, build and ordinary storage-consumer race suites remain required on the
+committed containing source with matching prepared dependencies. A source floor
+check alone is not runtime, installed upgrade/rollback or release acceptance.
+
+This backport is independent of the excluded 6 September SQLite SIGSEGV
+investigation. It does not reproduce a crash, inspect an existing database or
+executable, diagnose the retained crash, or clear its adverse evidence. The
+upstream advisory benchmark and this line's performance and exact qualification
+checks remain separate from source scope and integrity-floor verification.
+
+
+### v6.4 DOMPurify security backport (30 September 2026)
+
+Reviewed upstream `6ad6e18d53794145bd027df78513d625073f10e6` (Pulse #2349)
+raises the locked DOMPurify from 3.4.13 to 3.4.16 for
+`GHSA-p98j-92pf-mc4p`: an `IN_PLACE` `afterSanitize` hook that removes a node
+can leave detached event handlers armed in 3.4.13 through 3.4.15. DOMPurify
+ships in the frontend bundle. This line takes only that advisory repair,
+within its existing manifest range; all other locked packages and dependency
+edges are unchanged. The already retained brace-expansion 1.1.21 and 5.0.12
+repairs cover `GHSA-q2hr-2g5m-vwhr`. The dependency-security tests enforce
+all three patched floors to reject a later downgrade.
+
+Installer, signing, update selection, promotion and rollback boundaries are
+unchanged. Exact-lock installation, frontend validation and the enforced
+complete-graph audit remain necessary; a security-floor assertion alone is
+not an audit or release qualification.

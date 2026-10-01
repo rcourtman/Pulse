@@ -359,6 +359,18 @@ test_go_module_security_dependency_floors() {
   assert_module_at_least "Go module floor keeps x/sys aligned with security module graph" "${output}" "golang.org/x/sys" "v0.47.0"
 }
 
+# The metrics and alerting stores run on the pure-Go SQLite driver, so a
+# downgrade past the qualified storage release would silently drop the
+# upstream journal-rollback corruption fix. Keep the driver and the libc
+# version it requires aligned as floors, not pins.
+test_go_storage_dependency_integrity_floor() {
+  local output
+  output="$(cd "${ROOT_DIR}" && go list -m modernc.org/sqlite modernc.org/libc)"
+
+  assert_module_at_least "Go storage floor keeps sqlite past the journal-rollback corruption fix" "${output}" "modernc.org/sqlite" "v1.59.0"
+  assert_module_at_least "Go storage floor keeps libc aligned with the pinned sqlite driver" "${output}" "modernc.org/libc" "v1.75.7"
+}
+
 test_go_release_toolchain_floor() {
   local module_toolchain installed_toolchain
   module_toolchain="$(sed -n 's/^toolchain //p' "${ROOT_DIR}/go.mod")"
@@ -390,6 +402,7 @@ test_hot_dev_lab_agent_mode_enables_lan_and_guest_docker_inventory_defaults
 test_hot_dev_remembers_explicit_lab_agent_mode_for_later_managed_starts
 test_hot_dev_browser_urls_distinguish_bind_and_browser_hosts
 test_go_module_security_dependency_floors
+test_go_storage_dependency_integrity_floor
 test_go_release_toolchain_floor
 test_backend_race_suite_keeps_hosted_runner_timeout_headroom
 
