@@ -59,6 +59,7 @@ type RawAgentInstallCommandResponse = {
 
 export type AgentInstallCommandResponse = {
   command: string;
+  token?: string;
 };
 
 type RawHostAgentInstallTokenResponse = {
@@ -96,6 +97,7 @@ export type ProxmoxSetupCommandResponse = {
   commandWithoutEnv?: string;
   expires: number;
   tokenHint: string;
+  setupToken: string;
 };
 
 export type DownloadedProxmoxSetupScript = {
@@ -112,7 +114,11 @@ const normalizeAgentInstallCommandResponse = (
     throw new Error('Invalid agent install command response');
   }
 
-  return { command };
+  const token = optionalTrimmedString(response.token);
+  if (token && command.includes(token)) {
+    throw new Error('Install credentials must be entered separately from the command');
+  }
+  return { command, ...(token ? { token } : {}) };
 };
 
 const normalizeProxmoxSetupCommandResponse = (
@@ -156,6 +162,14 @@ const normalizeProxmoxSetupCommandResponse = (
   if (!setupToken) {
     throw new Error('Invalid Proxmox setup response setup token');
   }
+  if (
+    [url, downloadURL, command, commandWithEnv, commandWithoutEnv ?? ''].some((value) =>
+      value.includes(setupToken),
+    ) ||
+    /[?&]setup_token=/.test(downloadURL)
+  ) {
+    throw new Error('Setup credentials must be entered separately from commands and URLs');
+  }
   if (!tokenHint) {
     throw new Error('Invalid Proxmox setup response token hint');
   }
@@ -174,6 +188,7 @@ const normalizeProxmoxSetupCommandResponse = (
     commandWithoutEnv,
     expires,
     tokenHint,
+    setupToken,
   };
 };
 

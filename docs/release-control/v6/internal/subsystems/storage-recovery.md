@@ -2640,6 +2640,11 @@ vdev layout is reported` in
 
 ## Current State
 
+### Credential-safe Proxmox bootstrap (1 October 2026)
+
+The shared Proxmox setup boundary now receives its bootstrap credential from private terminal input via a bounded 0700/0600 file, before native setup mutation, rather than from copied shell literals or newly generated token-bearing download URLs. Existing registration grant binding, PVE/PBS monitoring scopes, and explicit non-rotating Audit/Repair remain unchanged. A private-file validation failure stops setup, and failed attempted registration exits nonzero with fixed guidance rather than echoed credential-bearing responses. This supersedes historical shared-boundary requirements for token-bearing commands and manual download URLs; it does not change storage permissions, recovery or retention.
+
+
 ### Update progress stream delivery
 
 Update progress delivery changes observation only. Streaming or polling a

@@ -223,6 +223,17 @@ describe('docsLinks', () => {
     expect(apiReference).not.toContain('Mobile Remote Access');
   });
 
+  it('ships credential-free Proxmox setup instructions and a separate token prompt', () => {
+    const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const shipped = readFileSync(path.join(frontendRoot, 'public', 'docs', 'API.md'), 'utf8');
+    const setup = apiReference.split('### Setup Script URL')[1].split('### Auto-Register')[0];
+    expect(shipped).toBe(apiReference);
+    expect(setup).toContain('identical credential-free commands');
+    expect(setup).toContain('`downloadURL` equals the tokenless `url`');
+    expect(setup).toContain('paste the token only at its prompt');
+    expect(setup).not.toContain('token-bearing `commandWithEnv`');
+  });
+
   it('ships the per-alert snooze and resume API contract', () => {
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     const shippedAPIReference = readFileSync(

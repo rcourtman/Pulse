@@ -60,12 +60,10 @@ func TestHandleSetupScriptURL(t *testing.T) {
 				if tokenHint == token {
 					t.Errorf("expected tokenHint to mask setup token, got %q", tokenHint)
 				}
-				if !strings.Contains(downloadURL, "setup_token=") {
-					t.Errorf("expected downloadURL to embed setup token, got %q", downloadURL)
+				if downloadURL != url || strings.Contains(downloadURL, token) {
+					t.Errorf("downloadURL must match the credential-free script URL")
 				}
-				if !strings.Contains(downloadURL, token) {
-					t.Errorf("expected downloadURL to contain setup token, got %q", downloadURL)
-				}
+
 				respType, ok := resp["type"].(string)
 				if !ok || respType != "pve" {
 					t.Errorf("expected canonical type, got %v", resp["type"])
@@ -92,16 +90,12 @@ func TestHandleSetupScriptURL(t *testing.T) {
 					t.Errorf("expected URL to contain public host, got %s", url)
 				}
 				quotedURL := posixShellQuote(url)
-				if !strings.Contains(command, "curl -fsSL "+quotedURL+" | ") ||
-					!strings.Contains(command, `if [ "$(id -u)" -eq 0 ]; then PULSE_SETUP_TOKEN=`+posixShellQuote(token)+` bash`) ||
-					!strings.Contains(command, `elif command -v sudo >/dev/null 2>&1; then sudo env PULSE_SETUP_TOKEN=`+posixShellQuote(token)+` bash`) {
-					t.Errorf("expected shell-quoted command, got %s", command)
+				for _, candidate := range []string{command, commandWithoutEnv} {
+					if !strings.Contains(candidate, "curl -fsSL "+quotedURL+` -o "$install_script"`) || strings.Contains(candidate, token) || !strings.Contains(candidate, "PULSE_SETUP_TOKEN_FILE=") || !strings.Contains(candidate, "sudo bash -c") {
+						t.Error("setup command must download completely, prompt privately, and pass only the token file")
+					}
 				}
-				if !strings.Contains(commandWithoutEnv, "curl -fsSL "+quotedURL+" | ") ||
-					!strings.Contains(commandWithoutEnv, `if [ "$(id -u)" -eq 0 ]; then bash`) ||
-					!strings.Contains(commandWithoutEnv, `elif command -v sudo >/dev/null 2>&1; then sudo bash`) {
-					t.Errorf("expected shell-quoted commandWithoutEnv, got %s", commandWithoutEnv)
-				}
+
 			},
 		},
 		{
@@ -296,7 +290,7 @@ func TestHandleSetupScriptURL_PreservesConfiguredPublicURLSchemeOnLoopback(t *te
 	}
 
 	command, _ := response["command"].(string)
-	if !strings.Contains(command, "curl -fsSL "+posixShellQuote(urlValue)+" | ") || !strings.Contains(command, `sudo env PULSE_SETUP_TOKEN=`) {
+	if !strings.Contains(command, "curl -fsSL "+posixShellQuote(urlValue)+` -o "$install_script"`) || !strings.Contains(command, `sudo bash -c`) {
 		t.Fatalf("command = %q, want quoted setup-script URL", command)
 	}
 }
@@ -323,8 +317,8 @@ func TestBuildSetupScriptInstallArtifact_UsesCanonicalTransportContract(t *testi
 	if artifact.URL == "" || !strings.Contains(artifact.URL, "/api/setup-script?") {
 		t.Fatalf("url = %q, want canonical setup-script url", artifact.URL)
 	}
-	if artifact.DownloadURL == "" || !strings.Contains(artifact.DownloadURL, "setup_token=setup-token-123") {
-		t.Fatalf("downloadURL = %q, want setup token embedded", artifact.DownloadURL)
+	if artifact.DownloadURL != artifact.URL || strings.Contains(artifact.DownloadURL, "setup-token-123") {
+		t.Fatalf("downloadURL = %q, want credential-free URL", artifact.DownloadURL)
 	}
 	if artifact.ScriptFileName != "pulse-setup-pve.sh" {
 		t.Fatalf("scriptFileName = %q, want canonical filename", artifact.ScriptFileName)
@@ -332,8 +326,8 @@ func TestBuildSetupScriptInstallArtifact_UsesCanonicalTransportContract(t *testi
 	if artifact.Command != artifact.CommandWithEnv {
 		t.Fatalf("command = %q, commandWithEnv = %q, want identical canonical env command", artifact.Command, artifact.CommandWithEnv)
 	}
-	if !strings.Contains(artifact.CommandWithEnv, "PULSE_SETUP_TOKEN='setup-token-123'") {
-		t.Fatalf("commandWithEnv = %q, want setup token env transport", artifact.CommandWithEnv)
+	if strings.Contains(artifact.CommandWithEnv, "setup-token-123") || !strings.Contains(artifact.CommandWithEnv, "PULSE_SETUP_TOKEN_FILE=") {
+		t.Fatalf("commandWithEnv = %q, want private token-file transport", artifact.CommandWithEnv)
 	}
 	if strings.Contains(artifact.CommandWithoutEnv, "PULSE_SETUP_TOKEN=") {
 		t.Fatalf("commandWithoutEnv = %q, want no setup token env transport", artifact.CommandWithoutEnv)

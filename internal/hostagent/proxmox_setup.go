@@ -133,6 +133,12 @@ func validateSetupScriptCommand(command string, expectedScriptURL string, setupT
 	if !strings.Contains(trimmedCommand, `elif command -v sudo >/dev/null 2>&1; then`) {
 		return fmt.Errorf("command missing sudo path")
 	}
+	// New servers separate reveal from private input. Accept the old coherent
+	// artifact only for rolling upgrades against an older server; never mix
+	// its token-bearing URL with the new command format.
+	if strings.Contains(trimmedCommand, "PULSE_SETUP_TOKEN_FILE=") && !strings.Contains(trimmedCommand, setupToken) && !strings.Contains(trimmedCommand, "PULSE_SETUP_TOKEN=") {
+		return nil
+	}
 	if tokenRequired {
 		if !strings.Contains(trimmedCommand, "PULSE_SETUP_TOKEN=") || !strings.Contains(trimmedCommand, setupToken) {
 			return fmt.Errorf("command missing setup token transport")
@@ -1494,7 +1500,7 @@ func (p *ProxmoxSetup) fetchSetupToken(ctx context.Context, ptype proxmoxProduct
 		parsedURL.RawQuery = query.Encode()
 		expectedDownloadURL = parsedURL.String()
 	}
-	if strings.TrimSpace(parsed.DownloadURL) != expectedDownloadURL {
+	if strings.TrimSpace(parsed.DownloadURL) != expectedDownloadURL && strings.TrimSpace(parsed.DownloadURL) != expectedScriptURL {
 		return "", fmt.Errorf("setup token response downloadURL mismatch")
 	}
 	if strings.TrimSpace(parsed.TokenHint) == "" {
@@ -1503,6 +1509,13 @@ func (p *ProxmoxSetup) fetchSetupToken(ctx context.Context, ptype proxmoxProduct
 	if strings.TrimSpace(parsed.TokenHint) == strings.TrimSpace(parsed.SetupToken) {
 		return "", fmt.Errorf("setup token response tokenHint must mask setupToken")
 	}
+	modern := strings.TrimSpace(parsed.DownloadURL) == expectedScriptURL
+	for _, command := range []string{parsed.Command, parsed.CommandWithEnv, parsed.CommandWithoutEnv} {
+		if modern != strings.Contains(command, "PULSE_SETUP_TOKEN_FILE=") {
+			return "", fmt.Errorf("setup-script command and download credential transports do not match")
+		}
+	}
+
 	if err := validateSetupScriptCommand(parsed.Command, expectedScriptURL, strings.TrimSpace(parsed.SetupToken), true); err != nil {
 		return "", fmt.Errorf("setup token response command invalid: %w", err)
 	}

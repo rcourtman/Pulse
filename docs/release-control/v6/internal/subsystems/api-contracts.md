@@ -4579,6 +4579,11 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Credential-safe Proxmox bootstrap (1 October 2026)
+
+The current Proxmox setup artifact supersedes the former token-bearing command/download contract: `command`, `commandWithEnv` and `commandWithoutEnv` are identical credential-free, single-line transports. `downloadURL` equals the tokenless `url`; downloads embed no setup token. `setupToken` (or agent-install `token`) is returned separately through the authenticated issuance response for an explicit reveal, never interpolated by the consumer. Settings uses the existing token-reveal dialog and tells users to run the command before pasting at its silent terminal prompt. Setup cache remains bound to endpoint/mode/live five-minute expiry and is discarded on modal close. The rendered scripts accept a bounded private `PULSE_SETUP_TOKEN_FILE` before mutation, unexport the secret, and put registration credentials in stdin, not process arguments. Legacy explicit query-token downloads remain accepted for compatibility, but no current artifact generates those URLs. Failed attempted registration returns nonzero and never echoes the response body. Runtime and root-installer consumers validate either the complete new artifact or the coherent old-server artifact; mixed transports fail closed.
+
+
 ### Update progress stream delivery
 
 `GET /api/updates/stream` answers `text/event-stream` with

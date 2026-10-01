@@ -1504,7 +1504,8 @@ fi`
 		`pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin`,
 		`pveum aclmod /storage -token "$PULSE_TOKEN_ID" -role PVEDatastoreAdmin`,
 		`smoke_test_pve_token() {`,
-		`Authorization: PVEAPIToken=$PULSE_TOKEN_ID=$TOKEN_VALUE`,
+		`printf 'Authorization: PVEAPIToken=%s=%s\n' "$PULSE_TOKEN_ID" "$TOKEN_VALUE" | curl`,
+		`-H @-`,
 		`${HOST_URL%/}/api2/json/nodes`,
 		`if smoke_test_pve_token; then`,
 	} {
@@ -6907,18 +6908,13 @@ func TestContract_DiagnosticsDockerPrepareTokenPreservesExplicitWorkloadOnlyMode
 func TestContract_SetupScriptURLCommandUsesFailFastQuotedTransport(t *testing.T) {
 	url := "https://pulse.example.com/api/setup-script?type=pve&host=pve1.local"
 	got := buildSetupScriptCommand(url, "token-123")
-
-	if !strings.Contains(got, "curl -fsSL "+posixShellQuote(url)+" | ") {
-		t.Fatalf("setup-script command missing canonical fail-fast transport: %s", got)
+	for _, required := range []string{"curl -fsSL " + posixShellQuote(url) + ` -o "$install_script"`, "sudo bash -c", "PULSE_SETUP_TOKEN_FILE="} {
+		if !strings.Contains(got, required) {
+			t.Fatalf("missing secure bootstrap fragment %s", required)
+		}
 	}
-	if !strings.Contains(got, `if [ "$(id -u)" -eq 0 ]; then PULSE_SETUP_TOKEN=`+posixShellQuote("token-123")+` bash`) {
-		t.Fatalf("setup-script command missing direct-root execution path: %s", got)
-	}
-	if !strings.Contains(got, `elif command -v sudo >/dev/null 2>&1; then sudo env PULSE_SETUP_TOKEN=`+posixShellQuote("token-123")+` bash`) {
-		t.Fatalf("setup-script command missing sudo execution path: %s", got)
-	}
-	if strings.Contains(got, "curl -sSL ") {
-		t.Fatalf("setup-script command preserved stale non-fail-fast curl transport: %s", got)
+	if strings.Contains(got, "token-123") || strings.Contains(got, "PULSE_SETUP_TOKEN=") || strings.Contains(got, "| bash") {
+		t.Fatal("bootstrap credential or partial script can reach the copied command")
 	}
 }
 
@@ -6942,12 +6938,10 @@ func TestContract_SetupScriptEmbedsFailFastGuidance(t *testing.T) {
 	}
 
 	script := rec.Body.String()
-	if !strings.Contains(script, `PULSE_BOOTSTRAP_COMMAND_WITH_ENV='curl -fsSL '"'"'http://sentinel-url:7656/api/setup-script?host=http%3A%2F%2Fsentinel-host%3A8006&pulse_url=http%3A%2F%2Fsentinel-url%3A7656&type=pve'"'"' | `) {
-		t.Fatalf("setup script missing canonical bootstrap command owner: %s", script)
+	if !strings.Contains(script, "PULSE_BOOTSTRAP_COMMAND_WITH_ENV="+posixShellQuote(buildSetupScriptCommand(buildSetupScriptURL("http://sentinel-url:7656", "pve", "http://sentinel-host:8006", "http://sentinel-url:7656", false), ""))) {
+		t.Fatal("setup script must use the shared credential-free retry command")
 	}
-	if strings.Contains(script, `PULSE_BOOTSTRAP_COMMAND_WITH_ENV='curl -fsSL '"'"'http://sentinel-url:7656/api/setup-script?host=http%3A%2F%2Fsentinel-host%3A8006&pulse_url=http%3A%2F%2Fsentinel-url%3A7656&type=pve'"'"' | { if [ "$(id -u)" -eq 0 ]; then PULSE_SETUP_TOKEN=`) {
-		t.Fatalf("setup script bootstrap command should defer setup token to runtime hydration, got: %s", script)
-	}
+
 	if !strings.Contains(script, `echo "  $PULSE_BOOTSTRAP_COMMAND_WITH_ENV"`) {
 		t.Fatalf("setup script missing bootstrap-command retry guidance: %s", script)
 	}
@@ -10250,7 +10244,7 @@ func TestContract_ProxmoxInstallCommandIncludesInsecureForPlainHTTP(t *testing.T
 		IncludeInstallType: true,
 	})
 
-	if !strings.Contains(got, "--url "+posixShellQuote("http://pulse.example.com:7655")) {
+	if !strings.Contains(got, "http://pulse.example.com:7655") {
 		t.Fatalf("install command missing canonical base URL: %s", got)
 	}
 	if !strings.Contains(got, "--insecure") {
@@ -10272,13 +10266,13 @@ func TestContract_ProxmoxInstallCommandUsesPrivilegeEscalationWrapper(t *testing
 	if !strings.Contains(got, `if [ "$(id -u)" -eq 0 ]; then`) {
 		t.Fatalf("install command missing root-or-sudo wrapper: %s", got)
 	}
-	if !strings.Contains(got, `sudo bash -s --`) {
+	if !strings.Contains(got, `sudo bash -c`) {
 		t.Fatalf("install command missing sudo fallback: %s", got)
 	}
-	if !strings.Contains(got, `token_dir=$(sudo mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)`) {
+	if !strings.Contains(got, `token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)`) {
 		t.Fatalf("install command missing root-owned sudo token bootstrap: %s", got)
 	}
-	if !strings.Contains(got, `rm -rf -- "$token_dir"`) {
+	if !strings.Contains(got, `rmdir -- "$token_dir"`) {
 		t.Fatalf("install command missing ephemeral token cleanup: %s", got)
 	}
 }
@@ -10294,7 +10288,7 @@ func TestContract_OptionalAuthProxmoxInstallCommandOmitsToken(t *testing.T) {
 	if strings.Contains(got, "--token") {
 		t.Fatalf("optional-auth install command preserved token flag: %s", got)
 	}
-	if !strings.Contains(got, "--url "+posixShellQuote("https://pulse.example.com")) {
+	if !strings.Contains(got, "https://pulse.example.com") {
 		t.Fatalf("optional-auth install command missing canonical base URL: %s", got)
 	}
 }
@@ -10310,7 +10304,7 @@ func TestContract_ProxmoxInstallCommandNormalizesTrailingSlashBaseURL(t *testing
 	if !strings.Contains(got, posixShellQuote("https://pulse.example.com/base/install.sh")) {
 		t.Fatalf("install command missing normalized install script URL: %s", got)
 	}
-	if !strings.Contains(got, "--url "+posixShellQuote("https://pulse.example.com/base")) {
+	if !strings.Contains(got, "https://pulse.example.com/base") {
 		t.Fatalf("install command missing normalized base URL: %s", got)
 	}
 	if !strings.Contains(got, `--token-file "$token_file"`) {
@@ -11206,40 +11200,26 @@ func TestContract_ResetFirstRunSecurityClearsEnvBackedStatus(t *testing.T) {
 }
 
 func TestContract_SetupScriptURLResponseJSONSnapshot(t *testing.T) {
-	payload := map[string]any{
-		"type":              "pve",
-		"host":              "https://pve.local:8006",
-		"url":               "https://pulse.example/api/setup-script?host=https%3A%2F%2Fpve.local%3A8006&pulse_url=https%3A%2F%2Fpulse.example&type=pve",
-		"downloadURL":       "https://pulse.example/api/setup-script?host=https%3A%2F%2Fpve.local%3A8006&pulse_url=https%3A%2F%2Fpulse.example&setup_token=setup-token-123&type=pve",
-		"scriptFileName":    "pulse-setup-pve.sh",
-		"command":           "curl -fsSL 'https://pulse.example/api/setup-script?host=https%3A%2F%2Fpve.local%3A8006&pulse_url=https%3A%2F%2Fpulse.example&type=pve' | { if [ \"$(id -u)\" -eq 0 ]; then PULSE_SETUP_TOKEN='setup-token-123' bash; elif command -v sudo >/dev/null 2>&1; then sudo env PULSE_SETUP_TOKEN='setup-token-123' bash; else echo \"Root privileges required. Run as root (su -) and retry.\" >&2; exit 1; fi; }",
-		"commandWithEnv":    "curl -fsSL 'https://pulse.example/api/setup-script?host=https%3A%2F%2Fpve.local%3A8006&pulse_url=https%3A%2F%2Fpulse.example&type=pve' | { if [ \"$(id -u)\" -eq 0 ]; then PULSE_SETUP_TOKEN='setup-token-123' bash; elif command -v sudo >/dev/null 2>&1; then sudo env PULSE_SETUP_TOKEN='setup-token-123' bash; else echo \"Root privileges required. Run as root (su -) and retry.\" >&2; exit 1; fi; }",
-		"commandWithoutEnv": "curl -fsSL 'https://pulse.example/api/setup-script?host=https%3A%2F%2Fpve.local%3A8006&pulse_url=https%3A%2F%2Fpulse.example&type=pve' | { if [ \"$(id -u)\" -eq 0 ]; then bash; elif command -v sudo >/dev/null 2>&1; then sudo bash; else echo \"Root privileges required. Run as root (su -) and retry.\" >&2; exit 1; fi; }",
-		"expires":           int64(1900000000),
-		"setupToken":        "setup-token-123",
-		"tokenHint":         "set…123",
-	}
-
-	got, err := json.Marshal(payload)
+	artifact := buildSetupScriptInstallArtifact("https://pulse.example", "pve", "https://pve.local:8006", "https://pulse.example", false, "setup-token-123", 1900000000)
+	payload, err := json.Marshal(artifact)
 	if err != nil {
-		t.Fatalf("marshal setup-script-url response: %v", err)
+		t.Fatal(err)
 	}
-
-	const want = `{
-		"command":"curl -fsSL 'https://pulse.example/api/setup-script?host=https%3A%2F%2Fpve.local%3A8006\u0026pulse_url=https%3A%2F%2Fpulse.example\u0026type=pve' | { if [ \"$(id -u)\" -eq 0 ]; then PULSE_SETUP_TOKEN='setup-token-123' bash; elif command -v sudo \u003e/dev/null 2\u003e\u00261; then sudo env PULSE_SETUP_TOKEN='setup-token-123' bash; else echo \"Root privileges required. Run as root (su -) and retry.\" \u003e\u00262; exit 1; fi; }",
-		"commandWithEnv":"curl -fsSL 'https://pulse.example/api/setup-script?host=https%3A%2F%2Fpve.local%3A8006\u0026pulse_url=https%3A%2F%2Fpulse.example\u0026type=pve' | { if [ \"$(id -u)\" -eq 0 ]; then PULSE_SETUP_TOKEN='setup-token-123' bash; elif command -v sudo \u003e/dev/null 2\u003e\u00261; then sudo env PULSE_SETUP_TOKEN='setup-token-123' bash; else echo \"Root privileges required. Run as root (su -) and retry.\" \u003e\u00262; exit 1; fi; }",
-		"commandWithoutEnv":"curl -fsSL 'https://pulse.example/api/setup-script?host=https%3A%2F%2Fpve.local%3A8006\u0026pulse_url=https%3A%2F%2Fpulse.example\u0026type=pve' | { if [ \"$(id -u)\" -eq 0 ]; then bash; elif command -v sudo \u003e/dev/null 2\u003e\u00261; then sudo bash; else echo \"Root privileges required. Run as root (su -) and retry.\" \u003e\u00262; exit 1; fi; }",
-		"downloadURL":"https://pulse.example/api/setup-script?host=https%3A%2F%2Fpve.local%3A8006\u0026pulse_url=https%3A%2F%2Fpulse.example\u0026setup_token=setup-token-123\u0026type=pve",
-		"expires":1900000000,
-		"host":"https://pve.local:8006",
-		"scriptFileName":"pulse-setup-pve.sh",
-		"setupToken":"setup-token-123",
-		"tokenHint":"set…123",
-		"type":"pve",
-		"url":"https://pulse.example/api/setup-script?host=https%3A%2F%2Fpve.local%3A8006\u0026pulse_url=https%3A%2F%2Fpulse.example\u0026type=pve"
-	}`
-
-	assertJSONSnapshot(t, got, want)
+	var got map[string]any
+	if err := json.Unmarshal(payload, &got); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"command", "commandWithEnv", "commandWithoutEnv"} {
+		command, ok := got[field].(string)
+		if !ok || command != artifact.Command || strings.Contains(command, artifact.SetupToken) || !strings.Contains(command, "PULSE_SETUP_TOKEN_FILE=") {
+			t.Fatalf("unsafe %s", field)
+		}
+		delete(got, field)
+	}
+	want := map[string]any{"type": "pve", "host": "https://pve.local:8006", "url": artifact.URL, "downloadURL": artifact.URL, "scriptFileName": "pulse-setup-pve.sh", "expires": float64(1900000000), "setupToken": "setup-token-123", "tokenHint": "set…123"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("bootstrap envelope = %#v, want %#v", got, want)
+	}
 }
 
 func TestContract_PublicSecurityStatusIncludesDemoPresentationPolicy(t *testing.T) {
@@ -23296,8 +23276,8 @@ func TestContract_RequestOriginCannotRetargetTokenBearingCommands(t *testing.T) 
 				if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 					t.Fatalf("decode response: %v", err)
 				}
-				if response.Token == "" || !strings.Contains(response.Command, response.Token) {
-					t.Fatalf("fresh token was not carried by install command: %#v", response)
+				if response.Token == "" || strings.Contains(response.Command, response.Token) || !strings.Contains(response.Command, `--token-file "$token_file"`) {
+					t.Fatal("fresh credential must be returned separately and entered privately")
 				}
 				if !strings.Contains(response.Command, tc.wantBaseURL+"/install.sh") ||
 					!strings.Contains(response.Command, "--url "+posixShellQuote(tc.wantBaseURL)) {
@@ -23347,9 +23327,10 @@ func TestContract_RequestOriginCannotRetargetTokenBearingCommands(t *testing.T) 
 			t.Fatalf("decode setup artifact: %v", err)
 		}
 		if artifact.SetupToken == "" ||
-			!strings.Contains(artifact.DownloadURL, artifact.SetupToken) ||
-			!strings.Contains(artifact.Command, artifact.SetupToken) {
-			t.Fatalf("setup token was not carried by canonical artifact: %#v", artifact)
+			strings.Contains(artifact.DownloadURL, artifact.SetupToken) ||
+			strings.Contains(artifact.Command, artifact.SetupToken) ||
+			artifact.DownloadURL != artifact.URL || !strings.Contains(artifact.Command, "PULSE_SETUP_TOKEN_FILE=") {
+			t.Fatal("canonical artifact must reveal the setup credential separately from commands and URLs")
 		}
 		if !strings.HasPrefix(artifact.URL, autoDetectedURL+"/api/setup-script?") ||
 			!strings.HasPrefix(artifact.DownloadURL, autoDetectedURL+"/api/setup-script?") {
@@ -24111,7 +24092,7 @@ func TestContract_HostedInstallerOriginsFailClosedAtRouter(t *testing.T) {
 					if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 						t.Fatalf("decode install response: %v", err)
 					}
-					if response.Token == "" || !strings.Contains(response.Command, response.Token) || !strings.Contains(response.Command, wantBaseURL+"/install.sh") {
+					if response.Token == "" || strings.Contains(response.Command, response.Token) || !strings.Contains(response.Command, `--token-file "$token_file"`) || !strings.Contains(response.Command, wantBaseURL+"/install.sh") {
 						t.Fatalf("install response did not bind fresh token to configured URL %q: %#v", wantBaseURL, response)
 					}
 					if strings.Contains(response.Command, "attacker") || len(cfg.APITokens) != 2 {
@@ -24143,8 +24124,8 @@ func TestContract_HostedInstallerOriginsFailClosedAtRouter(t *testing.T) {
 					if downloadRec.Code != http.StatusOK {
 						t.Fatalf("setup script status = %d, want %d: %s", downloadRec.Code, http.StatusOK, downloadRec.Body.String())
 					}
-					if !strings.Contains(downloadRec.Body.String(), wantBaseURL) || !strings.Contains(downloadRec.Body.String(), artifact.SetupToken) || strings.Contains(downloadRec.Body.String(), "attacker") {
-						t.Fatalf("rendered setup script did not preserve configured token target")
+					if !strings.Contains(downloadRec.Body.String(), wantBaseURL) || strings.Contains(downloadRec.Body.String(), artifact.SetupToken) || !strings.Contains(downloadRec.Body.String(), "PULSE_SETUP_TOKEN_FILE") || strings.Contains(downloadRec.Body.String(), "attacker") {
+						t.Fatal("download must preserve the configured target and private-input contract without embedding a setup credential")
 					}
 				})
 			}
@@ -25096,8 +25077,8 @@ func TestContract_HostedRuntimeAgentInstallCommandCarriesToken(t *testing.T) {
 		if strings.TrimSpace(token) == "" {
 			t.Fatalf("%s: hosted install payload has no token: %s", body, rec.Body.String())
 		}
-		if command, _ := payload["command"].(string); command != "" && !strings.Contains(command, token) {
-			t.Fatalf("%s: install command does not carry the minted token", body)
+		if command, _ := payload["command"].(string); command != "" && (strings.Contains(command, token) || !strings.Contains(command, `--token-file "$token_file"`)) {
+			t.Fatalf("%s: minted credential must be entered privately, not embedded", body)
 		}
 	}
 }

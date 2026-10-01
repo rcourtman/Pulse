@@ -22,20 +22,11 @@ type SetupScriptInstallArtifact struct {
 
 type setupScriptInstallArtifact = SetupScriptInstallArtifact
 
-func BuildSetupScriptCommand(scriptURL string, token string) string {
-	curlCommand := "curl -fsSL " + posixShellQuote(strings.TrimSpace(scriptURL)) + " | "
-	bashCommand := "bash"
-	sudoCommand := "sudo bash"
-	if trimmedToken := strings.TrimSpace(token); trimmedToken != "" {
-		envPrefix := "PULSE_SETUP_TOKEN=" + posixShellQuote(trimmedToken) + " "
-		bashCommand = envPrefix + bashCommand
-		sudoCommand = "sudo env " + envPrefix + "bash"
-	}
-
-	return curlCommand +
-		`{ if [ "$(id -u)" -eq 0 ]; then ` + bashCommand +
-		`; elif command -v sudo >/dev/null 2>&1; then ` + sudoCommand +
-		`; else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi; }`
+// The legacy token argument is intentionally not interpolated. All command
+// aliases now prompt privately; the separate SetupToken field is the reveal.
+func BuildSetupScriptCommand(scriptURL string, _ string) string {
+	return privateBootstrapCommand(scriptURL, "-fsSL", "",
+		`PULSE_SETUP_TOKEN_FILE="$token_file" bash "$1";`, true, "Pulse setup token")
 }
 
 func BuildSetupScriptURL(baseURL string, installType string, host string, pulseURL string, backupPerms bool) string {
@@ -53,20 +44,9 @@ func BuildSetupScriptURL(baseURL string, installType string, host string, pulseU
 	return strings.TrimRight(strings.TrimSpace(baseURL), "/") + "/api/setup-script?" + query.Encode()
 }
 
-func BuildSetupScriptDownloadURL(baseURL string, installType string, host string, pulseURL string, backupPerms bool, setupToken string) string {
-	downloadURL := BuildSetupScriptURL(baseURL, installType, host, pulseURL, backupPerms)
-	trimmedToken := strings.TrimSpace(setupToken)
-	if trimmedToken == "" {
-		return downloadURL
-	}
-	parsed, err := url.Parse(downloadURL)
-	if err != nil {
-		return downloadURL
-	}
-	query := parsed.Query()
-	query.Set("setup_token", trimmedToken)
-	parsed.RawQuery = query.Encode()
-	return parsed.String()
+// Downloads contain no credential, including in the request URL or script.
+func BuildSetupScriptDownloadURL(baseURL string, installType string, host string, pulseURL string, backupPerms bool, _ string) string {
+	return BuildSetupScriptURL(baseURL, installType, host, pulseURL, backupPerms)
 }
 
 func BuildSetupScriptInstallArtifact(baseURL string, installType string, host string, pulseURL string, backupPerms bool, setupToken string, expiresAt int64) SetupScriptInstallArtifact {
