@@ -77,8 +77,8 @@ func TestAdminDocsCustomRoleLifecycle(t *testing.T) {
 	}{
 		{http.MethodPost, "/api/admin/roles", adminDocBodies(t, "RBAC", "Creating a Role")[0], h.HandleRoles, http.StatusOK},
 		{http.MethodPut, "/api/admin/roles/alert-manager", adminDocBodies(t, "RBAC", "Updating a Role")[0], h.HandleRoles, http.StatusOK},
-		{http.MethodPut, "/api/admin/users/jane/roles", assignments[0], h.HandleUserRoleActions, http.StatusOK},
-		{http.MethodPut, "/api/admin/users/jane/roles", assignments[1], h.HandleUserRoleActions, http.StatusOK},
+		{http.MethodPut, "/api/admin/users/jane/roles", assignments[0], h.HandleUserRoleActions, http.StatusNoContent},
+		{http.MethodPut, "/api/admin/users/jane/roles", assignments[1], h.HandleUserRoleActions, http.StatusNoContent},
 		{http.MethodDelete, "/api/admin/users/jane", nil, h.HandleUserRoleActions, http.StatusNoContent},
 		{http.MethodDelete, "/api/admin/roles/alert-manager", nil, h.HandleRoles, http.StatusNoContent},
 	}

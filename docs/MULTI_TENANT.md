@@ -87,9 +87,10 @@ the relevant redacted error, not whole member or infrastructure responses.
 {"id": "production-datacenter", "displayName": "Production Datacenter"}
 ```
 
-The creator becomes the owner. `id` is a lowercase alphanumeric/hyphen ID
-(3–64 characters); `displayName` is the name shown in Pulse. `name` and
-`description` are not the creation fields.
+The creator becomes the owner. `id` is a stable ID of 1–64 characters using
+letters, digits, periods, underscores or hyphens, but not `.` or `..`; use a
+simple lowercase/hyphen ID such as the example. `displayName` is the name
+shown in Pulse. `name` and `description` are not the creation fields.
 
 ### Switching Organizations
 
@@ -145,10 +146,11 @@ Until acceptance, the share is pending and does not grant access.
 }
 ```
 
-Use `accessRole`, not `role`. Supported resource types are `vm`, `container`,
-`agent`, `storage`, `pbs` and `pmg`; `host` is not supported. Use the resource ID
-returned by Pulse, not a display name. Changing a share's access role makes it
-pending again, so the target must accept the new grant.
+Use `accessRole`, not `role`, and the resource type and ID returned by Pulse,
+not a display name. Supported types include `vm`, `system-container`, `agent`,
+`node`, `docker-host`, `storage`, `pbs` and `pmg`; the generic types `host` and
+`container` are not supported. Changing a share's access role makes it pending
+again, so the target must accept the new grant.
 
 **Read-only incoming shares:**
 ```bash
