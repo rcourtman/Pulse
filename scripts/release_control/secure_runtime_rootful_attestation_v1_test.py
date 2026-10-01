@@ -489,6 +489,8 @@ if module.MAX_RECEIPT_BYTES <= 0:
     def test_manifest_contract_binds_transitive_harness_and_production_boundary(self) -> None:
         manifest = json.loads((Path(__file__).with_name("secure_runtime_rootful_source_manifest_v1.json")).read_text(encoding="utf-8"))
         required = {
+            "scripts/installtests/release_notes_contract_test.go",
+            "scripts/installtests/testdata/release-notes-v6.4.5-authored.md",
             "scripts/installtests/secure_runtime_rootful_qualification_test.go",
             "scripts/installtests/secure_runtime_rootless_qualification_test.go",
             "scripts/installtests/secure_runtime_systemd_lab_test.go",

@@ -1023,6 +1023,7 @@ Companion drill:
 - Automated proof:
   `go test ./scripts/installtests -run 'TestStablePatchReleaseNotes' -count=1`
   `cd scripts/release_control && python3 -m unittest render_release_body_test`
+  `cd scripts/release_control && python3 -m unittest secure_runtime_rootful_attestation_v1_test release_note_visuals_test documentation_currentness_test`
   `cd scripts/release_control && python3 -m unittest resolve_release_promotion_test release_promotion_policy_test`
   `go test ./scripts/installtests -run 'Test(Demo|DeployDemo|UpdateDemo|Release)' -count=1`
 - Manual scenario:

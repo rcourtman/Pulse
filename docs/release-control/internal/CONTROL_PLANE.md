@@ -242,16 +242,16 @@ user language should update the control plane.
 ## Current State
 
 1. v6 is the current active release profile.
-2. `v6-product-lane-expansion` is the current active engineering target.
-   Pulse v6 GA and the initial 6.0.x patch line have shipped; active
-   development and stable release preparation now run on `main`.
+2. `v6-release-reliability` is the current active engineering target.
+   Pulse v6 has shipped. Active development runs on `main`; release preparation
+   uses the exact source line resolved by `control_plane.json`.
 3. `v6-ga-promotion` is complete. Its release records remain historical
    evidence and must not keep pre-GA branch, checkout, or readiness posture
    active in current lane state.
-4. Candidate lanes and coverage gaps now route post-GA product expansion.
-   Release-blocking correctness work may still override that default queue
-   when a shipped customer contract can drift across billing, entitlements,
-   runtime behavior, or public copy.
+4. Reported defects, dependable delivery and release qualification take
+   priority over new product expansion. Candidate lanes and coverage gaps
+   support that work; billing, entitlements, runtime behavior and public copy
+   remain customer contracts that must not drift.
 5. `v6-rc-stabilization` is completed after the shipped RCs established the
    current monitored-first floor and the active objective moved to stable
    promotion.
@@ -259,8 +259,10 @@ user language should update the control plane.
 7. The existing v6 control surfaces are still live, but they now sit underneath
    an evergreen Pulse control plane rather than pretending to be the whole
    long-term system.
-8. Both prerelease and stable v6 promotions resolve to `main` via
-   `control_plane.json`.
+8. The v6 profile defaults to `main`; explicit version overrides in
+   `control_plane.json` bind existing releases to `release/v6.4` and
+   `release/v6.5`. A new checkpoint's mapping is verified during governed
+   preparation, not inferred from the profile default or this page.
 9. Legacy maintenance releases that still feed governed automation outside the
    active v6 line must also resolve through `control_plane.json`.
    Right now the remaining `5.1.x` stable maintenance line resolves to `main`

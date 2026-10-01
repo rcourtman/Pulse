@@ -1935,6 +1935,10 @@ artifact-selection behaviour.
    the changelog and release metadata, not a mandatory public boilerplate
    sentence. Historical published notes are not edited or re-rendered to fit a
    later authoring template.
+   The rootful qualification source manifest retains the complete compiled
+   install-test package, including the release-notes helper and its exact
+   authored-copy fixture. Accepting grouped notes must not silently narrow
+   that attested source boundary.
    Qualification counts, readiness assertions, release gates, workflow
    narration, artifact identity, and promotion metadata stay in governed
    workflow summaries and evidence records rather than the public changelog.
