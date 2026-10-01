@@ -2456,6 +2456,13 @@ The v6.5 line already contains `internal/filesystemprobe` and
 `pkg/agents/filesystem`; both are included as compiled qualification dependencies.
 No new filesystem implementation is introduced by this backport.
 
+The v6.5 containing-source suite also requires its control-plane page to name
+the already configured `v6-release-reliability` target. The reviewed upstream
+page correction is backported verbatim; target configuration and version/source
+routing are not changed. The stale prose was a separate observed source-check
+failure, not evidence of a release-runtime or provider fault. The v6.4 profile
+has a different configured target and does not take this current-main page.
+
 The containing line's full Python suite also checks the current notes packet.
 That check binds the first heading to the exact escaped version, accepting
 `# Pulse vX.Y.Z` and `# Pulse vX.Y.Z Release Notes` rather than requiring both a
