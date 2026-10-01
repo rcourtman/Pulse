@@ -73,7 +73,11 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 	if m.config.MaxAlertAgeDays > 0 {
 		alertTTL := time.Duration(m.config.MaxAlertAgeDays) * 24 * time.Hour
 		for id, alert := range m.activeAlerts {
-			if !alert.Acknowledged && now.Sub(alert.StartTime) > alertTTL {
+			// Retention is housekeeping for inactive alerts, not recovery
+			// evidence. As with acknowledged alerts, keep a condition still
+			// observed; deleting it would re-fire on the next failing poll.
+			if !alert.Acknowledged && now.Sub(alert.StartTime) > alertTTL &&
+				lastSeenTooOld(alert, alertTTL) {
 				log.Info().
 					Str("alertID", id).
 					Dur("age", now.Sub(alert.StartTime)).

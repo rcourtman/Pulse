@@ -21639,3 +21639,53 @@ func TestAsyncActiveCheckpointBurstIsBounded(t *testing.T) {
 		t.Fatalf("restart lost latest pending intent: %+v", pending)
 	}
 }
+
+func TestCleanupRetentionRequiresObservationInactivity(t *testing.T) {
+	now := time.Now()
+	old := now.Add(-48 * time.Hour)
+	recent := now.Add(-5 * time.Minute)
+	for _, tc := range []struct {
+		name         string
+		start, seen  time.Time
+		acknowledged bool
+		ttl          int
+		keep         bool
+	}{
+		{name: "continuing unacknowledged condition", start: old, seen: recent, ttl: 1, keep: true},
+		{name: "inactive unacknowledged condition", start: old, seen: old, ttl: 1},
+		{name: "legacy inactive without last seen", start: old, ttl: 1},
+		{name: "legacy recent without last seen", start: recent, ttl: 1, keep: true},
+		{name: "recent occurrence with inconsistent old last seen", start: recent, seen: old, ttl: 1, keep: true},
+		{name: "disabled unacknowledged retention", start: old, seen: old, keep: true},
+		{name: "continuing acknowledged condition", start: old, seen: recent, acknowledged: true, ttl: 1, keep: true},
+		{name: "inactive acknowledged condition", start: old, seen: old, acknowledged: true, ttl: 1},
+		{name: "legacy without either timestamp", ttl: 1},
+		{name: "future observation does not expire", start: old, seen: now.Add(time.Hour), ttl: 1, keep: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newCleanupRetentionManager(t, t.TempDir(), false)
+			alert := &Alert{
+				ID: "retention-resource::metric-threshold:usage", ResourceID: "retention-resource",
+				CanonicalSpecID: "metric-threshold:usage", Type: "usage", Level: AlertLevelWarning,
+				StartTime: tc.start, LastSeen: tc.seen, Acknowledged: tc.acknowledged,
+			}
+			if tc.acknowledged {
+				ackTime := old
+				alert.AckTime = &ackTime
+				alert.AckUser = "operator"
+			}
+			m.mu.Lock()
+			m.config.MaxAlertAgeDays = tc.ttl
+			m.setActiveAlertNoLock(alert.ID, alert)
+			m.mu.Unlock()
+			m.Cleanup(time.Hour)
+			active := m.GetActiveAlerts()
+			if kept := len(active) == 1; kept != tc.keep {
+				t.Fatalf("cleanup kept = %v, want %v (start %s, last seen %s)", kept, tc.keep, tc.start, tc.seen)
+			}
+			if tc.keep && (!active[0].StartTime.Equal(tc.start) || !active[0].LastSeen.Equal(tc.seen) || active[0].Acknowledged != tc.acknowledged) {
+				t.Fatalf("cleanup changed the retained occurrence: %+v", active[0])
+			}
+		})
+	}
+}

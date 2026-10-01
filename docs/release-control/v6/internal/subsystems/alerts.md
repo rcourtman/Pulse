@@ -795,6 +795,26 @@ inspectability, or convert missing/stale evidence into health.
 
 ## Current State
 
+### Continuing unacknowledged alerts survive age-based cleanup
+
+`MaxAlertAgeDays` removes an unacknowledged alert only when both its occurrence
+start and last observation predate the configured limit. A still-observed
+condition keeps its occurrence identity, age and dispatch timestamp; cleanup
+must not hide it or manufacture another firing on the next poll. Legacy alerts
+without `LastSeen` use `StartTime` for inactivity. Zero disables this retention
+rule. Acknowledged-alert cleanup, automatic acknowledgement, explicit clears,
+confirmed recovery and notification eligibility remain unchanged.
+
+`TestCleanupRetentionRequiresObservationInactivity` in `alerts_test.go` covers
+continuing/inactive, legacy, disabled, acknowledged and inconsistent-timestamp
+controls. `TestCleanupContinuingDockerUpdateKeepsOccurrence` in
+`cleanup_observation_retention_test.go` exercises the real Docker update
+detector with cached, absent and failed registry observations through four
+cleanup/next-poll cycles, JSON and durable active-state restart, callback counts,
+history and affirmative recovery. This is source-fixture lifecycle proof, not
+an installed registry/destination result or a diagnosis of a reporter's daily
+resolve/reopen cycle.
+
 ### Confirmed empty storage is recovery evidence
 
 Static storage capacity evaluation must admit a zero usage observation when
