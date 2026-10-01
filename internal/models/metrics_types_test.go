@@ -19,6 +19,27 @@ func TestMetricPoint_ZeroValue(t *testing.T) {
 	}
 }
 
+func TestHostRAIDRequiredDevicesWireContract(t *testing.T) {
+	for _, required := range []int{0, 4} {
+		array := HostRAIDArray{Device: "/dev/md1", RequiredDevices: required, TotalDevices: 5, ActiveDevices: 4, SpareDevices: 1}
+		payload, err := json.Marshal(array.NormalizeCollections())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(payload), `"requiredDevices"`) != (required > 0) {
+			t.Fatalf("known/unknown required count not preserved: %s", payload)
+		}
+		var decoded HostRAIDArray
+		if err := json.Unmarshal(payload, &decoded); err != nil {
+			t.Fatal(err)
+		}
+		cloned := cloneHostRAIDArrays([]HostRAIDArray{decoded})
+		if cloned[0].RequiredDevices != required || cloned[0].TotalDevices != 5 || cloned[0].SpareDevices != 1 || cloned[0].Devices == nil {
+			t.Fatalf("model wire/clone changed count meaning: %+v", cloned)
+		}
+	}
+}
+
 func TestAlertLastSeenWireContract(t *testing.T) {
 	withoutLastSeen, err := json.Marshal(Alert{ID: "alert-1"})
 	if err != nil {

@@ -3944,20 +3944,21 @@ func hostRAIDFromReadStateView(raid []unifiedresources.HostRAIDMeta) []models.Ho
 			})
 		}
 		out = append(out, models.HostRAIDArray{
-			Device:         entry.Device,
-			Name:           entry.Name,
-			Level:          entry.Level,
-			State:          entry.State,
-			TotalDevices:   entry.TotalDevices,
-			ActiveDevices:  entry.ActiveDevices,
-			WorkingDevices: entry.WorkingDevices,
-			FailedDevices:  entry.FailedDevices,
-			SpareDevices:   entry.SpareDevices,
-			UUID:           entry.UUID,
-			Devices:        devices,
-			RebuildPercent: entry.RebuildPercent,
-			RebuildSpeed:   entry.RebuildSpeed,
-			Operation:      entry.Operation,
+			Device:          entry.Device,
+			Name:            entry.Name,
+			Level:           entry.Level,
+			State:           entry.State,
+			RequiredDevices: entry.RequiredDevices,
+			TotalDevices:    entry.TotalDevices,
+			ActiveDevices:   entry.ActiveDevices,
+			WorkingDevices:  entry.WorkingDevices,
+			FailedDevices:   entry.FailedDevices,
+			SpareDevices:    entry.SpareDevices,
+			UUID:            entry.UUID,
+			Devices:         devices,
+			RebuildPercent:  entry.RebuildPercent,
+			RebuildSpeed:    entry.RebuildSpeed,
+			Operation:       entry.Operation,
 		})
 	}
 	return out

@@ -18,6 +18,32 @@ func TestLegacyReportJSONDefaultsOperationReceiptProtocolUnsupported(t *testing.
 	}
 }
 
+func TestRAIDRequiredDevicesWireCompatibility(t *testing.T) {
+	for _, required := range []int{0, 4} {
+		report := Report{RAID: []RAIDArray{{Device: "/dev/md1", RequiredDevices: required, TotalDevices: 5, ActiveDevices: 4, WorkingDevices: 5, SpareDevices: 1}}}
+		data, err := json.Marshal(report)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fields struct {
+			RAID []map[string]any `json:"raid"`
+		}
+		if err := json.Unmarshal(data, &fields); err != nil {
+			t.Fatal(err)
+		}
+		if value, present := fields.RAID[0]["requiredDevices"]; present != (required != 0) || (present && value != float64(required)) {
+			t.Fatalf("required member presence/value = %v/%v in %s", present, value, data)
+		}
+		var got Report
+		if err := json.Unmarshal(data, &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.RAID[0].RequiredDevices != required || got.RAID[0].TotalDevices != 5 || got.RAID[0].SpareDevices != 1 {
+			t.Fatalf("RAID count round trip = %+v", got.RAID)
+		}
+	}
+}
+
 func TestReportSequenceIDRoundTrip(t *testing.T) {
 	value := FormatReportSequenceID("0123456789abcdef", 42)
 	if value != "v1:0123456789abcdef:42" {

@@ -19,6 +19,16 @@
 
 ## Purpose
 
+### RAID configured-member read evidence — issue #2369
+
+The existing host RAID status tool preserves optional `required_devices` from
+the canonical host view alongside source-native total, active, working, failed
+and spare counts. Omission means the configured requirement is unknown, not
+zero members. A total that includes spares is not evidence of a member deficit;
+the shared health owner remains authoritative for risk. Tool serialization tests
+check the separate counts. This read-only projection creates no feature, route,
+array-repair grant, backup verdict or recovery confirmation.
+
 ### Ollama Basic Auth continuity
 Patrol's runtime provider factory must carry the persisted Ollama username and
 password into streaming requests without trimming password bytes.
