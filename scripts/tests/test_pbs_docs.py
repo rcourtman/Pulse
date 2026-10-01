@@ -62,6 +62,13 @@ def certificate(directory, name):
     return certificate, key
 
 
+def server_context(cert, key):
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    context.load_cert_chain(str(cert), str(key))
+    return context
+
+
 @contextmanager
 def server(cert, key, status=200, installer=None):
     requests = []
@@ -78,8 +85,7 @@ def server(cert, key, status=200, installer=None):
             pass
 
     http = HTTPServer(("127.0.0.1", 0), Handler)
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    context.load_cert_chain(str(cert), str(key))
+    context = server_context(cert, key)
     http.socket = context.wrap_socket(http.socket, server_side=True)
     thread = threading.Thread(target=http.serve_forever, daemon=True)
     thread.start()
@@ -101,6 +107,10 @@ class PBSDocsTest(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.temporary.cleanup()
+
+    def test_tls_fixture_explicitly_rejects_legacy_protocols(self):
+        self.assertEqual(server_context(self.cert, self.key).minimum_version,
+                         ssl.TLSVersion.TLSv1_2)
 
     def test_shipped_copy_and_safe_scope(self):
         self.assertEqual(DOC.read_bytes(), (ROOT / "frontend-modern/public/docs/PBS.md").read_bytes())
