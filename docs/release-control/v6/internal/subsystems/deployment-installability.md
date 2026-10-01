@@ -2456,6 +2456,15 @@ The v6.5 line already contains `internal/filesystemprobe` and
 `pkg/agents/filesystem`; both are included as compiled qualification dependencies.
 No new filesystem implementation is introduced by this backport.
 
+The containing line's full Python suite also checks the current notes packet.
+That check binds the first heading to the exact escaped version, accepting
+`# Pulse vX.Y.Z` and `# Pulse vX.Y.Z Release Notes` rather than requiring both a
+boilerplate suffix and an inline repeated version. Its eight valid and ten
+negative title cases reject prefix collisions, wrong versions, draft suffixes,
+non-heading mentions and a displaced heading. Changelog/version/index lineage
+checks remain unchanged. This is a line validation adaptation of the reviewed
+note compatibility repair, not a published-note rewrite or a gate waiver.
+
 `scripts/installtests/release_notes_contract_test.go` reproduces authored-copy
 acceptance and rejects seven identity/safety violations. The renderer cases
 exercise grouped notes, unsafe ownership, duplicates, historical formats and the
