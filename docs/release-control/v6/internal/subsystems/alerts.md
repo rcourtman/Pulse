@@ -43,6 +43,21 @@ callbacks remain outside the manager lock. No retention duration is extended.
 sample and a short recovery/refire. This is synthetic lifecycle proof, not
 installed notification-destination acceptance.
 
+Hourly tracking-map cleanup retains canonical acknowledgement records while
+their incident is active, including legacy-keyed active snapshots and active
+recurrences with an older inactive timestamp. A decision does not expire from
+its acknowledgement age while the condition continues. Recovery starts the
+existing inactive-retention window; the ordinary cleanup's one-hour expiry,
+hourly stale-record fallback and explicit unacknowledgement remain unchanged.
+`TestTrackingCleanupPreservesAcknowledgedProviderRecurrence` in
+`internal/alerts/reducer_parity_ack_test.go` verifies manual and automatic
+acknowledgement through provider-native pool incident reconciliation, affirmative
+recovery, short recurrence, dispatch callbacks and JSON/durable checkpoint restart.
+`TestTrackingCleanupCanonicalAckRetentionBounds` verifies active/legacy identity,
+recent inactivity, both existing expiry paths and missing-timestamp fallback.
+Modeled elapsed time and local callbacks do not prove installed recovery or
+delivery to an external notification destination.
+
 Mobile incident drawers transfer their exact context to Assistant and close
 through the shared explicit handoff callback. Keeping the source drawer above
 Assistant, or dropping its occurrence identity to make navigation work, fails

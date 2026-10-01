@@ -139,6 +139,11 @@ func (m *Manager) cleanupStaleMaps() {
 		}
 	}
 	for canonicalID, record := range m.ackStateByCanonical {
+		// As with legacy records and Cleanup, an active incident owns its
+		// acknowledgement until recovery starts the inactive-retention window.
+		if m.hasActiveAlertTrackingKeyNoLock(canonicalID) {
+			continue
+		}
 		checkTime := record.inactiveAt
 		if checkTime.IsZero() {
 			checkTime = record.time

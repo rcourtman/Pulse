@@ -2,11 +2,13 @@ package alerts
 
 import (
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -261,4 +263,174 @@ func TestAutoAcknowledgementSurvivesMetricEvaluation(t *testing.T) {
 	evaluate(60)
 	evaluate(90)
 	assertAcknowledged("short recovery and refire")
+}
+
+// Age only the acknowledgement timestamps, keeping detector observations fresh.
+// The hourly sweep must not discard a long-running operator decision before a
+// real recovery can start the existing inactive-retention window.
+func TestTrackingCleanupPreservesAcknowledgedProviderRecurrence(t *testing.T) {
+	for _, durable := range []bool{false, true} {
+		for _, automatic := range []bool{false, true} {
+			name := "JSON"
+			if durable {
+				name = "durable"
+			}
+			if automatic {
+				name += "/automatic"
+			} else {
+				name += "/manual"
+			}
+			t.Run(name, func(t *testing.T) {
+				dir := t.TempDir()
+				newManager := func() *Manager {
+					return newCleanupRetentionManager(t, dir, durable)
+				}
+				m := newManager()
+				resource := unifiedresources.Resource{
+					ID: "storage:ack-tank", Type: unifiedresources.ResourceTypeStorage,
+					Name: "ack-tank", ParentName: "truenas-main",
+					Sources: []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+					Storage: &unifiedresources.StorageMeta{Platform: "truenas", Topology: "pool", Protection: "zfs", IsZFS: true},
+					Incidents: []unifiedresources.ResourceIncident{{
+						Provider: "truenas", NativeID: "ack-pool-alert", Code: "truenas_volume_status",
+						Severity: storagehealth.RiskWarning, Summary: "Pool ack-tank is DEGRADED",
+						StartedAt: time.Now().Add(-26 * time.Hour),
+					}},
+				}
+				healthy := resource
+				healthy.Incidents = nil
+				evaluate := func(m *Manager, observed unifiedresources.Resource) {
+					m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{observed})
+				}
+				var deliveries atomic.Int32
+				m.SetAlertCallback(func(*Alert) { deliveries.Add(1) })
+				evaluate(m, resource)
+				initial := m.GetActiveAlerts()
+				if len(initial) != 1 || deliveries.Load() != 1 {
+					t.Fatalf("initial provider condition: %d alerts / %d dispatches, want 1 / 1", len(initial), deliveries.Load())
+				}
+				id := initial[0].ID
+				user := "operator"
+				if automatic {
+					user = "system-auto"
+					m.mu.Lock()
+					m.config.AutoAcknowledgeAfterHours = 1
+					m.mu.Unlock()
+					m.Cleanup(time.Hour)
+				} else if err := m.AcknowledgeAlert(id, user); err != nil {
+					t.Fatal(err)
+				}
+				ackAt := time.Now().Add(-25 * time.Hour)
+				m.mu.Lock()
+				active, ok := m.getActiveAlertNoLock(id)
+				if !ok || !active.Acknowledged {
+					m.mu.Unlock()
+					t.Fatal("detector acknowledgement was not established")
+				}
+				active.AckTime = &ackAt
+				record := m.ackStateByCanonical[id]
+				record.time = ackAt
+				m.ackStateByCanonical[id] = record
+				m.mirrorAcknowledgeNoLock(active, user, ackAt)
+				m.setActiveAlertNoLock(id, active)
+				m.mu.Unlock()
+
+				checkCycle := func(m *Manager, count *atomic.Int32, stage string) {
+					t.Helper()
+					before := count.Load()
+					m.cleanupStaleMaps()
+					m.mu.RLock()
+					record, retained := m.ackStateByCanonical[id]
+					m.mu.RUnlock()
+					if !retained || record.user != user || !record.time.Equal(ackAt) {
+						t.Errorf("%s: hourly sweep lost the active acknowledgement: %+v, retained=%v", stage, record, retained)
+					}
+					evaluate(m, healthy) // Observed pool with no incident: affirmative recovery.
+					if got := len(m.GetActiveAlerts()); got != 0 {
+						t.Fatalf("%s: real recovery left %d active alerts", stage, got)
+					}
+					m.Cleanup(time.Hour) // Old acknowledgement, newly inactive: retain it.
+					evaluate(m, resource)
+					alerts := m.GetActiveAlerts()
+					if len(alerts) != 1 || alerts[0].ID != id || !alerts[0].Acknowledged || alerts[0].AckUser != user || alerts[0].AckTime == nil || !alerts[0].AckTime.Equal(ackAt) {
+						t.Errorf("%s: short recurrence lost acknowledgement identity: %+v", stage, alerts)
+					}
+					if got := count.Load() - before; got != 0 {
+						t.Errorf("%s: acknowledged recovery/recurrence dispatched %d duplicate notifications", stage, got)
+					}
+					t.Logf("%s: recovery/recurrence dispatch delta %d", stage, count.Load()-before)
+				}
+				checkCycle(m, &deliveries, "before restart")
+				m.Stop() // The actual final checkpoint, not a hand-built JSON fixture.
+				restarted := newManager()
+				var afterRestart atomic.Int32
+				restarted.SetAlertCallback(func(*Alert) { afterRestart.Add(1) })
+				checkCycle(restarted, &afterRestart, "after restart")
+				if err := restarted.UnacknowledgeAlert(id); err != nil {
+					t.Fatal(err)
+				}
+				before := afterRestart.Load()
+				evaluate(restarted, healthy)
+				evaluate(restarted, resource)
+				if got := afterRestart.Load() - before; got != 1 {
+					t.Errorf("explicit unacknowledge/recovery/recurrence dispatched %d notifications, want 1", got)
+				}
+			})
+		}
+	}
+}
+
+func TestTrackingCleanupCanonicalAckRetentionBounds(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		active     bool
+		legacy     bool
+		inactive   time.Duration
+		wantHourly bool
+		wantNormal bool
+	}{
+		{name: "active canonical", active: true, wantHourly: true, wantNormal: true},
+		{name: "active legacy identity", active: true, legacy: true, wantHourly: true, wantNormal: true},
+		{name: "active after earlier recurrence", active: true, inactive: 25 * time.Hour, wantHourly: true, wantNormal: true},
+		{name: "recently inactive old acknowledgement", inactive: 30 * time.Minute, wantHourly: true, wantNormal: true},
+		{name: "existing one-hour expiry", inactive: 2 * time.Hour, wantHourly: true},
+		{name: "stale inactive", inactive: 25 * time.Hour},
+		{name: "legacy missing inactive timestamp"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newTestManager(t)
+			now := time.Now()
+			old := now.Add(-25 * time.Hour)
+			id, alert := testNewCanonicalAlert("ack-bounds", "metric-threshold:cpu", "metric-threshold", "cpu")
+			alert.StartTime, alert.LastSeen = old, now
+			alert.Acknowledged, alert.AckUser, alert.AckTime = true, "operator", &old
+			record := ackRecord{acknowledged: true, user: "operator", time: old}
+			if tc.inactive > 0 {
+				record.inactiveAt = now.Add(-tc.inactive)
+			}
+			m.mu.Lock()
+			m.ackStateByCanonical[id] = record
+			if tc.active {
+				storageKey := id
+				if tc.legacy {
+					storageKey = "legacy-cpu-ack-bounds"
+				}
+				m.activeAlerts[storageKey] = alert
+			}
+			m.mu.Unlock()
+			assertRetained := func(stage string, want bool) {
+				t.Helper()
+				m.mu.RLock()
+				got, retained := m.ackStateByCanonical[id]
+				m.mu.RUnlock()
+				if retained != want || (retained && got != record) {
+					t.Errorf("%s: acknowledgement retained=%v (%+v), want %v with unchanged record", stage, retained, got, want)
+				}
+			}
+			m.cleanupStaleMaps()
+			assertRetained("hourly sweep", tc.wantHourly)
+			m.Cleanup(time.Hour)
+			assertRetained("normal one-hour inactive expiry", tc.wantNormal)
+		})
+	}
 }
