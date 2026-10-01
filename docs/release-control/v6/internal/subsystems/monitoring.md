@@ -27,13 +27,13 @@ projection converter. Conversion sorts final frontend rows beside precomputed
 keys instead of retaining an estate-sized array of conversion inputs. This
 must preserve canonical identity, parent/action targets, catalogs, ordering,
 ignore surfaces and source isolation. No timestamp/generation cache is added:
-metrics, labels, alert state, metadata clears and time-sensitive health continue
+metrics, tags, alert state, metadata clears and time-sensitive health continue
 to be evaluated on each requested broadcast.
 
 `TestBroadcastProjectionMatchesPreviousPipeline` compares full JSON with the
 pre-repair conversion/sort/coalesce pipeline on split hosts and mixed workloads.
 `TestBroadcastProjectionListsRegistryOnceAndKeepsLiveChanges` pins one registry
-list and verifies same-freshness metric/label changes, live alerts, ignored
+list and verifies same-freshness metric/tag changes, live alerts, ignored
 hosts and immutable prior projections. The 1,000-resource broadcast benchmark
 includes real registry cloning, projection, encoding, per-client deltas and
 queues with zero/one/four viewers, not persistence, transport or installed CPU.

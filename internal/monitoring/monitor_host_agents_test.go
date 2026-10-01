@@ -6660,9 +6660,9 @@ func TestBroadcastProjectionListsRegistryOnceAndKeepsLiveChanges(t *testing.T) {
 	oldCPU := first.Resources[0].CPU.Current
 	changed := store.GetAll()
 	// Keep LastSeen/overall freshness unchanged: a timestamp-only cache would
-	// miss these metric/status/label changes.
+	// miss these metric/status/tag changes.
 	changed[0].Metrics.CPU.Value = 77
-	changed[0].Labels = map[string]string{"new": "label"}
+	changed[0].Tags = []string{"new-tag"}
 	changed[0].Status = unifiedresources.StatusOffline
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestResources(changed)
@@ -6680,7 +6680,7 @@ func TestBroadcastProjectionListsRegistryOnceAndKeepsLiveChanges(t *testing.T) {
 			row = &second.Resources[i]
 		}
 	}
-	if row == nil || row.CPU.Current != 77 || row.Labels["new"] != "label" {
+	if row == nil || row.CPU.Current != 77 || len(row.Tags) != 1 || row.Tags[0] != "new-tag" {
 		t.Fatalf("mutable row was stale: %#v", row)
 	}
 	if first.Resources[0].CPU.Current != oldCPU {

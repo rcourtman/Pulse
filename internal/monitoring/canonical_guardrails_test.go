@@ -2921,7 +2921,7 @@ func TestBroadcastProjectionMatchesPreviousPipeline(t *testing.T) {
 	for i, name := range []string{"zebra", "Alpha", "alpha", "", "尾"} {
 		parent := "agent-api"
 		resources = append(resources, unifiedresources.Resource{
-			ID: fmt.Sprintf("vm-%d", i), Type: unifiedresources.ResourceTypeVM, Name: name, DisplayName: name,
+			ID: fmt.Sprintf("vm-%d", i), Type: unifiedresources.ResourceTypeVM, Name: name,
 			ParentID: &parent, Status: unifiedresources.StatusOnline, LastSeen: now,
 			Proxmox: &unifiedresources.ProxmoxData{NodeName: "tower.local", VMID: i + 100},
 			Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox},
