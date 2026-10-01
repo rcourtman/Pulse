@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import re
+import json
+import os
 import subprocess
 import textwrap
 import tempfile
@@ -31,6 +33,123 @@ def _discover_rc_draft_packet_paths() -> tuple[str, ...]:
 
 
 class RenderReleaseBodyTest(unittest.TestCase):
+    def grouped_notes(self, version: str = "6.4.6-rc.1") -> str:
+        return f"""# Pulse v{version} Release Notes
+
+PBS History stays with the current host and update progress is clearer.
+
+## Highlights
+
+- Replaced PBS hosts no longer return in History.
+- Update progress follows the work until it finishes.
+
+## Proxmox, PBS and backups
+
+- History no longer brings back a replaced PBS host (#2343).
+
+## Updates and agents
+
+- Update progress no longer stays on Downloading 10% after the update completes.
+
+## Known issues
+
+- Some combined API and agent PBS layouts still lack History. Use the API view.
+
+## Before you upgrade
+
+Back up your data directory and keep the backup until you have checked the update.
+"""
+
+    def test_next_patch_accepts_grouped_plain_language_notes(self) -> None:
+        for version in ("6.4.6-rc.1", "6.4.6", "6.5.0-rc.1", "6.5.0"):
+            with self.subTest(version=version):
+                notes = self.grouped_notes(version)
+                render_release_body.validate_release_notes_shape(notes, version)
+                args = type("Args", (), {"version": version,
+                    "rollback_target": "v6.4.5",
+                    "rollback_command": "sudo /bin/update --version v6.4.5"})()
+                body = "\n\n".join((notes.strip(),
+                    render_release_body.build_installation_section(version),
+                    render_release_body.build_rollback_section(args))) + "\n"
+                render_release_body.validate_release_body_shape(body, version, expected_body=body)
+                self.assertIn("## Proxmox, PBS and backups", body)
+                self.assertEqual(body.count("## Roll back\n"), 1)
+                self.assertIn("only when `/bin/update` was installed by the Pulse server installer", body)
+
+    def test_grouped_notes_keep_structure_and_customer_safety(self) -> None:
+        valid = self.grouped_notes()
+        cases = {
+            "wrong version": valid.replace("v6.4.6-rc.1", "v6.4.5"),
+            "empty group": valid.replace("- History no longer brings back a replaced PBS host (#2343).", ""),
+            "internal section": valid.replace("## Updates and agents", "## Release Qualification"),
+            "internal prose": valid.replace("after the update completes.", "after exact-SHA release gates passed."),
+            "long change": valid.replace("History no longer brings back a replaced PBS host (#2343).", "x" * 261),
+            "duplicate section": valid + "\n## Updates and agents\n\n- Another change.\n",
+            "duplicate change": valid.replace("Update progress no longer stays on Downloading 10% after the update completes.",
+                "History no longer brings back a replaced PBS host (#2343)."),
+            "flattened": valid.replace("\n\n## Updates and agents\n\n", " ## Updates and agents "),
+            "highlights only": "# Pulse v6.4.6-rc.1 Release Notes\n\nHistory is clearer.\n\n## Highlights\n\n- History stays with its host.\n",
+        }
+        for name, notes in cases.items():
+            with self.subTest(name=name):
+                with self.assertRaises(render_release_body.ReleaseBodyIntegrityError):
+                    render_release_body.validate_release_notes_shape(notes, "6.4.6-rc.1")
+
+    def test_metadata_and_renderer_change_group_names_stay_aligned(self) -> None:
+        go_source = (_REPO_ROOT / "scripts/installtests/release_notes_contract_test.go").read_text()
+        group_map = go_source.split("var releaseNoteChangeHeadings = map[string]bool{", 1)[1].split("}", 1)[0]
+        groups = set(re.findall(r'"([^"]+)":\s*true', group_map))
+        self.assertEqual(groups, render_release_body._CUSTOMER_CHANGE_GROUPS | {"what's improved", "what’s improved"})
+
+    def test_generator_prompts_and_renderer_agree_on_grouped_notes(self) -> None:
+        # Invoke the actual shell authoring path with a deterministic, local
+        # model double. No model service, credentials or network are used.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scripts = root / "scripts/release_control"
+            scripts.mkdir(parents=True)
+            (scripts / "render_release_body.py").write_text(
+                (_REPO_ROOT / "scripts/release_control/render_release_body.py").read_text())
+            def git(*args: str) -> None:
+                subprocess.run(["git", "-c", "user.name=Release Note Test",
+                    "-c", "user.email=notes@example.invalid", *args], cwd=root,
+                    check=True, capture_output=True)
+            git("init", "-b", "main")
+            git("commit", "--allow-empty", "--no-gpg-sign", "-m", "previous stable")
+            git("tag", "v6.4.5")
+            git("commit", "--allow-empty", "--no-gpg-sign", "-m", "candidate changes")
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            model = bin_dir / "codex"
+            model.write_text("""#!/usr/bin/env python3
+import json, os, pathlib, sys
+args = sys.argv[1:]
+assert 'OPENAI_API_KEY' not in os.environ
+with open(os.environ['NOTE_TEST_PROMPTS'], 'a') as trace:
+    trace.write(json.dumps(args[-1]) + '\\n')
+pathlib.Path(args[args.index('-o') + 1]).write_text(pathlib.Path(os.environ['NOTE_TEST_NOTES']).read_text())
+""")
+            model.chmod(0o755)
+            notes = root / "notes.md"
+            notes.write_text(self.grouped_notes())
+            prompts = root / "prompts.jsonl"
+            env = {**os.environ, "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"],
+                "NOTE_TEST_NOTES": str(notes), "NOTE_TEST_PROMPTS": str(prompts),
+                "OPENAI_API_KEY": "synthetic-value-must-be-scrubbed"}
+            for key in ("SAVE_TO_FILE", "RELEASE_NOTES_TRACE_DIR", "RELEASE_NOTE_VISUAL_PLAN_FILE"):
+                env.pop(key, None)
+            result = subprocess.run(["bash", str(_REPO_ROOT / "scripts/generate-release-notes.sh"),
+                "6.4.6-rc.1", "v6.4.5"], cwd=root, env=env,
+                capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, notes.read_text())
+            recorded = [json.loads(line) for line in prompts.read_text().splitlines()]
+            self.assertEqual(len(recorded), 4)  # research, draft, review, omission
+            for prompt in recorded[1:]:
+                self.assertIn("## Highlights", prompt)
+                self.assertIn("## Proxmox, PBS and backups", prompt)
+                self.assertIn("No internal verification status", prompt)
+
     def test_v642_security_packet_keeps_both_admin_boundaries_visible(self) -> None:
         notes = (
             _REPO_ROOT / "docs" / "releases" / "RELEASE_NOTES_v6.4.2.md"
@@ -548,6 +667,18 @@ Old metadata section.
             self.assertIn("https://pulserelay.pro/download.html", body)
             self.assertIn("The rollback target is `v5.1.28`", body)
             self.assertIn("sudo /bin/update --version v5.1.28", body)
+            for section, target in (
+                (render_release_body.build_installation_section(namespace.version), "v6.0.0-rc.2"),
+                (render_release_body.build_rollback_section(namespace), "v5.1.28"),
+            ):
+                self.assertLess(section.index("only when"), section.index("sudo /bin/update"))
+                self.assertIn("installed by the Pulse server installer", section)
+                self.assertIn("community-scripts updater can ignore `--version`", section)
+                self.assertIn(f"`PULSE_VERSION={target}`", section)
+                self.assertIn(
+                    "/blob/v6.0.0-rc.2/docs/INSTALL.md#2-bare-metal--systemd", section,
+                )
+                self.assertNotIn("/blob/main/", section)
             self.assertIn(
                 "For Docker Compose, set the Pulse image to the rollback target",
                 body,
@@ -577,6 +708,7 @@ Controls remain readable without horizontal scrolling.
             "Args",
             (),
             {
+                "version": "6.4.0",
                 "rollback_target": "v6.3.2",
                 "rollback_command": "sudo /bin/update --version v6.3.2",
             },
@@ -593,6 +725,34 @@ Controls remain readable without horizontal scrolling.
         self.assertEqual(
             render_release_body.validate_release_body_shape(body, "6.4.0"),
             body,
+        )
+
+    def test_updater_ownership_scope_cannot_be_borrowed_from_a_distant_warning(self) -> None:
+        args = type("Args", (), {"version": "6.3.2", "rollback_target": "v6.3.1",
+                                "rollback_command": "sudo /bin/update --version v6.3.1"})()
+        authored = "# Pulse v6.3.2 Release Notes\n\nSummary.\n\n## Before you upgrade\n\n"
+        install = render_release_body.build_installation_section("6.3.2")
+        rollback = render_release_body.build_rollback_section(args)
+        safe = authored + "Keep a backup.\n\n" + install + "\n\n" + rollback
+        render_release_body.validate_release_body_shape(safe, "6.3.2")
+        unsafe = (
+            safe.replace("Use this CLI command only when `/bin/update` was installed by the Pulse server installer:",
+                         "For systemd and Proxmox LXC installs, use:"),
+            safe.replace("For systemd and Proxmox LXC servers, use this command only when "
+                         "`/bin/update` was installed by the Pulse server installer:", "Run:"),
+            safe.replace("Keep a backup.", "On systemd and Proxmox LXC installs, use "
+                         "`sudo /bin/update --version v6.3.1`."),
+            safe.replace("Keep a backup.", "Use this CLI command only when `/bin/update` was installed "
+                         "by the Pulse server installer.\n\nA separate unrelated bullet.\n\n"
+                         "```bash\nsudo /bin/update --version v6.3.1\n```"),
+        )
+        for body in unsafe:
+            with self.subTest(body=body), self.assertRaisesRegex(
+                    render_release_body.ReleaseBodyIntegrityError, "each /bin/update"):
+                render_release_body.validate_release_body_shape(body, "6.3.2")
+        render_release_body.validate_server_updater_guidance(
+            "Use this command only when `/bin/update` was installed by\n"
+            "the Pulse server installer: `sudo /bin/update --version v6.3.1`."
         )
 
     def test_flattened_release_notes_fail_closed(self) -> None:
