@@ -1383,6 +1383,15 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 	if !exists {
 		firstSeen, exists = m.dockerUpdateFirstSeen[resourceID]
 	}
+	// Tracking maps are process-local, but an active occurrence survives a
+	// restart. Its start is the original pending age, not a new delay window.
+	// Otherwise positive reports return below-threshold without refreshing
+	// LastSeen, and hourly cleanup can resolve a still-asserted update.
+	if active, ok := m.getActiveAlertNoLock(canonicalAlertID); ok && active != nil &&
+		active.Type == "docker-container-update" && active.ResourceID == resourceID &&
+		!active.StartTime.IsZero() {
+		firstSeen, exists = active.StartTime, true
+	}
 	if !exists {
 		firstSeen = time.Now()
 	}
