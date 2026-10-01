@@ -849,14 +849,8 @@ func TestHelmChartShipsOpenShiftProfile(t *testing.T) {
 			t.Fatalf("Helm CI missing OpenShift render assertion %q", required)
 		}
 	}
-	if !strings.Contains(docs, "--set openShift.enabled=true") ||
-		!strings.Contains(docs, "--set openShift.kubernetesAgent.enabled=true") ||
-		!strings.Contains(docs, "create secret generic pulse-server-env") ||
-		!strings.Contains(docs, "create secret generic pulse-agent-env") {
-		t.Fatal("Kubernetes guide must document the shipped OpenShift profile")
-	}
-	if strings.Contains(docs, "--set-string agent.secretEnv.data.PULSE_TOKEN") {
-		t.Fatal("OpenShift guide must not persist the agent token in Helm release values")
+	if issues := openShiftDocsIssues(docs); len(issues) > 0 {
+		t.Fatalf("Kubernetes guide must document the shipped credential-safe OpenShift profile: %v", issues)
 	}
 }
 
