@@ -1,16 +1,18 @@
 {
   "version": 1,
-  "base_sha": "0dc858cb366a394b159d2c911c5d85b3020e7881",
-  "verified_at": "2026-10-01T00:37:51Z",
+  "base_sha": "00f82e2afc3cd75035c997e9e245c6e0eeffffa9",
+  "verified_at": "2026-10-01T01:42:43Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "e1658b5843ab22e0ea83d1bf27e8c1565a16d9f528eb3832524a67318d281d6a"
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "a49f3c6496e5515284a94c52b818f78f72d2e3530ae398794ea7432f251f48ec",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "5ea99d3d995ddb2fa777273ed3f224b7fbb9e7b10a015bed52d61a8e10dc0b99"
   },
   "routes": [
-    "/browser-tests/pbs-history-refresh.html (production GuestDrawerHistory/query/CSS with synthetic host/service metrics API responses; not a complete PBS drawer or installed acceptance)"
+    "/browser-tests/pbs-identity-boundary.html (production PBS table, full ResourceDetailDrawer, shared History/query and CSS with synthetic VM/Agent APIs; not installed collection or complete #1723 acceptance)"
   ],
   "viewports": [
     {
@@ -23,65 +25,174 @@
     }
   ],
   "states": [
-    "light/dark sparse CPU, memory and lone disk observations with one common inspected timestamp",
-    "a missing metric at the inspected time stays unavailable instead of borrowing nearby, latest or live data",
-    "zero-valued lone observations can be inspected without a synthetic trend",
-    "genuinely aligned series share cursor geometry and their own observed values",
-    "network directions preserve independently missing and zero rates",
-    "native keyboard/touch selection takes precedence over pointer movement",
-    "failed same-source refresh retains correctly attributed observations and a visible warning",
-    "a successful refresh updates the hovered timestamp values without choosing other latest metrics",
-    "held service-target replacement has no former-host observations, cursor or dated pointer description"
+    "light/dark short sample coverage stays at its true position in the fulfilled 24-hour window rather than stretching across each plot",
+    "all configured utilization/network/disk/thermal panels share dated endpoints, including lone and empty panels",
+    "three separately mapped synthetic PBS drawers read vm-one, vm-two and agent-three, not unrelated host identities",
+    "same-time observations occupy the same horizontal coordinate across groups with different sample coverage",
+    "failed same-source refresh retains samples and window with a sanitised warning; successful refresh advances the window",
+    "held 1-hour range replacement clears former endpoints, paths and inspection controls; matching data then uses the new window",
+    "empty window has labelled bounds without a synthetic trend; seven-day bounds remain dated; locked fourteen-day range makes no read"
   ],
   "interactions": [
-    "move a real pointer to sparse, aligned and single-sample timestamps; inspect visible legends, exact-time SVG descriptions and marker geometry",
-    "leave the plot to restore latest/current legends; verify pointer inspection makes no API reads",
-    "focus native range input and use Home/ArrowRight while moving the pointer elsewhere; blur to restore pointer inspection",
-    "Chromium/WebKit phone-emulated touch taps at each end of the native observation input, retaining its 44px minimum hit area",
-    "fail a real query refresh, inspect retained samples; successfully refresh the same source while hovering; switch resource with its GET held, then fulfil the service response"
+    "desktop native keyboard disclosure and History tab; Chromium phone row touch; WebKit phone native keyboard disclosure (whole-row touch opening not established)",
+    "focus native observation input, use Home/ArrowRight/End and compare dated values and same-time markers between utilization and network",
+    "Chromium/WebKit phone-emulated touch taps on the at-least-44px native History input; inspection performs no extra API reads",
+    "fail a real query refresh; retry with advancing bounds; hold and fulfil a 1-hour replacement read; refresh empty, choose seven days and a licence-locked range"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/history-pointer.cjs --engine=chromium; the same with --phone; --engine=firefox; --engine=webkit --phone. All from the assigned workspace root, Vite 6.4.3 / Playwright 1.56.1 (integration-lock parity verified).",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/history-window.cjs --engine=chromium --theme=light; --engine=chromium --theme=dark; both themes with --engine=chromium --phone; both themes with --engine=firefox; both themes with --engine=webkit --phone. Each is a separate bounded command from the assigned workspace root. Vite 6.4.3 / Playwright 1.56.1; integration-lock parity checked.",
   "browser_versions": {
     "chromium": "141.0.7390.37",
     "firefox": "142.0.1",
     "webkit": "26.0"
   },
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-1365/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-1365/retained-sparse-pointer-dark.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-1365/retained-sparse-pointer-light.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-1365/sparse-pointer-dark.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-1365/sparse-pointer-light.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-390/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-390/retained-sparse-pointer-dark.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-390/retained-sparse-pointer-light.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-390/sparse-pointer-dark.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-390/sparse-pointer-light.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/firefox-1365/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/firefox-1365/retained-sparse-pointer-dark.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/firefox-1365/retained-sparse-pointer-light.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/firefox-1365/sparse-pointer-dark.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/firefox-1365/sparse-pointer-light.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/webkit-390/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/webkit-390/retained-sparse-pointer-dark.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/webkit-390/retained-sparse-pointer-light.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/webkit-390/sparse-pointer-dark.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/webkit-390/sparse-pointer-light.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/receipts/browser-chromium-desktop-final.log",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/receipts/browser-chromium-phone.log",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/receipts/browser-firefox-desktop.log",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/receipts/browser-webkit-phone-isolated.log"
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-1365-dark/one-24h-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-1365-dark/one-hour-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-1365-dark/progress.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-1365-dark/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-1365-dark/retained-window-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-1365-dark/three-24h-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-1365-dark/two-24h-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-1365-light/one-24h-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-1365-light/one-hour-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-1365-light/progress.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-1365-light/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-1365-light/retained-window-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-1365-light/three-24h-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-1365-light/two-24h-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-390-dark/one-24h-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-390-dark/one-hour-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-390-dark/progress.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-390-dark/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-390-dark/retained-window-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-390-dark/three-24h-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-390-dark/two-24h-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-390-light/one-24h-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-390-light/one-hour-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-390-light/progress.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-390-light/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-390-light/retained-window-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-390-light/three-24h-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-chromium-390-light/two-24h-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-firefox-1365-dark/one-24h-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-firefox-1365-dark/one-hour-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-firefox-1365-dark/progress.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-firefox-1365-dark/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-firefox-1365-dark/retained-window-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-firefox-1365-dark/three-24h-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-firefox-1365-dark/two-24h-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-firefox-1365-light/one-24h-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-firefox-1365-light/one-hour-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-firefox-1365-light/progress.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-firefox-1365-light/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-firefox-1365-light/retained-window-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-firefox-1365-light/three-24h-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-firefox-1365-light/two-24h-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-webkit-390-dark/one-24h-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-webkit-390-dark/one-hour-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-webkit-390-dark/progress.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-webkit-390-dark/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-webkit-390-dark/retained-window-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-webkit-390-dark/three-24h-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-webkit-390-dark/two-24h-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-webkit-390-light/one-24h-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-webkit-390-light/one-hour-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-webkit-390-light/progress.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-webkit-390-light/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-webkit-390-light/retained-window-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-webkit-390-light/three-24h-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/browser-final/history-window-webkit-390-light/two-24h-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/receipts/browser-chromium-desktop-dark-final.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/receipts/browser-chromium-desktop-light-final.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/receipts/browser-chromium-phone-dark-final.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/receipts/browser-chromium-phone-light-final.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/receipts/browser-firefox-desktop-dark-final.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/receipts/browser-firefox-desktop-light-final.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/receipts/browser-webkit-phone-dark-native.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-6zj90pef/receipts/browser-webkit-phone-light-native.log"
   ],
-  "notes": "All 16 final screenshots inspected. Eight engine/viewport/theme cases pass with no page errors or horizontal overflow. Exact-base source-5g7tw1c0 has eight failing assertions and two passing replacement controls; a separate Chromium base screenshot reproduces the misattribution. The first phone run captured correct hover text before an element screenshot scrolled the tall fixture and ended its hover; the final runner captures the viewport without changing pointer state. The first WebKit navigation timed out during overlapping browser runs; its cause is not established, and a subsequent isolated run completes both themes. Adverse attempts remain in internal output receipts. These synthetic API proofs establish shared-renderer presentation, not installed PBS collection, all three #1723 drawers, VirtualBox/disk/network/I/O collection, update or upgrade/rollback acceptance, screen-reader speech, containing-line delivery or release availability.",
+  "notes": "All 40 final screenshots inspected. Eight engine/viewport/theme cases pass with no page errors or horizontal overflow and exact final runtime hashes. The ten-case exact-base source-fbz6bjig input fails all ten assertions; an inspected full PBS drawer baseline measures five minutes occupying 265/318 SVG plot units under 24 hours, versus about 1.10 units after repair. Initial navigation timeout, unknown browser-execution capability-unavailable exit, synthetic edge-point fixture mismatch and unsuccessful WebKit row/hidden-button touch attempts remain in internal receipts. WebKit final opening uses native keyboard disclosure, not a claimed touch repair; History touch inspection passes. Six Chromium/Firefox cases ran before the runner added the disclosure-state assertion and WebKit keyboard-opening branch; their runtime source hashes are identical to the final two WebKit cases. This establishes presentation, not real PBS/VirtualBox collection, all reported #1723 drawer/metric outcomes, screen-reader speech, installed Tailscale Serve/SSE update or signed upgrade/rollback, protected integration or release availability.",
   "prior_verifications": [
+    {
+      "version": 1,
+      "base_sha": "0dc858cb366a394b159d2c911c5d85b3020e7881",
+      "verified_at": "2026-10-01T00:37:51Z",
+      "result": "passed",
+      "changed_paths": ["frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"],
+      "content_sha256": {
+        "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "e1658b5843ab22e0ea83d1bf27e8c1565a16d9f528eb3832524a67318d281d6a"
+      },
+      "routes": [
+        "/browser-tests/pbs-history-refresh.html (production GuestDrawerHistory/query/CSS with synthetic host/service metrics API responses; not a complete PBS drawer or installed acceptance)"
+      ],
+      "viewports": [
+        {
+          "width": 1365,
+          "height": 900
+        },
+        {
+          "width": 390,
+          "height": 844
+        }
+      ],
+      "states": [
+        "light/dark sparse CPU, memory and lone disk observations with one common inspected timestamp",
+        "a missing metric at the inspected time stays unavailable instead of borrowing nearby, latest or live data",
+        "zero-valued lone observations can be inspected without a synthetic trend",
+        "genuinely aligned series share cursor geometry and their own observed values",
+        "network directions preserve independently missing and zero rates",
+        "native keyboard/touch selection takes precedence over pointer movement",
+        "failed same-source refresh retains correctly attributed observations and a visible warning",
+        "a successful refresh updates the hovered timestamp values without choosing other latest metrics",
+        "held service-target replacement has no former-host observations, cursor or dated pointer description"
+      ],
+      "interactions": [
+        "move a real pointer to sparse, aligned and single-sample timestamps; inspect visible legends, exact-time SVG descriptions and marker geometry",
+        "leave the plot to restore latest/current legends; verify pointer inspection makes no API reads",
+        "focus native range input and use Home/ArrowRight while moving the pointer elsewhere; blur to restore pointer inspection",
+        "Chromium/WebKit phone-emulated touch taps at each end of the native observation input, retaining its 44px minimum hit area",
+        "fail a real query refresh, inspect retained samples; successfully refresh the same source while hovering; switch resource with its GET held, then fulfil the service response"
+      ],
+      "command": "pulse-worker-browser frontend-modern/browser-tests/history-pointer.cjs --engine=chromium; the same with --phone; --engine=firefox; --engine=webkit --phone. All from the assigned workspace root, Vite 6.4.3 / Playwright 1.56.1 (integration-lock parity verified).",
+      "browser_versions": {
+        "chromium": "141.0.7390.37",
+        "firefox": "142.0.1",
+        "webkit": "26.0"
+      },
+      "artifacts": [
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-1365/result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-1365/retained-sparse-pointer-dark.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-1365/retained-sparse-pointer-light.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-1365/sparse-pointer-dark.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-1365/sparse-pointer-light.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-390/result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-390/retained-sparse-pointer-dark.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-390/retained-sparse-pointer-light.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-390/sparse-pointer-dark.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-390/sparse-pointer-light.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/firefox-1365/result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/firefox-1365/retained-sparse-pointer-dark.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/firefox-1365/retained-sparse-pointer-light.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/firefox-1365/sparse-pointer-dark.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/firefox-1365/sparse-pointer-light.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/webkit-390/result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/webkit-390/retained-sparse-pointer-dark.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/webkit-390/retained-sparse-pointer-light.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/webkit-390/sparse-pointer-dark.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/webkit-390/sparse-pointer-light.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/receipts/browser-chromium-desktop-final.log",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/receipts/browser-chromium-phone.log",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/receipts/browser-firefox-desktop.log",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/receipts/browser-webkit-phone-isolated.log"
+      ],
+      "notes": "All 16 final screenshots inspected. Eight engine/viewport/theme cases pass with no page errors or horizontal overflow. Exact-base source-5g7tw1c0 has eight failing assertions and two passing replacement controls; a separate Chromium base screenshot reproduces the misattribution. The first phone run captured correct hover text before an element screenshot scrolled the tall fixture and ended its hover; the final runner captures the viewport without changing pointer state. The first WebKit navigation timed out during overlapping browser runs; its cause is not established, and a subsequent isolated run completes both themes. Adverse attempts remain in internal output receipts. These synthetic API proofs establish shared-renderer presentation, not installed PBS collection, all three #1723 drawers, VirtualBox/disk/network/I/O collection, update or upgrade/rollback acceptance, screen-reader speech, containing-line delivery or release availability."
+    },
     {
       "version": 1,
       "base_sha": "0d3e5a801ab8fd1c1d224ef561cbf99e169c589f",
       "verified_at": "2026-09-30T23:28:26Z",
       "result": "passed",
-      "changed_paths": [
-        "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"
-      ],
+      "changed_paths": ["frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"],
       "content_sha256": {
         "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "327e75cabb99edffc712302c00645f06d92dc44dbebdd00aef08074e7fa53eb2"
       },
@@ -221,9 +332,7 @@
       "base_sha": "21a35494aecb335755de773dd099e1364e65b3e0",
       "verified_at": "2026-09-30T20:12:09Z",
       "result": "passed",
-      "changed_paths": [
-        "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"
-      ],
+      "changed_paths": ["frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"],
       "content_sha256": {
         "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "b2b31441b19c2e50283ceedf319cd09a1f94791750cd424c052717a4957fdc67"
       },
@@ -278,9 +387,7 @@
       "base_sha": "6ade01cbd4d02cd25b691f9ff5919206cceae764",
       "verified_at": "2026-09-30T01:40:13Z",
       "result": "passed",
-      "changed_paths": [
-        "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
-      ],
+      "changed_paths": ["frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"],
       "content_sha256": {
         "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "ed7207456ebbc990ada34b0c739e29565d90cfe1998415a781d87f3067d69c36"
       },
@@ -329,9 +436,7 @@
       "base_sha": "c3e8b6dd6dff36b5396ba2eb147d4e58d23001a6",
       "verified_at": "2026-09-29T23:04:22Z",
       "result": "passed",
-      "changed_paths": [
-        "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
-      ],
+      "changed_paths": ["frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"],
       "content_sha256": {
         "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "7172690587f8e642ee30492481abbe76ee79d277aad290c3b50310dd1c0b282b"
       },
@@ -427,9 +532,7 @@
       "base_sha": "fbf17b271abe70ad3e12042506b52f85b6cbc484",
       "verified_at": "2026-09-29T19:50:45Z",
       "result": "passed",
-      "changed_paths": [
-        "frontend-modern/src/pages/Actions.tsx"
-      ],
+      "changed_paths": ["frontend-modern/src/pages/Actions.tsx"],
       "content_sha256": {
         "frontend-modern/src/pages/Actions.tsx": "30e862ecc5125f07cf93f0c1e0b5f58efa023f5fdb56fe4b01721bf9a453e7ce"
       },
@@ -470,9 +573,7 @@
       "base_sha": "c2f7aa8b471d6cbb858e8ec71b4e664fded6549c",
       "verified_at": "2026-09-29T19:09:52Z",
       "result": "passed",
-      "changed_paths": [
-        "frontend-modern/src/features/actions/ActionReviewDialog.tsx"
-      ],
+      "changed_paths": ["frontend-modern/src/features/actions/ActionReviewDialog.tsx"],
       "content_sha256": {
         "frontend-modern/src/features/actions/ActionReviewDialog.tsx": "9a4af522484b42e37b118e8bfde7c1673122037a54b8bfed249818ba644e6b81"
       },

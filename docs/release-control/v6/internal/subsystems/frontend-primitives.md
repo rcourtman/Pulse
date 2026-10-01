@@ -7597,3 +7597,29 @@ series, zero rates, single observations, ties, focus precedence and replacement.
 in Chromium/Firefox desktop and Chromium/WebKit phone emulation in both themes,
 including failed refreshes and source replacement. Scripted APIs establish
 presentation accuracy, not real PBS collection or installed #1723 acceptance.
+
+### Drawer History panels share a dated time window
+
+`GuestDrawerHistory` uses one common time interval for every configured metric
+group, including utilization, network, disk I/O and thermals. The fulfilled
+API response's valid `start`/`end` interval remains in view even if it contains
+only a few minutes of observations. A sample at a given timestamp occupies the
+same horizontal position in every panel; a group's sparse coverage must not
+stretch independently to fill the selected range. Visible date/time endpoints
+and full local timestamps in their accessible labels distinguish overnight and
+multi-day windows. Native inspection still selects actual observations.
+
+Returned edge observations widen the common envelope instead of being clipped
+or discarded, including aggregated bucket timestamps. An invalid API interval
+falls back to the valid observed envelope across configured groups, not a
+fabricated range. Non-date timestamps and unconfigured metrics cannot poison
+that geometry. A valid empty window has labelled endpoints but no trend or
+inspection control. Failed matching refreshes retain the window with its data;
+target/range replacement clears both until matching data arrives.
+
+`GuestDrawerHistory.window.test.tsx` pins geometry, labels, refresh/replacement,
+empty/invalid windows and edge observations. `browser-tests/history-window.cjs`
+uses the production PBS table, resource drawers, History query and CSS with
+synthetic APIs, checking three separately mapped drawers and range/refresh
+behaviour in desktop and phone-emulated engines. This is presentation proof,
+not installed PBS/VirtualBox collection or a complete #1723 acceptance result.

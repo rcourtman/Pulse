@@ -41,6 +41,7 @@ import {
   normalizeGuestDrawerHistoryPoints,
   type GuestDrawerHistoryGroupConfig,
   type GuestDrawerHistoryTarget,
+  type GuestDrawerHistoryTimeBounds,
 } from './guestDrawerModel';
 
 interface GuestDrawerHistoryProps {
@@ -68,6 +69,7 @@ interface GuestDrawerHistoryGroupChartProps {
   metrics: Record<string, AggregatedMetricPoint[] | undefined>;
   range: HistoryTimeRange;
   sourceKey: string;
+  timeBounds: GuestDrawerHistoryTimeBounds | null;
 }
 
 const GUEST_DRAWER_HISTORY_MAX_POINTS = 240;
@@ -273,7 +275,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
   });
   const drawableSeries = createMemo(() => series().filter((item) => item.points.length >= 2));
   const scale = createMemo(() => getGuestDrawerHistoryScale(series(), props.group.unit));
-  const bounds = createMemo(() => getGuestDrawerHistoryRangeBounds(series()));
+  const bounds = () => props.timeBounds;
   const hasDrawableData = createMemo(() => drawableSeries().length > 0 && bounds() !== null);
   const hoveredSeries = createMemo(() => {
     const timestamp = activeTimestamp();
@@ -480,6 +482,36 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
           </div>
         </Show>
       </div>
+      <Show when={bounds()}>
+        {(window) => (
+          <div
+            class="ml-[34px] mr-2 mt-1 flex justify-between gap-2 text-[10px] tabular-nums text-muted"
+            data-testid="guest-history-time-window"
+          >
+            <For
+              each={[
+                { label: 'Window start', timestamp: window().startTime },
+                { label: 'Window end', timestamp: window().endTime },
+              ]}
+            >
+              {(endpoint) => (
+                <time
+                  dateTime={new Date(endpoint.timestamp).toISOString()}
+                  aria-label={`${endpoint.label}: ${new Date(endpoint.timestamp).toLocaleString()}`}
+                  title={new Date(endpoint.timestamp).toLocaleString()}
+                >
+                  {new Date(endpoint.timestamp).toLocaleString([], {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </time>
+              )}
+            </For>
+          </div>
+        )}
+      </Show>
       <p id={`${inspectionId}-description`} class="sr-only">
         {chartDescription()}
       </p>
@@ -560,6 +592,16 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
 
   const metrics = createMemo(() => historyQuery.value().metrics ?? {});
   const groups = createMemo(() => props.groups ?? GUEST_DRAWER_HISTORY_GROUPS);
+  const timeBounds = createMemo(() =>
+    getGuestDrawerHistoryRangeBounds(
+      groups().flatMap((group) =>
+        group.series.map((series) => ({
+          points: normalizeGuestDrawerHistoryPoints(metrics()[series.metric], series.unit),
+        })),
+      ),
+      historyQuery.value(),
+    ),
+  );
   const hasHistoryPoints = createMemo(() =>
     groups().some((group) =>
       group.series.some(
@@ -628,6 +670,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                     currentMetrics={props.currentMetrics}
                     range={props.range}
                     sourceKey={`${props.target?.resourceType}:${props.target?.resourceId}:${props.range}`}
+                    timeBounds={timeBounds()}
                   />
                 )}
               </For>
