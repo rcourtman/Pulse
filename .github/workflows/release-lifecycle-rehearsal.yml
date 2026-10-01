@@ -1,0 +1,81 @@
+name: Release Lifecycle Rehearsal
+
+# Shadow rehearsal of the systemd lifecycle users run between two PUBLISHED
+# releases: install FROM with its signed install.sh, seed real settings, upgrade
+# with /bin/update --version TO, then roll back with the documented
+# /bin/update --version FROM, asserting identity, health, unit state, settings
+# and data-dir survival after each step. It reports only. No release job
+# depends on it, and it uploads nothing.
+on:
+  workflow_dispatch:
+    inputs:
+      from_version:
+        description: 'Published tag to install first (e.g. v6.4.1). Empty = latest stable.'
+        required: false
+        type: string
+        default: ''
+      to_version:
+        description: 'Published tag to upgrade to. Empty = newest published release or prerelease newer than from_version.'
+        required: false
+        type: string
+        default: ''
+  schedule:
+    # Daily, well outside the 02:00-06:00 UTC unattended-update window that an
+    # upgraded install may arm, so the timer cannot race the assertions.
+    - cron: '23 13 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-lifecycle-rehearsal
+  cancel-in-progress: false
+
+jobs:
+  rehearse:
+    name: Install, upgrade and roll back on systemd
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout rehearsal harness (for README key and scripts)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve published release pair
+        id: pair
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          FROM_INPUT: ${{ inputs.from_version }}
+          TO_INPUT: ${{ inputs.to_version }}
+        run: |
+          set -euo pipefail
+          releases_json="$(mktemp)"
+          gh api --paginate "repos/${REPOSITORY}/releases?per_page=100" \
+            | jq -s 'add // []' > "${releases_json}"
+          latest_tag="$(gh api "repos/${REPOSITORY}/releases/latest" --jq '.tag_name')"
+          resolved="$(python3 scripts/release_lifecycle_rehearsal_versions.py \
+            --releases-json "${releases_json}" \
+            --latest-tag "${latest_tag}" \
+            --from "${FROM_INPUT}" \
+            --to "${TO_INPUT}")"
+          rm -f "${releases_json}"
+          from_tag="$(sed -n 's/^from_tag=//p' <<<"${resolved}")"
+          to_tag="$(sed -n 's/^to_tag=//p' <<<"${resolved}")"
+          reason="$(sed -n 's/^reason=//p' <<<"${resolved}")"
+          python3 scripts/write_github_output.py from_tag "${from_tag}"
+          python3 scripts/write_github_output.py to_tag "${to_tag}"
+          echo "Rehearsing ${from_tag} -> ${to_tag} -> ${from_tag} (${reason})"
+          {
+            echo "Release pair: \`${from_tag}\` -> \`${to_tag}\` (${reason})."
+            echo
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Rehearse install, upgrade and rollback
+        env:
+          FROM_TAG: ${{ steps.pair.outputs.from_tag }}
+          TO_TAG: ${{ steps.pair.outputs.to_tag }}
+          PULSE_REHEARSAL_REPO: ${{ github.repository }}
+          PULSE_REHEARSAL_ENGINE: docker
+        run: scripts/release_lifecycle_rehearsal.sh --from "${FROM_TAG}" --to "${TO_TAG}"

@@ -842,6 +842,9 @@ release-latency optimization.
 98. `scripts/verify-github-release-integrity.sh`
 99. `scripts/verify-release-container-images.sh`
 100. `scripts/release_control/verify_release_container_images_test.py`
+101. `.github/workflows/release-lifecycle-rehearsal.yml`
+102. `scripts/release_lifecycle_rehearsal.sh`
+103. `scripts/release_lifecycle_rehearsal_versions.py`
 
 ## Shared Boundaries
 
@@ -6105,6 +6108,82 @@ offline dependency snapshot for the updated lockfile, which is not present in
 the current assignment; a host dependency acquisition on the next launch is
 required before this contract's Go evidence can be produced. No passing Go
 suite, installed build or release acceptance is claimed here.
+
+### Published-release lifecycle rehearsal (shadow)
+
+`.github/workflows/release-lifecycle-rehearsal.yml` rehearses the systemd
+install, upgrade and rollback journey between two published releases. It is
+the shadow first step toward making install, upgrade and rollback a publication
+gate. It runs daily and on manual dispatch, holds only `contents: read`, runs
+on the hosted `ubuntu-24.04` image, uses no secrets and uploads no artifacts.
+No release workflow calls it or waits on it, so it reports without gating.
+
+`scripts/release_lifecycle_rehearsal_versions.py` chooses the pair from
+published, non-draft release tags under SemVer precedence. The default FROM is
+the release GitHub advertises as latest and must be stable. The default TO is
+the newest published release or prerelease newer than FROM. When FROM was
+defaulted and nothing newer is published, the pair is the previous stable to
+the latest stable. An explicit pair must be published and move forward, so a
+same-version or missing-target run fails instead of passing.
+
+`scripts/release_lifecycle_rehearsal.sh` runs every phase inside the same
+digest-pinned `jrei/systemd-debian:12` container as the install smoke.
+
+1. Install FROM with that release's own `install.sh --version`, after the
+   asset verifies against the README-pinned `pulse-installer` key and passes
+   the server-installer identity checks.
+2. Assert `/api/version` and `/opt/pulse/bin/pulse --version` both report
+   FROM, `/api/health` reports `healthy`, and `pulse.service` is active and
+   enabled with no newly failed unit.
+3. Seed state through the real API. First-run security setup uses the
+   bootstrap token from `pulse bootstrap-token`, then a disabled webhook with
+   a secret header and a PVE node with fake token credentials are created. The
+   read-back must show that auth is required, that an unauthenticated request
+   gets 401, and that the API token and password both get 200. The webhook must
+   keep its id, URL, method, service, disabled state and header key. The node
+   must keep its host, token name, stored token secret (`hasToken`), no
+   password and `verifySSL=false`. The `/etc/pulse` file list and checksums
+   become the baseline.
+4. Upgrade with the installed helper, `/bin/update --version TO`, after
+   checking that the helper is the Pulse server installer's. The helper
+   downloads the latest published `install.sh`, verifies it with its embedded
+   key and runs it.
+5. After the upgrade, and again after the documented rollback
+   `/bin/update --version FROM`, assert the expected identity, health and unit
+   state. The settings read-back must equal the baseline and meet the fixed
+   expectations. No baseline file may be missing from `/etc/pulse`.
+   `.encryption.key`, `nodes.enc` and `webhooks.enc` must be byte-identical.
+   The API reports only `hasToken` and redacted header values, so byte
+   identity under an unchanged key is what proves the exact seeded secrets
+   survived. A release that legitimately rewrites those stores fails the
+   rehearsal instead of passing unproven. The API token and password checks
+   prove those exact credentials directly.
+
+Rollback still runs when the upgrade phase fails. A phase also fails if
+`pulse-update.service` started during the run, because an unattended update
+would make the version assertions unattributable. Three D-Bus-activated host
+services that cannot run in the container (`systemd-hostnamed`,
+`systemd-timedated` and `systemd-localed`) are reported as warnings rather
+than failures. A unit drop-in sets `PULSE_TELEMETRY=false` so daily CI installs
+stay out of usage telemetry. It lives outside the installer's files and the
+data dir.
+
+Scope: only published assets and the amd64 systemd path are exercised. Docker,
+Helm, Proxmox LXC creation, the in-app updater and a prerelease's own
+`install.sh` (the helper always fetches the latest published installer) are
+not covered. A passing run is not release admission.
+
+Verification: `scripts/tests/test_release_lifecycle_rehearsal.py` covers pair
+resolution (SemVer ordering, draft exclusion, forward-only and published-only
+pairs, the previous-stable fallback), the fixed settings expectations (each lost
+or altered seeded field fails `--check-snapshot`, and a deleted file or a
+rewritten secret store fails `--compare-datadir`), the harness contract (the real updater
+invocation without bypass flags, the signed installer, the shared image digest,
+and per-phase identity, settings and data-dir checks) and the workflow trust
+shape. A local podman run (amd64 emulation) of `v6.4.1 -> v6.4.5 -> v6.4.1`
+passed all four phases. An earlier run correctly failed phase 1 on a new failed
+unit (`systemd-hostnamed`), which led to the container-only list above. The
+hosted Docker run is not yet claimed.
 
 ## Release-body updater ownership (30 September 2026)
 
