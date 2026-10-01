@@ -46,42 +46,65 @@ user merely because no local administrator is configured.
 
 ## Managing Roles
 
+### Before Using the API
+
+Prefer **Settings → Security → Access Control** for one-off administration.
+The API examples require the licensed `rbac` capability and permission to
+administer users. With RBAC enabled, role and user administration requires a
+full-access (`*`) API token bound to an authorised administrator; a monitoring
+token is not enough. Do not widen an agent's token for this job.
+
+If you already use an administration token, prepare its private header file
+as described in [API authentication](API.md#-authentication). The examples read
+`$HOME/.config/pulse/api-header`; never paste the token or a session cookie into
+a command. Keep this file outside shared repositories and diagnostics.
+
+The loopback URLs work on the Pulse host. For remote use, substitute your
+Pulse HTTPS URL and keep certificate verification enabled. Use curl 7.76 or
+later; `--disable` must remain first to ignore local trace/verbose defaults,
+and `--fail-with-body` makes HTTP failures return a non-zero exit. Run each
+change separately and check its response before continuing.
+
 ### Creating a Role
 
 **UI:** Settings → Security → Access Control → Create Role
 
+Use a new custom role ID. Built-in roles (`admin`, `operator`, `viewer`,
+`auditor`) cannot be modified or deleted. These examples use `alert-manager`.
+
 **API:**
 ```bash
-curl -X POST http://localhost:7655/api/admin/roles \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "id": "operator",
-    "name": "Operator",
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  --header 'Content-Type: application/json' --request POST \
+  --data-binary @- http://127.0.0.1:7655/api/admin/roles <<'JSON'
+  {
+    "id": "alert-manager",
+    "name": "Alert Manager",
     "description": "Can view and manage alerts",
     "permissions": [
       {"action": "read", "resource": "alerts"},
       {"action": "write", "resource": "alerts"},
       {"action": "read", "resource": "nodes"}
     ]
-  }'
+  }
+JSON
 ```
 
 ### Listing Roles
 
 ```bash
-curl http://localhost:7655/api/admin/roles \
-  -H "Authorization: Bearer $TOKEN"
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  http://127.0.0.1:7655/api/admin/roles
 ```
 
 ### Updating a Role
 
 ```bash
-curl -X PUT http://localhost:7655/api/admin/roles/operator \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Operator",
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  --header 'Content-Type: application/json' --request PUT \
+  --data-binary @- http://127.0.0.1:7655/api/admin/roles/alert-manager <<'JSON'
+  {
+    "name": "Alert Manager",
     "description": "Updated description",
     "permissions": [
       {"action": "read", "resource": "alerts"},
@@ -89,14 +112,15 @@ curl -X PUT http://localhost:7655/api/admin/roles/operator \
       {"action": "read", "resource": "nodes"},
       {"action": "read", "resource": "ai"}
     ]
-  }'
+  }
+JSON
 ```
 
 ### Deleting a Role
 
 ```bash
-curl -X DELETE http://localhost:7655/api/admin/roles/operator \
-  -H "Authorization: Bearer $TOKEN"
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  --request DELETE http://127.0.0.1:7655/api/admin/roles/alert-manager
 ```
 
 ---
@@ -106,8 +130,8 @@ curl -X DELETE http://localhost:7655/api/admin/roles/operator \
 ### Listing Users and Their Roles
 
 ```bash
-curl http://localhost:7655/api/admin/users \
-  -H "Authorization: Bearer $TOKEN"
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  http://127.0.0.1:7655/api/admin/users
 ```
 
 SSO users are displayed using the latest configured username claim and email
@@ -118,20 +142,27 @@ principal used for authorization.
 
 Role assignments are set as a complete list — the user's roles are replaced with the provided set:
 
+Use the stable `username` returned by the user list, not the display name or
+email. URL-encode it as one path segment (for example, `:` becomes `%3A` for an
+SSO principal). `jane` below is an example local username. Create the custom
+role before assigning it; do not run the deletion example first.
+
 ```bash
-curl -X PUT http://localhost:7655/api/admin/users/jane/roles \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"roleIds": ["operator", "viewer"]}'
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  --header 'Content-Type: application/json' --request PUT \
+  --data-binary @- http://127.0.0.1:7655/api/admin/users/jane/roles <<'JSON'
+{"roleIds": ["alert-manager", "viewer"]}
+JSON
 ```
 
 To remove all custom roles from a user, send an empty list:
 
 ```bash
-curl -X PUT http://localhost:7655/api/admin/users/jane/roles \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"roleIds": []}'
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  --header 'Content-Type: application/json' --request PUT \
+  --data-binary @- http://127.0.0.1:7655/api/admin/users/jane/roles <<'JSON'
+{"roleIds": []}
+JSON
 ```
 
 Note: Users cannot modify their own role assignments (self-escalation prevention).
@@ -139,8 +170,8 @@ Note: Users cannot modify their own role assignments (self-escalation prevention
 ### Removing User Access
 
 ```bash
-curl -X DELETE http://localhost:7655/api/admin/users/jane \
-  -H "Authorization: Bearer $TOKEN"
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  --request DELETE http://127.0.0.1:7655/api/admin/users/jane
 ```
 
 This removes the Pulse identity and all role assignments and revokes its active

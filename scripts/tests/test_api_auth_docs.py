@@ -80,6 +80,9 @@ def recording_server(status: int = 200):
 
         do_GET = record_request
         do_POST = record_request
+        do_PUT = record_request
+        do_PATCH = record_request
+        do_DELETE = record_request
 
         def log_message(self, *_args):
             pass
@@ -93,6 +96,48 @@ def recording_server(status: int = 200):
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+def exercise_curl(case: unittest.TestCase, home: Path, header_text: str, port: int, request: str):
+    """Execute the exact copied recipe; capture argv and hostile curl defaults."""
+    header = home / ".config/pulse/api-header"
+    header.parent.mkdir(parents=True, exist_ok=True)
+    header.write_text(header_text + "\n")
+    header.chmod(0o600)
+    real_curl = shutil.which("curl")
+    case.assertIsNotNone(real_curl, "curl is required to exercise the documented command")
+    tools = home / "tools"
+    tools.mkdir(exist_ok=True)
+    recorder = tools / "curl"
+    recorder.write_text(
+        "#!/usr/bin/env python3\nimport json, os, sys\n"
+        "from pathlib import Path\n"
+        "Path(os.environ['ARGV_RECEIPT']).write_text(json.dumps(sys.argv[1:]))\n"
+        "os.execv(os.environ['REAL_CURL'], [os.environ['REAL_CURL'], *sys.argv[1:]])\n"
+    )
+    recorder.chmod(0o700)
+    receipt = home / "argv.json"
+    trace = home / "curl-trace.txt"
+    # An existing curl configuration must not turn safe argv into a trace
+    # containing the header file's credential, or inject another header.
+    (home / ".curlrc").write_text(
+        f'header = "X-Curlrc-Injected: yes"\nverbose\ntrace-ascii = "{trace}"\n'
+    )
+    env = dict(os.environ, HOME=str(home), PATH=f"{tools}:{os.environ['PATH']}",
+               CURL_HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"), TMPDIR=str(home),
+               REAL_CURL=real_curl, ARGV_RECEIPT=str(receipt))
+    for key in list(env):
+        if key.lower().endswith("_proxy"):
+            del env[key]
+    request = request.replace("http://127.0.0.1:7655", f"http://127.0.0.1:{port}")
+    result = subprocess.run(["bash", "-eu", "-c", request], env=env, capture_output=True, timeout=10)
+    argv = json.loads(receipt.read_text())
+    case.assertEqual(argv[0], "--disable", "curl defaults must be disabled by the first option")
+    case.assertNotIn(TEST_TOKEN, " ".join(argv))
+    case.assertIn("@" + str(header), argv)
+    case.assertNotIn(b"synthetic-doc-test-token", result.stdout + result.stderr)
+    case.assertFalse(trace.exists(), "local curl configuration must not create a credential trace")
+    return result
 
 
 class APIAuthDocsTest(unittest.TestCase):
@@ -155,46 +200,7 @@ class APIAuthDocsTest(unittest.TestCase):
                 self.assertEqual(header.read_text(), f"X-API-Token: {TEST_TOKEN}\n" if existing else "")
 
     def run_documented_request(self, home: Path, header_text: str, port: int, request=None):
-        if request is None:
-            _, request = commands()
-        header = home / ".config/pulse/api-header"
-        header.parent.mkdir(parents=True, exist_ok=True)
-        header.write_text(header_text + "\n")
-        header.chmod(0o600)
-        real_curl = shutil.which("curl")
-        self.assertIsNotNone(real_curl, "curl is required to exercise the documented command")
-        tools = home / "tools"
-        tools.mkdir(exist_ok=True)
-        recorder = tools / "curl"
-        recorder.write_text(
-            "#!/usr/bin/env python3\nimport json, os, sys\n"
-            "from pathlib import Path\n"
-            "Path(os.environ['ARGV_RECEIPT']).write_text(json.dumps(sys.argv[1:]))\n"
-            "os.execv(os.environ['REAL_CURL'], [os.environ['REAL_CURL'], *sys.argv[1:]])\n"
-        )
-        recorder.chmod(0o700)
-        receipt = home / "argv.json"
-        trace = home / "curl-trace.txt"
-        # An existing curl configuration must not turn safe argv into a trace
-        # containing the header file's credential, or inject another header.
-        (home / ".curlrc").write_text(
-            f'header = "X-Curlrc-Injected: yes"\nverbose\ntrace-ascii = "{trace}"\n'
-        )
-        env = dict(os.environ, HOME=str(home), PATH=f"{tools}:{os.environ['PATH']}",
-                   CURL_HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"),
-                   REAL_CURL=real_curl, ARGV_RECEIPT=str(receipt))
-        for key in list(env):
-            if key.lower().endswith("_proxy"):
-                del env[key]
-        request = request.replace("http://127.0.0.1:7655", f"http://127.0.0.1:{port}")
-        result = subprocess.run(["bash", "-eu", "-c", request], env=env, capture_output=True, timeout=10)
-        argv = json.loads(receipt.read_text())
-        self.assertEqual(argv[0], "--disable", "curl defaults must be disabled by the first option")
-        self.assertNotIn(TEST_TOKEN, " ".join(argv))
-        self.assertIn("@" + str(header), argv)
-        self.assertNotIn(b"synthetic-doc-test-token", result.stdout + result.stderr)
-        self.assertFalse(trace.exists(), "local curl configuration must not create a credential trace")
-        return result
+        return exercise_curl(self, home, header_text, port, request if request is not None else commands()[1])
 
     def test_header_file_sends_each_supported_header_without_exposing_argv(self):
         with tempfile.TemporaryDirectory() as temporary, recording_server() as (port, requests):
