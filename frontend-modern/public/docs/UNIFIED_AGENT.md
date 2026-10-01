@@ -1000,6 +1000,11 @@ LXC guests** in Settings → System → General and any configured
 guests and guests already linked to an online guest-local agent. In the latter
 case, check that guest agent's Docker monitoring instead.
 
+If the owning node says **Remote control blocked**, first check its
+[command channel](#commands-enabled-but-remote-control-blocked). A successful
+root `pct exec` check does not establish that Pulse can reach that node's agent;
+do not repeat the guest probe when those results are already known.
+
 The host-side path requires the guest's `docker` executable and
 `/var/run/docker.sock` in the root `pct exec` context. A working Docker CLI in a
 user's login session does not prove that this context can reach the daemon;
@@ -1035,6 +1040,38 @@ Exit `124` means the check timed out; stop rather than loop or restart the host.
 Review output before posting and redact any private endpoint in an error. Do not
 change LXC privilege, `keyctl`, socket permissions or Docker versions merely to
 test a guess.
+
+### Commands enabled but remote control blocked
+
+**Remote control blocked** means the agent reports commands enabled, but Pulse
+has no admitted command channel connected for it. Agent Doctor's
+`commands command-capable · credential grants exec` line describes the reported
+local command ceiling and credential scope, not a connected session. A fresh
+monitoring report or **Automatic updates ready** also does not prove that this
+separate WebSocket channel is working. Changing Proxmox API permissions cannot
+repair a Pulse command-channel connection.
+
+For a systemd agent, inspect the recent journal **locally on the affected node**:
+
+```bash
+sudo journalctl -u pulse-agent.service --since '15 minutes ago' -n 200 --no-pager --output=cat
+```
+
+Look for **Connected and registered with Pulse command server**, or
+**WebSocket connection failed repeatedly, reconnecting** and its error. A
+`dial websocket` error is a connection/handshake failure; `registration failed`
+means registration was attempted but not accepted. Scope alone does not prove
+that the credential's host/agent binding was admitted. No matching entry is
+inconclusive: initial retries may be debug-only; do not restart the host or
+enable server-wide debug logging to manufacture an error.
+
+If reporting the problem, share only the failure stage and redacted error
+reason (or say no command-channel entry is visible), not the full journal or
+service configuration. Omit tokens, cookies, URLs, hostnames, addresses and
+agent/token IDs. Keep saved identity and credentials intact while distinguishing
+connection failures from admission failures; do not delete state, loosen TLS
+verification or broaden permissions to force a connection. Guest-local Docker
+monitoring with commands disabled remains an alternative to host-side discovery.
 
 ### Check Status
 ```bash
