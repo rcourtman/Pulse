@@ -403,7 +403,7 @@ export const buildCommandsByPlatform = (
                   <code>/root/.config/pulse-agent/bootstrap-token</code> using a trusted file editor
                   or upload path. The file must be root-owned with mode <code>0600</code> in a
                   root-owned <code>0700</code> directory. Never put the token in a GUI command
-                  field. This command does not prompt or delete your file; remove it through the
+                  field. This command does not prompt or delete your file. Remove it through the
                   same trusted file path afterwards. If your GUI cannot create private files, use
                   console or SSH instead. Bash must already be installed.
                 </span>

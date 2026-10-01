@@ -943,7 +943,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                     the uninstall command on the affected host itself. Pulse does
                                     not run commands remotely. For Unix commands that require a
                                     token, run the command first, then paste the separately revealed
-                                    token at its silent prompt; never insert it into the command.
+                                    token at its silent prompt. Never insert it into the command.
                                   </p>
                                   <For each={handoff().commands}>
                                     {(entry) => (
