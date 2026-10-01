@@ -917,6 +917,18 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                     <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
                                       <code>{command()}</code>
                                     </pre>
+                                    <Show
+                                      when={
+                                        commandRequiresToken(target) &&
+                                        target.commandPlatform !== 'windows'
+                                      }
+                                    >
+                                      <p class="mt-2 text-xs text-muted">
+                                        Run this command in a console or SSH session first, then
+                                        paste the separately revealed token at the silent Pulse
+                                        agent token prompt. Never insert the token into the command.
+                                      </p>
+                                    </Show>
                                   </div>
                                 </Show>
                               </Show>
@@ -929,7 +941,9 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                     This agent was removed from Pulse, but the agent software may
                                     still be installed on its host. Finish detaching it by running
                                     the uninstall command on the affected host itself. Pulse does
-                                    not run commands remotely.
+                                    not run commands remotely. For Unix commands that require a
+                                    token, run the command first, then paste the separately revealed
+                                    token at its silent prompt; never insert it into the command.
                                   </p>
                                   <For each={handoff().commands}>
                                     {(entry) => (

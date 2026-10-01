@@ -1,23 +1,27 @@
 {
   "version": 1,
-  "base_sha": "6b23876ec8104965c7842e194e055f3206134d4f",
-  "verified_at": "2026-10-01T04:21:56.727078Z",
+  "base_sha": "9189a7262e84b201a5af6649caf0f8cff7c6d144",
+  "verified_at": "2026-10-01T13:06:33.056850Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/nodes.ts",
-    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
-    "frontend-modern/src/components/Settings/useNodeModalState.ts",
-    "frontend-modern/src/stores/tokenReveal.ts"
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
+    "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
+    "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx",
+    "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
+    "frontend-modern/src/utils/agentInstallCommand.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/nodes.ts": "398f3b87ce192c7650a9e34f184ecdca0e8baf35b57d90ef5f8f697348675fec",
-    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx": "e4168945744f8ec20b5439f5730b1ecd8b4811b29ec00da4e7e3798f868a1b41",
-    "frontend-modern/src/components/Settings/useNodeModalState.ts": "9372c3a4b346a0e31733a7042c0a65b5ebe3518b12595c6c6a68b1cadd667dcd",
-    "frontend-modern/src/stores/tokenReveal.ts": "c21ac970bde6229506f7d6e627430b6e91c9ea983f705a28e3d149e4415c39b7"
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx": "416c7627303c665f956168a32e5aaf6af4268abacdd7e93045ab26cd45732d14",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "d2ff336c1e602794fd696aed3541684498adfcfeaf1f4e603e21a44865fce3bb",
+    "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx": "983a44871cfb908851c215a177e4a39185f7ac9017cc1b2152323b7ee396995a",
+    "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx": "c57bf5a99d457d6d21f0d22e0cc34af3618db214391fd09afce34743173a1c0f",
+    "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx": "276c89076d36670752f5d37be1895d739ae13501ea9d87d1cc3a497c7e6f5895",
+    "frontend-modern/src/utils/agentInstallCommand.ts": "9bb98b1db1b49aa478f894b346479951954899d4c6049d991ec4c75730cafa30"
   },
   "routes": [
-    "/browser-tests/proxmox-private-input.html?type=pve",
-    "/browser-tests/proxmox-private-input.html?type=pbs"
+    "/browser-tests/unix-private-install.html",
+    "/browser-tests/unix-private-install.html?optional=1"
   ],
   "viewports": [
     {
@@ -30,34 +34,29 @@
     }
   ],
   "states": [
-    "Actual settings state/setup section and existing token-reveal dialog with production CSS; synthetic server artifacts and no installed bootstrap execution",
-    "Separate command and credential copy for API Inventory and Host Telemetry Agent; raw secrets absent from copied shell text",
-    "PVE/PBS tokenless script download reuses live bootstrap metadata; credential cache clears on close/reopen",
-    "Held setup and agent issuance completed after modal close is discarded: no secret cache and no reveal dialog",
-    "Default TLS verification and monitoring-only agent request (enableCommands=false) unchanged",
-    "Desktop light and phone-emulated WebKit dark token reveal is readable; screenshots visually inspected"
+    "Actual infrastructure installer, operations closures, Agent Doctor and token dialog with production CSS; synthetic APIs, not installed agent/appliance execution",
+    "Required-auth Unix command and credential remain separate; single-line command grammar, private file no-terminal variant and separate-token instructions",
+    "Canonical repair/removal identity and custom CA preserved; saved-state update has no replacement credential; removal has no new-binary preflight",
+    "Optional-auth commands require no terminal or token-file; default TLS verification and monitoring-only issuance unchanged",
+    "Desktop Chromium light and phone-emulated WebKit dark; four final screenshots visually inspected"
   ],
   "interactions": [
-    "Copy command; copy token via Enter and pointer; Escape and Dismiss close token dialog",
-    "Close/reopen setup; download script; switch API/Agent paths",
-    "Hold setup/agent response, close modal, then release response and verify no late reveal/cache"
+    "Generate scoped host token, copy token with keyboard, Escape, reopen existing reveal without issuing another token",
+    "Copy actual Linux installer, no-terminal private-file installer and Agent Doctor repair commands; raw credential absent from each clipboard result",
+    "Change endpoint and custom CA; copy actual operations-state repair/removal/saved-state update commands; identity/profile/trust checked",
+    "Reload with optional auth and confirm tokenless commands"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/proxmox-private-input.cjs; pulse-worker-browser frontend-modern/browser-tests/proxmox-private-input.cjs --phone (separate commands from assigned workspace root)",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/unix-private-install.cjs",
   "browser_versions": {
     "playwright": "1.56.1",
     "chromium": "141.0.7390.37",
     "webkit": "26.0"
   },
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-desktop/pbs-agent.png",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-desktop/pbs-setup.png",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-desktop/pve-agent.png",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-desktop/pve-setup.png",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-desktop/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-phone/pbs-agent.png",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-phone/pbs-setup.png",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-phone/pve-agent.png",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-phone/pve-setup.png",
-    "/var/lib/pulse-maintainer/worker-outputs/core-runtime-yp94gsia/browser-phone/result.json"
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-wielhxw1/browser/chromium-commands.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-wielhxw1/browser/chromium-token.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-wielhxw1/browser/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-wielhxw1/browser/webkit-commands.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-wielhxw1/browser/webkit-token.png"
   ]
 }

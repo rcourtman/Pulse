@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { useInfrastructureOperationsState } from '../useInfrastructureOperationsState';
+import { describe, expect, it, vi } from 'vitest';
 import type { AgentFleetAgentDiagnostic } from '@/api/agentDiagnostics';
 import type { Connection } from '@/api/connections';
 import type { InfrastructureSystemRow } from '../connectionsTableModel';
@@ -1095,5 +1097,78 @@ describe('Agent Doctor model', () => {
       expect(report).toContain('  - Reissue token. Generate a fresh install token.');
       expect(report).toContain('  Update command blocked. The reported platform is unsupported.');
     });
+  });
+});
+
+// Exercise the real operations closures, not a hand-written command fixture.
+// Minting/state storage are outside this narrow presentation/transport proof.
+const privateInstallState = vi.hoisted(() => ({ token: 'issued-secret-not-shell-source' }));
+vi.mock('../useInfrastructureInstallState', () => ({
+  useInfrastructureInstallState: () => ({
+    currentToken: () => privateInstallState.token,
+    requiresToken: () => true,
+    selectedAgentUrl: () => 'https://pulse.example/base',
+    insecureMode: () => false,
+    customCaPath: () => '/etc/pulse/ca.pem',
+    enableCommands: () => false,
+  }),
+}));
+
+describe('Agent Doctor Unix credential handoffs', () => {
+  it('keeps repair/uninstall secrets separate while preserving identity, profile and custom trust', () => {
+    const operations = useInfrastructureOperationsState();
+    const connection = connectionFixture({
+      id: 'agent:canonical-id-42',
+      agentIdentity: { hostname: 'canonical.example', commandsEnabled: false },
+      state: 'unauthorized',
+    });
+    const repair = operations.getAgentConnectionUpgradeCommand(
+      connection,
+      ['--enable-docker'],
+      'linux',
+      true,
+    );
+    const uninstall = operations.getUninstallCommand({
+      agentActionId: 'canonical-id-42',
+      agentId: 'old-alias',
+      hostname: 'canonical.example',
+    });
+    for (const command of [repair, uninstall]) {
+      expect(command).not.toContain(privateInstallState.token);
+      expect(command).not.toContain('old-alias');
+      expect(command).not.toContain('| bash');
+      expect(command).toContain('--token-file "$token_file"');
+      expect(command).toContain('--agent-id');
+      expect(command).toContain('canonical-id-42');
+      expect(command).toContain('--hostname');
+      expect(command).toContain('canonical.example');
+      expect(command).toContain('--cacert');
+      expect(command).not.toContain('--insecure');
+      expect(command).not.toContain('--enable-commands');
+      execFileSync('sh', ['-n', '-c', command]);
+    }
+    expect(repair).toContain('--update');
+    expect(repair).toContain('--enable-docker');
+    expect(repair).toContain('--preflight-only');
+    expect(uninstall).toContain('--uninstall');
+    expect(uninstall).not.toContain('--preflight-only');
+  });
+
+  it('does not mint, inject or prompt for another credential during a saved-state update', () => {
+    const operations = useInfrastructureOperationsState();
+    const command = operations.getAgentConnectionUpgradeCommand(
+      connectionFixture(),
+      ['--enable-docker'],
+      'linux',
+    );
+    expect(command).toContain('--update');
+    expect(command).toContain('--enable-docker');
+    expect(command).toContain('--preflight-only');
+    expect(command).not.toContain('--token-file');
+    expect(command).not.toContain('read -r');
+    expect(command).not.toContain(privateInstallState.token);
+    expect(
+      operations.getAgentConnectionUpgradeCommandRequiresToken(connectionFixture(), 'linux'),
+    ).toBe(false);
   });
 });

@@ -472,13 +472,9 @@ describe('infrastructure operations model', () => {
     expect(agentUpgradeStart).toBeGreaterThanOrEqual(0);
     expect(agentUpgradeEnd).toBeGreaterThan(agentUpgradeStart);
     const agentUpgradeSource = operationsStateSource.slice(agentUpgradeStart, agentUpgradeEnd);
-    const unixUpgradeStart = agentUpgradeSource.indexOf('let command = `curl');
-    expect(unixUpgradeStart).toBeGreaterThanOrEqual(0);
-    const unixUpgradeSource = agentUpgradeSource.slice(unixUpgradeStart);
-
-    expect(agentUpgradeSource).toContain(
-      '| bash -s -- --update --url ${shellQuoteArg(url)} --non-interactive',
-    );
+    expect(agentUpgradeSource).toContain("const extraArgs = ['--update', ...installFlags];");
+    expect(agentUpgradeSource).toContain('token: replaceCredential ? token : null,');
+    expect(agentUpgradeSource).toContain('buildUnixAgentInstallCommand({');
     const requiresTokenEnd = operationsStateSource.indexOf('return {', agentUpgradeEnd);
     expect(requiresTokenEnd).toBeGreaterThan(agentUpgradeEnd);
     const requiresTokenSource = operationsStateSource.slice(agentUpgradeEnd, requiresTokenEnd);
@@ -487,9 +483,9 @@ describe('infrastructure operations model', () => {
     );
     expect(requiresTokenSource).toContain("=== 'windows'");
     expect(requiresTokenSource).toContain('installState.requiresToken()');
-    expect(unixUpgradeSource).not.toContain('command += ` --token ${shellQuoteArg(token)}`;');
-    expect(unixUpgradeSource).not.toContain('--agent-id');
-    expect(unixUpgradeSource).not.toContain('--hostname');
+    expect(agentUpgradeSource).not.toContain('command += ` --token ${shellQuoteArg(token)}`;');
+    // Identity overrides remain inside the explicit credential-replacement branch.
+    expect(agentUpgradeSource).toContain('if (replaceCredential) {');
   });
 
   it('resolves connection upgrade platforms through the shared caption-tolerant resolver', async () => {

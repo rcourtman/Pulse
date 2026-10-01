@@ -159,51 +159,47 @@ describe('useInfrastructureOperationsState command-building closures', () => {
     vi.resetAllMocks();
   });
 
-  describe('withPrivilegeEscalation (via getUninstallCommand)', () => {
-    it('wraps a "| bash -s --" command in the root/sudo escalation block verbatim', async () => {
+  describe('shared Unix bootstrap (via getUninstallCommand)', () => {
+    it('uses the complete-download/preflight/privileged private-input path', async () => {
       const { state, dispose } = mountHook();
       await flushAsync();
       state.setCustomAgentUrl(HTTPS_URL);
-
       const cmd = state.getUninstallCommand();
-
-      expect(cmd).toContain('| { if [ "$(id -u)" -eq 0 ]; then bash -s -- --uninstall --url');
-      expect(cmd).toContain(
-        '; elif command -v sudo >/dev/null 2>&1; then sudo bash -s -- --uninstall --url',
-      );
-      expect(cmd).toContain(
-        '; else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi; }',
-      );
-      // The original pipe form is consumed by the replacement.
-      expect(cmd).not.toMatch(/^\S+ \| bash -s --/);
+      expect(cmd).toContain('--uninstall');
+      expect(cmd).toContain('sudo bash -c');
+      expect(cmd).not.toContain('--preflight-only');
+      expect(cmd).not.toContain('| bash');
+      expect(cmd).not.toContain("--token '");
       dispose();
     });
   });
 
   describe('resolvedCommandToken (via getUninstallCommand)', () => {
-    it('substitutes the api-token placeholder when a token is required but absent', async () => {
+    it('requests private input without copying a placeholder when a token is required', async () => {
       const { state, dispose } = mountHook();
       await flushAsync();
       state.setCustomAgentUrl(HTTPS_URL);
 
-      expect(state.getUninstallCommand()).toContain("--token '<api-token>'");
+      expect(state.getUninstallCommand()).toContain('--token-file "$token_file"');
+      expect(state.getUninstallCommand()).not.toContain('<api-token>');
       dispose();
     });
 
-    it('uses the minted token verbatim when one is present and required', async () => {
+    it('keeps the minted token separate when one is present and required', async () => {
       const { state, dispose } = mountHook();
       await flushAsync();
       state.setCustomAgentUrl(HTTPS_URL);
       await state.handleGenerateToken();
 
       const cmd = state.getUninstallCommand();
-      expect(cmd).toContain("--token 'tok-1'");
+      expect(cmd).toContain('--token-file "$token_file"');
+      expect(cmd).not.toContain('tok-1');
       expect(cmd).not.toContain('<api-token>');
       expect(mocks.showTokenReveal).toHaveBeenCalledWith({
         token: 'tok-1',
         record: expect.objectContaining({ id: 'rec-1', name: 'Agent' }),
         source: 'agent',
-        note: expect.stringContaining('PULSE_TOKEN or Compose environment configuration'),
+        note: expect.stringContaining('silent “Pulse agent token” prompt'),
       });
       dispose();
     });
@@ -221,7 +217,7 @@ describe('useInfrastructureOperationsState command-building closures', () => {
         token: 'tok-1',
         record: expect.objectContaining({ id: 'rec-1', name: 'Agent' }),
         source: 'agent',
-        note: expect.stringContaining('PULSE_TOKEN or Compose environment configuration'),
+        note: expect.stringContaining('silent “Pulse agent token” prompt'),
       });
       dispose();
     });
@@ -239,7 +235,9 @@ describe('useInfrastructureOperationsState command-building closures', () => {
       const cmd = state.getUninstallCommand();
       expect(cmd).not.toContain('--token');
       expect(cmd).not.toContain('<api-token>');
-      expect(cmd).toContain("--uninstall --url 'https://pulse.test'");
+      expect(cmd).toContain('--uninstall');
+      expect(cmd).toContain('--url');
+      expect(cmd).toContain('https://pulse.test');
       dispose();
     });
   });
@@ -633,8 +631,8 @@ describe('useInfrastructureOperationsState command-building closures', () => {
         true,
       );
 
-      expect(cmd).toContain('tmp_dir=$(mktemp -d)');
-      expect(cmd).toContain('printf %s \'tok-1\' > "$token_file"');
+      expect(cmd).toContain('bootstrap_dir=$(mktemp -d /tmp/pulse-bootstrap.XXXXXX)');
+      expect(cmd).not.toContain('tok-1');
       expect(cmd).toContain('--token-file "$token_file"');
       expect(cmd).toContain('--update');
       expect(cmd).toContain('--enable-proxmox');
@@ -651,9 +649,10 @@ describe('useInfrastructureOperationsState command-building closures', () => {
 
       const cmd = state.getAgentConnectionUpgradeCommand(baseConnection, [], 'linux');
 
-      expect(cmd).toContain('| { if [ "$(id -u)" -eq 0 ]; then bash -s -- --update');
+      expect(cmd).toContain('--update');
+      expect(cmd).toContain('sudo bash -c');
       expect(cmd).not.toContain('--token-file');
-      expect(cmd).not.toContain('mktemp -d');
+      expect(cmd).not.toContain('token_dir=');
       dispose();
     });
 
