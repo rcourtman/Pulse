@@ -55,18 +55,31 @@ The audit log panel shows events in reverse chronological order with filtering b
 
 ### API
 
+Use a token with `audit:read`, bound to a user permitted to read audit logs,
+and the licensed `audit_logging` capability. Prepare the private header file
+in [API authentication](API.md#-authentication); never paste the token or a
+session cookie into a command. For a one-off read, you can instead open the
+API path in your signed-in Pulse browser.
+
+The loopback URLs below apply on the Pulse host. For remote access, use your
+Pulse HTTPS URL with certificate verification enabled. Use curl 7.76 or later,
+keeping `--disable` first to ignore local trace/verbose defaults.
+`--fail-with-body` returns a non-zero exit on HTTP failures, including 401,
+402 and 403. Share only the relevant redacted error, not the header file or
+whole audit response: events can contain usernames, client addresses and paths.
+
 ```bash
 # List recent events
-curl http://localhost:7655/api/audit?limit=50 \
-  -H "Authorization: Bearer $TOKEN"
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  'http://127.0.0.1:7655/api/audit?limit=50'
 
 # Filter by event type and date range
-curl "http://localhost:7655/api/audit?event=login&startTime=2026-01-01T00:00:00Z&endTime=2026-01-31T23:59:59Z&success=false" \
-  -H "Authorization: Bearer $TOKEN"
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  'http://127.0.0.1:7655/api/audit?event=login&startTime=2026-01-01T00:00:00Z&endTime=2026-01-31T23:59:59Z&success=false'
 
 # Get audit summary
-curl http://localhost:7655/api/audit/summary \
-  -H "Authorization: Bearer $TOKEN"
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  http://127.0.0.1:7655/api/audit/summary
 ```
 
 ### Query Parameters
@@ -87,12 +100,17 @@ curl http://localhost:7655/api/audit/summary \
 Export the audit log for external analysis or compliance archival:
 
 ```bash
-curl http://localhost:7655/api/audit/export \
-  -H "Authorization: Bearer $TOKEN" \
-  -o audit-export.json
+umask 077
+export_dir="$(mktemp -d)" &&
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  --output "$export_dir/audit-export.json" \
+  http://127.0.0.1:7655/api/audit/export &&
+printf 'Saved private export to %s\n' "$export_dir/audit-export.json"
 ```
 
-The export includes all events matching the current filter criteria.
+This creates a new private directory and prints the file's location only on
+success. It does not reuse filters selected in the UI. Treat the export as
+sensitive data; keep it outside shared repositories and issue attachments.
 
 ---
 
@@ -101,8 +119,8 @@ The export includes all events matching the current filter criteria.
 Every audit event is cryptographically signed at creation time. You can verify that an event has not been modified:
 
 ```bash
-curl http://localhost:7655/api/audit/6b3c9c3c-9a2f-4b3c-9a3b-3d0e8c5c5d45/verify \
-  -H "Authorization: Bearer $TOKEN"
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  http://127.0.0.1:7655/api/audit/6b3c9c3c-9a2f-4b3c-9a3b-3d0e8c5c5d45/verify
 ```
 
 Response:

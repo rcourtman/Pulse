@@ -274,9 +274,13 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     return `${count} stored observation ${count === 1 ? 'time' : 'times'}. ${inspectionValueText()}`;
   });
   const drawableSeries = createMemo(() => series().filter((item) => item.points.length >= 2));
+  const singlePointSeries = createMemo(() => series().filter((item) => item.points.length === 1));
+  const singleObservation = createMemo(() =>
+    observationTimes().length === 1 ? { timestamp: observationTimes()[0] } : null,
+  );
   const scale = createMemo(() => getGuestDrawerHistoryScale(series(), props.group.unit));
   const bounds = () => props.timeBounds;
-  const hasDrawableData = createMemo(() => drawableSeries().length > 0 && bounds() !== null);
+  const hasStoredData = createMemo(() => observationTimes().length > 0 && bounds() !== null);
   const hoveredSeries = createMemo(() => {
     const timestamp = activeTimestamp();
     const rangeBounds = bounds();
@@ -309,6 +313,11 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
       const currentValue = props.currentMetrics?.[item.metric];
       return {
         ...item,
+        isCurrent:
+          activeTimestamp() === null &&
+          item.points.length === 0 &&
+          typeof currentValue === 'number' &&
+          Number.isFinite(currentValue),
         valueLabel: hovered
           ? getGuestDrawerHistoryValueLabel([hovered.point], item.unit)
           : activeTimestamp() !== null
@@ -369,12 +378,18 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         <div class="flex flex-wrap justify-end gap-x-3 gap-y-1 text-[11px] text-muted">
           <For each={displaySeries()}>
             {(item) => (
-              <span class="inline-flex items-center gap-1">
+              <span
+                class="inline-flex items-center gap-1"
+                data-history-current={item.isCurrent ? item.metric : undefined}
+              >
                 <svg aria-hidden="true" class="h-2.5 w-2.5 shrink-0" viewBox="0 0 10 10">
                   <circle cx="5" cy="5" r="4" fill={item.color} />
                 </svg>
                 <span class="font-medium text-base-content">{item.label}</span>
                 <span>{item.valueLabel}</span>
+                <Show when={item.isCurrent}>
+                  <span>current</span>
+                </Show>
               </span>
             )}
           </For>
@@ -421,26 +436,48 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
           </For>
           <Show when={bounds()}>
             {(rangeBounds) => (
-              <For each={drawableSeries()}>
-                {(item) => (
-                  <path
-                    d={buildGuestDrawerHistoryPath(
-                      item.points,
-                      scale(),
-                      rangeBounds().startTime,
-                      rangeBounds().endTime,
-                      GUEST_DRAWER_HISTORY_CHART_WIDTH,
-                      GUEST_DRAWER_HISTORY_CHART_HEIGHT,
-                    )}
-                    fill="none"
-                    stroke={item.color}
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    vector-effect="non-scaling-stroke"
-                  />
-                )}
-              </For>
+              <>
+                <For each={drawableSeries()}>
+                  {(item) => (
+                    <path
+                      d={buildGuestDrawerHistoryPath(
+                        item.points,
+                        scale(),
+                        rangeBounds().startTime,
+                        rangeBounds().endTime,
+                        GUEST_DRAWER_HISTORY_CHART_WIDTH,
+                        GUEST_DRAWER_HISTORY_CHART_HEIGHT,
+                      )}
+                      fill="none"
+                      stroke={item.color}
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      vector-effect="non-scaling-stroke"
+                    />
+                  )}
+                </For>
+                <For each={singlePointSeries()}>
+                  {(item) => (
+                    <circle
+                      aria-hidden="true"
+                      data-history-observation={item.metric}
+                      cx={getGuestDrawerHistoryX(
+                        item.points[0].timestamp,
+                        rangeBounds().startTime,
+                        rangeBounds().endTime,
+                      )}
+                      cy={getGuestDrawerHistoryY(item.points[0].value, scale())}
+                      r="3.5"
+                      fill={item.color}
+                      stroke="currentColor"
+                      stroke-width="1"
+                      class="text-surface"
+                      vector-effect="non-scaling-stroke"
+                    />
+                  )}
+                </For>
+              </>
             )}
           </Show>
           <Show when={hoverX() !== null && hoveredSeries().length > 0}>
@@ -471,9 +508,9 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
             </For>
           </Show>
         </svg>
-        <Show when={!hasDrawableData() && !props.loading}>
+        <Show when={!hasStoredData() && !props.loading}>
           <div class="absolute inset-x-8 inset-y-2 flex items-center justify-center rounded-sm bg-surface/80 text-xs text-muted">
-            Collecting history
+            No stored history in this range
           </div>
         </Show>
         <Show when={props.loading}>
@@ -515,6 +552,19 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
       <p id={`${inspectionId}-description`} class="sr-only">
         {chartDescription()}
       </p>
+      <Show when={!props.loading && singleObservation()}>
+        {(observation) => (
+          <p class="mt-2 text-[10px] text-muted">
+            <span>Single observation. No trend yet.</span>
+            <time
+              class="block tabular-nums"
+              dateTime={new Date(observation().timestamp).toISOString()}
+            >
+              {new Date(observation().timestamp).toLocaleString()}
+            </time>
+          </p>
+        )}
+      </Show>
       <Show when={observationTimes().length > 1}>
         <div class="mt-2">
           <label for={inspectionId} class="flex justify-between gap-2 text-[10px] text-muted">

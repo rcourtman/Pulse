@@ -138,7 +138,15 @@ const { chromium, firefox, webkit } = require('playwright');
           }
           if (state === 'failure')
             return route.fulfill({ status: 503, json: { error: 'Private fixture detail' } });
-          return route.fulfill({ json: response(type, id, range, state === 'empty') });
+          const result = response(type, id, range, state === 'empty');
+          if (state === 'sparse')
+            result.metrics = {
+              cpu: [point(5, 0)],
+              netin: [point(5, 0)],
+              diskwrite: [point(5, 0)],
+              temperature: [point(5, 50)],
+            };
+          return route.fulfill({ json: result });
         }
         if (url.pathname === '/api/license/runtime-capabilities')
           return route.fulfill({
@@ -336,14 +344,54 @@ const { chromium, firefox, webkit } = require('playwright');
       );
       await detail.screenshot({ path: path.join(artifacts, `one-hour-${theme}.png`) });
       progress('replacement-window-verified', { theme });
-      state = 'empty';
+      state = 'sparse';
       await detail.getByRole('button', { name: 'Refresh history' }).click();
       await page.waitForFunction(
         () => document.querySelectorAll('[data-testid="guest-history-plot"] path').length === 0,
       );
+      await detail.screenshot({ path: path.join(artifacts, `sparse-${theme}.png`) });
+      const sparseObservation = {
+        theme,
+        pointCount: await detail.locator('[data-history-observation]').count(),
+        collectingClaims: await detail.getByText('Collecting history', { exact: true }).count(),
+        descriptions: await detail
+          .getByTestId('guest-history-plot')
+          .evaluateAll((plots) =>
+            plots.map(
+              (plot) => document.getElementById(plot.getAttribute('aria-describedby'))?.textContent,
+            ),
+          ),
+      };
+      progress('sparse-observation', sparseObservation);
+      assert.equal(sparseObservation.pointCount, 4, 'each lone series must be visible');
+      assert.equal(sparseObservation.collectingClaims, 0);
+      assert.equal(await detail.getByRole('slider').count(), 0);
+      assert.equal(await detail.getByText('Single observation. No trend yet.').count(), 4);
+      for (const dot of await detail.locator('[data-history-observation]').all()) {
+        assert.ok(Math.abs(Number(await dot.getAttribute('cx')) - expectedX(5, '1h')) < 0.01);
+        assert.ok(Number.isFinite(Number(await dot.getAttribute('cy'))));
+      }
+      await verifyWindow(detail, '1h');
+      state = 'failure';
+      await detail.getByRole('button', { name: 'Refresh history' }).click();
+      await detail
+        .getByText('History refresh failed. Showing previously loaded history.')
+        .waitFor();
+      assert.equal(await detail.locator('[data-history-observation]').count(), 4);
+      assert.equal(await detail.getByText('Single observation. No trend yet.').count(), 4);
+      state = 'empty';
+      await detail.getByRole('button', { name: 'Retry history' }).click();
+      await page.waitForFunction(
+        () => document.querySelectorAll('[data-history-observation]').length === 0,
+      );
       await verifyWindow(detail, '1h');
       assert.equal(await detail.getByRole('slider').count(), 0);
-      assert.equal(await detail.getByText('Collecting history', { exact: true }).count(), 4);
+      assert.equal(
+        await detail.getByText('No stored history in this range', { exact: true }).count(),
+        4,
+      );
+      assert.equal(await detail.getByText('Single observation. No trend yet.').count(), 0);
+      await detail.screenshot({ path: path.join(artifacts, `empty-${theme}.png`) });
       state = 'success';
       await detail.getByRole('combobox', { name: 'History range' }).selectOption('7d');
       await utilization.getByTestId('guest-history-plot').locator('path').first().waitFor();
@@ -354,6 +402,23 @@ const { chromium, firefox, webkit } = require('playwright');
       assert.equal(requests.length, readsBeforeLock);
       assert.equal(await detail.getByTestId('guest-history-time-window').count(), 0);
       assert.equal(errors.length, 0, errors.join('\n'));
+      // The direct production renderer deliberately supplies current readings.
+      // A live fallback must be labelled, never plotted or attributed to a stored time.
+      state = 'empty';
+      await page.goto('http://127.0.0.1:5225/browser-tests/pbs-history-refresh.html');
+      await page.evaluate(
+        (dark) => document.documentElement.classList.toggle('dark', dark),
+        theme === 'dark',
+      );
+      detail = page.getByTestId('history-refresh-fixture');
+      await detail.getByText('No stored history in this range', { exact: true }).first().waitFor();
+      const liveCPU = detail.locator(
+        '[data-history-group="utilization"] [data-history-current="cpu"]',
+      );
+      assert.match((await liveCPU.innerText()).replace(/\s+/g, ' '), /CPU\s*42\.0%\s*current/);
+      assert.equal(await detail.locator('[data-history-observation]').count(), 0);
+      assert.equal(await detail.getByTestId('guest-history-plot').locator('path').count(), 0);
+      await detail.screenshot({ path: path.join(artifacts, `current-empty-${theme}.png`) });
       observations.push({ theme, requests, errors, utilizationX, networkX });
       progress('completed-theme', { theme });
       await page.close();

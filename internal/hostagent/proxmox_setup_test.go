@@ -3,9 +3,11 @@
 package hostagent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -1908,5 +1910,49 @@ func TestRunAllFailsWhenEveryDetectedTypeFails(t *testing.T) {
 	}
 	if len(results) != 0 {
 		t.Fatalf("results = %#v, want none", results)
+	}
+}
+
+func TestProxmoxSetupFetchTokenAcceptsCoherentPrivateOrLegacyServerTransport(t *testing.T) {
+	for _, product := range []string{"pve", "pbs"} {
+		for _, mode := range []string{"private", "legacy", "mixed"} {
+			t.Run(product+"_"+mode, func(t *testing.T) {
+				base, host, token := "https://pulse.example", "https://node.example:8006", "setup-token-123"
+				var artifact map[string]any
+				if err := json.Unmarshal([]byte(canonicalSetupScriptURLResponseJSON(base, product, host, token)), &artifact); err != nil {
+					t.Fatal(err)
+				}
+				if mode != "legacy" {
+					command := `curl -fsSL '` + artifact["url"].(string) + `' -o "$install_script"; if [ "$(id -u)" -eq 0 ]; then :; elif command -v sudo >/dev/null 2>&1; then :; fi; PULSE_SETUP_TOKEN_FILE="$token_file" bash "$install_script"`
+					artifact["downloadURL"] = artifact["url"]
+					artifact["command"] = command
+					artifact["commandWithEnv"] = command
+					artifact["commandWithoutEnv"] = command
+					if mode == "mixed" {
+						artifact["commandWithEnv"] = canonicalSetupScriptCommand(artifact["url"].(string), token)
+					}
+				}
+				body, err := json.Marshal(artifact)
+				if err != nil {
+					t.Fatal(err)
+				}
+				p := &ProxmoxSetup{pulseURL: base, httpClient: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+					if req.URL.Path != "/api/setup-script-url" {
+						t.Errorf("unexpected endpoint %s", req.URL.Path)
+					}
+					return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(body)), Header: make(http.Header)}, nil
+				})}}
+				got, err := p.fetchSetupToken(context.Background(), proxmoxProductType(product), host)
+				if mode == "mixed" {
+					if err == nil {
+						t.Fatal("mixed private/legacy credential transport accepted")
+					}
+					return
+				}
+				if err != nil || got != token {
+					t.Fatalf("%s metadata refused: %v", mode, err)
+				}
+			})
+		}
 	}
 }

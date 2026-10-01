@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { NodeConfig } from '@/types/nodes';
 
 import { notificationStore } from '@/stores/notifications';
@@ -6,6 +6,7 @@ import { NodesAPI } from '@/api/nodes';
 import type { ProxmoxSetupCommandResponse } from '@/api/nodes';
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
+import { showTokenReveal } from '@/stores/tokenReveal';
 import {
   buildNodeModalMonitoringPayload,
   getNodeModalDefaultFormData,
@@ -71,6 +72,14 @@ export const useNodeModalState = (props: NodeModalProps) => {
     setQuickSetupExpiry(null);
   };
 
+  let bootstrapGeneration = 0;
+  const bootstrapActive = (generation: number) =>
+    generation === bootstrapGeneration && props.isOpen !== false;
+  onCleanup(() => {
+    bootstrapGeneration++;
+    clearQuickSetupState();
+  });
+
   const copyCommand = async (command: string, successMessage = 'Command copied!') => {
     if (await copyToClipboard(command)) {
       notificationStore.success(successMessage);
@@ -78,6 +87,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   };
 
   const copyProxmoxAgentInstallCommand = async (type: 'pve' | 'pbs', successMessage: string) => {
+    const generation = bootstrapGeneration;
     try {
       setLoadingAgentCommand(true);
       setAgentCommandError(null);
@@ -87,7 +97,15 @@ export const useNodeModalState = (props: NodeModalProps) => {
         enableCommands: false,
         insecure: agentInstallInsecure(),
       });
+      if (!bootstrapActive(generation)) return;
       setAgentInstallCommand(data.command);
+      if (data.token) {
+        showTokenReveal({
+          token: data.token,
+          source: type,
+          note: 'Run the copied install command first. Then copy this token and paste it only at the silent “Pulse agent token” prompt. It is not part of the command.',
+        });
+      }
       const copied = await copyToClipboard(data.command);
       if (copied) {
         notificationStore.success(successMessage);
@@ -98,12 +116,13 @@ export const useNodeModalState = (props: NodeModalProps) => {
       setAgentCommandError(copyFailureMessage);
       notificationStore.error(copyFailureMessage);
     } catch (error) {
+      if (!bootstrapActive(generation)) return;
       logger.error('[Host Telemetry Agent] Error:', error);
       const message = error instanceof Error ? error.message : 'Failed to generate install command';
       setAgentCommandError(message);
       notificationStore.error(message);
     } finally {
-      setLoadingAgentCommand(false);
+      if (bootstrapActive(generation)) setLoadingAgentCommand(false);
     }
   };
 
@@ -113,7 +132,8 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const loadQuickSetupBootstrap = async (
     type: 'pve' | 'pbs',
     backupPerms: boolean,
-  ): Promise<ProxmoxSetupCommandResponse> => {
+  ): Promise<ProxmoxSetupCommandResponse | null> => {
+    const generation = bootstrapGeneration;
     const host = formData().host?.trim() ?? '';
     if (!host) {
       notificationStore.error('Please enter the Endpoint URL first');
@@ -135,6 +155,8 @@ export const useNodeModalState = (props: NodeModalProps) => {
       backupPerms,
       name: formData().name?.trim() || undefined,
     });
+    if (!bootstrapActive(generation) || quickSetupCacheKey(type, backupPerms) !== cacheKey)
+      return null;
     setQuickSetupBootstrap({ cacheKey, response });
     setQuickSetupTokenHint(response.tokenHint);
     setQuickSetupExpiry(response.expires);
@@ -146,18 +168,22 @@ export const useNodeModalState = (props: NodeModalProps) => {
     backupPerms: boolean,
     successMessage: string,
   ) => {
+    const generation = bootstrapGeneration;
     logger.debug('[Quick Setup] Copy button clicked');
     try {
       logger.debug('[Quick Setup] Generating setup URL for host', {
         host: formData().host,
       });
       const data = await loadQuickSetupBootstrap(type, backupPerms);
-      if (await copyToClipboard(data.commandWithEnv)) {
+      if (!data || !bootstrapActive(generation)) return;
+      showSetupToken(data);
+      if (await copyToClipboard(data.command)) {
         notificationStore.success(successMessage);
         return;
       }
       throw new Error('Failed to copy to clipboard');
     } catch (error) {
+      if (!bootstrapActive(generation)) return;
       logger.error('[Quick Setup] Error:', error);
       clearQuickSetupState();
       if (!(error instanceof Error && error.message === PROXMOX_SETUP_HOST_REQUIRED_MESSAGE)) {
@@ -166,12 +192,24 @@ export const useNodeModalState = (props: NodeModalProps) => {
     }
   };
 
+  const showSetupToken = (bootstrap: ProxmoxSetupCommandResponse) => {
+    showTokenReveal({
+      token: bootstrap.setupToken,
+      source: bootstrap.type,
+      note: `Run the copied setup command (or downloaded script) first. Then copy this token and paste it only at the silent “Pulse setup token” prompt. It expires at ${new Date(bootstrap.expires * 1000).toLocaleTimeString()}. Never paste it into a shell command.`,
+    });
+  };
+
   const setupScriptRunHint = (fileName: string) => `bash ${fileName}`;
 
   const downloadProxmoxSetupScript = async (type: 'pve' | 'pbs', backupPerms = false) => {
+    const generation = bootstrapGeneration;
     try {
       const bootstrap = await loadQuickSetupBootstrap(type, backupPerms);
+      if (!bootstrap || !bootstrapActive(generation)) return;
       const data = await NodesAPI.downloadProxmoxSetupScript(bootstrap);
+      if (!bootstrapActive(generation)) return;
+      showSetupToken(bootstrap);
 
       const blob = new Blob([data.content], {
         type: data.contentType,
@@ -189,6 +227,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
         `Script downloaded! Upload it to your server and run: ${setupScriptRunHint(data.fileName)}`,
       );
     } catch (error) {
+      if (!bootstrapActive(generation)) return;
       logger.error('Failed to download script:', error);
       notificationStore.error('Failed to download script. Please check your connection.');
     }
@@ -214,6 +253,12 @@ export const useNodeModalState = (props: NodeModalProps) => {
     const isOpen = props.isOpen;
     const editingNode = props.editingNode;
     const prefillNode = props.prefillNode;
+
+    if (isOpen === false || key !== previousResetKey || nodeType !== previousNodeType) {
+      bootstrapGeneration++;
+      clearQuickSetupState();
+      setLoadingAgentCommand(false);
+    }
 
     if (key !== undefined && key !== previousResetKey) {
       previousResetKey = key;

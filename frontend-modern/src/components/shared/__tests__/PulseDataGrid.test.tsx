@@ -103,6 +103,23 @@ describe('PulseDataGrid', () => {
     expect(onRowClick).toHaveBeenCalledTimes(1);
   });
 
+  it('inherits the native touch click target from the shared TableRow', () => {
+    const nativeListener = vi.spyOn(HTMLTableRowElement.prototype, 'addEventListener');
+    try {
+      render(() => (
+        <PulseDataGrid<TestRow>
+          data={[{ id: '1', name: 'Touch tower' }]}
+          columns={[{ key: 'name', label: 'Name' }]}
+          keyExtractor={(row) => row.id}
+          onRowClick={vi.fn()}
+        />
+      ));
+      expect(nativeListener.mock.calls.some(([type]) => type === 'click')).toBe(true);
+    } finally {
+      nativeListener.mockRestore();
+    }
+  });
+
   it('does not trigger the row handler when an interactive child is clicked', () => {
     const onRowClick = vi.fn();
     const onRemove = vi.fn();

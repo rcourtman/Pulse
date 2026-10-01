@@ -51,8 +51,12 @@ func TestHostedRuntimeMintsAgentInstallTokensWithoutLocalAuth(t *testing.T) {
 			if len(cfg.APITokens) != 1 {
 				t.Fatalf("persisted API tokens = %d, want 1", len(cfg.APITokens))
 			}
-			if resp.Command != "" && !strings.Contains(resp.Command, resp.Token) {
-				t.Fatalf("install command does not carry the minted token: %s", resp.Command)
+			if tc.name == "proxmox agent" {
+				if strings.Contains(resp.Command, resp.Token) || !strings.Contains(resp.Command, `--token-file "$token_file"`) {
+					t.Fatal("hosted Proxmox credential must use separate private input")
+				}
+			} else if resp.Command != "" && !strings.Contains(resp.Command, resp.Token) {
+				t.Fatal("generic host command lost its existing credential transport")
 			}
 		})
 	}

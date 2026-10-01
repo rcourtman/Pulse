@@ -63,11 +63,17 @@ export function TableBody(props: TableBodyProps) {
 
 export type TableRowProps = JSX.HTMLAttributes<HTMLTableRowElement>;
 
+// WebKit touch needs a native click target on otherwise-static table rows.
+// Keep actions document-delegated: nested controls must run first and retain
+// their existing stopPropagation behaviour instead of opening the row too.
+const nativeRowClickTarget = () => undefined;
+
 export function TableRow(props: TableRowProps) {
   const [local, rest] = splitProps(props, ['class', 'children']);
   return (
     <tr
       class={`group transition-colors duration-150 hover:bg-surface-hover ${local.class || ''}`}
+      on:click={rest.onClick ? nativeRowClickTarget : undefined}
       {...rest}
     >
       {local.children}

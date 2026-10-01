@@ -489,6 +489,8 @@ if module.MAX_RECEIPT_BYTES <= 0:
     def test_manifest_contract_binds_transitive_harness_and_production_boundary(self) -> None:
         manifest = json.loads((Path(__file__).with_name("secure_runtime_rootful_source_manifest_v1.json")).read_text(encoding="utf-8"))
         required = {
+            "scripts/installtests/release_notes_contract_test.go",
+            "scripts/installtests/testdata/release-notes-v6.4.5-authored.md",
             "scripts/installtests/secure_runtime_rootful_qualification_test.go",
             "scripts/installtests/secure_runtime_rootless_qualification_test.go",
             "scripts/installtests/secure_runtime_systemd_lab_test.go",
@@ -506,6 +508,7 @@ if module.MAX_RECEIPT_BYTES <= 0:
         }
         self.assertTrue(compiled_test_inputs.issubset(manifest["exact_paths"]))
         recursive_roots = set(manifest["recursive_roots"])
+        unbound_dependencies = set()
         for target, include_tests in (
             ("./scripts/installtests", True),
             ("./cmd/pulse-agent", False),
@@ -527,12 +530,16 @@ if module.MAX_RECEIPT_BYTES <= 0:
                 if not raw_directory or directory == repo_root / "scripts" / "installtests":
                     continue
                 relative = directory.relative_to(repo_root).as_posix()
-                self.assertTrue(
-                    any(relative == root or relative.startswith(root + "/") for root in recursive_roots),
-                    f"compiled dependency for {target} is outside the source manifest: {relative}",
-                )
+                if not any(relative == root or relative.startswith(root + "/") for root in recursive_roots):
+                    unbound_dependencies.add(f"{target}: {relative}")
+        self.assertFalse(
+            unbound_dependencies,
+            "compiled dependencies outside the source manifest: " + ", ".join(sorted(unbound_dependencies)),
+        )
         self.assertIn("internal/agenthelper", manifest["recursive_roots"])
         self.assertIn("pkg/auth", manifest["recursive_roots"])
+        self.assertIn("internal/filesystemprobe", manifest["recursive_roots"])
+        self.assertIn("pkg/agents/filesystem", manifest["recursive_roots"])
 
 
 if __name__ == "__main__":
