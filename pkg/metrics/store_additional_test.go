@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -1570,4 +1571,158 @@ func TestConcurrentWritesDuringShutdownDoNotPanic(t *testing.T) {
 	}
 	close(stop)
 	wg.Wait()
+}
+
+// TestStoreIdentityIndexUpgradesStableLayouts retains both #1966 inputs: a
+// never-migrated stable database, and a database migrated by newer source then
+// reopened by the old binary (which recreates lookup alongside unique query_all).
+func TestStoreIdentityIndexUpgradesStableLayouts(t *testing.T) {
+	suppressTestLogs(t)
+	for _, layout := range []string{"untouched-stable", "already-time-major-with-lookup"} {
+		t.Run(layout, func(t *testing.T) {
+			cfg := DefaultConfig(t.TempDir())
+			cfg.FlushInterval = time.Hour
+			cfg.RollupInterval = time.Hour
+			base := time.Now().Add(-30 * time.Minute).Truncate(time.Minute)
+			store, err := NewStore(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := store.WaitForMaintenance(30 * time.Second); err != nil {
+				_ = store.Close()
+				t.Fatal(err)
+			}
+			batch := []WriteMetric{}
+			for _, kind := range []string{"vm", "ct"} {
+				for _, id := range []string{"shared", "other"} {
+					for _, metric := range []string{"cpu", "memory"} {
+						for i := 0; i < 120; i++ {
+							batch = append(batch, WriteMetric{ResourceType: kind, ResourceID: id,
+								MetricType: metric, Value: float64(i),
+								Timestamp: base.Add(time.Duration(i) * 10 * time.Second), Tier: TierRaw})
+						}
+					}
+				}
+			}
+			store.WriteBatchSync(batch)
+			if err := store.Close(); err != nil {
+				t.Fatal(err)
+			}
+			fixture, err := sql.Open("sqlite", cfg.DBPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Fixture-only reconstruction, never an operator upgrade recipe.
+			if layout == "untouched-stable" {
+				_, err = fixture.Exec(`DROP INDEX idx_metrics_query_all;
+					CREATE INDEX idx_metrics_query_all
+					ON metrics(resource_type, resource_id, tier, timestamp, metric_type);`)
+				if err != nil {
+					_ = fixture.Close()
+					t.Fatal(err)
+				}
+			}
+			_, err = fixture.Exec(`CREATE UNIQUE INDEX idx_metrics_lookup
+				ON metrics(resource_type, resource_id, metric_type, tier, timestamp);`)
+			if err != nil {
+				_ = fixture.Close()
+				t.Fatal(err)
+			}
+			if err := fixture.Close(); err != nil {
+				t.Fatal(err)
+			}
+
+			for stage := 0; stage < 2; stage++ {
+				store, err = NewStore(cfg)
+				if err != nil {
+					t.Fatal(err)
+				}
+				func() {
+					defer store.Close()
+					if err := store.WaitForMaintenance(30 * time.Second); err != nil {
+						t.Fatal(err)
+					}
+					issue1124AssertConsolidatedIndexes(t, store)
+					assertStableLayoutQueries(t, store, base, stage == 1)
+					var count int
+					if err := store.db.QueryRow("SELECT COUNT(*) FROM metrics").Scan(&count); err != nil {
+						t.Fatal(err)
+					}
+					if count != len(batch) {
+						t.Fatalf("identities=%d, want %d", count, len(batch))
+					}
+					if stage == 0 {
+						store.WriteBatchSync([]WriteMetric{{ResourceType: "vm", ResourceID: "shared",
+							MetricType: "cpu", Value: 999, Timestamp: base.Add(1190 * time.Second), Tier: TierRaw}})
+					}
+				}()
+			}
+		})
+	}
+}
+
+func assertStableLayoutQueries(t *testing.T, store *Store, base time.Time, updated bool) {
+	t.Helper()
+	end := base.Add(1190 * time.Second)
+	for _, kind := range []string{"vm", "ct"} {
+		for _, step := range []int64{0, 60} {
+			all, err := store.QueryAllBatch(kind, []string{"shared", "other"}, base, end, step)
+			if err != nil {
+				t.Fatal(err)
+			}
+			filtered, err := store.QueryMetricTypesBatch(kind, []string{"shared", "other"}, []string{"cpu"}, base, end, step)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(all) != 2 || len(filtered) != 2 {
+				t.Fatalf("resource isolation: all=%d filtered=%d", len(all), len(filtered))
+			}
+			for _, id := range []string{"shared", "other"} {
+				one, err := store.QueryAll(kind, id, base, end, step)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(one) != 2 {
+					t.Fatalf("metric isolation: %d", len(one))
+				}
+				if !reflect.DeepEqual(one, all[id]) {
+					t.Fatalf("QueryAll/QueryAllBatch differ for %s/%s step=%d", kind, id, step)
+				}
+				for _, metric := range []string{"cpu", "memory"} {
+					want := []MetricPoint{}
+					width := 1
+					if step > 1 {
+						width = int(step / 10)
+					}
+					for first := 0; first < 120; first += width {
+						sum, minVal, maxVal := 0.0, 1e9, -1e9
+						for i := first; i < first+width; i++ {
+							value := float64(i)
+							if updated && kind == "vm" && id == "shared" && metric == "cpu" && i == 119 {
+								value = 999
+							}
+							sum += value
+							minVal = min(minVal, value)
+							maxVal = max(maxVal, value)
+						}
+						ts := base.Add(time.Duration(first) * 10 * time.Second)
+						if step > 1 {
+							ts = ts.Add(time.Duration(step/2) * time.Second)
+						}
+						want = append(want, MetricPoint{Timestamp: ts, Value: sum / float64(width), Min: minVal, Max: maxVal})
+					}
+					got, err := store.Query(kind, id, metric, base, end, step)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if !reflect.DeepEqual(got, want) || !reflect.DeepEqual(one[metric], want) {
+						t.Fatalf("retained values for %s/%s/%s step=%d: Query=%v All=%v want=%v", kind, id, metric, step, got, one[metric], want)
+					}
+				}
+				if len(filtered[id]) != 1 || !reflect.DeepEqual(filtered[id]["cpu"], one["cpu"]) {
+					t.Fatal("filtered batch leaked metrics or lost values")
+				}
+			}
+		}
+	}
 }
