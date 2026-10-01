@@ -1982,6 +1982,20 @@ keep schedules such as `00:00` to `23:59` active through the full final
 minute instead of expiring at `23:59:00`. Alert quiet-hours proofs should
 control time through the alert manager clock hook instead of depending on wall
 clock execution at whatever second the test runner happens to hit.
+The schedule compares local civil clock minutes on the selected calendar day,
+not `time.Date` instants. Both occurrences of a repeated minute have the same
+quiet-hours policy; nonexistent clock minutes do not shift the configured
+start or end. Initial queued replay uses the first real minute outside the
+current non-full-day window, including an unselected day reached at midnight.
+This does not reinterpret the day toggles as the previous evening's ownership.
+Full-day windows retain the existing daily replay boundary; this clock repair
+is not current-policy revalidation of already queued work or external receipt.
+`TestQuietHoursDaylightSavingClockAndReplay` in
+`internal/alerts/quiet_hours_test.go` checks London, New York and Lord Howe
+(one-hour and half-hour changes), inclusive boundaries and exact UTC replay.
+`TestQuietHoursOvernightSelectedCalendarDays` checks overnight day selection.
+Quiet-hours location fallback is read-only; configuration updates own the
+location cache, including when public suppression helpers run concurrently.
 Quiet-hours suppression also applies to alert delivery lifecycle, not only the
 initial raised notification. Resolved notifications must not fan out when the
 alert was never notified or was already acknowledged, and monitoring-driven
