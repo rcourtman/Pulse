@@ -7577,3 +7577,23 @@ Mounted inspection regressions cover these boundaries. The direct-renderer
 browser fixture verifies native keys, focus, pointer coexistence and touch at
 desktop/phone widths across Chromium, Firefox and WebKit; it is not installed
 PBS collection or a screen-reader announcement-quality claim.
+
+### Drawer History pointer values share one observed time
+
+Pointer inspection snaps to the nearest actual stored timestamp across the
+group's series, with equidistant observations resolved to the earlier time.
+Every displayed value and marker must belong to that timestamp. Missing series
+remain unavailable at the inspected time, not a nearest neighbour, latest
+observation or current reading. A lone stored sample, including zero, can be
+inspected without fabricating a trend. The SVG's dated description follows the
+same active time as the visible legend. Leaving the plot restores the normal
+latest/current legend; focused native inspection still takes precedence.
+
+Matching refreshes reconcile the pointer with the current set of actual
+observations; resource/range replacement still clears pointer state. Mounted
+`GuestDrawerHistory.pointer.test.tsx` regressions cover sparse and disjoint
+series, zero rates, single observations, ties, focus precedence and replacement.
+`browser-tests/history-pointer.cjs` verifies the production renderer and query
+in Chromium/Firefox desktop and Chromium/WebKit phone emulation in both themes,
+including failed refreshes and source replacement. Scripted APIs establish
+presentation accuracy, not real PBS collection or installed #1723 acceptance.
