@@ -175,9 +175,31 @@ Check whether the corresponding graphs work in the TrueNAS web UI. If Pulse
 still shows missing readings, report the affected panels, running Pulse and
 TrueNAS versions, and the relevant sanitized evidence above. Do not replace
 an otherwise working key or clear stored History merely because a graph is
-empty. When sharing a requested native graph response, include only its graph
-name, `legend`, timing fields and one `data` row or error; omit authentication
-messages and identifying details. Do not upload a full browser network capture.
+empty.
+
+If a maintainer requests a **CORE 13 native graph response**, use your existing
+signed-in **TrueNAS** browser session, not the Pulse page:
+
+1. In Firefox on macOS, open Network with **⌘⌥E**, then reload with Network
+   recording. Select **WS**, select the WebSocket connection and open its
+   **Response** pane.
+2. Show **All** messages and clear any message search for `reporting.get_data`.
+   The incoming reply does not need to repeat the method name, so that search
+   can hide the evidence. Open the CPU or Memory graph on TrueNAS's Reporting
+   page while recording.
+3. Find the outgoing `"msg":"method"` request with `"name":"cpu"` or
+   `"name":"memory"`; `cputemp` is temperature, not CPU usage. Each request has
+   a different `id`, which is normal. Find the incoming `"msg":"result"` reply
+   with the **same `id` as that request**, and expand its `result` (or `error`).
+   The `legend`, timing fields and `data` belong to the response, not the
+   outgoing request's `params`.
+4. Share only the requested graph name, `legend`, timing fields and one `data`
+   row, or the matching sanitized error. If no matching incoming reply is
+   visible after the graph loads, report that instead of sending more requests.
+
+Omit authentication messages, keys, cookies, private hostnames and addresses.
+Do not upload a full browser network capture or paste code into the browser
+console to collect this evidence.
 
 ### Stale TrueNAS data
 - If TrueNAS data stops updating, the source status transitions to `stale` after ~120 seconds.
