@@ -39,10 +39,38 @@ func BuildProxmoxAgentInstallCommand(opts AgentInstallCommandOptions) string {
 		args += ` --token-file "$token_file"`
 	}
 	args += trustArgs + " --non-interactive"
+	return privateAgentBootstrapCommand(baseURL, curlFlags, trustArgs, args, strings.TrimSpace(opts.Token) != "")
+}
+
+// BuildContainerRuntimeAgentInstallCommand uses the same complete-download,
+// preflight and private credential-entry boundary as the Proxmox installer.
+// Token selects the prompt; its value is never included in the copied command.
+func BuildContainerRuntimeAgentInstallCommand(baseURL, token string, enableHost bool) string {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	args := " --url " + posixShellQuote(baseURL) + " --enable-docker"
+	if enableHost {
+		args += " --enable-host"
+	} else {
+		args += " --enable-host=false"
+	}
+	args += " --interval 30s"
+	needsToken := strings.TrimSpace(token) != ""
+	if needsToken {
+		args += ` --token-file "$token_file"`
+	}
+	trustArgs := ""
+	if strings.HasPrefix(strings.ToLower(baseURL), "http://") {
+		trustArgs = " --insecure"
+	}
+	args += trustArgs + " --non-interactive"
+	return privateAgentBootstrapCommand(baseURL, "-fsSL", trustArgs, args, needsToken)
+}
+
+func privateAgentBootstrapCommand(baseURL, curlFlags, trustArgs, args string, needsToken bool) string {
 	preflight := "bash \"$install_script\" --url " + posixShellQuote(baseURL) +
 		" --preflight-only --output json --non-interactive" + trustArgs + ";"
 	return privateBootstrapCommand(baseURL+"/install.sh", curlFlags, preflight,
-		"bash \"$1\""+args+";", strings.TrimSpace(opts.Token) != "", "Pulse agent token")
+		"bash \"$1\""+args+";", needsToken, "Pulse agent token")
 }
 
 // privateBootstrapCommand uses POSIX outer grammar for single-line paste hosts.
@@ -55,9 +83,18 @@ func privateBootstrapCommand(scriptURL, curlFlags, preflight, run string, needsT
 		privileged = append(privileged,
 			`token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX);`,
 			`token_file="$token_dir/token";`,
-			`cleanup() { unset pulse_token; rm -f -- "$token_file"; rmdir -- "$token_dir"; };`,
+			`unset pulse_token pulse_discard tty_state;`,
+			`cleanup() { unset pulse_token pulse_discard; if [ -n "${tty_state:-}" ]; then stty "$tty_state" </dev/tty 2>/dev/null || :; fi; rm -f -- "$token_file"; rmdir -- "$token_dir"; };`,
 			`trap cleanup EXIT; trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM;`,
-			`if ! IFS= read -r -s -p `+posixShellQuote(prompt+" (paste at this prompt, not in the command): ")+` pulse_token </dev/tty; then echo "A terminal is required to enter the token. No installation was attempted." >&2; exit 1; fi;`,
+			// A normal canonical tty silently truncates long lines (4095 bytes on
+			// Linux). Bounded character input preserves valid input and detects
+			// overflow; keep echo off while draining the rest of an invalid line
+			// so it cannot become a second command in the caller's shell history.
+			`if ! tty_state=$(stty -g </dev/tty); then echo "A terminal is required to enter the token. No installation was attempted." >&2; exit 1; fi;`,
+			`stty -echo </dev/tty;`,
+			`if ! IFS= read -r -s -p `+posixShellQuote(prompt+" (paste at this prompt, not in the command): ")+` -n 4097 pulse_token </dev/tty; then echo "Token input was interrupted. No installation was attempted." >&2; exit 1; fi;`,
+			`if [ "${#pulse_token}" -gt 4096 ]; then while IFS= read -r -s -n 4097 pulse_discard </dev/tty && [ "${#pulse_discard}" -eq 4097 ]; do :; done; unset pulse_discard; fi;`,
+			`stty "$tty_state" </dev/tty; unset tty_state;`,
 			`printf '\n' >/dev/tty;`,
 			`if [ -z "$pulse_token" ] || [ "${#pulse_token}" -gt 4096 ]; then echo "A non-empty token of at most 4096 characters is required." >&2; exit 1; fi;`,
 			`printf %s "$pulse_token" > "$token_file"; unset pulse_token;`,

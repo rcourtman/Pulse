@@ -207,14 +207,18 @@ func TestBuildContainerRuntimeAgentInstallCommand_UsesLifecycleTransport(t *test
 
 	require.Contains(t, command, posixShellQuote("https://pulse.example.com/base/install.sh"))
 	require.Contains(t, command, "https://pulse.example.com/base")
-	require.Contains(t, command, "--token "+posixShellQuote("token-123"))
+	require.NotContains(t, command, "token-123")
+	require.Contains(t, command, `--token-file "$token_file"`)
 	require.Contains(t, command, "--enable-docker")
 	require.Contains(t, command, "--enable-host")
 	require.NotContains(t, command, "--enable-host=false")
 	require.Contains(t, command, "--interval 30s")
-	require.Contains(t, command, `| { if [ "$(id -u)" -eq 0 ]; then bash -s --`)
-	require.Contains(t, command, `elif command -v sudo >/dev/null 2>&1; then sudo bash -s --`)
-	require.NotContains(t, command, "| sudo bash -s -- --url")
+	require.Contains(t, command, `sudo bash -c`)
+	require.Contains(t, command, "--preflight-only --output json --non-interactive")
+	require.Contains(t, command, `read -r -s -p`)
+	require.NotContains(t, command, "| bash")
+	require.NotContains(t, command, "| sudo")
+	require.NotContains(t, command, "\n")
 }
 
 func TestBuildContainerRuntimeAgentInstallCommand_OmitsTokenAndAddsInsecureForHTTP(t *testing.T) {

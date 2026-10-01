@@ -6875,11 +6875,11 @@ func TestContract_DiagnosticsDockerPrepareTokenInstallCommandUsesLifecycleTransp
 	if strings.Contains(got, "--disable-host") {
 		t.Fatalf("install command preserved stale disable-host flag: %s", got)
 	}
-	if !strings.Contains(got, `| { if [ "$(id -u)" -eq 0 ]; then bash -s --`) {
-		t.Fatalf("install command missing governed root-or-sudo wrapper: %s", got)
+	if !strings.Contains(got, `sudo bash -c`) || !strings.Contains(got, `--token-file "$token_file"`) || !strings.Contains(got, "--preflight-only") {
+		t.Fatal("install command missing private-token/preflight root-or-sudo boundary")
 	}
-	if strings.Contains(got, "curl -fsSL "+posixShellQuote(baseURL+"/install.sh")+" | sudo bash -s --") {
-		t.Fatalf("install command preserved raw sudo pipe instead of governed wrapper: %s", got)
+	if strings.Contains(got, "token-123") || strings.Contains(got, "| bash") || strings.Contains(got, "| sudo") {
+		t.Fatal("install command exposed a credential or executes a partial fetch")
 	}
 }
 
@@ -23056,8 +23056,8 @@ func TestContract_RequestOriginCannotRetargetTokenBearingCommands(t *testing.T) 
 
 		baseURL := newRouter().resolvePublicURL(req)
 		diagnosticsCommand := buildContainerRuntimeAgentInstallCommand(baseURL, "diagnostics-secret", true)
-		if !strings.Contains(diagnosticsCommand, autoDetectedURL) || !strings.Contains(diagnosticsCommand, "diagnostics-secret") {
-			t.Fatalf("diagnostics command did not retain safe target and token: %q", diagnosticsCommand)
+		if !strings.Contains(diagnosticsCommand, autoDetectedURL) || !strings.Contains(diagnosticsCommand, `--token-file "$token_file"`) || strings.Contains(diagnosticsCommand, "diagnostics-secret") {
+			t.Fatal("diagnostics command did not retain the safe target and separate credential-entry boundary")
 		}
 		if strings.Contains(diagnosticsCommand, "attacker") {
 			t.Fatalf("diagnostics command retained attacker-controlled origin bytes: %q", diagnosticsCommand)
