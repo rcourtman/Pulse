@@ -91,7 +91,17 @@ const Doctor = () => {
       agentIdentity: { hostname: 'doctor.example', commandsEnabled: false },
     },
   } as InfrastructureAgentDoctorTarget;
-  return <InfrastructureAgentDoctorPage targets={[target]} />;
+  const removedTarget = {
+    ...target,
+    key: 'agent:removed-fixture',
+    connectionId: 'agent:removed-fixture',
+    displayName: 'removed-fixture',
+    status: 'removed',
+    needsCredentialRepair: false,
+    connection: undefined,
+    diagnostic: { agentId: 'removed-agent-42', hostname: 'removed.example' },
+  } as InfrastructureAgentDoctorTarget;
+  return <InfrastructureAgentDoctorPage targets={[target, removedTarget]} />;
 };
 render(
   () => (
