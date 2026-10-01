@@ -39,10 +39,38 @@ func BuildProxmoxAgentInstallCommand(opts AgentInstallCommandOptions) string {
 		args += ` --token-file "$token_file"`
 	}
 	args += trustArgs + " --non-interactive"
+	return privateAgentBootstrapCommand(baseURL, curlFlags, trustArgs, args, strings.TrimSpace(opts.Token) != "")
+}
+
+// BuildContainerRuntimeAgentInstallCommand uses the same complete-download,
+// preflight and private credential-entry boundary as the Proxmox installer.
+// Token selects the prompt; its value is never included in the copied command.
+func BuildContainerRuntimeAgentInstallCommand(baseURL, token string, enableHost bool) string {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	args := " --url " + posixShellQuote(baseURL) + " --enable-docker"
+	if enableHost {
+		args += " --enable-host"
+	} else {
+		args += " --enable-host=false"
+	}
+	args += " --interval 30s"
+	needsToken := strings.TrimSpace(token) != ""
+	if needsToken {
+		args += ` --token-file "$token_file"`
+	}
+	trustArgs := ""
+	if strings.HasPrefix(strings.ToLower(baseURL), "http://") {
+		trustArgs = " --insecure"
+	}
+	args += trustArgs + " --non-interactive"
+	return privateAgentBootstrapCommand(baseURL, "-fsSL", trustArgs, args, needsToken)
+}
+
+func privateAgentBootstrapCommand(baseURL, curlFlags, trustArgs, args string, needsToken bool) string {
 	preflight := "bash \"$install_script\" --url " + posixShellQuote(baseURL) +
 		" --preflight-only --output json --non-interactive" + trustArgs + ";"
 	return privateBootstrapCommand(baseURL+"/install.sh", curlFlags, preflight,
-		"bash \"$1\""+args+";", strings.TrimSpace(opts.Token) != "", "Pulse agent token")
+		"bash \"$1\""+args+";", needsToken, "Pulse agent token")
 }
 
 // privateBootstrapCommand uses POSIX outer grammar for single-line paste hosts.

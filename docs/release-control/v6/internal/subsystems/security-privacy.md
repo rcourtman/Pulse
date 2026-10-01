@@ -956,6 +956,23 @@ tokens, and path-normalization variants.
 
 ## Current State
 
+### Container diagnostics keeps copied material credential-free (1 October 2026)
+
+Container migration-token issuance returns its secret separately on the
+existing authenticated route, with a no-store response. Copied install source,
+download URLs and the diagnostic systemd reference must never contain that
+secret, a raw token process argument or a secret-bearing environment directive.
+The installer receives a bounded private file only after complete download and
+preflight, from silent root/sudo terminal input; failure and handled signals
+clean the handoff. The service reference points to the canonical default
+Linux private state file and does not replace installer-owned profile policy.
+URL percent specifiers are literal in the systemd environment, and structural
+control characters are rejected before minting. Monitoring scopes, tenant
+resolution, persistence rollback and HTTPS verification remain unchanged.
+`TestSecurityContainerDiagnosticsRejectsUnitInjectionBeforeTokenIssuance` and
+`TestSecurityContainerDiagnosticsServiceReferenceUsesPrivateState` exercise
+that boundary, including real systemd grammar validation without installation.
+
 ### Node TLS verification preference is operator-owned
 
 A PVE connection's `VerifySSL` value is security-relevant, so the stored

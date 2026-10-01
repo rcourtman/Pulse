@@ -4579,6 +4579,25 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Credential-safe container diagnostics response (1 October 2026)
+
+`POST /api/diagnostics/docker/prepare-token` retains its fields and durable,
+tenant-bound monitoring-token issuance. Only the separate `token` field may
+contain the credential; `installCommand` is now a credential-free single line
+with complete download, installer preflight, then root/sudo private terminal
+input and token-file handoff. The response is `Cache-Control: no-store`.
+`systemdServiceSnippet` is a default-Linux reference to the installer's private
+state file, with no raw token in environment or process arguments. It explicitly
+instructs callers to use `installCommand` for the complete service and retain
+installer-generated units for custom state/privilege profiles. Unit URL data is
+quoted with literal percent specifiers; structural control characters fail
+before token issuance. Existing module flags/scopes, optional-token omission,
+normalised target and plain-HTTP policy are unchanged. No new endpoint,
+credential authority, execution scope or trust exception is introduced.
+`agent_install_command_shared_test.go`, `contract_test.go`,
+`router_low_coverage_additional_test.go` and `security_regression_test.go` pin
+the response, hosted-origin boundary, persisted scope and safe unit grammar.
+
 ### Credential-safe Proxmox bootstrap (1 October 2026)
 
 The current Proxmox setup artifact supersedes the former token-bearing command/download contract: `command`, `commandWithEnv` and `commandWithoutEnv` are identical credential-free, single-line transports. `downloadURL` equals the tokenless `url`; downloads embed no setup token. `setupToken` (or agent-install `token`) is returned separately through the authenticated issuance response for an explicit reveal, never interpolated by the consumer. Settings uses the existing token-reveal dialog and tells users to run the command before pasting at its silent terminal prompt. Setup cache remains bound to endpoint/mode/live five-minute expiry and is discarded on modal close. The rendered scripts accept a bounded private `PULSE_SETUP_TOKEN_FILE` before mutation, unexport the secret, and put registration credentials in stdin, not process arguments. Legacy explicit query-token downloads remain accepted for compatibility, but no current artifact generates those URLs. Failed attempted registration returns nonzero and never echoes the response body. Runtime and root-installer consumers validate either the complete new artifact or the coherent old-server artifact; mixed transports fail closed.

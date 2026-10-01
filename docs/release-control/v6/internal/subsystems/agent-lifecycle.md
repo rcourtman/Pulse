@@ -3452,6 +3452,25 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Credential-safe container diagnostics bootstrap (1 October 2026)
+
+The existing container-runtime migration command now shares the Proxmox
+complete-download/preflight/private-input implementation in
+`internal/api/configapi/install_command.go`. The authenticated response keeps
+its separate `token` field; `installCommand` never interpolates it. A terminal
+prompt inside the root/sudo child creates a bounded 0700/0600 handoff, passes
+only its path, and removes it on success, failure or handled signals. Optional
+auth needs neither a credential nor a terminal. Default host-plus-Docker and
+explicit workload-only modes, their persisted scopes, 30-second interval and
+plain-HTTP continuity remain unchanged; neither mode adds command execution.
+The diagnostic systemd reference uses the default installer's protected
+`/var/lib/pulse-agent/token`, not a token literal or secret environment value.
+It is not a replacement for the complete installer-generated unit, especially
+on custom-state or privilege-profile installations. Executable root/sudo,
+history, argv, cleanup and real TLS-download fixtures are in
+`configapi/container_install_command_test.go`; they are not native installation
+or Docker/Podman estate acceptance.
+
 ### Credential-safe Proxmox bootstrap (1 October 2026)
 
 Proxmox initial bootstrap keeps credentials out of copied shell source. The current PVE/PBS agent command fetches a complete installer, runs its credential-free preflight, then privately prompts inside the root/sudo Bash child. Its 0700 directory and 0600 token file are owned by that child, passed only by path and removed on exit or handled signals. The UI reveals credentials separately, clears cached setup material on close and discards late issuance after close/reset. No exec scope is added. Existing fleet reporting is unchanged; newly enrolling an older agent with a newer server requires the current installer. New agents and the root installer still validate coherent old-server artifacts during rolling upgrades, but never execute their command strings.

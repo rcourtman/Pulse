@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -26,6 +27,58 @@ import (
 	pulsews "github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
+
+func TestSecurityContainerDiagnosticsRejectsUnitInjectionBeforeTokenIssuance(t *testing.T) {
+	for _, url := range []string{"https://pulse.example\nEnvironment=INJECTED=true", "https://pulse.example/\rpath", "https://pulse.example/\x00"} {
+		t.Run(strconv.Quote(url), func(t *testing.T) {
+			monitor, state, _ := newTestMonitor(t)
+			state.DockerHosts = []models.DockerHost{{ID: "host-1"}}
+			cfg := &config.Config{PublicURL: url}
+			router := &Router{monitor: monitor, config: cfg}
+			req := httptest.NewRequest(http.MethodPost, "/api/diagnostics/docker/prepare-token", strings.NewReader(`{"agentId":"host-1"}`))
+			rec := httptest.NewRecorder()
+			router.handleDiagnosticsDockerPrepareToken(rec, req)
+			if rec.Code != http.StatusServiceUnavailable || len(cfg.APITokens) != 0 {
+				t.Fatal("unsafe diagnostic unit target minted a token or produced a usable response")
+			}
+		})
+	}
+}
+
+func TestSecurityContainerDiagnosticsServiceReferenceUsesPrivateState(t *testing.T) {
+	for _, enableHost := range []bool{true, false} {
+		for _, baseURL := range []string{"https://pulse.example/base", "http://pulse.example:7655", `https://pulse.example/path%20space/%n/$VALUE/"quoted"`} {
+			snippet, err := buildContainerRuntimeAgentServiceSnippet(baseURL+"/", enableHost)
+			if err != nil {
+				t.Fatal(err)
+			}
+			urlLine := "Environment=" + strconv.Quote("PULSE_URL="+strings.ReplaceAll(baseURL, "%", "%%"))
+			if !strings.Contains(snippet, urlLine) || !strings.Contains(snippet, "--url ${PULSE_URL}") || !strings.Contains(snippet, "--token-file /var/lib/pulse-agent/token") {
+				t.Fatal("service reference changed URL data or lost the private credential path")
+			}
+			if strings.Contains(snippet, "PULSE_TOKEN=") || strings.Contains(snippet, "--token ") || strings.Contains(snippet, "--enable-commands") {
+				t.Fatal("service reference exposes a credential or broadens command authority")
+			}
+			if !strings.Contains(snippet, containerRuntimeAgentHostFlag(enableHost)+" --interval") {
+				t.Fatal("service reference lost its explicit host-monitoring mode")
+			}
+			if strings.Contains(snippet, "--insecure") != strings.HasPrefix(baseURL, "http://") {
+				t.Fatal("service reference changed the transport trust policy")
+			}
+			// Validate real systemd unit grammar, without installing a service or
+			// pretending the diagnostic reference is the complete governed unit.
+			unit := filepath.Join(t.TempDir(), "container-reference.service")
+			body := strings.Replace(snippet, "/usr/local/bin/pulse-agent", "/bin/true", 1)
+			if err := os.WriteFile(unit, []byte(body+"\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			out, err := exec.Command("systemd-analyze", "verify", "--man=no", unit).CombinedOutput()
+			if err != nil {
+				t.Fatalf("systemd reference syntax: %v\n%s", err, out)
+			}
+		}
+	}
+}
 
 type wsRawMessage struct {
 	Type    agentexec.MessageType `json:"type"`
