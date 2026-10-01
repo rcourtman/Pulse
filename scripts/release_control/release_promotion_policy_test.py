@@ -426,9 +426,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                       metadata["run"])
         self.assertIn('if [ "$FILE_VERSION" != "$VERSION" ]; then', metadata["run"])
         self.assertIn(
-            'if [ "${WATCHDOG_MODE}" = "true" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then',
+            'if [ "${WATCHDOG_MODE}" = "true" ]; then',
             metadata["run"],
         )
+        self.assertIn('metadata_mode=watchdog', metadata["run"])
+        self.assertIn('metadata_mode=promotion', metadata["run"])
         self.assertEqual(metadata["env"]["WATCHDOG_MODE"], "${{ steps.mode.outputs.watchdog }}")
         self.assertEqual(jobs["build_release_candidate"]["if"],
                          "${{ inputs.watchdog != true && inputs.version != '' }}")
@@ -2209,13 +2211,15 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('workflow_dispatch:false)', dry_run_workflow)
         self.assertIn('[ -z "${ROLLBACK_VERSION_INPUT:-}" ]', dry_run_workflow)
         self.assertIn('Candidate rehearsal requires explicit rollback and no watchdog SHA.', dry_run_workflow)
-        # Both admitted watchdog modes derive rollback; a candidate rehearsal
-        # can never reach that derivation, including when the input is absent.
+        # Both admitted watchdog modes observe the preceding stable reference,
+        # without manufacturing a new promotion envelope for an already-shipped
+        # VERSION. Candidate rehearsals still use the complete resolver.
         self.assertIn(
-            'if [ "${WATCHDOG_MODE}" = "true" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then',
+            'if [ "${WATCHDOG_MODE}" = "true" ]; then',
             dry_run_workflow,
         )
-        self.assertIn("--derive-rollback-latest-stable", dry_run_workflow)
+        self.assertIn("derive_latest_stable_rollback_tag(version, list_stable_tags())", dry_run_workflow)
+        self.assertNotIn("--derive-rollback-latest-stable", dry_run_workflow)
         self.assertIn("--derive-rollback-latest-stable", resolver)
         self.assertIn("derive_latest_stable_rollback_tag", resolver)
         self.assertIn("Required: prior stable version to pin for rollback", content)

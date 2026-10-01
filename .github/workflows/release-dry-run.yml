@@ -315,15 +315,32 @@ jobs:
           elif [ -n "${UNSIGNED_WINDOWS_REASON_INPUT:-}" ]; then
             HELPER_ARGS+=(--unsigned-windows-reason "${UNSIGNED_WINDOWS_REASON_INPUT}")
           fi
-          if [ "${WATCHDOG_MODE}" = "true" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then
-            # Both admitted watchdog paths have no candidate inputs. Ordinary
-            # candidate rehearsals retain their explicit-rollback requirement.
-            HELPER_ARGS+=(--derive-rollback-latest-stable)
-            echo "[OK] Scheduled rehearsal: deriving rollback target from the latest preceding stable tag"
+          if [ "${WATCHDOG_MODE}" = "true" ]; then
+            # A release line can retain its published stable VERSION while
+            # reviewed fixes accumulate. Observing that source is not a new
+            # stable promotion: do not invent an RC, soak or exception envelope.
+            # These helpers already exist on the selected release line; no
+            # newer main-only helper is required after the detached checkout.
+            WATCHED_VERSION="$VERSION" PYTHONPATH=scripts/release_control python3 - <<'PY' > "$RUNNER_TEMP/rehearsal-metadata.out"
+          import os
+          from resolve_release_promotion import (
+              derive_latest_stable_rollback_tag, list_stable_tags, release_stage, tag_exists,
+          )
+          version = os.environ["WATCHED_VERSION"]
+          stage = release_stage(version)
+          rollback = derive_latest_stable_rollback_tag(version, list_stable_tags())
+          if not tag_exists(rollback):
+              raise ValueError("Watchdog rollback reference is unavailable")
+          print("metadata_mode=watchdog")
+          print(f"watched_version_stage={stage}")
+          print(f"rollback_tag={rollback}")
+          PY
+          else
+            # Candidate rehearsals retain every promotion and rollback gate.
+            python3 scripts/release_control/resolve_release_promotion.py \
+              "${HELPER_ARGS[@]}" > "$RUNNER_TEMP/rehearsal-metadata.out"
+            echo "metadata_mode=promotion" >> "$RUNNER_TEMP/rehearsal-metadata.out"
           fi
-
-          python3 scripts/release_control/resolve_release_promotion.py \
-            "${HELPER_ARGS[@]}" > "$RUNNER_TEMP/rehearsal-metadata.out"
 
           {
             echo "version=${VERSION}"
@@ -482,8 +499,10 @@ jobs:
           if-no-files-found: error
 
       - name: Write rehearsal summary
+        id: summary
         if: always()
         env:
+          WATCHDOG_MODE: ${{ steps.mode.outputs.watchdog }}
           TESTED_SHA: ${{ steps.source.outputs.tested_sha }}
           TESTED_BRANCH: ${{ steps.source.outputs.tested_branch }}
           NOTE: ${{ inputs.note }}
@@ -506,8 +525,33 @@ jobs:
         run: |
           mkdir -p release-dry-run
           SUMMARY_FILE="release-dry-run/rc-to-ga-rehearsal-summary.md"
+          ARTIFACT_NAME="rc-to-ga-rehearsal-summary"
+          if [ "${WATCHDOG_MODE}" = "true" ]; then
+            SUMMARY_FILE="release-dry-run/watchdog-summary.md"
+            ARTIFACT_NAME="release-watchdog-summary"
+          fi
+          {
+            echo "summary_file=${SUMMARY_FILE}"
+            echo "artifact_name=${ARTIFACT_NAME}"
+          } >> "$GITHUB_OUTPUT"
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          if [ "${REHEARSAL_CONCLUSION}" != "success" ]; then
+          if [ "${WATCHDOG_MODE}" = "true" ]; then
+            {
+              echo "# Release Watchdog Observation"
+              echo ""
+              echo "- Workflow run: ${RUN_URL}"
+              echo "- Workflow event: ${GITHUB_REF_NAME}@${GITHUB_SHA}"
+              echo "- Tested source: ${TESTED_BRANCH:-unresolved}@${TESTED_SHA:-unresolved}"
+              echo "- Declared source version: ${WORKFLOW_OUTPUT_1:-unresolved}"
+              echo "- Preceding stable reference: ${WORKFLOW_OUTPUT_5:-unresolved}"
+              echo "- Source metadata observation: ${REHEARSAL_CONCLUSION}"
+              echo "- Preflight result: ${JOB_CONCLUSION}"
+              echo ""
+              echo "This observes branch drift, build and integration checks, not a candidate promotion."
+              echo "The definitive verdict also requires the stable demo's no-mutation verification."
+              echo "It does not establish promotion readiness, soak, qualification or installed recovery."
+            } > "$SUMMARY_FILE"
+          elif [ "${REHEARSAL_CONCLUSION}" != "success" ]; then
             {
               echo "# Prerelease-to-GA Rehearsal Summary"
               echo ""
@@ -586,8 +630,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: rc-to-ga-rehearsal-summary
-          path: release-dry-run/rc-to-ga-rehearsal-summary.md
+          name: ${{ steps.summary.outputs.artifact_name }}
+          path: ${{ steps.summary.outputs.summary_file }}
+          if-no-files-found: error
 
   demo_path_preflight:
     name: Verify Current Stable Demo Path (No Mutation)
