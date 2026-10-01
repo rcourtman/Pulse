@@ -8,7 +8,8 @@ Pulse can monitor PBS backups in two ways:
 
 ### 1. Direct PBS Connection (Recommended)
 
-Connect directly to your PBS server for full monitoring capabilities:
+Connect to the PBS API with a dedicated read-only token. An agent is not
+required for these API-backed readings:
 
 **Benefits:**
 - ✅ Deduplication factor and storage efficiency stats
@@ -29,73 +30,100 @@ If your PVE cluster has PBS storage configured, Pulse automatically fetches back
 - ❌ Can be slow for encrypted PBS storage
 - ❌ Limited metadata per backup
 
-**Recommendation:** If you see a banner in the Recovery page (formerly Backups) suggesting you add PBS directly, following this guide will significantly improve your monitoring experience.
+**Recommendation:** Start with a direct API connection when you need PBS
+datastore, job or server status beyond the PVE passthrough. Add a host agent
+only for extra local telemetry such as SMART and temperatures; see
+[Agent Security](AGENT_SECURITY.md#proxmox-deployment-choices).
 
 ---
 
 ## Setting Up Direct PBS Connection
 
-### Method 1: Unified Agent Install (Recommended for Bare Metal)
+### Method 1: API-Only Connection (Recommended)
 
-Install the unified agent directly on your PBS server for automatic setup:
-
-```bash
-# Run on your PBS server
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  sudo bash -s -- --url http://<pulse-ip>:7655 --token <api-token> --enable-proxmox --proxmox-type pbs
-```
-
-The agent will:
-1. Detect it's running on a PBS server
-2. Create a `pulse-monitor@pbs` user with read-only access
-3. Generate an API token
-4. Register the PBS node with Pulse automatically
-
-### Method 2: API-Only Setup Script (Best for PBS in Containers) ⭐
-
-Use this when you can run a command on the PBS host but do not want to install the agent.
-
-From Pulse's Settings page:
-1. Go to **Settings → Infrastructure**.
-2. Click **Add infrastructure**.
-3. Choose **Proxmox Backup Server**.
-4. Use the API-only setup path and enter your PBS server's URL.
-5. Click copy to get the setup command.
-6. Run the command on your PBS server.
-
-Example (what the UI generates):
-```bash
-curl -fsSL "http://<pulse-ip>:7655/api/setup-script?type=pbs&host=https://<pbs-ip>:8007&pulse_url=http://<pulse-ip>:7655" | { if [ "$(id -u)" -eq 0 ]; then PULSE_SETUP_TOKEN="<setup-token>" bash; elif command -v sudo >/dev/null 2>&1; then sudo env PULSE_SETUP_TOKEN="<setup-token>" bash; else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi; }
-```
-
-Pulse generates that full command for you from **Settings → Infrastructure**, including
-the one-time setup token. The script creates a `pulse-monitor@pbs` user,
-generates a scoped API token, and registers the server with Pulse.
-
-> **Note**: API-only mode does not include temperature monitoring or AI command execution. Use **Agent Install** for full functionality.
-
-> **Tip**: The installer now auto-detects Proxmox mode (`pve` or `pbs`) when possible, but keeping `--proxmox-type pbs` explicit is recommended for predictable PBS onboarding.
-
-### Method 3: Manual Token Creation
-
-If you prefer manual setup:
+Use a dedicated PBS monitoring user and token, not a root password. On a new
+setup, run these commands in an administrator shell **on the PBS server**:
 
 ```bash
-# SSH into your PBS server
-
-# 1. Create a dedicated monitoring user
 proxmox-backup-manager user create pulse-monitor@pbs --comment "Pulse monitoring"
-
-# 2. Grant read-only access (Audit role)
-proxmox-backup-manager acl update / Audit --auth-id pulse-monitor@pbs
-
-# 3. Generate an API token (save the output!)
 proxmox-backup-manager user generate-token pulse-monitor@pbs pulse-token
+proxmox-backup-manager acl update / Audit --auth-id pulse-monitor@pbs
+proxmox-backup-manager acl update / Audit --auth-id 'pulse-monitor@pbs!pulse-token'
 ```
 
-Copy the token value and enter it in Pulse:
-- **Token ID:** `pulse-monitor@pbs!pulse-token`
-- **Token Value:** The UUID shown after running the command
+PBS tokens have their own permissions, limited by their owning user's
+permissions. Grant `Audit` to **both the user and the token**. If either already
+exists, inspect and reuse it instead of deleting it or rerunning token creation.
+Do not disable privilege separation or grant `Admin` to work around a missing
+permission.
+
+The token secret is shown once. Save it privately and enter it only in Pulse's
+**Token Value** field; do not paste it into a shell command, URL, screenshot or
+issue report. Keep any terminal recording containing that output private.
+
+In Pulse:
+1. Open **Settings → Infrastructure → Add infrastructure** and choose
+   **Proxmox Backup Server**.
+2. Enter the PBS HTTPS URL, normally `https://pbs.example.com:8007`.
+3. Select **API Token** and **Manual Token Setup**.
+4. Enter **Token ID** `pulse-monitor@pbs!pulse-token` and its secret in
+   **Token Value**.
+5. Keep certificate verification enabled. For a self-signed certificate, use
+   an independently verified **SSL Fingerprint**; see the TLS guidance below.
+6. Test and save the connection. Check that the expected datastores and backups
+   are visible, not just that the connection test succeeds.
+
+### Method 2: Optional Host Agent
+
+Use this only when you also need host-local telemetry. The Linux agent normally
+runs as root; it is not required to fix API authentication or missing backup
+permissions. Review [Agent Security](AGENT_SECURITY.md) first.
+
+Create a separate Pulse token in **API Access**, using the **Agent host** preset
+for reporting, configuration reads and agent management. This is a **Pulse**
+token, not the **PBS** token used above. Do not enable command execution just
+for monitoring.
+
+On the PBS host, enter an administrator root shell before preparing the private
+file below. In the editor, save only the Pulse agent token, with no header or
+quotes; never put the secret in a command argument:
+
+```bash
+umask 077
+mkdir -p "$HOME/.config/pulse"
+chmod 700 "$HOME/.config/pulse"
+touch "$HOME/.config/pulse/pbs-agent-token"
+chmod 600 "$HOME/.config/pulse/pbs-agent-token"
+vi "$HOME/.config/pulse/pbs-agent-token"
+```
+
+Download the agent installer from **your Pulse server's HTTPS address**, then
+inspect the saved script before running it. Replace the example Pulse URL in
+both commands. Stop if the download fails; run the next command only after a
+successful download and inspection. Do not substitute GitHub's top-level `install.sh`: that installs
+the Pulse server, not the agent.
+
+```bash
+curl --fail --silent --show-error \
+  --output "$HOME/.config/pulse/pbs-agent-install.sh" \
+  https://pulse.example.com/install.sh
+```
+
+```bash
+bash "$HOME/.config/pulse/pbs-agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/pbs-agent-token" \
+  --enable-proxmox --proxmox-type pbs --enable-docker=false
+```
+
+Do not bypass certificate checks to fetch or run the installer. Use a trusted
+Pulse certificate or a CA file you verified separately. See
+[Unified Agent Setup](UNIFIED_AGENT.md) for installer trust and other profiles.
+After installation, check a fresh agent report and the host's
+`pulse-agent --version`; installation or hardware capacity alone does not prove
+that every CPU, memory or History reading is available. Keep the token file
+private and remove the bootstrap copy when no longer needed; do not remove the
+installed agent's runtime credential.
 
 ---
 
@@ -133,18 +161,65 @@ If you have multiple PBS servers, add each one separately in Settings. Pulse wil
 
 ### "Connection Failed" Error
 
-1. **Check URL:** Ensure the PBS URL is correct (default port is 8007)
-   - Format: `https://pbs.example.com:8007`
+Check from the Pulse host or container's network, if possible. A request from
+another machine does not prove that Pulse can reach PBS.
 
-2. **Verify token:** Test authentication:
-   ```bash
-   curl -sk -H "Authorization: PBSAPIToken=pulse-monitor@pbs!pulse-token:YOUR_TOKEN" \
-     https://your-pbs:8007/api2/json/version
-   ```
+- **Address/network:** use the PBS HTTPS URL and port `8007`; check DNS, routing
+  and the firewall before changing credentials.
+- **TLS:** keep verification enabled. Use a certificate trusted by the Pulse
+  runtime, or set its **SSL Fingerprint** after verifying the SHA-256 value
+  through the PBS console or another already-trusted administrative channel.
+  Do not accept a fingerprint solely from the failed connection. For example,
+  on the PBS server you can inspect its public certificate (not its private key):
 
-3. **Network access:** Ensure Pulse can reach PBS on port 8007
+  ```bash
+  openssl x509 -in /etc/proxmox-backup/proxy.pem -noout -fingerprint -sha256
+  ```
 
-4. **SSL verification:** If using self-signed certificates, disable SSL verification in the node settings
+- **Authentication/permissions:** test a datastore request, not just `/version`.
+  Prepare a private header file on the machine running curl:
+
+  ```bash
+  umask 077
+  mkdir -p "$HOME/.config/pulse"
+  chmod 700 "$HOME/.config/pulse"
+  touch "$HOME/.config/pulse/pbs-header"
+  chmod 600 "$HOME/.config/pulse/pbs-header"
+  vi "$HOME/.config/pulse/pbs-header"
+  ```
+
+  In the editor, save this line, replacing `<pbs-token-secret>` with the secret
+  for the PBS token being tested:
+
+  ```text
+  Authorization: PBSAPIToken=pulse-monitor@pbs!pulse-token:<pbs-token-secret>
+  ```
+
+  Then use curl 7.76 or later, with your PBS hostname:
+
+  ```bash
+  curl --fail-with-body --silent --show-error --connect-timeout 5 --max-time 15 \
+    --header "@$HOME/.config/pulse/pbs-header" \
+    https://pbs.example.com:8007/api2/json/admin/datastore
+  ```
+
+  For curl with a private CA or self-signed certificate, add
+  `--cacert "$HOME/.config/pulse/pbs-ca.pem"` using a public certificate obtained
+  and verified through a trusted channel. Its hostname must still match. Do not
+  use `--insecure` or `-k`.
+
+  `401` means authentication was rejected; `403` means the requested access was
+  refused. Both return a non-zero curl exit while retaining the error body.
+  Inspect the existing token and both `Audit` grants before replacing anything.
+  A `200` response listing the expected datastore establishes access to that
+  list, not successful collection of every backup, job or History graph. An
+  empty list is not proof that all permissions are correct.
+
+Keep the header file outside shared repositories and diagnostics. Do not share
+verbose/trace curl output, full infrastructure responses, token values or
+private keys. If help is needed, provide only the HTTP status, relevant redacted
+error and which expected reading is missing. Do not clear History or recreate a
+working connection to make missing data look resolved.
 
 ### Slow Backup Loading
 
@@ -155,10 +230,12 @@ If you notice slow loading for PBS storage accessed via PVE:
 
 ### Duplicate Backups
 
-If you see the same backup twice:
-- This shouldn't happen—Pulse deduplicates by VMID and timestamp
-- If it does occur, the direct PBS version takes priority
-- Check console for debug logs: `localStorage.setItem('debug-pmg', 'true')`
+Check the source, datastore, namespace, guest type/ID and backup time on each
+entry. Independent PVE installations can reuse a guest ID; matching VMIDs alone
+are not proof of a duplicate. Keep both records while checking their origin.
+If the same backup remains listed twice, report those redacted distinctions and
+whether each entry came from direct PBS or PVE passthrough. Do not delete backups
+or change retention to hide a display problem.
 
 ---
 
@@ -169,7 +246,9 @@ In the Recovery view, PBS backups show a data source indicator:
 - **"PBS"** badge alone = Direct PBS connection (full data)
 - **"PBS via PVE"** = Passthrough via PVE storage (limited data)
 
-Adding your PBS server directly will remove the "via PVE" indicator and unlock full monitoring capabilities.
+When the same backup is reconciled across both sources, Pulse prefers the
+direct PBS observation. Check the actual source and expected readings after
+adding the connection; the presence of a badge alone is not collection proof.
 
 ---
 
