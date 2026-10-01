@@ -289,14 +289,50 @@ Continue checking delivery activity for destination failures.
 ## 🛠️ Advanced Diagnostics
 
 ### Correlate Logs with Requests
-Every API response has an `X-Request-ID` header. Use it to find the exact log entry:
+
+For a failed HTTP API request, inspect its response in your authenticated
+browser's **Developer tools → Network** panel. Copy only the `X-Request-ID`
+response header, if present, and keep the HTTP status and time. Do not copy a
+session cookie, **Copy as cURL** command or full network export into a report.
+WebSocket upgrades do not pass through this request-ID middleware.
+
+Service logs normally use JSON (`"request_id":"abc123"`); console logs may use
+`request_id=abc123`. Search for the literal ID value so both formats work.
+Replace `abc123` below with the response's ID. Run only the command for your
+deployment, on the Pulse host using an account authorised to read its logs.
+These examples limit collection to the last 15 minutes and 1,000 lines; adjust
+the time window to the original incident rather than repeating the failed action.
+
 ```bash
 # systemd / Proxmox LXC
-journalctl -u pulse --no-pager | grep "request_id=abc123"
-
-# Docker
-docker logs pulse 2>&1 | grep "request_id=abc123"
+set -o pipefail
+REQUEST_ID='abc123'
+journalctl -u pulse --since '15 minutes ago' --lines 1000 --no-pager |
+  grep -F -- "$REQUEST_ID"
 ```
+
+```bash
+# Docker
+REQUEST_ID='abc123'
+if pulse_logs=$(docker logs --since 15m --tail 1000 pulse 2>&1); then
+  printf '%s\n' "$pulse_logs" | grep -F -- "$REQUEST_ID"
+else
+  printf '%s\n' "$pulse_logs" >&2
+  false
+fi
+```
+
+A log-reader failure is not an empty search result: resolve any access or
+container/service error locally first. Even a successful read with no match
+does not prove the request succeeded. At the default log level, this middleware
+logs HTTP 5xx failures but not successful requests; HTTP 4xx failures are logged
+at debug level. The selected window, retained logs or deployment may also differ.
+Keep the original response status, time and ID even when there is no matching log;
+do not enable debug logging or retry a state-changing request just to fill that gap.
+
+These local excerpts are **not sanitised**. Before sharing a relevant line,
+remove credentials, cookies, secret URLs and private host, network or personal
+information. See [Getting Help](#-getting-help) for safe evidence collection.
 
 ### Check Permissions (Proxmox)
 If Pulse can't see VMs or storage, check the user permissions on Proxmox:
