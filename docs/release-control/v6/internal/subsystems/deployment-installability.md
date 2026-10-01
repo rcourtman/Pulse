@@ -2572,6 +2572,30 @@ artifact-selection behaviour.
 
 ## Current State
 
+### Existing-install auto-update consent (1 October 2026)
+
+A manual update, version-pinned rollback or reinstall is not consent to turn
+on unattended updates. The root server installer's three existing-install
+prompt paths share `offer_existing_auto_updates`: missing timers and explicitly
+disabled settings default to **No**, including Enter and non-TTY reads. Only
+`y`/`yes` (case-insensitive), or the existing explicit enable option, opts in.
+Explicit CLI choices are not prompted again. Existing enabled or disabled timer
+assets still refresh without changing their enablement; fresh installs remain
+opt-in. Readiness, signature validation and persistent-data backup are unchanged.
+
+`auto_update_intent_test.go` executes the real main flows for update, rollback,
+same-version reinstall and both menu actions, covering absent/disabled/enabled
+timers, Enter, EOF, invalid/no/affirmative input and explicit CLI choices.
+`root_install_sh_test.go` binds those paths to the shared choice, and
+`build_release_assets_test.go` binds the signed published lifecycle rehearsal to
+its new intent check. The rehearsal now retains only the boolean choice and
+timer enablement/activity before and after upgrade and rollback, fails changed
+or unavailable observations, and does not pass a disable flag to hide the bug.
+Its Python tests execute the observer/comparator against intact, changed and
+unreadable fixtures. These source proofs are not native installed acceptance;
+the published containing installer and both actual lifecycle phases still need
+their terminal observations.
+
 ### Credential-safe Proxmox bootstrap (1 October 2026)
 
 Current PVE auto-registration metadata accepts the credential-free setup artifact: all command aliases use a private-file handoff and `downloadURL` equals the tokenless script URL. This replaces earlier requirements to embed setup tokens in commands/URLs. The older coherent server artifact is accepted read-only during upgrades, never executed. Host, type, canonical filename/URL, masked hint and live expiry remain required. Root-installer JSON parsing and registration pass secrets through descriptor/stdin input rather than Python/curl argv, and the setup response is no longer persisted as a plaintext /tmp diagnostic. No install source, API scope, trust exception, release selector or success condition is widened.
