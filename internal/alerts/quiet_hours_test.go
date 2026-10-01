@@ -1,12 +1,81 @@
 package alerts
 
 import (
+	"reflect"
 	"sync"
 	"testing"
 	"time"
 
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 )
+
+func TestQuietHoursDeliverySnapshotIsCurrentIndependentAndReadOnly(t *testing.T) {
+	now := time.Date(2026, 10, 25, 1, 45, 0, 0, time.UTC)
+	quiet := QuietHours{Enabled: true, Start: "01:30", End: "02:00", Timezone: "Europe/London",
+		Days: map[string]bool{"sunday": true}, Suppress: QuietHoursSuppression{Storage: true}}
+	m := fixedQuietHoursTestManager(now, quiet)
+	defer m.Stop()
+	policy := m.QuietHoursNotificationPolicy()
+	for _, tc := range []struct {
+		kind  string
+		level AlertLevel
+		held  bool
+	}{
+		{"cpu", AlertLevelWarning, true},
+		{"cpu", AlertLevelCritical, false},
+		{"connectivity", AlertLevelCritical, false},
+		{"disk-health", AlertLevelCritical, true},
+	} {
+		alert := &Alert{ID: tc.kind, Type: tc.kind, Level: tc.level, Acknowledged: true,
+			Metadata: map[string]interface{}{MetadataQuietHoursReplayAt: "old-admission", "unchanged": "value"}}
+		before := alert.Clone()
+		at := policy(alert, now)
+		if (at != nil) != tc.held || (at != nil && !at.Equal(time.Date(2026, 10, 25, 2, 1, 0, 0, time.UTC))) {
+			t.Fatalf("%s level=%s held=%t replay=%v", tc.kind, tc.level, tc.held, at)
+		}
+		if !reflect.DeepEqual(before, alert) {
+			t.Fatal("delivery policy mutated acknowledgement or original occurrence metadata")
+		}
+	}
+	if at := policy(nil, now); at != nil {
+		t.Fatalf("nil alert acquired a hold: %v", at)
+	}
+	config := m.GetConfig()
+	config.Schedule.QuietHours = QuietHours{}
+	m.UpdateConfig(config)
+	alert := &Alert{Type: "cpu", Level: AlertLevelWarning}
+	if at := policy(alert, now); at == nil {
+		t.Fatal("immutable policy snapshot changed after configuration update")
+	}
+	if at := m.QuietHoursNotificationPolicy()(alert, now); at != nil {
+		t.Fatal("fresh delivery snapshot did not pick up disabled quiet hours")
+	}
+}
+
+func TestQuietHoursDeliverySnapshotConcurrentConfigUpdates(t *testing.T) {
+	now := time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)
+	m := newManagerWithQuietHoursSuppress(QuietHoursSuppression{})
+	defer m.Stop()
+	config := m.GetConfig()
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			for range 20 {
+				if i == 0 {
+					m.UpdateConfig(config)
+				} else {
+					at := m.QuietHoursNotificationPolicy()(&Alert{Type: "cpu", Level: AlertLevelWarning}, now)
+					if at == nil || !at.After(now) {
+						t.Errorf("continuous schedule acquired an invented open minute: %v", at)
+					}
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+}
 
 func fixedQuietHoursTestManager(now time.Time, quietHours QuietHours) *Manager {
 	m := NewManager()

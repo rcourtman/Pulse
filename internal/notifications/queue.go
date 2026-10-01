@@ -187,8 +187,10 @@ type NotificationQueue struct {
 	cleanupTicker         *time.Ticker
 	notifyChan            chan struct{}                   // Signal when new notifications are added
 	processor             func(*QueuedNotification) error // Notification processor function
-	deliveryHealthChanged func()                          // Reconcile the monitoring-owned delivery alert after health-changing transitions
-	workerSem             chan struct{}                   // Semaphore for limiting concurrent workers
+	quietHoursPolicy      func() func(*alerts.Alert, time.Time) *time.Time
+	now                   func() time.Time // Queue scheduling clock; nil uses wall time.
+	deliveryHealthChanged func()           // Reconcile the monitoring-owned delivery alert after health-changing transitions
+	workerSem             chan struct{}    // Semaphore for limiting concurrent workers
 }
 
 // notificationDeliveryGate orders delivery and cancellation for a single
@@ -1156,7 +1158,7 @@ func (nq *NotificationQueue) GetPending(limit int) ([]*QueuedNotification, error
 }
 
 // scanNotification scans a database row into a QueuedNotification
-func (nq *NotificationQueue) scanNotification(rows *sql.Rows) (*QueuedNotification, error) {
+func (nq *NotificationQueue) scanNotification(rows interface{ Scan(...any) error }) (*QueuedNotification, error) {
 	var notif QueuedNotification
 	var alertsJSON, configJSON, linksJSON string
 	var lastAttempt, nextRetryAt, completedAt *int64
@@ -1757,6 +1759,16 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 			Msg("Skipping cancelled notification")
 		return
 	}
+	// Obtain policy before the delivery gates: the policy owner may have
+	// lifecycle callbacks that cancel queued work. The returned evaluator is
+	// immutable and must not acquire any owner locks.
+	nq.mu.RLock()
+	policyProvider := nq.quietHoursPolicy
+	nq.mu.RUnlock()
+	var quietHoursPolicy func(*alerts.Alert, time.Time) *time.Time
+	if policyProvider != nil {
+		quietHoursPolicy = policyProvider()
+	}
 	releaseDeliveryGates := nq.acquireAlertDeliveryGates(alertIdentifiersFromAlerts(notif.Alerts), false)
 	healthChanged := false
 	defer func() {
@@ -1765,6 +1777,15 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 			nq.notifyDeliveryHealthChanged()
 		}
 	}()
+	if quietHoursPolicy != nil {
+		ready, err := nq.prepareQuietHoursDelivery(notif, quietHoursPolicy)
+		if err != nil {
+			log.Error().Err(err).Str("id", notif.ID).Msg("Failed to revalidate queued quiet-hours delivery")
+		}
+		if err != nil || !ready {
+			return
+		}
+	}
 
 	// Atomically claim the pending row. A concurrent resolution may have
 	// cancelled it while it was waiting for its per-alert delivery gate.

@@ -1931,6 +1931,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 	// The queue worker starts with the manager but has no processor until all
 	// saved destinations are installed. Activate it only after the last load;
 	// a slow migration or config read must not cancel due persisted work.
+	m.notificationMgr.SetQuietHoursPolicyProvider(m.alertManager.QuietHoursNotificationPolicy)
 	m.notificationMgr.StartQueueProcessing()
 
 	// In mock mode the canonical sampler owns demo chart history by default.

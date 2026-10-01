@@ -481,12 +481,16 @@ func quietHoursCategoryForAlert(alert *Alert) string {
 }
 
 func (m *Manager) shouldSuppressNotification(alert *Alert) (bool, string) {
-	if alert == nil {
-		return false, ""
-	}
 	// Only quiet-hours matches are replayable. Operator policy is checked by
 	// each caller before this helper, because it must drop rather than defer.
 	if !m.isInQuietHours() {
+		return false, ""
+	}
+	return quietHoursSuppressionForAlert(alert, m.config.Schedule.QuietHours.Suppress)
+}
+
+func quietHoursSuppressionForAlert(alert *Alert, suppress QuietHoursSuppression) (bool, string) {
+	if alert == nil {
 		return false, ""
 	}
 
@@ -497,15 +501,15 @@ func (m *Manager) shouldSuppressNotification(alert *Alert) (bool, string) {
 	category := quietHoursCategoryForAlert(alert)
 	switch category {
 	case "performance":
-		if m.config.Schedule.QuietHours.Suppress.Performance {
+		if suppress.Performance {
 			return true, category
 		}
 	case "storage":
-		if m.config.Schedule.QuietHours.Suppress.Storage {
+		if suppress.Storage {
 			return true, category
 		}
 	case "offline":
-		if m.config.Schedule.QuietHours.Suppress.Offline {
+		if suppress.Offline {
 			return true, category
 		}
 	}
@@ -516,13 +520,42 @@ func (m *Manager) shouldSuppressNotification(alert *Alert) (bool, string) {
 func (m *Manager) quietHoursReplayAt() time.Time {
 	now := m.policyNow()
 	clock, valid := m.quietHoursClock()
-	if !valid || !clock.contains(now) {
+	if !valid {
+		return now.Add(time.Minute).UTC()
+	}
+	return clock.replayAt(now)
+}
+
+// QuietHoursNotificationPolicy returns an immutable snapshot of the current
+// quiet-hours rule. The delivery owner obtains it before taking queue or
+// per-alert delivery locks, so evaluation never calls back into this manager
+// while cancellation is waiting for those locks. It does not mutate alert
+// lifecycle, acknowledgement, metadata or destination selection.
+func (m *Manager) QuietHoursNotificationPolicy() func(*Alert, time.Time) *time.Time {
+	m.mu.RLock()
+	clock, valid := m.quietHoursClock()
+	suppress := m.config.Schedule.QuietHours.Suppress
+	m.mu.RUnlock()
+	return func(alert *Alert, now time.Time) *time.Time {
+		if !valid || !clock.contains(now) {
+			return nil
+		}
+		if suppressed, _ := quietHoursSuppressionForAlert(alert, suppress); !suppressed {
+			return nil
+		}
+		replayAt := clock.replayAt(now)
+		return &replayAt
+	}
+}
+
+func (clock quietHoursClock) replayAt(now time.Time) time.Time {
+	if !clock.contains(now) {
 		return now.Add(time.Minute).UTC()
 	}
 
 	// A full-day window has no non-quiet clock minute. Preserve its existing
-	// daily replay boundary; queued-policy revalidation is a separate delivery
-	// concern, not permission to invent an end to a continuous schedule.
+	// daily revalidation boundary. The queue must check policy again there,
+	// not invent an end to a continuous schedule or attempt a provider send.
 	if (clock.end-clock.start+24*60)%(24*60) == 24*60-1 {
 		local := now.In(clock.location)
 		endExclusive := time.Date(local.Year(), local.Month(), local.Day(), clock.end/60, clock.end%60, 0, 0, clock.location).Add(time.Minute)
