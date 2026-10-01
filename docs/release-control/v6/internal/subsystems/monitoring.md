@@ -323,7 +323,9 @@ Verification: `internal/truenas/core_reporting_test.go` and its anonymised
 `testdata/core13_reporting.json` cover five source-bound native excerpts,
 row/timing/alias/zero/null/empty/finite controls, device totals, stale buckets,
 ARC alignment, current and canonical History projections, request validation,
-catalogue limits and failure boundaries. The excerpt windows are deliberately
+catalogue limits and failure boundaries. Unique overflow is rejected rather than
+truncated, while duplicate identifiers consume only one selection entry. The
+excerpt windows are deliberately
 shortened controls, not complete native windows. Extended
 `TestTrueNASPartialReportingPipeline` in
 `internal/monitoring/truenas_poller_test.go` crosses pinned-certificate HTTP,

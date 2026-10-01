@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"os"
@@ -376,6 +377,22 @@ func TestCORE13CatalogueAndResponseSafety(t *testing.T) {
 		t.Fatalf("catalogue deduplication: %v %v", graphs, err)
 	}
 	client.Close()
+}
+
+func TestCORE13CatalogueRejectsUniqueOverflow(t *testing.T) {
+	identifiers := make([]string, 253)
+	for i := range identifiers {
+		identifiers[i] = fmt.Sprintf("disk-%d", i)
+	}
+	raw, err := json.Marshal([]map[string]any{{"name": "disk", "identifiers": identifiers}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := newLegacyRESTReportingClient(t, alertArgsTransport{"/api/v2.0/reporting/graphs": {body: string(raw)}})
+	defer client.Close()
+	if graphs, err := client.legacyReportingGraphs(context.Background()); err == nil || graphs != nil {
+		t.Fatal("oversized unique catalogue became a partial host total")
+	}
 }
 
 func TestCORE13ARCAlignedWithFreeMemory(t *testing.T) {

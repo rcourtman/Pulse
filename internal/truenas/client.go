@@ -426,7 +426,8 @@ func legacyRESTReportingGraphs() []map[string]any {
 // getLegacySystemReportingData keeps a rejected optional graph from discarding
 // usable CPU/memory readings. Keep the successful batch fast path; only split
 // graph-validation/server errors, never authentication, rate-limit, endpoint,
-// transport or cancellation failures. The query and graph set remain unchanged.
+// transport or cancellation failures. Bind the catalogue-selected graph set once
+// for both the batch and split; the requested query window remains unchanged.
 func (c *Client) getLegacySystemReportingData(ctx context.Context, query map[string]any) ([]trueNASReportingGetDataResponse, error) {
 	graphs, err := c.legacyReportingGraphs(ctx)
 	if err != nil {
