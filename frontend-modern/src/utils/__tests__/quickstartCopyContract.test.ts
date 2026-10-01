@@ -42,7 +42,7 @@ describe('quickstart copy contract', () => {
     }
   });
 
-  it('keeps Relay public docs aligned with the Relay tier instead of Pro-only copy', () => {
+  it('keeps existing mobile security guidance aligned with retirement', () => {
     const security = readRepoFile('SECURITY.md');
     const publicSecurity = readRepoFile('frontend-modern/public/docs/SECURITY.md');
     const screenshots = readRepoFile('docs/SCREENSHOTS.md');
@@ -53,10 +53,14 @@ describe('quickstart copy contract', () => {
       expect(copy).not.toContain('relay protocol (Pro feature)');
     }
 
-    expect(security).toContain('Relay Security (Relay and Above)');
-    expect(publicSecurity).toContain('Relay Security (Relay and Above)');
-    expect(security).toContain('Relay, Pro, legacy Pro+, or Cloud license');
-    expect(publicSecurity).toContain('Relay, Pro, legacy Pro+, or Cloud license');
+    for (const copy of [security, publicSecurity]) {
+      expect(copy).toContain('Existing Mobile Pairings (Retirement)');
+      expect(copy).toContain('31 March 2027');
+      expect(copy).toContain('Relay is no longer sold');
+      expect(copy).toContain('receive Pro features at their current price');
+      expect(copy).toContain('Relay connects the app, not the');
+      expect(copy).not.toContain('Relay Security (Relay and Above)');
+    }
   });
 
   it('keeps public AI docs aligned with model-owned Patrol and Assistant reasoning', () => {

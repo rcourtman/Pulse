@@ -145,7 +145,7 @@ describe('systemSettings store', () => {
     expect(configurationDoc).toContain('PULSE_TELEMETRY');
   });
 
-  it('keeps Relay security guidance aligned with the Relay tier boundary', () => {
+  it('keeps existing mobile pairing security guidance aligned with retirement', () => {
     const securityDoc = readFileSync(path.join(repoRoot, 'SECURITY.md'), 'utf8');
     const publicSecurityDoc = readFileSync(
       path.join(frontendRoot, 'public', 'docs', 'SECURITY.md'),
@@ -153,10 +153,11 @@ describe('systemSettings store', () => {
     );
 
     for (const copy of [securityDoc, publicSecurityDoc]) {
-      expect(copy).toContain('Relay Security (Relay and Above)');
-      expect(copy).toContain(
-        'Relay functionality requires a Relay, Pro, legacy Pro+, or Cloud license',
-      );
+      expect(copy).toContain('Existing Mobile Pairings (Retirement)');
+      expect(copy).toContain('31 March 2027');
+      expect(copy).toContain('Relay is no longer sold');
+      expect(copy).toContain('receive Pro features at their current price');
+      expect(copy).toContain('Relay connects the app, not the');
       expect(copy).not.toContain('Relay Security (Pro)');
       expect(copy).not.toContain('Relay functionality requires a Pro or Cloud license');
     }
