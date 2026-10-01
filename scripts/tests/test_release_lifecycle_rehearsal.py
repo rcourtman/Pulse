@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
@@ -150,7 +151,7 @@ class HarnessContractTest(unittest.TestCase):
     def test_every_post_change_phase_checks_identity_health_settings_and_data(self) -> None:
         for phase in ("phase_upgrade", "phase_rollback"):
             body = self.harness.split(f"{phase}() {{", 1)[1].split("\n}\n", 1)[0]
-            for check in ("assert_runtime", "check_settings", "check_datadir", "record_phase"):
+            for check in ("assert_runtime", "check_auto_update_intent", "check_settings", "check_datadir", "record_phase"):
                 with self.subTest(phase=phase, check=check):
                     self.assertIn(check, body)
 
@@ -174,6 +175,98 @@ class HarnessContractTest(unittest.TestCase):
                     env={"PATH": "/usr/bin:/bin", "PULSE_REHEARSAL_ENGINE": "none-such"},
                 )
                 self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+
+
+class AutoUpdateIntentTest(unittest.TestCase):
+    """Execute the real observer/comparator, with guest systemctl observations."""
+
+    def check(self, baseline: str | None, config: object = None, *,
+              load: str = "not-found", enabled: str = "disabled",
+              active: str = "inactive") -> subprocess.CompletedProcess:
+        harness = HARNESS_PATH.read_text(encoding="utf-8")
+        functions = "\n".join(
+            name + "() {" + harness.split(name + "() {", 1)[1].split("\n}\n", 1)[0] + "\n}"
+            for name in ("auto_update_snapshot", "check_auto_update_intent")
+        )
+        script = r'''set -euo pipefail
+PHASE_UNITS="pulse active/enabled"
+note_failure() { echo "::error::$*"; }
+systemctl() {
+    case "$*" in
+        "show -p LoadState --value pulse-update.timer") echo "$LOAD" ;;
+        "is-enabled pulse-update.timer") echo "$ENABLED"; [[ "$ENABLED" == enabled ]] ;;
+        "is-active pulse-update.timer") echo "$ACTIVE"; [[ "$ACTIVE" == active ]] ;;
+        *) return 1 ;;
+    esac
+}
+export -f systemctl
+cexec() { bash -c "$1"; }
+''' + functions + '\ncheck_auto_update_intent rollback\nprintf "%s\\n" "$PHASE_UNITS"\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            (work / "state").mkdir()
+            data = work / "data"
+            data.mkdir()
+            if baseline is not None:
+                (work / "state" / "auto-updates.baseline.tsv").write_text(baseline + "\n", encoding="utf-8")
+            if config is not None:
+                (data / "system.json").write_text(
+                    config if isinstance(config, str) else json.dumps(config), encoding="utf-8")
+            return subprocess.run(
+                ["bash", "-c", script], capture_output=True, text=True, check=False,
+                env={**os.environ, "WORK_DIR": str(work), "DATA_DIR": str(data),
+                     "LOAD": load, "ENABLED": enabled, "ACTIVE": active},
+            )
+
+    def test_absent_timer_and_unset_choice_stay_absent(self) -> None:
+        result = self.check("absent\tabsent\tabsent")
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertIn("auto-updates absent/absent/absent preserved", result.stdout)
+
+    def test_disabled_enabled_and_masked_choices_are_preserved(self) -> None:
+        for config, enabled, active in ((False, "disabled", "inactive"),
+                                        (True, "enabled", "active"),
+                                        (False, "masked", "inactive")):
+            with self.subTest(config=config, timer=enabled):
+                result = self.check(f"{'enabled' if config else 'disabled'}\t{enabled}\t{active}",
+                                    {"autoUpdateEnabled": config}, load="loaded", enabled=enabled, active=active)
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    def test_persisted_false_is_not_a_new_opt_in(self) -> None:
+        result = self.check("absent\tabsent\tabsent", {"autoUpdateEnabled": False})
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    def test_config_timer_or_activity_changes_fail(self) -> None:
+        for config, enabled, active in ((True, "disabled", "inactive"),
+                                        (False, "enabled", "inactive"),
+                                        (False, "disabled", "active")):
+            with self.subTest(config=config, timer=enabled, active=active):
+                result = self.check("disabled\tdisabled\tinactive", {"autoUpdateEnabled": config},
+                                    load="loaded", enabled=enabled, active=active)
+                self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+                self.assertIn("auto-update choice or timer enablement/activity changed", result.stdout)
+
+    def test_enabled_choice_cannot_be_silently_disabled(self) -> None:
+        result = self.check("enabled\tenabled\tactive", {"autoUpdateEnabled": False},
+                            load="loaded", enabled="enabled", active="active")
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+
+    def test_unreadable_choice_or_timer_is_not_assumed_disabled(self) -> None:
+        for config, load, enabled, active in (("not json", "not-found", "disabled", "inactive"),
+                                              ({"autoUpdateEnabled": "true"}, "not-found", "disabled", "inactive"),
+                                              ({"autoUpdateEnabled": None}, "not-found", "disabled", "inactive"),
+                                              (None, "", "disabled", "inactive"),
+                                              (None, "loaded", "", "inactive"),
+                                              (None, "loaded", "disabled", "unknown")):
+            with self.subTest(config=config, load=load, enabled=enabled, active=active):
+                result = self.check("absent\tabsent\tabsent", config, load=load, enabled=enabled, active=active)
+                self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+                self.assertIn("could not be read", result.stdout)
+
+    def test_missing_baseline_cannot_pass(self) -> None:
+        result = self.check(None)
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertIn("has no baseline", result.stdout)
 
 
 GOOD_SNAPSHOT = {

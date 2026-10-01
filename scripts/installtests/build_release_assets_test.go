@@ -144,6 +144,30 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 	}
 }
 
+// A no-flag, signed published-installer rehearsal must catch re-enabling after
+// a version change. The install smoke's explicit disable flag alone cannot.
+func TestPublishedLifecycleRehearsalPreservesAutoUpdateChoice(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "release_lifecycle_rehearsal.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{
+		`auto_update_snapshot > "${WORK_DIR}/state/auto-updates.baseline.tsv"`,
+		`check_auto_update_intent upgrade || true`,
+		`check_auto_update_intent rollback || true`,
+		`cexec '/bin/update --version "$TARGET"'`,
+	} {
+		if !strings.Contains(string(content), required) {
+			t.Fatalf("published installer lifecycle proof missing %s", required)
+		}
+	}
+	for _, line := range strings.Split(string(content), "\n") {
+		if strings.Contains(line, "/bin/update --version") && strings.Contains(line, "--disable-auto-updates") {
+			t.Fatal("lifecycle proof must observe installer consent, not bypass it")
+		}
+	}
+}
+
 func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 	content, err := os.ReadFile(repoFile(".github", "workflows", "security-scan.yml"))
 	if err != nil {
