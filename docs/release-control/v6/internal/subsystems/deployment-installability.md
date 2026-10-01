@@ -4314,7 +4314,11 @@ including DOMPurify `GHSA-55q2-fjhq-7xh7`, brace-expansion
 `GHSA-2v37-7h3g-55p8`. The same floor test requires every locked browserslist
 copy to be at least `4.28.7`, closing the unbounded-query-cache
 `GHSA-c83g-rgw3-j3cx` and untrusted-custom-stats
-`GHSA-73wf-gq98-2v4g` advisories, while
+`GHSA-73wf-gq98-2v4g` advisories. The locked DOMPurify floor is `3.4.16`
+for `GHSA-p98j-92pf-mc4p` (an `IN_PLACE` `afterSanitize` hook that removes a
+node could leave detached event handlers armed, affecting 3.4.13 to 3.4.15),
+which failed the complete frontend audit on every `release/v6.4` pull request
+on 1 October 2026. Meanwhile
 `scripts/installtests/build_release_assets_test.go` prevents either CI audit
 gate from being removed silently. A later advisory must advance these floors
 and its sanitizer or dependency-specific regression proof together; audit
