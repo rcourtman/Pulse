@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -467,7 +468,9 @@ func (s *Store) initSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_metrics_tier_time 
 		ON metrics(tier, timestamp);
 
-		-- Covering index for Unified History (QueryAll) performance
+		-- Identity and range-read index. Created non-unique here so reads
+		-- can name it on every schema generation; ensureMetricsIdentityIndex
+		-- makes it the unique identity index.
 		CREATE INDEX IF NOT EXISTS idx_metrics_query_all
 		ON metrics(resource_type, resource_id, tier, timestamp, metric_type);
 
@@ -494,41 +497,83 @@ func (s *Store) initSchema() error {
 	return nil
 }
 
-var metricsIdentityColumns = []string{"resource_type", "resource_id", "metric_type", "tier", "timestamp"}
+// metricsIdentityIndex is the one B-tree that enforces sample identity and
+// serves every range read. Its columns are time-major within a resource, so
+// the samples one poll writes for a resource share leaf pages. The retired
+// metric-major order gave every series its own insertion point, and each
+// commit then rewrote one page per series through the WAL and checkpoint.
+// Upsert conflict targets match it by column set, not order.
+const metricsIdentityIndex = "idx_metrics_query_all"
+
+var metricsIdentityColumns = []string{"resource_type", "resource_id", "tier", "timestamp", "metric_type"}
+
+// retiredMetricsIdentityIndexes are the metric-major trees earlier schemas
+// kept over the same five columns: idx_metrics_unique up to v6.1.1 and the
+// unique idx_metrics_lookup that replaced it. Either is authoritative for
+// identity until the replacement commits.
+var retiredMetricsIdentityIndexes = []string{"idx_metrics_lookup", "idx_metrics_unique"}
 
 // ensureMetricsIdentityIndex keeps one B-tree for both metric identity and
-// single-series range queries. Older databases have two indexes containing the
-// same five columns in different orders: idx_metrics_lookup serves reads while
-// idx_metrics_unique enforces identity. Every insert dirties both trees, which
-// materially amplifies WAL and checkpoint writes.
+// range queries. Every additional tree over the same columns is dirtied by
+// every insert, which materially amplifies WAL and checkpoint writes.
 func (s *Store) ensureMetricsIdentityIndex() error {
-	lookupCurrent, err := s.metricsIndexMatches("idx_metrics_lookup", true, metricsIdentityColumns)
+	current, err := s.metricsIndexMatches(metricsIdentityIndex, true, metricsIdentityColumns)
 	if err != nil {
 		return fmt.Errorf("inspect metrics identity index: %w", err)
 	}
-	legacyUniqueExists, err := s.metricsIndexExists("idx_metrics_unique")
+	retired, retiredUnique, err := s.existingRetiredMetricsIdentityIndexes()
 	if err != nil {
-		return fmt.Errorf("inspect legacy metrics unique index: %w", err)
+		return fmt.Errorf("inspect retired metrics identity indexes: %w", err)
 	}
-
-	if legacyUniqueExists {
-		// v6.1.1 and earlier already have an authoritative unique index. Keep
-		// serving with that crash-safe schema and defer the O(rows) rebuild to
-		// the startup-maintenance worker so NewStore latency stays bounded.
-		s.identityMigrationPending.Store(true)
-		log.Info().Msg("Scheduled metrics identity index consolidation")
+	if current && len(retired) == 0 {
 		return nil
 	}
-	if lookupCurrent {
+	if current || retiredUnique {
+		// Identity is already enforced by a unique index. Keep serving with
+		// that crash-safe schema and defer the O(rows) rebuild to the
+		// startup-maintenance worker so NewStore latency stays bounded.
+		s.identityMigrationPending.Store(true)
+		log.Info().Strs("retired_indexes", retired).Msg("Scheduled metrics identity index consolidation")
 		return nil
 	}
 
 	return s.migrateMetricsIdentityIndex()
 }
 
+// existingRetiredMetricsIdentityIndexes reports which retired trees remain
+// and whether any of them still enforces identity.
+func (s *Store) existingRetiredMetricsIdentityIndexes() (existing []string, anyUnique bool, err error) {
+	rows, err := s.db.Query(`PRAGMA index_list(metrics)`)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			sequence int
+			index    string
+			unique   int
+			origin   string
+			partial  int
+		)
+		if err := rows.Scan(&sequence, &index, &unique, &origin, &partial); err != nil {
+			return nil, false, err
+		}
+		if !slices.Contains(retiredMetricsIdentityIndexes, index) {
+			continue
+		}
+		existing = append(existing, index)
+		if unique == 1 && partial == 0 {
+			anyUnique = true
+		}
+	}
+	return existing, anyUnique, rows.Err()
+}
+
 func (s *Store) migrateMetricsIdentityIndex() error {
 	if err := s.replaceMetricsIdentityIndex(); err == nil {
-		log.Info().Msg("Consolidated metrics lookup and identity indexes")
+		log.Info().Msg("Consolidated metrics identity index")
 		return nil
 	} else if !isUniqueConstraintError(err) {
 		return fmt.Errorf("consolidate metrics identity index: %w", err)
@@ -546,27 +591,41 @@ func (s *Store) migrateMetricsIdentityIndex() error {
 	return nil
 }
 
+// replaceMetricsIdentityIndex rebuilds the identity index as unique when it is
+// not already, then drops the retired trees, all in one transaction so a crash
+// leaves the previous authoritative index in place.
 func (s *Store) replaceMetricsIdentityIndex() error {
+	current, err := s.metricsIndexMatches(metricsIdentityIndex, true, metricsIdentityColumns)
+	if err != nil {
+		return fmt.Errorf("inspect metrics identity index: %w", err)
+	}
+
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("begin identity index migration: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := tx.Exec(`DROP INDEX IF EXISTS idx_metrics_lookup`); err != nil {
-		return fmt.Errorf("drop old lookup index: %w", err)
-	}
-	if metricsIdentityMigrationHook != nil {
+	if !current {
+		if _, err := tx.Exec(`DROP INDEX IF EXISTS ` + metricsIdentityIndex); err != nil {
+			return fmt.Errorf("drop non-unique identity index: %w", err)
+		}
+		if metricsIdentityMigrationHook != nil {
+			metricsIdentityMigrationHook()
+		}
+		if _, err := tx.Exec(`
+			CREATE UNIQUE INDEX ` + metricsIdentityIndex + `
+			ON metrics(` + strings.Join(metricsIdentityColumns, ", ") + `)
+		`); err != nil {
+			return fmt.Errorf("create unique identity index: %w", err)
+		}
+	} else if metricsIdentityMigrationHook != nil {
 		metricsIdentityMigrationHook()
 	}
-	if _, err := tx.Exec(`
-		CREATE UNIQUE INDEX idx_metrics_lookup
-		ON metrics(resource_type, resource_id, metric_type, tier, timestamp)
-	`); err != nil {
-		return fmt.Errorf("create consolidated lookup index: %w", err)
-	}
-	if _, err := tx.Exec(`DROP INDEX IF EXISTS idx_metrics_unique`); err != nil {
-		return fmt.Errorf("drop old unique index: %w", err)
+	for _, name := range retiredMetricsIdentityIndexes {
+		if _, err := tx.Exec(`DROP INDEX IF EXISTS ` + name); err != nil {
+			return fmt.Errorf("drop retired identity index %s: %w", name, err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit identity index migration: %w", err)
@@ -1590,10 +1649,7 @@ func retainedQuerySQL(resourceType string, resourceIDs, metricTypes []string, st
 	endParam := startParam + 1
 	tierParam := endParam + 1
 	stepParam := tierParam + len(tiers)
-	index := "idx_metrics_query_all"
-	if len(metricTypes) > 0 {
-		index = "idx_metrics_lookup"
-	}
+	index := metricsIdentityIndex
 	scope := func(alias string, tierIndex int) string {
 		clause := alias + ".resource_type = :p1 AND " + alias + ".resource_id IN (" + idSlots + ")"
 		if len(metricTypes) > 0 {
@@ -1618,8 +1674,11 @@ func retainedQuerySQL(resourceType string, resourceIDs, metricTypes []string, st
 			// fallback observation. Both checks use this statement's snapshot.
 			branch += " AND (NOT EXISTS (SELECT 1 FROM metrics AS coverage INDEXED BY " + index + " WHERE " + scope("coverage", j) + ") OR NOT EXISTS ("
 			bucket := max(tierBucketSeconds(tier), tierBucketSeconds(preferred))
+			// Name the identity index here too: with a time-major identity
+			// tree the planner otherwise seeks this correlated probe on
+			// (tier, timestamp) alone and walks every resource in the bucket.
 			branch += fmt.Sprintf(`
-    SELECT 1 FROM metrics AS h
+    SELECT 1 FROM metrics AS h INDEXED BY `+index+`
     WHERE h.resource_type = m.resource_type AND h.resource_id = m.resource_id
     AND h.metric_type = m.metric_type AND h.tier = :p%d
     AND h.timestamp >= MAX(:p%d, (m.timestamp / %d) * %d)
@@ -1698,10 +1757,9 @@ func (s *Store) queryRetainedChunk(resourceType string, resourceIDs []string, me
 		// order the value projection for each presence probe.
 		idSlots := strings.TrimSuffix(strings.Repeat("?,", len(resourceIDs)), ",")
 		presenceScope := "resource_type = ? AND resource_id IN (" + idSlots + ")"
-		index := "idx_metrics_query_all"
+		index := metricsIdentityIndex
 		if len(metricTypes) > 0 {
 			presenceScope += " AND metric_type IN (" + strings.TrimSuffix(strings.Repeat("?,", len(metricTypes)), ",") + ")"
-			index = "idx_metrics_lookup"
 		}
 		presenceScope += " AND tier = ? AND timestamp >= ? AND timestamp <= ?"
 		check := "EXISTS (SELECT 1 FROM metrics INDEXED BY " + index + " WHERE " + presenceScope + ")"

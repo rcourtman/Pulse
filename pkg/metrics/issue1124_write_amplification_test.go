@@ -399,8 +399,10 @@ func TestStoreIdentityMigrationKeepsReadersAvailable(t *testing.T) {
 // TestMetricsWriteAmplificationInvariant persists 157,452 deterministic
 // multi-provider samples, enough to force repeated B-tree splits and expose an
 // accidentally restored identity index. The frame ceiling includes 14% margin
-// over the consolidated schema's measured 35,030 frames; the v6.1.1 schema
-// produces 50,516 frames and fails this invariant.
+// over the time-major identity schema's measured 20,223 frames; the retired
+// metric-major lookup schema produces 36,308 frames and the v6.1.1 schema
+// 50,516, and both fail this invariant. It starts from an empty table, so
+// TestMetricsIdentityIndexSteadyStateWrites covers retained history.
 func TestMetricsWriteAmplificationInvariant(t *testing.T) {
 	suppressTestLogs(t)
 	dir := t.TempDir()
@@ -463,7 +465,7 @@ func TestMetricsWriteAmplificationInvariant(t *testing.T) {
 	pageSize := issue1124PragmaInt(t, store, "page_size")
 	walBytes := issue1124FileSize(t, dbPath+"-wal")
 	walFrames := (walBytes - 32) / (pageSize + 24)
-	const maxWALFrames = 40_000
+	const maxWALFrames = 23_000
 	if walFrames > maxWALFrames {
 		t.Fatalf(
 			"WAL frames=%d for %d samples, limit=%d; redundant indexes or transaction churn regressed write amplification",
@@ -493,8 +495,10 @@ func TestMetricsWriteAmplificationInvariant(t *testing.T) {
 // multi-provider estate. It reports WAL frames and per-B-tree dbstat pages
 // separately, so retained database size is never used as a write-volume proxy.
 //
-// Run with PULSE_METRICS_WRITE_PROFILE=full (v6.1.1 layout) or consolidated
-// and optionally PULSE_METRICS_WRITE_PROFILE_TICKS=N. The default 30 ticks
+// Run with PULSE_METRICS_WRITE_PROFILE=full (v6.1.1 layout), lookup (the
+// v6.1.2 to v6.4 metric-major unique index) or consolidated (the time-major
+// identity index), each optionally -batched, and optionally
+// PULSE_METRICS_WRITE_PROFILE_TICKS=N. The default 30 ticks
 // persist 393,630 samples across 2,197 resources. Set
 // PULSE_METRICS_WRITE_PROFILE_AUTOCHECKPOINT=1 for production checkpoint/fsync
 // tracing, PULSE_METRICS_WRITE_PROFILE_CHECKPOINT_PAGES=N for a bounded
@@ -506,9 +510,9 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 	if mode == "" {
 		t.Skip("set " + issue1124ProfileEnv + " to run the write-amplification profile")
 	}
-	if mode != "full" && mode != "consolidated" && mode != "full-batched" &&
-		mode != "consolidated-batched" && mode != "without-rowid" {
-		t.Fatalf("%s must be full, consolidated, full-batched, consolidated-batched, or without-rowid, got %q", issue1124ProfileEnv, mode)
+	if mode != "full" && mode != "lookup" && mode != "consolidated" && mode != "full-batched" &&
+		mode != "lookup-batched" && mode != "consolidated-batched" && mode != "without-rowid" {
+		t.Fatalf("%s must be full, lookup, consolidated, full-batched, lookup-batched, consolidated-batched, or without-rowid, got %q", issue1124ProfileEnv, mode)
 	}
 
 	ticks := 30
@@ -562,7 +566,9 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 		// Reconstruct the v6.1.1 schema so released and consolidated layouts
 		// remain comparable after the production migration lands.
 		if _, err := store.db.Exec(`
-			DROP INDEX idx_metrics_lookup;
+			DROP INDEX idx_metrics_query_all;
+			CREATE INDEX idx_metrics_query_all
+			ON metrics(resource_type, resource_id, tier, timestamp, metric_type);
 			CREATE INDEX idx_metrics_lookup
 			ON metrics(resource_type, resource_id, metric_type, tier, timestamp);
 			CREATE UNIQUE INDEX idx_metrics_unique
@@ -570,6 +576,20 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 		`); err != nil {
 			_ = store.Close()
 			t.Fatalf("install v6.1.1 index layout: %v", err)
+		}
+	}
+	if mode == "lookup" || mode == "lookup-batched" {
+		// Reconstruct the v6.1.2 to v6.4 schema, whose unique identity tree
+		// was metric-major beside a non-unique time-major read index.
+		if _, err := store.db.Exec(`
+			DROP INDEX idx_metrics_query_all;
+			CREATE INDEX idx_metrics_query_all
+			ON metrics(resource_type, resource_id, tier, timestamp, metric_type);
+			CREATE UNIQUE INDEX idx_metrics_lookup
+			ON metrics(resource_type, resource_id, metric_type, tier, timestamp);
+		`); err != nil {
+			_ = store.Close()
+			t.Fatalf("install metric-major lookup index layout: %v", err)
 		}
 	}
 	if mode == "without-rowid" {
@@ -671,7 +691,7 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 				batch[i] = metric
 				logicalBytes += issue1124LogicalBytes(metric)
 			}
-			if mode == "full-batched" || mode == "consolidated-batched" {
+			if mode == "full-batched" || mode == "lookup-batched" || mode == "consolidated-batched" {
 				tickBatch = append(tickBatch, batch...)
 			} else {
 				writeStarted := time.Now()
@@ -850,7 +870,7 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 		RetentionFreelist:             retentionFreelist,
 		DBStats:                       dbStats,
 	}
-	if mode == "full-batched" || mode == "consolidated-batched" {
+	if mode == "full-batched" || mode == "lookup-batched" || mode == "consolidated-batched" {
 		report.WriteCalls = ticks
 	}
 	encoded, err := json.Marshal(report)
@@ -1191,19 +1211,12 @@ func issue1124CreateLegacyStore(t *testing.T, dbPath string, rows int, duplicate
 
 func issue1124AssertConsolidatedIndexes(t *testing.T, store *Store) {
 	t.Helper()
-	matches, err := store.metricsIndexMatches("idx_metrics_lookup", true, metricsIdentityColumns)
+	matches, err := store.metricsIndexMatches(metricsIdentityIndex, true, metricsIdentityColumns)
 	if err != nil {
-		t.Fatalf("inspect consolidated lookup index: %v", err)
+		t.Fatalf("inspect consolidated identity index: %v", err)
 	}
 	if !matches {
-		t.Fatal("idx_metrics_lookup is not the expected unique identity/range index")
-	}
-	exists, err := store.metricsIndexExists("idx_metrics_unique")
-	if err != nil {
-		t.Fatalf("inspect obsolete unique index: %v", err)
-	}
-	if exists {
-		t.Fatal("obsolete idx_metrics_unique still exists")
+		t.Fatalf("%s is not the expected unique time-major identity index", metricsIdentityIndex)
 	}
 
 	rows, err := store.db.Query(`PRAGMA index_list(metrics)`)
@@ -1228,9 +1241,10 @@ func issue1124AssertConsolidatedIndexes(t *testing.T, store *Store) {
 	if err := rows.Err(); err != nil {
 		t.Fatalf("consolidated index rows: %v", err)
 	}
+	// Retired metric-major trees (idx_metrics_lookup, idx_metrics_unique)
+	// must be gone: each would be dirtied by every insert.
 	want := map[string]bool{
-		"idx_metrics_lookup":    true,
-		"idx_metrics_query_all": false,
+		"idx_metrics_query_all": true,
 		"idx_metrics_tier_time": false,
 	}
 	if len(indexes) != len(want) {
