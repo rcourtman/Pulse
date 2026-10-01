@@ -2272,7 +2272,9 @@ func TestTrueNASPartialReportingPipeline(t *testing.T) {
 	observedAt := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Second)
 	for index, cycle := range cycles {
 		current.Store(int64(index))
-		poller.ensureConnectionRuntimeStatusLocked("default", instance.ID).nextPollAt = time.Time{}
+		// Model the next due poll, not an absent deadline: a zero deadline
+		// is deliberately reconstructed from the previous attempt's cadence.
+		poller.ensureConnectionRuntimeStatusLocked("default", instance.ID).nextPollAt = time.Now().Add(-time.Second)
 		poller.pollAll(context.Background())
 		summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{instance})[instance.ID]
 		if summary.Poll == nil || summary.Poll.LastSuccessAt == nil || summary.Poll.LastError != nil || summary.Poll.ConsecutiveFailures != 0 || summary.Observed == nil || summary.Observed.StoragePools != 1 {
