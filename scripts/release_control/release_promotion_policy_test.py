@@ -44,6 +44,14 @@ def normalize_ws(text: str) -> str:
     return " ".join(text.split())
 
 
+def release_notes_title_matches(text: str, version: str) -> bool:
+    """Bind the first heading to the exact version without requiring prose style."""
+    lines = text.splitlines()
+    return bool(lines and re.fullmatch(
+        r"# Pulse v" + re.escape(version) + r"(?: Release Notes)?", lines[0].strip()
+    ))
+
+
 _MATERIAL_APPROVAL_RE = re.compile(
     r"(?i)(?:"
     r"\brichard[- ]approved\b|"
@@ -1385,6 +1393,23 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         )
         self.assertNotIn("Limits are applied to canonical top-level monitored systems", changelog)
 
+    def test_release_note_title_keeps_exact_version_without_boilerplate(self) -> None:
+        for version in ("6.4.5", "6.4.6", "6.4.6-rc.1", "6.5.0"):
+            for suffix in ("", " Release Notes"):
+                with self.subTest(version=version, suffix=suffix):
+                    self.assertTrue(release_notes_title_matches(
+                        f"# Pulse v{version}{suffix}\n\nUser-facing changes.\n", version
+                    ))
+        for title in (
+            "# Pulse v6.4.50", "# Pulse v6.4.5-rc.1", "# Pulse v6.4.4",
+            "# Pulse v6x4x5", "# Pulse v6.4.5 Draft Release Notes",
+            "# Pulse v6.4.5 Release Notes Extra", "## Pulse v6.4.5",
+            "Summary mentions Pulse v6.4.5 Release Notes",
+            "\n# Pulse v6.4.5", "",
+        ):
+            with self.subTest(title=title):
+                self.assertFalse(release_notes_title_matches(title, "6.4.5"))
+
     def test_version_file_matches_current_rc_packet(self) -> None:
         current_version = read("VERSION").strip()
         release_index = read("docs/RELEASE_NOTES.md")
@@ -1395,8 +1420,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             changelog = read(changelog_path)
             self.assertIn(release_notes_path, release_index)
             self.assertIn(changelog_path, release_index)
-            self.assertIn(f"Pulse v{current_version} Release Notes", release_notes)
-            self.assertIn(f"`v{current_version}`", release_notes)
+            # The exact first heading carries version identity. Authored notes
+            # need neither a mandatory suffix nor a repeated inline version.
+            self.assertTrue(release_notes_title_matches(release_notes, current_version))
             self.assertIn(f"Pulse v{current_version}", changelog)
         else:
             packet_paths = rc_packet_paths_for_version(current_version)
