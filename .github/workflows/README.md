@@ -151,6 +151,19 @@ nothing; results are in the job log and step summary. Run
 `scripts/release_lifecycle_rehearsal.sh --from <tag> --to <tag>` to reproduce
 it locally (`PULSE_REHEARSAL_ENGINE=podman` on hosts without Docker).
 
+`dependency-advisory-watch.yml` runs the required build-and-test frontend audit
+daily against `main` and every active `release/v<major>.<minor>` line (the
+latest stable's line and newer), because a new npm advisory against an
+unchanged lockfile otherwise surfaces only when it fails every pull request on
+that branch. Each line is a separate matrix job that reads only that line's
+`frontend-modern/package.json` and `package-lock.json` (it never checks out,
+installs or runs another branch's code in the default branch's scope) and audits
+them with the same Node.js pin and `scripts/npm-audit-retry.sh all`. A failing job names
+the branch and advisories in its step summary and annotation; the fix is
+`npm audit fix --package-lock-only` on that line plus raised floors in
+`frontend-modern/src/security/__tests__/dependencySecurity.test.ts`. It is
+read-only, hosted-only, uses no secrets and uploads nothing.
+
 The shared `install-sh-smoke-body.yml` inherits its caller's token permissions;
 keep it free of workflow- or job-level permission overrides. Continuity calls
 that body directly with `contents: read`. The existing `install-sh-smoke.yml`

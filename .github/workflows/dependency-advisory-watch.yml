@@ -1,0 +1,112 @@
+name: Dependency Advisory Watch
+
+# A new npm advisory against an unchanged lockfile fails the required
+# "Audit complete frontend dependency graph" step in build-and-test.yml on
+# every pull request to that branch. On 30 Sep-1 Oct 2026 two advisories did
+# exactly that to main, release/v6.4 and release/v6.5 at once, and nothing
+# owned the fix. This watch runs the same audit daily against main and every
+# active release line, fails when any of them would block, and names the
+# branch, the advisories and the fix in the step summary. Scheduled workflows
+# only run on the default branch. The audit needs only each line's
+# frontend-modern/package.json and package-lock.json, so this job reads those
+# two files with git and never checks out, installs or executes another
+# branch's code in the default branch's context.
+on:
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-advisory-watch
+  cancel-in-progress: false
+
+jobs:
+  lines:
+    name: List active release lines
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      branches: ${{ steps.lines.outputs.branches }}
+    steps:
+      - name: Checkout watch helpers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve main and active release lines
+        id: lines
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          heads="$(mktemp)"
+          git ls-remote --heads "https://github.com/${REPOSITORY}.git" 'refs/heads/release/v*' > "${heads}"
+          # The newest stable's line and newer are active. If the lookup fails,
+          # every release line is audited rather than none.
+          latest_stable="$(gh api "repos/${REPOSITORY}/releases/latest" --jq '.tag_name' 2>/dev/null || true)"
+          branches="$(python3 scripts/dependency_advisory_watch.py lines --heads "${heads}" --latest-stable "${latest_stable}")"
+          rm -f "${heads}"
+          echo "Newest stable: ${latest_stable:-unknown}; auditing ${branches}"
+          python3 scripts/write_github_output.py branches "${branches}"
+
+  audit:
+    name: Audit frontend dependencies (${{ matrix.branch }})
+    needs: lines
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: ${{ fromJSON(needs.lines.outputs.branches) }}
+    steps:
+      - name: Checkout watch helpers
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read the audited branch's lockfile inputs
+        env:
+          BRANCH: ${{ matrix.branch }}
+          AUDITED: ${{ runner.temp }}/audited
+        run: |
+          set -euo pipefail
+          mkdir -p "${AUDITED}"
+          git fetch --no-tags --depth=1 origin "+refs/heads/${BRANCH}:refs/remotes/audited/head"
+          for file in package.json package-lock.json; do
+            git show "refs/remotes/audited/head:frontend-modern/${file}" > "${AUDITED}/${file}"
+          done
+
+      # Same Node.js and audit runner as the required build-and-test Frontend
+      # job. npm audit reads the lockfile, so no install is needed and no
+      # package from the audited branch is fetched or run. The runner always
+      # comes from this workflow's own commit, so a release line that predates
+      # it is held to the same verdict main's required check applies.
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+
+      - name: Audit complete frontend dependency graph
+        id: audit
+        working-directory: ${{ runner.temp }}/audited
+        env:
+          NPM_AUDIT_REQUIRE_RESULT: 'true'
+        run: |
+          set -o pipefail
+          bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" all 2>&1 | tee "$RUNNER_TEMP/npm-audit.log"
+
+      - name: Report advisories and fix
+        if: ${{ !cancelled() }}
+        env:
+          BRANCH: ${{ matrix.branch }}
+          AUDIT_OUTCOME: ${{ steps.audit.outcome }}
+        run: |
+          python3 scripts/dependency_advisory_watch.py summary \
+            --branch "${BRANCH}" \
+            --outcome "${AUDIT_OUTCOME}" \
+            --log "$RUNNER_TEMP/npm-audit.log" \
+            --summary-file "$GITHUB_STEP_SUMMARY"

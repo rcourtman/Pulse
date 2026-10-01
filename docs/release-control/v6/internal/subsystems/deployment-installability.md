@@ -845,6 +845,8 @@ release-latency optimization.
 101. `.github/workflows/release-lifecycle-rehearsal.yml`
 102. `scripts/release_lifecycle_rehearsal.sh`
 103. `scripts/release_lifecycle_rehearsal_versions.py`
+104. `.github/workflows/dependency-advisory-watch.yml`
+105. `scripts/dependency_advisory_watch.py`
 
 ## Shared Boundaries
 
@@ -6184,6 +6186,65 @@ shape. A local podman run (amd64 emulation) of `v6.4.1 -> v6.4.5 -> v6.4.1`
 passed all four phases. An earlier run correctly failed phase 1 on a new failed
 unit (`systemd-hostnamed`), which led to the container-only list above. The
 hosted Docker run is not yet claimed.
+
+### Release-line dependency advisory watch (1 October 2026)
+
+On 30 September and 1 October 2026 `GHSA-q2hr-2g5m-vwhr` (`brace-expansion`)
+and `GHSA-p98j-92pf-mc4p` (DOMPurify) were published against unchanged
+`frontend-modern/package-lock.json` graphs. The required *Audit complete
+frontend dependency graph* step in `build-and-test.yml` then failed every pull
+request on `main`, `release/v6.4` and `release/v6.5`. That held the v6.4.6
+preparation pull request and the v6.5 release candidate for days with no owner.
+The scheduled npm audit in `security-scan.yml` only informs, and a scheduled
+workflow runs on the default branch alone, so release lines were never checked
+before a pull request hit them.
+
+`.github/workflows/dependency-advisory-watch.yml` runs daily and on manual
+dispatch with only `contents: read` on the hosted `ubuntu-24.04` image. It uses
+no secrets, persists no checkout credentials and uploads nothing. Its first job
+lists `main` plus every remote `release/v<major>.<minor>` branch at or newer
+than the line of the release GitHub reports as latest. Patch branches such as
+`release/v6.4.2` and legacy `release/5.1` are never lines. If the latest-release
+lookup fails, every release line is audited instead of none.
+
+The second job is a fail-fast-free matrix over those branches. A scheduled job
+runs in the default branch's cache and token scope, so it never checks out,
+installs or runs another branch's code: each entry fetches the audited branch
+and reads only its `frontend-modern/package.json` and `package-lock.json` as
+data with `git show`, uses no dependency cache, and repeats the required
+build-and-test audit against that lockfile with the same `actions/setup-node`
+pin and Node.js 24 and `scripts/npm-audit-retry.sh all` with
+`NPM_AUDIT_REQUIRE_RESULT=true`. `npm audit` answers from the lockfile, so the
+verdict is the one the required step reaches after its install. The runner always comes from the workflow's
+own commit, so a line whose build-and-test predates it is held to main's
+verdict, which fails on any finding at any severity just as a plain `npm audit`
+does. `frontend-modern/package-lock.json` is the only lockfile the required
+audit covers, so it is the only one the watch audits. The job fails whenever
+the audit fails. The step summary and one failure annotation name the branch,
+the GHSA identifiers and packages, and the fix: `npm audit fix
+--package-lock-only` in `frontend-modern` on that line, then raising the
+matching floors in `frontend-modern/src/security/__tests__/dependencySecurity.test.ts`.
+An unreachable advisory endpoint, or a missing lockfile before any verdict,
+also fails the job but is reported as such and never as an advisory. Only
+validated branch names, package names and GHSA identifiers reach the
+annotation, and registry text in the summary is escaped.
+
+The watch gates nothing directly. The maintainer release-path health timer
+watches it, so a failed run becomes a top-priority Delivery request naming the
+failing line.
+
+Verification: `scripts/tests/test_dependency_advisory_watch.py` covers line
+selection (newest-stable floor, patch and legacy branch exclusion, the
+fail-wide fallback, `main` always present), the summary and annotation for
+advisory, clean, unreachable and install-failure outcomes, escaping of hostile
+registry text, refusal of unexpected branch names, and the workflow contract
+(triggers, read-only hosted shape, matrix wiring, and parity of the Node.js
+pin, install command and audit runner with the required build-and-test step).
+`scripts/check_workflow_trust.py` and actionlint pass. A local run of the
+helper and `npm-audit-retry.sh` against the 1 October 2026 heads selected
+`main`, `release/v6.4` and `release/v6.5`, passed `main`, and failed
+`release/v6.4` (`GHSA-p98j-92pf-mc4p`) and `release/v6.5`
+(`brace-expansion` and DOMPurify advisories). The hosted run is not yet claimed.
 
 ## Release-body updater ownership (30 September 2026)
 
