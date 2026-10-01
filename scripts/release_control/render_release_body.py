@@ -28,6 +28,13 @@ _CUSTOMER_SECTION_HEADINGS = {
     "before you upgrade",
     "known issues",
 }
+_CUSTOMER_CHANGE_GROUPS = {
+    "alerts and notifications", "disks and storage",
+    "proxmox, pbs and backups", "truenas, vsphere and docker",
+    "install, updates and agents", "updates and agents",
+    "pulse pro, ai and hosted", "monitoring and service health",
+    "security", "other improvements",
+}
 _INTERNAL_RELEASE_LANGUAGE_RE = re.compile(
     r"\b(?:"
     r"readiness assertions?"
@@ -251,16 +258,23 @@ def _validate_customer_facing_release_notes(text: str, version: str) -> None:
             f"the release summary must be {_MAX_CUSTOMER_SUMMARY_LENGTH} characters or fewer"
         )
 
+    # New packets follow the grouped, plain-language release story. Retain the
+    # historical validator for older packets without rewriting published prose.
+    grouped = (_release_core(version) or (0, 0, 0)) >= (6, 4, 6)
+    allowed_headings = _CUSTOMER_SECTION_HEADINGS | (
+        _CUSTOMER_CHANGE_GROUPS | {"highlights"} if grouped else set()
+    )
     headings: dict[str, int] = {}
     for index, line in enumerate(lines):
         heading = re.fullmatch(r"##[ \t]+(.+?)\s*", line)
         if not heading:
             continue
         normalized = re.sub(r"\s+", " ", heading.group(1)).lower()
-        if normalized not in _CUSTOMER_SECTION_HEADINGS:
+        if normalized not in allowed_headings:
             raise ReleaseBodyIntegrityError(
                 "customer-facing release notes may only use What's improved, "
-                "Fixes, Before you upgrade, and Known issues sections"
+                "supported customer change groups, Highlights, Before you upgrade, "
+                "and Known issues sections"
             )
         if normalized in headings:
             raise ReleaseBodyIntegrityError(
@@ -272,28 +286,35 @@ def _validate_customer_facing_release_notes(text: str, version: str) -> None:
         (key for key in ("what's improved", "what’s improved") if key in headings),
         None,
     )
-    if improvements_key is None:
+    change_keys = [key for key in headings if key in _CUSTOMER_CHANGE_GROUPS] if grouped else []
+    if improvements_key:
+        change_keys.append(improvements_key)
+    if not change_keys:
         raise ReleaseBodyIntegrityError(
-            "customer-facing release notes must contain a What's improved section"
+            "customer-facing release notes must contain a What's improved section "
+            "or a supported customer change group"
         )
 
-    improvements = _flat_bullet_items(
-        _section_lines(text, headings[improvements_key]),
-        "What's improved",
-    )
-    if not improvements:
-        raise ReleaseBodyIntegrityError(
-            "What's improved must contain at least one bullet"
-        )
-    for item in improvements:
-        if len(item) > _MAX_CUSTOMER_ITEM_LENGTH:
+    seen_changes: set[str] = set()
+    for key in change_keys:
+        improvements = _flat_bullet_items(_section_lines(text, headings[key]), key)
+        if not improvements:
             raise ReleaseBodyIntegrityError(
-                f"customer-facing bullets must be {_MAX_CUSTOMER_ITEM_LENGTH} characters or fewer"
+                f"{key} must contain at least one bullet"
             )
-        if not re.match(r"^\*\*[^*]+\*\*[ \t]+(?:—|-)[ \t]+\S", item):
-            raise ReleaseBodyIntegrityError(
-                "What's improved bullets must start with a short bold outcome followed by a dash"
-            )
+        for item in improvements:
+            if len(item) > _MAX_CUSTOMER_ITEM_LENGTH:
+                raise ReleaseBodyIntegrityError(
+                    f"customer-facing bullets must be {_MAX_CUSTOMER_ITEM_LENGTH} characters or fewer"
+                )
+            if not grouped and not re.match(r"^\*\*[^*]+\*\*[ \t]+(?:—|-)[ \t]+\S", item):
+                raise ReleaseBodyIntegrityError(
+                    "What's improved bullets must start with a short bold outcome followed by a dash"
+                )
+            normalized_item = re.sub(r"\s+", " ", item).casefold()
+            if grouped and normalized_item in seen_changes:
+                raise ReleaseBodyIntegrityError("customer change groups must not repeat a change")
+            seen_changes.add(normalized_item)
 
     if "fixes" in headings:
         if _requires_single_change_list(version):

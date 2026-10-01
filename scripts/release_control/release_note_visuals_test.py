@@ -176,6 +176,7 @@ class ReleaseNoteVisualPlanTest(unittest.TestCase):
                 "Args",
                 (),
                 {
+                    "version": "6.4.0",
                     "rollback_target": "v6.3.2",
                     "rollback_command": "sudo /bin/update --version v6.3.2",
                 },
