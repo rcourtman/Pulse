@@ -47,10 +47,11 @@ const lockedVersions = (packageName: string): string[] =>
 
 const braceExpansionIsPatched = (version: string): boolean => {
   const [major] = parseVersion(version);
-  if (major === 1) return atLeast(version, [1, 1, 18]);
+  // GHSA-q2hr-2g5m-vwhr (quadratic {a},b} rewrite) is fixed in 1.1.21 and 5.0.12.
+  if (major === 1) return atLeast(version, [1, 1, 21]);
   if (major === 2) return atLeast(version, [2, 1, 4]);
   if (major === 3) return atLeast(version, [3, 0, 6]);
-  return major >= 5 && atLeast(version, [5, 0, 9]);
+  return major >= 5 && atLeast(version, [5, 0, 12]);
 };
 
 const nanoidIsPatched = (version: string): boolean => {
@@ -89,11 +90,12 @@ describe('frontend dependency security floors', () => {
   });
 
   it('keeps DOMPurify above the hook-detachment XSS floor', () => {
+    // GHSA-p98j-92pf-mc4p (IN_PLACE afterSanitize hook XSS) affects 3.4.13-3.4.15.
     expect(manifest.dependencies.dompurify).toBe('^3.4.13');
     const versions = lockedVersions('dompurify');
     expect(versions).not.toHaveLength(0);
     for (const version of versions) {
-      expect(atLeast(version, [3, 4, 13]), `dompurify ${version} is vulnerable`).toBe(true);
+      expect(atLeast(version, [3, 4, 16]), `dompurify ${version} is vulnerable`).toBe(true);
     }
   });
 
