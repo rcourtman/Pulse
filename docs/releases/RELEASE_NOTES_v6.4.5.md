@@ -1,8 +1,8 @@
 # Pulse v6.4.5
 
-The first stable release since v6.4.1. It brings everyone the fixes that have been in the v6.4.5 previews over the past month: quieter and more accurate alerts, fewer disk writes, working updates and Windows agent installs, and better PBS, TrueNAS, vSphere and Docker support.
+`v6.4.5` is a stable patch release and the first stable release since `v6.4.1`. It brings everyone the fixes that have been in the v6.4.5 previews over the past month: quieter and more accurate alerts, fewer disk writes, working updates and Windows agent installs, and better PBS, TrueNAS, vSphere and Docker support.
 
-## Highlights
+## What's improved
 
 - **Far fewer false disk-wear alerts.** Endurance counters no longer raise false disk-wear warnings, disk I/O totals are no longer inflated, and a recovered or excluded disk stops re-alerting (#2112).
 - **Stable updates work again.** The updater reads the full release information and offers the right build, including on ARMv6 and ARMv7 (#2282).
@@ -76,6 +76,6 @@ The first stable release since v6.4.1. It brings everyone the fixes that have be
 - Back up your Pulse data directory and configuration, and keep the backup until you have checked everything works.
 - This release includes the changes from v6.4.2, which was never published. If you use SSO only, map at least one trusted identity-provider group to the built-in `admin` role before upgrading so you keep admin access.
 - Windows Unified Agent binaries are not Authenticode-signed while SignPath remains unavailable, so Windows may show an Unknown Publisher warning. Verify downloads with the published checksums and detached signatures.
-- Pulse Mobile works with this release unchanged.
+- Pulse Mobile works with this release unchanged. It does not require a companion mobile release.
 - The rollback target is stable `v6.4.1`. On systemd and Proxmox LXC installs, use `sudo /bin/update --version v6.4.1`. For Docker Compose, pin `rcourtman/pulse:6.4.1` and recreate the container.
 

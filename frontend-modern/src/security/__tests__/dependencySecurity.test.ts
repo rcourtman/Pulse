@@ -93,7 +93,8 @@ describe('frontend dependency security floors', () => {
     const versions = lockedVersions('dompurify');
     expect(versions).not.toHaveLength(0);
     for (const version of versions) {
-      expect(atLeast(version, [3, 4, 13]), `dompurify ${version} is vulnerable`).toBe(true);
+      // GHSA-p98j-92pf-mc4p (IN_PLACE afterSanitize hook XSS) affects 3.4.13-3.4.15.
+      expect(atLeast(version, [3, 4, 16]), `dompurify ${version} is vulnerable`).toBe(true);
     }
   });
 
