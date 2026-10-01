@@ -381,7 +381,7 @@ type AlertConfig struct {
 	TimeThresholds                 map[string]int                 `json:"timeThresholds"`               // Per-type delays: guest, node, agent, storage, pbs
 	MetricTimeThresholds           map[string]map[string]int      `json:"metricTimeThresholds"`         // Optional per-metric delays keyed by resource type
 	MetricEvaluationWindows        map[string]map[string]int      `json:"metricEvaluationWindows"`      // Rolling-average seconds keyed by resource type and metric; explicit zero uses the current value
-	MaxAlertAgeDays                int                            `json:"maxAlertAgeDays"`              // Maximum age for alerts before auto-cleanup (0 = disabled)
+	MaxAlertAgeDays                int                            `json:"maxAlertAgeDays"`              // Inactivity limit in days for unacknowledged alert cleanup (0 = disabled)
 	MaxAcknowledgedAgeDays         int                            `json:"maxAcknowledgedAgeDays"`       // Maximum age for acknowledged alerts (0 = disabled)
 	AutoAcknowledgeAfterHours      int                            `json:"autoAcknowledgeAfterHours"`    // Auto-acknowledge alerts after X hours (0 = disabled)
 	FlappingEnabled                bool                           `json:"flappingEnabled"`              // Enable flapping detection
