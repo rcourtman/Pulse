@@ -20,6 +20,18 @@
 
 ## Purpose
 
+### Shipped documentation table headers
+
+After sanitization, the documentation renderer assigns trusted `scope=col` to
+native `thead th` cells without expanding the attribute allowlist. Document
+roles, scope and classes remain untrusted, and body cells are not promoted.
+Table-local horizontal scrolling is preserved. Renderer regression tests cover
+trusted column scope and rejected author-supplied attributes. The production
+Docs/router/styles fixture checks all eight current plan-table columnheader
+roles in desktop Chromium and phone WebKit, including local scrolling and
+page-width containment. This establishes browser roles, not screen-reader
+speech or release availability.
+
 ### Shipped documentation fragment navigation
 
 The shared documentation renderer assigns GitHub-compatible, document-local

@@ -1,18 +1,17 @@
 {
   "version": 1,
-  "base_sha": "53e69c06fe24e3c07deaddb5e40418d07bb0b34b",
-  "verified_at": "2026-10-01T18:25:48.680085Z",
+  "base_sha": "1a0cd7c9d5aa02de754535a293dc0cacd4ef6fa0",
+  "verified_at": "2026-10-01T18:27:14.912695Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx",
-    "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx"
+    "frontend-modern/src/features/docs/docMarkdown.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx": "f9b44049c02a5e5146d882befeefe8aa5bab221a2c4a0951e529c274a416010c",
-    "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx": "1f04fe06cfbb1874c657883e07b4c7ce0992399696b5bed05f3ea029b1f00c0f"
+    "frontend-modern/src/features/docs/docMarkdown.ts": "572a3b4bc5bc1114adef5aa64bb0ea833c0dbe5865bbd57d3dc767fd1965aa55"
   },
   "routes": [
-    "/browser-tests/unix-private-install.html"
+    "/docs/PULSE_PRO",
+    "/browser-tests/docs-fragment-navigation.html?scenario=plans"
   ],
   "viewports": [
     {
@@ -25,27 +24,26 @@
     }
   ],
   "states": [
-    "Production installer and Agent Doctor with synthetic APIs, required authentication and separately issued token; not native installation or enrollment",
-    "Private-file note preserves trusted editor/upload, root 0600 file and 0700 directory, no GUI secret and console/SSH fallback; command preserves the user-owned file",
-    "Removed agent note preserves host-local detachment, silent prompt and no token in copied command; command retains exact removed-agent identity and no new-binary preflight",
-    "Desktop Chromium light and phone-emulated WebKit dark; four affected-note screenshots inspected, outer page width contained"
+    "Production Docs page/router/styles with the current shipped eight-column plan comparison, not a replacement table fixture",
+    "Every sanitized thead TH has trusted scope=col and all eight native columnheader roles; document role/scope/class remain stripped",
+    "Desktop Chromium light and phone-emulated WebKit dark; table-local horizontal scrolling and outer-page containment; four final full-page/header screenshots inspected",
+    "This establishes browser accessibility roles, not screen-reader speech or published availability"
   ],
   "interactions": [
-    "Generate separate token and dismiss token dialog",
-    "Copy the private-file installation command; verify fixed private path and token secrecy",
-    "Expand removed agent and copy its scoped uninstall command; verify token secrecy and no preflight"
+    "Navigate to the real plans document and inspect table DOM and accessibility snapshot",
+    "On phone, scroll the table horizontally without moving the outer page; bring its header into view"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/unix-guidance-copy.cjs",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/docs-table-headers.cjs",
   "browser_versions": {
     "playwright": "1.56.1",
     "chromium": "141.0.7390.37",
     "webkit": "26.0"
   },
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/unix/chromium-private-file.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/unix/chromium-removed-note.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/unix/webkit-private-file.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/unix/webkit-removed-note.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/unix/result.json"
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/docs/chromium-after.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/docs/chromium-headers.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/docs/webkit-after.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/docs/webkit-headers.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/docs/after.json"
   ]
 }
