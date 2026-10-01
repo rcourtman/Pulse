@@ -1342,7 +1342,16 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 	}
 	// The fixed-forward History checkpoint has deliberately narrower release copy.
 	// Keep shared install safety assertions above and inherited repairs below.
-	if version == "6.4.4-beta.4" {
+	if stableTarget == "6.4.6" {
+		// This maintenance packet is relative to published 6.4.5. Require its
+		// actual customer outcomes, not historical 6.4.2 packet/process copy.
+		assertFileContainsAllNormalized(t, releaseNotesPath,
+			"Backup Server History stays with its host",
+			"Update progress keeps moving",
+			"Startup checks handle both address families",
+			"More dependable metrics storage",
+		)
+	} else if version == "6.4.4-beta.4" {
 		assertFileContainsAllNormalized(t, releaseNotesPath,
 			"Proxmox node History uses the right source",
 			"PBS History supports more installed shapes",
@@ -1373,17 +1382,29 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"Rollback target: `v"+previous+"`",
 		"Promotion path: exact-SHA single-build release candidate from `"+releaseBranch+"`",
 		comparisonSummary,
-		"carries the complete `v6.4.2` change set",
-		"no longer pin a guest in Backup Running",
-		"(#1815)",
-		"no longer collapse into a single host or Docker record",
-		"(#1753)",
-		"Windows Unified Agent auto-update no longer fails with HTTP 404",
-		"(#1820)",
 		"Windows signing decision: prereleases publish checksum- and detached-signature-verified Windows agents without Authenticode",
 		"Mobile decision: `no-mobile-impact`",
 		"no companion mobile build or store rollout is required",
 	)
+	if stableTarget == "6.4.6" {
+		assertFileContainsAllNormalized(t, changelogPath,
+			"Keep PBS History on the corroborated host identity",
+			"Follow quiet update streams with status checks",
+			"Bound local health probes across IPv4 and IPv6",
+			"modernc.org/sqlite to v1.59.0",
+			"modernc.org/libc to v1.75.7",
+		)
+	} else {
+		assertFileContainsAllNormalized(t, changelogPath,
+			"carries the complete `v6.4.2` change set",
+			"no longer pin a guest in Backup Running",
+			"(#1815)",
+			"no longer collapse into a single host or Docker record",
+			"(#1753)",
+			"Windows Unified Agent auto-update no longer fails with HTTP 404",
+			"(#1820)",
+		)
+	}
 	if version == "6.3.0-rc.6" {
 		assertFileContainsAllNormalized(t, releaseNotesPath,
 			"Chart and resource-query services now qualify independently from the residual API router, shrinking the root test critical path.",
