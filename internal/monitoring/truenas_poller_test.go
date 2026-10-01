@@ -2247,7 +2247,11 @@ func TestTrueNASPartialReportingPipeline(t *testing.T) {
 	}))
 	defer server.Close()
 	fingerprint := fmt.Sprintf("%x", sha256.Sum256(server.Certificate().Raw))
-	client, err := truenas.NewClient(truenas.ClientConfig{Host: server.URL, APIKey: "synthetic", Fingerprint: fingerprint})
+	// Trust only this fixture certificate via VerifyConnection, rather than
+	// requiring httptest's self-signed certificate to have a public CA chain.
+	// Fingerprint pinning remains enforced (including the existing mismatch
+	// controls in internal/truenas); no production TLS setting is changed.
+	client, err := truenas.NewClient(truenas.ClientConfig{Host: server.URL, APIKey: "synthetic", Fingerprint: fingerprint, InsecureSkipVerify: true})
 	if err != nil {
 		t.Fatal(err)
 	}
