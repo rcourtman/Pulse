@@ -556,8 +556,8 @@ describe('GuestDrawer', () => {
       await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalled());
 
       const utilizationChart = screen.getAllByTestId('guest-history-group-chart')[0];
-      expect(utilizationChart).toHaveTextContent('CPU25.0%');
-      expect(utilizationChart).toHaveTextContent('Collecting history');
+      expect(utilizationChart).toHaveTextContent('CPU25.0%current');
+      expect(utilizationChart).toHaveTextContent('No stored history in this range');
       expect(utilizationChart.querySelector('path')).toBeNull();
     });
 

@@ -209,7 +209,10 @@ const { chromium } = require('playwright');
         await page.getByRole('button', { name: 'Switch to service target', exact: true }).click();
         await status.getByText('Failed to load history data', { exact: true }).waitFor();
         assert.equal(await plots.count(), 0);
-        assert.equal(await detail.getByText('Collecting history', { exact: true }).count(), 0);
+        assert.equal(
+          await detail.getByText('No stored history in this range', { exact: true }).count(),
+          0,
+        );
         assert.equal(await detail.getByText(/previously loaded/).count(), 0);
         await checkLayout();
         await screenshot('replacement-failed');
