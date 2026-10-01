@@ -11,6 +11,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// sseClientQueueSize bounds how many undelivered statuses a single slow
+// client may hold before new ones are dropped for that client.
+const sseClientQueueSize = 64
+
 // SSEClient represents a Server-Sent Events client
 type SSEClient struct {
 	ID         string
@@ -19,6 +23,9 @@ type SSEClient struct {
 	Done       chan bool
 	LastActive time.Time
 	mu         sync.Mutex // protects writes to Writer and Flusher
+	// queue delivers broadcasts to this client in order through a single
+	// writer goroutine. Nil for clients not registered via AddClient.
+	queue chan UpdateStatus
 }
 
 // SSEBroadcaster manages Server-Sent Events connections for update progress
@@ -77,6 +84,7 @@ func (b *SSEBroadcaster) AddClient(w http.ResponseWriter, clientID string) *SSEC
 		Flusher:    flusher,
 		Done:       make(chan bool, 1),
 		LastActive: time.Now(),
+		queue:      make(chan UpdateStatus, sseClientQueueSize),
 	}
 
 	b.mu.Lock()
@@ -93,16 +101,57 @@ func (b *SSEBroadcaster) AddClient(w http.ResponseWriter, clientID string) *SSEC
 		Int("total_clients", clientCount).
 		Msg("SSE client connected")
 
-	// Send the current cached status immediately to the new client
+	// Write the connection preamble and the current status synchronously,
+	// before the ordered writer starts, so a (re)connecting client always
+	// sees where the update is right now instead of waiting for the next
+	// stage change. The cache is read after registration so a broadcast
+	// racing this connect is either in the snapshot or queued behind it.
 	b.statusMu.RLock()
 	cachedStatus := b.cachedStatus
 	b.statusMu.RUnlock()
 
-	go func() {
-		b.sendToClient(client, cachedStatus)
-	}()
+	if data, err := json.Marshal(cachedStatus); err == nil {
+		b.writeToClient(client, ": connected\n\n"+formatSSEData(data))
+	} else {
+		log.Error().Err(err).Str("client_id", clientID).Msg("Failed to marshal initial status for SSE")
+		b.writeToClient(client, ": connected\n\n")
+	}
+
+	go b.clientWriteLoop(client)
 
 	return client
+}
+
+// clientWriteLoop drains a client's queue so broadcasts reach it in the
+// order they were emitted. A goroutine per message (the previous design)
+// let a later stage overtake an earlier one on the wire.
+func (b *SSEBroadcaster) clientWriteLoop(client *SSEClient) {
+	for {
+		select {
+		case <-client.Done:
+			return
+		case status := <-client.queue:
+			b.sendToClient(client, status)
+		}
+	}
+}
+
+// enqueueForClient hands a status to the client's ordered writer without
+// blocking the broadcast loop on a slow connection.
+func (b *SSEBroadcaster) enqueueForClient(client *SSEClient, status UpdateStatus) {
+	if client.queue == nil {
+		go b.sendToClient(client, status)
+		return
+	}
+	select {
+	case <-client.Done:
+	case client.queue <- status:
+	default:
+		log.Warn().
+			Str("client_id", client.ID).
+			Str("status", status.Status).
+			Msg("SSE client queue full, dropping update status for this client")
+	}
 }
 
 // RemoveClient unregisters an SSE client
@@ -176,9 +225,10 @@ func (b *SSEBroadcaster) broadcastLoop() {
 			}
 			b.mu.RUnlock()
 
-			// Send to all clients in parallel
+			// Each client has its own ordered writer, so a slow client
+			// neither blocks the others nor receives stages out of order.
 			for _, client := range clients {
-				go b.sendToClient(client, status)
+				b.enqueueForClient(client, status)
 			}
 
 			log.Debug().
@@ -206,10 +256,19 @@ func (b *SSEBroadcaster) sendToClient(client *SSEClient, status UpdateStatus) {
 		return
 	}
 
-	// Write SSE message format
-	// Format: data: {json}\n\n
-	message := fmt.Sprintf("data: %s\n\n", string(data))
+	b.writeToClient(client, formatSSEData(data))
+}
 
+// formatSSEData frames a JSON payload as a single SSE data event.
+func formatSSEData(data []byte) string {
+	return fmt.Sprintf("data: %s\n\n", string(data))
+}
+
+// writeToClient writes a raw SSE frame and flushes it immediately. Every
+// write to a client goes through here under the client lock: the
+// ResponseWriter is not safe for concurrent use, and an unflushed frame is
+// indistinguishable from a silent stream on the browser side.
+func (b *SSEBroadcaster) writeToClient(client *SSEClient, frame string) {
 	// Acquire client lock to prevent concurrent writes
 	client.mu.Lock()
 	defer client.mu.Unlock()
@@ -227,18 +286,19 @@ func (b *SSEBroadcaster) sendToClient(client *SSEClient, status UpdateStatus) {
 				Str("client_id", client.ID).
 				Interface("panic", r).
 				Msg("Recovered from panic while sending to SSE client")
-			b.RemoveClient(client.ID)
+			go b.RemoveClient(client.ID)
 		}
 	}()
 
-	// Write to client
-	_, err = fmt.Fprint(client.Writer, message)
-	if err != nil {
+	if _, err := fmt.Fprint(client.Writer, frame); err != nil {
 		log.Debug().
 			Err(err).
 			Str("client_id", client.ID).
 			Msg("Failed to write to SSE client, removing")
-		b.RemoveClient(client.ID)
+		// Removal takes the broadcaster lock; do it off this goroutine so a
+		// concurrent cleanup pass holding that lock while waiting on this
+		// client's lock cannot deadlock.
+		go b.RemoveClient(client.ID)
 		return
 	}
 
@@ -332,28 +392,7 @@ func (b *SSEBroadcaster) sendHeartbeatToClient(c *SSEClient) {
 	default:
 	}
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	select {
-	case <-c.Done:
-		return
-	default:
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			b.RemoveClient(c.ID)
-		}
-	}()
-
-	_, err := fmt.Fprint(c.Writer, ": heartbeat\n\n")
-	if err != nil {
-		b.RemoveClient(c.ID)
-		return
-	}
-	c.Flusher.Flush()
-	c.LastActive = time.Now()
+	b.writeToClient(c, ": heartbeat\n\n")
 }
 
 func closeDone(ch chan bool) {

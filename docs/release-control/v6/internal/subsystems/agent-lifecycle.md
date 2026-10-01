@@ -3309,6 +3309,15 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Update progress stream delivery
+
+Server update progress delivery is owned by internal/updates and its API
+adapter. Immediate status on connect, ordered flushed events, and the modal's
+polling fallback change how progress is observed only. They grant no agent
+update, installation or command-execution authority, and a completed server
+update is not evidence that any agent was upgraded.
+
+
 ### Org managers reach the agent install path in their own organization
 
 An owner or admin of the selected organization now receives

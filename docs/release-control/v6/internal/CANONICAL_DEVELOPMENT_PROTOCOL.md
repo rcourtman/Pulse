@@ -253,6 +253,20 @@ print a non-passing receipt skeleton with
 `python3 scripts/release_control/browser_verification_guard.py --print-template`
 after staging the intended frontend paths.
 
+An integration range that merges reviewed work onto a main that has moved is
+validated with `--base <range-base> --commit <range-tip>`. The tip of such a
+range is normally a merge, and the range carries several independently
+verified changes, so no single receipt can name the tip's parent or the whole
+cumulative delta. Range mode instead requires every changed user-visible
+frontend file's content at the tip to equal a `content_sha256` digest recorded
+by a valid receipt in a non-merge commit inside the range, where that receipt
+is validated exactly as the per-commit guard validates it at its own commit:
+bound to that commit's parent and to that commit's tree. Receipts written by
+merge commits are never evidence, because a conflict resolution has no browser
+run behind it. Content that changed after its browser pass, including a
+correction commit, a conflict resolution, or two changes to one file, needs a
+fresh receipt for the final content in its own non-merge commit.
+
 A source diff that is byte-for-byte the locked Prettier output of its parent
 has no rendered behavior or visual delta and does not require a new browser
 receipt. The exemption fails closed when the formatter is unavailable or the
