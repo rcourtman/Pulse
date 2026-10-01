@@ -63,7 +63,7 @@ def certificate(directory, name):
 
 
 @contextmanager
-def server(cert, key, status=200, installer=None):
+def server(cert, key, status=200, installer=None, installer_path="/install.sh"):
     requests = []
 
     class Handler(BaseHTTPRequestHandler):
@@ -71,7 +71,7 @@ def server(cert, key, status=200, installer=None):
             requests.append((self.path, dict(self.headers)))
             self.send_response(status)
             self.end_headers()
-            body = installer if self.path == "/install.sh" else b'{"data":[]}\n'
+            body = installer if self.path == installer_path else b'{"data":[]}\n'
             self.wfile.write(body or b"fixture error\n")
 
         def log_message(self, *_args):
