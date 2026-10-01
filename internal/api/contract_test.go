@@ -23326,9 +23326,10 @@ func TestContract_RequestOriginCannotRetargetTokenBearingCommands(t *testing.T) 
 			t.Fatalf("decode setup artifact: %v", err)
 		}
 		if artifact.SetupToken == "" ||
-			!strings.Contains(artifact.DownloadURL, artifact.SetupToken) ||
-			!strings.Contains(artifact.Command, artifact.SetupToken) {
-			t.Fatalf("setup token was not carried by canonical artifact: %#v", artifact)
+			strings.Contains(artifact.DownloadURL, artifact.SetupToken) ||
+			strings.Contains(artifact.Command, artifact.SetupToken) ||
+			artifact.DownloadURL != artifact.URL || !strings.Contains(artifact.Command, "PULSE_SETUP_TOKEN_FILE=") {
+			t.Fatal("canonical artifact must reveal the setup credential separately from commands and URLs")
 		}
 		if !strings.HasPrefix(artifact.URL, autoDetectedURL+"/api/setup-script?") ||
 			!strings.HasPrefix(artifact.DownloadURL, autoDetectedURL+"/api/setup-script?") {
@@ -24122,8 +24123,8 @@ func TestContract_HostedInstallerOriginsFailClosedAtRouter(t *testing.T) {
 					if downloadRec.Code != http.StatusOK {
 						t.Fatalf("setup script status = %d, want %d: %s", downloadRec.Code, http.StatusOK, downloadRec.Body.String())
 					}
-					if !strings.Contains(downloadRec.Body.String(), wantBaseURL) || !strings.Contains(downloadRec.Body.String(), artifact.SetupToken) || strings.Contains(downloadRec.Body.String(), "attacker") {
-						t.Fatalf("rendered setup script did not preserve configured token target")
+					if !strings.Contains(downloadRec.Body.String(), wantBaseURL) || strings.Contains(downloadRec.Body.String(), artifact.SetupToken) || !strings.Contains(downloadRec.Body.String(), "PULSE_SETUP_TOKEN_FILE") || strings.Contains(downloadRec.Body.String(), "attacker") {
+						t.Fatal("download must preserve the configured target and private-input contract without embedding a setup credential")
 					}
 				})
 			}
