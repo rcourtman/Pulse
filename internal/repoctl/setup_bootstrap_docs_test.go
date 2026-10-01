@@ -1,6 +1,10 @@
 package repoctl
 
-import "testing"
+import (
+	"regexp"
+	"strings"
+	"testing"
+)
 
 func TestSetupBootstrapDocsStayOnCanonicalArtifactContract(t *testing.T) {
 	apiRel := "docs/API.md"
@@ -27,7 +31,9 @@ func TestSetupBootstrapDocsStayOnCanonicalArtifactContract(t *testing.T) {
 		"Stop if the download fails",
 		"Do not bypass certificate checks",
 	})
-	assertContainsNone(t, pbsRel, pbsDoc, []string{
+	// Inspect executable fences, not prose that warns against unsafe flags.
+	commands := strings.Join(regexp.MustCompile("(?s)```bash\n(.*?)```").FindAllString(pbsDoc, -1), "\n")
+	assertContainsNone(t, pbsRel, commands, []string{
 		"PULSE_SETUP_TOKEN=",
 		"sudo env PULSE_SETUP_TOKEN=",
 		"curl -k",
