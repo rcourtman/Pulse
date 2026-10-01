@@ -514,7 +514,9 @@ func TestTrueNASHandlers_HandleList_IncludesPollAndObservedSummary(t *testing.T)
 	t.Cleanup(poller.Stop)
 	handler.getPoller = func(context.Context) *monitoring.TrueNASPoller { return poller }
 
-	deadline := time.Now().Add(3 * time.Second)
+	// The poller records its first success within about 50ms; a loaded release
+	// qualification host once took longer than 3s (v6.4.6-rc.1, 1 Oct 2026).
+	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
 		summaries := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})
 		if summary, ok := summaries[connection.ID]; ok && summary.Poll != nil && summary.Poll.LastSuccessAt != nil && summary.Observed != nil {
