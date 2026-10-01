@@ -23275,8 +23275,8 @@ func TestContract_RequestOriginCannotRetargetTokenBearingCommands(t *testing.T) 
 				if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 					t.Fatalf("decode response: %v", err)
 				}
-				if response.Token == "" || !strings.Contains(response.Command, response.Token) {
-					t.Fatalf("fresh token was not carried by install command: %#v", response)
+				if response.Token == "" || strings.Contains(response.Command, response.Token) || !strings.Contains(response.Command, `--token-file "$token_file"`) {
+					t.Fatal("fresh credential must be returned separately and entered privately")
 				}
 				if !strings.Contains(response.Command, tc.wantBaseURL+"/install.sh") ||
 					!strings.Contains(response.Command, "--url "+posixShellQuote(tc.wantBaseURL)) {
@@ -24090,7 +24090,7 @@ func TestContract_HostedInstallerOriginsFailClosedAtRouter(t *testing.T) {
 					if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 						t.Fatalf("decode install response: %v", err)
 					}
-					if response.Token == "" || !strings.Contains(response.Command, response.Token) || !strings.Contains(response.Command, wantBaseURL+"/install.sh") {
+					if response.Token == "" || strings.Contains(response.Command, response.Token) || !strings.Contains(response.Command, `--token-file "$token_file"`) || !strings.Contains(response.Command, wantBaseURL+"/install.sh") {
 						t.Fatalf("install response did not bind fresh token to configured URL %q: %#v", wantBaseURL, response)
 					}
 					if strings.Contains(response.Command, "attacker") || len(cfg.APITokens) != 2 {
@@ -25075,8 +25075,8 @@ func TestContract_HostedRuntimeAgentInstallCommandCarriesToken(t *testing.T) {
 		if strings.TrimSpace(token) == "" {
 			t.Fatalf("%s: hosted install payload has no token: %s", body, rec.Body.String())
 		}
-		if command, _ := payload["command"].(string); command != "" && !strings.Contains(command, token) {
-			t.Fatalf("%s: install command does not carry the minted token", body)
+		if command, _ := payload["command"].(string); command != "" && (strings.Contains(command, token) || !strings.Contains(command, `--token-file "$token_file"`)) {
+			t.Fatalf("%s: minted credential must be entered privately, not embedded", body)
 		}
 	}
 }
