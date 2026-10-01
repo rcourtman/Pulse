@@ -11015,19 +11015,37 @@ status-only or unrelated test for the setup contract. The registry routes only `
 setup proof policy; unrelated API runtime paths retain their existing verification
 requirements. No runtime paths or required contract updates are exempted.
 
-### Single-line Unix client install transport
+### Single-line private Unix client install transport
 
-`frontend-modern/src/utils/agentInstallCommand.ts` emits a single-line Unix
-bootstrap with explicit shell separators so text-input paste normalization
-cannot join shell statements (#2123). It retains the canonical URL, quoted
-credential-to-private-file transport, custom CA/insecure continuity, and
-preflight-before-install ordering; no API request, response or auth scope changes.
-Normalized values containing CR/LF are rejected, not rewritten. Regression
-coverage in `agentInstallCommand.test.ts` checks shell syntax after
-text-input normalization, literal quoted token bytes, root/sudo private-file
-permissions, cleanup and early exit when download or preflight fails. This
-client transport repair does not establish the reporter's native pfSense abort
-cause or successful offline installation.
+`frontend-modern/src/utils/agentInstallCommand.ts` retains explicit single-line
+shell grammar for paste hosts (#2123), canonical URLs, custom CA/insecure
+continuity and complete-download-before-execution. Token values select private
+entry only and never become shell source, argv or environment. The privileged
+Bash child uses the bounded Core bootstrap reader; 4096-character input is
+preserved, overflow is drained before returning to the caller, and terminal
+modes and temporary 0700/0600 files are restored/removed on exit. Download and
+unprivileged preflight precede credential entry and installation; sudo
+validation precedes the download so authentication cannot consume token input.
+
+A no-terminal command can use an absolute local `tokenFilePath`. It requires a
+privileged-user-owned regular non-symlink 0600 file in an owned non-symlink 0700
+parent, passes only its path, and leaves this operator-owned file untouched.
+The existing installer's bounded trusted token reader still validates content
+and ancestor trust. The FreeBSD card explains this existing private-file route
+and does not put credentials in GUI command fields. It does not claim a GUI can
+create private files or establish native appliance installation.
+
+Unix install, credential replacement, upgrade and uninstall use the shared
+transport. Explicit replacement/uninstall retain canonical agent ID and host;
+ordinary updates recover their existing credential/identity from installer
+state without a new prompt. Uninstall skips new-binary preflight so detachment
+is not blocked by availability of an unrelated replacement binary. Server
+minting, scope, TLS choice, execution opt-in and response shapes are unchanged.
+Windows command transport is unchanged and remains separate unfinished work.
+`agentInstallCommand.test.ts` exercises actual shells, PTYs, private-file
+boundaries and failures; `infrastructureAgentDoctorModel.test.ts` exercises the
+real lifecycle closures. These are modelled installer/privilege probes, not
+native system installation or publication.
 
 ### Pulse Mobile pairing readiness wording
 

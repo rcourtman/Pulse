@@ -396,12 +396,13 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                   {state.latestTokenSource() === 'setup_handoff' ? (
                     <>
                       First-host install token <strong>{state.latestRecord()?.name}</strong>{' '}
-                      prepared automatically. Commands below already include this credential.
+                      prepared automatically. Unix commands request it separately at a silent
+                      prompt.
                     </>
                   ) : (
                     <>
-                      Install token <strong>{state.latestRecord()?.name}</strong> created. Commands
-                      below now include this credential.
+                      Install token <strong>{state.latestRecord()?.name}</strong> created. Unix
+                      commands keep it separate: copy the command first, then use Show token only.
                     </>
                   )}
                 </span>
@@ -421,8 +422,8 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
         <Show when={!state.requiresToken()}>
           <div class="space-y-3">
             <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
-              Tokens are optional on this Pulse instance. Confirm to generate commands without
-              embedding a token.
+              Tokens are optional on this Pulse instance. Confirm to generate commands without a
+              token.
             </div>
             <button
               type="button"
@@ -449,8 +450,8 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                 Installation commands
               </h4>
               <p class="ml-6 text-xs text-muted">
-                Generate an install token first. Pulse will then build copy-ready commands with the
-                credential inserted for the target host.
+                Generate an install token first. Then copy the command for the target host and
+                follow its credential-entry instructions.
               </p>
             </div>
             <div class="grid gap-3 lg:grid-cols-2">
@@ -496,9 +497,9 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                   </h4>
                   <p class={`mt-0.5 text-xs text-muted ${state.requiresToken() ? 'ml-6' : ''}`}>
                     Copy the default command for the first host first. It checks this Pulse URL and
-                    the matching agent binary before asking for administrator privileges, then
-                    installs Pulse Agent as a background service on each machine where you want full
-                    node-local telemetry.
+                    the matching agent binary before reading a Unix token, then installs Pulse Agent
+                    as a background service on each machine where you want full node-local
+                    telemetry.
                   </p>
                 </div>
               </div>

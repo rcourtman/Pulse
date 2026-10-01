@@ -8344,20 +8344,37 @@ Focused proof lives in `internal/hostagent/agent_new_test.go`
 `TestGetReliableMachineIDNormalizesWindowsBraces`); the Windows recovery file is
 cross-compiled with `GOOS=windows go build ./internal/hostagent/`.
 
-### Unix bootstrap survives single-line command fields
+### Private Unix lifecycle bootstrap
 
-The shared frontend Unix installer command uses explicit shell statement
-separators rather than literal newlines or backslash-newline continuations.
-This preserves its grammar when copied into a single-line command field (#2123).
-The builder rejects embedded CR/LF in its normalized inputs rather than silently
-altering a quoted URL, credential, CA path or option. Shell quoting is unchanged.
-Download and unprivileged preflight still precede token-file creation and sudo
-installation. Root and sudo paths retain private token directories, file modes,
-TLS options, non-interactive operation and cleanup on success or failure.
-`agentInstallCommand.test.ts` covers normalized-input syntax and
-synthetic root/sudo execution under sh and Bash, including download, preflight
-and install failures. A clipboard fixture proves input compatibility, not native
-FreeBSD installation, offline dependency availability or service persistence.
+The shared frontend Unix installer preserves single-line paste grammar,
+quoted destinations, explicit custom CA/insecure continuity and profile flags.
+Issued credentials are separate from copied commands. A privileged Bash child
+owns the Core-aligned silent bounded reader and temporary 0700/0600 handoff;
+maximum-size input must survive unchanged, overflow must not reach the caller's
+history, and every exit must restore terminal modes and remove temporary files.
+Download/preflight failures never reach credential entry or installation.
+Sudo validation occurs before download; download and unprivileged preflight
+still precede privileged installation. Token-optional and saved-state update
+paths need no terminal or replacement credential.
+
+For non-terminal FreeBSD command fields, the existing page offers an absolute
+local private-token-file variant, with ownership/regular-file/symlink/mode
+checks and the installer's bounded trusted reader. The operator provisions and
+removes that file through a trusted file path; the command neither contains its
+contents nor deletes it. A GUI without private file provisioning requires a
+console/SSH session; native pfSense/FreeBSD installation is not inferred.
+
+Unix upgrades, explicit credential repairs and uninstall now share this
+complete-download transport rather than executing a partial fetch pipe or
+putting tokens in argv. Repairs/removal retain canonical ID and hostname;
+ordinary updates preserve their saved-state credential/identity route. Removal
+skips new-binary preflight, which is not a detachment prerequisite. Issuance,
+scopes, tenant/host binding, TLS and command-execution opt-in are unchanged.
+Windows credential handling is deliberately unchanged pending its own complete
+validated step. `agentInstallCommand.test.ts` is the executable helper proof;
+`infrastructureAgentDoctorModel.test.ts` verifies the real operations closures
+and existing credential/identity choices. Browser receipts cover real settings
+components with synthetic APIs, not installed outcome or reporter acceptance.
 
 ### Agent Doctor handoff stays readable on a phone
 

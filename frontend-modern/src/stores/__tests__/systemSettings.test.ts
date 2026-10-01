@@ -145,7 +145,7 @@ describe('systemSettings store', () => {
     expect(configurationDoc).toContain('PULSE_TELEMETRY');
   });
 
-  it('keeps existing mobile pairing security guidance aligned with retirement', () => {
+  it('keeps existing mobile pairing security without offering retired Relay', () => {
     const securityDoc = readFileSync(path.join(repoRoot, 'SECURITY.md'), 'utf8');
     const publicSecurityDoc = readFileSync(
       path.join(frontendRoot, 'public', 'docs', 'SECURITY.md'),
@@ -153,14 +153,17 @@ describe('systemSettings store', () => {
     );
 
     for (const copy of [securityDoc, publicSecurityDoc]) {
-      expect(copy).toContain('Existing Mobile Pairings (Retirement)');
-      expect(copy).toContain('31 March 2027');
+      expect(copy).toContain('### Existing Mobile Pairings (Retirement)');
+      expect(copy).toContain('Pulse Mobile and Relay retire on **31 March 2027**');
       expect(copy).toContain('Relay is no longer sold');
       expect(copy).toContain('receive Pro features at their current price');
-      expect(copy).toContain('Relay connects the app, not the');
+      expect(copy).toContain('Paired-app access remains license-gated until retirement');
+      expect(copy).toMatch(/Relay connects the app, not the\s+web UI/);
+      expect(copy).not.toContain('Relay Security (Relay and Above)');
       expect(copy).not.toContain('Relay Security (Pro)');
       expect(copy).not.toContain('Relay functionality requires a Pro or Cloud license');
     }
+    expect(publicSecurityDoc).toBe(securityDoc);
   });
 
   it('documents self-hosted AI provider transport and resource-policy redaction in the privacy doc', () => {
