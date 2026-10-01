@@ -1328,20 +1328,21 @@ func (e *PulseToolExecutor) executeGetHostRAIDStatus(_ context.Context, args map
 			}
 
 			arrays = append(arrays, HostRAIDArraySummary{
-				Device:         raid.Device,
-				Name:           raid.Name,
-				Level:          raid.Level,
-				State:          raid.State,
-				TotalDevices:   raid.TotalDevices,
-				ActiveDevices:  raid.ActiveDevices,
-				WorkingDevices: raid.WorkingDevices,
-				FailedDevices:  raid.FailedDevices,
-				SpareDevices:   raid.SpareDevices,
-				UUID:           raid.UUID,
-				RebuildPercent: raid.RebuildPercent,
-				RebuildSpeed:   raid.RebuildSpeed,
-				Operation:      raid.Operation,
-				Devices:        devices,
+				Device:          raid.Device,
+				Name:            raid.Name,
+				Level:           raid.Level,
+				State:           raid.State,
+				RequiredDevices: raid.RequiredDevices,
+				TotalDevices:    raid.TotalDevices,
+				ActiveDevices:   raid.ActiveDevices,
+				WorkingDevices:  raid.WorkingDevices,
+				FailedDevices:   raid.FailedDevices,
+				SpareDevices:    raid.SpareDevices,
+				UUID:            raid.UUID,
+				RebuildPercent:  raid.RebuildPercent,
+				RebuildSpeed:    raid.RebuildSpeed,
+				Operation:       raid.Operation,
+				Devices:         devices,
 			})
 		}
 

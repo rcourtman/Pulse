@@ -15,6 +15,21 @@
 
 ## Purpose
 
+### RAID spare-count lifecycle — issue #2369
+
+Canonical host RAID alerts use the shared required-member health assessment,
+not attached-device arithmetic. Known configured counts appear as
+`raidRequiredDevices` metadata alongside unchanged total/active/failed/spare
+observations. A healthy spare creates no incident; an actual missing member or
+failed device still activates critical health. Scrub/resync/recovery and transient
+operation expiry cannot mask a static deficit. Restoring all required members
+with a spare resolves the existing incident through the same canonical state
+identity, once, without a duplicate fire or resolve.
+`TestRAIDSpareCanonicalActivationAndRecovery` checks event-ledger activation,
+continuity and resolution; collector and ingestion tests check both health and
+canonical alert severity. Routine scrub/resync remains silent, and genuine
+recovery/reshape keeps its warning when no critical deficit exists.
+
 ### Retained occurrence re-fires preserve incident truth
 
 A reducer re-fire inside the retention window keeps its original occurrence
