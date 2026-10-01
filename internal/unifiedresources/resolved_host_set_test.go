@@ -1,6 +1,8 @@
 package unifiedresources
 
 import (
+	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -660,5 +662,32 @@ func TestResolvedFormatTime(t *testing.T) {
 	got := resolvedFormatTime(ts)
 	if got != "2026-02-25T10:30:00Z" {
 		t.Fatalf("expected RFC3339, got %q", got)
+	}
+}
+
+func TestBroadcastGroupingMatchesPreviousAlgorithm(t *testing.T) {
+	for _, count := range []int{0, 1, 8, 100} {
+		resources := []Resource{
+			topLevelTestAgent("agent", "tower.local", "machine", "agent-id"),
+			topLevelTestDockerHost("docker", "tower.local", "docker-id", "agent-id"),
+			topLevelTestAgent("different", "separate.local", "other-machine", "other-agent"),
+		}
+		for i := 0; i < count; i++ {
+			resources = append(resources, Resource{ID: fmt.Sprintf("vm-%d", i), Type: ResourceTypeVM, Name: fmt.Sprintf("vm-%d", i), Proxmox: &ProxmoxData{NodeName: "tower.local", VMID: i + 100}, Identity: ResourceIdentity{Hostnames: []string{"shared-node.local"}}})
+		}
+		got, want := ResolveTopLevelSystems(resources), resolveTopLevelSystemsReference(resources)
+		if got.Count() != want.Count() {
+			t.Fatalf("count %d: groups %d != %d", count, got.Count(), want.Count())
+		}
+		for _, r := range resources {
+			if got.GroupIDForResource(r) != want.GroupIDForResource(r) {
+				t.Fatalf("%s identity/group changed", r.ID)
+			}
+		}
+		gotJSON, _ := json.Marshal(got.records())
+		wantJSON, _ := json.Marshal(want.records())
+		if string(gotJSON) != string(wantJSON) {
+			t.Fatalf("count %d: group record/explanation changed", count)
+		}
 	}
 }
