@@ -155,7 +155,7 @@ curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
 JSON
 ```
 
-To remove all custom roles from a user, send an empty list:
+To clear a user's entire role assignment, including built-in roles, send an empty list:
 
 ```bash
 curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \

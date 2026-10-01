@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -48,7 +49,14 @@ func adminDocBodies(t *testing.T, name, heading string) [][]byte {
 }
 
 func TestAdminDocsCustomRoleLifecycle(t *testing.T) {
-	manager, err := auth.NewFileManager(t.TempDir())
+	dataPath := t.TempDir()
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
+	InitPersistentAuthStores(dataPath)
+	const fixtureSession = "admin-docs-jane-session-fixture"
+	GetSessionStore().CreateSession(fixtureSession, time.Hour, "fixture", "127.0.0.1", "jane")
+	fixtureCSRF := GetCSRFStore().GenerateCSRFToken(fixtureSession)
+	manager, err := auth.NewFileManager(dataPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,6 +112,14 @@ func TestAdminDocsCustomRoleLifecycle(t *testing.T) {
 			}
 			if !exists || strings.Join(assignment.RoleIDs, ",") != strings.Join(want.RoleIDs, ",") {
 				t.Fatalf("assignment did not persist the complete role list: %+v", assignment)
+			}
+		}
+		if step.method == http.MethodDelete && step.path == "/api/admin/users/jane" {
+			if _, exists := manager.GetUserAssignment("jane"); exists {
+				t.Fatal("user removal retained the role assignment")
+			}
+			if GetSessionStore().GetSession(fixtureSession) != nil || GetCSRFStore().ValidateCSRFToken(fixtureSession, fixtureCSRF) {
+				t.Fatal("user removal retained the session or its CSRF token")
 			}
 		}
 	}
