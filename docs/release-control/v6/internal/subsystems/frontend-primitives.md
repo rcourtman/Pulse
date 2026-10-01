@@ -401,9 +401,20 @@ priority.
 
 Expandable platform summary rows use
 `getPlatformResourceDetailRowInteractionProps` (or
-`createPlatformResourceDetailState`, which owns the same state contract) for
-whole-row pointer activation, Enter/Space keyboard activation, focus treatment,
-`aria-expanded` / `aria-controls`, and exclusion of embedded links and controls.
+`createPlatformResourceDetailState` for their expansion state) for whole-row
+pointer activation and exclusion of embedded links and controls. The nested
+native disclosure button owns keyboard activation, focus and
+`aria-expanded` / `aria-controls`; static table rows are not duplicate controls.
+The shared `TableRow` installs a non-activating native click target only while
+an `onClick` action exists. WebKit touch must be able to synthesize that row's
+click, but actions remain document-delegated so embedded controls can stop
+propagation before the row action runs. Do not move the action into the native
+compatibility listener or add touch-end activation that opens rows during
+scrolling. Explicit caller-owned native listeners remain caller-owned.
+`Table.test.tsx` covers native binding, removal, single activation, child
+isolation and bound handlers; `PulseDataGrid.test.tsx` checks inheritance.
+The production PBS table/drawer browser fixture exercises first-tap disclosure
+and History in WebKit phone emulation, not installed collection or devices.
 `PlatformResourceDetailToggleButton` is the desktop disclosure affordance and
 is visually removed on phone layouts where the complete row is the touch target;
 provider tables must not add a second mobile chevron. When row activation

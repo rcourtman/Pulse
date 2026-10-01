@@ -1,5 +1,6 @@
-import { render, screen } from '@solidjs/testing-library';
-import { describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import tableSource from '@/components/shared/Table.tsx?raw';
 
 import {
@@ -10,6 +11,128 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+describe('TableRow touch activation', () => {
+  it('marks clickable rows as native click targets without changing row semantics', () => {
+    const nativeListener = vi.spyOn(HTMLTableRowElement.prototype, 'addEventListener');
+    const onClick = vi.fn();
+    render(() => (
+      <Table>
+        <TableBody>
+          <TableRow onClick={onClick}>
+            <TableCell>Tap resource</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    ));
+    expect(nativeListener.mock.calls.some(([type]) => type === 'click')).toBe(true);
+    const row = screen.getByRole('row');
+    expect(row).not.toHaveAttribute('tabindex');
+    expect(row).not.toHaveAttribute('aria-expanded');
+    fireEvent.click(screen.getByText('Tap resource'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(row, { key: 'Enter' });
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not make static rows native click targets', () => {
+    const nativeListener = vi.spyOn(HTMLTableRowElement.prototype, 'addEventListener');
+    render(() => (
+      <Table>
+        <TableBody>
+          <TableRow>
+            <TableCell>Static resource</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    ));
+    expect(nativeListener.mock.calls.some(([type]) => type === 'click')).toBe(false);
+  });
+
+  it('lets delegated child actions stop the row before its action runs', () => {
+    const onClick = vi.fn();
+    const onChild = vi.fn();
+    render(() => (
+      <Table>
+        <TableBody>
+          <TableRow onClick={onClick}>
+            <TableCell>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onChild();
+                }}
+              >
+                Child action
+              </button>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Child action' }));
+    expect(onChild).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('removes the native target when the row action is withdrawn', () => {
+    const removeListener = vi.spyOn(HTMLTableRowElement.prototype, 'removeEventListener');
+    const onClick = vi.fn();
+    const [enabled, setEnabled] = createSignal(true);
+    render(() => (
+      <Table>
+        <TableBody>
+          <TableRow onClick={enabled() ? onClick : undefined}>
+            <TableCell>Changing resource</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    ));
+    fireEvent.click(screen.getByText('Changing resource'));
+    setEnabled(false);
+    expect(removeListener.mock.calls.some(([type]) => type === 'click')).toBe(true);
+    fireEvent.click(screen.getByText('Changing resource'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    setEnabled(true);
+    fireEvent.click(screen.getByText('Changing resource'));
+    expect(onClick).toHaveBeenCalledTimes(2);
+  });
+
+  it('preserves bound delegated handlers and caller-owned native handlers', () => {
+    const onClick = vi.fn();
+    const onNative = vi.fn();
+    render(() => (
+      <Table>
+        <TableBody>
+          <TableRow
+            onClick={[onClick, 'row-identity']}
+            on:click={(event) => {
+              event.stopPropagation();
+              onNative();
+            }}
+          >
+            <TableCell>Native action</TableCell>
+          </TableRow>
+          <TableRow onClick={[onClick, 'second-identity']}>
+            <TableCell>Bound action</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    ));
+    fireEvent.click(screen.getByText('Native action'));
+    expect(onNative).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText('Bound action'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onClick.mock.calls[0][0]).toBe('second-identity');
+  });
+});
 
 describe('TableBody', () => {
   it('keeps the shared table wrapper CSP-safe', () => {
