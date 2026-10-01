@@ -1922,9 +1922,23 @@ artifact-selection behaviour.
    duplicate appended `Installation` / `Promotion Metadata` sections verbatim.
    From the release after `v6.4.0-rc.1` onward, that renderer also owns a
    customer-facing communication contract. Public notes lead with one short
-   outcome paragraph, use a scannable `What's improved` section with no more
-   than six concrete items, keep fixes symptom-led, and reserve `Before you
+   outcome paragraph, use scannable symptom-led changes, and reserve `Before you
    upgrade` or `Known issues` for information users must act on or understand.
+   From v6.4.6 onward, the authoring tools and renderer accept a short plain-text
+   `Highlights` list and grouped customer sections (alerts, storage, PBS, NAS,
+   updates, Pro, service health, security or other improvements). A narrow patch
+   may retain `What's improved`. Groups must be non-empty and not duplicate the
+   same change, bullets remain bounded, and internal status headings stay out.
+   The install-metadata checks bind the current version in the notes title and
+   retain Windows signing/warning, companion compatibility and exact stable
+   rollback disclosures. Stable maturity and promotion lineage remain bound by
+   the changelog and release metadata, not a mandatory public boilerplate
+   sentence. Historical published notes are not edited or re-rendered to fit a
+   later authoring template.
+   The rootful qualification source manifest retains the complete compiled
+   install-test package, including the release-notes helper and its exact
+   authored-copy fixture. Accepting grouped notes must not silently narrow
+   that attested source boundary.
    Qualification counts, readiness assertions, release gates, workflow
    narration, artifact identity, and promotion metadata stay in governed
    workflow summaries and evidence records rather than the public changelog.
@@ -6122,3 +6136,13 @@ rewriting the author's instructions or selecting another rollback version.
 distant-scope rejection, and valid generated and inline ownership conditions.
 This changes publication validation, not installer behaviour, immutable release
 contents or proof of an installed upgrade/rollback.
+
+## Rootful qualification source closure (1 October 2026)
+
+The rootful source manifest includes `internal/filesystemprobe` and
+`pkg/agents/filesystem`: both are compiled dependencies of the current collector
+and qualification harness. Omitting them would leave the attested packet
+unbound to filesystem-observation code that it actually executes. The closure
+test enumerates all repository-local dependencies of the install-test binary,
+collector and helper and reports every missing package together. No qualification
+gate, source exclusion or production permission is relaxed by this correction.
