@@ -598,7 +598,7 @@ func TestRootInstallScriptAutoRegisterUsesSecureContractShape(t *testing.T) {
 		`'if [ "$(id -u)" -eq 0 ]; then' not in _value`,
 		`'elif command -v sudo >/dev/null 2>&1; then' not in _value`,
 		`valid = "PULSE_SETUP_TOKEN_FILE=" in _value and "PULSE_SETUP_TOKEN=" not in _value and setup_token not in _value`,
-		`valid = ("PULSE_SETUP_TOKEN=" in _value and setup_token in _value) if _requires_token else ("PULSE_SETUP_TOKEN=" not in _value and setup_token not in _value)`,
+		`valid = "PULSE_SETUP_TOKEN_FILE=" not in _value and (("PULSE_SETUP_TOKEN=" in _value and setup_token in _value) if _requires_token else ("PULSE_SETUP_TOKEN=" not in _value and setup_token not in _value))`,
 		`not token_hint or token_hint == setup_token`,
 		`[[ "$setup_type" != "pve" ]]`,
 		`[[ "$setup_host" != "$normalized_host_url" ]]`,

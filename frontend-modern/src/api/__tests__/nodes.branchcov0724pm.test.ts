@@ -149,6 +149,7 @@ describe('NodesAPI — branch coverage (downloadProxmoxSetupScript failure arms)
   });
 
   const pveBootstrap = (): ProxmoxSetupCommandResponse => ({
+    setupToken: 'synthetic-setup-token',
     type: 'pve',
     host: 'https://pve.example:8006',
     url: 'https://pulse.example/base/api/setup-script?type=pve',

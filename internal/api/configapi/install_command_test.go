@@ -372,3 +372,25 @@ func TestPrivateBootstrapInteractiveHistoryContainsCommandButNotToken(t *testing
 		t.Fatal("silent input entered shell history or terminal output")
 	}
 }
+
+// The public server installer is not the telemetry installer. If it is served
+// accidentally at the agent path, its real parser rejects --url before token
+// input or privileged installation; a complete but wrong fetch is not success.
+func TestPrivateAgentBootstrapRejectsActualServerInstaller(t *testing.T) {
+	source, err := os.ReadFile(filepath.Join("..", "..", "..", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, env := bootstrapFixture(t, string(source))
+	command := BuildProxmoxAgentInstallCommand(AgentInstallCommandOptions{BaseURL: "https://pulse.example", Token: "synthetic-token", InstallType: "pve", IncludeInstallType: true})
+	out, err := runBootstrap(t, command, "", env, false)
+	if err == nil || !strings.Contains(string(out), "Unknown option: --url") {
+		t.Fatal("wrong installer was not rejected by its real parser")
+	}
+	dirs, _ := os.ReadFile(filepath.Join(root, "private-directories"))
+	for _, path := range strings.Fields(string(dirs)) {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatal("wrong-installer failure left a private directory")
+		}
+	}
+}

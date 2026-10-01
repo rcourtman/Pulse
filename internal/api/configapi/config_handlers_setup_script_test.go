@@ -435,7 +435,7 @@ func TestPVESetupScript_UsesFailFastRetryGuidance(t *testing.T) {
 	}
 
 	script := rr.Body.String()
-	if !containsString(script, `PULSE_BOOTSTRAP_COMMAND_WITH_ENV='curl -fsSL '"'"'http://sentinel-url:7656/api/setup-script?host=http%3A%2F%2Fsentinel-host%3A8006&pulse_url=http%3A%2F%2Fsentinel-url%3A7656&type=pve'"'"' | `) {
+	if !containsString(script, `PULSE_BOOTSTRAP_COMMAND_WITH_ENV=`+posixShellQuote(BuildSetupScriptCommand("http://sentinel-url:7656/api/setup-script?host=http%3A%2F%2Fsentinel-host%3A8006&pulse_url=http%3A%2F%2Fsentinel-url%3A7656&type=pve", ""))) {
 		t.Fatalf("expected canonical bootstrap command owner in setup script, got: %s", truncate(script, 700))
 	}
 	if !containsString(script, `echo "  $PULSE_BOOTSTRAP_COMMAND_WITH_ENV"`) {
@@ -952,7 +952,8 @@ func TestPVESetupScriptSmokeTestsCreatedTokenBeforeAutoRegistration(t *testing.T
 	for _, needle := range []string{
 		`smoke_test_pve_token() {`,
 		`curl -kfsS --retry 2 --retry-delay 1`,
-		`Authorization: PVEAPIToken=$PULSE_TOKEN_ID=$TOKEN_VALUE`,
+		`printf 'Authorization: PVEAPIToken=%s=%s\n' "$PULSE_TOKEN_ID" "$TOKEN_VALUE" | curl`,
+		`-H @-`,
 		`${HOST_URL%/}/api2/json/nodes`,
 		`TOKEN_READY=false`,
 		`if smoke_test_pve_token; then`,

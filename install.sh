@@ -2349,7 +2349,7 @@ for _field_name, _value, _requires_token in command_fields:
     if modern:
         valid = "PULSE_SETUP_TOKEN_FILE=" in _value and "PULSE_SETUP_TOKEN=" not in _value and setup_token not in _value
     else:
-        valid = ("PULSE_SETUP_TOKEN=" in _value and setup_token in _value) if _requires_token else ("PULSE_SETUP_TOKEN=" not in _value and setup_token not in _value)
+        valid = "PULSE_SETUP_TOKEN_FILE=" not in _value and (("PULSE_SETUP_TOKEN=" in _value and setup_token in _value) if _requires_token else ("PULSE_SETUP_TOKEN=" not in _value and setup_token not in _value))
     if not valid:
         if _field_name == "command":
             setup_command = ""

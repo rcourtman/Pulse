@@ -407,7 +407,7 @@ describe('NodesAPI', () => {
           [field]: `unsafe-${secret}`,
         });
         await expect(
-          NodesAPI.getProxmoxSetupCommand({ type: 'pve', host: 'pve.example' }),
+          NodesAPI.getProxmoxSetupCommand({ type: 'pve', host: 'pve.example', backupPerms: false }),
         ).rejects.toThrow('Setup credentials must be entered separately from commands and URLs');
       },
     );
