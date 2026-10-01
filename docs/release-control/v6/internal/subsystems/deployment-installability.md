@@ -148,9 +148,24 @@ no-mutation verification and definitive verdict must all succeed. Delivery's
 reviewed dispatcher fixes repository, workflow, main and both inputs, retains
 intent before POST and never replays a refused or uncertain watchdog attempt.
 
+A release line can still declare its published stable VERSION after reviewed
+runtime fixes land. Watchdog metadata therefore observes the selected source's
+supported version stage and preceding stable tag; it does not call the
+candidate-promotion resolver, infer an RC, override soak or generate a promotion
+envelope. Candidate rehearsals still use that unchanged resolver and all its
+explicit rollback, ancestry, runtime-content and soak gates. Branch/VERSION
+equality and missing-reference failures remain fatal in both paths. Watchdog
+summaries retain actual preflight failure/success separately from the definitive
+demo verdict, use the distinct `release-watchdog-summary` artifact, and cannot
+be mistaken for the recorder's `rc-to-ga-rehearsal-summary` promotion evidence.
+
 Verification: `rehearsal_source_test.py` executes the source-selection shell
 against local Git fixtures. `release_promotion_policy_test.py` pins workflow
-ordering, metadata wiring and separate source reporting. Passing local fixtures
+ordering, metadata wiring and separate source reporting. The executable fixtures
+cover a post-publication runtime change with the same stable VERSION, the
+identical candidate's continued promotion refusal, RC/missing-reference/version
+failure paths and a failed watchdog's non-promotion summary. Registered
+`build_release_assets_test.go` guards that evidence separation. Passing local fixtures
 does not establish hosted backend, integration or demo execution; those outcomes
 must be observed after landing.
 

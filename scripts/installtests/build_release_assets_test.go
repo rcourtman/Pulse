@@ -2444,6 +2444,37 @@ func TestReleaseWatchdogIsControlBoundAndCannotBuildCandidate(t *testing.T) {
 	}
 }
 
+func TestReleaseWatchdogDoesNotManufacturePromotionReadiness(t *testing.T) {
+	workflow, err := os.ReadFile(repoFile(".github", "workflows", "release-dry-run.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(workflow)
+	for _, required := range []string{
+		`print("metadata_mode=watchdog")`,
+		`echo "metadata_mode=promotion"`,
+		`derive_latest_stable_rollback_tag(version, list_stable_tags())`,
+		`ARTIFACT_NAME="release-watchdog-summary"`,
+		`SUMMARY_FILE="release-dry-run/watchdog-summary.md"`,
+		`not a candidate promotion`,
+		`does not establish promotion readiness, soak, qualification or installed recovery`,
+		`name: ${{ steps.summary.outputs.artifact_name }}`,
+		`path: ${{ steps.summary.outputs.summary_file }}`,
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("watchdog/promotion evidence separation missing: %s", required)
+		}
+	}
+	if strings.Contains(text, "--derive-rollback-latest-stable") {
+		t.Fatal("watchdog must not manufacture a stable-promotion envelope from the branch VERSION")
+	}
+	assertFileContainsAll(t, repoFile("scripts", "release_control", "rehearsal_source_test.py"),
+		`test_postpublication_watchdog_does_not_pretend_to_promote_stable`,
+		`test_identical_candidate_rehearsal_still_refuses_new_stable_promotion`,
+		`test_watchdog_summary_cannot_be_recorded_as_promotion_readiness`,
+	)
+}
+
 func TestDemoMutationAndRecoverySharePhysicalTargetLock(t *testing.T) {
 	updateBytes, err := os.ReadFile(repoFile(".github", "workflows", "update-demo-server.yml"))
 	if err != nil {
