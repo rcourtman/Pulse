@@ -1,18 +1,16 @@
 {
   "version": 1,
-  "base_sha": "f3c92a242ebf9b7062dfc9f6ff711a56639f536c",
-  "verified_at": "2026-09-30T22:39:35Z",
+  "base_sha": "0dc858cb366a394b159d2c911c5d85b3020e7881",
+  "verified_at": "2026-10-01T00:37:51Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/UpdateProgressModal.tsx",
-    "frontend-modern/src/components/updateReadinessModel.ts"
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/UpdateProgressModal.tsx": "d51df7a98a379e313f306b68529c8db0687ff91176af23869411c4b46feb2599",
-    "frontend-modern/src/components/updateReadinessModel.ts": "b25bf82441fc6572b95891af48a1ed2a0e8ea1f4e583c171ea9352a1e67d76ce"
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "e1658b5843ab22e0ea83d1bf27e8c1565a16d9f528eb3832524a67318d281d6a"
   },
   "routes": [
-    "/browser-tests/update-progress-modal.html (production UpdateProgressModal with a scripted update stream and scripted /api/updates/status and /api/version)"
+    "/browser-tests/pbs-history-refresh.html (production GuestDrawerHistory/query/CSS with synthetic host/service metrics API responses; not a complete PBS drawer or installed acceptance)"
   ],
   "viewports": [
     {
@@ -25,45 +23,199 @@
     }
   ],
   "states": [
-    "stream delivers one downloading 10% event then stays open and silent; fallback polling advances the modal through 35, 70, 80 and 90% (applying)",
-    "stream closed during download with a single unreachable status poll between two successful ones; download progress continues and the restart phase is never entered",
-    "restarting status from polling, then /api/version unreachable twice, then the new version reported; Pulse is restarting shown, then exactly one page reload",
-    "pre-update version unavailable (503), late polls failing and a new version plus idle answering without a restarting or completed status; modal stays on Pulse is restarting with no reload and no completion claim",
-    "stream delivers downloading, verifying, extracting, backing-up, applying and completed; old version answers once, becomes unreachable, then the new version; exactly one reload and no fallback polls"
+    "light/dark sparse CPU, memory and lone disk observations with one common inspected timestamp",
+    "a missing metric at the inspected time stays unavailable instead of borrowing nearby, latest or live data",
+    "zero-valued lone observations can be inspected without a synthetic trend",
+    "genuinely aligned series share cursor geometry and their own observed values",
+    "network directions preserve independently missing and zero rates",
+    "native keyboard/touch selection takes precedence over pointer movement",
+    "failed same-source refresh retains correctly attributed observations and a visible warning",
+    "a successful refresh updates the hovered timestamp values without choosing other latest metrics",
+    "held service-target replacement has no former-host observations, cursor or dated pointer description"
   ],
   "interactions": [
-    "emit scripted SSE statuses and hold the stream silent past the 6s silence window; assert the first fallback poll lands after it and the stream stays open",
-    "fail the stream and abort one status poll mid-download; assert no restart text ever rendered (MutationObserver) and the do-not-close warning remains",
-    "count document loads of the harness to assert a single reload after real restart evidence, and none without a baseline or backend confirmation",
-    "inspect screenshots at desktop and phone widths; assert no page errors, no horizontal overflow and the dialog inside the viewport"
+    "move a real pointer to sparse, aligned and single-sample timestamps; inspect visible legends, exact-time SVG descriptions and marker geometry",
+    "leave the plot to restore latest/current legends; verify pointer inspection makes no API reads",
+    "focus native range input and use Home/ArrowRight while moving the pointer elsewhere; blur to restore pointer inspection",
+    "Chromium/WebKit phone-emulated touch taps at each end of the native observation input, retaining its 44px minimum hit area",
+    "fail a real query refresh, inspect retained samples; successfully refresh the same source while hovering; switch resource with its GET held, then fulfil the service response"
   ],
-  "command": "NODE_PATH=<playwright 1.56.1 node_modules> PULSE_BROWSER_ARTIFACTS=<proof dir> PULSE_CHROMIUM_PATH=<cached chrome-headless-shell 151.0.7922.34> node frontend-modern/browser-tests/update-progress-modal.cjs from the worktree root; Vite dev server on 127.0.0.1:5208, Playwright 1.56.1, Chromium headless shell 151.0.7922.34",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/history-pointer.cjs --engine=chromium; the same with --phone; --engine=firefox; --engine=webkit --phone. All from the assigned workspace root, Vite 6.4.3 / Playwright 1.56.1 (integration-lock parity verified).",
+  "browser_versions": {
+    "chromium": "141.0.7390.37",
+    "firefox": "142.0.1",
+    "webkit": "26.0"
+  },
   "artifacts": [
-    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/harness-rebased-3.log",
-    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/a-polled-90pct-1365.png",
-    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/a-polled-90pct-390.png",
-    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/a-stream-10pct-1365.png",
-    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/a-stream-10pct-390.png",
-    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/b-after-failed-poll-80pct-1365.png",
-    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/b-after-failed-poll-80pct-390.png",
-    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/c-reloaded-1365.png",
-    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/c-reloaded-390.png",
-    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/c-restarting-1365.png",
-    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/c-restarting-390.png",
-    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/d-unconfirmed-waiting-1365.png",
-    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/d-unconfirmed-waiting-390.png",
-    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/e-reloaded-1365.png",
-    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/e-reloaded-390.png",
-    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/e-restarting-1365.png",
-    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/e-restarting-390.png",
-    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/e-stream-applying-1365.png",
-    "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/e-stream-applying-390.png"
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-1365/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-1365/retained-sparse-pointer-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-1365/retained-sparse-pointer-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-1365/sparse-pointer-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-1365/sparse-pointer-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-390/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-390/retained-sparse-pointer-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-390/retained-sparse-pointer-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-390/sparse-pointer-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/chromium-390/sparse-pointer-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/firefox-1365/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/firefox-1365/retained-sparse-pointer-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/firefox-1365/retained-sparse-pointer-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/firefox-1365/sparse-pointer-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/firefox-1365/sparse-pointer-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/webkit-390/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/webkit-390/retained-sparse-pointer-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/webkit-390/retained-sparse-pointer-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/webkit-390/sparse-pointer-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/browser-final/webkit-390/sparse-pointer-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/receipts/browser-chromium-desktop-final.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/receipts/browser-chromium-phone.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/receipts/browser-firefox-desktop.log",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-gc5fjc3_/receipts/browser-webkit-phone-isolated.log"
   ],
-  "notes": [
-    "Mock-backed UI proof of the production modal; all five scenarios passed at 1365x900 and 390x844 and the screenshots were inspected. The same harness run against the pre-fix UpdateProgressModal and updateReadinessModel (fa1d9eb36) fails scenario (a), staying on 10% (pre-fix/run.log). This does not exercise the backend SSE endpoint, a real proxy, or an installed update. Re-run after rebasing onto 8d5969fb3 (lockfile-only brace-expansion/DOMPurify floors); both full runs passed all five scenarios at both viewports with unchanged component content hashes.",
-    "Re-run after rebasing onto f3c92a242; all five scenarios passed at both viewports with unchanged component content hashes."
-  ],
+  "notes": "All 16 final screenshots inspected. Eight engine/viewport/theme cases pass with no page errors or horizontal overflow. Exact-base source-5g7tw1c0 has eight failing assertions and two passing replacement controls; a separate Chromium base screenshot reproduces the misattribution. The first phone run captured correct hover text before an element screenshot scrolled the tall fixture and ended its hover; the final runner captures the viewport without changing pointer state. The first WebKit navigation timed out during overlapping browser runs; its cause is not established, and a subsequent isolated run completes both themes. Adverse attempts remain in internal output receipts. These synthetic API proofs establish shared-renderer presentation, not installed PBS collection, all three #1723 drawers, VirtualBox/disk/network/I/O collection, update or upgrade/rollback acceptance, screen-reader speech, containing-line delivery or release availability.",
   "prior_verifications": [
+    {
+      "version": 1,
+      "base_sha": "0d3e5a801ab8fd1c1d224ef561cbf99e169c589f",
+      "verified_at": "2026-09-30T23:28:26Z",
+      "result": "passed",
+      "changed_paths": [
+        "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"
+      ],
+      "content_sha256": {
+        "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "327e75cabb99edffc712302c00645f06d92dc44dbebdd00aef08074e7fa53eb2"
+      },
+      "routes": [
+        "/browser-tests/pbs-history-refresh.html (direct production GuestDrawerHistory/query with production CSS and synthetic metrics API data; not a complete PBS drawer or installed acceptance)"
+      ],
+      "viewports": [
+        {
+          "width": 1365,
+          "height": 900
+        },
+        {
+          "width": 390,
+          "height": 844
+        }
+      ],
+      "states": [
+        "light/dark ordered and sparse stored series",
+        "native focus with a 2px blue outline, measured contrast 3.68:1 light and 3.98:1 dark against the chart surface",
+        "missing series at a selected timestamp stay missing, not nearby or live values",
+        "same-source refresh adds samples without changing the selected timestamp or keyboard focus",
+        "failed refresh retains inspectable matching observations and honest warning",
+        "single stored observation has a dated description but no fabricated trend or pointless slider",
+        "empty store/current readings expose no inspection control",
+        "held replacement target has no former-host points or selection; new target starts at its own latest observation",
+        "licence-locked range has no reads or inspection action"
+      ],
+      "interactions": [
+        "Tab from History range through Refresh to the native observation slider; Home, ArrowRight, End and ArrowLeft select actual stored times with no extra API reads",
+        "refresh through the existing real query while the input stays focused; new sample indexes do not move the selected timestamp",
+        "move and leave the plot while the slider is focused; then blur and confirm existing mouse hover still works",
+        "Chromium/WebKit phone touch taps at both ends of the 44px-high native control update the selected stored values",
+        "fail a refresh, inspect retained observations; replace with a single sample and then no history; switch resource while its GET is held; load the service response; select locked 14d"
+      ],
+      "command": "pulse-worker-browser frontend-modern/browser-tests/history-inspection.cjs --engine=chromium; the same command with --phone; --engine=firefox; --engine=webkit --phone. All from the assigned workspace root, Vite 6.4.3 / Playwright 1.56.1 (integration-lock parity verified).",
+      "browser_versions": {
+        "chromium": "141.0.7390.37",
+        "firefox": "142.0.1",
+        "webkit": "26.0"
+      },
+      "artifacts": [
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-1365/selected-sparse-time-light.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-1365/failed-refresh-inspection-light.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-1365/selected-sparse-time-dark.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-1365/failed-refresh-inspection-dark.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-1365/result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-390/selected-sparse-time-light.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-390/failed-refresh-inspection-light.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-390/selected-sparse-time-dark.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-390/failed-refresh-inspection-dark.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/chromium-390/result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/firefox-1365/selected-sparse-time-light.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/firefox-1365/failed-refresh-inspection-light.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/firefox-1365/selected-sparse-time-dark.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/firefox-1365/failed-refresh-inspection-dark.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/firefox-1365/result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/webkit-390/selected-sparse-time-light.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/webkit-390/failed-refresh-inspection-light.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/webkit-390/selected-sparse-time-dark.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/webkit-390/failed-refresh-inspection-dark.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/browser-final/webkit-390/result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/receipts/browser-chromium-desktop.log",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/receipts/browser-chromium-phone.log",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/receipts/browser-firefox-desktop.log",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-frhttefs/receipts/browser-webkit-phone.log"
+      ],
+      "notes": "All 16 final screenshots inspected. Eight engine/viewport/theme cases pass native keyboard, touch, state and layout assertions with no page errors. Semantic snapshots exercise native slider names/value text, not actual screen-reader speech quality. Initial dependency-copy/install failures, unsupported helper invocation, preliminary browser sequence exit 143 with unknown cause and the corrected dark-focus-colour defect remain in output receipts. No real PBS telemetry, full drawer, in-browser update, installed upgrade/rollback, containing-line or release availability claim. Copy-lint failure source-zhg72ioz at unshared 7c625696... is retained. Its semicolon-separated accessible value text is replaced by sentences; that unshared candidate was abandoned at the supplied base, not amended or integrated. All four browser commands and all 16 inspected screenshots now bind the corrected runtime. No failed earlier pass or shared history is rewritten."
+    },
+    {
+      "version": 1,
+      "base_sha": "f3c92a242ebf9b7062dfc9f6ff711a56639f536c",
+      "verified_at": "2026-09-30T22:39:35Z",
+      "result": "passed",
+      "changed_paths": [
+        "frontend-modern/src/components/UpdateProgressModal.tsx",
+        "frontend-modern/src/components/updateReadinessModel.ts"
+      ],
+      "content_sha256": {
+        "frontend-modern/src/components/UpdateProgressModal.tsx": "d51df7a98a379e313f306b68529c8db0687ff91176af23869411c4b46feb2599",
+        "frontend-modern/src/components/updateReadinessModel.ts": "b25bf82441fc6572b95891af48a1ed2a0e8ea1f4e583c171ea9352a1e67d76ce"
+      },
+      "routes": [
+        "/browser-tests/update-progress-modal.html (production UpdateProgressModal with a scripted update stream and scripted /api/updates/status and /api/version)"
+      ],
+      "viewports": [
+        {
+          "width": 1365,
+          "height": 900
+        },
+        {
+          "width": 390,
+          "height": 844
+        }
+      ],
+      "states": [
+        "stream delivers one downloading 10% event then stays open and silent; fallback polling advances the modal through 35, 70, 80 and 90% (applying)",
+        "stream closed during download with a single unreachable status poll between two successful ones; download progress continues and the restart phase is never entered",
+        "restarting status from polling, then /api/version unreachable twice, then the new version reported; Pulse is restarting shown, then exactly one page reload",
+        "pre-update version unavailable (503), late polls failing and a new version plus idle answering without a restarting or completed status; modal stays on Pulse is restarting with no reload and no completion claim",
+        "stream delivers downloading, verifying, extracting, backing-up, applying and completed; old version answers once, becomes unreachable, then the new version; exactly one reload and no fallback polls"
+      ],
+      "interactions": [
+        "emit scripted SSE statuses and hold the stream silent past the 6s silence window; assert the first fallback poll lands after it and the stream stays open",
+        "fail the stream and abort one status poll mid-download; assert no restart text ever rendered (MutationObserver) and the do-not-close warning remains",
+        "count document loads of the harness to assert a single reload after real restart evidence, and none without a baseline or backend confirmation",
+        "inspect screenshots at desktop and phone widths; assert no page errors, no horizontal overflow and the dialog inside the viewport"
+      ],
+      "command": "NODE_PATH=<playwright 1.56.1 node_modules> PULSE_BROWSER_ARTIFACTS=<proof dir> PULSE_CHROMIUM_PATH=<cached chrome-headless-shell 151.0.7922.34> node frontend-modern/browser-tests/update-progress-modal.cjs from the worktree root; Vite dev server on 127.0.0.1:5208, Playwright 1.56.1, Chromium headless shell 151.0.7922.34",
+      "artifacts": [
+        "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/harness-rebased-3.log",
+        "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/a-polled-90pct-1365.png",
+        "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/a-polled-90pct-390.png",
+        "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/a-stream-10pct-1365.png",
+        "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/a-stream-10pct-390.png",
+        "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/b-after-failed-poll-80pct-1365.png",
+        "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/b-after-failed-poll-80pct-390.png",
+        "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/c-reloaded-1365.png",
+        "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/c-reloaded-390.png",
+        "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/c-restarting-1365.png",
+        "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/c-restarting-390.png",
+        "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/d-unconfirmed-waiting-1365.png",
+        "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/d-unconfirmed-waiting-390.png",
+        "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/e-reloaded-1365.png",
+        "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/e-reloaded-390.png",
+        "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/e-restarting-1365.png",
+        "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/e-restarting-390.png",
+        "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/e-stream-applying-1365.png",
+        "/private/tmp/claude-501/-Users-rcourtman-Development-pulse-repos-pulse/6fb259b1-7b46-484b-80c9-554dd254295e/scratchpad/update-progress-modal-proof-rebased/e-stream-applying-390.png"
+      ],
+      "notes": [
+        "Mock-backed UI proof of the production modal; all five scenarios passed at 1365x900 and 390x844 and the screenshots were inspected. The same harness run against the pre-fix UpdateProgressModal and updateReadinessModel (fa1d9eb36) fails scenario (a), staying on 10% (pre-fix/run.log). This does not exercise the backend SSE endpoint, a real proxy, or an installed update. Re-run after rebasing onto 8d5969fb3 (lockfile-only brace-expansion/DOMPurify floors); both full runs passed all five scenarios at both viewports with unchanged component content hashes.",
+        "Re-run after rebasing onto f3c92a242; all five scenarios passed at both viewports with unchanged component content hashes."
+      ]
+    },
     {
       "version": 1,
       "base_sha": "21a35494aecb335755de773dd099e1364e65b3e0",

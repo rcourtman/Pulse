@@ -7556,3 +7556,44 @@ catalog, the header metadata and every locale catalog; the product name is not
 translated. Its route id, feature gate and read capability are unchanged.
 Relay never provided remote access to the web UI, so no settings chrome may
 label it Remote Access.
+
+### Drawer History is inspectable without pointer hover
+
+`GuestDrawerHistory` exposes a labelled native range input for groups with
+multiple stored observation times. Native arrow keys, Home/End and touch input
+select real stored timestamps; the control's value text includes the full local
+date/time and separately formatted series values. A series without a sample at
+the selected time remains missing rather than borrowing a neighbouring or live
+reading. The SVG has a linked textual description, including lone observations
+and the absence of stored data; a lone observation does not fabricate a trend.
+
+Selection follows its timestamp across same-source refreshes, not an ordinal
+index that shifts when samples arrive. An expired selection snaps to an actual
+remaining observation. Changing resource type, id or range clears pointer and
+keyboard selection even when matching cached data arrives immediately. Empty,
+failed initial, absent-target and licence-locked views expose no inspection
+control. Existing matching-point retention and scoped retry remain unchanged.
+Mounted inspection regressions cover these boundaries. The direct-renderer
+browser fixture verifies native keys, focus, pointer coexistence and touch at
+desktop/phone widths across Chromium, Firefox and WebKit; it is not installed
+PBS collection or a screen-reader announcement-quality claim.
+
+### Drawer History pointer values share one observed time
+
+Pointer inspection snaps to the nearest actual stored timestamp across the
+group's series, with equidistant observations resolved to the earlier time.
+Every displayed value and marker must belong to that timestamp. Missing series
+remain unavailable at the inspected time, not a nearest neighbour, latest
+observation or current reading. A lone stored sample, including zero, can be
+inspected without fabricating a trend. The SVG's dated description follows the
+same active time as the visible legend. Leaving the plot restores the normal
+latest/current legend; focused native inspection still takes precedence.
+
+Matching refreshes reconcile the pointer with the current set of actual
+observations; resource/range replacement still clears pointer state. Mounted
+`GuestDrawerHistory.pointer.test.tsx` regressions cover sparse and disjoint
+series, zero rates, single observations, ties, focus precedence and replacement.
+`browser-tests/history-pointer.cjs` verifies the production renderer and query
+in Chromium/Firefox desktop and Chromium/WebKit phone emulation in both themes,
+including failed refreshes and source replacement. Scripted APIs establish
+presentation accuracy, not real PBS collection or installed #1723 acceptance.

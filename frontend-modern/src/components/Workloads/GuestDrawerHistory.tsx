@@ -1,4 +1,14 @@
-import { For, Show, createMemo, createSignal, onMount, type Component } from 'solid-js';
+import {
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  createUniqueId,
+  on,
+  onMount,
+  type Component,
+} from 'solid-js';
 
 import {
   ChartsAPI,
@@ -57,6 +67,7 @@ interface GuestDrawerHistoryGroupChartProps {
   loading: boolean;
   metrics: Record<string, AggregatedMetricPoint[] | undefined>;
   range: HistoryTimeRange;
+  sourceKey: string;
 }
 
 const GUEST_DRAWER_HISTORY_MAX_POINTS = 240;
@@ -176,18 +187,18 @@ const getGuestDrawerHistoryY = (
   return GUEST_DRAWER_HISTORY_PLOT_TOP + (1 - (bounded - scale.minValue) / valueSpan) * plotHeight;
 };
 
-const findClosestGuestDrawerHistoryPoint = (
-  points: readonly AggregatedMetricPoint[],
+const findClosestGuestDrawerHistoryTimestamp = (
+  timestamps: readonly number[],
   timestamp: number,
-): AggregatedMetricPoint | null => {
-  if (points.length === 0) return null;
+): number | null => {
+  if (timestamps.length === 0) return null;
 
-  let closest = points[0];
-  let closestDistance = Math.abs(points[0].timestamp - timestamp);
-  for (const point of points.slice(1)) {
-    const distance = Math.abs(point.timestamp - timestamp);
+  let closest = timestamps[0];
+  let closestDistance = Math.abs(closest - timestamp);
+  for (const candidate of timestamps.slice(1)) {
+    const distance = Math.abs(candidate - timestamp);
     if (distance < closestDistance) {
-      closest = point;
+      closest = candidate;
       closestDistance = distance;
     }
   }
@@ -196,24 +207,82 @@ const findClosestGuestDrawerHistoryPoint = (
 
 const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps> = (props) => {
   const [hoverTimestamp, setHoverTimestamp] = createSignal<number | null>(null);
+  const [selectedTimestamp, setSelectedTimestamp] = createSignal<number | null>(null);
+  const inspectionId = `history-inspection-${createUniqueId()}`;
+  createEffect(
+    on(
+      () => props.sourceKey,
+      () => {
+        setHoverTimestamp(null);
+        setSelectedTimestamp(null);
+      },
+    ),
+  );
   const series = createMemo(() =>
     props.group.series.map((config) => ({
       ...config,
       points: normalizeGuestDrawerHistoryPoints(props.metrics[config.metric], config.unit),
     })),
   );
+  // Step through actual stored times, not synthetic points between samples.
+  // Keep the selected time across polls even if its ordinal index changes.
+  const observationTimes = createMemo(() =>
+    [...new Set(series().flatMap((item) => item.points.map((point) => point.timestamp)))].sort(
+      (a, b) => a - b,
+    ),
+  );
+  const selectedIndex = createMemo(() => {
+    const times = observationTimes();
+    const selected = selectedTimestamp();
+    if (selected === null) return Math.max(0, times.length - 1);
+    const closest = findClosestGuestDrawerHistoryTimestamp(times, selected);
+    return closest === null ? 0 : times.indexOf(closest);
+  });
+  const inspectionTimestamp = createMemo(() =>
+    selectedTimestamp() === null ? null : (observationTimes()[selectedIndex()] ?? null),
+  );
+  // Resolve the pointer to one real time across the whole group. Independent
+  // nearest-series reads would attribute values from different times to the
+  // first metric's timestamp, and can even borrow a live fallback reading.
+  const activeTimestamp = createMemo(() => {
+    const inspected = inspectionTimestamp();
+    if (inspected !== null) return inspected;
+    const hovered = hoverTimestamp();
+    return hovered === null
+      ? null
+      : findClosestGuestDrawerHistoryTimestamp(observationTimes(), hovered);
+  });
+  const observationValueText = (timestamp: number | undefined): string => {
+    if (timestamp === undefined) return 'No stored history observations.';
+    const values = series().map((item) => {
+      const point = item.points.find((point) => point.timestamp === timestamp);
+      return `${item.label} ${point ? formatHistoryChartTooltipValue(point.value, item.unit) : 'no observation'}`;
+    });
+    return `${new Date(timestamp).toLocaleString()}. ${values.join('. ')}.`;
+  };
+  const inspectionValueText = createMemo(() =>
+    observationValueText(observationTimes()[selectedIndex()]),
+  );
+  const chartDescription = createMemo(() => {
+    if (props.loading) return 'Loading history.';
+    const timestamp = activeTimestamp();
+    if (timestamp !== null) return observationValueText(timestamp);
+    const count = observationTimes().length;
+    if (count === 0) return inspectionValueText();
+    return `${count} stored observation ${count === 1 ? 'time' : 'times'}. ${inspectionValueText()}`;
+  });
   const drawableSeries = createMemo(() => series().filter((item) => item.points.length >= 2));
   const scale = createMemo(() => getGuestDrawerHistoryScale(series(), props.group.unit));
   const bounds = createMemo(() => getGuestDrawerHistoryRangeBounds(series()));
   const hasDrawableData = createMemo(() => drawableSeries().length > 0 && bounds() !== null);
   const hoveredSeries = createMemo(() => {
-    const timestamp = hoverTimestamp();
+    const timestamp = activeTimestamp();
     const rangeBounds = bounds();
     if (timestamp === null || !rangeBounds) return [];
 
-    return drawableSeries()
+    return series()
       .map((item) => {
-        const point = findClosestGuestDrawerHistoryPoint(item.points, timestamp);
+        const point = item.points.find((point) => point.timestamp === timestamp);
         if (!point) return null;
         return {
           ...item,
@@ -240,20 +309,23 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         ...item,
         valueLabel: hovered
           ? getGuestDrawerHistoryValueLabel([hovered.point], item.unit)
-          : item.points.length > 0
-            ? getGuestDrawerHistoryValueLabel(item.points, item.unit)
-            : typeof currentValue === 'number' && Number.isFinite(currentValue)
-              ? formatHistoryChartTooltipValue(currentValue, item.unit)
-              : '-',
+          : activeTimestamp() !== null
+            ? '-'
+            : item.points.length > 0
+              ? getGuestDrawerHistoryValueLabel(item.points, item.unit)
+              : typeof currentValue === 'number' && Number.isFinite(currentValue)
+                ? formatHistoryChartTooltipValue(currentValue, item.unit)
+                : '-',
       };
     }),
   );
   const hoverTimeLabel = createMemo(() => {
-    const point = hoveredSeries()[0]?.point;
-    return point ? formatHistoryChartTimeLabel(point.timestamp, props.range) : '';
+    const timestamp = activeTimestamp();
+    return timestamp === null ? '' : formatHistoryChartTimeLabel(timestamp, props.range);
   });
 
   const handleHoverMove = (event: MouseEvent & { currentTarget: SVGSVGElement }) => {
+    if (inspectionTimestamp() !== null) return;
     const rangeBounds = bounds();
     if (!rangeBounds) return;
 
@@ -321,6 +393,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         </For>
         <svg
           aria-label={`${props.group.label} history`}
+          aria-describedby={`${inspectionId}-description`}
           class="absolute inset-0 h-full w-full cursor-crosshair"
           data-testid="guest-history-plot"
           onMouseMove={handleHoverMove}
@@ -407,6 +480,43 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
           </div>
         </Show>
       </div>
+      <p id={`${inspectionId}-description`} class="sr-only">
+        {chartDescription()}
+      </p>
+      <Show when={observationTimes().length > 1}>
+        <div class="mt-2">
+          <label for={inspectionId} class="flex justify-between gap-2 text-[10px] text-muted">
+            <span>Inspect history</span>
+            <span aria-hidden="true">
+              {selectedIndex() + 1} / {observationTimes().length}
+            </span>
+          </label>
+          <input
+            id={inspectionId}
+            type="range"
+            aria-label={`Inspect ${props.group.label} history`}
+            aria-valuetext={inspectionValueText()}
+            aria-describedby={`${inspectionId}-help`}
+            min="0"
+            max={observationTimes().length - 1}
+            step="1"
+            value={selectedIndex()}
+            class="h-11 w-full cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-6"
+            onFocus={() => {
+              setHoverTimestamp(null);
+              setSelectedTimestamp(observationTimes()[selectedIndex()] ?? null);
+            }}
+            onBlur={() => setSelectedTimestamp(null)}
+            onInput={(event) => {
+              const index = event.currentTarget.valueAsNumber;
+              if (Number.isFinite(index)) setSelectedTimestamp(observationTimes()[index] ?? null);
+            }}
+          />
+          <p id={`${inspectionId}-help`} class="sr-only">
+            Use arrow keys, Home or End to inspect stored observations.
+          </p>
+        </div>
+      </Show>
     </section>
   );
 };
@@ -517,6 +627,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                     metrics={metrics()}
                     currentMetrics={props.currentMetrics}
                     range={props.range}
+                    sourceKey={`${props.target?.resourceType}:${props.target?.resourceId}:${props.range}`}
                   />
                 )}
               </For>
