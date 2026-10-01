@@ -3452,6 +3452,11 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Credential-safe Proxmox bootstrap (1 October 2026)
+
+Proxmox initial bootstrap keeps credentials out of copied shell source. The current PVE/PBS agent command fetches a complete installer, runs its credential-free preflight, then privately prompts inside the root/sudo Bash child. Its 0700 directory and 0600 token file are owned by that child, passed only by path and removed on exit or handled signals. The UI reveals credentials separately, clears cached setup material on close and discards late issuance after close/reset. No exec scope is added. Existing fleet reporting is unchanged; newly enrolling an older agent with a newer server requires the current installer. New agents and the root installer still validate coherent old-server artifacts during rolling upgrades, but never execute their command strings.
+
+
 ### Update progress stream delivery
 
 Server update progress delivery is owned by internal/updates and its API

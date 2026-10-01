@@ -313,8 +313,7 @@ describe('NodesAPI', () => {
           }),
         }),
       );
-      expect(result).toEqual({ command: 'curl ...' });
-      expect(result).not.toHaveProperty('token');
+      expect(result).toEqual({ command: 'curl ...', token: 'secret-token' });
     });
 
     it('supports the PBS proxmox install command contract', async () => {
@@ -332,6 +331,16 @@ describe('NodesAPI', () => {
       expect(result.command).toBe('curl pbs ...');
     });
 
+    it('rejects an agent credential embedded in the copied command', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+        command: 'bash install.sh --token synthetic-secret',
+        token: 'synthetic-secret',
+      });
+      await expect(
+        NodesAPI.getAgentInstallCommand({ type: 'pve', enableProxmox: true }),
+      ).rejects.toThrow('Install credentials must be entered separately from the command');
+    });
+
     it('rejects blank install commands', async () => {
       vi.mocked(apiFetchJSON).mockResolvedValueOnce({ command: '   ', token: 'secret-token' });
 
@@ -342,12 +351,12 @@ describe('NodesAPI', () => {
   });
 
   describe('getProxmoxSetupCommand', () => {
-    it('uses the canonical setup-script-url contract for PVE while keeping raw setup tokens inside the shared client boundary', async () => {
+    it('uses the canonical PVE setup contract with a separate revealed setup token', async () => {
       vi.mocked(apiFetchJSON).mockResolvedValueOnce({
         type: 'pve',
         host: 'https://pve.example:8006',
         url: 'https://pulse.example/api/setup-script?type=pve',
-        downloadURL: 'https://pulse.example/api/setup-script?type=pve&setup_token=setup-token-123',
+        downloadURL: 'https://pulse.example/api/setup-script?type=pve',
         scriptFileName: 'pulse-setup-pve.sh',
         command: 'curl pve ...',
         setupToken: 'setup-token-123',
@@ -374,21 +383,41 @@ describe('NodesAPI', () => {
       );
       expect(result.type).toBe('pve');
       expect(result.host).toBe('https://pve.example:8006');
-      expect(result.downloadURL).toBe(
-        'https://pulse.example/api/setup-script?type=pve&setup_token=setup-token-123',
-      );
+      expect(result.downloadURL).toBe('https://pulse.example/api/setup-script?type=pve');
       expect(result.scriptFileName).toBe('pulse-setup-pve.sh');
       expect(result.tokenHint).toBe('set…123');
       expect(result.expires).toBe(1_900_000_000);
-      expect(result).not.toHaveProperty('setupToken');
+      expect(result.setupToken).toMatch(/token-123$/);
     });
+
+    it.each(['url', 'downloadURL', 'command', 'commandWithEnv', 'commandWithoutEnv'])(
+      'rejects a setup credential embedded in %s without returning it in the error',
+      async (field) => {
+        const secret = 'synthetic-setup-secret';
+        vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+          type: 'pve',
+          host: 'https://pve.example:8006',
+          url: 'https://pulse.example/api/setup-script?type=pve',
+          downloadURL: 'https://pulse.example/api/setup-script?type=pve',
+          scriptFileName: 'pulse-setup-pve.sh',
+          command: 'safe command',
+          setupToken: secret,
+          tokenHint: 'syn…ret',
+          expires: 1_900_000_000,
+          [field]: `unsafe-${secret}`,
+        });
+        await expect(
+          NodesAPI.getProxmoxSetupCommand({ type: 'pve', host: 'pve.example' }),
+        ).rejects.toThrow('Setup credentials must be entered separately from commands and URLs');
+      },
+    );
 
     it('sends the typed connection name so the setup token can carry it into auto-registration', async () => {
       vi.mocked(apiFetchJSON).mockResolvedValueOnce({
         type: 'pve',
         host: 'https://pve.example:8006',
         url: 'https://pulse.example/api/setup-script?type=pve',
-        downloadURL: 'https://pulse.example/api/setup-script?type=pve&setup_token=setup-token-123',
+        downloadURL: 'https://pulse.example/api/setup-script?type=pve',
         scriptFileName: 'pulse-setup-pve.sh',
         command: 'curl pve ...',
         setupToken: 'setup-token-123',
@@ -422,8 +451,7 @@ describe('NodesAPI', () => {
         type: ' pve ',
         host: ' https://pve.example:8006 ',
         url: ' https://pulse.example/api/setup-script?type=pve ',
-        downloadURL:
-          ' https://pulse.example/api/setup-script?type=pve&setup_token=setup-token-123 ',
+        downloadURL: ' https://pulse.example/api/setup-script?type=pve ',
         scriptFileName: ' pulse-setup-pve.sh ',
         command: ' curl pve ... ',
         commandWithEnv: ' curl env pve ... ',
@@ -443,13 +471,14 @@ describe('NodesAPI', () => {
         type: 'pve',
         host: 'https://pve.example:8006',
         url: 'https://pulse.example/api/setup-script?type=pve',
-        downloadURL: 'https://pulse.example/api/setup-script?type=pve&setup_token=setup-token-123',
+        downloadURL: 'https://pulse.example/api/setup-script?type=pve',
         scriptFileName: 'pulse-setup-pve.sh',
         command: 'curl pve ...',
         commandWithEnv: 'curl env pve ...',
         commandWithoutEnv: 'curl bare pve ...',
         expires: 1_900_000_000,
         tokenHint: 'set…123',
+        setupToken: 'setup-token-123',
       });
     });
 
@@ -458,7 +487,7 @@ describe('NodesAPI', () => {
         type: 'pbs',
         host: 'https://pbs.example:8007',
         url: 'https://pulse.example/api/setup-script?type=pbs',
-        downloadURL: 'https://pulse.example/api/setup-script?type=pbs&setup_token=pbs-token-123',
+        downloadURL: 'https://pulse.example/api/setup-script?type=pbs',
         scriptFileName: 'pulse-setup-pbs.sh',
         command: 'curl pbs ...',
         setupToken: 'pbs-token-123',
@@ -486,12 +515,10 @@ describe('NodesAPI', () => {
       expect(result.command).toBe('curl pbs ...');
       expect(result.type).toBe('pbs');
       expect(result.host).toBe('https://pbs.example:8007');
-      expect(result.downloadURL).toBe(
-        'https://pulse.example/api/setup-script?type=pbs&setup_token=pbs-token-123',
-      );
+      expect(result.downloadURL).toBe('https://pulse.example/api/setup-script?type=pbs');
       expect(result.scriptFileName).toBe('pulse-setup-pbs.sh');
       expect(result.tokenHint).toBe('pbs…123');
-      expect(result).not.toHaveProperty('setupToken');
+      expect(result.setupToken).toMatch(/token-123$/);
     });
 
     it('falls back to command for commandWithEnv when the backend omits it', async () => {
@@ -499,7 +526,7 @@ describe('NodesAPI', () => {
         type: 'pbs',
         host: 'https://pbs.example:8007',
         url: 'https://pulse.example/api/setup-script?type=pbs',
-        downloadURL: 'https://pulse.example/api/setup-script?type=pbs&setup_token=pbs-token-123',
+        downloadURL: 'https://pulse.example/api/setup-script?type=pbs',
         scriptFileName: 'pulse-setup-pbs.sh',
         command: 'curl pbs ...',
         setupToken: 'pbs-token-123',
@@ -521,7 +548,7 @@ describe('NodesAPI', () => {
         type: 'pbs',
         host: 'https://pbs.example:8007',
         url: '',
-        downloadURL: 'https://pulse.example/api/setup-script?type=pbs&setup_token=pbs-token-123',
+        downloadURL: 'https://pulse.example/api/setup-script?type=pbs',
         scriptFileName: 'pulse-setup-pbs.sh',
         command: 'curl pbs ...',
         setupToken: 'pbs-token-123',
@@ -543,7 +570,7 @@ describe('NodesAPI', () => {
         type: 'pve',
         host: 'https://pve.example:8006',
         url: 'https://pulse.example/api/setup-script?type=pve',
-        downloadURL: 'https://pulse.example/api/setup-script?type=pve&setup_token=setup-token-123',
+        downloadURL: 'https://pulse.example/api/setup-script?type=pve',
         scriptFileName: 'pulse-setup-pve.sh',
         command: 'curl pve ...',
         setupToken: 'setup-token-123',
@@ -565,7 +592,7 @@ describe('NodesAPI', () => {
         type: 'pve',
         host: 'https://pve.example:8006',
         url: 'https://pulse.example/api/setup-script?type=pve',
-        downloadURL: 'https://pulse.example/api/setup-script?type=pve&setup_token=setup-token-123',
+        downloadURL: 'https://pulse.example/api/setup-script?type=pve',
         command: 'curl pve ...',
         setupToken: 'setup-token-123',
         tokenHint: 'set…123',
@@ -586,7 +613,7 @@ describe('NodesAPI', () => {
         type: 'pve',
         host: 'https://pve.example:8006',
         url: 'https://pulse.example/api/setup-script?type=pve',
-        downloadURL: 'https://pulse.example/api/setup-script?type=pve&setup_token=setup-token-123',
+        downloadURL: 'https://pulse.example/api/setup-script?type=pve',
         scriptFileName: 'pulse-setup-pve.sh',
         command: 'curl pve ...',
         setupToken: 'setup-token-123',
@@ -616,11 +643,11 @@ describe('NodesAPI', () => {
       );
 
       const result = await NodesAPI.downloadProxmoxSetupScript({
+        setupToken: 'synthetic-setup-token',
         type: 'pve',
         host: 'https://pve.example:8006',
         url: 'https://pulse.example/base/api/setup-script?type=pve',
-        downloadURL:
-          'https://pulse.example/base/api/setup-script?type=pve&setup_token=setup-token-123',
+        downloadURL: 'https://pulse.example/base/api/setup-script?type=pve',
         scriptFileName: 'pulse-setup-pve.sh',
         command: 'curl pve ...',
         commandWithEnv: 'curl env pve ...',
@@ -629,9 +656,7 @@ describe('NodesAPI', () => {
         tokenHint: 'set…123',
       });
 
-      expect(apiFetch).toHaveBeenCalledWith(
-        'https://pulse.example/base/api/setup-script?type=pve&setup_token=setup-token-123',
-      );
+      expect(apiFetch).toHaveBeenCalledWith('https://pulse.example/base/api/setup-script?type=pve');
       expect(result).toEqual({
         content: '#!/bin/bash\necho pve',
         contentType: 'text/x-shellscript; charset=utf-8',
@@ -651,11 +676,11 @@ describe('NodesAPI', () => {
       );
 
       const result = await NodesAPI.downloadProxmoxSetupScript({
+        setupToken: 'synthetic-setup-token',
         type: 'pbs',
         host: 'pbs.example',
         url: 'https://pulse.example/base/api/setup-script?type=pbs',
-        downloadURL:
-          'https://pulse.example/base/api/setup-script?type=pbs&setup_token=pbs-token-123',
+        downloadURL: 'https://pulse.example/base/api/setup-script?type=pbs',
         scriptFileName: 'pulse-setup-pbs.sh',
         command: 'curl pbs ...',
         commandWithEnv: 'curl env pbs ...',
@@ -664,9 +689,7 @@ describe('NodesAPI', () => {
         tokenHint: 'pbs…123',
       });
 
-      expect(apiFetch).toHaveBeenCalledWith(
-        'https://pulse.example/base/api/setup-script?type=pbs&setup_token=pbs-token-123',
-      );
+      expect(apiFetch).toHaveBeenCalledWith('https://pulse.example/base/api/setup-script?type=pbs');
       expect(result).toEqual({
         content: '#!/bin/bash\necho pbs',
         contentType: 'text/x-shellscript; charset=utf-8',
@@ -687,11 +710,11 @@ describe('NodesAPI', () => {
 
       await expect(
         NodesAPI.downloadProxmoxSetupScript({
+          setupToken: 'synthetic-setup-token',
           type: 'pve',
           host: 'https://pve.example:8006',
           url: 'https://pulse.example/base/api/setup-script?type=pve',
-          downloadURL:
-            'https://pulse.example/base/api/setup-script?type=pve&setup_token=setup-token-123',
+          downloadURL: 'https://pulse.example/base/api/setup-script?type=pve',
           scriptFileName: 'pulse-setup-pve.sh',
           command: 'curl pve ...',
           commandWithEnv: 'curl env pve ...',
@@ -712,11 +735,11 @@ describe('NodesAPI', () => {
 
       await expect(
         NodesAPI.downloadProxmoxSetupScript({
+          setupToken: 'synthetic-setup-token',
           type: 'pve',
           host: 'https://pve.example:8006',
           url: 'https://pulse.example/base/api/setup-script?type=pve',
-          downloadURL:
-            'https://pulse.example/base/api/setup-script?type=pve&setup_token=setup-token-123',
+          downloadURL: 'https://pulse.example/base/api/setup-script?type=pve',
           scriptFileName: 'pulse-setup-pve.sh',
           command: 'curl pve ...',
           commandWithEnv: 'curl env pve ...',
@@ -740,11 +763,11 @@ describe('NodesAPI', () => {
 
       await expect(
         NodesAPI.downloadProxmoxSetupScript({
+          setupToken: 'synthetic-setup-token',
           type: 'pve',
           host: 'https://pve.example:8006',
           url: 'https://pulse.example/base/api/setup-script?type=pve',
-          downloadURL:
-            'https://pulse.example/base/api/setup-script?type=pve&setup_token=setup-token-123',
+          downloadURL: 'https://pulse.example/base/api/setup-script?type=pve',
           scriptFileName: 'pulse-setup-pve.sh',
           command: 'curl pve ...',
           commandWithEnv: 'curl env pve ...',

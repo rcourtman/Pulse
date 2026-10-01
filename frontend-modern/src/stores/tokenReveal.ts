@@ -3,7 +3,7 @@ import type { APITokenRecord } from '@/api/security';
 
 export interface TokenRevealPayload {
   token: string;
-  record: APITokenRecord;
+  record?: APITokenRecord;
   source?: string;
   note?: string;
 }

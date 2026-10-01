@@ -33,11 +33,54 @@ func DeriveSetupScriptServerName(serverHost string) string {
 	return strings.Split(trimmedHost, ":")[0]
 }
 
+// setupTokenFilePrelude reads only a bounded private credential, never an
+// argument or exported secret. Legacy downloaded scripts with an embedded
+// query token remain readable, but new artifacts do not generate such URLs.
+const setupTokenFilePrelude = `set +xv
+export -n PULSE_SETUP_TOKEN 2>/dev/null || true
+if [ -n "${PULSE_SETUP_TOKEN_FILE:-}" ]; then
+    setup_token_file="$PULSE_SETUP_TOKEN_FILE"
+    if [ ! -f "$setup_token_file" ] || [ -L "$setup_token_file" ] || [ ! -r "$setup_token_file" ]; then
+        echo "Setup token file must be a readable private regular file." >&2
+        exit 1
+    fi
+    setup_token_mode=$(stat -c %a "$setup_token_file" 2>/dev/null || stat -f %Lp "$setup_token_file")
+    setup_token_owner=$(stat -c %u "$setup_token_file" 2>/dev/null || stat -f %u "$setup_token_file")
+    setup_token_parent=$(dirname -- "$setup_token_file")
+    if [ -L "$setup_token_parent" ] || [ "$(stat -c %a "$setup_token_parent" 2>/dev/null || stat -f %Lp "$setup_token_parent")" != "700" ] || [ "$(stat -c %u "$setup_token_parent" 2>/dev/null || stat -f %u "$setup_token_parent")" != "$EUID" ]; then
+        echo "Setup token file requires a private directory owned by the current user." >&2
+        exit 1
+    fi
+    setup_token_size=$(wc -c < "$setup_token_file")
+    if [ "$setup_token_mode" != "600" ] || [ "$setup_token_owner" != "$EUID" ] || [ "$setup_token_size" -gt 4096 ]; then
+        echo "Setup token file must be owned by the current user, mode 0600, and at most 4096 bytes." >&2
+        exit 1
+    fi
+    PULSE_SETUP_TOKEN=$(cat -- "$setup_token_file")
+    if [[ ! "$PULSE_SETUP_TOKEN" =~ ^[a-fA-F0-9]{32,128}$ ]]; then
+        echo "Setup token file contains an invalid setup token." >&2
+        exit 1
+    fi
+    unset setup_token_file setup_token_mode setup_token_owner setup_token_size setup_token_parent
+fi
+`
+
 func RenderSetupScript(serverType string, ctx SetupScriptRenderContext) string {
+	var script string
 	if strings.TrimSpace(serverType) == "pve" {
-		return renderPVESetupScript(ctx)
+		script = renderPVESetupScript(ctx)
+	} else {
+		script = renderPBSSetupScript(ctx)
 	}
-	return renderPBSSetupScript(ctx)
+	script = strings.Replace(script, "#!/bin/bash\n", "#!/bin/bash\n"+setupTokenFilePrelude, 1)
+	// A rejected setup credential or failed attempted registration is not a
+	// successful bootstrap. PVE's explicit Audit/Repair exit stays separate.
+	return script + `
+if [ "${SETUP_TOKEN_INVALID:-false}" = true ] || [ "${TOKEN_READY:-false}" != true ] || { [ -n "${PULSE_SETUP_TOKEN:-}" ] && [ "${AUTO_REG_SUCCESS:-false}" != true ]; }; then
+    exit 1
+fi
+`
+
 }
 
 func renderPVESetupScript(ctx SetupScriptRenderContext) string {
@@ -488,7 +531,7 @@ if [[ $MAIN_ACTION =~ ^(3|[Rr]|remove)$ ]]; then
         UNREGISTER_RC=$?
         if [ "$UNREGISTER_RC" -ne 0 ]; then
             echo "    ⚠️  Pulse server teardown request failed."
-            echo "       Response: $UNREGISTER_RESPONSE"
+            echo "       Check the Pulse connection and retry; response details are not printed."
             echo "       Remove the node from Pulse manually if it remains listed."
         elif echo "$UNREGISTER_RESPONSE" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"success"'; then
             if echo "$UNREGISTER_RESPONSE" | grep -Eq '"removed"[[:space:]]*:[[:space:]]*true'; then
@@ -498,7 +541,7 @@ if [[ $MAIN_ACTION =~ ^(3|[Rr]|remove)$ ]]; then
             fi
         else
             echo "    ⚠️  Pulse server teardown did not confirm success."
-            echo "       Response: $UNREGISTER_RESPONSE"
+            echo "       Check the Pulse connection and retry; response details are not printed."
             echo "       Remove the node from Pulse manually if it remains listed."
         fi
     else
@@ -684,8 +727,8 @@ create_pve_token() {
 }
 
 smoke_test_pve_token() {
-    if SMOKE_OUTPUT=$(curl -kfsS --retry 2 --retry-delay 1 \
-        -H "Authorization: PVEAPIToken=$PULSE_TOKEN_ID=$TOKEN_VALUE" \
+    if SMOKE_OUTPUT=$(printf 'Authorization: PVEAPIToken=%%s=%%s\n' "$PULSE_TOKEN_ID" "$TOKEN_VALUE" | curl -kfsS --retry 2 --retry-delay 1 \
+        -H @- \
         "${HOST_URL%%/}/api2/json/nodes" 2>&1); then
         SMOKE_RC=0
     else
@@ -710,13 +753,13 @@ attempt_auto_registration() {
         if [ -t 0 ]; then
             printf "Pulse setup token: "
             if command -v stty >/dev/null 2>&1; then stty -echo; fi
-            IFS= read -r PULSE_SETUP_TOKEN
+            IFS= read -r -s PULSE_SETUP_TOKEN
             if command -v stty >/dev/null 2>&1; then stty echo; fi
             printf "\n"
 		elif [ -c /dev/tty ] && [ -r /dev/tty ] && [ -w /dev/tty ]; then
 			printf "Pulse setup token: " >/dev/tty
 			if command -v stty >/dev/null 2>&1; then stty -echo </dev/tty 2>/dev/null || true; fi
-			IFS= read -r PULSE_SETUP_TOKEN </dev/tty || true
+			IFS= read -r -s PULSE_SETUP_TOKEN </dev/tty || true
 			if command -v stty >/dev/null 2>&1; then stty echo </dev/tty 2>/dev/null || true; fi
 			printf "\n" >/dev/tty
 		fi
@@ -753,13 +796,13 @@ attempt_auto_registration() {
     AUTO_REG_SUCCESS=false
     if [ "$REGISTER_RC" -ne 0 ]; then
         echo "⚠️  Auto-registration request failed before success confirmation."
-        echo "   Response: $REGISTER_RESPONSE"
+        echo "   Registration failed; check the connection and setup-token expiry in Pulse."
         echo ""
         echo "📝 Use the token details below in Pulse Settings → Infrastructure to finish registration."
     elif [ "$REGISTER_STATUS" = "401" ] || [ "$REGISTER_STATUS" = "403" ]; then
         SETUP_TOKEN_INVALID=true
         echo "Error: Auto-registration failed - authentication required"
-        echo "   Response: $REGISTER_RESPONSE"
+        echo "   Registration failed; check the connection and setup-token expiry in Pulse."
         echo ""
         echo "The provided Pulse setup token was invalid or expired"
         echo "Get a fresh setup token from Pulse Settings → Infrastructure and rerun this script."
@@ -769,7 +812,7 @@ attempt_auto_registration() {
         echo ""
     else
         echo "⚠️  Auto-registration failed. Finish registration manually in Pulse Settings → Infrastructure."
-        echo "   Response: $REGISTER_RESPONSE"
+        echo "   Registration failed; check the connection and setup-token expiry in Pulse."
         echo ""
         echo "📝 Use the token details below in Pulse Settings → Infrastructure to finish registration."
     fi
@@ -1682,13 +1725,13 @@ else
             if [ -t 0 ]; then
                 printf "Pulse setup token: "
                 if command -v stty >/dev/null 2>&1; then stty -echo; fi
-                IFS= read -r PULSE_SETUP_TOKEN
+                IFS= read -r -s PULSE_SETUP_TOKEN
                 if command -v stty >/dev/null 2>&1; then stty echo; fi
                 printf "\n"
 		    elif [ -c /dev/tty ] && [ -r /dev/tty ] && [ -w /dev/tty ]; then
 			    printf "Pulse setup token: " >/dev/tty
 			    if command -v stty >/dev/null 2>&1; then stty -echo </dev/tty 2>/dev/null || true; fi
-			    IFS= read -r PULSE_SETUP_TOKEN </dev/tty || true
+			    IFS= read -r -s PULSE_SETUP_TOKEN </dev/tty || true
 			    if command -v stty >/dev/null 2>&1; then stty echo </dev/tty 2>/dev/null || true; fi
 			    printf "\n" >/dev/tty
 		    fi
@@ -1731,13 +1774,13 @@ else
         :
     elif [ "$REGISTER_RC" -ne 0 ]; then
         echo "⚠️  Auto-registration request failed before success confirmation."
-        echo "   Response: $REGISTER_RESPONSE"
+        echo "   Registration failed; check the connection and setup-token expiry in Pulse."
         echo ""
         echo "📝 Use the token details below in Pulse Settings → Infrastructure to finish registration."
     elif [ "$REGISTER_STATUS" = "401" ] || [ "$REGISTER_STATUS" = "403" ]; then
         SETUP_TOKEN_INVALID=true
         echo "Error: Auto-registration failed - authentication required"
-        echo "   Response: $REGISTER_RESPONSE"
+        echo "   Registration failed; check the connection and setup-token expiry in Pulse."
         echo ""
         echo "The provided Pulse setup token was invalid or expired"
         echo "Get a fresh setup token from Pulse Settings → Infrastructure and rerun this script."
@@ -1746,7 +1789,7 @@ else
         echo "Successfully registered with Pulse monitoring."
     else
         echo "⚠️  Auto-registration failed. Finish registration manually in Pulse Settings → Infrastructure."
-        echo "   Response: $REGISTER_RESPONSE"
+        echo "   Registration failed; check the connection and setup-token expiry in Pulse."
         echo ""
         echo "📝 Use the token details below in Pulse Settings → Infrastructure to finish registration."
     fi
@@ -1761,7 +1804,7 @@ proxmox-backup-manager acl update / Audit --auth-id pulse-monitor@pbs
 proxmox-backup-manager acl update / Audit --auth-id "$PULSE_TOKEN_ID"
 
 echo ""
-echo "✅ Setup complete!"
+echo "Setup result:"
 if [ "$AUTO_REG_SUCCESS" = true ]; then
     echo "Successfully registered with Pulse monitoring."
     echo "Data will appear in your dashboard within 10 seconds."

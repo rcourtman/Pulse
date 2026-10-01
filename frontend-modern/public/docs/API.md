@@ -525,9 +525,11 @@ Request body:
 ### Setup Script (Public)
 `GET /api/setup-script`
 Returns the Proxmox/PBS setup script as a shell-script download. Accepts an
-optional temporary setup token in the `setup_token` query for embedded
-non-interactive bootstrap; otherwise the script prompts for the one-time setup
-token at runtime. Canonical callers must send a supported `type` of `pve` or
+optional legacy `setup_token` query for compatibility. Current downloads
+contain no token: paste the separately revealed token only at the silent
+terminal prompt, or supply `PULSE_SETUP_TOKEN_FILE` pointing to a mode-0600
+regular file in a mode-0700 directory owned by the script's user. Never put a
+token in a copied command or URL. Canonical callers must send a supported `type` of `pve` or
 `pbs` plus non-empty `host` and `pulse_url`; the route no longer generates
 placeholder-host scripts for later repair or reconstructs Pulse identity from
 the request origin. The route now shares the same canonical type boundary as
@@ -557,20 +559,23 @@ authorize the request itself. Pulse-managed Proxmox monitor-token names on the
 setup/bootstrap path derive from the canonical Pulse endpoint, not request-local
 host fallbacks, so setup-script and turnkey node-add flows stay on one
 deterministic `pulse-<canonical-scope-slug>` identity per Pulse instance.
-`setupToken` remains bootstrap transport data for `/api/setup-script` and
-`/api/auto-register`, while `tokenHint` is the operator-facing display field
-for quick-setup surfaces and must stay masked instead of exposing the full
-one-time token in UI copy. Shared frontend consumers may validate
-`setupToken`, but they should not retain or display it once the returned
-bootstrap artifact and `tokenHint` are available; visible quick-setup previews
-should use the non-secret `commandWithoutEnv` form while copy actions keep
-using the token-bearing `commandWithEnv` artifact, and manual download flows
-should use the token-bearing `downloadURL` artifact instead of rebuilding a
-plain setup-script URL from non-secret preview state. Non-frontend bootstrap
-consumers such as the runtime-side Unified Agent bootstrap flow and shell installer must fail closed on that
-same full artifact contract too, rejecting missing or mismatched
-`downloadURL`, `tokenHint`, or expired `expires` values instead of accepting a
-reduced setup-token-only response shape.
+The `command`, `commandWithEnv`, and `commandWithoutEnv` fields now contain
+identical credential-free commands. They download the complete script before
+running it and prompt silently in the root-or-sudo process. The token crosses
+the installer boundary through a private file, not process arguments or an
+exported secret. `downloadURL` equals the tokenless `url`, so a manual download
+also needs the separately revealed token at runtime. `setupToken` is used for
+`/api/auto-register`; `tokenHint` remains masked on the setup page. Settings
+reveals the token in a separate dialog: run the command first, then copy and
+paste the token only at its prompt. The artifact is reused only for the same
+host and options while its five-minute expiry is live, and discarded when the
+setup modal closes.
+Non-frontend consumers must validate the complete artifact, including the
+canonical host, type, URLs, filename, masked hint and live expiry. Current
+Unified Agents and the shell installer also accept the coherent older-server
+artifact during upgrades, but never execute its command text. For new
+Proxmox agent enrolment against a newer server, use its current installer;
+already enrolled agents keep reporting normally.
 
 ### Auto-Register (Public)
 `POST /api/auto-register`

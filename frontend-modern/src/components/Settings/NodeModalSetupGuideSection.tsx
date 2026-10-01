@@ -241,8 +241,8 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                     </span>
                   </label>
                   <p class="text-[11px] text-muted italic">
-                    No token fields are needed here. The node appears in Pulse automatically after
-                    the agent starts.
+                    Run the command first, then paste the separately revealed token at its silent
+                    prompt. The node appears in Pulse after the agent starts.
                   </p>
                 </div>
               </Show>
@@ -286,7 +286,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                           await state.copyQuickSetupCommand(
                             'pve',
                             true,
-                            'Command copied to clipboard! Run it on the server. The one-time setup token is already embedded.',
+                            'Command copied to clipboard! Run it on the server. Paste the separate token only at the silent prompt.',
                           );
                         }}
                         class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-200 bg-surface-hover rounded-md transition-colors"
@@ -318,10 +318,11 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                         }
                       >
                         <div class="pr-10 font-sans text-left">
-                          <p class="font-medium text-base-content">Credentialed command ready</p>
+                          <p class="font-medium text-base-content">Credential-free command ready</p>
                           <p class="mt-1 text-xs leading-5 text-muted">
                             Use Copy command to place the runnable command on your clipboard. The
-                            one-time setup token is intentionally not shown on this page.
+                            one-time setup token is shown separately. Run the command first, then
+                            paste the token only at its silent prompt, never into a shell command.
                           </p>
                         </div>
                       </Show>
@@ -424,7 +425,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       </li>
                     </ul>
                     <p class="text-xs text-green-600 dark:text-green-400 mt-2 font-semibold">
-                      Fully automatic: no manual token copying needed.
+                      The monitoring API token is registered automatically.
                     </p>
                   </div>
                 </div>
@@ -728,8 +729,8 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                     </span>
                   </label>
                   <p class="text-xs text-muted">
-                    No token fields are needed here. The server appears in Pulse automatically after
-                    the agent connects.
+                    Run the command first, then paste the separately revealed token at its silent
+                    prompt. The server appears in Pulse after the agent connects.
                   </p>
                 </div>
               </Show>
@@ -757,7 +758,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                             await state.copyQuickSetupCommand(
                               'pbs',
                               false,
-                              'Command copied to clipboard! Run it on the server. The one-time setup token is already embedded.',
+                              'Command copied to clipboard! Run it on the server. Paste the separate token only at the silent prompt.',
                             );
                           }}
                           class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-200 bg-surface-hover rounded-md transition-colors"
@@ -790,10 +791,11 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                         }
                       >
                         <div class="pr-10 font-sans text-left">
-                          <p class="font-medium text-base-content">Credentialed command ready</p>
+                          <p class="font-medium text-base-content">Credential-free command ready</p>
                           <p class="mt-1 text-xs leading-5 text-muted">
                             Use Copy command to place the runnable command on your clipboard. The
-                            one-time setup token is intentionally not shown on this page.
+                            one-time setup token is shown separately. Run the command first, then
+                            paste the token only at its silent prompt, never into a shell command.
                           </p>
                         </div>
                       </Show>
@@ -895,7 +897,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       </li>
                     </ul>
                     <p class="text-xs text-green-600 dark:text-green-400 mt-2 font-semibold">
-                      Fully automatic: no manual token copying needed.
+                      The monitoring API token is registered automatically.
                     </p>
                   </div>
                 </div>

@@ -2553,6 +2553,11 @@ artifact-selection behaviour.
 
 ## Current State
 
+### Credential-safe Proxmox bootstrap (1 October 2026)
+
+Current PVE auto-registration metadata accepts the credential-free setup artifact: all command aliases use a private-file handoff and `downloadURL` equals the tokenless script URL. This replaces earlier requirements to embed setup tokens in commands/URLs. The older coherent server artifact is accepted read-only during upgrades, never executed. Host, type, canonical filename/URL, masked hint and live expiry remain required. Root-installer JSON parsing and registration pass secrets through descriptor/stdin input rather than Python/curl argv, and the setup response is no longer persisted as a plaintext /tmp diagnostic. No install source, API scope, trust exception, release selector or success condition is widened.
+
+
 ### Update progress stream delivery
 
 `GET /api/updates/stream` is the in-app updater's progress feed and must never

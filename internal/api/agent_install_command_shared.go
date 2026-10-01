@@ -3,7 +3,6 @@ package api
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
@@ -142,19 +141,7 @@ func buildContainerRuntimeAgentInstallCommand(baseURL string, token string, enab
 }
 
 func buildSetupScriptCommand(scriptURL string, token string) string {
-	curlCommand := "curl -fsSL " + posixShellQuote(strings.TrimSpace(scriptURL)) + " | "
-	bashCommand := "bash"
-	sudoCommand := "sudo bash"
-	if trimmedToken := strings.TrimSpace(token); trimmedToken != "" {
-		envPrefix := "PULSE_SETUP_TOKEN=" + posixShellQuote(trimmedToken) + " "
-		bashCommand = envPrefix + bashCommand
-		sudoCommand = "sudo env " + envPrefix + "bash"
-	}
-
-	return curlCommand +
-		`{ if [ "$(id -u)" -eq 0 ]; then ` + bashCommand +
-		`; elif command -v sudo >/dev/null 2>&1; then ` + sudoCommand +
-		`; else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi; }`
+	return configapi.BuildSetupScriptCommand(scriptURL, token)
 }
 
 func buildSetupScriptTokenHint(token string) string {
@@ -166,40 +153,11 @@ func buildSetupScriptTokenHint(token string) string {
 }
 
 func buildSetupScriptURL(baseURL string, installType string, host string, pulseURL string, backupPerms bool) string {
-	query := url.Values{}
-	query.Set("type", strings.TrimSpace(installType))
-
-	if trimmedHost := strings.TrimSpace(host); trimmedHost != "" {
-		query.Set("host", trimmedHost)
-	}
-
-	if trimmedPulseURL := strings.TrimSpace(pulseURL); trimmedPulseURL != "" {
-		query.Set("pulse_url", trimmedPulseURL)
-	}
-
-	if backupPerms && strings.TrimSpace(installType) == "pve" {
-		query.Set("backup_perms", "true")
-	}
-
-	return normalizeAgentInstallBaseURL(baseURL) + "/api/setup-script?" + query.Encode()
+	return configapi.BuildSetupScriptURL(baseURL, installType, host, pulseURL, backupPerms)
 }
 
 func buildSetupScriptDownloadURL(baseURL string, installType string, host string, pulseURL string, backupPerms bool, setupToken string) string {
-	downloadURL := buildSetupScriptURL(baseURL, installType, host, pulseURL, backupPerms)
-	trimmedToken := strings.TrimSpace(setupToken)
-	if trimmedToken == "" {
-		return downloadURL
-	}
-
-	parsed, err := url.Parse(downloadURL)
-	if err != nil {
-		return downloadURL
-	}
-
-	query := parsed.Query()
-	query.Set("setup_token", trimmedToken)
-	parsed.RawQuery = query.Encode()
-	return parsed.String()
+	return configapi.BuildSetupScriptDownloadURL(baseURL, installType, host, pulseURL, backupPerms, setupToken)
 }
 
 func buildSetupScriptFileName(installType string) string {
@@ -207,22 +165,7 @@ func buildSetupScriptFileName(installType string) string {
 }
 
 func buildSetupScriptInstallArtifact(baseURL string, installType string, host string, pulseURL string, backupPerms bool, setupToken string, expiresAt int64) setupScriptInstallArtifact {
-	scriptURL := buildSetupScriptURL(baseURL, installType, host, pulseURL, backupPerms)
-	commandWithEnv := buildSetupScriptCommand(scriptURL, setupToken)
-
-	return setupScriptInstallArtifact{
-		Type:              strings.TrimSpace(installType),
-		Host:              strings.TrimSpace(host),
-		URL:               scriptURL,
-		DownloadURL:       buildSetupScriptDownloadURL(baseURL, installType, host, pulseURL, backupPerms, setupToken),
-		ScriptFileName:    buildSetupScriptFileName(installType),
-		Command:           commandWithEnv,
-		CommandWithEnv:    commandWithEnv,
-		CommandWithoutEnv: buildSetupScriptCommand(scriptURL, ""),
-		Expires:           expiresAt,
-		SetupToken:        strings.TrimSpace(setupToken),
-		TokenHint:         buildSetupScriptTokenHint(setupToken),
-	}
+	return configapi.BuildSetupScriptInstallArtifact(baseURL, installType, host, pulseURL, backupPerms, setupToken, expiresAt)
 }
 
 func resolveConfigAgentInstallBaseURL(req *http.Request, cfg *config.Config, hostedMode bool) string {
