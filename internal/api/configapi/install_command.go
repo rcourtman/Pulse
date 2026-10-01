@@ -83,9 +83,18 @@ func privateBootstrapCommand(scriptURL, curlFlags, preflight, run string, needsT
 		privileged = append(privileged,
 			`token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX);`,
 			`token_file="$token_dir/token";`,
-			`cleanup() { unset pulse_token; rm -f -- "$token_file"; rmdir -- "$token_dir"; };`,
+			`unset pulse_token pulse_discard tty_state;`,
+			`cleanup() { unset pulse_token pulse_discard; if [ -n "${tty_state:-}" ]; then stty "$tty_state" </dev/tty 2>/dev/null || :; fi; rm -f -- "$token_file"; rmdir -- "$token_dir"; };`,
 			`trap cleanup EXIT; trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM;`,
-			`if ! IFS= read -r -s -p `+posixShellQuote(prompt+" (paste at this prompt, not in the command): ")+` pulse_token </dev/tty; then echo "A terminal is required to enter the token. No installation was attempted." >&2; exit 1; fi;`,
+			// A normal canonical tty silently truncates long lines (4095 bytes on
+			// Linux). Bounded character input preserves valid input and detects
+			// overflow; keep echo off while draining the rest of an invalid line
+			// so it cannot become a second command in the caller's shell history.
+			`if ! tty_state=$(stty -g </dev/tty); then echo "A terminal is required to enter the token. No installation was attempted." >&2; exit 1; fi;`,
+			`stty -echo </dev/tty;`,
+			`if ! IFS= read -r -s -p `+posixShellQuote(prompt+" (paste at this prompt, not in the command): ")+` -n 4097 pulse_token </dev/tty; then echo "Token input was interrupted. No installation was attempted." >&2; exit 1; fi;`,
+			`if [ "${#pulse_token}" -gt 4096 ]; then while IFS= read -r -s -n 4097 pulse_discard </dev/tty && [ "${#pulse_discard}" -eq 4097 ]; do :; done; unset pulse_discard; fi;`,
+			`stty "$tty_state" </dev/tty; unset tty_state;`,
 			`printf '\n' >/dev/tty;`,
 			`if [ -z "$pulse_token" ] || [ "${#pulse_token}" -gt 4096 ]; then echo "A non-empty token of at most 4096 characters is required." >&2; exit 1; fi;`,
 			`printf %s "$pulse_token" > "$token_file"; unset pulse_token;`,

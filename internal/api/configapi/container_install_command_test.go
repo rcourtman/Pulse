@@ -47,6 +47,52 @@ func TestContainerBootstrapHistoryAndShellData(t *testing.T) {
 	assertContainerBootstrapCleanup(t, root)
 }
 
+func TestContainerBootstrapOverflowDoesNotBecomeShellHistory(t *testing.T) {
+	root, env := bootstrapFixture(t, recordingInstaller)
+	token := strings.Repeat("x", 10000) + "-OVERFLOW_HISTORY_MARKER"
+	command := BuildContainerRuntimeAgentInstallCommand("https://pulse.example", "separate-issued-token", true)
+	history := filepath.Join(root, "shell-history")
+	payload, err := json.Marshal(map[string]string{"command": command, "input": token, "history": history})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("python3", "-c", bootstrapPTYRunner)
+	cmd.Stdin = strings.NewReader(string(payload))
+	cmd.Env = append(os.Environ(), env...)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("overflowed input was accepted")
+	}
+	hist, err := os.ReadFile(history)
+	if err != nil || !strings.Contains(string(hist), command) {
+		t.Fatal("history control did not record the copied command")
+	}
+	for _, output := range []string{string(out), string(hist)} {
+		if strings.Contains(output, "OVERFLOW_HISTORY_MARKER") || strings.Contains(output, strings.Repeat("x", 512)) {
+			t.Fatal("discarded credential input was echoed or returned to shell history")
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "captured-token")); !os.IsNotExist(err) {
+		t.Fatal("installer ran after overflowed input")
+	}
+	assertContainerBootstrapCleanup(t, root)
+}
+
+func TestContainerBootstrapPreservesMaximumAcceptedInput(t *testing.T) {
+	root, env := bootstrapFixture(t, recordingInstaller)
+	token := strings.Repeat("a", 4096)
+	command := BuildContainerRuntimeAgentInstallCommand("https://pulse.example", "separate-issued-token", true)
+	out, err := runBootstrap(t, command, token, env, true)
+	if err != nil {
+		t.Fatalf("maximum-size private input: %v\n%s", err, out)
+	}
+	captured, err := os.ReadFile(filepath.Join(root, "captured-token"))
+	if err != nil || string(captured) != token {
+		t.Fatal("terminal silently truncated an accepted token")
+	}
+	assertContainerBootstrapCleanup(t, root)
+}
+
 func assertContainerBootstrapCleanup(t *testing.T, root string) {
 	t.Helper()
 	directories, err := os.ReadFile(filepath.Join(root, "private-directories"))
