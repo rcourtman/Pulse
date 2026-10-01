@@ -1,10 +1,12 @@
 package alerts
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -97,25 +99,54 @@ func TestCleanupRoutine_ReturnsImmediatelyWhenStopped(t *testing.T) {
 }
 
 func TestStartPeriodicSave_PersistsHistoryOnTicker(t *testing.T) {
-	hm := newTestHistoryManager(t)
-	hm.saveInterval = 10 * time.Millisecond
-	hm.history = []HistoryEntry{
-		{Alert: Alert{ID: "periodic-save-alert"}, Timestamp: time.Now()},
-	}
-
-	hm.startPeriodicSave()
-	// Stop waits for the save worker, so an in-flight save cannot race the
-	// TempDir cleanup.
-	defer hm.Stop()
-
-	deadline := time.Now().Add(750 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		data, err := os.ReadFile(hm.historyFile)
-		if err == nil && strings.Contains(string(data), "periodic-save-alert") {
-			return
+	// Exercise the real ticker and persistence worker using virtual time.
+	// The old 750 ms filesystem-poll deadline measured wall-clock scheduling
+	// and I/O as well as periodic-save behaviour. Wait drains each tick's real
+	// file I/O before assertions, without adding a production callback or
+	// letting Stop's final save satisfy the periodic-save assertion.
+	synctest.Test(t, func(t *testing.T) {
+		hm := newTestHistoryManager(t)
+		hm.history = []HistoryEntry{
+			{Alert: Alert{ID: "periodic-save-alert"}, Timestamp: time.Now()},
 		}
-		time.Sleep(15 * time.Millisecond)
-	}
+		hm.startPeriodicSave()
+		defer hm.Stop()
 
-	t.Fatal("periodic save did not persist history data before deadline")
+		synctest.Wait()
+		if _, err := os.Stat(hm.historyFile); !os.IsNotExist(err) {
+			t.Fatalf("history written before first tick: %v", err)
+		}
+		assertPersisted := func(wantIDs ...string) {
+			t.Helper()
+			data, err := os.ReadFile(hm.historyFile)
+			if err != nil {
+				t.Fatalf("read periodic history: %v", err)
+			}
+			var entries []HistoryEntry
+			if err := json.Unmarshal(data, &entries); err != nil {
+				t.Fatalf("decode periodic history: %v", err)
+			}
+			if len(entries) != len(wantIDs) {
+				t.Fatalf("periodic history has %d entries, want %d", len(entries), len(wantIDs))
+			}
+			for i, id := range wantIDs {
+				if entries[i].Alert.ID != id {
+					t.Errorf("entry %d ID = %q, want %q", i, entries[i].Alert.ID, id)
+				}
+			}
+		}
+
+		time.Sleep(hm.saveInterval)
+		synctest.Wait()
+		assertPersisted("periodic-save-alert")
+
+		hm.mu.Lock()
+		hm.history = append(hm.history, HistoryEntry{
+			Alert: Alert{ID: "second-tick-alert"}, Timestamp: time.Now(),
+		})
+		hm.mu.Unlock()
+		time.Sleep(hm.saveInterval)
+		synctest.Wait()
+		assertPersisted("periodic-save-alert", "second-tick-alert")
+	})
 }
