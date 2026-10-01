@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "base_sha": "920aa2f27c6cb717cca7eb8e2cd3f1379d0fdf73",
-  "verified_at": "2026-10-01T03:23:21Z",
+  "base_sha": "36418af66beac94204276f7dc73de2c41e297fb1",
+  "verified_at": "2026-10-01T05:22:37Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/Table.tsx"
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/Table.tsx": "4009a751a3fa435cb4067a98989d25cac4e9e6d08acd7b91701fc98fbfd5aaf1"
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "65538187de57957691eb00af08a9f86b916a6300f2d12065a1985fb2170ef7bf"
   },
   "routes": [
-    "/browser-tests/pbs-identity-boundary.html (production PBS table, full ResourceDetailDrawer and History with synthetic bounded API/Agent/PVE data)",
-    "/browser-tests/table-row-touch.html (production Table, SummaryRowActionButton and PulseDataGrid with synthetic rows and delegated embedded actions)"
+    "/browser-tests/pbs-identity-boundary.html (production PBS table and full ResourceDetailDrawer/History; synthetic bounded API/Agent/PVE resources)",
+    "/browser-tests/pbs-history-refresh.html (production shared History renderer with deliberately distinct current readings)"
   ],
   "viewports": [
     {
@@ -24,43 +24,131 @@
     }
   ],
   "states": [
-    "WebKit phone light/dark, Chromium phone light and Firefox desktop dark: all three synthetic PBS drawers open with the first ordinary cell activation and close with the next",
-    "History tabs stay open and read only vm-one, vm-two and agent-three with bounded GETs",
-    "delegated embedded buttons, native fragment links and checkbox clicks retain their own action without firing the row",
-    "shared disclosure touch and Enter/Space activate once; disabled/static rows do not act; restoring the row handler works",
-    "PulseDataGrid row activates once and its embedded button does not activate the row; no page errors or document horizontal overflow"
+    "All three synthetic PBS drawers retain vm-one, vm-two and agent-three history identity and one dated window",
+    "A lone stored CPU, network, disk-write and thermal series each displays one point at its actual time, with valid measured zeros and no manufactured path",
+    "Single-time panels visibly date their observation and explain that it is not a trend; empty successful reads report no stored history in the selected range",
+    "Live CPU/memory legend fallbacks carry an explicit current label and create no stored geometry",
+    "Failed same-source refresh retains lone points and the warning; uncached range replacement clears old geometry and captions while loading; locked ranges make no reads",
+    "Light/dark phone and desktop rendering: no page errors or document horizontal overflow"
   ],
   "interactions": [
-    "phone-emulated locator.tap on ordinary PBS cells without focus, force, synthetic click dispatch or added event instrumentation",
-    "tap History, inspect real plotted paths, close each drawer from its same name cell; focus native disclosure and use Enter/Space",
-    "tap embedded button, fragment link and checkbox; tap and keyboard-activate native disclosure; withdraw and restore row action; activate data-grid row and its child button"
+    "Native disclosure and History tabs for each of three mapped drawers; keyboard/touch stored-time inspection remains dated and makes no extra reads",
+    "Refresh, failed refresh, retry, sparse response, successful empty response, and 24h/1h/7d/locked-14d range changes",
+    "Current-only direct renderer read confirms explicitly labelled live readings and empty plots"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/table-row-touch.cjs --engine=webkit; --engine=webkit --dark; --engine=chromium; --engine=firefox --dark --desktop. Four separate bounded executions from the assigned workspace root. Playwright 1.56.1 / integration-lock parity checked; Vite 6.4.3.",
+  "command": "Four executions from assigned workspace root: pulse-worker-browser frontend-modern/browser-tests/history-window.cjs --engine=webkit --phone --theme=light; --engine=webkit --phone --theme=dark; --engine=firefox --theme=dark; --engine=chromium --phone --theme=light. Playwright 1.56.1 matches integration lock; Vite 6.4.3.",
   "browser_versions": {
-    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
     "firefox": "142.0.1",
-    "webkit": "26.0"
+    "chromium": "141.0.7390.37"
   },
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/chromium-390-light/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/chromium-390-light/pbs-first-activation.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/chromium-390-light/pbs-third-history.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/chromium-390-light/shared-controls.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/firefox-1365-dark/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/firefox-1365-dark/pbs-first-activation.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/firefox-1365-dark/pbs-third-history.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/firefox-1365-dark/shared-controls.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/webkit-390-dark/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/webkit-390-dark/pbs-first-activation.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/webkit-390-dark/pbs-third-history.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/webkit-390-dark/shared-controls.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/webkit-390-light/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/webkit-390-light/pbs-first-activation.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/webkit-390-light/pbs-third-history.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/webkit-390-light/shared-controls.png"
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-light/sparse-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-light/current-empty-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-light/one-24h-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-light/two-24h-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-light/one-hour-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-light/empty-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-light/three-24h-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-light/retained-window-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-light/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-light/progress.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-dark/two-24h-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-dark/three-24h-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-dark/current-empty-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-dark/one-hour-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-dark/one-24h-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-dark/sparse-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-dark/retained-window-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-dark/empty-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-dark/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-webkit-390-dark/progress.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-firefox-1365-dark/two-24h-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-firefox-1365-dark/three-24h-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-firefox-1365-dark/current-empty-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-firefox-1365-dark/one-hour-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-firefox-1365-dark/one-24h-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-firefox-1365-dark/sparse-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-firefox-1365-dark/retained-window-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-firefox-1365-dark/empty-dark.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-firefox-1365-dark/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-firefox-1365-dark/progress.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-chromium-390-light/sparse-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-chromium-390-light/current-empty-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-chromium-390-light/one-24h-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-chromium-390-light/two-24h-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-chromium-390-light/one-hour-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-chromium-390-light/empty-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-chromium-390-light/three-24h-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-chromium-390-light/retained-window-light.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-chromium-390-light/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-_7g3zqr_/browser-qualified/history-window-chromium-390-light/progress.json"
   ],
-  "notes": "All 12 final screenshots inspected. This repairs reproduced WebKit-emulated row touch, not physical iPhone/Safari acceptance, installed PBS telemetry, every #1723 metric outcome, screen-reader speech or a Tailscale Serve update. Initial harness working-directory/API-path/locator/output-wrapping failures and the instrumented diagnostic are retained in the output receipts; none is a release failure or passing uninstrumented baseline.",
+  "notes": "All 32 final screenshots inspected after the copy-style correction to Single observation. No trend yet. All four fresh passes match the runtime SHA256 above. Baseline WebKit phone returned exit 1: four valid lone series had zero points and four Collecting history claims. Earlier HMR/source-hash diagnostics and a batch wrapper exit 143 are retained outside this final proof; the final single Chromium execution exits 0. Offline renderer fixtures do not establish installed PBS/VirtualBox/provider acceptance, physical devices, screen-reader speech or Tailscale Serve update proof. No API, polling, cache or license boundary changes.",
   "prior_verifications": [
+    {
+      "version": 1,
+      "base_sha": "920aa2f27c6cb717cca7eb8e2cd3f1379d0fdf73",
+      "verified_at": "2026-10-01T03:23:21Z",
+      "result": "passed",
+      "changed_paths": [
+        "frontend-modern/src/components/shared/Table.tsx"
+      ],
+      "content_sha256": {
+        "frontend-modern/src/components/shared/Table.tsx": "4009a751a3fa435cb4067a98989d25cac4e9e6d08acd7b91701fc98fbfd5aaf1"
+      },
+      "routes": [
+        "/browser-tests/pbs-identity-boundary.html (production PBS table, full ResourceDetailDrawer and History with synthetic bounded API/Agent/PVE data)",
+        "/browser-tests/table-row-touch.html (production Table, SummaryRowActionButton and PulseDataGrid with synthetic rows and delegated embedded actions)"
+      ],
+      "viewports": [
+        {
+          "width": 390,
+          "height": 844
+        },
+        {
+          "width": 1365,
+          "height": 900
+        }
+      ],
+      "states": [
+        "WebKit phone light/dark, Chromium phone light and Firefox desktop dark: all three synthetic PBS drawers open with the first ordinary cell activation and close with the next",
+        "History tabs stay open and read only vm-one, vm-two and agent-three with bounded GETs",
+        "delegated embedded buttons, native fragment links and checkbox clicks retain their own action without firing the row",
+        "shared disclosure touch and Enter/Space activate once; disabled/static rows do not act; restoring the row handler works",
+        "PulseDataGrid row activates once and its embedded button does not activate the row; no page errors or document horizontal overflow"
+      ],
+      "interactions": [
+        "phone-emulated locator.tap on ordinary PBS cells without focus, force, synthetic click dispatch or added event instrumentation",
+        "tap History, inspect real plotted paths, close each drawer from its same name cell; focus native disclosure and use Enter/Space",
+        "tap embedded button, fragment link and checkbox; tap and keyboard-activate native disclosure; withdraw and restore row action; activate data-grid row and its child button"
+      ],
+      "command": "pulse-worker-browser frontend-modern/browser-tests/table-row-touch.cjs --engine=webkit; --engine=webkit --dark; --engine=chromium; --engine=firefox --dark --desktop. Four separate bounded executions from the assigned workspace root. Playwright 1.56.1 / integration-lock parity checked; Vite 6.4.3.",
+      "browser_versions": {
+        "chromium": "141.0.7390.37",
+        "firefox": "142.0.1",
+        "webkit": "26.0"
+      },
+      "artifacts": [
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/chromium-390-light/result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/chromium-390-light/pbs-first-activation.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/chromium-390-light/pbs-third-history.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/chromium-390-light/shared-controls.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/firefox-1365-dark/result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/firefox-1365-dark/pbs-first-activation.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/firefox-1365-dark/pbs-third-history.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/firefox-1365-dark/shared-controls.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/webkit-390-dark/result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/webkit-390-dark/pbs-first-activation.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/webkit-390-dark/pbs-third-history.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/webkit-390-dark/shared-controls.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/webkit-390-light/result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/webkit-390-light/pbs-first-activation.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/webkit-390-light/pbs-third-history.png",
+        "/var/lib/pulse-maintainer/worker-outputs/web-product-0i3s168w/browser-final/webkit-390-light/shared-controls.png"
+      ],
+      "notes": "All 12 final screenshots inspected. This repairs reproduced WebKit-emulated row touch, not physical iPhone/Safari acceptance, installed PBS telemetry, every #1723 metric outcome, screen-reader speech or a Tailscale Serve update. Initial harness working-directory/API-path/locator/output-wrapping failures and the instrumented diagnostic are retained in the output receipts; none is a release failure or passing uninstrumented baseline."
+    },
     {
       "version": 1,
       "base_sha": "00f82e2afc3cd75035c997e9e245c6e0eeffffa9",

@@ -5223,6 +5223,7 @@
         "frontend-modern/src/components/SetupWizard/SetupWizard.tsx",
         "frontend-modern/src/components/Toast/Toast.tsx",
         "frontend-modern/src/components/Workloads/AvailabilityProbeSuggestionCard.tsx",
+        "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
         "frontend-modern/src/components/Workloads/nodeDrawerModel.ts",
         "frontend-modern/src/features/docker/dockerHostDrawerModel.ts",
         "frontend-modern/src/features/platformPage/platformEstateOverviewModel.ts",
@@ -5928,6 +5929,24 @@
             "exact_files": [
               "frontend-modern/src/features/docs/__tests__/docMarkdown.test.ts",
               "frontend-modern/src/pages/__tests__/Docs.test.ts"
+            ]
+          },
+          {
+            "id": "drawer-metric-history",
+            "label": "shared drawer stored/current history proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Workloads/__tests__/GuestDrawerHistory.inspection.test.tsx",
+              "frontend-modern/src/components/Workloads/__tests__/GuestDrawerHistory.pointer.test.tsx",
+              "frontend-modern/src/components/Workloads/__tests__/GuestDrawerHistory.refresh.test.tsx",
+              "frontend-modern/src/components/Workloads/__tests__/GuestDrawerHistory.source-isolation.test.tsx",
+              "frontend-modern/src/components/Workloads/__tests__/GuestDrawerHistory.sparse.test.tsx",
+              "frontend-modern/src/components/Workloads/__tests__/GuestDrawerHistory.window.test.tsx"
             ]
           }
         ],

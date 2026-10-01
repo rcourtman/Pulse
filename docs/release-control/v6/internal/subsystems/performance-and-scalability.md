@@ -876,11 +876,17 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     the migration boundary.
 11. Extend workload drawer derivations and runtime wiring through `frontend-modern/src/components/Workloads/guestDrawerModel.ts` and `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`, and extend drawer overview rendering through `frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`, rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Workloads/GuestDrawer.tsx`
     Drawer history charts belong to `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`.
-    A current metric may remain visible in a chart legend while history is
-    accumulating, but it must never be expanded into synthetic timestamps or a
-    flat line. Fewer than two stored points remains `Collecting history` and
-    only metrics-store samples may contribute chart geometry, bounds, or hover
-    inspection. Current-value legends must preserve the same availability
+    A current metric may remain visible in a chart legend only when labelled
+    `current`; it must never be expanded into synthetic timestamps or a flat
+    line. One stored sample is a visible point at its actual time, with a dated
+    single-observation caption rather than a collecting claim or invented trend.
+    Successful empty reads say `No stored history in this range`. Only
+    metrics-store samples may contribute chart geometry, bounds, or hover
+    inspection, including valid measured zero. This presentation adds no fetch,
+    point expansion, polling or retention budget. Verify sparse and mixed-series
+    geometry and failed-refresh/source-change behaviour in
+    `GuestDrawerHistory.sparse.test.tsx`, with rendered phone/desktop coverage in
+    `browser-tests/history-window.cjs`. Current-value legends preserve the same availability
     semantics as workload rows: the poller's negative unknown-disk sentinel is
     unavailable and renders `-`, never a fabricated negative percentage.
     History cards must let the plot area stretch to the card height instead of

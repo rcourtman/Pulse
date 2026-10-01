@@ -336,10 +336,23 @@ These proofs establish presentation/recovery, not installed collection or delive
 
 Shared workload, node, Docker-host, and resource-drawer history presentation
 keeps current readings separate from stored samples. A current metric may
-populate the legend while history is still being collected, but it must never
-be expanded into synthetic timestamps or chart geometry. An empty stored
-series renders the shared collecting-history state; zero remains a valid
+populate the legend only with the explicit `current` label, never as a stored
+reading, timestamp or chart geometry. A successful empty read says `No stored
+history in this range`; it does not imply that collection is running or that
+changing provider configuration will produce a sample. Zero remains a valid
 reported reading, while an absent metric remains unavailable.
+A lone stored series renders one point at its actual timestamp and value,
+including measured zero, never an invented line. A group with one observation
+time exposes that date visibly with `Single observation. No trend yet.` and
+retains the existing accessible observation description. Multiple series with
+separate single observations remain separate points, inspectable at their
+actual times through the existing native control. Failed same-source refreshes
+retain these points; source/range replacement clears them along with paths and
+captions. `GuestDrawerHistory.sparse.test.tsx` checks geometry, units, provenance,
+invalid data, refresh and replacement. `browser-tests/history-window.cjs` also
+checks sparse/empty/current states through the production PBS drawer and direct
+shared renderer. This is presentation proof, not provider collection or #1723
+installed acceptance.
 Shared history-chart gridlines must carry numeric labels derived from the
 plotted scale rather than semantic `Avg` / `Max` placeholders. Byte and
 byte-rate axes include their human-readable unit at each gridline, and the
@@ -708,7 +721,7 @@ the synthetic estate continues updating, plus the alert timeline and note form.
 
 The Backups surface passes its complete deduplicated route inventory to the PBS table. Only PBS servers render as rows; other resources supply correlation inputs. Preserve PBS drawer identity and use the correlated canonical history target. Missing disk utilisation does not gate CPU/memory history.
 
-One agent can be surfaced twice for a single PBS host: folded into its PVE guest and as a standalone `source=pbs` host row. Those two rows are one machine, not an ambiguous pair. Correlation must collapse candidates that share an agent identity and prefer the guest representation, whose canonical metrics target carries the persisted host history; the PBS service target has no host series and renders the collecting-history state. Two candidates with distinct agent identities remain ambiguous, and a candidate with no agent identity must not be treated as proof of sameness.
+One agent can be surfaced twice for a single PBS host: folded into its PVE guest and as a standalone `source=pbs` host row. Those two rows are one machine, not an ambiguous pair. Correlation must collapse candidates that share an agent identity and prefer the guest representation, whose canonical metrics target carries the persisted host history; the PBS service target has no stored host series and renders the no-history state. Two candidates with distinct agent identities remain ambiguous, and a candidate with no agent identity must not be treated as proof of sameness.
 
 A live snapshot can briefly omit the correlated host row while the PBS server row remains, for example while a realtime refresh replaces the merged estate. The correlation must retain the last resolved host per PBS server across that omission instead of falling back to the PBS service target, so the drawer's Discovery and Metrics Target rows and its History series do not flicker. Reuse the remembered host only while it is still fresh relative to the server, and drop it once stale so a removed or replaced host is not advertised indefinitely; a host row that is present but ambiguous still declines.
 

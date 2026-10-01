@@ -177,7 +177,9 @@ describe('GuestDrawerHistory shared time window', () => {
   it('keeps an empty valid query window without inventing observations or a trend', async () => {
     vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(response({ metrics: {} }));
     mount();
-    await waitFor(() => expect(screen.getAllByText('Collecting history')).toHaveLength(4));
+    await waitFor(() =>
+      expect(screen.getAllByText('No stored history in this range')).toHaveLength(4),
+    );
     expect(screen.queryByRole('slider')).toBeNull();
     expect(document.querySelectorAll('path')).toHaveLength(0);
     expect(screen.getAllByTestId('guest-history-time-window')).toHaveLength(4);
