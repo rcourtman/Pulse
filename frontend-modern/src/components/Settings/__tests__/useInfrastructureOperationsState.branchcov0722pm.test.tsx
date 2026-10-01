@@ -1,3 +1,4 @@
+import { unixBootstrapTestSource } from '@/utils/__tests__/unixBootstrapTestSource';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Connection } from '@/api/connections';
@@ -308,8 +309,8 @@ describe('useInfrastructureOperationsState command-building closures', () => {
       };
 
       const cmd = state.getUninstallCommand(row);
-      expect(cmd).toContain("--agent-id 'act-9'");
-      expect(cmd).toContain("--hostname 'host-9'");
+      expect(unixBootstrapTestSource(cmd)).toContain("--agent-id 'act-9'");
+      expect(unixBootstrapTestSource(cmd)).toContain("--hostname 'host-9'");
       expect(cmd).not.toContain('agent-9');
       dispose();
     });
@@ -321,8 +322,8 @@ describe('useInfrastructureOperationsState command-building closures', () => {
       const row: AgentUninstallIdentity = { agentId: 'agent-7', hostname: 'host-7' };
 
       const cmd = state.getUninstallCommand(row);
-      expect(cmd).toContain("--agent-id 'agent-7'");
-      expect(cmd).toContain("--hostname 'host-7'");
+      expect(unixBootstrapTestSource(cmd)).toContain("--agent-id 'agent-7'");
+      expect(unixBootstrapTestSource(cmd)).toContain("--hostname 'host-7'");
       dispose();
     });
 

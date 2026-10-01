@@ -1,3 +1,4 @@
+import { unixBootstrapTestSource } from '@/utils/__tests__/unixBootstrapTestSource';
 import { execFileSync } from 'node:child_process';
 import { useInfrastructureOperationsState } from '../useInfrastructureOperationsState';
 import { describe, expect, it, vi } from 'vitest';
@@ -392,8 +393,8 @@ describe('Agent Doctor model', () => {
     expect(install).toContain('--enable-privileged-helper');
     expect(install).toContain('--enable-action-runner');
     expect(install).toContain('--action-token-file');
-    expect(install).toContain("--agent-id 'host-1'");
-    expect(install).toContain("--hostname 'host-1.local'");
+    expect(unixBootstrapTestSource(install)).toContain("--agent-id 'host-1'");
+    expect(unixBootstrapTestSource(install)).toContain("--hostname 'host-1.local'");
     expect(install).toContain("--cacert '/etc/pulse/ca.pem'");
     expect(install).not.toContain(secret);
     expect(install).not.toContain('--action-token ');

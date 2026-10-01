@@ -277,9 +277,7 @@ describe('infrastructure operations model', () => {
       'Use Availability checks for ping-only or agentless device monitoring.',
     );
     expect(infrastructureInstallerSectionSource).toContain('checks this Pulse URL and');
-    expect(infrastructureInstallerSectionSource).toContain(
-      'before asking for administrator privileges',
-    );
+    expect(infrastructureInstallerSectionSource).toContain('before reading a Unix token');
     expect(infrastructureInstallerSectionSource).toContain(
       'For Proxmox, start with a dedicated read-only or narrowly scoped API token',
     );
