@@ -1134,15 +1134,15 @@ func TestCurrentStablePatchReleasePacketTracksInstallMetadata(t *testing.T) {
 	releaseNotesPath := repoFile("docs", "releases", "RELEASE_NOTES_v"+version+".md")
 	changelogPath := repoFile("docs", "releases", "V6_CHANGELOG_v"+version+".md")
 
-	assertFileContainsAllNormalized(t, releaseNotesPath,
-		"`v"+version+"` is a stable patch release",
-		"`v"+previous+"`",
-		"## What's improved",
-		"not Authenticode-signed",
-		"Unknown Publisher warning",
-		"does not require a companion mobile release",
-		"rollback target is stable `v"+previous+"`",
-	)
+	// The changelog below binds stable maturity and promotion lineage. Public
+	// notes bind the version and operator safety, not one author's boilerplate.
+	notes, err := os.ReadFile(releaseNotesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, issue := range stablePatchReleaseNotesIssues(string(notes), version, previous) {
+		t.Errorf("%s: %s", releaseNotesPath, issue)
+	}
 	changelogRequired := make([]string, 0, 7)
 	changelogRequired = append(changelogRequired,
 		"Version: `v"+version+"`",
