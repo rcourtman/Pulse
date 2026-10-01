@@ -79,6 +79,7 @@ def server(cert, key, status=200, installer=None, installer_path="/install.sh"):
 
     http = HTTPServer(("127.0.0.1", 0), Handler)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(str(cert), str(key))
     http.socket = context.wrap_socket(http.socket, server_side=True)
     thread = threading.Thread(target=http.serve_forever, daemon=True)
