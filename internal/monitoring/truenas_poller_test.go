@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -2227,7 +2228,7 @@ func TestTrueNASPartialReportingPipeline(t *testing.T) {
 		{`[{"name":"cpu","legend":["usage"],"data":[[1789000060,0]]},{"name":"memory","legend":["free"],"data":[[1789000060,0]]},{"name":"interface","legend":["received"],"data":[[1789000060,0]]},{"name":"disk","legend":["write"],"data":[[1789000060,0]]}]`, 200, map[string]float64{"cpu": 0, "memory": 100, "netin": 0, "diskwrite": 0}, ""},
 	}
 	var current atomic.Int64
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/api/v2.0/system/info":
@@ -2245,7 +2246,8 @@ func TestTrueNASPartialReportingPipeline(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	client, err := truenas.NewClient(truenas.ClientConfig{Host: server.URL, APIKey: "synthetic"})
+	fingerprint := fmt.Sprintf("%x", sha256.Sum256(server.Certificate().Raw))
+	client, err := truenas.NewClient(truenas.ClientConfig{Host: server.URL, APIKey: "synthetic", Fingerprint: fingerprint})
 	if err != nil {
 		t.Fatal(err)
 	}
