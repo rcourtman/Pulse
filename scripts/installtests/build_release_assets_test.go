@@ -2599,8 +2599,8 @@ func TestDemoReachabilityHelperSeparatesTailnetAndSshTransportProof(t *testing.T
 		`tailscale status --json`,
 		`tailscale ping --c 3 --timeout 10s "$DEMO_SERVER_HOST"`,
 		`nc -z -w 5 "$DEMO_SERVER_HOST" "$TCP_PORT"`,
-		`Runner Tailscale DNS:`,
-		`Runner Tailscale tags:`,
+		`Tailscale backend:`,
+		`Diagnostic mode is local-only`,
 		`Demo peer is not present in the runner peer map yet.`,
 		`Verify sshd and the host firewall on tailscale0.`,
 	} {
@@ -2641,7 +2641,7 @@ exit 1
 	if err != nil {
 		t.Fatalf("demo reachability helper failed: %v\n%s", err, output)
 	}
-	for _, needle := range []string{"Tailscale backend: Running", "Demo peer state: online=True active=True relay=lhr", "Demo SSH transport is reachable over Tailscale."} {
+	for _, needle := range []string{"Tailscale backend: Running", "Demo peer state: online=True active=True", "Demo SSH transport is reachable over Tailscale."} {
 		if !strings.Contains(string(output), needle) {
 			t.Fatalf("demo reachability output missing %q: %s", needle, output)
 		}

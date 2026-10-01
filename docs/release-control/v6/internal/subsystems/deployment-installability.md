@@ -4114,8 +4114,23 @@ hostnames or Tailscale IPs, rather than silently depending on public SSH
 reachability from GitHub-hosted runners. The workflow must use the current
 pinned Tailscale GitHub Action, its target `ping` readiness gate, and the shared
 `.github/scripts/check-demo-reachability.sh` TCP/22 diagnostic before SSH key
-capture. A successful tailnet join alone is not connectivity proof. After that
-network preflight, shared SSH
+capture. A successful tailnet join alone is not connectivity proof.
+
+The shared helper's `diagnose` mode is local-only after a failed setup action:
+it must not ping the peer or attempt direct TCP as a fallback. Its `check` mode
+requires recognised local `Running` state before any probe, then a successful
+tailnet ping before TCP/22. Missing, malformed or non-running daemon state is
+an incomplete setup result, not proof that the demo is down. Failed ping is
+retained without another diagnostic ping or TCP attempt. Status diagnostics
+report only allowlisted backend states and peer-presence/online/active booleans;
+they never print tailnet addresses, DNS names, tags, relay locations, raw JSON
+or local CLI errors. Tailnet and TCP probe stdout/stderr are also suppressed
+on both success and failure; their exits and bounded, topology-free verdicts
+remain visible. Diagnostic success cannot establish connectivity or
+installed acceptance, and neither mode changes credentials or authorises
+replaying a provider refusal.
+
+After that network preflight, shared SSH
 setup must wait for configured demo hostnames to resolve, accept configured IP
 literals without a DNS precheck, and then capture host keys with bounded
 short retries before any installer or binary copy runs; a long `ssh-keyscan`
