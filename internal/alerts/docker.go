@@ -1206,8 +1206,10 @@ func (m *Manager) clearDockerContainerMetricAlerts(resourceID string, metrics ..
 func (m *Manager) clearDockerContainerUpdateTracking(resourceID, trackingKey string) {
 	m.mu.Lock()
 	delete(m.dockerUpdateFirstSeen, resourceID)
+	delete(m.dockerUpdateLastObserved, resourceID)
 	if trackingKey != "" {
 		delete(m.dockerUpdateFirstSeenByIdentity, trackingKey)
+		delete(m.dockerUpdateLastObserved, trackingKey)
 	}
 	m.mu.Unlock()
 }
@@ -1251,9 +1253,11 @@ func (m *Manager) clearDockerContainerUpdateStateLocked(alert *Alert) {
 
 	if alert.ResourceID != "" {
 		delete(m.dockerUpdateFirstSeen, alert.ResourceID)
+		delete(m.dockerUpdateLastObserved, alert.ResourceID)
 	}
 	if trackingKey := dockerUpdateTrackingKeyFromAlert(alert); trackingKey != "" {
 		delete(m.dockerUpdateFirstSeenByIdentity, trackingKey)
+		delete(m.dockerUpdateLastObserved, trackingKey)
 	}
 }
 
@@ -1339,6 +1343,17 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 		return
 	}
 
+	// Reports refresh tracking activity even when the registry result is cached
+	// or unavailable. Do not create a pending condition from unknown evidence.
+	m.mu.Lock()
+	if _, exists := m.dockerUpdateFirstSeen[resourceID]; exists {
+		m.dockerUpdateLastObserved[resourceID] = time.Now()
+	}
+	if _, exists := m.dockerUpdateFirstSeenByIdentity[updateTrackingKey]; exists {
+		m.dockerUpdateLastObserved[updateTrackingKey] = time.Now()
+	}
+	m.mu.Unlock()
+
 	// Check if this container has an update status reported
 	if container.UpdateStatus == nil {
 		// Missing update status means the condition is unknown, not resolved.
@@ -1368,11 +1383,22 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 	if !exists {
 		firstSeen, exists = m.dockerUpdateFirstSeen[resourceID]
 	}
+	// Tracking maps are process-local, but an active occurrence survives a
+	// restart. Its start is the original pending age, not a new delay window.
+	// Otherwise positive reports return below-threshold without refreshing
+	// LastSeen, and hourly cleanup can resolve a still-asserted update.
+	if active, ok := m.getActiveAlertNoLock(canonicalAlertID); ok && active != nil &&
+		active.Type == "docker-container-update" && active.ResourceID == resourceID &&
+		!active.StartTime.IsZero() {
+		firstSeen, exists = active.StartTime, true
+	}
 	if !exists {
 		firstSeen = time.Now()
 	}
 	m.dockerUpdateFirstSeen[resourceID] = firstSeen
 	m.dockerUpdateFirstSeenByIdentity[updateTrackingKey] = firstSeen
+	m.dockerUpdateLastObserved[resourceID] = time.Now()
+	m.dockerUpdateLastObserved[updateTrackingKey] = time.Now()
 	m.mu.Unlock()
 
 	// Check if we've exceeded the delay threshold
@@ -1475,6 +1501,7 @@ func (m *Manager) cleanupDockerContainerAlertsWithTracking(host models.DockerHos
 		if strings.HasPrefix(resourceID, prefix) {
 			if _, exists := seen[resourceID]; !exists {
 				delete(m.dockerUpdateFirstSeen, resourceID)
+				delete(m.dockerUpdateLastObserved, resourceID)
 			}
 		}
 	}
@@ -1485,6 +1512,7 @@ func (m *Manager) cleanupDockerContainerAlertsWithTracking(host models.DockerHos
 			}
 			if _, exists := seenUpdateTracking[trackingKey]; !exists {
 				delete(m.dockerUpdateFirstSeenByIdentity, trackingKey)
+				delete(m.dockerUpdateLastObserved, trackingKey)
 			}
 		}
 	}
@@ -1520,11 +1548,13 @@ func (m *Manager) clearDockerHostContainerAlerts(host models.DockerHost) {
 	for resourceID := range m.dockerUpdateFirstSeen {
 		if strings.HasPrefix(resourceID, prefix) {
 			delete(m.dockerUpdateFirstSeen, resourceID)
+			delete(m.dockerUpdateLastObserved, resourceID)
 		}
 	}
 	for trackingKey := range m.dockerUpdateFirstSeenByIdentity {
 		if strings.HasPrefix(trackingKey, updateTrackingPrefix) {
 			delete(m.dockerUpdateFirstSeenByIdentity, trackingKey)
+			delete(m.dockerUpdateLastObserved, trackingKey)
 		}
 	}
 	m.mu.Unlock()

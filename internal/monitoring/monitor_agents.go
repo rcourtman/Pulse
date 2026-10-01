@@ -3366,20 +3366,21 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			rebuildSpeed = ""
 		}
 		raid = append(raid, models.HostRAIDArray{
-			Device:         array.Device,
-			Name:           array.Name,
-			Level:          array.Level,
-			State:          array.State,
-			TotalDevices:   array.TotalDevices,
-			ActiveDevices:  array.ActiveDevices,
-			WorkingDevices: array.WorkingDevices,
-			FailedDevices:  array.FailedDevices,
-			SpareDevices:   array.SpareDevices,
-			UUID:           array.UUID,
-			Devices:        devices,
-			RebuildPercent: rebuildPercent,
-			RebuildSpeed:   rebuildSpeed,
-			Operation:      operation,
+			Device:          array.Device,
+			Name:            array.Name,
+			Level:           array.Level,
+			State:           array.State,
+			RequiredDevices: array.RequiredDevices,
+			TotalDevices:    array.TotalDevices,
+			ActiveDevices:   array.ActiveDevices,
+			WorkingDevices:  array.WorkingDevices,
+			FailedDevices:   array.FailedDevices,
+			SpareDevices:    array.SpareDevices,
+			UUID:            array.UUID,
+			Devices:         devices,
+			RebuildPercent:  rebuildPercent,
+			RebuildSpeed:    rebuildSpeed,
+			Operation:       operation,
 		})
 	}
 

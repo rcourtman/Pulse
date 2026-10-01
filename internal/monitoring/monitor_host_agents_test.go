@@ -67,6 +67,82 @@ func TestNewMonitorRoutesStartupCustomSensorWarningBeforeStart(t *testing.T) {
 	}
 }
 
+func TestRAIDRequiredMembersReportAndReadState(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		required int
+		total    int
+		active   int
+		working  int
+		want     storagehealth.RiskLevel
+	}{
+		{"reported legacy clean spare", 0, 5, 4, 5, storagehealth.RiskHealthy},
+		{"new mdadm clean spare", 4, 5, 4, 5, storagehealth.RiskHealthy},
+		{"new mdstat clean spare", 4, 4, 4, 5, storagehealth.RiskHealthy},
+		{"count deficit despite clean state and spare", 4, 4, 3, 4, storagehealth.RiskCritical},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			manager := alerts.NewManagerWithDataDir(t.TempDir())
+			t.Cleanup(manager.Stop)
+			cfg := manager.GetConfig()
+			cfg.Enabled = true
+			cfg.ActivationState = alerts.ActivationActive
+			cfg.TimeThresholds = map[string]int{}
+			manager.UpdateConfig(cfg)
+			monitor := &Monitor{
+				state: models.NewState(), alertManager: manager,
+				hostTokenBindings: make(map[string]string), config: &config.Config{}, rateTracker: NewRateTracker(),
+			}
+			report := agentshost.Report{
+				Agent:     agentshost.AgentInfo{ID: "raid-agent", Version: "test", IntervalSeconds: 30},
+				Host:      agentshost.HostInfo{ID: "raid-host", Hostname: "linux-raid", Platform: "linux"},
+				Timestamp: time.Now().UTC(),
+				RAID:      []agentshost.RAIDArray{{Device: "/dev/md1", Level: "raid5", State: "clean", RequiredDevices: tc.required, TotalDevices: tc.total, ActiveDevices: tc.active, WorkingDevices: tc.working, SpareDevices: 1}},
+			}
+			payload, err := json.Marshal(report)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var decoded agentshost.Report
+			if err := json.Unmarshal(payload, &decoded); err != nil {
+				t.Fatal(err)
+			}
+			host, err := monitor.ApplyHostReport(decoded, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			stored := monitor.state.GetSnapshot().Hosts
+			if len(stored) != 1 || len(stored[0].RAID) != 1 {
+				t.Fatalf("stored host RAID=%+v", stored)
+			}
+			record := unifiedresources.HostIngestRecord(stored[0])
+			view := unifiedresources.NewHostView(&record.Resource)
+			readback := hostRAIDFromReadStateView(view.RAID())
+			for _, array := range []models.HostRAIDArray{host.RAID[0], stored[0].RAID[0], readback[0]} {
+				if array.RequiredDevices != tc.required || array.TotalDevices != tc.total || array.ActiveDevices != tc.active || array.SpareDevices != 1 {
+					t.Fatalf("ingest/state/canonical readback changed count meaning: %+v", array)
+				}
+				if got := storagehealth.AssessHostRAIDArray(array); got.Level != tc.want {
+					t.Fatalf("assessment after round trip=%+v, want %s", got, tc.want)
+				}
+			}
+			var raidAlerts []alerts.Alert
+			for _, alert := range manager.GetActiveAlerts() {
+				if alert.Type == "raid" {
+					raidAlerts = append(raidAlerts, alert)
+				}
+			}
+			if tc.want == storagehealth.RiskHealthy {
+				if len(raidAlerts) != 0 || record.Resource.Agent.RAID[0].Risk != nil {
+					t.Fatalf("healthy spare produced alert or canonical risk: alerts=%+v risk=%+v", raidAlerts, record.Resource.Agent.RAID[0].Risk)
+				}
+			} else if len(raidAlerts) != 1 || raidAlerts[0].Level != alerts.AlertLevelCritical || record.Resource.Agent.RAID[0].Risk == nil || record.Resource.Agent.RAID[0].Risk.Level != storagehealth.RiskCritical {
+				t.Fatalf("real deficit lost alert or canonical risk: alerts=%+v risk=%+v", raidAlerts, record.Resource.Agent.RAID[0].Risk)
+			}
+		})
+	}
+}
+
 func TestHostZFSPoolsFromAgentDisksPreservesDatasetFacts(t *testing.T) {
 	got := hostZFSPoolsFromAgentDisks([]agentshost.Disk{
 		{Device: "/", Type: "ext4"},

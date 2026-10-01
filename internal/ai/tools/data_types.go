@@ -2084,20 +2084,21 @@ func (s HostRAIDSummary) NormalizeCollections() HostRAIDSummary {
 
 // HostRAIDArraySummary summarizes a RAID array
 type HostRAIDArraySummary struct {
-	Device         string                  `json:"device"`
-	Name           string                  `json:"name,omitempty"`
-	Level          string                  `json:"level"` // raid0, raid1, raid5, etc.
-	State          string                  `json:"state"` // clean, degraded, rebuilding
-	TotalDevices   int                     `json:"total_devices"`
-	ActiveDevices  int                     `json:"active_devices"`
-	WorkingDevices int                     `json:"working_devices"`
-	FailedDevices  int                     `json:"failed_devices"`
-	SpareDevices   int                     `json:"spare_devices"`
-	UUID           string                  `json:"uuid,omitempty"`
-	RebuildPercent float64                 `json:"rebuild_percent,omitempty"`
-	RebuildSpeed   string                  `json:"rebuild_speed,omitempty"`
-	Operation      string                  `json:"operation,omitempty"`
-	Devices        []HostRAIDDeviceSummary `json:"devices"`
+	Device          string                  `json:"device"`
+	Name            string                  `json:"name,omitempty"`
+	Level           string                  `json:"level"`                      // raid0, raid1, raid5, etc.
+	State           string                  `json:"state"`                      // clean, degraded, rebuilding
+	RequiredDevices int                     `json:"required_devices,omitempty"` // configured members excluding spares; zero means unknown
+	TotalDevices    int                     `json:"total_devices"`
+	ActiveDevices   int                     `json:"active_devices"`
+	WorkingDevices  int                     `json:"working_devices"`
+	FailedDevices   int                     `json:"failed_devices"`
+	SpareDevices    int                     `json:"spare_devices"`
+	UUID            string                  `json:"uuid,omitempty"`
+	RebuildPercent  float64                 `json:"rebuild_percent,omitempty"`
+	RebuildSpeed    string                  `json:"rebuild_speed,omitempty"`
+	Operation       string                  `json:"operation,omitempty"`
+	Devices         []HostRAIDDeviceSummary `json:"devices"`
 }
 
 func (s HostRAIDArraySummary) NormalizeCollections() HostRAIDArraySummary {

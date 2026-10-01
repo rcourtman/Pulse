@@ -82,6 +82,7 @@ type Manager struct {
 	dockerUpdateFirstSeen        map[string]time.Time            // Track when image updates were first detected for alert delay
 	// Stable identity tracking prevents update-delay resets when host IDs churn.
 	dockerUpdateFirstSeenByIdentity map[string]time.Time
+	dockerUpdateLastObserved        map[string]time.Time // Resource and stable identity keys; activity, not pending age.
 	// PMG quarantine growth tracking
 	pmgQuarantineHistory map[string][]pmgQuarantineSnapshot // Track quarantine snapshots for growth detection
 	// SMART counter snapshots let alert evaluation distinguish historical
@@ -227,6 +228,7 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 		dockerRestartTracking:           make(map[string]*dockerRestartRecord),
 		dockerUpdateFirstSeen:           make(map[string]time.Time),
 		dockerUpdateFirstSeenByIdentity: make(map[string]time.Time),
+		dockerUpdateLastObserved:        make(map[string]time.Time),
 		pmgQuarantineHistory:            make(map[string][]pmgQuarantineSnapshot),
 		smartCounterSnapshots:           make(map[string]smartCounterSnapshot),
 		pmgAnomalyTrackers:              make(map[string]*pmgAnomalyTracker),

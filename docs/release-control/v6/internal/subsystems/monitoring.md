@@ -17,6 +17,23 @@
 
 ## Purpose
 
+### RAID count provenance across ingestion — issue #2369
+
+Agent ingestion, host snapshots and canonical read-state projection retain
+`requiredDevices` separately from source-native `totalDevices` and spare counts.
+Health compares active members with a known configured requirement, including
+explicit zero-active deficits; a spare cannot fill a missing active role.
+Collector fallback preserves an explicit zero active count under a known
+requirement rather than substituting members from another probe.
+Legacy reports retain conservative total-based detection except for an exact
+clean/active, zero-failure tuple where total equals working and active plus
+spares. That corroborated mdadm tuple is healthy; arbitrary subtraction from
+mdstat totals is forbidden. Missing or unreconciled evidence does not gain
+that exception. Explicit degradation/failures remain critical and scrub/resync
+never hide a member deficit. `TestRAIDRequiredMembersReportAndReadState` pins
+the wire/ingestion/snapshot/readback and canonical alert/risk paths; storage
+health tests pin legacy compatibility and reconstruction/maintenance boundaries.
+
 ### Restored disk alerts and persisted operator policy — issues #2237/#2112
 
 Alerts can restore before the resource registry and persisted operator state

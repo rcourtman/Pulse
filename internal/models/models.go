@@ -700,19 +700,21 @@ type SMARTAttributes struct {
 
 // HostRAIDArray represents an mdadm RAID array on a host.
 type HostRAIDArray struct {
-	Device         string           `json:"device"`
-	Name           string           `json:"name,omitempty"`
-	Level          string           `json:"level"`
-	State          string           `json:"state"`
-	TotalDevices   int              `json:"totalDevices"`
-	ActiveDevices  int              `json:"activeDevices"`
-	WorkingDevices int              `json:"workingDevices"`
-	FailedDevices  int              `json:"failedDevices"`
-	SpareDevices   int              `json:"spareDevices"`
-	UUID           string           `json:"uuid,omitempty"`
-	Devices        []HostRAIDDevice `json:"devices"`
-	RebuildPercent float64          `json:"rebuildPercent"`
-	RebuildSpeed   string           `json:"rebuildSpeed,omitempty"`
+	Device string `json:"device"`
+	Name   string `json:"name,omitempty"`
+	Level  string `json:"level"`
+	State  string `json:"state"`
+	// RequiredDevices excludes spares; zero denotes an older or unknown count.
+	RequiredDevices int              `json:"requiredDevices,omitempty"`
+	TotalDevices    int              `json:"totalDevices"`
+	ActiveDevices   int              `json:"activeDevices"`
+	WorkingDevices  int              `json:"workingDevices"`
+	FailedDevices   int              `json:"failedDevices"`
+	SpareDevices    int              `json:"spareDevices"`
+	UUID            string           `json:"uuid,omitempty"`
+	Devices         []HostRAIDDevice `json:"devices"`
+	RebuildPercent  float64          `json:"rebuildPercent"`
+	RebuildSpeed    string           `json:"rebuildSpeed,omitempty"`
 	// Operation is the in-progress sync action from /proc/mdstat
 	// ("recovery", "resync", "check", or "reshape"); empty when idle.
 	Operation string `json:"operation,omitempty"`
