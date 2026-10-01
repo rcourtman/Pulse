@@ -58,6 +58,30 @@ func TestResourceFromPBSInstanceProjectsReportedNodeName(t *testing.T) {
 	}
 }
 
+func TestHostRAIDRequiredMembersCanonicalRisk(t *testing.T) {
+	for _, active := range []int{4, 3} {
+		host := models.Host{ID: "raid-source", Hostname: "linux", Status: "online", RAID: []models.HostRAIDArray{{
+			Device: "/dev/md2", Level: "raid5", State: "clean", RequiredDevices: 4, TotalDevices: 5, ActiveDevices: active, WorkingDevices: 5, SpareDevices: 1,
+		}}}
+		record := HostIngestRecord(host)
+		arrays := NewHostView(&record.Resource).RAID()
+		if len(arrays) != 1 || arrays[0].RequiredDevices != 4 || arrays[0].TotalDevices != 5 || arrays[0].SpareDevices != 1 {
+			t.Fatalf("canonical RAID count provenance=%+v", arrays)
+		}
+		if active == 4 {
+			if arrays[0].Risk != nil || record.Resource.Agent.StorageRisk != nil || record.Resource.Agent.ProtectionReduced {
+				t.Fatalf("healthy spare reduced protection: %+v", record.Resource.Agent)
+			}
+		} else if arrays[0].Risk == nil || arrays[0].Risk.Level != storagehealth.RiskCritical || !record.Resource.Agent.ProtectionReduced {
+			t.Fatalf("member deficit with spare lost protection risk: %+v", record.Resource.Agent)
+		}
+		arrays[0].RequiredDevices = 1
+		if record.Resource.Agent.RAID[0].RequiredDevices != 4 {
+			t.Fatal("read view mutated canonical required count")
+		}
+	}
+}
+
 func TestResourceFromProxmoxNodeIncludesNetworkInterfaces(t *testing.T) {
 	node := models.Node{
 		ID: "mock-cluster-pve1", Name: "pve1", Status: "online",

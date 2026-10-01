@@ -560,7 +560,7 @@ func TestCloneAgentData_DeepIsolation(t *testing.T) {
 		LoadAverage: []float64{0.5, 1.0, 1.5},
 		DiskExclude: []string{"/dev/sda"},
 		RAID: []HostRAIDMeta{
-			{Device: "/dev/md0", Level: "raid1", Risk: &StorageRisk{Level: storagehealth.RiskHealthy}},
+			{Device: "/dev/md0", Level: "raid1", RequiredDevices: 2, TotalDevices: 3, SpareDevices: 1, Risk: &StorageRisk{Level: storagehealth.RiskHealthy}},
 		},
 		PackageUpdates: &AgentPackageUpdateMeta{Packages: []AgentPackageUpdate{{Name: "openssl"}}},
 		StorageCleanup: &AgentStorageCleanupMeta{Provider: "apt-package-cache", ReclaimableBytes: 512},
@@ -580,6 +580,13 @@ func TestCloneAgentData_DeepIsolation(t *testing.T) {
 	cloned.RAID[0].Risk.Level = storagehealth.RiskCritical
 	if original.RAID[0].Risk.Level == storagehealth.RiskCritical {
 		t.Error("mutating cloned RAID risk should not affect original")
+	}
+	if cloned.RAID[0].RequiredDevices != 2 || cloned.RAID[0].TotalDevices != 3 || cloned.RAID[0].SpareDevices != 1 {
+		t.Fatalf("clone lost RAID count provenance: %+v", cloned.RAID[0])
+	}
+	cloned.RAID[0].RequiredDevices = 1
+	if original.RAID[0].RequiredDevices != 2 {
+		t.Fatal("mutating cloned RAID required count changed the source")
 	}
 	cloned.PackageUpdates.Packages[0].Name = "mutated"
 	cloned.StorageCleanup.Provider = "mutated"

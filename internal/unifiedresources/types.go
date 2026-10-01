@@ -705,21 +705,22 @@ type HostRAIDDeviceMeta struct {
 
 // HostRAIDMeta describes a RAID array.
 type HostRAIDMeta struct {
-	Device         string               `json:"device"`
-	Name           string               `json:"name,omitempty"`
-	Level          string               `json:"level"`
-	State          string               `json:"state"`
-	TotalDevices   int                  `json:"totalDevices"`
-	ActiveDevices  int                  `json:"activeDevices"`
-	WorkingDevices int                  `json:"workingDevices"`
-	FailedDevices  int                  `json:"failedDevices"`
-	SpareDevices   int                  `json:"spareDevices"`
-	UUID           string               `json:"uuid,omitempty"`
-	Devices        []HostRAIDDeviceMeta `json:"devices,omitempty"`
-	RebuildPercent float64              `json:"rebuildPercent,omitempty"`
-	RebuildSpeed   string               `json:"rebuildSpeed,omitempty"`
-	Operation      string               `json:"operation,omitempty"`
-	Risk           *StorageRisk         `json:"risk,omitempty"`
+	Device          string               `json:"device"`
+	Name            string               `json:"name,omitempty"`
+	Level           string               `json:"level"`
+	State           string               `json:"state"`
+	RequiredDevices int                  `json:"requiredDevices,omitempty"` // configured members, excluding spares; zero means unknown
+	TotalDevices    int                  `json:"totalDevices"`
+	ActiveDevices   int                  `json:"activeDevices"`
+	WorkingDevices  int                  `json:"workingDevices"`
+	FailedDevices   int                  `json:"failedDevices"`
+	SpareDevices    int                  `json:"spareDevices"`
+	UUID            string               `json:"uuid,omitempty"`
+	Devices         []HostRAIDDeviceMeta `json:"devices,omitempty"`
+	RebuildPercent  float64              `json:"rebuildPercent,omitempty"`
+	RebuildSpeed    string               `json:"rebuildSpeed,omitempty"`
+	Operation       string               `json:"operation,omitempty"`
+	Risk            *StorageRisk         `json:"risk,omitempty"`
 }
 
 // HostUnraidDiskMeta describes a disk's role and state inside an Unraid array.

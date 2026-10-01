@@ -226,12 +226,13 @@ func TestBuildReport(t *testing.T) {
 		mc.raidArraysFn = func(ctx context.Context) ([]agentshost.RAIDArray, error) {
 			return []agentshost.RAIDArray{
 				{
-					Device:         "/dev/md0",
-					Level:          "raid10",
-					State:          "active",
-					TotalDevices:   4,
-					ActiveDevices:  4,
-					WorkingDevices: 4,
+					Device:          "/dev/md0",
+					Level:           "raid10",
+					State:           "active",
+					RequiredDevices: 4,
+					TotalDevices:    4,
+					ActiveDevices:   4,
+					WorkingDevices:  4,
 					Devices: []agentshost.RAIDDevice{
 						{Device: "/dev/sda1", State: "active sync", Slot: 0},
 						{Device: "/dev/sdb1", State: "active sync", Slot: 1},
@@ -254,7 +255,7 @@ func TestBuildReport(t *testing.T) {
 		if array.Device != "/dev/md0" || array.Level != "raid10" || array.State != "active" {
 			t.Fatalf("unexpected RAID array summary: %+v", array)
 		}
-		if array.TotalDevices != 4 || array.ActiveDevices != 4 || len(array.Devices) != 4 {
+		if array.RequiredDevices != 4 || array.TotalDevices != 4 || array.ActiveDevices != 4 || len(array.Devices) != 4 {
 			t.Fatalf("unexpected RAID array topology: %+v", array)
 		}
 		mc.raidArraysFn = nil
@@ -278,8 +279,23 @@ func TestBuildReport(t *testing.T) {
 		if array.Device != "/dev/md13" || array.State != "active" {
 			t.Fatalf("unexpected QNAP RAID array summary: %+v", array)
 		}
-		if array.TotalDevices != 2 || array.ActiveDevices != 2 || array.WorkingDevices != 2 || array.FailedDevices != 0 {
+		if array.RequiredDevices != 2 || array.TotalDevices != 2 || array.ActiveDevices != 2 || array.WorkingDevices != 2 || array.FailedDevices != 0 {
 			t.Fatalf("unexpected QNAP RAID array counts: %+v", array)
+		}
+		mc.raidArraysFn = nil
+	})
+
+	t.Run("RAID collection preserves explicit zero active bitmap", func(t *testing.T) {
+		mc.raidArraysFn = func(ctx context.Context) ([]agentshost.RAIDArray, error) {
+			return parseMDStatArrays("md1 : active raid5 sda1[0] sdb1[1] sdc1[2] sdd1[3]\n      1024000 blocks super 1.2 [4/0] [____]\n"), nil
+		}
+		report, err := agent.buildReport(context.Background())
+		if err != nil || len(report.RAID) != 1 {
+			t.Fatalf("buildReport: raid=%+v err=%v", report.RAID, err)
+		}
+		array := report.RAID[0]
+		if array.RequiredDevices != 4 || array.ActiveDevices != 0 || array.FailedDevices != 4 {
+			t.Fatalf("explicit zero active members became fabricated healthy counts: %+v", array)
 		}
 		mc.raidArraysFn = nil
 	})
