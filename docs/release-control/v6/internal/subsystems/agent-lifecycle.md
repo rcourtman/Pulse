@@ -15,6 +15,18 @@
 
 ## Purpose
 
+### Continuity-aware broadcast read ownership
+
+Broadcast state takes its single resource list from the current continuity-aware
+read view, not a preliminary registry clone discarded before that view is
+resolved. The resulting presentation slice is caller-owned; URL/health
+decoration cannot mutate nested registry data. Ignored/re-enrollment surfaces,
+parent identities and agent action targets remain unchanged, and a prior client
+baseline must survive later mutable updates. No freshness cache substitutes for
+live reads. `TestBroadcastProjectionListsRegistryOnceAndKeepsLiveChanges` checks
+same-freshness changes and ignored-host inventory; the previous-pipeline JSON
+oracle checks split-host identity/action/infrastructure composition.
+
 ### Import preview lifetime and setup authority
 
 The node credential editor binds each monitored-system impact preview to the

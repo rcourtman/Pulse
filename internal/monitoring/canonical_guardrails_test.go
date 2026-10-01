@@ -1,6 +1,8 @@
 package monitoring
 
 import (
+	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -606,7 +608,8 @@ func TestBroadcastResourceProjectionCoalescesSplitHostIdentities(t *testing.T) {
 	for _, snippet := range []string{
 		"metricsTargetResolver := broadcastMetricsTargetResolver(unifiedView.readState)",
 		"broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)",
-		"broadcastFrontendResources, broadcastCatalogs := convertResourcesForBroadcast(broadcastResources, metricsTargetResolver)",
+		"broadcastFrontendResources, broadcastCatalogs := convertPresentationResourcesForBroadcast(",
+		"attachBroadcastMetricsTargets(broadcastResources, metricsTargetResolver)",
 		"frontendState.CapabilityCatalog = broadcastCatalogs.capabilities",
 		"frontendState.PolicyCatalog = broadcastCatalogs.policies",
 		"frontendState.AISafeSummaryCatalog = broadcastCatalogs.aiSafeSummaries",
@@ -2900,5 +2903,69 @@ func TestMockGuestChartHistorySkipsMemoryUsedForNonProxmoxGuests(t *testing.T) {
 				len(series["memoryused"]),
 			)
 		}
+	}
+}
+
+func TestBroadcastProjectionMatchesPreviousPipeline(t *testing.T) {
+	now := time.Now().UTC()
+	resources := []unifiedresources.Resource{
+		{ID: "agent-api", Type: unifiedresources.ResourceTypeAgent, Name: "tower", Status: unifiedresources.StatusOnline, LastSeen: now,
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"tower.local"}},
+			Sources:  []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+			Proxmox:  &unifiedresources.ProxmoxData{NodeName: "tower.local", ClusterName: "lab", PVEVersion: "9"}},
+		{ID: "agent-runtime", Type: unifiedresources.ResourceTypeAgent, Name: "tower", Status: unifiedresources.StatusOnline, LastSeen: now,
+			Identity: unifiedresources.ResourceIdentity{MachineID: "tower-machine", Hostnames: []string{"tower.local"}},
+			Sources:  []unifiedresources.DataSource{unifiedresources.SourceAgent},
+			Agent:    &unifiedresources.AgentData{AgentID: "tower-machine", Hostname: "tower.local", Platform: "linux", AgentVersion: "6.4.5"},
+			Metrics:  &unifiedresources.ResourceMetrics{CPU: &unifiedresources.MetricValue{Value: 25, Unit: "percent"}}},
+	}
+	for i, name := range []string{"zebra", "Alpha", "alpha", "", "尾"} {
+		parent := "agent-api"
+		resources = append(resources, unifiedresources.Resource{
+			ID: fmt.Sprintf("vm-%d", i), Type: unifiedresources.ResourceTypeVM, Name: name,
+			ParentID: &parent, Status: unifiedresources.StatusOnline, LastSeen: now,
+			Proxmox: &unifiedresources.ProxmoxData{NodeName: "tower.local", VMID: i + 100},
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+			Metrics: &unifiedresources.ResourceMetrics{CPU: &unifiedresources.MetricValue{Value: 10, Unit: "percent"}},
+		})
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestResources(resources)
+	store := &broadcastProjectionCountingStore{MonitorAdapter: unifiedresources.NewMonitorAdapter(registry)}
+	m := &Monitor{resourceStore: store}
+	snapshot := models.EmptyStateSnapshot()
+	snapshot.ActiveAlerts = []models.Alert{{ID: "warning", ResourceID: "agent-runtime", Level: "warning", Type: "cpu"}}
+	snapshot.RemovedHostAgents = []models.RemovedHostAgent{{ID: "ignored-host", Hostname: "ignored.local", RemovedAt: now}}
+	snapshot.RemovedDockerHosts = []models.RemovedDockerHost{{ID: "ignored-docker", Hostname: "docker.local", RemovedAt: now}}
+	sourceBefore, _ := json.Marshal(store.GetAll())
+	view := m.currentUnifiedStateView()
+	previousResources := unifiedresources.CoalescePresentationHostResources(view.resources)
+	previousResources = m.applyPersistedMetadataToUnifiedResources(previousResources)
+	previousResources = unifiedresources.AttachResourceHealth(previousResources, resourceHealthAlerts(snapshot.ActiveAlerts), now)
+	want := snapshot.ToFrontend()
+	projected, catalogs := convertResourcesForBroadcastReference(previousResources, broadcastMetricsTargetResolver(view.readState))
+	want.Resources = projected
+	want.CapabilityCatalog = catalogs.capabilities
+	want.PolicyCatalog = catalogs.policies
+	want.AISafeSummaryCatalog = catalogs.aiSafeSummaries
+	want.ConnectedInfrastructure = buildConnectedInfrastructure(previousResources, snapshot)
+	if !view.freshness.IsZero() {
+		want.LastUpdate = view.freshness.UnixMilli()
+	}
+	got := m.buildBroadcastFrontendStateFromSnapshot(snapshot)
+	wantJSON, err := json.Marshal(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotJSON, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(gotJSON) != string(wantJSON) {
+		t.Fatalf("projection differs from previous pipeline\nwant=%s\ngot=%s", wantJSON, gotJSON)
+	}
+	sourceAfter, _ := json.Marshal(store.GetAll())
+	if string(sourceAfter) != string(sourceBefore) {
+		t.Fatal("broadcast decoration mutated registry")
 	}
 }

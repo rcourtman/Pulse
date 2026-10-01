@@ -23,6 +23,25 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Bounded confidence/priority work in broadcast grouping — issue #2199
+
+The general identity matcher retains every confidence, reason, ordering and
+review flag. Top-level grouping requests only its existing high-confidence
+floor (0.90), so hostname-only and IP-only peer sets are not built when no
+eligible composite signal exists. High-confidence results are identical to
+filtering the full general matcher; machine ID, UUID and hostname+MAC still
+keep their existing precedence. Host/IP fallback still requires exactly one
+strictly better-priority owner. Equal/worse-priority peers are discarded before
+allocating/sorting fallback candidates, and a best-priority group has no possible
+attachment target. No identity, ambiguity, count, group ID or explanation rule
+changes, and no cached output hides live transitions.
+
+Independent pre-repair matching/grouping oracles, candidate-floor differential
+cases/fuzzing, a discarded-peer allocation bound, mixed grouping records and the
+complete existing identity/topology suites protect these constraints. The
+residual synthetic broadcast profile identified discarded matching/grouping as
+the dominant cost; it is not a profile of the reporter's installed agent fleet.
+
 ### Allocation-bounded snapshot and clone metadata — issue #2199
 
 WebSocket snapshot extraction decodes every entry's ID from the encoded array
