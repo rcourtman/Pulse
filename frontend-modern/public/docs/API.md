@@ -1183,7 +1183,7 @@ Returns organizations accessible to the authenticated user.
 ```json
 { "id": "acme-corp", "displayName": "Acme Corporation" }
 ```
-The creator becomes the owner and first member. Organization IDs must be lowercase alphanumeric with hyphens, 3-64 characters.
+The creator becomes the owner and first member. Organization IDs use letters, digits, periods, underscores or hyphens, 1–64 characters, but cannot be `.` or `..`. Prefer a simple lowercase/hyphen ID such as the example.
 
 ### Get Organization
 `GET /api/orgs/{id}` (requires `settings:read`)
@@ -1209,7 +1209,7 @@ Returns all members with their roles. User must be a member of the org.
 ```json
 { "userId": "jane", "role": "editor" }
 ```
-Roles: `owner`, `admin`, `editor`, `viewer`. Admin or owner role required. Setting role to `owner` transfers ownership (only current owner can do this). Default org members cannot be managed.
+Roles: `owner`, `admin`, `editor`, `viewer`. Admin or owner role required. A new user receives a pending invitation (`202`) and must accept it in Pulse before gaining membership. Posting an existing member's `userId` updates their role; there is no member PATCH endpoint. Setting role to `owner` transfers ownership only to an existing member, by the current owner after fresh sign-in. Default org members cannot be managed.
 
 ### Remove Member
 `DELETE /api/orgs/{id}/members/{userId}` (requires `settings:write`, session auth only)
@@ -1234,7 +1234,7 @@ Returns resources shared inbound to this organization from other organizations.
   "accessRole": "viewer"
 }
 ```
-Share a resource with another organization. Valid resource types: `vm`, `container`, `agent`, `storage`, `pbs`, `pmg`. Access roles: `viewer`, `editor`, `admin`. Admin or owner role required on the source org.
+Share a resource with another organization, using the resource type and ID returned by Pulse. Supported types include `vm`, `system-container`, `agent`, `node`, `docker-host`, `storage`, `pbs` and `pmg`; generic `host` and `container` types are not supported. Access roles: `viewer`, `editor`, `admin`. Admin or owner role required on the source org. The share is pending until a target-org admin or owner accepts it in Pulse; changing its access role requires acceptance again.
 
 ### Delete Share
 `DELETE /api/orgs/{id}/shares/{shareId}` (requires `settings:write`, session auth only)
