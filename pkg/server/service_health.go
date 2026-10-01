@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
@@ -168,11 +169,14 @@ func localServiceHealthBaseURLs(listener net.Listener, tlsEnabled bool) []string
 	hosts := []string{tcpAddr.IP.String()}
 	if tcpAddr.IP == nil || tcpAddr.IP.IsUnspecified() {
 		hosts = []string{"127.0.0.1"}
-		// An IPv6 wildcard can be dual-stack or IPv6-only. IPv4-first also
-		// works when IPv6 loopback is disabled. An IPv4-only wildcard must
-		// not inspect a different IPv6 listener that happens to share its port.
-		if tcpAddr.IP == nil || tcpAddr.IP.To4() == nil {
-			hosts = append(hosts, "::1")
+		if tcpAddr.IP != nil && tcpAddr.IP.To4() == nil {
+			// Only a proven dual-stack socket owns both loopback families.
+			// An IPv6-only socket may share its port with an unrelated IPv4
+			// server. Unknown socket modes stay conservatively IPv6-only.
+			hosts = []string{"::1"}
+			if serviceHealthListenerAcceptsIPv4(listener) {
+				hosts = []string{"127.0.0.1", "::1"}
+			}
 		}
 	} else if tcpAddr.Zone != "" && tcpAddr.IP.To4() == nil {
 		hosts[0] += "%" + tcpAddr.Zone
@@ -187,6 +191,27 @@ func localServiceHealthBaseURLs(listener net.Listener, tlsEnabled bool) []string
 		baseURLs = append(baseURLs, baseURL.String())
 	}
 	return baseURLs
+}
+
+// IPv4-first works when a dual-stack listener serves Pulse over IPv4 but IPv6
+// loopback is disabled. Inspect the bound socket rather than inferring its
+// mode from the wildcard address or from another server answering on its port.
+func serviceHealthListenerAcceptsIPv4(listener net.Listener) bool {
+	socket, ok := listener.(syscall.Conn)
+	if !ok {
+		return false
+	}
+	raw, err := socket.SyscallConn()
+	if err != nil {
+		return false
+	}
+	dualStack := false
+	if err := raw.Control(func(fd uintptr) {
+		dualStack = serviceHealthSocketIsDualStack(fd)
+	}); err != nil {
+		return false
+	}
+	return dualStack
 }
 
 func frontendAssetPaths(index []byte) []string {
