@@ -107,6 +107,7 @@ def formatting_only_paths(
     paths: Sequence[str],
     *,
     commit: str | None,
+    base: str | None = None,
     repo_root: Path = REPO_ROOT,
 ) -> set[str]:
     """Paths whose new content is exactly prettier's output for the old content.
@@ -118,13 +119,14 @@ def formatting_only_paths(
 
     This fails closed: an added or deleted file, an unreadable blob, a prettier
     that will not run, or any output that is not byte-identical all fall
-    through and still require the receipt.
+    through and still require the receipt. `base` compares against an
+    explicit range base instead of the commit's parent.
     """
     prettier = format_staged_frontend.prettier_bin()
     if prettier is None:
         return set()
 
-    base_revision = f"{commit}^" if commit else "HEAD"
+    base_revision = base or (f"{commit}^" if commit else "HEAD")
     formatting_only: set[str] = set()
     for path in paths:
         new_object = f"{commit}:{path}" if commit else f":{path}"
@@ -244,6 +246,108 @@ def validate_receipt(
     return errors
 
 
+def receipt_commits_in_range(
+    base: str,
+    head: str,
+    *,
+    repo_root: Path = REPO_ROOT,
+) -> list[str]:
+    """Non-merge commits in base..head that author a receipt version.
+
+    Merge commits are excluded: a merge resolution of the shared receipt keeps
+    or combines other commits' records without a browser run of its own, so it
+    can never be evidence. --full-history keeps receipt commits on merged side
+    branches that default history simplification would prune.
+    """
+    output = run_git(
+        [
+            "rev-list",
+            "--reverse",
+            "--no-merges",
+            "--full-history",
+            f"{base}..{head}",
+            "--",
+            RECEIPT_PATH,
+        ],
+        repo_root=repo_root,
+    )
+    return [line.strip() for line in output.splitlines() if line.strip()]
+
+
+def range_receipt_coverage(
+    base: str,
+    head: str,
+    *,
+    repo_root: Path = REPO_ROOT,
+) -> tuple[dict[str, set[str]], list[str]]:
+    """Content digests verified by valid receipts authored inside base..head.
+
+    Each receipt is validated exactly as the per-commit guard validates it at
+    the commit that recorded it: bound to that commit's own parent, and its
+    changed_paths and content_sha256 matching that commit's tree. A receipt
+    that fails contributes no coverage and is reported.
+    """
+    covered: dict[str, set[str]] = {}
+    diagnostics: list[str] = []
+    for commit in receipt_commits_in_range(base, head, repo_root=repo_root):
+        try:
+            payload = json.loads(load_receipt_text(commit=commit, repo_root=repo_root))
+            commit_base = expected_base_sha(commit=commit, repo_root=repo_root)
+        except (json.JSONDecodeError, subprocess.CalledProcessError) as exc:
+            diagnostics.append(f"{commit[:12]}: unable to load receipt: {exc}")
+            continue
+        listed = payload.get("changed_paths") if isinstance(payload, dict) else None
+        listed_paths = (
+            [path for path in listed if isinstance(path, str) and path]
+            if isinstance(listed, list)
+            else []
+        )
+        errors = validate_receipt(
+            payload,
+            changed_paths=listed_paths,
+            expected_base=commit_base,
+            expected_content_sha256=content_sha256(
+                listed_paths, commit=commit, repo_root=repo_root
+            ),
+        )
+        if errors:
+            diagnostics.append(f"{commit[:12]}: receipt is invalid: " + "; ".join(errors))
+            continue
+        for path, digest in payload["content_sha256"].items():
+            covered.setdefault(path, set()).add(digest)
+    return covered, diagnostics
+
+
+def range_coverage_errors(
+    changed_paths: Sequence[str],
+    *,
+    base: str,
+    head: str,
+    repo_root: Path = REPO_ROOT,
+) -> list[str]:
+    """Changed frontend paths whose final content no receipt in range verified.
+
+    Integration merges reviewed commits onto a main that keeps moving, so the
+    range tip is usually a merge and the range carries several independently
+    verified changes. Binding one tip receipt to the tip's parent and to the
+    whole cumulative delta is invalid by construction there. What must hold is
+    that every user-visible frontend file ships with content a real browser
+    pass verified: its digest at head must equal the digest recorded by a valid
+    receipt from a non-merge commit in the range.
+    """
+    covered, diagnostics = range_receipt_coverage(base, head, repo_root=repo_root)
+    final = content_sha256(changed_paths, commit=head, repo_root=repo_root)
+    uncovered = [path for path in changed_paths if final[path] not in covered.get(path, set())]
+    if not uncovered:
+        return []
+    errors = [
+        f"{path} final content {final[path][:12]} is not verified by any valid receipt in the range"
+        for path in uncovered
+    ]
+    errors.extend(diagnostics)
+    return errors
+
+
 def build_template(paths: Sequence[str], *, repo_root: Path = REPO_ROOT) -> dict:
     changed_paths = frontend_runtime_paths(paths)
     return {
@@ -275,16 +379,37 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Validate the receipt stored in this commit against that commit's parent.",
     )
     parser.add_argument(
+        "--base",
+        help=(
+            "Validate the range base..--commit: every changed user-visible frontend "
+            "file's final content must match a valid receipt recorded by a non-merge "
+            "commit in the range, bound to that commit's own parent."
+        ),
+    )
+    parser.add_argument(
         "--print-template",
         action="store_true",
         help="Print a non-passing receipt template for the current staged frontend paths.",
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.base and not args.commit:
+        parser.error("--base requires --commit")
+    return args
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
-    paths = stdin_files(sys.stdin) if args.files_from_stdin else staged_files()
+    if args.files_from_stdin:
+        paths = stdin_files(sys.stdin)
+    elif args.base:
+        paths = stdin_files(
+            run_git(
+                ["diff", "--name-only", "--diff-filter=ACMRD", args.base, args.commit],
+                repo_root=REPO_ROOT,
+            ).splitlines()
+        )
+    else:
+        paths = staged_files()
 
     if args.print_template:
         print(json.dumps(build_template(paths), indent=2))
@@ -292,7 +417,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     changed_frontend_paths = frontend_runtime_paths(paths)
     if changed_frontend_paths:
-        reformatted = formatting_only_paths(changed_frontend_paths, commit=args.commit)
+        reformatted = formatting_only_paths(
+            changed_frontend_paths, commit=args.commit, base=args.base, repo_root=REPO_ROOT
+        )
         if reformatted:
             print(
                 f"Browser verification guard: {len(reformatted)} path(s) are prettier-only "
@@ -304,6 +431,38 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if not changed_frontend_paths:
         print("Browser verification guard skipped (no user-visible frontend source changes).")
+        return 0
+
+    if args.base:
+        try:
+            errors = range_coverage_errors(
+                changed_frontend_paths,
+                base=args.base,
+                head=args.commit,
+                repo_root=REPO_ROOT,
+            )
+        except subprocess.CalledProcessError as exc:
+            print(f"BLOCKED: unable to evaluate browser verification range: {exc}", file=sys.stderr)
+            return 1
+        if errors:
+            print(
+                f"BLOCKED: browser verification does not cover {args.base[:12]}..{args.commit[:12]}:",
+                file=sys.stderr,
+            )
+            for error in errors:
+                print(f"  - {error}", file=sys.stderr)
+            print(
+                "Content changed after its browser pass (a correction, a conflict resolution, "
+                "or two changes to one file) needs a fresh receipt for the final content, "
+                "committed in its own non-merge commit and bound to that commit's parent.",
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            "Browser verification guard passed "
+            f"({len(changed_frontend_paths)} frontend source file(s) across "
+            f"{args.base[:12]}..{args.commit[:12]} covered by in-range receipts)."
+        )
         return 0
 
     if RECEIPT_PATH not in paths:

@@ -233,6 +233,7 @@ const (
 	ServiceHealthFailureStartup         = "startup"
 	ServiceHealthFailureRuntime         = "runtime"
 	ServiceHealthFailureAPIConnectivity = "api_connectivity"
+	ServiceHealthFailureTimeout         = "timeout"
 	ServiceHealthFailureAPIStatus       = "api_status"
 	ServiceHealthFailureUIStatus        = "ui_status"
 	ServiceHealthFailureFrontendAssets  = "frontend_assets"
@@ -1003,6 +1004,12 @@ var (
 //
 // This is a no-op when outbound usage telemetry is disabled.
 func Start(ctx context.Context, cfg Config) {
+	startWithDelay(ctx, cfg, startupDelay)
+}
+
+// Keep the production settling delay constant while allowing deterministic
+// tests to exercise the same background runner without a two-minute sleep.
+func startWithDelay(ctx context.Context, cfg Config, initialDelay time.Duration) {
 	if !cfg.Enabled {
 		log.Info().Msg("Outbound usage telemetry is disabled (enable via PULSE_TELEMETRY=true or Settings → System)")
 		return
@@ -1032,7 +1039,7 @@ func Start(ctx context.Context, cfg Config) {
 		defer r.wg.Done()
 
 		// Wait for the monitor to connect and populate state before the first ping.
-		startTimer := time.NewTimer(startupDelay)
+		startTimer := time.NewTimer(initialDelay)
 		select {
 		case <-ctx.Done():
 			startTimer.Stop()
