@@ -34,7 +34,7 @@ X-API-Token: <token>
 Then make a read-only request (curl 7.76 or later):
 
 ```bash
-curl --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
   http://127.0.0.1:7655/api/state/summary
 ```
 
@@ -43,7 +43,8 @@ access, use your Pulse HTTPS URL and keep certificate verification enabled;
 do not use `--insecure`. On an authentication-enabled instance, the protected
 summary checks token access; `/api/health` is public and does not verify authentication.
 `--fail-with-body` returns a non-zero exit on HTTP errors, including 401 and
-403, while retaining the error response.
+403, while retaining the error response. Keep `--disable` first: it ignores
+local curl configuration that could otherwise enable credential-bearing trace output.
 
 Do not paste tokens into command lines, URLs or issue reports. Keep the header
 file private and outside shared repositories and diagnostics; do not use curl
@@ -93,6 +94,8 @@ Some endpoints require admin privileges and/or scopes. Common scopes include:
 - `settings:write`
 - `agent:config:read`
 - `agent:manage`
+- `actions:plan`, `actions:approve`, `actions:execute`
+- `audit:read`
 
 Endpoints that require admin access are noted below.
 
@@ -311,77 +314,129 @@ Returns the canonical fleet connections ledger with per-row fleet-governance sta
 
 The payload is the source of truth for enrollment, liveness, version drift, adapter health, config rollout, credential posture, update posture, and remote-control posture. Consumers must not rebuild those states from provider-specific config stores or display labels.
 
-CLI adapter:
+Use the private header file prepared in [Authentication](#-authentication),
+with `settings:read` on the token:
+
 ```bash
-PULSE_API_TOKEN=your-token pulse fleet connections \
-  --api-url http://localhost:7655
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  http://127.0.0.1:7655/api/connections
 ```
 
 ### Unified Action Planning
-`POST /api/actions/plan`
-Returns the deterministic pre-execution plan for a capability advertised on a unified resource. Requires `ai:execute`.
 
-This endpoint is API-first and plan-only: it resolves the resource from the unified registry, verifies the requested capability and parameter schema, returns approval policy, blast radius, stale-plan hashes, and preflight checks, and does not approve or execute anything.
+The existing action API separates planning, approval and execution. Run these
+steps separately, inspecting each response before moving on; do not paste the
+whole sequence as an unattended recovery script. Use the private header file
+from [Authentication](#-authentication), not a token in a command or environment
+assignment. For remote access, replace the loopback origin with your Pulse HTTPS
+URL and keep certificate verification enabled.
 
-`POST /api/actions/{id}/decision`
-Records an explicit `approved` or `rejected` decision for a persisted `pending_approval` action. It does not execute the action.
+| Endpoint | Token scope and access |
+| --- | --- |
+| `GET /api/agent/resource-capabilities/{id}` | `monitoring:read`; lists the resource's advertised capabilities and parameter schemas. |
+| `POST /api/actions/plan` | `actions:plan` and permission to plan actions; creates a plan but does not approve or execute it. |
+| `POST /api/actions/{id}/decision` | `actions:approve` and permission to approve actions; records an explicit `approved` or `rejected` decision for a pending action, without executing it. |
+| `POST /api/actions/{id}/execute` | `actions:execute` and permission to execute actions; dispatches only an approved action or an approval-free executable plan. Dry-run-only plans cannot execute. |
+| `GET /api/audit/actions` | `audit:read`, audit-log read permission and licensed audit logging. |
+| `GET /api/audit/actions/{id}/events` | The same audit access; returns the action's lifecycle evidence. |
 
-`POST /api/actions/{id}/execute`
-Starts execution only for an approved action or an approval-free executable plan, records `executing` before dispatch, and records the terminal result afterward. Dry-run-only plans are rejected and cannot be executed through this endpoint.
+The legacy `ai:execute` scope also permits planning, approval and execution,
+but use the narrower action scopes when possible. Approval and execution tokens
+must be bound to an authorised user; a scope alone does not bypass approval
+policy, separation of duties or step-up requirements. Audit reads through a
+browser session additionally require admin access. A `monitoring:read` token is
+not an action-control or audit token.
 
-CLI adapter:
+1. **Inspect capabilities.** Choose the canonical resource `id` from
+   `GET /api/resources`, not a display name or a VM number. Replace `vm:42`
+   throughout these examples and URL-encode it in request paths (`vm%3A42` here).
+   An empty capabilities list means there is nothing to plan for that resource.
+
 ```bash
-PULSE_API_TOKEN=your-token pulse actions capabilities \
-  --api-url http://localhost:7655 \
-  --resource-id vm:42
-
-PULSE_API_TOKEN=your-token pulse actions plan \
-  --api-url http://localhost:7655 \
-  --request-id agent-run-123 \
-  --resource-id vm:42 \
-  --capability restart \
-  --param mode=graceful \
-  --reason "Recover after confirmed outage" \
-  --requested-by agent:oncall-helper
-
-PULSE_API_TOKEN=your-token pulse actions decide \
-  --api-url http://localhost:7655 \
-  --action-id act_... \
-  --outcome approved \
-  --reason "Inside maintenance window"
-
-PULSE_API_TOKEN=your-token pulse actions execute \
-  --api-url http://localhost:7655 \
-  --action-id act_... \
-  --reason "Execute approved recovery"
-
-PULSE_API_TOKEN=your-token pulse actions audit \
-  --api-url http://localhost:7655 \
-  --resource-id vm:42 \
-  --limit 10
-
-PULSE_API_TOKEN=your-token pulse actions events \
-  --api-url http://localhost:7655 \
-  --action-id act_...
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  http://127.0.0.1:7655/api/agent/resource-capabilities/vm%3A42
 ```
 
-Request:
-```json
+2. **Plan only.** Use an advertised capability and its actual parameter schema;
+   `restart` and `mode=graceful` are examples, not universal capabilities. Choose
+   a request ID for this specific intent. Pulse derives the actor from the
+   authenticated credential, not a caller-supplied `requestedBy` value.
+
+```bash
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  --header 'Content-Type: application/json' --request POST --data-binary @- \
+  http://127.0.0.1:7655/api/actions/plan <<'JSON'
 {
-  "requestId": "agent-run-123",
+  "requestId": "manual-recovery-123",
   "resourceId": "vm:42",
   "capabilityName": "restart",
   "params": { "mode": "graceful" },
-  "reason": "Recover after confirmed outage",
-  "requestedBy": "agent:oncall-helper"
+  "reason": "Recover after confirmed outage"
 }
+JSON
 ```
+
+Inspect the returned approval policy, blast radius, expiry and preflight checks.
+Keep its `actionId` and reviewed `planHash`; replace `act_...` and `sha256:...`
+below with those returned values. Planning is not proof that execution is safe
+or currently available.
+
+3. **Decide only if approval is required.** Use an authorised approver's private
+   header file. Approve only the reviewed plan; stop on a refusal or stale-plan
+   response rather than weakening the policy or creating another recovery action.
+
+```bash
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  --header 'Content-Type: application/json' --request POST --data-binary @- \
+  http://127.0.0.1:7655/api/actions/act_.../decision <<'JSON'
+{
+  "outcome": "approved",
+  "reason": "Inside maintenance window",
+  "planHash": "sha256:..."
+}
+JSON
+```
+
+4. **Execute separately.** Only after reviewing a successful decision, or an
+   approval-free executable plan, use the executor's authorised header file:
+
+```bash
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  --header 'Content-Type: application/json' --request POST --data-binary @- \
+  http://127.0.0.1:7655/api/actions/act_.../execute <<'JSON'
+{
+  "reason": "Execute approved recovery",
+  "planHash": "sha256:..."
+}
+JSON
+```
+
+If the response is lost or times out, inspect the existing action and target
+before retrying: losing the connection does not prove that execution stopped.
+An HTTP success is not a substitute for checking the terminal result and the
+resource's observed state.
+
+5. **Read the audit and events**, using a private header file with audit access:
+
+```bash
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  'http://127.0.0.1:7655/api/audit/actions?resourceId=vm%3A42&limit=10'
+```
+
+```bash
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  http://127.0.0.1:7655/api/audit/actions/act_.../events
+```
+
+When audit logging is unavailable, use Pulse's action detail in the signed-in
+UI to inspect the existing action; do not infer success or repeat execution
+from an unavailable audit response.
 
 Response:
 ```json
 {
   "actionId": "act_...",
-  "requestId": "agent-run-123",
+  "requestId": "manual-recovery-123",
   "allowed": true,
   "requiresApproval": true,
   "approvalPolicy": "admin",
