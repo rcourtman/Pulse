@@ -78,4 +78,3 @@ The first stable release since v6.4.1. It brings everyone the fixes that have be
 - Windows Unified Agent binaries are not Authenticode-signed while SignPath remains unavailable, so Windows may show an Unknown Publisher warning. Verify downloads with the published checksums and detached signatures.
 - Pulse Mobile works with this release unchanged.
 - The rollback target is stable `v6.4.1`. On systemd and Proxmox LXC installs, use `sudo /bin/update --version v6.4.1`. For Docker Compose, pin `rcourtman/pulse:6.4.1` and recreate the container.
-
