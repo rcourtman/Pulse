@@ -111,7 +111,6 @@ describe('TableRow touch activation', () => {
       <Table>
         <TableBody>
           <TableRow
-            onClick={[onClick, 'row-identity']}
             on:click={(event) => {
               event.stopPropagation();
               onNative();
