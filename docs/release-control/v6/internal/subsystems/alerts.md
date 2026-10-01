@@ -41,6 +41,21 @@ callbacks remain outside the manager lock. No retention duration is extended.
 sample and a short recovery/refire. This is synthetic lifecycle proof, not
 installed notification-destination acceptance.
 
+Hourly tracking-map cleanup retains canonical acknowledgement records while
+their incident is active, including legacy-keyed active snapshots and active
+recurrences with an older inactive timestamp. A decision does not expire from
+its acknowledgement age while the condition continues. Recovery starts the
+existing inactive-retention window; the ordinary cleanup's one-hour expiry,
+hourly stale-record fallback and explicit unacknowledgement remain unchanged.
+`TestTrackingCleanupPreservesAcknowledgedProviderRecurrence` in
+`internal/alerts/reducer_parity_ack_test.go` verifies manual and automatic
+acknowledgement through provider-native pool incident reconciliation, affirmative
+recovery, short recurrence, dispatch callbacks and JSON/durable checkpoint restart.
+`TestTrackingCleanupCanonicalAckRetentionBounds` verifies active/legacy identity,
+recent inactivity, both existing expiry paths and missing-timestamp fallback.
+Modeled elapsed time and local callbacks do not prove installed recovery or
+delivery to an external notification destination.
+
 ### Unchanged pending-intent checkpoints
 
 The JSON pending-intent checkpoint must not replace a regular private file when
@@ -737,6 +752,50 @@ must not reinterpret acknowledgement as resolution, omit suppressed state from
 inspectability, or convert missing/stale evidence into health.
 
 ## Current State
+
+### Active Docker update pending age survives restart
+
+A positive Docker image-update report reuses the matching active occurrence's
+`StartTime` as its pending-age authority. Resource and stable-identity timer maps
+are process-local; restoring the active alert must not impose another 24/48-hour
+delay during which positive reports fail to refresh `LastSeen`. Both cleanup
+paths must retain the observed occurrence, acknowledgement and notification
+identity without manufacturing recovery, refiring or duplicate delivery.
+Only the same resource's active `docker-container-update` occurrence supplies
+age. Another host/container and a resolved occurrence cannot lend their timers;
+affirmative recovery still retires tracking and a new update waits its normal
+delay. Absent/failed checks remain unknown, not recovery. An unactivated pending
+timer remains process-local; this does not infer an update's first detection
+from its cached registry-check timestamp.
+
+`TestDockerUpdateRestartRestoresActivePendingAge` in `update_alerts_test.go`
+exercises the public host checker, real JSON/durable checkpoint and restart,
+24/48-hour delays, acknowledged/unacknowledged incidents, stale saved observation,
+cached positive/absent/error reports, hourly and retention cleanup, lifecycle and
+delivery callbacks, isolated hosts and affirmative recovery/new-delay controls.
+The saved observation is aged deliberately; this is deterministic source-level
+restart/housekeeping proof, not a naturally elapsed day, live registry or
+destination result, or reporter confirmation of #2353's full daily cycle.
+
+### Continuing unacknowledged alerts survive age-based cleanup
+
+`MaxAlertAgeDays` removes an unacknowledged alert only when both its occurrence
+start and last observation predate the configured limit. A still-observed
+condition keeps its occurrence identity, age and dispatch timestamp; cleanup
+must not hide it or manufacture another firing on the next poll. Legacy alerts
+without `LastSeen` use `StartTime` for inactivity. Zero disables this retention
+rule. Acknowledged-alert cleanup, automatic acknowledgement, explicit clears,
+confirmed recovery and notification eligibility remain unchanged.
+
+`TestCleanupRetentionRequiresObservationInactivity` in `alerts_test.go` covers
+continuing/inactive, legacy, disabled, acknowledged and inconsistent-timestamp
+controls. `TestCleanupContinuingDockerUpdateKeepsOccurrence` in
+`cleanup_observation_retention_test.go` exercises the real Docker update
+detector with cached, absent and failed registry observations through four
+cleanup/next-poll cycles, JSON and durable active-state restart, callback counts,
+history and affirmative recovery. This is source-fixture lifecycle proof, not
+an installed registry/destination result or a diagnosis of a reporter's daily
+resolve/reopen cycle.
 
 ### Alert-quality telemetry folds only canonical durable lifecycle truth
 

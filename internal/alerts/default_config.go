@@ -194,7 +194,7 @@ func defaultAlertConfig() AlertConfig {
 			},
 		},
 		// Alert TTL defaults
-		MaxAlertAgeDays:           7,  // Auto-cleanup alerts older than 7 days
+		MaxAlertAgeDays:           7,  // Cleanup unacknowledged alerts inactive for 7 days
 		MaxAcknowledgedAgeDays:    1,  // Auto-cleanup acknowledged alerts older than 1 day
 		AutoAcknowledgeAfterHours: 24, // Auto-acknowledge alerts after 24 hours
 		// Flapping detection defaults
