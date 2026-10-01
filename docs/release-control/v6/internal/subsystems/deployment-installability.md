@@ -1461,15 +1461,21 @@ artifact-selection behaviour.
    bound to the anticipated exact 40-character source SHA, verifies that SHA is
    reachable from the governed release branch, and rejects an existing tag at
    any other commit. Exact-version registry tags are public publication surfaces.
-   The `candidate_qualification` join must require all exact-source candidate
-   checks, including container qualification, draft validation, installer smoke
-   and private Pro qualification, before the first public Git tag, Docker tag or
-   Helm chart write. Restricted drafts bind `target_commitish` without pushing
+   The candidate predicate must require all exact-source candidate checks,
+   including container qualification, draft validation, installer smoke and
+   private Pro qualification, before the first public Git tag, Docker tag or
+   Helm chart write. `publish_release_tag`, `publish_docker`,
+   `publish_helm_chart` and `activate_release` each carry that exact predicate,
+   guarded by `!cancelled()` so integration skips are judged explicitly and
+   workflow cancellation still blocks every writer. No echo-only join job may
+   stand in for it. Restricted drafts bind `target_commitish` without pushing
    a Git ref and do not retain checkout credentials. Only the qualified Git-tag
    publication job retains credentials for its authenticated ref write. Draft
    state never authorizes rewriting an existing public tag.
-   The `release_readiness` join then requires verified Docker and Helm digests
-   before activation or floating-alias promotion. A failure before qualification
+   `activate_release` then requires the published tag and verified Docker and
+   Helm digests directly before activation or floating-alias promotion, and
+   `release_commit_verdict` restates every candidate result in place of the
+   former readiness join. A failure before qualification
    leaves the unexposed candidate repairable under its intended version. A
    failure during public distribution retains the exposed source identity for
    recovery or a clearly explained successor, since registries are not atomic. The exact-version server and provider control-plane image builds
@@ -2183,9 +2189,14 @@ artifact-selection behaviour.
    activation-only recovery workflow. Recovery must accept only a completed
    failed `create-release.yml` run whose failures are confined to activation,
    require the successful `release_readiness` DAG join as the canonical proof
-   that every immutable gate succeeded, and reject every failure outside the
-   activation boundary. Recovery must not duplicate reusable-workflow display
-   names as a parallel gate catalog. It must revalidate GitHub's stored
+   that every immutable gate succeeded when the source run has that job, and
+   reject every failure outside the activation boundary. Runs made after the
+   join was folded into its writers have no `release_readiness` job; for them
+   recovery requires a successful `publish_release_tag`, which carries the
+   candidate predicate itself, and at least one job and only successful jobs
+   under each of the `publish_docker` and `publish_helm_chart` caller IDs.
+   Old-shape runs must keep recovering exactly as before, and recovery must not
+   grow a per-display-name gate catalog beyond those caller-ID prefixes. It must revalidate GitHub's stored
    asset digests against that source run's unexpired candidate manifest, and
    require the same draft release ID, tag, target commit, and absent activation
    marker. It then dispatches a fresh durable convergence owner and repeats the
@@ -2311,6 +2322,9 @@ artifact-selection behaviour.
    containing Playwright `test-results/` plus
    `release-integration-diagnostics/docker.log`; that Docker log must capture
    container state and the Pulse test server plus mock GitHub server logs.
+   Failure diagnostics and the inspection-only packaged Helm chart artifact are
+   kept for three days, since no job or workflow downloads them. Artifacts that
+   later jobs, recovery or other workflows consume keep their own retention.
    The release integration job must also name at least one current,
    non-quarantined browser spec. For the v6.1.0 release line that proof is
    `tests/66-organization-sharing-approval-ui.spec.ts`; the job must not point

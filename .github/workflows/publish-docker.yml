@@ -3,7 +3,7 @@ run-name: Publish Docker Images ${{ inputs.tag }}
 
 # Called only after exact candidate qualification and public tag creation.
 # Versioned registry images are public release surfaces, not private staging.
-# The release-readiness join verifies published digests before activation.
+# activate_release joins the published digests before activation.
 on:
   workflow_call:
     inputs:

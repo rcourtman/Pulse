@@ -724,7 +724,7 @@ jobs:
           name: release-integration-playwright-report
           path: tests/integration/playwright-report/
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 3
 
       - name: Upload integration failures
         if: failure()
@@ -735,7 +735,7 @@ jobs:
             tests/integration/test-results/
             tests/integration/release-integration-diagnostics/
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 3
 
       - name: Cleanup
         if: always()
@@ -846,7 +846,7 @@ jobs:
             tests/integration/test-results/
             tests/integration/playwright-report/
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 3
 
   release_note_visuals:
     needs:
@@ -899,7 +899,8 @@ jobs:
       - build_release_candidate
       - release_note_visuals
     # Only restricted draft metadata/assets are staged here. No public Git tag
-    # is created until candidate_qualification passes every prepublication check.
+    # is created until publish_release_tag's candidate predicate passes every
+    # prepublication check.
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.release_note_visuals.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -1427,7 +1428,13 @@ jobs:
           echo "Release: ${WORKFLOW_OUTPUT_1}"
 
   # Restricted candidate checks finish before the first public versioned write.
-  candidate_qualification:
+  # Every public writer below repeats this exact candidate predicate instead
+  # of trusting an echo-only join, so no writer can start unless every
+  # exact-source candidate check succeeded. Beta qualification deliberately
+  # permits skipped integration ancestors, so the predicate overrides the
+  # implicit success() with !cancelled(): skips are judged explicitly, and
+  # workflow cancellation is rejected even after every prerequisite succeeded.
+  publish_release_tag:
     needs:
       - prepare
       - publication_trust_preflight
@@ -1443,21 +1450,7 @@ jobs:
       - validate_release_assets
       - install_sh_smoke
       - stage_private_pro_runtime
-    if: ${{ always() && needs.prepare.result == 'success' && needs.publication_trust_preflight.result == 'success' && needs.build_release_candidate.result == 'success' && needs.qualify_release_containers.result == 'success' && needs.frontend_bundle.result == 'success' && needs.frontend_checks.result == 'success' && needs.windows_install_command_smoke.result == 'success' && needs.backend_tests.result == 'success' && needs.release_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') && needs.create_release.result == 'success' && needs.validate_release_assets.result == 'success' && needs.install_sh_smoke.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Confirm candidate qualification before public exposure
-        run: echo "All exact-source candidate checks passed. Public version publication may begin."
-
-  publish_release_tag:
-    needs:
-      - prepare
-      - candidate_qualification
-    # Beta qualification deliberately permits skipped integration ancestors.
-    # Override implicit success(), but reject workflow cancellation even after
-    # both direct prerequisites have succeeded.
-    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.candidate_qualification.result == 'success' }}
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.publication_trust_preflight.result == 'success' && needs.build_release_candidate.result == 'success' && needs.qualify_release_containers.result == 'success' && needs.frontend_bundle.result == 'success' && needs.frontend_checks.result == 'success' && needs.windows_install_command_smoke.result == 'success' && needs.backend_tests.result == 'success' && needs.release_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') && needs.create_release.result == 'success' && needs.validate_release_assets.result == 'success' && needs.install_sh_smoke.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -1491,12 +1484,22 @@ jobs:
 
   publish_docker:
     needs:
-      - candidate_qualification
-      - publish_release_tag
       - prepare
+      - publication_trust_preflight
       - build_release_candidate
+      - qualify_release_containers
+      - frontend_bundle
+      - frontend_checks
+      - windows_install_command_smoke
+      - backend_tests
+      - integration_tests
+      - release_smoke
       - create_release
-    if: ${{ !cancelled() && needs.candidate_qualification.result == 'success' && needs.publish_release_tag.result == 'success' && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+      - validate_release_assets
+      - install_sh_smoke
+      - stage_private_pro_runtime
+      - publish_release_tag
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.publication_trust_preflight.result == 'success' && needs.build_release_candidate.result == 'success' && needs.qualify_release_containers.result == 'success' && needs.frontend_bundle.result == 'success' && needs.frontend_checks.result == 'success' && needs.windows_install_command_smoke.result == 'success' && needs.backend_tests.result == 'success' && needs.release_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') && needs.create_release.result == 'success' && needs.validate_release_assets.result == 'success' && needs.install_sh_smoke.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' && needs.publish_release_tag.result == 'success' }}
     permissions:
       contents: read
       packages: write
@@ -1575,11 +1578,22 @@ jobs:
   # release has not crossed the operator-controlled publication boundary.
   publish_helm_chart:
     needs:
-      - candidate_qualification
-      - publish_release_tag
       - prepare
+      - publication_trust_preflight
+      - build_release_candidate
+      - qualify_release_containers
+      - frontend_bundle
+      - frontend_checks
+      - windows_install_command_smoke
+      - backend_tests
+      - integration_tests
+      - release_smoke
+      - create_release
       - validate_release_assets
-    if: ${{ !cancelled() && needs.candidate_qualification.result == 'success' && needs.publish_release_tag.result == 'success' && needs.prepare.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+      - install_sh_smoke
+      - stage_private_pro_runtime
+      - publish_release_tag
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.publication_trust_preflight.result == 'success' && needs.build_release_candidate.result == 'success' && needs.qualify_release_containers.result == 'success' && needs.frontend_bundle.result == 'success' && needs.frontend_checks.result == 'success' && needs.windows_install_command_smoke.result == 'success' && needs.backend_tests.result == 'success' && needs.release_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') && needs.create_release.result == 'success' && needs.validate_release_assets.result == 'success' && needs.install_sh_smoke.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' && needs.publish_release_tag.result == 'success' }}
     permissions:
       contents: write
       packages: write
@@ -1590,21 +1604,6 @@ jobs:
     with:
       chart_version: ${{ needs.prepare.outputs.version }}
       app_version: ${{ needs.prepare.outputs.version }}
-
-  # Candidate qualification owns prepublication checks. This final join adds
-  # verified public registry digests before GitHub release activation.
-  release_readiness:
-    needs:
-      - candidate_qualification
-      - publish_release_tag
-      - publish_docker
-      - publish_helm_chart
-    if: ${{ !cancelled() && needs.candidate_qualification.result == 'success' && needs.publish_release_tag.result == 'success' && needs.publish_docker.result == 'success' && needs.publish_helm_chart.result == 'success' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Confirm immutable release readiness
-        run: echo "Qualified source and verified public artifacts are ready for release activation."
 
   # Stage the exact private Pro image and signed R2 packet from the anticipated
   # tag and immutable public SHA as soon as preparation succeeds. These assets
@@ -1811,16 +1810,31 @@ jobs:
   # draft. Publishing that complete packet is the irreversible commit: GitHub
   # must lock its tag/assets and issue a verifiable release attestation before
   # customer convergence may use the marker.
+  #
+  # Activation joins the candidate predicate and verified public registry
+  # digests directly: the tag, both Docker images and the Helm chart must all
+  # have published before the GitHub release may be activated.
   activate_release:
     needs:
       - prepare
+      - publication_trust_preflight
+      - build_release_candidate
+      - qualify_release_containers
+      - frontend_bundle
+      - frontend_checks
+      - windows_install_command_smoke
+      - backend_tests
+      - integration_tests
+      - release_smoke
       - create_release
+      - validate_release_assets
+      - install_sh_smoke
+      - stage_private_pro_runtime
+      - publish_release_tag
       - publish_docker
       - publish_helm_chart
-      - release_readiness
       - dispatch_release_convergence
-      - stage_private_pro_runtime
-    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.release_readiness.result == 'success' && needs.dispatch_release_convergence.result == 'success' }}
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.publication_trust_preflight.result == 'success' && needs.build_release_candidate.result == 'success' && needs.qualify_release_containers.result == 'success' && needs.frontend_bundle.result == 'success' && needs.frontend_checks.result == 'success' && needs.windows_install_command_smoke.result == 'success' && needs.backend_tests.result == 'success' && needs.release_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') && needs.create_release.result == 'success' && needs.validate_release_assets.result == 'success' && needs.install_sh_smoke.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' && needs.publish_release_tag.result == 'success' && needs.publish_docker.result == 'success' && needs.publish_helm_chart.result == 'success' && needs.dispatch_release_convergence.result == 'success' }}
     continue-on-error: true
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -2186,15 +2200,21 @@ jobs:
     needs:
       - prepare
       - publication_trust_preflight
-      - release_smoke
+      - build_release_candidate
+      - qualify_release_containers
+      - frontend_bundle
+      - frontend_checks
       - windows_install_command_smoke
+      - backend_tests
+      - integration_tests
+      - release_smoke
       - create_release
-      - publish_docker
       - validate_release_assets
       - install_sh_smoke
-      - publish_helm_chart
-      - release_readiness
       - stage_private_pro_runtime
+      - publish_release_tag
+      - publish_docker
+      - publish_helm_chart
       - dispatch_release_convergence
       - activate_release
     if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
@@ -2222,7 +2242,13 @@ jobs:
           VALIDATE_RESULT: ${{ needs.validate_release_assets.result }}
           INSTALL_RESULT: ${{ needs.install_sh_smoke.result }}
           HELM_RESULT: ${{ needs.publish_helm_chart.result }}
-          READINESS_RESULT: ${{ needs.release_readiness.result }}
+          BUILD_CANDIDATE_RESULT: ${{ needs.build_release_candidate.result }}
+          CONTAINER_QUALIFICATION_RESULT: ${{ needs.qualify_release_containers.result }}
+          FRONTEND_BUNDLE_RESULT: ${{ needs.frontend_bundle.result }}
+          FRONTEND_CHECKS_RESULT: ${{ needs.frontend_checks.result }}
+          BACKEND_RESULT: ${{ needs.backend_tests.result }}
+          INTEGRATION_RESULT: ${{ needs.integration_tests.result }}
+          TAG_RESULT: ${{ needs.publish_release_tag.result }}
           PRIVATE_PRO_STAGE_RESULT: ${{ needs.stage_private_pro_runtime.result }}
           CONVERGENCE_DISPATCH_RESULT: ${{ needs.dispatch_release_convergence.result }}
           CONVERGENCE_RUN_ID: ${{ needs.dispatch_release_convergence.outputs.run_id }}
@@ -2255,7 +2281,17 @@ jobs:
             require_result "exact-version Docker staging" "$DOCKER_RESULT" success
             require_result "staged install.sh smoke" "$INSTALL_RESULT" success
             require_result "Helm staging" "$HELM_RESULT" success
-            require_result "immutable release readiness" "$READINESS_RESULT" success
+            # The candidate predicate the public writers carry, restated as
+            # an explicit verdict now that no echo-only join summarizes it.
+            require_result "release candidate build" "$BUILD_CANDIDATE_RESULT" success
+            require_result "exact-candidate container qualification" "$CONTAINER_QUALIFICATION_RESULT" success
+            require_result "frontend bundle" "$FRONTEND_BUNDLE_RESULT" success
+            require_result "frontend checks" "$FRONTEND_CHECKS_RESULT" success
+            require_result "backend tests" "$BACKEND_RESULT" success
+            if [ "$INTEGRATION_RESULT" != "skipped" ]; then
+              require_result "integration tests" "$INTEGRATION_RESULT" success
+            fi
+            require_result "qualified tag publication" "$TAG_RESULT" success
             require_result "durable customer convergence dispatch" "$CONVERGENCE_DISPATCH_RESULT" success
             if [[ "$VERSION" =~ -rc\.[1-9][0-9]*$ ]]; then
               if [[ ! "$SECURE_RUNTIME_QUALIFICATION_RUN_ID" =~ ^[0-9]+$ ]] || \
