@@ -176,6 +176,47 @@ links, must be 260 characters or fewer. Use no semicolon or em dash characters.]
 section when there is none.]
 EOF
 
+# v6.4.6 and later use the current reader-facing format, not the old forced
+# outcome/dash list. The renderer still validates the exact version and safety.
+if python3 - "$VERSION" <<'PY'
+import re, sys
+match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-(?:alpha|beta|rc)\.\d+)?", sys.argv[1])
+sys.exit(0 if match and tuple(map(int, match.groups())) >= (6, 4, 6) else 1)
+PY
+then
+    read -r -d '' NOTE_FORMAT <<EOF || true
+# Pulse v${VERSION} Release Notes
+
+[One short paragraph explaining the customer outcome of this release.]
+
+## Highlights
+
+- [One to three plain-text outcomes, each 140 characters or fewer. No markup,
+  links or issue references in this short list.]
+
+## Proxmox, PBS and backups
+
+- [Plain-language change, where users notice it and why it matters.]
+
+[Choose only relevant change groups: Alerts and notifications, Disks and
+storage, Proxmox, PBS and backups, TrueNAS, vSphere and Docker, Install, updates
+and agents, Updates and agents, Pulse Pro, AI and hosted, Monitoring and service
+health, Security, Other improvements. A narrow patch may use What's improved
+instead. Do not create empty groups or repeat the same change between groups.
+Each full bullet must be 260 characters or fewer. No semicolons or em dashes.]
+
+## Known issues
+
+[Only unresolved user symptoms with an actionable workaround or next step.
+Omit this section when there are none.]
+
+## Before you upgrade
+
+[Only compatibility, signing, companion-app or required operator information.
+Omit this section when there is none. No internal verification status.]
+EOF
+fi
+
 # Strip accidental markdown fences and anything before the release title.
 clean_notes() {
     sed -e 's/^```[a-z]*$//' -e 's/^```$//' | \

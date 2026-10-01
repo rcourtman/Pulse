@@ -549,7 +549,7 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 		"Direction changes must be normalized",
 		"Do not wait for a special governance prompt",
 		"stable or GA promotion readiness",
-		"v6-product-lane-expansion",
+		"`v6-release-reliability` is the current active engineering target",
 		"v6-ga-promotion",
 		"v6-rc-stabilization",
 		"available_candidate_lane_queue",

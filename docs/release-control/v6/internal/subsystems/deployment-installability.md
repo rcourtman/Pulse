@@ -251,10 +251,11 @@ select zero captures when its investigation finds that screenshots add no
 meaningful customer value. Committed sidecars remain schema-valid review
 records and retain the evidence-backed reason for selecting captures or none.
 
-Customer-facing notes use one outcome list for features and fixes. Each visible
-change is described once under `What's improved`; a parallel `Fixes` section is
-forbidden for packets from `v6.4.0-rc.6` onward because it encourages the same
-change to be restated with slightly different implementation detail. Internal
+Customer-facing notes describe each visible change once, without a parallel
+`Fixes` list, for packets from `v6.4.0-rc.6` onward. Historical packets keep their
+`What's improved` shape. From v6.4.6 onward, a short `Highlights` list and relevant
+plain-language change groups are supported; a narrow patch may retain
+`What's improved`. Groups must be non-empty and must not repeat a change. Internal
 toolchain and architecture work stays in the detailed changelog unless it
 changes something users can recognize or act on.
 
@@ -1785,9 +1786,23 @@ artifact-selection behaviour.
    duplicate appended `Installation` / `Promotion Metadata` sections verbatim.
    From the release after `v6.4.0-rc.1` onward, that renderer also owns a
    customer-facing communication contract. Public notes lead with one short
-   outcome paragraph, use a scannable `What's improved` section with no more
-   than six concrete items, keep fixes symptom-led, and reserve `Before you
+   outcome paragraph, use scannable symptom-led changes, and reserve `Before you
    upgrade` or `Known issues` for information users must act on or understand.
+   From v6.4.6 onward, the authoring tools and renderer accept a short plain-text
+   `Highlights` list and grouped customer sections (alerts, storage, PBS, NAS,
+   updates, Pro, service health, security or other improvements). A narrow patch
+   may retain `What's improved`. Groups must be non-empty and not duplicate the
+   same change, bullets remain bounded, and internal status headings stay out.
+   The install-metadata checks bind the current version in the notes title and
+   retain Windows signing/warning, companion compatibility and exact stable
+   rollback disclosures. Stable maturity and promotion lineage remain bound by
+   the changelog and release metadata, not a mandatory public boilerplate
+   sentence. Historical published notes are not edited or re-rendered to fit a
+   later authoring template.
+   The rootful qualification source manifest retains the complete compiled
+   install-test package, including the release-notes helper and its exact
+   authored-copy fixture. Accepting grouped notes must not silently narrow
+   that attested source boundary.
    Qualification counts, readiness assertions, release gates, workflow
    narration, artifact identity, and promotion metadata stay in governed
    workflow summaries and evidence records rather than the public changelog.
@@ -2413,6 +2428,56 @@ artifact-selection behaviour.
    `frontend-modern/src/security/__tests__/dependencySecurity.test.ts` proving
    the manifest range, the locked `@types/node`/`undici-types` versions and the
    `ES2022` lib declaration stay in step.
+
+### Release-note compatibility and server-helper ownership backport (1 October 2026)
+
+Reviewed main `90c80acb493eb4ff6a789b184a794b87b4a6d538` repairs the authored
+v6.4.5 watchdog failure and supports the required grouped v6.4.6 release story.
+This line takes its note generator, renderer, install-metadata helper, exact
+historical fixture, visual fixture correction and complete compiled-source
+boundary. It also takes the renderer-only ownership prerequisites from
+`62c3761ee6fe67ee3af5ba9d0efa4fe35bb19c67` and
+`9d77f09b4f6b52a03bd9246e81c9273f42a2129d`: every executable
+`/bin/update --version` example must have its own nearby condition that the
+helper was installed by the Pulse server installer. A distant warning cannot
+qualify another command. The generated install and rollback sections link to
+exact-version signed server-installer instructions for community-scripts
+containers and unknown helper ownership, preserving the selected target.
+
+Version identity, unsigned-Windows/publisher warning, companion compatibility,
+exact rollback, immutable promotion lineage and all qualification gates remain
+required. The authored v6.4.5 fixture is retained verbatim as historical evidence,
+not a new publication body. Neither published packets nor release metadata,
+source routing, application runtime or dependency manifests change.
+
+The source-closure test checks all repository-local compiled dependencies of
+the install-test package, collector and helper and reports all missing packages.
+The v6.5 line already contains `internal/filesystemprobe` and
+`pkg/agents/filesystem`; both are included as compiled qualification dependencies.
+No new filesystem implementation is introduced by this backport.
+
+The v6.5 containing-source suite also requires its control-plane page to name
+the already configured `v6-release-reliability` target. The reviewed upstream
+page correction is backported verbatim; target configuration and version/source
+routing are not changed. The stale prose was a separate observed source-check
+failure, not evidence of a release-runtime or provider fault. The v6.4 profile
+has a different configured target and does not take this current-main page.
+
+The containing line's full Python suite also checks the current notes packet.
+That check binds the first heading to the exact escaped version, accepting
+`# Pulse vX.Y.Z` and `# Pulse vX.Y.Z Release Notes` rather than requiring both a
+boilerplate suffix and an inline repeated version. Its eight valid and ten
+negative title cases reject prefix collisions, wrong versions, draft suffixes,
+non-heading mentions and a displaced heading. Changelog/version/index lineage
+checks remain unchanged. This is a line validation adaptation of the reviewed
+note compatibility repair, not a published-note rewrite or a gate waiver.
+
+`scripts/installtests/release_notes_contract_test.go` reproduces authored-copy
+acceptance and rejects seven identity/safety violations. The renderer cases
+exercise grouped notes, unsafe ownership, duplicates, historical formats and the
+actual shell authoring path with a local model double. Install and complete
+Python suites are source evidence; the containing line still needs independent
+review, exact qualification and a new-source terminal no-mutation watchdog.
 
 ## Current State
 
