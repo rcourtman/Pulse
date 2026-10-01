@@ -1,14 +1,6 @@
 {
-  "version": 1,
-  "base_sha": "65dce0862c50f18a430d1c4bf7a43a961bcf5351",
-  "verified_at": "2026-09-30T07:27:55.302Z",
-  "result": "passed",
-  "changed_paths": ["frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"],
-  "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "898d0e93299f61e649d028527a12685064567c1efb3169a54374f1ce0110afc1"
-  },
   "routes": [
-    "/browser-tests/pbs-retention-guard.html (production PBS table, resource drawer and History with synthetic refresh props)"
+    "/browser-tests/update-progress-modal.html (production UpdateProgressModal with a scripted update stream and scripted /api/updates/status and /api/version)"
   ],
   "viewports": [
     {
@@ -21,53 +13,73 @@
     }
   ],
   "states": [
-    "initial-service",
-    "correlated-host",
-    "unchanged-identity-omission",
-    "changed-machine-without-host",
-    "reacquired-host",
-    "ambiguous-hosts",
-    "omitted-after-ambiguity"
+    "stream delivers one downloading 10% event then stays open and silent; fallback polling advances the modal through 35, 70, 80 and 90% (applying)",
+    "stream closed during download with a single unreachable status poll between two successful ones; download progress continues and the restart phase is never entered",
+    "restarting status from polling, then /api/version unreachable twice, then the new version reported; Pulse is restarting shown, then exactly one page reload",
+    "pre-update version unavailable (503), late polls failing and a new version plus idle answering without a restarting or completed status; modal stays on Pulse is restarting with no reload and no completion claim",
+    "stream delivers downloading, verifying, extracting, backing-up, applying and completed; old version answers once, becomes unreachable, then the new version; exactly one reload and no fallback polls"
   ],
   "interactions": [
-    "Desktop keyboard disclosure and phone row activation; keep drawer open across host match, unchanged omission, changed machine, reacquisition, ambiguity and later omission.",
-    "Check Metrics Target and host-disk withdrawal; force 6h/1h History reads after every transition.",
-    "14 target/layout observations and 50 History GETs; no wrong-host reads, page errors or horizontal overflow."
+    "emit scripted SSE statuses and hold the stream silent past the 6s silence window; assert the first fallback poll lands after it and the stream stays open",
+    "fail the stream and abort one status poll mid-download; assert no restart text ever rendered (MutationObserver) and the do-not-close warning remains",
+    "count document loads of the harness to assert a single reload after real restart evidence, and none without a baseline or backend confirmation",
+    "inspect screenshots at desktop and phone widths; assert no page errors, no horizontal overflow and the dialog inside the viewport"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/pbs-retention-guard.cjs; Playwright 1.56.1, Chromium 141.0.7390.37",
+  "version": 1,
+  "base_sha": "b50aeb6a8d9e38ab362b23f4ed15a010f675a90f",
+  "verified_at": "2026-09-30T23:56:13Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/UpdateProgressModal.tsx",
+    "frontend-modern/src/components/updateReadinessModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/UpdateProgressModal.tsx": "d51df7a98a379e313f306b68529c8db0687ff91176af23869411c4b46feb2599",
+    "frontend-modern/src/components/updateReadinessModel.ts": "b25bf82441fc6572b95891af48a1ed2a0e8ea1f4e583c171ea9352a1e67d76ce"
+  },
+  "command": "pulse-worker-browser dist/modal-browser/runner.cjs from the assigned release/v6.4 workspace root; wrapper requires the byte-identical tracked modal harness from the worker-owned frontend copy; Chromium 141.0.7390.37, Playwright 1.56.1",
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v64-browser-proof-final.log",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v64-browser-final-artifacts/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v64-browser-final-artifacts/retained-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v64-browser-final-artifacts/retained-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v64-browser-final-artifacts/replacement-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v64-browser-final-artifacts/replacement-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v64-browser-final-artifacts/ambiguous-omitted-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v64-browser-final-artifacts/ambiguous-omitted-390.png"
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-fixed-path.log",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-copy.json",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-artifacts/a-polled-90pct-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-artifacts/a-polled-90pct-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-artifacts/a-stream-10pct-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-artifacts/a-stream-10pct-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-artifacts/b-after-failed-poll-80pct-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-artifacts/b-after-failed-poll-80pct-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-artifacts/c-reloaded-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-artifacts/c-reloaded-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-artifacts/c-restarting-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-artifacts/c-restarting-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-artifacts/d-unconfirmed-waiting-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-artifacts/d-unconfirmed-waiting-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-artifacts/e-reloaded-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-artifacts/e-reloaded-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-artifacts/e-restarting-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-artifacts/e-restarting-390.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-artifacts/e-stream-applying-1365.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-jniag1lv/modal-browser-artifacts/e-stream-applying-390.png"
   ],
-  "notes": "Six screenshots inspected. Mock-backed UI proof of the bounded release-line retention repair; not installed topology, persisted History, full #1723 relief, or release qualification. The initial collapsed-host-disclosure assertion failure is retained separately.",
+  "notes": "All five scripted scenarios passed at 1365x900 and 390x844; all 18 screenshots inspected. Launch frontend graph 602312e363ff8608700bf098dfa6a27848e27b82ac0923a73bd650983869bddf was used with offline installation. First client failed before rendering because __dirname was / in the confined request; the explicit /workspace wrapper corrects that path. This is mocked production-modal proof, not final dependency-graph audit, backend SSE, real Tailscale Serve or installed update/recovery acceptance.",
   "prior_verifications": [
     {
       "version": 1,
-      "base_sha": "a1b4e2f7532c8d7ba1cbfcb01ce0971fef42c179",
-      "verified_at": "2026-09-27T10:10:29Z",
+      "base_sha": "65dce0862c50f18a430d1c4bf7a43a961bcf5351",
+      "verified_at": "2026-09-30T07:27:55.302Z",
       "result": "passed",
       "changed_paths": [
-        "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
-        "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx",
-        "frontend-modern/src/hooks/useWorkloads.ts",
-        "frontend-modern/src/types/workloads.ts"
+        "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
       ],
       "content_sha256": {
-        "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "f4f8903e442d92a622fa2517f54288fb0dfa97882136e268e8e0f540390127fe",
-        "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "1a0b15141ee41e45dc884406bc4689828b034704c80f914fc0d2baa93d0b6edd",
-        "frontend-modern/src/hooks/useWorkloads.ts": "cf1b15b6554858c647108818d07f0f8c31655fdc8e9b8531fb8f9df4c7c41aa5",
-        "frontend-modern/src/types/workloads.ts": "4d779f40a56b83b83c8bbcb4b49f88e1db3432d071b8f6326094fa081547c1e6"
+        "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "898d0e93299f61e649d028527a12685064567c1efb3169a54374f1ce0110afc1"
       },
-      "routes": ["/browser-tests/guest-storage-2263.html"],
+      "routes": [
+        "/browser-tests/pbs-retention-guard.html (production PBS table, resource drawer and History with synthetic refresh props)"
+      ],
       "viewports": [
         {
-          "width": 1440,
+          "width": 1365,
           "height": 900
         },
         {
@@ -76,20 +88,79 @@
         }
       ],
       "states": [
-        "Linked guest: one physical disk and a clean RAID1 array visible without loading SMART detail",
-        "Expanded disk while lazy detail request is held: loading status visible and keyboard focus retained",
-        "Loaded SMART overview and History: health attributes and empty-history chart placeholders visible",
-        "No-agent guest: no disk card and no child-resource request",
-        "HTTP 503 child-resource query: unavailable status visible instead of an empty disk card"
+        "initial-service",
+        "correlated-host",
+        "unchanged-identity-omission",
+        "changed-machine-without-host",
+        "reacquired-host",
+        "ambiguous-hosts",
+        "omitted-after-ambiguity"
       ],
       "interactions": [
-        "Expand by keyboard, hold and release the SMART module, then switch History and Overview tabs",
-        "Collapse and reopen by pointer without a second SMART module request",
-        "Switch to no-agent and failing-query fixture states; assert exact parent-filtered disk requests only",
-        "Inspect desktop and phone screenshots for disk/RAID placement and overflow"
+        "Desktop keyboard disclosure and phone row activation; keep drawer open across host match, unchanged omission, changed machine, reacquisition, ambiguity and later omission.",
+        "Check Metrics Target and host-disk withdrawal; force 6h/1h History reads after every transition.",
+        "14 target/layout observations and 50 History GETs; no wrong-host reads, page errors or horizontal overflow."
       ],
-      "command": "pulse-worker-browser dist/browser-proof-2263/browser-run.cjs from assigned release/v6.4 workspace root (Playwright 1.56.1, Chromium 141.0.7390.37)",
-      "notes": "Offline synthetic fixture from byte-identical, lock-matched source copy under /workspace/dist/browser-proof-2263/frontend-modern; browser-run.cjs differs from tracked guest-storage-2263.cjs only in the absolute root path. Passed log and 12 inspected desktop/phone screenshots are retained in this release-line worker output. This is not installed or field acceptance."
+      "command": "pulse-worker-browser frontend-modern/browser-tests/pbs-retention-guard.cjs; Playwright 1.56.1, Chromium 141.0.7390.37",
+      "artifacts": [
+        "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v64-browser-proof-final.log",
+        "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v64-browser-final-artifacts/result.json",
+        "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v64-browser-final-artifacts/retained-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v64-browser-final-artifacts/retained-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v64-browser-final-artifacts/replacement-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v64-browser-final-artifacts/replacement-390.png",
+        "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v64-browser-final-artifacts/ambiguous-omitted-1365.png",
+        "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v64-browser-final-artifacts/ambiguous-omitted-390.png"
+      ],
+      "notes": "Six screenshots inspected. Mock-backed UI proof of the bounded release-line retention repair; not installed topology, persisted History, full #1723 relief, or release qualification. The initial collapsed-host-disclosure assertion failure is retained separately.",
+      "prior_verifications": [
+        {
+          "version": 1,
+          "base_sha": "a1b4e2f7532c8d7ba1cbfcb01ce0971fef42c179",
+          "verified_at": "2026-09-27T10:10:29Z",
+          "result": "passed",
+          "changed_paths": [
+            "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+            "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx",
+            "frontend-modern/src/hooks/useWorkloads.ts",
+            "frontend-modern/src/types/workloads.ts"
+          ],
+          "content_sha256": {
+            "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "f4f8903e442d92a622fa2517f54288fb0dfa97882136e268e8e0f540390127fe",
+            "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "1a0b15141ee41e45dc884406bc4689828b034704c80f914fc0d2baa93d0b6edd",
+            "frontend-modern/src/hooks/useWorkloads.ts": "cf1b15b6554858c647108818d07f0f8c31655fdc8e9b8531fb8f9df4c7c41aa5",
+            "frontend-modern/src/types/workloads.ts": "4d779f40a56b83b83c8bbcb4b49f88e1db3432d071b8f6326094fa081547c1e6"
+          },
+          "routes": [
+            "/browser-tests/guest-storage-2263.html"
+          ],
+          "viewports": [
+            {
+              "width": 1440,
+              "height": 900
+            },
+            {
+              "width": 390,
+              "height": 844
+            }
+          ],
+          "states": [
+            "Linked guest: one physical disk and a clean RAID1 array visible without loading SMART detail",
+            "Expanded disk while lazy detail request is held: loading status visible and keyboard focus retained",
+            "Loaded SMART overview and History: health attributes and empty-history chart placeholders visible",
+            "No-agent guest: no disk card and no child-resource request",
+            "HTTP 503 child-resource query: unavailable status visible instead of an empty disk card"
+          ],
+          "interactions": [
+            "Expand by keyboard, hold and release the SMART module, then switch History and Overview tabs",
+            "Collapse and reopen by pointer without a second SMART module request",
+            "Switch to no-agent and failing-query fixture states; assert exact parent-filtered disk requests only",
+            "Inspect desktop and phone screenshots for disk/RAID placement and overflow"
+          ],
+          "command": "pulse-worker-browser dist/browser-proof-2263/browser-run.cjs from assigned release/v6.4 workspace root (Playwright 1.56.1, Chromium 141.0.7390.37)",
+          "notes": "Offline synthetic fixture from byte-identical, lock-matched source copy under /workspace/dist/browser-proof-2263/frontend-modern; browser-run.cjs differs from tracked guest-storage-2263.cjs only in the absolute root path. Passed log and 12 inspected desktop/phone screenshots are retained in this release-line worker output. This is not installed or field acceptance."
+        }
+      ]
     }
   ]
 }

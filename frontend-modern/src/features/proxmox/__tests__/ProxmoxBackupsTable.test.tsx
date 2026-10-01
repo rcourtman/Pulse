@@ -4,6 +4,7 @@ import type { JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProxmoxBackupsTable } from '../ProxmoxBackupsTable';
+import { ProxmoxBackupServersTable } from '../ProxmoxBackupServersTable';
 import proxmoxBackupServersTableSource from '../ProxmoxBackupServersTable.tsx?raw';
 import proxmoxBackupsTableSource from '../ProxmoxBackupsTable.tsx?raw';
 import proxmoxPageSurfaceSource from '../ProxmoxPageSurface.tsx?raw';
@@ -593,7 +594,6 @@ describe('ProxmoxBackupsTable', () => {
   });
 
   it('keeps the PBS server identity while routing IP-configured History to its reported host', async () => {
-    mockBackupAPIs();
     const pbsServer = {
       ...pbsServerResource,
       id: 'pbs-1',
@@ -638,16 +638,12 @@ describe('ProxmoxBackupsTable', () => {
       },
     } as Resource;
 
-    renderInRouter(() => (
-      <ProxmoxBackupsTable
-        emptyIcon={<span />}
-        workloads={[workloadResource]}
-        servers={[pbsServer, hostAgent]}
-      />
-    ));
+    // Exercise the real server-row/drawer boundary without unrelated backup
+    // feed requests, posture queries or Router transitions. Those flows have
+    // their own cases above; none owns this PBS host identity decision.
+    render(() => <ProxmoxBackupServersTable servers={[pbsServer, hostAgent]} />);
 
-    await screen.findAllByText('pbs-docker');
-    fireEvent.click(screen.getByRole('row', { name: /backup-connection/ }));
+    await fireEvent.click(screen.getByRole('row', { name: /backup-connection/ }));
     const detail = await screen.findByTestId('pbs-resource-detail');
     expect(detail).toHaveAttribute('data-resource-id', 'pbs-1');
     expect(detail).toHaveAttribute('data-agent-id', 'agent-pbs-1');

@@ -627,8 +627,8 @@ the `white_label` branding entitlement.
    credentials, recipient details, alert evidence, or other tenant-private
    notification configuration into the resource or incident timeline.
 6. Change operator-facing telemetry/adoption reporting through `scripts/telemetry_adoption_report.py` together with the privacy disclosure whenever release-identity interpretation changes.
-   Release service-health telemetry must come from a bounded loopback probe of
-   the listener Pulse actually bound. It may report only whether the API, UI,
+   Release service-health telemetry must come from a bounded local probe of
+   the listener Pulse actually bound, using loopback for wildcard binds. It may report only whether the API, UI,
    and referenced frontend assets were served, a fixed failure category, and
    the immediately previous normalized release observation. It must not report
    listener addresses, URLs, asset names, response bodies, errors, hostnames,
@@ -1501,9 +1501,9 @@ download URLs, command output, log lines, paths, hostnames, release asset URLs,
 checksums, signatures, or operator-entered values.
 Schema v13 adds a direct local service-health observation so a process-level
 telemetry heartbeat is not mistaken for proof that the installed UI and API
-are being served. The runtime probes its bound listener through loopback and
-reports only observed/healthy booleans, one fixed failure class (`listener`,
-`startup`, `runtime`, `api_connectivity`, `api_status`, `ui_status`,
+are being served. The runtime probes the address bound by its TCP listener
+(loopback for wildcard binds) and reports only observed/healthy booleans, one fixed failure class (`listener`,
+`startup`, `runtime`, `api_connectivity`, `timeout`, `api_status`, `ui_status`,
 `frontend_assets`, or `unknown`), a fixed observation cohort, and the
 immediately previous normalized release's observed/healthy booleans. No probe
 target, listener address, URL, IP address, asset path, response content, raw
@@ -1511,6 +1511,19 @@ error, account, customer, or infrastructure identity may enter the payload or
 persisted receiver row. The previous-release fields are direct adjacent-release
 observations, not 30-day update counters, and are the only valid basis for a
 before/after release-health cohort in the adoption report.
+The service-health self-check must preserve the explicit bound TCP address and
+port; wildcard IPv6/unspecified-family listeners try IPv4 and IPv6 loopback,
+while an IPv4-only wildcard remains IPv4-only. No external address discovery,
+proxy, redirect, or remote frontend asset fetch is permitted. One bounded
+settling retry may follow a failed observation in the telemetry background
+runner: at most two five-second attempts, separated by one second. Each attempt
+shares its deadline across API/UI/assets and reserves time for an alternate
+loopback family. Once an API responds, status/body/UI/asset failures cannot be
+masked by switching families. Deadline and network timeout failures use only
+the fixed `timeout` bucket; other failure classes remain visible. Tests must
+cover unavailable IPv6 with working IPv4, IPv6-only serving, a stalled family,
+startup recovery, final timeouts, explicit addresses, HTTPS, redirect refusal,
+bounded bodies/assets, closed-category serialization and background execution.
 That same outbound usage telemetry floor now also permits only content-free Pulse
 Patrol control and governed Pulse Intelligence operations adoption flags and
 counters inside the same rotating 30-day telemetry window:
