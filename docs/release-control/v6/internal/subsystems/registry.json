@@ -6105,6 +6105,7 @@
               "internal/truenas/disk_health.go",
               "internal/truenas/fixtures.go",
               "internal/truenas/provider.go",
+              "internal/truenas/telemetry.go",
               "internal/truenas/transport.go",
               "internal/truenas/types.go"
             ],

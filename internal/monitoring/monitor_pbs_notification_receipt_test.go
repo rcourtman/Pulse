@@ -75,7 +75,12 @@ func testPBSMetricObservationGapNotificationReceipts(t *testing.T, restart bool)
 		select {
 		case body := <-receipts:
 			return body
-		case <-time.After(5 * time.Second):
+		case <-time.After(12 * time.Second):
+			// This asserts delivery, not latency. The autonomous queue polls
+			// every five seconds and the resolution callback is asynchronous;
+			// a five-second deadline races a legitimate post-restart delivery.
+			// Allow the same two-poll bound as the queue's recovery contracts,
+			// without forcing its worker or skipping the real HTTP receipt.
 			t.Fatal("no HTTP webhook receipt")
 			return nil
 		}
