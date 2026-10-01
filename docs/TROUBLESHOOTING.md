@@ -109,19 +109,40 @@ only the relevant port numbers and a redacted error if help is needed.
 - If another admin can log in, use `POST /api/security/reset-lockout` to clear the lockout for your username or IP.
 
 #### Audit Log verification shows unsigned events
-- **Symptom**: Audit Log entries show “Unsigned” or verification fails in the UI.
-- **Root cause**: Audit signing is disabled (crypto manager unavailable), so events are stored without signatures.
-- **Fix**: Ensure `.encryption.key` is present and Pro/legacy Pro+/Cloud audit logging is enabled, then restart Pulse to regenerate `.audit-signing.key`. Newly created events will be signed; existing unsigned events remain unsigned.
+
+**Unsigned** means no signature was stored for that event; it is not the same
+as **Failed** verification or a request **Error**. Signing can be unavailable
+when Pulse cannot initialise its encryption manager. Check a bounded startup
+log excerpt and the persistent data mount and access for the service account,
+without printing key contents. Do not delete or regenerate `.encryption.key`
+or an audit signing key to make the warning disappear. Restoring signing for
+new events cannot authenticate an old unsigned event.
+
+See [Audit verification and safe recovery](AUDIT_LOGGING.md#verification-failures-and-safe-recovery)
+for the different results and evidence to retain.
 
 #### Audit Log is empty
-- **Symptom**: Audit Log shows zero events or "Console Logging Only."
-- **Root cause**: Community plan uses console logging only, or Pro/legacy Pro+/Cloud audit logging is not enabled.
-- **Fix**: Use Pro, legacy Pro+, or Cloud with audit logging enabled, then generate new audit events (logins, token creation, password changes).
+
+Clear the event, user, date and success filters, and check the selected
+organisation first. A query error is not an empty history. **Pulse Pro runtime
+required** means an active licence is running on the public community runtime;
+follow the panel's **Download Pulse Pro** link rather than buying another
+licence or resetting storage. Without the audit capability, reads and exports
+are gated, but Pulse still attempts to capture events persistently on all
+plans. **Console Logging Only** can also reflect unavailable persistent
+storage: inspect the bounded startup logs for audit initialisation errors.
+Do not change passwords or create tokens merely to populate the panel.
 
 #### Audit Log verification fails for older events
-- **Symptom**: Older events fail verification while newer events pass.
-- **Root cause**: The audit signing key changed (for example, `.audit-signing.key` was regenerated), so signatures no longer match.
-- **Fix**: Restore the previous `.audit-signing.key` from backup to verify older events. If rotated intentionally, expect older events to fail verification.
+
+A failed signature check does not by itself prove tampering. An event signed
+with a different key can fail even when its contents are unchanged; missing
+signatures and an unsupported or damaged signature format also cannot verify.
+Keep the failure as evidence. Do not swap an old key into the live instance,
+edit audit rows or re-sign old events. Preserve the current data and keys
+privately before any recovery; compare a matching backup only in an isolated
+restore, not by overwriting today's history. Follow
+[safe audit recovery](AUDIT_LOGGING.md#verification-failures-and-safe-recovery).
 
 ### Monitoring Data
 
