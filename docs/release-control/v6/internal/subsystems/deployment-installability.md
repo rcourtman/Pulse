@@ -2446,15 +2446,13 @@ workspaces`. Install proofs that only ever ran against an empty install could
 not see this; verification on 2026-09-23 used a v6.4.1 bundle with one client
 whose container Docker reported healthy.
 
-The active stable `v6.4.5` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `6.4.5` release version.
-This stable patch release uses `promoted_from_tag=v6.4.5-rc.5` and `rollback_version=v6.4.1`, and promotes that published release candidate from `release/v6.4` unchanged apart from release metadata.
-The release plan's 24-hour soak for v6.4.5 is shorter than the selected resolver's 72-hour minimum by the explicit version-bound owner decision in the release plan. Release admission sets the soak exception only once the candidate has soaked the plan's time and the stable source adds nothing beyond release metadata.
-`hotfix_exception=true` transports that approved waiver through the shared promotion resolver. It does not reclassify v6.4.5 as a hotfix for active customer harm.
-The integrated single-build workflow must pass its exact-SHA preflight and immutable readiness gates before publication. Stable/latest install pointers and stable semver aliases move only after the exact public and private candidate paths pass.
-No governed mobile-facing path changed from `v6.4.1`, so the release decision is `no-mobile-impact` and no companion upload or public mobile-store rollout is part of this release.
-Stable `v6.4.5` skips SignPath under the standing unavailable policy and retains exact-SHA, checksum, detached-signature, immutable-manifest, published-digest, and Unknown Publisher disclosure controls.
-For the active stable `v6.4.5` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `6.4.5` until the next governed cut moves them forward.
-These are the selected publication requirements, not a claim that this preparation has been qualified or published.
+The active prerelease `v6.4.6-rc.1` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `6.4.6-rc.1` release version.
+It follows stable `v6.4.5` and opens the published `v6.4.6` candidate line.
+This prerelease keeps `rollback_version=v6.4.5`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.
+For the active prerelease `v6.4.6-rc.1` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `6.4.6-rc.1` until the next governed stable cut moves them forward.
+No governed mobile-facing path changed from `v6.4.5`, so the release decision is `no-mobile-impact` and no companion upload or public mobile-store rollout is part of this candidate.
+The prerelease Windows path retains exact-SHA, checksum, and detached-signature verification without Authenticode. Stable `v6.4.6` also skips SignPath under the standing unavailable policy.
+These are the selected publication requirements, not a claim that this preparation has been qualified or published. Stable remains subject to actual readiness and promotion evidence.
 
 Stable rehearsal metadata resolves candidate publication through GitHub using
 only the existing job contents-read token, bound to the resolver step as
