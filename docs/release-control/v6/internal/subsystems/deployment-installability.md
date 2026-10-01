@@ -6136,3 +6136,13 @@ rewriting the author's instructions or selecting another rollback version.
 distant-scope rejection, and valid generated and inline ownership conditions.
 This changes publication validation, not installer behaviour, immutable release
 contents or proof of an installed upgrade/rollback.
+
+## Rootful qualification source closure (1 October 2026)
+
+The rootful source manifest includes `internal/filesystemprobe` and
+`pkg/agents/filesystem`: both are compiled dependencies of the current collector
+and qualification harness. Omitting them would leave the attested packet
+unbound to filesystem-observation code that it actually executes. The closure
+test enumerates all repository-local dependencies of the install-test binary,
+collector and helper and reports every missing package together. No qualification
+gate, source exclusion or production permission is relaxed by this correction.

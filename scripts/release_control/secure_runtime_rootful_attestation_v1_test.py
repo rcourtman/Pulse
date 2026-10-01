@@ -508,6 +508,7 @@ if module.MAX_RECEIPT_BYTES <= 0:
         }
         self.assertTrue(compiled_test_inputs.issubset(manifest["exact_paths"]))
         recursive_roots = set(manifest["recursive_roots"])
+        unbound_dependencies = set()
         for target, include_tests in (
             ("./scripts/installtests", True),
             ("./cmd/pulse-agent", False),
@@ -529,12 +530,16 @@ if module.MAX_RECEIPT_BYTES <= 0:
                 if not raw_directory or directory == repo_root / "scripts" / "installtests":
                     continue
                 relative = directory.relative_to(repo_root).as_posix()
-                self.assertTrue(
-                    any(relative == root or relative.startswith(root + "/") for root in recursive_roots),
-                    f"compiled dependency for {target} is outside the source manifest: {relative}",
-                )
+                if not any(relative == root or relative.startswith(root + "/") for root in recursive_roots):
+                    unbound_dependencies.add(f"{target}: {relative}")
+        self.assertFalse(
+            unbound_dependencies,
+            "compiled dependencies outside the source manifest: " + ", ".join(sorted(unbound_dependencies)),
+        )
         self.assertIn("internal/agenthelper", manifest["recursive_roots"])
         self.assertIn("pkg/auth", manifest["recursive_roots"])
+        self.assertIn("internal/filesystemprobe", manifest["recursive_roots"])
+        self.assertIn("pkg/agents/filesystem", manifest["recursive_roots"])
 
 
 if __name__ == "__main__":
