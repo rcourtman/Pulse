@@ -1,5 +1,5 @@
 name: Release Dry Run
-run-name: Release Dry Run v${{ inputs.version || 'scheduled' }}
+run-name: ${{ inputs.watchdog && format('Release Watchdog at {0}', inputs.expected_workflow_sha) || format('Release Dry Run v{0}', inputs.version || 'scheduled') }}
 
 on:
   # Weekly drift watchdog: starts on main every Tuesday 07:00 UTC and selects the governed
@@ -7,12 +7,21 @@ on:
   # week at a time instead of piling up until an RC publish. Scheduled runs
   # carry no workflow_dispatch inputs (GitHub does not apply input defaults to
   # schedule events), so the rehearsal step derives the rollback target as the
-  # latest stable tag preceding VERSION. Manual dispatches must still supply
-  # rollback_version explicitly.
+  # latest stable tag preceding VERSION. The fixed on-demand watchdog uses the
+  # same envelope; ordinary manual rehearsals still supply rollback explicitly.
   schedule:
     - cron: '0 7 * * 2'
   workflow_dispatch:
     inputs:
+      watchdog:
+        description: 'Run the scheduled no-publication watchdog now, from exact reviewed main'
+        required: false
+        type: boolean
+        default: false
+      expected_workflow_sha:
+        description: 'Required exact main workflow SHA for watchdog dispatch; forbidden for candidate rehearsals'
+        required: false
+        type: string
       version:
         description: 'Optional version under rehearsal (e.g. 6.0.0-rc.2 or 6.0.0)'
         required: false
@@ -23,7 +32,9 @@ on:
         type: string
       rollback_version:
         description: 'Required rollback stable version to rehearse (for example 6.0.4 or v6.0.4)'
-        required: true
+        # Candidate rehearsals still enforce this before checkout. Only the
+        # fixed watchdog envelope derives the preceding stable rollback.
+        required: false
         type: string
       ga_date:
         description: 'Stable v6.0.0 rehearsal only: planned GA publish date (YYYY-MM-DD)'
@@ -70,7 +81,7 @@ permissions:
 jobs:
   build_release_candidate:
     name: Build Immutable Release Candidate
-    if: ${{ inputs.version != '' }}
+    if: ${{ inputs.watchdog != true && inputs.version != '' }}
     permissions:
       actions: write
       attestations: write
@@ -115,11 +126,67 @@ jobs:
 
     steps:
       - name: Validate release ref
+        id: mode
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WATCHDOG_INPUT: ${{ inputs.watchdog }}
+          EXPECTED_WORKFLOW_SHA_INPUT: ${{ inputs.expected_workflow_sha }}
+          VERSION_INPUT: ${{ inputs.version }}
+          PROMOTED_FROM_TAG_INPUT: ${{ inputs.promoted_from_tag }}
+          ROLLBACK_VERSION_INPUT: ${{ inputs.rollback_version }}
+          GA_DATE_INPUT: ${{ inputs.ga_date }}
+          V5_EOS_DATE_INPUT: ${{ inputs.v5_eos_date }}
+          HOTFIX_EXCEPTION_INPUT: ${{ inputs.hotfix_exception }}
+          HOTFIX_REASON_INPUT: ${{ inputs.hotfix_reason }}
+          UNSIGNED_WINDOWS_EXCEPTION_INPUT: ${{ inputs.unsigned_windows_exception }}
+          UNSIGNED_WINDOWS_REASON_INPUT: ${{ inputs.unsigned_windows_reason }}
+          NOTE_INPUT: ${{ inputs.note }}
+          MOBILE_RELEASE_DECISION: ${{ inputs.mobile_release_decision }}
+          MOBILE_RELEASE_EVIDENCE: ${{ inputs.mobile_release_evidence }}
         run: |
+          set -euo pipefail
           if [[ "${GITHUB_REF}" != refs/heads/* ]]; then
             echo "::error::Release dry run must be executed from a branch ref. Current ref: ${GITHUB_REF}"
             exit 1
           fi
+          WATCHDOG=false
+          case "${EVENT_NAME}:${WATCHDOG_INPUT:-false}" in
+            schedule:false) WATCHDOG=true ;;
+            workflow_dispatch:true)
+              if [ "${GITHUB_REF}" != "refs/heads/main" ] || \
+                 [[ ! "${EXPECTED_WORKFLOW_SHA_INPUT:-}" =~ ^[0-9a-f]{40}$ ]] || \
+                 [ "${EXPECTED_WORKFLOW_SHA_INPUT}" != "${GITHUB_SHA}" ]; then
+                echo "::error::Watchdog dispatch requires the exact reviewed main workflow SHA."
+                exit 1
+              fi
+              WATCHDOG=true
+              ;;
+            workflow_dispatch:false)
+              if [ -n "${EXPECTED_WORKFLOW_SHA_INPUT:-}" ] || [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then
+                echo "::error::Candidate rehearsal requires explicit rollback and no watchdog SHA."
+                exit 1
+              fi
+              ;;
+            *) echo "::error::Unsupported rehearsal event or watchdog mode."; exit 1 ;;
+          esac
+          if [ "${WATCHDOG}" = "true" ]; then
+            for name in VERSION_INPUT PROMOTED_FROM_TAG_INPUT ROLLBACK_VERSION_INPUT \
+                        GA_DATE_INPUT V5_EOS_DATE_INPUT HOTFIX_REASON_INPUT \
+                        UNSIGNED_WINDOWS_REASON_INPUT NOTE_INPUT \
+                        MOBILE_RELEASE_DECISION MOBILE_RELEASE_EVIDENCE; do
+              if [ -n "${!name:-}" ]; then
+                echo "::error::Watchdog refuses candidate input ${name}."
+                exit 1
+              fi
+            done
+            for name in HOTFIX_EXCEPTION_INPUT UNSIGNED_WINDOWS_EXCEPTION_INPUT; do
+              if [ "${!name:-false}" != "false" ]; then
+                echo "::error::Watchdog refuses exception input ${name}."
+                exit 1
+              fi
+            done
+          fi
+          echo "watchdog=${WATCHDOG}" >> "$GITHUB_OUTPUT"
           echo "[OK] Dry run executing on branch ${GITHUB_REF_NAME}"
 
       - name: Checkout repository
@@ -145,11 +212,16 @@ jobs:
         id: source
         env:
           EVENT_NAME: ${{ github.event_name }}
+          WATCHDOG_MODE: ${{ steps.mode.outputs.watchdog }}
           REQUIRED_BRANCH: ${{ steps.branch_policy.outputs.required_branch }}
         run: |
           set -euo pipefail
           TESTED_BRANCH="${GITHUB_REF_NAME}"
-          if [ "${EVENT_NAME}" = "schedule" ]; then
+          if [ "${WATCHDOG_MODE}" = "true" ]; then
+            if [ "${EVENT_NAME}" != "schedule" ] && [ "${EVENT_NAME}" != "workflow_dispatch" ]; then
+              echo "::error::Unsupported watchdog event."
+              exit 1
+            fi
             # Resolve once; never test a moving branch or rewrite GITHUB_SHA.
             git check-ref-format "refs/heads/${REQUIRED_BRANCH}"
             git fetch --no-tags origin "refs/heads/${REQUIRED_BRANCH}"
@@ -183,6 +255,7 @@ jobs:
         id: rehearsal
         env:
           EVENT_NAME: ${{ github.event_name }}
+          WATCHDOG_MODE: ${{ steps.mode.outputs.watchdog }}
           VERSION_INPUT: ${{ inputs.version }}
           PROMOTED_FROM_TAG_INPUT: ${{ inputs.promoted_from_tag }}
           ROLLBACK_VERSION_INPUT: ${{ inputs.rollback_version }}
@@ -242,10 +315,9 @@ jobs:
           elif [ -n "${UNSIGNED_WINDOWS_REASON_INPUT:-}" ]; then
             HELPER_ARGS+=(--unsigned-windows-reason "${UNSIGNED_WINDOWS_REASON_INPUT}")
           fi
-          if [ "${EVENT_NAME}" = "schedule" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then
-            # Scheduled watchdog runs carry no dispatch inputs; derive the
-            # rollback target instead of failing. Manual dispatches never get
-            # this flag, so their explicit-rollback requirement stands.
+          if [ "${WATCHDOG_MODE}" = "true" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then
+            # Both admitted watchdog paths have no candidate inputs. Ordinary
+            # candidate rehearsals retain their explicit-rollback requirement.
             HELPER_ARGS+=(--derive-rollback-latest-stable)
             echo "[OK] Scheduled rehearsal: deriving rollback target from the latest preceding stable tag"
           fi
@@ -266,6 +338,7 @@ jobs:
         id: mobile_release
         env:
           EVENT_NAME: ${{ github.event_name }}
+          WATCHDOG_MODE: ${{ steps.mode.outputs.watchdog }}
           MOBILE_RELEASE_DECISION: ${{ inputs.mobile_release_decision }}
           MOBILE_RELEASE_EVIDENCE: ${{ inputs.mobile_release_evidence }}
           WORKFLOW_OUTPUT_1: ${{ steps.rehearsal.outputs.version }}
@@ -273,7 +346,7 @@ jobs:
           set -euo pipefail
           DECISION="${MOBILE_RELEASE_DECISION:-}"
           EVIDENCE="${MOBILE_RELEASE_EVIDENCE:-}"
-          if [ -z "${DECISION}" ] && [ "${EVENT_NAME}" = "schedule" ]; then
+          if [ -z "${DECISION}" ] && [ "${WATCHDOG_MODE}" = "true" ]; then
             DECISION="no-mobile-impact"
             EVIDENCE="Scheduled release dry-run watchdog; no mobile release packet is being dispatched."
           fi
