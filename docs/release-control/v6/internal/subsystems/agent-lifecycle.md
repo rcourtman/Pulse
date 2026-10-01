@@ -15,6 +15,31 @@
 
 ## Purpose
 
+### Command-channel registration frame ordering
+
+The server reserves each new session's write lock while still holding the
+session-map lock, before dispatchers can discover it. Registration success
+must be the first frame: the unified client rejects an operation request
+received instead of the acknowledgement. Serializing individual writes after
+publication is insufficient because a dispatcher could win the lock first.
+The lock is on the new connection, not the replaced session. Rejection,
+replacement, pending activation, token admission and command authority remain
+unchanged; acknowledgement failure releases the reservation.
+
+`TestRegistrationReservesFirstFrameBeforePublishingSession` in
+`internal/agentexec/server_websocket_test.go` deterministically probes the
+publication-to-ack window and checks the first wire frame. Its global logging
+hook runs in an isolated copy of the same race-instrumented test binary with
+a bounded timeout, and joins its handler before restoring the logger. This
+avoids racing with handlers still finishing from preceding package tests.
+Real unified-agent WebSocket fixtures cover registration, receipt queries,
+APT/Docker mutation-once replay and cancellation/reconnect. These are source
+transport proofs, not installed acceptance or release qualification.
+
+Release-line backport of reviewed main `03dcabdf873f7c0090b58d89f58766e37aba8a27`
+and isolated regression `f825e0b0a1b1578f9058777d90b5741fb0689c23`. It changes
+no wire fields, admission checks, timeouts or release metadata.
+
 ### Explicit filesystem selections survive the report boundary
 
 Disk reports carry optional `explicitlyIncluded` evidence when the collector

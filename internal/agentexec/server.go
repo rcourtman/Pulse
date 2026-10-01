@@ -1478,6 +1478,10 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 		s.agents[ac.sessionKey] = ac
 	}
+	// Reserve the first frame before publishing the session to dispatchers.
+	// Clients require registered before any command; merely serializing the
+	// writes below does not guarantee that the acknowledgement wins the race.
+	ac.writeMu.Lock()
 	s.mu.Unlock()
 	if replaced != nil && replaced != ac {
 		log.Info().
@@ -1506,10 +1510,10 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	ackMsg, ackErr := NewMessage(MsgTypeRegistered, "", RegisteredPayload{Success: true, Message: "Registered"})
 	if ackErr != nil {
 		log.Warn().Err(ackErr).Str("agent_id", reg.AgentID).Msg("Failed to encode registration ack")
+		ac.writeMu.Unlock()
 		conn.Close()
 		return
 	}
-	ac.writeMu.Lock()
 	if sendErr := s.sendMessage(conn, ackMsg); sendErr != nil {
 		log.Warn().
 			Err(sendErr).
