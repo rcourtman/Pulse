@@ -2756,7 +2756,6 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-          "internal/alerts/quiet_hours_test.go",
               "internal/alerts/alert_admission_test.go",
               "internal/alerts/alerts_test.go",
               "internal/alerts/callback_config_coverage_test.go",
@@ -2779,6 +2778,7 @@
               "internal/alerts/incident_synthesis_test.go",
               "internal/alerts/intent_policy_test.go",
               "internal/alerts/operational_contract_test.go",
+              "internal/alerts/quiet_hours_test.go",
               "internal/alerts/reducer/ack_test.go",
               "internal/alerts/reducer/discrete_test.go",
               "internal/alerts/reducer/intent_test.go",
