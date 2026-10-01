@@ -2756,6 +2756,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+          "internal/alerts/quiet_hours_test.go",
               "internal/alerts/alert_admission_test.go",
               "internal/alerts/alerts_test.go",
               "internal/alerts/callback_config_coverage_test.go",

@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -390,4 +391,232 @@ func TestIsInQuietHours(t *testing.T) {
 			t.Errorf("isInQuietHours() = false, want true through the configured end minute")
 		}
 	})
+}
+
+// Local-clock schedules apply to both copies of a repeated minute. Missing
+// minutes do not move a configured start or end into some other wall-clock hour.
+func TestQuietHoursDaylightSavingClockAndReplay(t *testing.T) {
+	for _, tc := range []struct {
+		name, zone, start, end, now, replay string
+		quiet                               bool
+	}{
+		{"london-first-repeated-hour", "Europe/London", "01:00", "02:00", "2026-10-25T00:30:00Z", "2026-10-25T02:01:00Z", true},
+		{"london-second-repeated-hour", "Europe/London", "01:00", "02:00", "2026-10-25T01:30:00Z", "2026-10-25T02:01:00Z", true},
+		{"london-first-repeated-end", "Europe/London", "00:00", "01:30", "2026-10-25T00:15:00Z", "2026-10-25T00:31:00Z", true},
+		{"london-second-repeated-end", "Europe/London", "00:00", "01:30", "2026-10-25T01:15:00Z", "2026-10-25T01:31:00Z", true},
+		{"london-after-first-end", "Europe/London", "00:00", "01:30", "2026-10-25T00:45:00Z", "", false},
+		{"london-after-second-end", "Europe/London", "00:00", "01:30", "2026-10-25T01:45:00Z", "", false},
+		{"london-missing-start", "Europe/London", "01:30", "02:30", "2026-03-29T01:15:00Z", "2026-03-29T01:31:00Z", true},
+		{"london-missing-end-replay", "Europe/London", "00:00", "01:30", "2026-03-29T00:55:30Z", "2026-03-29T01:00:00Z", true},
+		{"london-after-missing-end", "Europe/London", "00:00", "01:30", "2026-03-29T01:15:00Z", "", false},
+		{"london-overnight-missing-end", "Europe/London", "22:00", "01:30", "2026-03-28T23:00:00Z", "2026-03-29T01:00:00Z", true},
+		{"london-overnight-repeated-end", "Europe/London", "22:00", "01:30", "2026-10-24T23:15:00Z", "2026-10-25T00:31:00Z", true},
+		{"london-end-minute-before-jump", "Europe/London", "00:00", "00:59", "2026-03-29T00:59:59Z", "2026-03-29T01:00:00Z", true},
+		{"new-york-first-repeated-end", "America/New_York", "00:00", "01:30", "2026-11-01T05:15:00Z", "2026-11-01T05:31:00Z", true},
+		{"new-york-second-repeated-end", "America/New_York", "00:00", "01:30", "2026-11-01T06:15:00Z", "2026-11-01T06:31:00Z", true},
+		{"new-york-after-first-end", "America/New_York", "00:00", "01:30", "2026-11-01T05:45:00Z", "", false},
+		{"new-york-after-second-end", "America/New_York", "00:00", "01:30", "2026-11-01T06:45:00Z", "", false},
+		{"new-york-missing-start", "America/New_York", "02:30", "03:30", "2026-03-08T07:15:00Z", "2026-03-08T07:31:00Z", true},
+		{"new-york-missing-end", "America/New_York", "00:00", "02:30", "2026-03-08T06:55:00Z", "2026-03-08T07:00:00Z", true},
+		{"new-york-after-missing-end", "America/New_York", "00:00", "02:30", "2026-03-08T07:15:00Z", "", false},
+		{"lord-howe-first-repeated-half-hour", "Australia/Lord_Howe", "01:30", "02:00", "2026-04-04T14:40:00Z", "2026-04-04T15:31:00Z", true},
+		{"lord-howe-second-repeated-half-hour", "Australia/Lord_Howe", "01:30", "02:00", "2026-04-04T15:10:00Z", "2026-04-04T15:31:00Z", true},
+		{"lord-howe-missing-start", "Australia/Lord_Howe", "02:00", "02:45", "2026-10-03T15:35:00Z", "2026-10-03T15:46:00Z", true},
+		{"lord-howe-after-missing-end", "Australia/Lord_Howe", "00:00", "02:15", "2026-10-03T15:40:00Z", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			now, err := time.Parse(time.RFC3339, tc.now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			m := newTestManager(t)
+			m.now = func() time.Time { return now }
+			cfg := m.GetConfig()
+			cfg.Schedule.QuietHours = QuietHours{Enabled: true, Start: tc.start, End: tc.end, Timezone: tc.zone,
+				Days: map[string]bool{"monday": true, "tuesday": true, "wednesday": true, "thursday": true, "friday": true, "saturday": true, "sunday": true}}
+			m.UpdateConfig(cfg)
+			m.mu.Lock()
+			defer m.mu.Unlock()
+			if got := m.isInQuietHours(); got != tc.quiet {
+				t.Errorf("quiet at %s for %s %s-%s = %v, want %v", now, tc.zone, tc.start, tc.end, got, tc.quiet)
+			}
+			if tc.replay == "" {
+				return
+			}
+			want, err := time.Parse(time.RFC3339, tc.replay)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := m.quietHoursReplayAt()
+			if !got.Equal(want) {
+				t.Errorf("replay = %s, want first eligible real minute %s", got, want)
+			}
+			if !got.After(now) {
+				t.Error("replay must be in the future")
+			}
+			now = want.Add(-time.Nanosecond)
+			if !m.isInQuietHours() {
+				t.Error("quiet hours ended before the final included minute finished")
+			}
+			now = want
+			if m.isInQuietHours() {
+				t.Error("computed replay minute is still quiet")
+			}
+		})
+	}
+}
+
+func TestQuietHoursOvernightSelectedCalendarDays(t *testing.T) {
+	m := newTestManager(t)
+	now := time.Date(2026, 10, 2, 23, 30, 0, 0, time.UTC) // Friday
+	m.now = func() time.Time { return now }
+	cfg := m.GetConfig()
+	cfg.Schedule.QuietHours = QuietHours{Enabled: true, Start: "22:00", End: "06:00", Timezone: "UTC", Days: map[string]bool{"friday": true}}
+	m.UpdateConfig(cfg)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.isInQuietHours() {
+		t.Fatal("selected Friday evening must be quiet")
+	}
+	want := time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC)
+	if got := m.quietHoursReplayAt(); !got.Equal(want) {
+		t.Fatalf("unselected Saturday must end suppression at midnight: got %s, want %s", got, want)
+	}
+	now = want
+	if m.isInQuietHours() {
+		t.Fatal("overnight settings must not silently enable an unselected day")
+	}
+	now = now.AddDate(0, 0, 6).Add(6*time.Hour + 59*time.Second) // Friday's inclusive 06:00 minute
+	if !m.isInQuietHours() || !m.quietHoursReplayAt().Equal(now.Truncate(time.Minute).Add(time.Minute)) {
+		t.Fatal("selected morning must keep the inclusive end minute")
+	}
+}
+
+func TestQuietHoursReplaySkipsNonexistentGap(t *testing.T) {
+	// This overnight window has a one-minute daily gap, 01:29. London's
+	// spring jump skips that entire gap, so the next real exit is Monday.
+	now := time.Date(2026, 3, 28, 23, 0, 0, 0, time.UTC)
+	m := fixedQuietHoursTestManager(now, QuietHours{Enabled: true, Start: "01:30", End: "01:28", Timezone: "Europe/London",
+		Days: map[string]bool{"saturday": true, "sunday": true, "monday": true}})
+	want := time.Date(2026, 3, 30, 0, 29, 0, 0, time.UTC)
+	if !m.isInQuietHours() || !m.quietHoursReplayAt().Equal(want) {
+		t.Fatalf("skipped gap must not release a notification into quiet hours: replay=%s want=%s", m.quietHoursReplayAt(), want)
+	}
+}
+
+func TestQuietHoursFullDayRetainsDailyReplayBoundary(t *testing.T) {
+	for _, tc := range []struct{ start, end, now, replay string }{
+		{"00:00", "23:59", "2026-10-01T12:30:00Z", "2026-10-02T00:00:00Z"},
+		{"22:00", "21:59", "2026-10-01T23:30:00Z", "2026-10-02T22:00:00Z"},
+		{"22:00", "21:59", "2026-10-01T12:30:00Z", "2026-10-01T22:00:00Z"},
+	} {
+		t.Run(tc.start+"/"+tc.now, func(t *testing.T) {
+			now, _ := time.Parse(time.RFC3339, tc.now)
+			want, _ := time.Parse(time.RFC3339, tc.replay)
+			m := fixedQuietHoursTestManager(now, QuietHours{Enabled: true, Start: tc.start, End: tc.end, Timezone: "UTC", Days: map[string]bool{"thursday": true, "friday": true}})
+			if !m.isInQuietHours() || !m.quietHoursReplayAt().Equal(want) {
+				t.Fatalf("daily replay changed: %s, want %s", m.quietHoursReplayAt(), want)
+			}
+		})
+	}
+}
+
+func TestQuietHoursClockDispatchAndDiagnosis(t *testing.T) {
+	for _, tc := range []struct {
+		name, now, start, end, replay string
+		quiet                         bool
+	}{
+		{"repeated-hour", "2026-10-25T00:30:00Z", "01:00", "02:00", "2026-10-25T02:01:00Z", true},
+		{"skipped-end", "2026-03-29T00:55:00Z", "00:00", "01:30", "2026-03-29T01:00:00Z", true},
+		{"after-skipped-end", "2026-03-29T01:15:00Z", "00:00", "01:30", "", false},
+	} {
+		for _, critical := range []bool{false, true} {
+			name := tc.name + "/warning"
+			if critical {
+				name = tc.name + "/unsuppressed-critical"
+			}
+			t.Run(name, func(t *testing.T) {
+				now, _ := time.Parse(time.RFC3339, tc.now)
+				m := newTestManager(t)
+				m.now = func() time.Time { return now }
+				cfg := m.GetConfig()
+				cfg.Enabled = true
+				cfg.ActivationState = ActivationActive
+				cfg.FlappingEnabled = false
+				cfg.Schedule.QuietHours = QuietHours{Enabled: true, Start: tc.start, End: tc.end, Timezone: "Europe/London", Days: map[string]bool{"sunday": true}}
+				m.UpdateConfig(cfg)
+				_, alert := testNewCanonicalAlert("vm-100", "vm-100-cpu", "vm", "cpu")
+				alert.Level = AlertLevelWarning
+				if critical {
+					alert.Level = AlertLevelCritical
+				}
+				alert.StartTime = now
+				alert.LastSeen = now
+				// Old metadata must be cleared when quiet hours no longer apply.
+				alert.Metadata = map[string]interface{}{MetadataQuietHoursSuppressed: true, MetadataQuietHoursReplayAt: "2099-01-01T00:00:00Z"}
+				m.mu.Lock()
+				m.setActiveAlertNoLock(alert.ID, alert)
+				m.mu.Unlock()
+				deferred := tc.quiet && !critical
+				diagnosis, found := m.DiagnoseAlertDelivery(alert.ID)
+				if !found {
+					t.Fatal("active occurrence unavailable")
+				}
+				if deferred {
+					want, _ := time.Parse(time.RFC3339, tc.replay)
+					if diagnosis.Status != AlertDeliveryStatusDeferred || diagnosis.Reason != AlertDeliveryReasonQuietHours || diagnosis.QuietHoursReplayAt == nil || !diagnosis.QuietHoursReplayAt.Equal(want) {
+						t.Fatalf("diagnosis disagrees with local-clock policy: %+v", diagnosis)
+					}
+				} else if diagnosis.Status != AlertDeliveryStatusWouldSend || diagnosis.Reason != AlertDeliveryReasonReady {
+					t.Fatalf("eligible alert was diagnosed as held: %+v", diagnosis)
+				}
+				var dispatched *Alert
+				m.SetAlertCallback(func(a *Alert) { dispatched = a })
+				m.mu.Lock()
+				admitted := m.dispatchAlert(alert, false)
+				m.mu.Unlock()
+				if !admitted || dispatched == nil {
+					t.Fatal("quiet-hours replay must enter the existing delivery pipeline, not be dropped")
+				}
+				if deferred {
+					if dispatched.Metadata[MetadataQuietHoursSuppressed] != true || dispatched.Metadata[MetadataQuietHoursReplayAt] != tc.replay {
+						t.Fatalf("pipeline replay timestamp = %#v, want %s", dispatched.Metadata, tc.replay)
+					}
+				} else if hasQuietHoursNotificationReplay(dispatched) {
+					t.Fatalf("eligible alert kept stale deferral metadata: %#v", dispatched.Metadata)
+				}
+				// Escalation/bypass sends consult this same public helper.
+				bypass := cloneAlertForOutput(dispatched)
+				if m.ShouldSuppressNotification(bypass) || hasQuietHoursNotificationReplay(bypass) != deferred {
+					t.Fatal("public bypass helper did not apply the same clock policy")
+				}
+			})
+		}
+	}
+}
+
+func TestQuietHoursConcurrentUncachedReaders(t *testing.T) {
+	now := time.Date(2026, 10, 25, 0, 30, 0, 0, time.UTC)
+	m := fixedQuietHoursTestManager(now, QuietHours{Enabled: true, Start: "01:00", End: "02:00", Timezone: "Europe/London", Days: map[string]bool{"sunday": true}})
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for worker := 0; worker < 32; worker++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			for i := 0; i < 25; i++ {
+				alert := &Alert{ID: "uncached-reader", Type: "cpu", Level: AlertLevelWarning}
+				if m.ShouldSuppressNotification(alert) || alert.Metadata[MetadataQuietHoursReplayAt] != "2026-10-25T02:01:00Z" {
+					t.Error("concurrent reader disagrees with quiet-hours replay")
+					return
+				}
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if m.quietHoursLoc != nil {
+		t.Fatal("read-locked evaluation mutated the configuration-owned location cache")
+	}
 }
