@@ -285,7 +285,11 @@ describe('infrastructure operations model', () => {
     expect(infrastructureInstallerSectionSource).toContain('augmentation.');
     expect(infrastructureInstallerSectionSource).toContain('Installation commands');
     expect(infrastructureInstallerSectionSource).toContain(
-      'Generate an install token first. Pulse will then build copy-ready commands',
+      'Generate an install token first. Then copy the command for the target host and',
+    );
+    expect(infrastructureInstallerSectionSource).toContain('follow its credential-entry instructions.');
+    expect(infrastructureInstallerSectionSource).toContain(
+      'commands keep it separate: copy the command first, then use Show token only.',
     );
     expect(infrastructureInstallerSectionSource).toContain(
       'Install the transitional combined runtime that can accept server command requests',
