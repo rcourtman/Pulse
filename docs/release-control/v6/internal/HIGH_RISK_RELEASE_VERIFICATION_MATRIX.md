@@ -1029,6 +1029,14 @@ Companion drill:
     complete missing-package list is a failed boundary check, not qualification.
   `cd scripts/release_control && python3 -m unittest resolve_release_promotion_test release_promotion_policy_test`
   `go test ./scripts/installtests -run 'Test(Demo|DeployDemo|UpdateDemo|Release)' -count=1`
+  - `TestDemoReachabilityStopsBeforeUnreadyOrFailedTailnetProbes` executes
+    synthetic local daemon/probe commands: failed setup diagnostics never
+    contact the host, non-running/malformed status cannot pass readiness,
+    failed tailnet ping cannot fall back to TCP, and workflow output excludes
+    private topology, including stdout/stderr from both probes on success or
+    failure. Running-state success still requires both ping and SSH
+    transport, with bounded TCP failures retained. This is offline helper
+    correctness, not live OAuth access or installed demo acceptance.
 - Manual scenario:
   - Compare the exact selected release notes with the install-metadata verdict.
     Authored grouped notes must retain version identity, unsigned-Windows and
