@@ -37,7 +37,9 @@ class RehearsalSourceTest(unittest.TestCase):
         self.git("config", "user.email", "fixture@example.invalid")
         self.git("config", "user.name", "Fixture")
         self.git("config", "core.hooksPath", "/dev/null")
-        for name in ("scripts/release_control/control_plane.py",
+        # Match the real checkout's generated-file policy, including Python's
+        # import cache, while still detecting any uncommitted source change.
+        for name in (".gitignore", "scripts/release_control/control_plane.py",
                      "scripts/release_control/repo_file_io.py",
                      "scripts/release_control/resolve_release_promotion.py",
                      "docs/release-control/control_plane.json"):
