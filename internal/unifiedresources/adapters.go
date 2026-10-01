@@ -360,21 +360,22 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 			}
 			assessment := storagehealth.AssessHostRAIDArray(r)
 			raid[i] = HostRAIDMeta{
-				Device:         r.Device,
-				Name:           r.Name,
-				Level:          r.Level,
-				State:          r.State,
-				TotalDevices:   r.TotalDevices,
-				ActiveDevices:  r.ActiveDevices,
-				WorkingDevices: r.WorkingDevices,
-				FailedDevices:  r.FailedDevices,
-				SpareDevices:   r.SpareDevices,
-				UUID:           r.UUID,
-				Devices:        devices,
-				RebuildPercent: r.RebuildPercent,
-				RebuildSpeed:   r.RebuildSpeed,
-				Operation:      r.Operation,
-				Risk:           storageRiskFromAssessment(assessment),
+				Device:          r.Device,
+				Name:            r.Name,
+				Level:           r.Level,
+				State:           r.State,
+				RequiredDevices: r.RequiredDevices,
+				TotalDevices:    r.TotalDevices,
+				ActiveDevices:   r.ActiveDevices,
+				WorkingDevices:  r.WorkingDevices,
+				FailedDevices:   r.FailedDevices,
+				SpareDevices:    r.SpareDevices,
+				UUID:            r.UUID,
+				Devices:         devices,
+				RebuildPercent:  r.RebuildPercent,
+				RebuildSpeed:    r.RebuildSpeed,
+				Operation:       r.Operation,
+				Risk:            storageRiskFromAssessment(assessment),
 			}
 			if !isInternalHostRAIDDevice(r.Device) {
 				storageAssessments = append(storageAssessments, assessment)

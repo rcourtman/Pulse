@@ -4,6 +4,11 @@ Pulse's audit log records security-relevant events with tamper-evident signature
 
 **Requires:** Pro, legacy Pro+, or Cloud license with the `audit_logging` capability to query, export, and verify events via the API. Events are recorded on all plans, but the API endpoints are license-gated.
 
+An active licence alone does not enable the audit UI/API on the public
+community runtime. If the panel says **Pulse Pro runtime required**, follow
+**Download Pulse Pro** to the private runtime for your deployment. Do not buy
+a second licence or reset the data directory to clear this gate.
+
 For plan details, see [PULSE_PRO.md](PULSE_PRO.md). For API endpoints, see [API Reference](API.md#-audit-log-pro).
 
 ---
@@ -116,7 +121,9 @@ sensitive data; keep it outside shared repositories and issue attachments.
 
 ## Tamper Detection
 
-Every audit event is cryptographically signed at creation time. You can verify that an event has not been modified:
+When signing is available, Pulse signs audit events at creation time. Events
+captured without a signer remain unsigned. Use **Verify** in the signed-in
+Audit Log panel, or the authenticated read below, to check a stored signature:
 
 ```bash
 curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
@@ -132,7 +139,49 @@ Response:
 }
 ```
 
-If `verified` is `false`, the event data has been tampered with since it was recorded.
+`verified: true` means the signature matches the verifier's key and supported
+signature format. It does not prove that the history is complete or that no
+events were deleted. `verified: false` means the check failed, not that Pulse
+has established why it failed. Keep that result as evidence.
+
+### Verification failures and safe recovery
+
+| Result | What it establishes | Safe next step |
+| --- | --- | --- |
+| **Not checked** | No verification result has been obtained. | Use **Verify** for the relevant event. |
+| **Unsigned** | No signature was stored. | Check whether signing was available when the event was captured. Later enabling signing cannot authenticate it retroactively. |
+| **Failed** / `verified: false` | The stored event and signature do not verify with the current key and supported format. | Preserve the evidence; a different key, missing or damaged signature, unsupported format or modified signed fields can cause this. |
+| **Unavailable** / `available: false` | The current logger cannot offer verification. | Check the audit capability/runtime gate and bounded startup logs for persistent-store initialisation failures. |
+| **Error** / non-successful HTTP response | The verification request did not return a usable result. | Keep the HTTP status and redacted error; it is not proof that the event failed verification. |
+
+Start with the event's time, the last known working version and whether the
+data mount, service account, runtime or backup changed. Inspect a bounded
+startup log excerpt locally; distinguish encryption/signing initialisation
+errors from an audit database/query error. Do not print the key files or post
+whole audit exports, service environments or backups. For an empty panel,
+clear filters and check the selected organisation before assuming events were
+lost. See [Getting Help](TROUBLESHOOTING.md#-getting-help) for safe evidence.
+
+**Preserve before changing anything.** Keep a consistent private backup of the
+current data directory, including the audit store and its signing and
+encryption keys. Use your established snapshot/backup procedure for a running
+instance; copying a live `.db` file alone is not a consistent backup. For an
+offline filesystem backup, stop Pulse first and retain the complete store,
+including any SQLite sidecar files, with its original ownership and access.
+
+Do not delete or regenerate a key, replace a live signing key with an older
+one, edit audit rows or re-sign old events to make verification pass. A newly
+generated signing key does not verify events signed with the previous key.
+The encrypted signing key also needs its matching `.encryption.key`; restoring
+only one member is not a recovery. Swapping keys can break verification of
+newer events while concealing the original problem.
+
+If a matching historical backup exists, restore and compare it in an isolated
+test instance using the corresponding Pulse runtime/version, without
+replacing the live data or contacting monitored systems and notification
+destinations. Keep the current instance and both backups intact. If the
+original key is lost or an event was unsigned, do not claim that a restart,
+new key or successful check on a different event authenticated that history.
 
 ---
 
@@ -160,15 +209,27 @@ See [Multi-Tenant Organizations](MULTI_TENANT.md) for details.
 | Export | License-gated (402) | Available |
 | `persistentLogging` API flag | `false` | `true` |
 
-On all plans, audit events are written to the SQLite database. However, the query, verify, and export API endpoints require the `audit_logging` license feature and return `402 Payment Required` without it. The `persistentLogging` flag in API responses indicates whether the licensed query capabilities are available.
+Pulse attempts SQLite-backed capture on all plans; failure to initialise the
+store can leave console-only logging. The query, verify and export endpoints
+also require the `audit_logging` capability and a compatible runtime. A
+licence/runtime gate is not proof that events were never captured. For an
+authorised query, `persistentLogging` describes the active logger, not a count
+of historical events or proof that their signatures are valid.
 
 ---
 
 ## Storage
 
-Audit events are stored in a SQLite database in the Pulse data directory:
+The default audit store lives in the Pulse data directory:
 - **Single-tenant:** `{data-dir}/audit/audit.db`
 - **Multi-tenant:** `{data-dir}/orgs/{org-id}/audit/audit.db`
+
+The default encrypted signing key is `.audit-signing.key` **inside the audit
+store directory**, alongside `audit.db`, not at the data-directory root. Its
+matching `.encryption.key` is in the data directory (or the organisation's data
+directory for a non-default organisation). Keep both with the corresponding
+history. A runtime may supply a different audit directory or managed signing
+key; use that deployment's actual configuration rather than guessing a path.
 
 Data directory locations:
 - systemd: `/etc/pulse/`
