@@ -25,7 +25,7 @@ Pulse uses a split config model:
 
 - **Local auth and secrets**: `.env` (managed by Quick Security Setup or environment overrides, not shown in the UI)
 - **Encryption key**: `.encryption.key` (required to decrypt `.enc` files)
-- **Audit signing key**: `.audit-signing.key` (Pro/legacy Pro+/Cloud, encrypted)
+- **Audit signing key**: `audit/.audit-signing.key` (default store, encrypted; preserve with its matching encryption key and history)
 - **System settings**: `system.json` (editable in the UI unless locked by env)
 - **Nodes and credentials**: `nodes.enc` (encrypted)
 - **Notification config**: `email.enc`, `webhooks.enc`, `apprise.enc` (encrypted)
@@ -40,7 +40,7 @@ Pulse uses a split config model:
 - **AI pattern data**: `ai_patterns.json`
 - **AI remediation data**: `ai_remediations.json`
 - **AI incident tracking**: `ai_incidents.json`
-- **Audit log database**: `audit.db` (Pro/legacy Pro+/Cloud, SQLite)
+- **Audit log database**: `audit/audit.db` (default store; persistent capture on all plans, licensed query/export)
 - **Relay/Pro/legacy Pro+/Cloud license**: `license.enc` (encrypted)
 - **Host metadata**: `host_metadata.json`
 - **Docker metadata**: `docker_metadata.json`
@@ -63,6 +63,12 @@ Path mapping:
 
 - systemd/LXC: `/etc/pulse/*`
 - Docker/Helm: `/data/*`
+
+The audit paths above are the default store, not a licence-dependent guarantee
+that storage initialised successfully. Runtime-specific storage can differ;
+see [Audit storage and safe recovery](AUDIT_LOGGING.md#storage) before restoring
+history or keys. Do not replace keys in a live instance to clear a verification
+failure.
 
 Enterprise/internal multi-org layout:
 - Default org uses the root data dir for backward compatibility.
