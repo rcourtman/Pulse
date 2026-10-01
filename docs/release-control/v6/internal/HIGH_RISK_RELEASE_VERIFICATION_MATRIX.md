@@ -1021,9 +1021,16 @@ Companion drill:
   `.github/scripts/check-demo-reachability.sh`
   `scripts/trigger-stable-patch.sh`
 - Automated proof:
+  `go test ./scripts/installtests -run 'TestStablePatchReleaseNotes' -count=1`
+  `cd scripts/release_control && python3 -m unittest render_release_body_test`
   `cd scripts/release_control && python3 -m unittest resolve_release_promotion_test release_promotion_policy_test`
   `go test ./scripts/installtests -run 'Test(Demo|DeployDemo|UpdateDemo|Release)' -count=1`
 - Manual scenario:
+  - Compare the exact selected release notes with the install-metadata verdict.
+    Authored grouped notes must retain version identity, unsigned-Windows and
+    publisher warning, mobile compatibility and the exact stable rollback. A
+    wording mismatch is not a product-runtime diagnosis. Do not mutate a shipped
+    release or skip functional checks to obtain a passing watchdog.
   1. Push the exact candidate commit to the governed stable branch.
   2. For a no-public-release rehearsal, dispatch
      `./scripts/trigger-stable-patch.sh --dry-run <version>`.
