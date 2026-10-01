@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 from io import StringIO
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -190,6 +192,153 @@ class FormattingOnlyExemptionTest(unittest.TestCase):
                 clear=False,
             ):
                 self.assertEqual(self.resolve(repo_root), set())
+
+
+OTHER_PATH = "frontend-modern/src/components/Other.tsx"
+
+
+class IntegrationRangeTest(unittest.TestCase):
+    """--base validates a merged integration range, not one tip receipt.
+
+    The maintainer coordinator merges reviewed candidates onto a main that
+    keeps moving, so the range tip is a merge whose parent no lane receipt can
+    name. Each frontend file must still ship with content a browser pass
+    verified, recorded by a non-merge commit bound to its own parent.
+    """
+
+    def setUp(self) -> None:
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.repo_root = Path(self.tmpdir.name)
+        self.env = strip_local_git_env(os.environ.copy())
+        self.env["PULSE_PRETTIER_BIN"] = str(self.repo_root / "missing-prettier")
+        self.git("init", "--quiet", "--initial-branch=main")
+        self.write(CHANGED_PATH, "export const a = 0;\n")
+        self.write(OTHER_PATH, "export const b = 0;\n")
+        self.base = self.commit("seed")
+
+    def git(self, *args: str) -> str:
+        return subprocess.run(
+            ["git", "-c", "user.email=t@example.com", "-c", "user.name=t", *args],
+            cwd=self.repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=self.env,
+        ).stdout.strip()
+
+    def write(self, path: str, text: str) -> None:
+        target = self.repo_root / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+
+    def commit(self, message: str) -> str:
+        self.git("add", "-A")
+        self.git("commit", "--quiet", "--allow-empty", "-m", message)
+        return self.git("rev-parse", "HEAD")
+
+    def write_receipt(self, paths: list[str], *, base: str | None = None) -> None:
+        receipt = valid_receipt()
+        receipt["base_sha"] = base or self.git("rev-parse", "HEAD")
+        receipt["changed_paths"] = paths
+        receipt["content_sha256"] = {
+            path: hashlib.sha256((self.repo_root / path).read_bytes()).hexdigest()
+            for path in paths
+        }
+        self.write(RECEIPT_PATH, json.dumps(receipt, indent=2) + "\n")
+
+    def verified_change(self, path: str, text: str, message: str) -> str:
+        self.write(path, text)
+        self.write_receipt([path])
+        return self.commit(message)
+
+    def run_range(self, *extra: str) -> tuple[int, str]:
+        stderr = StringIO()
+        with (
+            patch.dict("os.environ", self.env, clear=True),
+            patch("browser_verification_guard.REPO_ROOT", self.repo_root),
+            patch("sys.stdout", new=StringIO()),
+            patch("sys.stderr", new=stderr),
+        ):
+            status = main(["--base", self.base, "--commit", self.git("rev-parse", "HEAD"), *extra])
+        return status, stderr.getvalue()
+
+    def merge_advanced_main_into_candidate(self) -> None:
+        # main advances with its own verified frontend change while the
+        # candidate is verified against the older base, then the coordinator
+        # merges the candidate onto the newer main.
+        self.git("checkout", "--quiet", "-b", "candidate", self.base)
+        self.verified_change(CHANGED_PATH, "export const a = 1;\n", "candidate")
+        self.git("checkout", "--quiet", "main")
+        self.verified_change(OTHER_PATH, "export const b = 1;\n", "upstream")
+        # Both sides edited the shared receipt; the resolution keeps one side.
+        subprocess.run(
+            ["git", "-c", "user.email=t@example.com", "-c", "user.name=t",
+             "merge", "--quiet", "--no-ff", "candidate", "-m", "integrate"],
+            cwd=self.repo_root, capture_output=True, env=self.env,
+        )
+        self.git("checkout", "--quiet", "--theirs", RECEIPT_PATH)
+        self.commit("integrate candidate")
+        self.assertEqual(len(self.git("log", "-1", "--format=%P").split()), 2)
+
+    def test_accepts_merge_of_verified_candidate_onto_advanced_main(self) -> None:
+        self.merge_advanced_main_into_candidate()
+        self.assertEqual(self.run_range(), (0, ""))
+
+    def test_accepts_receipt_recorded_in_a_later_commit(self) -> None:
+        self.write(CHANGED_PATH, "export const a = 1;\n")
+        self.commit("frontend change")
+        self.write_receipt([CHANGED_PATH])
+        self.commit("record proof")
+        self.assertEqual(self.run_range()[0], 0)
+
+    def test_blocks_frontend_edit_after_merge_without_fresh_proof(self) -> None:
+        self.merge_advanced_main_into_candidate()
+        self.write(CHANGED_PATH, "export const a = 2;\n")
+        self.commit("coordinator correction")
+
+        status, stderr = self.run_range()
+
+        self.assertEqual(status, 1)
+        self.assertIn(CHANGED_PATH, stderr)
+        self.assertNotIn(OTHER_PATH, stderr)
+
+    def test_merge_resolution_receipt_is_not_evidence(self) -> None:
+        # A conflict resolution that changes source and rewrites the receipt
+        # inside the merge commit has no browser run behind it.
+        self.git("checkout", "--quiet", "-b", "candidate", self.base)
+        self.verified_change(CHANGED_PATH, "export const a = 1;\n", "candidate")
+        self.git("checkout", "--quiet", "main")
+        self.git("merge", "--quiet", "--no-ff", "--no-commit", "candidate")
+        self.write(CHANGED_PATH, "export const a = 3;\n")
+        self.write_receipt([CHANGED_PATH], base=self.base)
+        self.commit("integrate with resolution")
+        self.assertEqual(len(self.git("log", "-1", "--format=%P").split()), 2)
+
+        status, stderr = self.run_range()
+
+        self.assertEqual(status, 1)
+        self.assertIn(CHANGED_PATH, stderr)
+
+    def test_receipt_bound_to_another_parent_is_rejected(self) -> None:
+        self.write(CHANGED_PATH, "export const a = 1;\n")
+        self.write_receipt([CHANGED_PATH], base="b" * 40)
+        self.commit("stale proof")
+
+        status, stderr = self.run_range()
+
+        self.assertEqual(status, 1)
+        self.assertIn("base_sha must match", stderr)
+
+    def test_range_paths_can_come_from_stdin(self) -> None:
+        self.merge_advanced_main_into_candidate()
+        changed = self.git("diff", "--name-only", "--diff-filter=ACMRD", self.base, "HEAD")
+        with patch("sys.stdin", StringIO(changed + "\n")):
+            self.assertEqual(self.run_range("--files-from-stdin"), (0, ""))
+
+    def test_base_requires_commit(self) -> None:
+        with patch("sys.stderr", new=StringIO()), self.assertRaises(SystemExit):
+            main(["--base", self.base])
 
 
 if __name__ == "__main__":
