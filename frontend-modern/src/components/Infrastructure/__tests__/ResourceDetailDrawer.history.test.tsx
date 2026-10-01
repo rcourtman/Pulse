@@ -161,7 +161,7 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
 describe('ResourceDetailDrawer change history section', () => {
   it('keeps current readings separate from stored history samples', () => {
     expect(guestDrawerHistorySource).toContain('currentMetrics');
-    expect(guestDrawerHistorySource).toContain('Collecting history');
+    expect(guestDrawerHistorySource).toContain('No stored history in this range');
     expect(guestDrawerHistorySource).not.toContain('buildFallbackHistoryPoints');
   });
 

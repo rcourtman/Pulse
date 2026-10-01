@@ -57,7 +57,7 @@ describe('GuestDrawerHistory refresh recovery', () => {
     const { container } = render(() => <GuestDrawerHistory target={target} range="24h" />);
     await screen.findByText('Failed to load history data');
     const retry = screen.getByRole('button', { name: 'Retry history' });
-    expect(screen.queryByText('Collecting history')).not.toBeInTheDocument();
+    expect(screen.queryByText('No stored history in this range')).not.toBeInTheDocument();
     expect(screen.queryByText(/previously loaded/)).not.toBeInTheDocument();
     expect(container).not.toHaveTextContent('private diagnostic detail');
     expect(paths(container)).toHaveLength(0);
@@ -204,7 +204,7 @@ describe('GuestDrawerHistory refresh recovery', () => {
       await vi.advanceTimersByTimeAsync(30_000);
       expect(screen.getByText('Failed to load history data')).toBeInTheDocument();
       expect(screen.queryByText(/previously loaded/)).not.toBeInTheDocument();
-      expect(screen.queryByText('Collecting history')).not.toBeInTheDocument();
+      expect(screen.queryByText('No stored history in this range')).not.toBeInTheDocument();
       expect(paths(container)).toHaveLength(0);
     },
   );
