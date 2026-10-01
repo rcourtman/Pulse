@@ -3,6 +3,22 @@
 One short paragraph explaining the customer outcome of the release. Lead with
 what feels better or works now, not how it was implemented.
 
+## Highlights
+
+- One to three short plain-text outcomes. Keep each under 140 characters with
+  no Markdown, links or issue references so the in-app highlights stay readable.
+
+## Proxmox, PBS and backups
+
+- Explain a change in plain language, where users notice it and why it matters.
+
+From v6.4.6 onward, group related changes under the relevant reader-facing
+headings: Alerts and notifications, Disks and storage, Proxmox, PBS and backups,
+TrueNAS, vSphere and Docker, Install, updates and agents, Updates and agents,
+Pulse Pro, AI and hosted, Monitoring and service health, Security, and Other
+improvements. Omit unused groups. A narrow patch can keep the simpler section
+below instead. Do not repeat a change between groups or add empty sections.
+
 ## What's improved
 
 - **Short outcome** - Explain where users notice it and why it matters.
@@ -12,7 +28,7 @@ what feels better or works now, not how it was implemented.
 
 Use a concise set of meaningful improvements. A narrow patch may use fewer
 rather than padding the notes with internal work. Each user-visible change
-belongs in this list exactly once. Prefer observable behavior over component
+belongs in the grouped changes exactly once. Prefer observable behavior over component
 names, group related implementation work into one user-recognizable theme, and
 use plain language. Each complete bullet, including Markdown links, must be no
 more than 260 characters. New release notes must not contain semicolons or em
@@ -32,6 +48,12 @@ constraints, and optional per-pass traces.
 
 Do not add a separate `Fixes` section. That shape encourages the same change to
 be described twice as both an improvement and a fix.
+
+## Known issues
+
+Describe remaining user symptoms and an actionable workaround or next step.
+Omit this section when there are none. Do not substitute internal verification
+status for information users can act on.
 
 ## Before you upgrade
 

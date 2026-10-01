@@ -28,6 +28,13 @@ _CUSTOMER_SECTION_HEADINGS = {
     "before you upgrade",
     "known issues",
 }
+_CUSTOMER_CHANGE_GROUPS = {
+    "alerts and notifications", "disks and storage",
+    "proxmox, pbs and backups", "truenas, vsphere and docker",
+    "install, updates and agents", "updates and agents",
+    "pulse pro, ai and hosted", "monitoring and service health",
+    "security", "other improvements",
+}
 _INTERNAL_RELEASE_LANGUAGE_RE = re.compile(
     r"\b(?:"
     r"readiness assertions?"
@@ -251,16 +258,23 @@ def _validate_customer_facing_release_notes(text: str, version: str) -> None:
             f"the release summary must be {_MAX_CUSTOMER_SUMMARY_LENGTH} characters or fewer"
         )
 
+    # New packets follow the grouped, plain-language release story. Retain the
+    # historical validator for older packets without rewriting published prose.
+    grouped = (_release_core(version) or (0, 0, 0)) >= (6, 4, 6)
+    allowed_headings = _CUSTOMER_SECTION_HEADINGS | (
+        _CUSTOMER_CHANGE_GROUPS | {"highlights"} if grouped else set()
+    )
     headings: dict[str, int] = {}
     for index, line in enumerate(lines):
         heading = re.fullmatch(r"##[ \t]+(.+?)\s*", line)
         if not heading:
             continue
         normalized = re.sub(r"\s+", " ", heading.group(1)).lower()
-        if normalized not in _CUSTOMER_SECTION_HEADINGS:
+        if normalized not in allowed_headings:
             raise ReleaseBodyIntegrityError(
                 "customer-facing release notes may only use What's improved, "
-                "Fixes, Before you upgrade, and Known issues sections"
+                "supported customer change groups, Highlights, Before you upgrade, "
+                "and Known issues sections"
             )
         if normalized in headings:
             raise ReleaseBodyIntegrityError(
@@ -272,28 +286,35 @@ def _validate_customer_facing_release_notes(text: str, version: str) -> None:
         (key for key in ("what's improved", "what’s improved") if key in headings),
         None,
     )
-    if improvements_key is None:
+    change_keys = [key for key in headings if key in _CUSTOMER_CHANGE_GROUPS] if grouped else []
+    if improvements_key:
+        change_keys.append(improvements_key)
+    if not change_keys:
         raise ReleaseBodyIntegrityError(
-            "customer-facing release notes must contain a What's improved section"
+            "customer-facing release notes must contain a What's improved section "
+            "or a supported customer change group"
         )
 
-    improvements = _flat_bullet_items(
-        _section_lines(text, headings[improvements_key]),
-        "What's improved",
-    )
-    if not improvements:
-        raise ReleaseBodyIntegrityError(
-            "What's improved must contain at least one bullet"
-        )
-    for item in improvements:
-        if len(item) > _MAX_CUSTOMER_ITEM_LENGTH:
+    seen_changes: set[str] = set()
+    for key in change_keys:
+        improvements = _flat_bullet_items(_section_lines(text, headings[key]), key)
+        if not improvements:
             raise ReleaseBodyIntegrityError(
-                f"customer-facing bullets must be {_MAX_CUSTOMER_ITEM_LENGTH} characters or fewer"
+                f"{key} must contain at least one bullet"
             )
-        if not re.match(r"^\*\*[^*]+\*\*[ \t]+(?:—|-)[ \t]+\S", item):
-            raise ReleaseBodyIntegrityError(
-                "What's improved bullets must start with a short bold outcome followed by a dash"
-            )
+        for item in improvements:
+            if len(item) > _MAX_CUSTOMER_ITEM_LENGTH:
+                raise ReleaseBodyIntegrityError(
+                    f"customer-facing bullets must be {_MAX_CUSTOMER_ITEM_LENGTH} characters or fewer"
+                )
+            if not grouped and not re.match(r"^\*\*[^*]+\*\*[ \t]+(?:—|-)[ \t]+\S", item):
+                raise ReleaseBodyIntegrityError(
+                    "What's improved bullets must start with a short bold outcome followed by a dash"
+                )
+            normalized_item = re.sub(r"\s+", " ", item).casefold()
+            if grouped and normalized_item in seen_changes:
+                raise ReleaseBodyIntegrityError("customer change groups must not repeat a change")
+            seen_changes.add(normalized_item)
 
     if "fixes" in headings:
         if _requires_single_change_list(version):
@@ -360,6 +381,33 @@ def strip_validation_status_block(text: str) -> str:
     return _canonical_body(stripped.lstrip("\n"))
 
 
+def validate_server_updater_guidance(text: str) -> None:
+    """Every executable updater example needs its own nearby ownership scope.
+
+    A warning in a distant highlight does not make an unqualified install or
+    rollback command safe. This covers authored bullets as well as the generated
+    sections, without rewriting the author's instructions or rollback target.
+    """
+    command = re.compile(r"(?<![\w/])/bin/update\s+--version\b")
+    ownership = re.compile(
+        r"only when\s+`?/bin/update`?\s+was installed by\s+the Pulse server installer",
+        re.IGNORECASE,
+    )
+    for section in re.split(r"(?m)^#{1,6}[ \t]+.*$", _normalize_newlines(text)):
+        for match in command.finditer(section):
+            paragraphs = re.split(r"\n[ \t]*\n", section[:match.start()])
+            context = paragraphs[-1]
+            # The generated command is in a fence, immediately after the scoped
+            # paragraph. Do not borrow a warning from an earlier bullet/section.
+            if re.fullmatch(r"\s*```[A-Za-z0-9_-]*\s*(?:sudo\s+)?", context):
+                context = paragraphs[-2] if len(paragraphs) > 1 else ""
+            if not ownership.search(context):
+                raise ReleaseBodyIntegrityError(
+                    "each /bin/update --version command must say nearby that it is "
+                    "only for the helper installed by the Pulse server installer"
+                )
+
+
 def validate_release_body_shape(
     body: str,
     version: str,
@@ -412,6 +460,7 @@ def validate_release_body_shape(
         )
     authored_notes = authored_prefix.split(visual_heading, 1)[0]
     validate_release_notes_shape(authored_notes, version)
+    validate_server_updater_guidance(clean_body)
 
     if expected_body is not None:
         expected_clean = strip_validation_status_block(expected_body)
@@ -481,16 +530,28 @@ def sanitize_release_notes(raw_text: str, version: str) -> str:
     return _collapse_blank_lines(text)
 
 
+def server_installer_fallback(target: str, docs_version: str) -> str:
+    return (
+        "On Proxmox community-scripts containers, or if you cannot confirm who installed "
+        "`/bin/update`, follow the "
+        f"[signed server-installer instructions](https://github.com/rcourtman/Pulse/blob/v{docs_version}/docs/INSTALL.md#2-bare-metal--systemd) "
+        f"with `PULSE_VERSION={target}`. The community-scripts updater can ignore `--version`."
+    )
+
+
 def build_installation_section(version: str) -> str:
     return "\n".join(
         [
             "## Install",
             "",
-            "For systemd and Proxmox LXC installs, use **Settings → System → Updates** or:",
+            "For systemd and Proxmox LXC server updates, use **Settings → System → Updates**. "
+            "Use this CLI command only when `/bin/update` was installed by the Pulse server installer:",
             "",
             "```bash",
             f"sudo /bin/update --version v{version}",
             "```",
+            "",
+            server_installer_fallback(f"v{version}", version),
             "",
             "For Docker:",
             "",
@@ -514,9 +575,14 @@ def build_rollback_section(args: argparse.Namespace) -> str:
             "",
             f"The rollback target is `{args.rollback_target}`:",
             "",
+            "For systemd and Proxmox LXC servers, use this command only when "
+            "`/bin/update` was installed by the Pulse server installer:",
+            "",
             "```bash",
             args.rollback_command,
             "```",
+            "",
+            server_installer_fallback(args.rollback_target, args.version),
             "",
             "For Docker Compose, set the Pulse image to the rollback target and recreate the container.",
         ]
