@@ -1813,10 +1813,8 @@ describe('settings architecture guardrails', () => {
     );
     expect(nodeModalSetupGuideSectionSource).toContain('setupCommandButtonTitle');
     expect(nodeModalSetupGuideSectionSource).toContain('disabled={setupHandoffDisabled()}');
-    expect(nodeModalSetupGuideSectionSource).toContain('Credentialed command ready');
-    expect(nodeModalSetupGuideSectionSource).toContain(
-      'one-time setup token is intentionally not shown on this page',
-    );
+    expect(nodeModalSetupGuideSectionSource).toContain('Credential-free command ready');
+    expect(nodeModalSetupGuideSectionSource).toContain('one-time setup token is shown separately');
     expect(nodeModalStateSource).toContain('copyToClipboard(data.command)');
     expect(nodeModalStateSource).toContain('showSetupToken(data)');
     expect(nodeModalStateSource).not.toContain('quickSetupPreviewCommand');
