@@ -2222,7 +2222,7 @@ func TestRESTReportingGraphFailureBoundaries(t *testing.T) {
 			}
 			want := 1
 			if status == 400 || status == 422 || status == 500 {
-				want = 6
+				want = 7
 			}
 			if transport.calls != want {
 				t.Fatalf("calls = %d, want %d", transport.calls, want)

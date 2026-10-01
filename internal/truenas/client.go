@@ -288,7 +288,7 @@ func (c *Client) getSystemTelemetryREST(ctx context.Context) (*SystemInfo, error
 	if err != nil {
 		return nil, err
 	}
-	history := parseSystemMetricHistory(response)
+	history := parseSystemMetricHistory(liveReportingResponses(response, end))
 	if history == nil {
 		return nil, errNoSystemTelemetry
 	}
@@ -302,7 +302,27 @@ func systemInfoFromMetricHistory(history *SystemMetricHistory) *SystemInfo {
 	if history == nil {
 		return nil
 	}
-	system := &SystemInfo{CollectedAt: time.Now().UTC(), Telemetry: &SystemTelemetryAvailability{}}
+	system := &SystemInfo{Telemetry: &SystemTelemetryAvailability{}}
+	for _, series := range [][]TimeSeriesPoint{history.CPUPercent, history.MemoryAvailableBytes, history.NetInRate, history.NetOutRate, history.DiskReadRate, history.DiskWriteRate} {
+		for _, point := range series {
+			if point.Timestamp.After(system.CollectedAt) {
+				system.CollectedAt = point.Timestamp
+			}
+		}
+	}
+	for key, series := range history.TemperatureCelsius {
+		if value, ok := latestTimeSeriesValue(series); ok {
+			if system.TemperatureCelsius == nil {
+				system.TemperatureCelsius = make(map[string]float64)
+			}
+			system.TemperatureCelsius[key] = value
+		}
+		for _, point := range series {
+			if point.Timestamp.After(system.CollectedAt) {
+				system.CollectedAt = point.Timestamp
+			}
+		}
+	}
 	if value, ok := latestTimeSeriesValue(history.CPUPercent); ok {
 		system.CPUPercent = value
 		system.Telemetry.CPU = true
@@ -314,9 +334,20 @@ func systemInfoFromMetricHistory(history *SystemMetricHistory) *SystemInfo {
 		system.MemoryAvailableBytes = int64(value)
 		system.Telemetry.Memory = value >= 0
 	}
-	if value, ok := latestTimeSeriesValue(history.ARCSizeBytes); ok {
-		system.ARCSizeBytes = int64(value)
+	// Cache and free RAM must describe the same bucket. An old ARC sample
+	// must not make a newer full-RAM reading look healthy.
+	var latestFree time.Time
+	for _, free := range history.MemoryAvailableBytes {
+		if free.Timestamp.After(latestFree) {
+			latestFree = free.Timestamp
+		}
 	}
+	for _, arc := range history.ARCSizeBytes {
+		if arc.Timestamp.Equal(latestFree) {
+			system.ARCSizeBytes = int64(arc.Value)
+		}
+	}
+
 	if value, ok := latestTimeSeriesValue(history.NetInRate); ok {
 		system.NetInRate = value
 		system.Telemetry.NetIn = true
@@ -388,6 +419,7 @@ func legacyRESTReportingGraphs() []map[string]any {
 		reportingGraph("arcsize", ""),
 		reportingGraph("interface", ""),
 		reportingGraph("disk", ""),
+		reportingGraph("cputemp", ""),
 	}
 }
 
@@ -396,10 +428,16 @@ func legacyRESTReportingGraphs() []map[string]any {
 // graph-validation/server errors, never authentication, rate-limit, endpoint,
 // transport or cancellation failures. The query and graph set remain unchanged.
 func (c *Client) getLegacySystemReportingData(ctx context.Context, query map[string]any) ([]trueNASReportingGetDataResponse, error) {
-	graphs := legacyRESTReportingGraphs()
+	graphs, err := c.legacyReportingGraphs(ctx)
+	if err != nil {
+		return nil, err
+	}
 	response, err := c.getReportingDataREST(ctx, graphs, query)
-	if err == nil || !isReportingGraphFailure(err) {
-		return response, err
+	if err == nil {
+		return bindLegacyReportingResponses(graphs, response), nil
+	}
+	if !isReportingGraphFailure(err) {
+		return nil, err
 	}
 	batchErr := err
 	var collected []trueNASReportingGetDataResponse
@@ -419,7 +457,7 @@ func (c *Client) getLegacySystemReportingData(ctx context.Context, query map[str
 	if len(collected) == 0 {
 		return nil, batchErr
 	}
-	return collected, nil
+	return bindLegacyReportingResponses(graphs, collected), nil
 }
 
 func isReportingGraphFailure(err error) bool {
@@ -2378,6 +2416,7 @@ type trueNASReportingGetDataResponse struct {
 	Aggregations trueNASReportingAggregations `json:"aggregations"`
 	Start        int64                        `json:"start"`
 	End          int64                        `json:"end"`
+	Step         int64                        `json:"step"`
 	Legend       []string                     `json:"legend"`
 }
 
@@ -3178,34 +3217,25 @@ func parseSystemTelemetry(fields map[string]any, intervalSeconds int, collectedA
 }
 
 func parseSystemTemperatures(responses []trueNASReportingGetDataResponse) map[string]float64 {
-	if len(responses) == 0 {
-		return nil
-	}
-
 	temperatures := make(map[string]float64)
 	for _, response := range responses {
-		if strings.TrimSpace(strings.ToLower(response.Name)) != "cputemp" || len(response.Legend) == 0 {
+		if !strings.EqualFold(strings.TrimSpace(response.Name), "cputemp") {
 			continue
 		}
-
-		values := extractReportingLegendFloatValues(response.Aggregations.Mean, response.Legend)
-		if len(values) == 0 && len(response.Data) > 0 {
-			values = extractReportingLegendFloatValues(response.Data[len(response.Data)-1], response.Legend)
+		values := latestReportingValues(response)
+		// Retain aggregate-only compatibility, never use a window mean to fill a
+		// missing/null current row or an invalid native timing envelope.
+		if len(response.Data) == 0 && response.Step == 0 {
+			values = finiteReportingValues(extractReportingLegendFloatValues(response.Aggregations.Mean, response.Legend))
 		}
-		if len(values) == 0 {
-			continue
-		}
-
 		for index, legend := range response.Legend {
 			value, ok := values[legend]
 			if !ok || value <= 0 {
 				continue
 			}
-			key := canonicalSystemTemperatureKey(legend, index, len(response.Legend))
-			if key == "" {
-				continue
+			if key := canonicalSystemTemperatureKey(legend, index, len(response.Legend)); key != "" {
+				temperatures[key] = value
 			}
-			temperatures[key] = value
 		}
 	}
 	if len(temperatures) == 0 {
@@ -3218,75 +3248,93 @@ func parseSystemMetricHistory(responses []trueNASReportingGetDataResponse) *Syst
 	if len(responses) == 0 {
 		return nil
 	}
-
-	history := &SystemMetricHistory{}
+	history := &SystemMetricHistory{TemperatureCelsius: make(map[string][]TimeSeriesPoint)}
+	io := map[string]map[string][]TimeSeriesPoint{
+		"netin": {}, "netout": {}, "diskread": {}, "diskwrite": {},
+	}
+	seen := make(map[string]bool)
 	for _, response := range responses {
-		name := strings.TrimSpace(strings.ToLower(response.Name))
+		name := strings.ToLower(strings.TrimSpace(response.Name))
 		switch name {
-		case "cpu", "memory", "arcsize", "interface", "disk":
+		case "cpu", "memory", "arcsize", "cputemp", "interface", "disk":
 		default:
 			continue
 		}
-
-		for _, raw := range response.Data {
-			timestamp, values, ok := parseReportingSeriesValues(raw, response.Legend)
-			if !ok || timestamp.IsZero() || len(values) == 0 {
+		identifier := readStringAny(map[string]any{"identifier": response.Identifier}, "identifier")
+		key := name + "\x00" + identifier
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		if name == "interface" {
+			io["netin"][key] = nil
+			io["netout"][key] = nil
+		}
+		if name == "disk" {
+			io["diskread"][key] = nil
+			io["diskwrite"][key] = nil
+		}
+		for index := range response.Data {
+			timestamp, values, ok := reportingRow(response, index)
+			if !ok {
 				continue
 			}
-
 			switch name {
 			case "cpu":
-				if value, ok := parseSystemCPUPercent(values); ok {
+				if value, ok := reportingCPUPercent(values, response.Legend); ok {
 					history.CPUPercent = appendTimeSeriesPoint(history.CPUPercent, timestamp, value)
 				}
 			case "memory":
-				// FreeBSD active pages are only one used-memory component, not
-				// total usage. Without an explicit used series, let the provider
-				// derive usage from system capacity, free memory and ARC.
+				if !reportingMemoryRowValid(values, response.Legend) {
+					continue
+				}
 				if value, ok := parseSystemMemoryPercent(values); ok {
 					history.MemoryPercent = appendTimeSeriesPoint(history.MemoryPercent, timestamp, value)
 				}
-				if value, ok := pickReportingValue(values, "used", "memory_used", "used_bytes", "memory"); ok {
+				if value, ok := pickReportingValue(values, "used", "memory_used", "used_bytes", "memory"); ok && value >= 0 {
 					history.MemoryUsedBytes = appendTimeSeriesPoint(history.MemoryUsedBytes, timestamp, value)
 				}
-				if value, ok := pickReportingValue(values, "available", "free", "available_bytes", "free_bytes"); ok {
+				if value, ok := pickReportingValue(values, "available", "free", "available_bytes", "free_bytes", "memory-free_value"); ok && value >= 0 {
 					history.MemoryAvailableBytes = appendTimeSeriesPoint(history.MemoryAvailableBytes, timestamp, value)
 				}
-				if value, ok := pickReportingValue(values, "total", "memory_total", "total_bytes", "physical_memory_total"); ok {
+				if value, ok := pickReportingValue(values, "total", "memory_total", "total_bytes", "physical_memory_total"); ok && value > 0 {
 					history.MemoryTotalBytes = appendTimeSeriesPoint(history.MemoryTotalBytes, timestamp, value)
 				}
 			case "arcsize":
-				if value, ok := pickReportingValue(values, "arc_size", "size", "arcsize"); ok {
+				if value, ok := pickReportingValue(values, "arc_size", "size", "arcsize", "arcsize_value"); ok && value >= 0 {
 					history.ARCSizeBytes = appendTimeSeriesPoint(history.ARCSizeBytes, timestamp, value)
 				}
-			case "interface":
-				if value, ok := pickReportingValue(values, "received", "received_bytes", "rx", "rx_bytes", "netin", "in"); ok {
-					history.NetInRate = appendTimeSeriesPoint(history.NetInRate, timestamp, value)
+			case "cputemp":
+				for i, legend := range response.Legend {
+					if value, ok := values[legend]; ok && value > 0 {
+						key := canonicalSystemTemperatureKey(legend, i, len(response.Legend))
+						if key != "" {
+							history.TemperatureCelsius[key] = appendTimeSeriesPoint(history.TemperatureCelsius[key], timestamp, value)
+						}
+					}
 				}
-				if value, ok := pickReportingValue(values, "sent", "sent_bytes", "tx", "tx_bytes", "netout", "out"); ok {
-					history.NetOutRate = appendTimeSeriesPoint(history.NetOutRate, timestamp, value)
+			case "interface":
+				if value, ok := pickReportingValue(values, "received", "received_bytes", "rx", "rx_bytes", "netin", "in"); ok && value >= 0 {
+					io["netin"][key] = appendTimeSeriesPoint(io["netin"][key], timestamp, value)
+				}
+				if value, ok := pickReportingValue(values, "sent", "sent_bytes", "tx", "tx_bytes", "netout", "out"); ok && value >= 0 {
+					io["netout"][key] = appendTimeSeriesPoint(io["netout"][key], timestamp, value)
 				}
 			case "disk":
-				if value, ok := pickReportingValue(values, "read", "read_bytes", "diskread", "bytes_read"); ok {
-					history.DiskReadRate = appendTimeSeriesPoint(history.DiskReadRate, timestamp, value)
+				if value, ok := pickReportingValue(values, "read", "read_bytes", "diskread", "bytes_read", "disk_octets_read"); ok && value >= 0 {
+					io["diskread"][key] = appendTimeSeriesPoint(io["diskread"][key], timestamp, value)
 				}
-				if value, ok := pickReportingValue(values, "write", "write_bytes", "diskwrite", "bytes_written"); ok {
-					history.DiskWriteRate = appendTimeSeriesPoint(history.DiskWriteRate, timestamp, value)
+				if value, ok := pickReportingValue(values, "write", "write_bytes", "diskwrite", "bytes_written", "disk_octets_write"); ok && value >= 0 {
+					io["diskwrite"][key] = appendTimeSeriesPoint(io["diskwrite"][key], timestamp, value)
 				}
 			}
 		}
 	}
-
-	if len(history.CPUPercent) == 0 &&
-		len(history.MemoryPercent) == 0 &&
-		len(history.MemoryUsedBytes) == 0 &&
-		len(history.MemoryAvailableBytes) == 0 &&
-		len(history.MemoryTotalBytes) == 0 &&
-		len(history.ARCSizeBytes) == 0 &&
-		len(history.NetInRate) == 0 &&
-		len(history.NetOutRate) == 0 &&
-		len(history.DiskReadRate) == 0 &&
-		len(history.DiskWriteRate) == 0 {
+	history.NetInRate = sumReportingDevices(io["netin"])
+	history.NetOutRate = sumReportingDevices(io["netout"])
+	history.DiskReadRate = sumReportingDevices(io["diskread"])
+	history.DiskWriteRate = sumReportingDevices(io["diskwrite"])
+	if len(history.CPUPercent)+len(history.MemoryPercent)+len(history.MemoryUsedBytes)+len(history.MemoryAvailableBytes)+len(history.MemoryTotalBytes)+len(history.ARCSizeBytes)+len(history.NetInRate)+len(history.NetOutRate)+len(history.DiskReadRate)+len(history.DiskWriteRate)+len(history.TemperatureCelsius) == 0 {
 		return nil
 	}
 	return history
@@ -3337,8 +3385,10 @@ func parseReportingDiskTemperatureHistory(responses []trueNASReportingGetDataRes
 		}
 
 		points := make([]TimeSeriesPoint, 0, len(response.Data))
-		for _, raw := range response.Data {
-			timestamp, value, ok := parseReportingSeriesPoint(raw, response.Legend)
+		for index := range response.Data {
+			timestamp, values, ok := reportingRow(response, index)
+			value, hasValue := pickReportingValue(values, response.Legend...)
+			ok = ok && hasValue && value > 0
 			if !ok || timestamp.IsZero() {
 				continue
 			}
