@@ -7556,3 +7556,24 @@ catalog, the header metadata and every locale catalog; the product name is not
 translated. Its route id, feature gate and read capability are unchanged.
 Relay never provided remote access to the web UI, so no settings chrome may
 label it Remote Access.
+
+### Drawer History is inspectable without pointer hover
+
+`GuestDrawerHistory` exposes a labelled native range input for groups with
+multiple stored observation times. Native arrow keys, Home/End and touch input
+select real stored timestamps; the control's value text includes the full local
+date/time and separately formatted series values. A series without a sample at
+the selected time remains missing rather than borrowing a neighbouring or live
+reading. The SVG has a linked textual description, including lone observations
+and the absence of stored data; a lone observation does not fabricate a trend.
+
+Selection follows its timestamp across same-source refreshes, not an ordinal
+index that shifts when samples arrive. An expired selection snaps to an actual
+remaining observation. Changing resource type, id or range clears pointer and
+keyboard selection even when matching cached data arrives immediately. Empty,
+failed initial, absent-target and licence-locked views expose no inspection
+control. Existing matching-point retention and scoped retry remain unchanged.
+Mounted inspection regressions cover these boundaries. The direct-renderer
+browser fixture verifies native keys, focus, pointer coexistence and touch at
+desktop/phone widths across Chromium, Firefox and WebKit; it is not installed
+PBS collection or a screen-reader announcement-quality claim.
