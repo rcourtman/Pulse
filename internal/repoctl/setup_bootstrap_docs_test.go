@@ -17,10 +17,24 @@ func TestSetupBootstrapDocsStayOnCanonicalArtifactContract(t *testing.T) {
 	pbsRel := "docs/PBS.md"
 	pbsDoc := readRepoFile(t, pbsRel)
 	assertContainsAll(t, pbsRel, pbsDoc, []string{
-		`curl -fsSL "http://<pulse-ip>:7655/api/setup-script?type=pbs&host=https://<pbs-ip>:8007&pulse_url=http://<pulse-ip>:7655" | { if [ "$(id -u)" -eq 0 ]; then PULSE_SETUP_TOKEN="<setup-token>" bash; elif command -v sudo >/dev/null 2>&1; then sudo env PULSE_SETUP_TOKEN="<setup-token>" bash; else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi; }`,
-		"Pulse generates that full command for you from **Settings → Infrastructure**",
+		"Create a separate Pulse token in **API Access**",
+		"enter an administrator root shell",
+		`chmod 700 "$HOME/.config/pulse"`,
+		`chmod 600 "$HOME/.config/pulse/pbs-agent-token"`,
+		`vi "$HOME/.config/pulse/pbs-agent-token"`,
+		`curl --fail --silent --show-error`,
+		`--output "$HOME/.config/pulse/pbs-agent-install.sh"`,
+		`https://pulse.example.com/install.sh`,
+		"successful download and inspection",
+		`bash "$HOME/.config/pulse/pbs-agent-install.sh"`,
+		`--token-file "$HOME/.config/pulse/pbs-agent-token"`,
+		`--enable-proxmox --proxmox-type pbs --enable-docker=false`,
+		"Do not bypass certificate checks",
 	})
 	assertContainsNone(t, pbsRel, pbsDoc, []string{
 		`curl -sSL "http://<pulse-ip>:7655/api/setup-script?type=pbs&host=https://<pbs-ip>:8007&pulse_url=http://<pulse-ip>:7655" | bash`,
+		`PULSE_SETUP_TOKEN=`,
+		`sudo env PULSE_SETUP_TOKEN=`,
+		`--insecure`,
 	})
 }
