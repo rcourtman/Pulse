@@ -27,18 +27,25 @@ preventing duplicate root-SSH sensor polling between cluster peers.
 
 ## Quick Start
 
-Generate an installation command in the UI:
+Choose the host profile and create a monitoring token in the UI:
 **Settings → Infrastructure → Install on a host**
 
 Choose a target profile in that screen when you want explicit install flags for Docker, Kubernetes, Proxmox VE, or Proxmox Backup Server.
 
-The generated command is not tied to a single machine. For a Proxmox VE
-cluster, one API connection already provides cluster-wide inventory; the agent
-is per host, so run the same generated command on each cluster node where you
-want agent-provided telemetry (temperatures, SMART, host identity). Each agent
-registers itself and attaches to its own cluster member.
+Keep the token out of shell commands, history, URLs and screenshots. Use the
+private-file installation steps below; the command arguments contain only the
+file's path. A Pulse agent token is not a Proxmox or PBS API token. Monitoring
+does not require command execution: leave that option off unless you intend
+to grant it. See [Agent Security](AGENT_SECURITY.md) before choosing a root
+host agent instead of an API connection or the opt-in Linux safe profile.
 
-The same generated command is also the supported v5-to-v6 agent upgrade path.
+For a Proxmox VE cluster, one API connection already provides cluster-wide
+inventory; the agent is per host. Repeat the private-file installation on each
+cluster node where you want agent-provided telemetry (temperatures, SMART, host
+identity), using the intended profile. Each agent registers itself and attaches
+to its own cluster member.
+
+The same installer is also the supported v5-to-v6 agent upgrade path.
 Run it on the host that already has the v5 `pulse-agent` service to replace the
 binary and service configuration in place; do not uninstall the old service
 first unless you are intentionally removing that host from Pulse.
@@ -51,24 +58,29 @@ agents initiate the connection. Prefer a stable DNS name for the primary URL
 so replacing the Pulse host does not require an agent migration.
 
 After importing the configuration on a Pulse server with a different address,
-retarget each existing standard Linux agent from that agent machine:
+retarget each existing standard Linux agent from that agent machine. Download
+and inspect the installer from the **new** Pulse address using the HTTPS
+preparation below; retargeting reuses the saved credential, so do not create
+another token just for this operation:
 
 ```bash
-curl -fsSL https://pulse.example.com:7655/install.sh | \
-  sudo bash -s -- --retarget --url https://pulse.example.com:7655
+bash "$HOME/.config/pulse/agent-install.sh" \
+  --retarget --url https://pulse.example.com
 ```
 
 The retarget operation recovers the existing token, agent ID, enabled
 collectors, and other service options. It does not carry the old endpoint's
 TLS bypass, custom CA, or certificate fingerprint to the new address. Supply
-`--cacert`, `--server-fingerprint`, or (only on a trusted network)
-`--insecure` explicitly when the new endpoint requires it. The script must
-come from the new server so it supports the retarget operation. A newly
-generated full installation command from **Settings → Infrastructure → Install
-on a host** remains the fallback.
+`--cacert` or an independently verified `--server-fingerprint` explicitly
+when the new agent endpoint requires it. The installer download itself must
+use a trusted certificate or a separately verified CA file; an agent
+fingerprint option does not verify that earlier download. The script must
+come from the new server so it supports retargeting. If retargeting is not
+supported on that host, use the private-file installation below with the
+intended profile, rather than uninstalling the existing service first.
 
-On Windows, run the full generated PowerShell installation command from the
-new Pulse server as Administrator, including the desired collector options.
+On Windows, use the PowerShell private-file installation below from the new
+Pulse server as Administrator, including the desired collector options.
 Do not expect the configuration import itself to make agent-only machines
 appear at the new address.
 
@@ -83,42 +95,96 @@ the agent has reported, and confirm the host-local version with
 This is the agent installer served by your Pulse server. It is separate from the
 top-level GitHub `install.sh`, which installs or updates the Pulse server itself.
 
-### Linux (systemd)
-```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <api-token>
-```
+### Private-file installation: Linux, macOS and NAS
 
-### macOS
-```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <api-token>
-```
+Use an administrative shell **on the host being monitored**, not the Pulse
+server or an unrelated container. Linux/systemd, macOS, Synology and TrueNAS
+use the same preparation. TrueNAS SCALE uses systemd; CORE uses rc.d. An API
+connection is usually enough for TrueNAS inventory and usage; an agent is
+optional for host-local data.
+
+1. In that shell, protect the file before opening the editor. Save only the
+   Pulse agent token, with no quotes or header. Use your own private directory
+   and regular files, not shared paths or symlinks:
+
+   ```bash
+   umask 077
+   mkdir -p "$HOME/.config/pulse"
+   chmod 700 "$HOME/.config/pulse"
+   touch "$HOME/.config/pulse/agent-token"
+   chmod 600 "$HOME/.config/pulse/agent-token"
+   vi "$HOME/.config/pulse/agent-token"
+   ```
+
+2. Replace `https://pulse.example.com` with your Pulse server's HTTPS address
+   in both the download and installation commands. Download to a file:
+
+   ```bash
+   curl --fail --silent --show-error --connect-timeout 10 --max-time 60 \
+     --output "$HOME/.config/pulse/agent-install.sh" \
+     https://pulse.example.com/install.sh
+   ```
+
+   **Stop if the download fails.** Inspect the saved script before executing
+   it. Do not bypass certificate verification or pipe an unchecked response
+   into a privileged shell. For a private CA, add curl's `--cacert` with the
+   separately verified CA file, and supply the installer's `--cacert` option
+   for the agent connection as well. Do not substitute GitHub's top-level
+   `install.sh`: that installs the Pulse server, not the agent.
+
+3. Install with the private token file, adding a profile from
+   [Installation Options](#installation-options) when needed:
+
+   ```bash
+   bash "$HOME/.config/pulse/agent-install.sh" \
+     --url https://pulse.example.com \
+     --token-file "$HOME/.config/pulse/agent-token"
+   ```
+
+Keep the bootstrap token file private and remove that copy when no longer
+needed; do not delete the installed agent's runtime credential. Check a fresh
+report in Pulse and `pulse-agent --version` on the host. A started service or
+hardware capacity alone does not prove that every requested metric is present.
 
 ### Windows (PowerShell, run as Administrator)
+
+Use a **new** setup directory under your own Windows profile; if it already
+exists, choose another name. The following preparation grants access only to
+your account and SYSTEM. Stop if directory creation or the ACL command fails:
+
 ```powershell
-irm http://<pulse-ip>:7655/install.ps1 | iex
+$setupDir = Join-Path $env:USERPROFILE 'PulseAgentSetup'
+New-Item -ItemType Directory -Path $setupDir -ErrorAction Stop | Out-Null
+$userSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+icacls.exe $setupDir /inheritance:r /grant:r "*${userSid}:(OI)(CI)F" '*S-1-5-18:(OI)(CI)F'
+if ($LASTEXITCODE -ne 0) { throw 'Could not protect the setup directory' }
+$tokenFile = Join-Path $setupDir 'agent-token.txt'
+New-Item -ItemType File -Path $tokenFile -ErrorAction Stop | Out-Null
+Start-Process -FilePath notepad.exe -ArgumentList "`"$tokenFile`"" -Wait
 ```
 
-With environment variables:
+In Notepad, save only the Pulse agent token, with no quotes or header. Never
+paste it into a PowerShell command or assign a literal secret to an environment
+variable. Replace the example HTTPS address in both commands below. Download
+and inspect the script first; do not use `Invoke-Expression` on a web response:
+
 ```powershell
-$env:PULSE_URL="http://<pulse-ip>:7655"
-$env:PULSE_TOKEN="<api-token>"
-irm http://<pulse-ip>:7655/install.ps1 | iex
+$installerFile = Join-Path $setupDir 'install.ps1'
+Invoke-WebRequest -Uri 'https://pulse.example.com/install.ps1' -OutFile $installerFile -ErrorAction Stop
 ```
 
-### Synology NAS
-```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <api-token>
+Only after a successful download and inspection, run the saved script. Clear
+an old `PULSE_TOKEN` environment value so it cannot override the file:
+
+```powershell
+Remove-Item Env:PULSE_TOKEN -ErrorAction SilentlyContinue
+& $installerFile -Url 'https://pulse.example.com' -TokenFile $tokenFile
 ```
 
-### TrueNAS SCALE/CORE
-TrueNAS SCALE and TrueNAS CORE are both supported. The installer auto-detects the platform and configures the appropriate service manager (systemd for SCALE, rc.d for CORE).
-```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <api-token>
-```
+Keep the setup directory private and remove the bootstrap copy when no longer
+needed, not the installed service's token. Verify a fresh report and the
+installed agent version; the remaining platform trust trade-offs are in
+[Agent Security](AGENT_SECURITY.md).
 
 ## Features
 
@@ -550,46 +616,58 @@ operators are comfortable with Proxmox-side guest probing.
 
 ## Installation Options
 
+These commands use the protected token file and successfully downloaded,
+inspected installer from [Private-file installation](#private-file-installation-linux-macos-and-nas).
+Use the same HTTPS address in preparation and installation. The flags below
+choose collectors; they do not grant command execution.
+
 ### Simple Install (host + Docker auto-detect)
 ```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token>
+bash "$HOME/.config/pulse/agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/agent-token"
 ```
 
 ### Proxmox VE Node (explicit profile)
 ```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-proxmox --proxmox-type pve
+bash "$HOME/.config/pulse/agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/agent-token" --enable-proxmox --proxmox-type pve
 ```
 
 ### Proxmox Backup Server Node (explicit profile)
 ```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-proxmox --proxmox-type pbs
+bash "$HOME/.config/pulse/agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/agent-token" --enable-proxmox --proxmox-type pbs
 ```
 
 ### Force Enable Docker (if auto-detection fails)
 ```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-docker
+bash "$HOME/.config/pulse/agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/agent-token" --enable-docker
 ```
 
 ### Disable Docker (even if detected)
 ```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-docker=false
+bash "$HOME/.config/pulse/agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/agent-token" --enable-docker=false
 ```
 
 ### Host + Kubernetes Monitoring
 ```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-kubernetes
+bash "$HOME/.config/pulse/agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/agent-token" --enable-kubernetes
 ```
 
 ### Docker Monitoring Only
 ```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-host=false --enable-docker
+bash "$HOME/.config/pulse/agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/agent-token" --enable-host=false --enable-docker
 ```
 
 ### Exclude Specific Disks from Monitoring
@@ -693,9 +771,10 @@ installer path instead of relying on a plain-HTTP first hop.
 
 To disable auto-updates:
 ```bash
-# During installation
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <token> --disable-auto-update
+# After private-file preparation and successful installer inspection
+bash "$HOME/.config/pulse/agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/agent-token" --disable-auto-update
 
 # Or set environment variable
 PULSE_DISABLE_AUTO_UPDATE=true
@@ -718,8 +797,11 @@ See [Centralized Agent Management](CENTRALIZED_MANAGEMENT.md) for supported keys
 
 ## Uninstall
 
+Download and inspect the agent installer using the HTTPS preparation above
+before running this on the agent host. Uninstallation needs no new token:
+
 ```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | bash -s -- --uninstall
+bash "$HOME/.config/pulse/agent-install.sh" --uninstall
 ```
 
 This removes:
@@ -805,10 +887,13 @@ Unraid), `/tmp` and `/usr/local/bin` share that filesystem, so both the staged
 and installed copy must fit at once.
 
 If the check fails because `/tmp` is on a constrained root, point `TMPDIR` at a
-directory on a data volume and re-run the installer:
+directory on a data volume and re-run the already downloaded and inspected
+agent installer from the private-file preparation above:
 
 ```bash
-TMPDIR=/share/CACHEDEV1_DATA/tmp bash install.sh --url http://pulse --token <token>
+TMPDIR=/share/CACHEDEV1_DATA/tmp bash "$HOME/.config/pulse/agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/agent-token"
 ```
 
 (`mktemp` honours `TMPDIR`, so this moves the staging copy off the RAM root.
