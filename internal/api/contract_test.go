@@ -1504,7 +1504,8 @@ fi`
 		`pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin`,
 		`pveum aclmod /storage -token "$PULSE_TOKEN_ID" -role PVEDatastoreAdmin`,
 		`smoke_test_pve_token() {`,
-		`Authorization: PVEAPIToken=$PULSE_TOKEN_ID=$TOKEN_VALUE`,
+		`printf 'Authorization: PVEAPIToken=%s=%s\n' "$PULSE_TOKEN_ID" "$TOKEN_VALUE" | curl`,
+		`-H @-`,
 		`${HOST_URL%/}/api2/json/nodes`,
 		`if smoke_test_pve_token; then`,
 	} {

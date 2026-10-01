@@ -182,7 +182,8 @@ func TestBuildProxmoxAgentInstallCommand_NormalizesTrailingSlashes(t *testing.T)
 	require.Contains(t, command, "https://pulse.example.com/base")
 	require.Contains(t, command, `--token-file "$token_file"`)
 	require.NotContains(t, command, "//install.sh")
-	require.NotContains(t, command, "https://pulse.example.com/base/")
+	require.Contains(t, command, "--url "+posixShellQuote("https://pulse.example.com/base"))
+	require.NotContains(t, command, posixShellQuote("https://pulse.example.com/base/"))
 }
 
 func TestBuildProxmoxAgentInstallCommand_IncludesCommandsWhenRequested(t *testing.T) {
@@ -332,7 +333,7 @@ fi`,
 	})
 
 	require.Contains(t, script, `SETUP_SCRIPT_URL="https://pulse.example/api/setup-script?backup_perms=true&host=https%3A%2F%2Fpve1.local%3A8006&pulse_url=https%3A%2F%2Fpulse.example&type=pve"`)
-	require.Contains(t, script, `PULSE_BOOTSTRAP_COMMAND_WITH_ENV='curl -fsSL '"'"'https://pulse.example/api/setup-script?backup_perms=true&host=https%3A%2F%2Fpve1.local%3A8006&pulse_url=https%3A%2F%2Fpulse.example&type=pve'"'"' | `)
+	require.Contains(t, script, "PULSE_BOOTSTRAP_COMMAND_WITH_ENV="+posixShellQuote(artifact.CommandWithEnv))
 	require.Contains(t, script, `PULSE_SETUP_TOKEN="${PULSE_SETUP_TOKEN:-setup-token-123}"`)
 	require.Contains(t, script, `pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin`)
 	require.Contains(t, script, `pveum aclmod /storage -token "$PULSE_TOKEN_ID" -role PVEDatastoreAdmin`)
