@@ -37,8 +37,11 @@ class RehearsalSourceTest(unittest.TestCase):
         self.git("config", "user.email", "fixture@example.invalid")
         self.git("config", "user.name", "Fixture")
         self.git("config", "core.hooksPath", "/dev/null")
-        for name in ("scripts/release_control/control_plane.py",
+        # Match the real checkout's generated-file policy, including Python's
+        # import cache, while still detecting any uncommitted source change.
+        for name in (".gitignore", "scripts/release_control/control_plane.py",
                      "scripts/release_control/repo_file_io.py",
+                     "scripts/release_control/resolve_release_promotion.py",
                      "docs/release-control/control_plane.json"):
             target = self.repo / name
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -194,12 +197,98 @@ class RehearsalSourceTest(unittest.TestCase):
         metadata = step("Resolve rehearsal metadata")
         self.assertIn('if [ "${TESTED_BRANCH}" != "$REQUIRED_BRANCH" ]; then', metadata)
         self.assertIn('if [ "$FILE_VERSION" != "$VERSION" ]; then', metadata)
-        self.assertIn('if [ "${WATCHDOG_MODE}" = "true" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then', metadata)
-        self.assertIn('--derive-rollback-latest-stable', metadata)
+        self.assertIn('if [ "${WATCHDOG_MODE}" = "true" ]; then', metadata)
+        self.assertIn('metadata_mode=watchdog', metadata)
+        self.assertIn('metadata_mode=promotion', metadata)
+        self.assertNotIn('--derive-rollback-latest-stable', metadata)
         workflow = WORKFLOW.read_text()
         self.assertIn('TESTED_SHA: ${{ needs.dry-run.outputs.tested_sha }}', workflow)
         self.assertIn('Workflow event SHA:', workflow)
         self.assertNotIn('echo "- Source SHA:', workflow)
+
+    def metadata(self, watchdog="true", **overrides):
+        env = dict(self.env, EVENT_NAME="workflow_dispatch", WATCHDOG_MODE=watchdog,
+                   TESTED_BRANCH="release/v6.4", WORKFLOW_OUTPUT_1="release/v6.4",
+                   RUNNER_TEMP=str(self.root), GITHUB_OUTPUT=str(self.output))
+        env.update(overrides)
+        return subprocess.run(["bash", "-euo", "pipefail", "-c",
+                               step("Resolve rehearsal metadata")],
+                              cwd=self.repo, env=env, text=True, capture_output=True)
+
+    def published_stable_with_pending_fix(self):
+        self.git("tag", "v6.4.1", self.main)
+        self.git("checkout", "release/v6.4")
+        self.version("6.4.5")
+        self.git("tag", "v6.4.5-rc.5")
+        self.git("tag", "v6.4.5")
+        runtime = self.repo / "internal/updates/pending.go"
+        runtime.parent.mkdir(parents=True)
+        runtime.write_text("package updates\n")
+        self.git("add", ".")
+        self.git("commit", "-m", "reviewed pending fix after stable")
+
+    def test_postpublication_watchdog_does_not_pretend_to_promote_stable(self):
+        self.published_stable_with_pending_fix()
+        before = self.git("rev-parse", "HEAD")
+        result = self.metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        observation = self.output.read_text()
+        self.assertIn("version=6.4.5\n", observation)
+        self.assertIn("metadata_mode=watchdog\n", observation)
+        self.assertIn("rollback_tag=v6.4.1\n", observation)
+        self.assertIn("watched_version_stage=stable\n", observation)
+        for candidate_field in ("promotion_mode=", "soak_hours=", "rollback_command=",
+                                "hotfix_exception=", "promoted_from_tag="):
+            self.assertNotIn(candidate_field, observation)
+        self.assertEqual(self.git("rev-parse", "HEAD"), before)
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_identical_candidate_rehearsal_still_refuses_new_stable_promotion(self):
+        self.published_stable_with_pending_fix()
+        result = self.metadata("false", ROLLBACK_VERSION_INPUT="v6.4.1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("same-version release candidates already exist", result.stderr)
+        self.assertFalse(self.output.exists())
+
+    def test_watchdog_rc_and_metadata_failures_remain_source_bound(self):
+        self.git("tag", "v6.4.1", self.main)
+        self.git("checkout", "release/v6.4")
+        self.version("6.4.6-rc.1")
+        self.assertEqual(self.metadata().returncode, 0)
+        self.assertIn("watched_version_stage=rc\n", self.output.read_text())
+        self.output.unlink()
+        for overrides in ({"VERSION_INPUT": "6.4.5"},
+                          {"TESTED_BRANCH": "main"}):
+            with self.subTest(overrides=overrides):
+                self.assertNotEqual(self.metadata(**overrides).returncode, 0)
+                self.assertFalse(self.output.exists())
+        self.git("tag", "-d", "v6.4.1")
+        missing = self.metadata()
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertIn("no stable release tag precedes it", missing.stderr)
+        self.assertFalse(self.output.exists())
+
+    def test_watchdog_summary_cannot_be_recorded_as_promotion_readiness(self):
+        # Execute the real summary shell without an Actions expression evaluator.
+        script = step("Write rehearsal summary").replace(
+            "${{ github.repository }}", "rcourtman/Pulse").replace(
+            "${{ github.run_id }}", "123")
+        env = dict(self.env, WATCHDOG_MODE="true", GITHUB_OUTPUT=str(self.output),
+                   GITHUB_STEP_SUMMARY=str(self.root / "step-summary"),
+                   GITHUB_REF_NAME="main", GITHUB_SHA=self.main,
+                   TESTED_BRANCH="release/v6.4", TESTED_SHA=self.release,
+                   REHEARSAL_CONCLUSION="success", JOB_CONCLUSION="failure",
+                   WORKFLOW_OUTPUT_1="6.4.5", WORKFLOW_OUTPUT_5="v6.4.1")
+        result = subprocess.run(["bash", "-euo", "pipefail", "-c", script],
+                                cwd=self.repo, env=env, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        text = (self.repo / "release-dry-run/watchdog-summary.md").read_text()
+        self.assertIn("- Preflight result: failure", text)
+        self.assertIn("not a candidate promotion", text)
+        self.assertNotIn("Candidate stable tag:", text)
+        self.assertNotIn("record_rc_to_ga_rehearsal.py", text)
+        self.assertIn("artifact_name=release-watchdog-summary\n", self.output.read_text())
+        self.assertFalse((self.repo / "release-dry-run/rc-to-ga-rehearsal-summary.md").exists())
 
 
 if __name__ == "__main__":

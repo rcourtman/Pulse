@@ -55,6 +55,11 @@ export interface GuestDrawerHistoryScale {
   maxValue: number;
 }
 
+export interface GuestDrawerHistoryTimeBounds {
+  startTime: number;
+  endTime: number;
+}
+
 export interface GuestDrawerBackupPresentation {
   ageClass: string;
   ageLabel: string;
@@ -157,12 +162,15 @@ const clampHistoryPointValue = (value: number, unit: string): number => {
   return unit === '%' ? Math.min(100, nonNegative) : nonNegative;
 };
 
+const isHistoryTimestamp = (timestamp: number): boolean =>
+  Number.isFinite(timestamp) && Number.isFinite(new Date(timestamp).getTime());
+
 export const normalizeGuestDrawerHistoryPoints = (
   points: AggregatedMetricPoint[] | undefined,
   unit: string,
 ): AggregatedMetricPoint[] =>
   (points ?? [])
-    .filter((point) => Number.isFinite(point.timestamp) && Number.isFinite(point.value))
+    .filter((point) => isHistoryTimestamp(point.timestamp) && Number.isFinite(point.value))
     .map((point) => {
       const value = clampHistoryPointValue(point.value, unit);
       return {
@@ -271,12 +279,29 @@ export const getGuestDrawerHistoryValueLabel = (
 
 export const getGuestDrawerHistoryRangeBounds = (
   groupedSeries: readonly { points: readonly AggregatedMetricPoint[] }[],
-): { startTime: number; endTime: number } | null => {
-  const timestamps = groupedSeries.flatMap((item) => item.points.map((point) => point.timestamp));
-  if (timestamps.length === 0) return null;
+  window?: { start: number; end: number },
+): GuestDrawerHistoryTimeBounds | null => {
+  const timestamps = groupedSeries
+    .flatMap((item) => item.points.map((point) => point.timestamp))
+    .filter(isHistoryTimestamp);
+  const windowBounds =
+    window &&
+    isHistoryTimestamp(window.start) &&
+    isHistoryTimestamp(window.end) &&
+    window.end > window.start
+      ? { startTime: window.start, endTime: window.end }
+      : null;
+  if (timestamps.length === 0) return windowBounds;
+
+  // The API's requested window is shared across every panel. Do not stretch
+  // a few recent readings across the whole selected range, or scale each
+  // metric group to different times. Preserve returned edge observations
+  // (including aggregate bucket timestamps) by widening the common envelope.
+  const first = Math.min(...timestamps);
+  const last = Math.max(...timestamps);
   return {
-    startTime: Math.min(...timestamps),
-    endTime: Math.max(...timestamps),
+    startTime: Math.min(windowBounds?.startTime ?? first, first),
+    endTime: Math.max(windowBounds?.endTime ?? last, last),
   };
 };
 

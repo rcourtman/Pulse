@@ -3360,3 +3360,20 @@ reproduced the CI magnitude or establishes an improvement. Keep the signal
 open as an environment-bound observation under the existing
 `performance-post-rc-headroom` follow-up; no chart-path code change is
 justified by this comparison alone.
+
+### Shared drawer History window calculation
+
+The drawer model computes bounds from the requested API interval and supplied
+valid observation timestamps. The renderer derives one envelope per fulfilled
+query from its configured metric groups and shares it across all panels; it
+does not synthesize, resample or fetch extra points to fill an empty window.
+Invalid dates cannot enter the labelled geometry, and returned edge buckets
+remain inside the common envelope. The existing 240-point request cap per
+metric, 30-second poll and retained-query cache limits are unchanged. No
+backend, metrics-store, performance threshold or latency claim changes here.
+
+`GuestDrawer.test.tsx` verifies requested, expanded, invalid and absent bounds;
+`GuestDrawerHistory.window.test.tsx` verifies the mounted query and geometry,
+including selection retention while a same-source window advances. Browser
+receipts exercise the actual PBS table/drawer renderer with synthetic APIs,
+not installed collection or a performance benchmark.
