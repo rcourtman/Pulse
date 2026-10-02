@@ -2030,6 +2030,11 @@ application resource-provider or WebSocket lifecycle.
     populates only the canonical field on the REST contract, so without
     landing on `v2.uptime` ESXi hosts and VMware-backed VMs lose uptime on
     the unified-resources side even though the API payload carries it.
+    The same mapping must carry every provider facet the frontend reads at
+    the top level of `Resource`, `pmg` included: the REST and websocket
+    transports race on a fresh route load, and a facet present only under
+    `platformData` on the REST row left the Mail Gateway table rendering
+    every PMG column as a dash whenever the REST snapshot landed last.
     That same shared cache boundary must normalize route/query type filters
     through the canonical frontend-to-`ResourceType` resolver before slicing
     the snapshot, so compatibility values such as `disk` / `physical_disk`

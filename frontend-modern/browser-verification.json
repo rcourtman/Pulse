@@ -1,23 +1,21 @@
 {
   "version": 1,
-  "base_sha": "53bff9fab41dae620b6bb7355b8904dc4dd3056f",
-  "verified_at": "2026-10-02T21:10:53Z",
+  "base_sha": "b08abe7471bdc07a3393f32e6ebc37531c56fee7",
+  "verified_at": "2026-10-02T21:27:38Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/storageBackups/resourceStoragePresentation.ts",
-    "frontend-modern/src/features/storageBackups/storageAdapters.ts"
+    "frontend-modern/src/hooks/useUnifiedResources.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/storageBackups/resourceStoragePresentation.ts": "933723fb9afeeb53afa46946a346daca19d50c0d61a81fc0730498ebd8c09bb2",
-    "frontend-modern/src/features/storageBackups/storageAdapters.ts": "d91a0d528d9318ee4d3fab95e7f3f770b1febb93136bfbc6176fc2719b4b6013"
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "6d19a6b88664cebd9036b0369a08721686a6649745038b4e92a331e9fb35ed6a"
   },
   "routes": [
-    "/proxmox/storage"
+    "/proxmox/mail"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 900
+      "height": 800
     },
     {
       "width": 390,
@@ -25,12 +23,12 @@
     }
   ],
   "states": [
-    "Mock estate (5 PVE nodes, 2 shared PBS storages, 1 shared NFS, 2 Ceph pools, 3 PBS datastores), dark theme, Chromium, backend built from this branch",
-    "Storage sub-tab with node-local, shared and PBS datastore rows; Physical Disks sub-tab"
+    "Mock estate with two PMG instances (one healthy, one degraded), dark and light themes, Chromium, fresh page load with cold caches so REST and websocket race",
+    "Before the fix: 2 of 3 and 2 of 3 fresh loads at 1440px rendered every PMG column (version, nodes, mail in, spam, virus, quarantine, queue, deferred) as a dash for 10s and never recovered; after: 6 of 6 loads at 1440px and 3 of 3 at 390px show the values at first paint"
   ],
   "interactions": [
-    "Read every Storage row at 1440px and 390px: shared PBS storage shows \"Shared \u00b7 5 nodes\", the NFS storage shows type \"NFS\" and host \"Shared\", PBS datastores show state Online",
-    "Switched to Physical Disks; measured table cells for clipped text at both viewports, no horizontal page scroll; remaining phone clipping is pre-existing in the shared storage table"
+    "Loaded /proxmox/mail repeatedly with a fresh browser context, read the row text at 1.2s and 4s, and captured the REST and websocket payloads to confirm both carry pmg metadata",
+    "Instrumented the table temporarily to confirm resource.pmg was undefined on the REST-sourced first paint; probe removed before commit"
   ],
-  "command": "playwright chromium against a private mock-mode stack built from this branch (backend :7685, vite :5203)"
+  "command": "playwright chromium against a private mock-mode stack (backend :7685 from main, vite :5203 from this branch)"
 }
