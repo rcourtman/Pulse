@@ -291,13 +291,16 @@ row timestamps and supported object aliases retain compatibility. A metric is
 never a timestamp, a null is never zero and a window mean is never a replacement
 for a missing current row. History retains measured buckets; native current
 readings accept only the last two steps before the requested end, preserving
-sample time rather than stamping an old value as newly measured. The five-state
+sample time rather than stamping an old value as newly measured. This allowance
+never exceeds the live query window, even with a coarse returned step. The five-state
 CORE CPU vector is normalized by its sum (RRD state rates need not sum to 100).
 All-zero CPU or complete memory-class vectors are empty buckets, not 100% usage;
 explicit zero usage, all-idle CPU, zero-free RAM with used pages and zero I/O
 remain measured zeros. Free memory comes from `memory-free_value`, not active
 pages or the sum of memory classes. ARC subtraction uses the matching free-RAM
-bucket. Reporting I/O values remain rates in the existing bytes/s contract;
+bucket when free RAM is present; independently reported ARC remains available
+without claiming measured memory usage. Pre-cancelled collection stops before
+reading the catalogue or posting a reporting query. Reporting I/O values remain rates in the existing bytes/s contract;
 step supplies time, not a second rate division; `overlap` is not extra traffic.
 
 Legacy REST reads `/reporting/graphs` once per live/History collection and sends

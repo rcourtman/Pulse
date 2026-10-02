@@ -417,6 +417,28 @@ func TestCORE13ARCAlignedWithFreeMemory(t *testing.T) {
 	assertCOREPoint(t, points, 0, 1789000000, 0)
 }
 
+func TestCORE13CoarseStepDoesNotMakeOldRowsCurrent(t *testing.T) {
+	response := trueNASReportingGetDataResponse{Name: "cpu", Legend: []string{"usage"}, Start: 1789000000, End: 1789000000, Step: 3600, Data: []any{[]any{12.}}}
+	if history := parseSystemMetricHistory(liveReportingResponses([]trueNASReportingGetDataResponse{response}, 1789000400)); history != nil {
+		t.Fatal("coarse step made an old CPU sample current")
+	}
+	if history := parseSystemMetricHistory([]trueNASReportingGetDataResponse{response}); history == nil {
+		t.Fatal("live age filtering destroyed native History")
+	}
+}
+
+func TestCORE13ARCOnlyDoesNotInventMemoryUsage(t *testing.T) {
+	history := &SystemMetricHistory{ARCSizeBytes: []TimeSeriesPoint{{Timestamp: time.Unix(1789000000, 0), Value: 8 << 30}}}
+	system := systemInfoFromMetricHistory(history)
+	if system.ARCSizeBytes != 8<<30 || system.Telemetry.Memory {
+		t.Fatal("ARC-only telemetry lost or claimed free RAM")
+	}
+	system.MemoryTotalBytes = 32 << 30
+	if metricsFromTrueNASSystem(*system, 0, 0).Memory != nil {
+		t.Fatal("ARC-only reading invented usage")
+	}
+}
+
 func TestCORE13DiskTemperatureHistoryExternalTiming(t *testing.T) {
 	response := trueNASReportingGetDataResponse{Name: "disktemp", Identifier: "disk-a", Legend: []string{"temperature"}, Start: 1789000000, End: 1789000020, Step: 10, Data: []any{[]any{40.}, []any{nil}, []any{42.}}}
 	points := parseReportingDiskTemperatureHistory([]trueNASReportingGetDataResponse{response})["disk-a"]

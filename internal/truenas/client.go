@@ -342,6 +342,14 @@ func systemInfoFromMetricHistory(history *SystemMetricHistory) *SystemInfo {
 			latestFree = free.Timestamp
 		}
 	}
+	// ARC can be observed independently when no free-RAM sample exists;
+	// retain it without implying known memory usage. With free RAM, require
+	// cache and free to describe the same bucket before deriving usage.
+	if latestFree.IsZero() {
+		if value, ok := latestTimeSeriesValue(history.ARCSizeBytes); ok {
+			system.ARCSizeBytes = int64(value)
+		}
+	}
 	for _, arc := range history.ARCSizeBytes {
 		if arc.Timestamp.Equal(latestFree) {
 			system.ARCSizeBytes = int64(arc.Value)

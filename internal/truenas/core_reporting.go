@@ -16,6 +16,9 @@ import (
 // Older REST bridges without the catalogue retain the unscoped compatibility
 // request. Authentication, transport and malformed replies are never retried.
 func (c *Client) legacyReportingGraphs(ctx context.Context) ([]map[string]any, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	var catalogue []struct {
 		Name        string   `json:"name"`
 		Identifiers []string `json:"identifiers"`
@@ -97,7 +100,9 @@ func reportingRow(response trueNASReportingGetDataResponse, index int) (time.Tim
 
 // Keep native History intact, but do not label an old RRD point as a current
 // reading. Two returned steps allow the usual unfinished/null RRD bucket;
-// older points stay available only through History. Preserve row indices.
+// older points stay available only through History. Never exceed the live
+// query window even if a coarse/malformed step allows older buckets. Preserve
+// row indices.
 func liveReportingResponses(responses []trueNASReportingGetDataResponse, end int64) []trueNASReportingGetDataResponse {
 	live := append([]trueNASReportingGetDataResponse(nil), responses...)
 	for i, response := range live {
@@ -108,7 +113,7 @@ func liveReportingResponses(responses []trueNASReportingGetDataResponse, end int
 		for index := range response.Data {
 			timestamp, _, ok := reportingRow(response, index)
 			gap := end - timestamp.Unix()
-			if !ok || timestamp.Unix() > end || (gap > response.Step && gap-response.Step > response.Step) {
+			if !ok || timestamp.Unix() > end || gap > legacyRESTTelemetryWindowSeconds || (gap > response.Step && gap-response.Step > response.Step) {
 				live[i].Data[index] = nil
 			}
 		}
