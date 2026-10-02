@@ -7730,6 +7730,46 @@ the production chart and API transport with synthetic stored samples. This
 does not establish native collection, whole-report resolution or availability
 in a release. Existing request, source, units and access boundaries are unchanged.
 
+### Shared History touch inspection preserves native scrolling
+
+A primary touch tap inside a Storage History plot selects the nearest actual
+observation at that horizontal position. Compatibility mouse focus must not
+replace that reading with the latest sample or announce it as keyboard input.
+The existing hover group and timestamp reconciliation remain shared with mouse
+and keyboard inspection. Single measured-zero observations remain inspectable;
+empty data and a changed selection cannot inherit an old touch.
+
+Movement beyond ten CSS pixels, cancellation, multiple contacts and release
+outside the plot are not taps. Inspection neither prevents native touch defaults
+nor captures the pointer or changes touch-action: page scrolling and pinch zoom
+remain browser-owned. Blur and Escape clear inspection, and supported keyboard
+keys resume the existing dated, politely announced sample navigation.
+
+Mounted `HistoryChart.test.tsx` regressions cover focus ordering, gesture
+rejection, selection ownership, refresh, empty/zero and input coexistence.
+`browser-tests/history-touch.cjs` exercises actual touchscreen taps through the
+production disk/pool details and API transport in phone Chromium/WebKit, native
+vertical panning in Chromium, and desktop mouse/keyboard controls. Synthetic
+sample presentation is not native collector, physical device, assistive-device
+or installed whole-report acceptance.
+
+### Shared Storage presenters preserve disk ownership
+
+Pool-detail presenters under `features/storageBackups/` must not use repeated
+device paths, UnRAID group labels or host display names as fleet-wide identity.
+Direct pool children are retained; inferred membership requires the same
+canonical host parent, or a complete native Proxmox instance/node pair when
+parents are missing. Known parent conflicts win over native names. Full ZFS
+device identifiers may normalize an optional `/dev/` prefix but must not match
+arbitrary suffixes. Missing ownership produces no invented linked-disk facts.
+The storage adapter preserves the instance needed for that presentation scope;
+this does not rewrite canonical resources or History targets. Existing keyed
+pool details must update linked disks and local health through target/snapshot
+replacement without retaining peer-host rows. The mounted
+`StoragePoolDetail.ownership.test.tsx` and production-component browser fixture
+`browser-tests/pool-ownership.cjs` verify desktop/phone presentation and History
+coexistence; they are not field collection or native recovery evidence.
+
 ### Scheduled report kinds
 
 The Settings > Reporting schedule form composes the shared `FormSelect` for a

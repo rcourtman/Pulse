@@ -48,6 +48,9 @@ export function useHistoryChartState(
   const chartHeight = createMemo(() => props.height || 200);
   let chartLeftInset = HISTORY_CHART_MIN_LEFT_INSET;
   let chartRightInset = 0;
+  let touchFocus = false;
+  let touchTimestamp: number | null = null;
+  let pendingTouch: { pointerId: number; x: number; y: number; moved: boolean } | undefined;
   const hoveredTimestamp = hoverGroup?.hoveredTimestamp ?? localHoveredTimestamp;
   const setHoveredTimestamp = hoverGroup?.setHoveredTimestamp ?? setLocalHoveredTimestamp;
 
@@ -132,6 +135,8 @@ export function useHistoryChartState(
       suppliedData !== undefined,
     ]);
     if (selection !== previousSelection) {
+      pendingTouch = undefined;
+      touchTimestamp = null;
       setHoveredPoint(null);
       setHoveredTimestamp(null);
     }
@@ -376,12 +381,21 @@ export function useHistoryChartState(
   });
 
   const handleFocus = () => {
+    // Touch's compatibility mouse events can focus the canvas after pointerup.
+    // That focus must not replace the tapped reading with the latest sample.
+    if (touchFocus) {
+      setHoveredTimestamp(touchTimestamp);
+      return;
+    }
     setKeyboardInspecting(true);
     const points = data();
     setHoveredTimestamp(points.length ? points[points.length - 1].timestamp : null);
   };
 
   const handleBlur = () => {
+    touchFocus = false;
+    touchTimestamp = null;
+    pendingTouch = undefined;
     setKeyboardInspecting(false);
     setHoveredTimestamp(null);
   };
@@ -389,12 +403,18 @@ export function useHistoryChartState(
   const handleKeyDown = (event: KeyboardEvent) => {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     if (event.key === 'Escape') {
+      touchFocus = false;
+      touchTimestamp = null;
+      pendingTouch = undefined;
       setHoveredTimestamp(null);
       return;
     }
     const points = data();
     if (!points.length || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
+    touchFocus = false;
+    touchTimestamp = null;
+    pendingTouch = undefined;
     setKeyboardInspecting(true);
     const timestamp = hoveredTimestamp();
     const index =
@@ -410,14 +430,14 @@ export function useHistoryChartState(
     setHoveredTimestamp(points[next].timestamp);
   };
 
-  const handleMouseMove = (event: MouseEvent) => {
+  const inspectAtClientX = (clientX: number, snapToSample = false) => {
     const canvas = refs.getCanvas();
     const points = data();
     if (!canvas || points.length === 0) return;
 
     setKeyboardInspecting(false);
     const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
+    const x = clientX - rect.left;
     const width = rect.width;
     if (x < chartLeftInset || x > width - chartRightInset) {
       setHoveredTimestamp(null);
@@ -434,11 +454,58 @@ export function useHistoryChartState(
       leftInset: chartLeftInset,
       rightInset: chartRightInset,
     });
-    setHoveredTimestamp(geometry.getTimestamp(x));
+    const timestamp = geometry.getTimestamp(x);
+    const inspectedTimestamp = snapToSample
+      ? findHistoryChartClosestPoint(points, timestamp).timestamp
+      : timestamp;
+    setHoveredTimestamp(inspectedTimestamp);
+    return inspectedTimestamp;
+  };
+
+  const handleMouseMove = (event: MouseEvent) => {
+    if (!touchFocus) inspectAtClientX(event.clientX);
+  };
+
+  const handlePointerDown = (event: PointerEvent) => {
+    if (event.pointerType === 'mouse') touchFocus = false;
+    if (event.pointerType !== 'touch') return;
+    touchFocus = true;
+    touchTimestamp = null;
+    setKeyboardInspecting(false);
+    setHoveredTimestamp(null);
+    pendingTouch = event.isPrimary
+      ? { pointerId: event.pointerId, x: event.clientX, y: event.clientY, moved: false }
+      : undefined;
+  };
+
+  const handlePointerMove = (event: PointerEvent) => {
+    if (event.pointerType === 'mouse') touchFocus = false;
+    if (event.pointerType !== 'touch' || pendingTouch?.pointerId !== event.pointerId) return;
+    if (Math.hypot(event.clientX - pendingTouch.x, event.clientY - pendingTouch.y) > 10) {
+      pendingTouch.moved = true;
+    }
+  };
+
+  const handlePointerUp = (event: PointerEvent) => {
+    if (event.pointerType !== 'touch') return;
+    const touch = pendingTouch;
+    pendingTouch = undefined;
+    if (!touch || !event.isPrimary || touch.pointerId !== event.pointerId || touch.moved) return;
+    if (Math.hypot(event.clientX - touch.x, event.clientY - touch.y) > 10) return;
+    const rect = refs.getCanvas()?.getBoundingClientRect();
+    if (!rect || event.clientY < rect.top || event.clientY > rect.bottom) return;
+    touchTimestamp = inspectAtClientX(event.clientX, true) ?? null;
+  };
+
+  const handlePointerCancel = (event: PointerEvent) => {
+    if (event.pointerType !== 'touch') return;
+    pendingTouch = undefined;
+    touchTimestamp = null;
+    setHoveredTimestamp(null);
   };
 
   const handleMouseLeave = () => {
-    if (keyboardInspecting()) return;
+    if (keyboardInspecting() || touchFocus) return;
     setHoveredTimestamp(null);
   };
 
@@ -454,6 +521,10 @@ export function useHistoryChartState(
     keyboardInspecting,
     handleMouseLeave,
     handleMouseMove,
+    handlePointerDown,
+    handlePointerMove,
+    handlePointerUp,
+    handlePointerCancel,
     chartHeight,
     chartWidth,
     hoveredPoint,

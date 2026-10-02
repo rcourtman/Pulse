@@ -368,6 +368,28 @@ const diskRoleRank = (role: string): number => {
   }
 };
 
+const diskBelongsToStorageHost = (record: StorageRecord, disk: Resource): boolean => {
+  const hostId = readRecordDetailString(record, 'parentId');
+  const diskParentId = disk.parentId?.trim();
+  // Canonical ownership outranks labels, paths and source-native names.
+  // In particular, two hosts may both be called pve1 and both report /dev/sda.
+  if (hostId && diskParentId) return hostId === diskParentId;
+
+  // Older Proxmox snapshots may lack canonical parents. Only the complete
+  // native instance/node pair is a scope; a hostname alone is not one.
+  const platformData = (disk.platformData || {}) as Record<string, unknown>;
+  const proxmox = platformData.proxmox as Resource['proxmox'] | undefined;
+  const node = readRecordDetailString(record, 'node').toLowerCase();
+  const instance = readRecordDetailString(record, 'instance');
+  const diskNode = (disk.proxmox?.nodeName || disk.proxmox?.node || proxmox?.nodeName || '')
+    .trim()
+    .toLowerCase();
+  const diskInstance = (disk.proxmox?.instance || proxmox?.instance || '').trim();
+  return Boolean(node && instance && node === diskNode && instance === diskInstance);
+};
+
+const normalizeDevicePath = (value: string): string => value.trim().replace(/^\/dev\//, '');
+
 export function getStoragePoolLinkedDisks(
   record: StorageRecord,
   physicalDisks: Resource[],
@@ -382,9 +404,14 @@ export function getStoragePoolLinkedDisks(
     .filter((disk) => {
       const devPath = readDiskDevPath(disk);
       const group = readDiskStorageGroup(disk).toLowerCase();
-      if (directParentIds.has(disk.parentId || '')) return true;
+      if (directParentIds.has(disk.parentId?.trim() || '')) return true;
+      if (!diskBelongsToStorageHost(record, disk)) return false;
       if (pool?.devices?.length && devPath) {
-        return pool.devices.some((device) => devPath.endsWith(device.name));
+        return pool.devices.some(
+          (device) =>
+            Boolean(device.name.trim()) &&
+            normalizeDevicePath(devPath) === normalizeDevicePath(device.name),
+        );
       }
       return Boolean(unraidStorageGroup && group === unraidStorageGroup);
     })

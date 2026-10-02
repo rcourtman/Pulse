@@ -17,6 +17,32 @@
 
 ## Purpose
 
+### Exact TrueNAS subscription termination — issue #2396
+
+JSON-RPC stream readers and the subscription-acknowledgement wait recognise
+`notify_unsubscribed` only for the exact requested collection, including its
+arguments. An unrelated interval or event source cannot reject the current
+subscription. A matching rejection ends the operation promptly, discards the
+stream session and is not retried or downgraded to REST. A subsequent ordinary
+read may authenticate a fresh session within the existing operation budget.
+The notification uses middleware errno fields, not a JSON-RPC response error;
+only its numeric errno and a fixed message survive, never provider reason,
+trace, extra fields or private collection arguments. Malformed termination
+cannot leave a stream reusable. A clean end without telemetry remains
+unavailable, not a zero sample; a clean log end returns the bounded collected
+tail and retains the socket without cancelling an already-ended subscription.
+
+`TestJSONRPCSubscriptionTerminationRejectsWithoutWaitingOrRetry` covers all
+three readers before/after acknowledgement, cleanup, confidentiality and fresh
+read recovery. The adjacent termination controls pin exact-collection
+isolation, malformed events, absent samples and clean log completion.
+`TestTrueNASPollerSubscriptionRejectionKeepsPollingAndRecovers` exercises
+three connected protocol/poller snapshots: usable inventory and poll-ledger
+progress during rejected nonempty Apps enrichment, native alert disappearance,
+then ordinary stats recovery with stable identity. These are source controls
+using the reporter's source-derived envelope, not a retained wire capture,
+native appliance/incident acceptance or release availability.
+
 ### RAID count provenance across ingestion — issue #2369
 
 Agent ingestion, host snapshots and canonical read-state projection retain
@@ -195,6 +221,47 @@ server, opening-context cancellation, concurrent controls/RPCs and sender dispos
 `internal/monitoring/truenas_poller_test.go` verifies due boundaries, short/slow
 cycles, completion timestamps and unchanged failure backoff. These are synthetic
 runtime proofs, not native firmware timeout or reporter-resolution evidence.
+
+### TrueNAS empty app inventories and session-disposal evidence
+
+An empty or null `app.query`/legacy `/app` result remains a successful empty
+app inventory. It must not request `app.stats`: there is no workload to enrich,
+and a stopped Apps service must not consume the operation budget or dispose of
+an otherwise usable monitoring session just to enrich no rows. Nonempty app
+inventories retain best-effort stats enrichment. This removes a needless
+subscription path reported in #2396; it does not establish the exact
+`notify_unsubscribed` envelope or resolve rejection with nonempty inventories.
+Unrecognised stream notifications remain bounded by the existing operation
+timeout, not classified as a known subscription's rejection without evidence.
+
+The one permitted stream transport retry uses the same disposal rules as the
+initial exchange. Malformed events, empty subscription IDs and failed
+unsubscribe cleanup discard the second session and report disconnected status;
+normal app-log idle completion returns the collected tail and discards its
+timed-out socket rather than surfacing an internal consumed-session sentinel.
+No extra retry, action replay or REST downgrade is introduced.
+
+Each authenticated socket's first local disposal records an INFO event with
+`component=truenas_rpc`, `action=close_session`, a fixed `reason`, authenticated
+`session_age`, and optional request-method/error-category classifications. Causes
+distinguish client closure, stream completion/error, transport error and failed
+keepalive writes. Error categories distinguish timeout, cancellation, method,
+transport and protocol errors. No error text, params, subscription ID, endpoint,
+username or credential is logged. Keepalive failure may precede a subsequent
+poll's disposal, so that first cause must be preserved and logged only once.
+These are local close-path observations, not appliance/proxy diagnoses or
+evidence that #2400's minute-by-minute reauthentication has been resolved. There
+is still no fixed session-age or per-poll closure policy.
+
+Verification in `internal/truenas/transport_test.go`:
+`TestJSONRPCEmptyAppsDoNotSubscribeToStats`,
+`TestLegacyRESTEmptyAppsDoNotNegotiateStats`, the snapshot inventory contract,
+`TestJSONRPCStreamRetryDiscardsUnusableSecondSession`,
+`TestJSONRPCStreamRetryReturnsCompletedLogTail`, `TestRPCSessionCloseDetails`,
+`TestRPCSessionCloseLogIsBoundedAndSecretFree` and
+`TestRPCSessionCloseLogKeepsFirstKeepaliveCause`. These controlled runtime tests
+preserve inventory, retry limits, fresh-session recovery and log confidentiality;
+native SCALE behaviour, published delivery and field acceptance remain separate.
 
 
 ### TrueNAS reporting summaries preserve raw History — issue #2346
