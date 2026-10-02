@@ -246,8 +246,8 @@ must update that receipt with:
 7. a UTC verification timestamp and `result: "passed"`
 
 `scripts/release_control/browser_verification_guard.py` enforces the receipt
-against the staged index locally and against each changed commit in canonical
-governance CI. A stale receipt, later source edit, incomplete path coverage,
+against the staged index locally and against the final integration range in
+canonical governance CI. Canonical contract completion remains checked per commit. A stale receipt, later source edit, incomplete path coverage,
 missing responsive viewport, or omitted state/interaction evidence is a hard failure. Agents may
 print a non-passing receipt skeleton with
 `python3 scripts/release_control/browser_verification_guard.py --print-template`
@@ -265,7 +265,11 @@ bound to that commit's parent and to that commit's tree. Receipts written by
 merge commits are never evidence, because a conflict resolution has no browser
 run behind it. Content that changed after its browser pass, including a
 correction commit, a conflict resolution, or two changes to one file, needs a
-fresh receipt for the final content in its own non-merge commit.
+fresh receipt for the final content in its own non-merge commit. CI uses this
+same range mode so an additive receipt correction can retain reviewed commit
+identities. An invalid historical receipt contributes no coverage; a later
+valid receipt must still bind its own parent and the exact final content. An
+unavailable range base fails closed rather than narrowing browser coverage.
 
 A source diff that is byte-for-byte the locked Prettier output of its parent
 has no rendered behavior or visual delta and does not require a new browser
