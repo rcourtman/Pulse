@@ -364,3 +364,62 @@ func TestAppriseQueueConfidentiality(t *testing.T) {
 		}
 	}
 }
+
+// Safe summaries intentionally omit provider prose. The v6.4 audit must retain
+// its declared Apprise class without importing main's early-DLQ policy.
+func TestAppriseQueueWithheldProseRetainsClass(t *testing.T) {
+	for _, kind := range []string{"apprise", "apprise_resolved", "webhook"} {
+		for _, tc := range []struct {
+			cause string
+			class NotificationFailureClass
+		}{
+			{"internal server error", NotificationFailureServerError},
+			{"bad request", NotificationFailureRejected},
+			{"connection reset", NotificationFailureConnectivity},
+		} {
+			t.Run(kind+"/"+string(tc.class), func(t *testing.T) {
+				q, err := NewNotificationQueue(t.TempDir())
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer q.Stop()
+				notif := &QueuedNotification{ID: "withheld", Type: kind, Status: QueueStatusPending, Config: json.RawMessage(`{}`), MaxAttempts: 3, Alerts: []*alerts.Alert{{ID: "fixture"}}}
+				if err = q.Enqueue(notif); err != nil {
+					t.Fatal(err)
+				}
+				failure := safeAppriseError("operation", errors.New(tc.cause+" "+appriseSecret))
+				q.SetProcessor(func(*QueuedNotification) error { return failure })
+				q.processBatch()
+				deadline := time.Now().Add(3 * time.Second)
+				var class, summary string
+				for {
+					err = q.db.QueryRow("SELECT failure_class,error_message FROM notification_audit WHERE notification_id=?", notif.ID).Scan(&class, &summary)
+					if err == nil {
+						break
+					}
+					if err != sql.ErrNoRows || time.Now().After(deadline) {
+						t.Fatal("audit did not complete")
+					}
+					time.Sleep(time.Millisecond)
+				}
+				q.SetProcessor(nil)
+				want := tc.class
+				if kind == "webhook" {
+					want = ClassifyNotificationFailure(failure.Error())
+				}
+				if class != string(want) {
+					t.Errorf("class=%s want=%s", class, want)
+				}
+				assertAppriseConfidential(t, summary)
+				var status string
+				var attempts int
+				if err = q.db.QueryRow("SELECT status,attempts FROM notification_queue WHERE id=?", notif.ID).Scan(&status, &attempts); err != nil {
+					t.Fatal(err)
+				}
+				if status != string(QueueStatusPending) || attempts != 1 {
+					t.Fatal("diagnostic classification changed retry policy")
+				}
+			})
+		}
+	}
+}

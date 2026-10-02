@@ -175,7 +175,10 @@ payloads, TLS verification, SSRF checks, retry budget and delivery state do not
 change. Existing historical logs/audits are not rewritten or claimed cleared.
 The v6.4 queue retains its existing retry-all-until-exhaustion policy, including
 HTTP 401; the diagnostic classifier does not import main's early-DLQ policy.
-Attempt audits still classify the safe error summary through the existing seam.
+Attempt audits retain the sender's declared Apprise class without recovering
+withheld error prose; other destinations and legacy audit callers still use
+the existing text classifier. This diagnostic observation never selects retry
+or dead-letter policy.
 
 Verification: `apprise_confidentiality_test.go` captures actual CLI/loopback HTTP
 logs and errors across firing, recovery and test sends; verifies unchanged
