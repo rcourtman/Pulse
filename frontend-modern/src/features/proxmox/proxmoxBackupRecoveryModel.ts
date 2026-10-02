@@ -47,6 +47,8 @@ export interface RecoverableArtifact {
   /** Operator-facing source/repository label used by the backup-location filter. */
   locationLabel?: string;
   detail: string;
+  /** Full provider identifier behind a shortened `detail`, shown on hover. */
+  detailTitle?: string;
   protected: boolean;
   verified?: boolean;
   /** A still-running backup is writing this artifact; it is not recoverable yet. */
@@ -155,6 +157,12 @@ function parseTimestampMs(value: string | undefined): number | undefined {
   if (!value) return undefined;
   const ms = Date.parse(value);
   return Number.isFinite(ms) ? ms : undefined;
+}
+
+function archiveFileName(volid: string | undefined): string {
+  const trimmed = volid?.trim() ?? '';
+  if (!trimmed) return '';
+  return trimmed.slice(trimmed.lastIndexOf('/') + 1);
 }
 
 function pbsBackupFileDetailLabel(fileCount: number): string {
@@ -585,7 +593,12 @@ export function buildProxmoxBackupRecoveryModel(
       size: archive.size,
       location: archive.storage || archive.node || '—',
       ...artifactLocationScope('archive', archive.instance, archive.storage || archive.node),
-      detail: archive.volid || archive.format || archiveSource.detailFallbackLabel,
+      // The volid repeats the storage, guest type, VMID, and timestamp the row
+      // already shows in their own columns and clips at every width; the
+      // archive format is the one fact it adds, so that is the cell and the
+      // volid stays on hover and in search.
+      detail: archive.format || archiveFileName(archive.volid) || archiveSource.detailFallbackLabel,
+      detailTitle: archive.volid || undefined,
       protected: archive.protected,
       verified: archive.inProgress ? undefined : archive.isPBS ? archive.verified : undefined,
       running: archive.inProgress === true,
@@ -743,6 +756,7 @@ export function recoverableArtifactMatchesSearch(
     artifact.sourceTitle,
     artifact.location,
     artifact.detail,
+    artifact.detailTitle,
     artifact.verified === true
       ? 'verified'
       : artifact.verified === false

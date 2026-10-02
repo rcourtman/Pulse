@@ -192,7 +192,10 @@ export function ProxmoxRecoverableTable(props: {
       </TableCell>
       <Show when={columnVisible('details')}>
         <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-          <span class="inline-block max-w-[20rem] truncate" title={artifact.detail}>
+          <span
+            class="inline-block max-w-[20rem] truncate"
+            title={artifact.detailTitle ?? artifact.detail}
+          >
             {artifact.detail || '—'}
           </span>
         </TableCell>

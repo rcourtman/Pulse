@@ -162,6 +162,35 @@ describe('proxmoxBackupRecoveryModel', () => {
     );
   });
 
+  it('shows the archive format as its detail and keeps the volid on hover and in search', () => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [],
+      archives: [archive({ format: 'tar.zst' })],
+      snapshots: [],
+      tasks: [],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    });
+
+    const [artifact] = model.recoverableArtifacts;
+    expect(artifact.detail).toBe('tar.zst');
+    expect(artifact.detailTitle).toBe('local:backup/vzdump-lxc-112-2026_05_24-02_00_00.tar.zst');
+    expect(recoverableArtifactMatchesSearch(artifact, 'vzdump-lxc-112')).toBe(true);
+  });
+
+  it('falls back to the archive file name when the provider reports no format', () => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [],
+      archives: [archive({ format: '' })],
+      snapshots: [],
+      tasks: [],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    });
+
+    expect(model.recoverableArtifacts[0].detail).toBe('vzdump-lxc-112-2026_05_24-02_00_00.tar.zst');
+  });
+
   it('keeps a terminally incomplete PBS artifact out of latest recovery', () => {
     const model = buildProxmoxBackupRecoveryModel({
       workloads: [workload({})],
