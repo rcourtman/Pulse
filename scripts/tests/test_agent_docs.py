@@ -36,6 +36,17 @@ def recipe(name, needle):
     return found[0]
 
 
+def run_recorded_recipe(command, env):
+    # A copied command may exit successfully without invoking the installer.
+    # Its evidence must not come from the preceding profile or uninstall.
+    receipt = Path(env["INSTALL_RECEIPT"])
+    receipt.unlink(missing_ok=True)
+    result = subprocess.run(["bash", "-eu", "-c", command], env=env,
+                            capture_output=True, timeout=10)
+    args = json.loads(receipt.read_text()) if receipt.is_file() else None
+    return result, args
+
+
 class AgentDocsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -191,9 +202,9 @@ PY
             env.update(EXPECTED_TOKEN=TOKEN, INSTALL_RECEIPT=str(home / "installer-argv.json"))
             for command in profiles:
                 with self.subTest(command=command):
-                    result = subprocess.run(["bash", "-eu", "-c", command], env=env, capture_output=True, timeout=10)
+                    result, args = run_recorded_recipe(command, env)
                     self.assertEqual(result.returncode, 0, result.stderr.decode())
-                    args = json.loads((home / "installer-argv.json").read_text())
+                    self.assertIsNotNone(args, "copied profile did not invoke its installer")
                     self.assertEqual(args[:4], ["--url", "https://pulse.example.com", "--token-file", str(token)])
                     self.assertNotIn(TOKEN.encode(), result.stdout + result.stderr)
             expected_profiles = [[], ["--enable-proxmox", "--proxmox-type", "pve"],
@@ -208,6 +219,20 @@ PY
         source = (ROOT / "scripts/install.sh").read_text()
         self.assertIn('--token-file) TOKEN_FILE_PATH="$2"; shift 2 ;;', source)
         self.assertIn('read_collector_token_file_safely "$TOKEN_FILE_PATH" true', source)
+
+    def test_skipped_or_failed_recipe_cannot_reuse_a_previous_receipt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            receipt = home / "argv.json"
+            env = fixture_environment(home)
+            env["INSTALL_RECEIPT"] = str(receipt)
+            for command, expected_exit in ((":", 0), ("exit 7", 7)):
+                with self.subTest(command=command):
+                    receipt.write_text(json.dumps(["--previous-profile"]))
+                    result, args = run_recorded_recipe(command, env)
+                    self.assertEqual(result.returncode, expected_exit)
+                    self.assertIsNone(args)
+                    self.assertFalse(receipt.exists())
 
     def test_retarget_uninstall_and_cleanup_use_saved_script_without_new_token(self):
         expected = (["--retarget", "--url", "https://pulse.example.com"], ["--uninstall"],
@@ -226,9 +251,9 @@ PY
             env = fixture_environment(home)
             env["INSTALL_RECEIPT"] = str(home / "argv.json")
             for command, args in zip(commands, expected):
-                result = subprocess.run(["bash", "-eu", "-c", command], env=env, capture_output=True, timeout=10)
+                result, recorded_args = run_recorded_recipe(command, env)
                 self.assertEqual(result.returncode, 0, result.stderr.decode())
-                self.assertEqual(json.loads((home / "argv.json").read_text()), args)
+                self.assertEqual(recorded_args, args)
 
 
 if __name__ == "__main__":
