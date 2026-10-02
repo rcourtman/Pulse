@@ -1,49 +1,53 @@
 {
   "version": 1,
-  "base_sha": "1a0cd7c9d5aa02de754535a293dc0cacd4ef6fa0",
-  "verified_at": "2026-10-01T18:27:14.912695Z",
+  "base_sha": "33d6d729c1dc7c0913a970fd4c463a9f9575b7b1",
+  "verified_at": "2026-10-02T10:16:57.632722Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/docs/docMarkdown.ts"
+    "frontend-modern/src/components/Storage/DiskList.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/docs/docMarkdown.ts": "572a3b4bc5bc1114adef5aa64bb0ea833c0dbe5865bbd57d3dc767fd1965aa55"
+    "frontend-modern/src/components/Storage/DiskList.tsx": "df63db162779ff0d2064475a9db1fd67ac748703f398a88d108ecdd154dae9d2"
   },
   "routes": [
-    "/docs/PULSE_PRO",
-    "/browser-tests/docs-fragment-navigation.html?scenario=plans"
+    "/browser-tests/disk-live-refresh.html"
   ],
   "viewports": [
     {
-      "width": 1280,
+      "width": 1365,
       "height": 900
     },
     {
       "width": 390,
-      "height": 900
+      "height": 844
     }
   ],
   "states": [
-    "Production Docs page/router/styles with the current shipped eight-column plan comparison, not a replacement table fixture",
-    "Every sanitized thead TH has trusted scope=col and all eight native columnheader roles; document role/scope/class remain stripped",
-    "Desktop Chromium light and phone-emulated WebKit dark; table-local horizontal scrolling and outer-page containment; four final full-page/header screenshots inspected",
-    "This establishes browser accessibility roles, not screen-reader speech or published availability"
+    "Production DiskList, DiskDetail, keyed renderer and styles with synthetic PBS collector snapshots, not installed appliance evidence",
+    "Healthy to failed disk updates health, warning text, endurance, temperature, model and canonical target without remounting the row or its expanded detail",
+    "Missing measurements remove obsolete values and critical styling; unavailable detail evidence remains visible; recovery restores current values",
+    "Disclosure keyboard focus and aria-controls survive same-ID updates; changed metric targets update summary/detail linkage",
+    "Attention filter includes the failed disk, removes the recovered disk and returns current healthy values in All",
+    "Desktop Chromium light and phone-emulated WebKit dark have no outer-page overflow or page errors; six fault/missing/recovered screenshots inspected; existing dense phone truncation is unchanged"
   ],
   "interactions": [
-    "Navigate to the real plans document and inspect table DOM and accessibility snapshot",
-    "On phone, scroll the table horizontally without moving the outer page; bring its header into view"
+    "Expand the real disk row and focus its disclosure, apply fault/missing/recovery snapshots without navigating or reloading",
+    "Check current values, stable owner, focus, live disclosure target and selected detail after each snapshot",
+    "Toggle Attention/All across fault and recovery"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/docs-table-headers.cjs",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/disk-live-refresh.cjs",
   "browser_versions": {
     "playwright": "1.56.1",
     "chromium": "141.0.7390.37",
     "webkit": "26.0"
   },
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/docs/chromium-after.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/docs/chromium-headers.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/docs/webkit-after.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/docs/webkit-headers.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-yqww6hbj/browser/docs/after.json"
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-zuzev1gs/browser/chromium-fault.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-zuzev1gs/browser/chromium-missing.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-zuzev1gs/browser/chromium-recovered.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-zuzev1gs/browser/webkit-fault.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-zuzev1gs/browser/webkit-missing.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-zuzev1gs/browser/webkit-recovered.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-zuzev1gs/browser/result.json"
   ]
 }
