@@ -34,7 +34,9 @@ export function useHistoryChartState(
 ) {
   const [range, setRange] = createSignal<HistoryTimeRange>(props.range || '24h');
   const [data, setData] = createSignal(props.data ?? []);
+  const [keyboardInspecting, setKeyboardInspecting] = createSignal(false);
   const [loading, setLoading] = createSignal(false);
+  const [refreshFailed, setRefreshFailed] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [source, setSource] = createSignal<'store' | 'memory' | 'live' | 'mock_synthetic' | null>(
     null,
@@ -118,6 +120,7 @@ export function useHistoryChartState(
     setData(suppliedData ?? []);
     setSource(suppliedData !== undefined ? 'live' : null);
     setError(null);
+    setRefreshFailed(false);
     setLoading(false);
     const selection = JSON.stringify([
       resourceType,
@@ -153,12 +156,13 @@ export function useHistoryChartState(
         if (!active) return;
         setData('points' in result ? (result.points ?? []) : []);
         setSource(result.source ?? 'store');
+        setRefreshFailed(false);
         hasLoaded = true;
       } catch (err) {
         if (!active) return;
         console.error('Failed to fetch metrics history:', err);
-        if (!hasLoaded) setError('Failed to load history data');
-        setSource(null);
+        if (hasLoaded) setRefreshFailed(true);
+        else setError('Failed to load history data');
       } finally {
         if (active) {
           pending = false;
@@ -351,11 +355,47 @@ export function useHistoryChartState(
     onCleanup(() => resizeObserver.disconnect());
   });
 
+  const handleFocus = () => {
+    setKeyboardInspecting(true);
+    const points = data();
+    setHoveredTimestamp(points.length ? points[points.length - 1].timestamp : null);
+  };
+
+  const handleBlur = () => {
+    setKeyboardInspecting(false);
+    setHoveredTimestamp(null);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.key === 'Escape') {
+      setHoveredTimestamp(null);
+      return;
+    }
+    const points = data();
+    if (!points.length || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    setKeyboardInspecting(true);
+    const timestamp = hoveredTimestamp();
+    const index =
+      timestamp === null
+        ? points.length - 1
+        : points.indexOf(findHistoryChartClosestPoint(points, timestamp));
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? points.length - 1
+          : Math.max(0, Math.min(points.length - 1, index + (event.key === 'ArrowLeft' ? -1 : 1)));
+    setHoveredTimestamp(points[next].timestamp);
+  };
+
   const handleMouseMove = (event: MouseEvent) => {
     const canvas = refs.getCanvas();
     const points = data();
     if (!canvas || points.length === 0) return;
 
+    setKeyboardInspecting(false);
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const width = rect.width;
@@ -370,6 +410,7 @@ export function useHistoryChartState(
   };
 
   const handleMouseLeave = () => {
+    if (keyboardInspecting()) return;
     setHoveredTimestamp(null);
   };
 
@@ -378,6 +419,11 @@ export function useHistoryChartState(
     dataMax,
     dataMin,
     error,
+    refreshFailed,
+    handleFocus,
+    handleBlur,
+    handleKeyDown,
+    keyboardInspecting,
     handleMouseLeave,
     handleMouseMove,
     chartHeight,
