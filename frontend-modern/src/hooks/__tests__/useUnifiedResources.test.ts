@@ -1642,6 +1642,9 @@ describe('useUnifiedResources', () => {
             lastSeen: '2026-02-06T12:00:00Z',
             sources: ['pmg'],
             uptime: 1_555_222,
+            technology: 'pmg',
+            sourceStatus: { pmg: { status: 'online', lastSeen: '2026-02-06T12:00:00Z' } },
+            actionReadiness: [{ name: 'restart', available: true }],
             pmg: {
               instanceId: 'pmg-eu',
               hostname: 'pmg.example.lan',
@@ -1671,6 +1674,12 @@ describe('useUnifiedResources', () => {
       expect.objectContaining({ version: '8.1-2', spamIn: 321, queueDeferred: 5 }),
     );
     expect(row?.platformData?.pmg).toEqual(row?.pmg);
+    // The per-source status, action readiness, and technology facets ride the
+    // same race: Docker lifecycle actions and storage freshness read them at
+    // the top level, where only websocket rows used to carry them.
+    expect(row?.sourceStatus?.pmg?.status).toBe('online');
+    expect(row?.actionReadiness?.[0]?.name).toBe('restart');
+    expect(row?.technology).toBe('pmg');
 
     dispose();
   });
