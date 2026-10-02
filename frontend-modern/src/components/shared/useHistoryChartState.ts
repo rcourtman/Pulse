@@ -197,15 +197,22 @@ export function useHistoryChartState(
     const yAxisTicks = getHistoryChartYAxisLabels(scale, props.unit);
     const labelCount = 4;
     const timeAxisTicks =
-      points.length > 0
-        ? Array.from({ length: labelCount }, (_, index) => {
-            const timestamp =
-              points[0].timestamp +
-              ((points[points.length - 1].timestamp - points[0].timestamp) * index) /
-                (labelCount - 1);
-            return { timestamp, label: formatHistoryChartTimeLabel(timestamp, range()) };
-          })
-        : [];
+      points.length === 1
+        ? [
+            {
+              timestamp: points[0].timestamp,
+              label: formatHistoryChartTimeLabel(points[0].timestamp, range()),
+            },
+          ]
+        : points.length > 0
+          ? Array.from({ length: labelCount }, (_, index) => {
+              const timestamp =
+                points[0].timestamp +
+                ((points[points.length - 1].timestamp - points[0].timestamp) * index) /
+                  (labelCount - 1);
+              return { timestamp, label: formatHistoryChartTimeLabel(timestamp, range()) };
+            })
+          : [];
 
     ctx.font = '10px sans-serif';
     chartLeftInset = getHistoryChartLeftInset(
@@ -248,26 +255,39 @@ export function useHistoryChartState(
       rightInset: chartRightInset,
     });
 
-    ctx.beginPath();
-    points.forEach((point, index) => {
-      if (index === 0) ctx.moveTo(geometry.getX(point.timestamp), height - 20);
-      ctx.lineTo(geometry.getX(point.timestamp), geometry.getY(point.value));
-    });
-    if (points.length > 0) {
+    if (points.length === 1) {
+      // A stored observation is visible before inspection, including measured
+      // zero. A line or filled area would invent a duration for this sample.
+      ctx.beginPath();
+      ctx.arc(
+        geometry.getX(points[0].timestamp),
+        geometry.getY(points[0].value),
+        4,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = mainColor;
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      points.forEach((point, index) => {
+        if (index === 0) ctx.moveTo(geometry.getX(point.timestamp), height - 20);
+        ctx.lineTo(geometry.getX(point.timestamp), geometry.getY(point.value));
+      });
       ctx.lineTo(geometry.getX(points[points.length - 1].timestamp), height - 20);
-    }
-    ctx.closePath();
-    ctx.fillStyle = `${mainColor}66`;
-    ctx.fill();
+      ctx.closePath();
+      ctx.fillStyle = `${mainColor}66`;
+      ctx.fill();
 
-    ctx.beginPath();
-    ctx.strokeStyle = mainColor;
-    ctx.lineWidth = 2;
-    points.forEach((point, index) => {
-      if (index === 0) ctx.moveTo(geometry.getX(point.timestamp), geometry.getY(point.value));
-      else ctx.lineTo(geometry.getX(point.timestamp), geometry.getY(point.value));
-    });
-    ctx.stroke();
+      ctx.beginPath();
+      ctx.strokeStyle = mainColor;
+      ctx.lineWidth = 2;
+      points.forEach((point, index) => {
+        if (index === 0) ctx.moveTo(geometry.getX(point.timestamp), geometry.getY(point.value));
+        else ctx.lineTo(geometry.getX(point.timestamp), geometry.getY(point.value));
+      });
+      ctx.stroke();
+    }
 
     ctx.fillStyle = axisTextColor;
     ctx.font = '10px sans-serif';
@@ -404,9 +424,17 @@ export function useHistoryChartState(
       return;
     }
 
-    const ratio = (x - chartLeftInset) / (width - chartLeftInset - chartRightInset);
-    const timeSpan = Math.max(1, points[points.length - 1].timestamp - points[0].timestamp);
-    setHoveredTimestamp(points[0].timestamp + ratio * timeSpan);
+    const geometry = createHistoryChartGeometry({
+      width,
+      height: chartHeight(),
+      startTime: points[0].timestamp,
+      endTime: points[points.length - 1].timestamp,
+      minValue: 0,
+      maxValue: 1,
+      leftInset: chartLeftInset,
+      rightInset: chartRightInset,
+    });
+    setHoveredTimestamp(geometry.getTimestamp(x));
   };
 
   const handleMouseLeave = () => {

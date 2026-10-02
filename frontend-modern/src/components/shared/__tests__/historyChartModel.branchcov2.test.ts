@@ -406,6 +406,40 @@ describe('createHistoryChartGeometry', () => {
     expect(geo.getX(100)).toBe(40);
   });
 
+  it('centres a single timestamp and maps every plot position back to that observation', () => {
+    const geo = createHistoryChartGeometry({
+      width: 300,
+      height: 120,
+      startTime: 1000,
+      endTime: 1000,
+      minValue: 0,
+      maxValue: 100,
+      leftInset: 60,
+      rightInset: 20,
+    });
+    expect(geo.getX(1000)).toBe(170);
+    for (const x of [60, 100, 170, 280]) {
+      expect(geo.getTimestamp(x)).toBe(1000);
+    }
+    expect(geo.getY(0)).toBe(100);
+  });
+
+  it('inverts timestamp geometry without changing multi-observation interpolation', () => {
+    const geo = createHistoryChartGeometry({
+      width: 300,
+      height: 120,
+      startTime: 1000,
+      endTime: 3000,
+      minValue: 0,
+      maxValue: 100,
+      leftInset: 60,
+      rightInset: 20,
+    });
+    for (const timestamp of [1000, 1500, 2000, 3000]) {
+      expect(geo.getTimestamp(geo.getX(timestamp))).toBeCloseTo(timestamp);
+    }
+  });
+
   it('left-pads the first timestamp to the chart origin', () => {
     const geo = createHistoryChartGeometry({
       width: 200,
