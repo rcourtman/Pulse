@@ -2221,13 +2221,23 @@ func TestTrueNASPartialReportingPipeline(t *testing.T) {
 		status        int
 		want          map[string]float64
 		errorCategory string
+		native        bool
 	}{
-		{`[{"name":"memory","legend":["free"],"data":[[1789000060,8]]}]`, 200, map[string]float64{"memory": 50}, ""},
-		{`[{"name":"cpu","legend":["usage"],"data":[[1789000060,0]]}]`, 200, map[string]float64{"cpu": 0}, ""},
-		{`provider-private-text`, 401, nil, "authentication"},
-		{`[{"name":"cpu","legend":["usage"],"data":[[1789000060,0]]},{"name":"memory","legend":["free"],"data":[[1789000060,0]]},{"name":"interface","legend":["received"],"data":[[1789000060,0]]},{"name":"disk","legend":["write"],"data":[[1789000060,0]]}]`, 200, map[string]float64{"cpu": 0, "memory": 100, "netin": 0, "diskwrite": 0}, ""},
+		{`[{"name":"memory","legend":["free"],"data":[[1789000060,8]]}]`, 200, map[string]float64{"memory": 50}, "", false},
+		{`[{"name":"cpu","legend":["usage"],"data":[[1789000060,0]]}]`, 200, map[string]float64{"cpu": 0}, "", false},
+		{`provider-private-text`, 401, nil, "authentication", false},
+		{`[{"name":"cpu","legend":["usage"],"data":[[1789000060,0]]},{"name":"memory","legend":["free"],"data":[[1789000060,0]]},{"name":"interface","legend":["received"],"data":[[1789000060,0]]},{"name":"disk","legend":["write"],"data":[[1789000060,0]]}]`, 200, map[string]float64{"cpu": 0, "memory": 100, "netin": 0, "diskwrite": 0}, "", false},
+		{`[
+ {"name":"cpu","legend":["interrupt","system","user","nice","idle"],"data":[[1,2,3,4,90]]},
+ {"name":"memory","legend":["memory-active_value","memory-inactive_value","memory-wired_value","memory-laundry_value","memory-free_value"],"data":[[1,1,10,0,4]]},
+ {"name":"arcsize","legend":["arcsize_value"],"data":[[2]]},
+ {"name":"cputemp","legend":["cputemp0","cputemp1"],"data":[[41,42]]},
+ {"name":"interface","identifier":"nic-a","legend":["rx","tx","overlap"],"data":[[8,16,8]]},
+ {"name":"disk","identifier":"disk-a","legend":["disk_octets_read","disk_octets_write"],"data":[[0,32]]}
+ ]`, 200, map[string]float64{"cpu": 10, "memory": 62.5, "netin": 8, "netout": 16, "diskread": 0, "diskwrite": 32, "temperature": 42}, "", true},
 	}
 	var current atomic.Int64
+	var nativeEnd atomic.Int64
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
@@ -2237,10 +2247,48 @@ func TestTrueNASPartialReportingPipeline(t *testing.T) {
 			_, _ = w.Write([]byte(`[{"id":1,"name":"tank","status":"ONLINE","size":100,"allocated":50,"free":50}]`))
 		case "/api/v2.0/pool/dataset", "/api/v2.0/disk", "/api/v2.0/alert/list":
 			_, _ = w.Write([]byte(`[]`))
+		case "/api/v2.0/reporting/graphs":
+			if cycles[current.Load()].native {
+				_, _ = w.Write([]byte(`[{"name":"disk","identifiers":["disk-a"]},{"name":"interface","identifiers":["nic-a"]}]`))
+			} else {
+				http.NotFound(w, r)
+			}
 		case "/api/v2.0/reporting/get_data":
 			cycle := cycles[current.Load()]
 			w.WriteHeader(cycle.status)
-			_, _ = w.Write([]byte(cycle.body))
+			if !cycle.native {
+				_, _ = w.Write([]byte(cycle.body))
+				break
+			}
+			var query struct {
+				Query  map[string]any   `json:"query"`
+				Graphs []map[string]any `json:"graphs"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
+				t.Error(err)
+				return
+			}
+			var rows []map[string]any
+			if err := json.Unmarshal([]byte(cycle.body), &rows); err != nil {
+				t.Error(err)
+				return
+			}
+			end := int64(query.Query["end"].(float64))
+			nativeEnd.Store(end)
+			for _, row := range rows {
+				row["start"] = end
+				row["end"] = end
+				row["step"] = 10
+			}
+			for _, graph := range query.Graphs {
+				if name := graph["name"]; (name == "interface" || name == "disk") && graph["identifier"] == nil {
+					t.Error("native device requested without identifier")
+					return
+				}
+			}
+			if err := json.NewEncoder(w).Encode(rows); err != nil {
+				t.Error(err)
+			}
 		default:
 			http.NotFound(w, r)
 		}
@@ -2318,6 +2366,9 @@ func TestTrueNASPartialReportingPipeline(t *testing.T) {
 		if host.Agent.Memory.UsageUnavailable != !availability.Memory {
 			t.Fatalf("cycle %d stale/fabricated memory metadata: %+v", index, host.Agent.Memory)
 		}
+		if cycle.native && (host.Temperature == nil || *host.Temperature != 42) {
+			t.Fatalf("native collapsed/expanded temperature missing: %+v", host)
+		}
 		var writes []metrics.WriteMetric
 		monitor.syncUnifiedAgentMetrics(resourceStore, &writes)
 		seen := make(map[string]bool)
@@ -2338,7 +2389,7 @@ func TestTrueNASPartialReportingPipeline(t *testing.T) {
 		persistent.WriteBatchSync(writes)
 		inMemory := monitor.GetGuestMetrics("agent:"+instance.ID, time.Hour)
 		chart := monitor.GetGuestMetricsForChart("agent:"+instance.ID, "agent", instance.ID, time.Hour)
-		for _, key := range []string{"cpu", "memory", "disk", "netin", "netout", "diskread", "diskwrite"} {
+		for _, key := range []string{"cpu", "memory", "disk", "netin", "netout", "diskread", "diskwrite", "temperature"} {
 			if len(inMemory[key]) != counts[key] || len(chart[key]) != counts[key] {
 				t.Errorf("cycle %d %s chart contains fabricated/lost points: memory=%d chart=%d want=%d", index, key, len(inMemory[key]), len(chart[key]), counts[key])
 			}
@@ -2350,14 +2401,40 @@ func TestTrueNASPartialReportingPipeline(t *testing.T) {
 			}
 			continue
 		}
-		if err != nil || id != instance.ID || len(native) != len(cycle.want) {
+		wantNative := len(cycle.want)
+		if err != nil || id != instance.ID || len(native) != wantNative {
 			t.Fatalf("cycle %d native History=%+v id=%q err=%v", index, native, id, err)
 		}
 		for key, want := range cycle.want {
 			points := native[key]
-			if len(points) != 1 || points[0].Value != want || points[0].Timestamp.Unix() != 1789000060 {
+			if len(points) != 1 || points[0].Value != want || points[0].Timestamp.Unix() != func() int64 {
+				if cycle.native {
+					return nativeEnd.Load()
+				}
+				return 1789000060
+			}() {
 				t.Errorf("cycle %d %s native data/timestamp altered: %+v", index, key, points)
 			}
 		}
+		if cycle.native {
+			points := native["temperature"]
+			if len(points) != 1 || points[0].Value != 42 || points[0].Timestamp.Unix() != nativeEnd.Load() {
+				t.Fatalf("native temperature History missing: %+v", points)
+			}
+			shared := poller.GuestMetricHistory(nil, "default", "agent", time.Hour)[instance.ID]
+			if len(shared) != 7 || len(shared["temperature"]) != 1 {
+				t.Fatalf("shared History fallback dropped native panels: %+v", shared)
+			}
+		}
+	}
+	// Once local CPU History covers the window, the chart's fast path must
+	// still retain Thermals without relying on another appliance request.
+	now := time.Now()
+	for i := 0; i <= 60; i++ {
+		monitor.metricsHistory.AddGuestMetric("agent:"+instance.ID, "cpu", 10, now.Add(time.Duration(i-60)*time.Minute))
+	}
+	chart := monitor.GetGuestMetricsForChart("agent:"+instance.ID, "agent", instance.ID, time.Hour)
+	if points := chart["temperature"]; len(points) != 1 || points[0].Value != 42 {
+		t.Fatalf("sufficiently covered local History lost Thermals: %+v", points)
 	}
 }

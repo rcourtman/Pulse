@@ -369,6 +369,9 @@ func (p *Provider) SystemMetricHistory(ctx context.Context, duration time.Durati
 	if len(nativeHistory.DiskWriteRate) > 0 {
 		metricMap["diskwrite"] = cloneTimeSeriesPoints(nativeHistory.DiskWriteRate)
 	}
+	if temperatures := systemTemperatureHistory(nativeHistory.TemperatureCelsius); len(temperatures) > 0 {
+		metricMap["temperature"] = temperatures
+	}
 	if len(metricMap) == 0 {
 		return resourceID, nil, nil
 	}

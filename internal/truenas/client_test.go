@@ -2195,8 +2195,8 @@ func TestRESTReportingGraphFailurePreservesSnapshotTelemetry(t *testing.T) {
 			t.Fatal("inventory lost")
 		}
 	}
-	if transport.calls != 12 {
-		t.Fatalf("reporting calls = %d, want bounded batch + five graphs per snapshot", transport.calls)
+	if transport.calls != 2*(1+len(legacyRESTReportingGraphs())) {
+		t.Fatalf("reporting calls = %d, want bounded batch + selected graphs per snapshot", transport.calls)
 	}
 	history, err := client.GetSystemMetricHistory(context.Background(), time.Hour)
 	if err != nil {
@@ -2222,7 +2222,7 @@ func TestRESTReportingGraphFailureBoundaries(t *testing.T) {
 			}
 			want := 1
 			if status == 400 || status == 422 || status == 500 {
-				want = 6
+				want = 7
 			}
 			if transport.calls != want {
 				t.Fatalf("calls = %d, want %d", transport.calls, want)
@@ -2464,7 +2464,7 @@ func TestRESTSnapshotRetainsSanitizedTelemetryFailure(t *testing.T) {
 			}
 			wantCalls := 1
 			if tc.status == 422 {
-				wantCalls = 6
+				wantCalls = 1 + len(legacyRESTReportingGraphs())
 			}
 			if transport.calls != wantCalls {
 				t.Fatalf("reporting calls=%d, want %d", transport.calls, wantCalls)

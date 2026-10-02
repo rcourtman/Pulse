@@ -221,6 +221,9 @@ func TestRESTReportingDefaultAggregationsPreserveSamples(t *testing.T) {
 			var calls int
 			client := newLegacyRESTReportingClient(t, nil)
 			client.httpClient.Transport = reportingAggregationRESTFunc(func(r *http.Request) (*http.Response, error) {
+				if r.URL.Path == "/api/v2.0/reporting/graphs" {
+					return (alertArgsTransport{}).RoundTrip(r)
+				}
 				calls++
 				var request struct {
 					Graphs []map[string]any `json:"graphs"`
