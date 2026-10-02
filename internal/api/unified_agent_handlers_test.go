@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 	"unsafe"
@@ -551,4 +552,86 @@ func TestUnifiedAgentHandlers_HandleLinkUnlink(t *testing.T) {
 	if unlinkRec.Code != http.StatusOK {
 		t.Fatalf("unlink status = %d, want 200: %s", unlinkRec.Code, unlinkRec.Body.String())
 	}
+}
+
+func TestAgentConfigFetchAuditTrackerRecordsOnlyNewDeliveries(t *testing.T) {
+	tracker := newAgentConfigFetchAuditTracker()
+	start := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
+	for _, step := range []struct {
+		name   string
+		token  string
+		hash   string
+		at     time.Duration
+		reason string
+		audit  bool
+	}{
+		{"first delivery", "tok-a", "sha256:1", 0, "first_since_start", true},
+		{"unchanged poll", "tok-a", "sha256:1", time.Minute, "", false},
+		{"config change", "tok-a", "sha256:2", 2 * time.Minute, "config_changed", true},
+		{"unchanged after change", "tok-a", "sha256:2", 3 * time.Minute, "", false},
+		{"token rotation", "tok-b", "sha256:2", 4 * time.Minute, "token_changed", true},
+		{"just under a day", "tok-b", "sha256:2", 4*time.Minute + agentConfigFetchAuditInterval - time.Second, "", false},
+		{"a day since last audit", "tok-b", "sha256:2", 4*time.Minute + agentConfigFetchAuditInterval, "daily", true},
+	} {
+		reason, audit := tracker.observe("default", "agent-1", step.token, step.hash, start.Add(step.at))
+		if audit != step.audit || reason != step.reason {
+			t.Fatalf("%s: audit=%v reason=%q, want audit=%v reason=%q", step.name, audit, reason, step.audit, step.reason)
+		}
+	}
+	if reason, audit := tracker.observe("other-org", "agent-1", "tok-b", "sha256:2", start.Add(5*time.Minute)); !audit || reason != "first_since_start" {
+		t.Fatalf("same agent ID in another org: audit=%v reason=%q, want its own first delivery", audit, reason)
+	}
+	var unset *agentConfigFetchAuditTracker
+	if _, audit := unset.observe("default", "agent-1", "tok-a", "sha256:1", start); !audit {
+		t.Fatal("a handler without a tracker must audit every delivery")
+	}
+}
+
+func TestAgentConfigFetchAuditTrackerDayRestartAndConcurrency(t *testing.T) {
+	tracker := newAgentConfigFetchAuditTracker()
+	start := time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)
+	recorded := 0
+	for minute := 0; minute < 1440; minute++ {
+		if _, audit := tracker.observe("org", "agent", "token", "sha256:config", start.Add(time.Duration(minute)*time.Minute)); audit {
+			recorded++
+		}
+	}
+	if recorded != 1 {
+		t.Fatalf("1,440 unchanged minute polls recorded %d audits, want 1", recorded)
+	}
+	if reason, audit := tracker.observe("org", "agent", "token", "sha256:config", start.Add(24*time.Hour)); !audit || reason != "daily" {
+		t.Fatalf("daily access audit = %v %q, want daily", audit, reason)
+	}
+	if reason, audit := tracker.observe("org", "agent", "token", "sha256:config", start.Add(23*time.Hour)); audit || reason != "" {
+		t.Fatalf("a backwards clock recorded unchanged access: %v %q", audit, reason)
+	}
+	restarted := newAgentConfigFetchAuditTracker()
+	if reason, audit := restarted.observe("org", "agent", "token", "sha256:config", start.Add(24*time.Hour)); !audit || reason != "first_since_start" {
+		t.Fatalf("restart audit = %v %q, want first_since_start", audit, reason)
+	}
+
+	// Concurrent deliveries must atomically share the same remembered success.
+	concurrent := newAgentConfigFetchAuditTracker()
+	results := make(chan bool, 32)
+	var workers sync.WaitGroup
+	for i := 0; i < cap(results); i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			_, audit := concurrent.observe("org", "agent", "token", "sha256:config", start)
+			results <- audit
+		}()
+	}
+	workers.Wait()
+	close(results)
+	concurrentAudits := 0
+	for audit := range results {
+		if audit {
+			concurrentAudits++
+		}
+	}
+	if concurrentAudits != 1 {
+		t.Fatalf("32 concurrent identical deliveries recorded %d audits, want 1", concurrentAudits)
+	}
+	t.Logf("unchanged minute polls=1440 recorded=%d; concurrent polls=32 recorded=%d; daily and restart access preserved", recorded, concurrentAudits)
 }

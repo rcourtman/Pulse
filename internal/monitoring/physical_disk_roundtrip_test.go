@@ -179,6 +179,64 @@ func TestPhysicalDiskSkippedPollPreservesSourceIdentity(t *testing.T) {
 	}
 }
 
+// An agent disk may inherit its linked PVE node's instance for presentation,
+// even when the PVE disks/list endpoint did not report that disk. The skipped
+// poll must not turn that presentation scope into a PVE inventory observation:
+// an empty PVE inventory on the next full poll would then remove the invented
+// observation and record spurious configuration changes on every cycle (#2319).
+func TestPhysicalDiskSkippedPollDoesNotPromoteAgentOnlySMARTToPVEInventory(t *testing.T) {
+	state := models.NewState()
+	now := time.Now().UTC()
+	state.UpdateNodesForInstance("pve", []models.Node{{
+		ID: "pve-node", Name: "node", Instance: "pve", LinkedAgentID: "agent",
+		Status: "online", LastSeen: now,
+	}})
+	state.UpsertHost(models.Host{
+		ID: "agent", Hostname: "node", LinkedNodeID: "pve-node",
+		Status: "online", LastSeen: now,
+		Sensors: models.HostSensorSummary{SMART: []models.HostDiskSMART{{
+			// A stable serial keeps the canonical identity unchanged; without
+			// the source guard, the false PVE observation produces exactly the
+			// tags-only change reported in #2319 rather than a tags+identity row.
+			Device: "sda", Serial: "disk-serial", Type: "sata", Health: "PASSED",
+		}}},
+	})
+	store := unifiedresources.NewMemoryStore()
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))
+	monitor := &Monitor{
+		state: state, resourceStore: adapter,
+		lastPhysicalDiskPoll: map[string]time.Time{"pve": now},
+	}
+	for cycle := 0; cycle < 3; cycle++ {
+		// A successful full PVE inventory read found no disks on this node.
+		state.UpdatePhysicalDisks("pve", nil)
+		adapter.PopulateFromSnapshot(state.GetSnapshot())
+		disks := adapter.PhysicalDisks()
+		if len(disks) != 1 || disks[0].Instance() != "pve" {
+			t.Fatalf("cycle %d: linked Agent SMART disk missing from presentation: %+v", cycle, disks)
+		}
+		if _, hasPVE := disks[0].SourceStatus(unifiedresources.SourceProxmox); hasPVE {
+			t.Fatalf("cycle %d: Agent-only disk unexpectedly has PVE source", cycle)
+		}
+		before, err := store.GetRecentChanges(disks[0].ID(), time.Time{}, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		monitor.maybePollPhysicalDisksAsync(context.Background(), "pve", &config.PVEInstance{}, nil, nil, nil, nil)
+		adapter.PopulateFromSnapshot(state.GetSnapshot())
+		after, err := store.GetRecentChanges(disks[0].ID(), time.Time{}, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(after) != len(before) {
+			t.Fatalf("cycle %d: unchanged SMART disk emitted %d new history rows: %+v", cycle, len(after)-len(before), after)
+		}
+		if got := state.GetSnapshot().PhysicalDisks; len(got) != 0 {
+			t.Fatalf("cycle %d: Agent-only disk was written into PVE inventory: %+v", cycle, got)
+		}
+	}
+}
+
 func TestPhysicalDiskReadbackSourceIDFallback(t *testing.T) {
 	for _, resource := range []unifiedresources.Resource{
 		{ID: "canonical"},

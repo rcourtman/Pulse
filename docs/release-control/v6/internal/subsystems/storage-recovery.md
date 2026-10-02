@@ -21,6 +21,22 @@
 
 ## Purpose
 
+### Polling-write repair preserves recovery evidence — issues #2319/#2320
+
+Routine successful agent config polling no longer creates one security-audit
+row per minute: first delivery after startup, token/config changes and daily
+access remain recorded, as does every failure. Recovery actions keep their
+existing action audits, receipts and verification. No audit or change-history
+rows are removed. Skipped PVE disk readback requires an actual Proxmox source;
+Agent-only SMART presentation scope is not source-owned inventory or recovery
+state. Storage targets, samples, health, restore and command authority are
+unchanged. `internal/api/host_agent_removal_lifecycle_integration_test.go`
+verifies config delivery/failure auditing and
+`internal/monitoring/physical_disk_roundtrip_test.go` verifies unchanged disk
+identity and no fabricated journal changes. Native/installed acceptance is
+separate from these synthetic controls.
+
+
 ### Independent physical disk temperature
 
 Disk Overview displays a finite positive reported temperature even when the

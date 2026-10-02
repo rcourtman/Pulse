@@ -17,6 +17,21 @@
 
 ## Purpose
 
+### Agent-only SMART readback provenance — issue #2319
+
+A linked Agent SMART disk may inherit its PVE node's instance for presentation.
+That scope must not invent a Proxmox source during a skipped physical-disk poll.
+`physicalDisksForInstanceFromReadState` admits only actual Proxmox observations;
+Agent-only disks remain visible through their Agent source. Explicit failed-
+query Agent fallback still supplies PVE inventory, while permission failures
+retain prior inventory and genuine PVE disks preserve identity and readings.
+No historical rows are deleted and no collection interval is changed.
+`TestPhysicalDiskSkippedPollDoesNotPromoteAgentOnlySMARTToPVEInventory` pins
+three empty-inventory/full-skip cycles with no new journal rows, and the
+existing source-identity, SMART-enrichment and failed-query controls retain
+provider continuity. Synthetic proof is not the reporter's installed row rate.
+
+
 ### Restored disk alerts and persisted operator policy — issues #2237/#2112
 
 Alerts can restore before the resource registry and persisted operator state
