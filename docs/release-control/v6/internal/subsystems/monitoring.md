@@ -93,6 +93,25 @@ cycles, completion timestamps and unchanged failure backoff. These are synthetic
 runtime proofs, not native firmware timeout or reporter-resolution evidence.
 
 
+### TrueNAS reporting summaries preserve raw History — issue #2346
+
+Every reporting time-range query requests `aggregate: true`, the TrueNAS
+default, through the shared `reportingRangeQuery`: JSON-RPC host/disk-temperature
+History and short temperature reads, plus legacy REST host History/live telemetry.
+SCALE 25.04.2.6 rejects `aggregate: false` because its response schema requires
+the min/mean/max fields omitted by that option. These summaries accompany the
+raw `data` series; History still parses only raw samples, with the same
+start/end window, timestamps, units and default duration. There is no new
+retry, error suppression, transport selection or graph-isolation policy.
+
+`TestReportingHistorySupportsSCALE2504Aggregations` models the supplied
+ReportingGetDataResult/EINVAL failure and preserves 3,600 raw samples through
+system and disk History. `TestReportingAggregationsPreserveRPCFailures` keeps
+validation, access and missing-method errors visible. The REST default-summary
+regression and existing CORE graph-isolation/live-memory tests retain legacy
+telemetry and canonical CPU/memory History projections. Synthetic transports
+are not native appliance or containing-release acceptance.
+
 **TrueNAS legacy-REST memory telemetry — issue #2077 (20 September 2026)**
 
 A connection proven to run a recognized legacy CORE/FreeNAS release has no
@@ -102,9 +121,9 @@ host-chart history are reconstructed from the REST reporting API
 `query` parameters). The reporting `memory` and `arcsize` graphs supply the
 available and ARC readings that the JSON-RPC realtime subscription otherwise
 provides. When no available-memory reading can be established, the provider
-must not derive usage from a zero available value: the system memory metric is
+must not derive usage from an absent available value: the system memory metric is
 omitted and agent memory is projected as usage-unavailable with its known total,
-so a CORE appliance is never reported as 100% used. This is a behavioral
+so missing data never reports a CORE appliance as 100% used. This is a behavioral
 correctness repair with no public API or schema delta.
 `TestRESTSystemTelemetryReadsReportingMemory`,
 `TestRESTSystemMetricHistoryUsesReporting` and
@@ -115,11 +134,49 @@ and projection proofs, not native CORE appliance acceptance or reporter
 confirmation.
 
 
+
+### TrueNAS partial samples and nonblocking telemetry diagnostics — issue #2077
+
+Live system identity and both telemetry parsers carry explicit per-metric
+availability. A reporting timestamp or realtime interval is not evidence that
+CPU, memory or any sibling I/O series was measured. Each canonical metric is
+omitted unless its own reading exists; observed zeros remain valid, including
+zero free memory. Capacity-only snapshots keep hardware capacity and mark
+usage unavailable. Older static snapshots retain their compatibility projection;
+no live client uses that fallback. Null/malformed single-series objects never
+substitute a timestamp or another arbitrary numeric field for the missing value.
+Supported generic `value`, `y` and `temperature` row aliases remain supported.
+
+Optional telemetry failure must not discard inventory or degrade a successful
+inventory poll. Existing connection diagnostics expose optional
+`observed.telemetry` with six availability booleans (`cpu`, `memory`, `netIn`,
+`netOut`, `diskRead`, `diskWrite`), a fixed `errorCategory` and, for HTTP failures,
+`httpStatus`. No raw response body, endpoint, key, hostname or arbitrary provider
+error text is copied into this projection. Error categories record the observed
+collection result, not its cause. A later refresh replaces availability and
+clears obsolete failures; snapshot and connection-summary copies cannot mutate
+shared state. This is an additive diagnostic field on the existing read surface,
+not a separate resource, route, telemetry store or alert policy.
+
+`TestRESTReportingObservationPresence`,
+`TestRESTSnapshotRetainsSanitizedTelemetryFailure`, `TestRealtimeObservationPresence`
+and `TestSystemTelemetryFailureCategoriesAreBounded` in
+`internal/truenas/client_test.go` pin repeated full snapshots, canonical rows,
+native History/zero semantics and bounded failure/recovery controls.
+`TestTrueNASPartialReportingPipeline` in
+`internal/monitoring/truenas_poller_test.go` exercises the HTTP client, poller,
+registry, memory metadata, shared metrics writer and in-memory/persisted chart
+readbacks across partial, missing and zero-valued cycles. These synthetic proofs
+are not the reporter's native response schema, installed CORE acceptance or a
+claim that #2077's missing graph journey is resolved.
+
+
 **Legacy reporting failure isolation and memory components — issue #2077**
 
 Live telemetry and history retain the legacy REST graph/query contract and the
 single successful-batch fast path. A batch rejected with HTTP 400, 422 or 500
-falls back to one request per graph (at most six calls including the batch).
+falls back to one request per selected graph. The native catalogue extension
+below bounds the expanded selection and its split loop.
 A failed optional graph must not discard successful CPU, memory or ARC graphs.
 Authentication, rate-limit, missing-endpoint, service-unavailable, decoding,
 transport and cancellation errors are not graph fallback triggers; these also
@@ -151,6 +208,75 @@ request shape. They do not establish the native CORE response schema, row
 timestamps/units, appliance acceptance or the reporter's exact failure. Native
 response evidence remains required before claiming that this repair resolves the
 reported telemetry journey.
+
+### CORE native reporting rows and device graphs — issue #2077
+
+`internal/truenas/core_reporting.go` owns the native reporting envelope alongside
+`client.go`, not a second transport or metrics store. The reporter's five incoming
+CORE 13.0-U6.1 results now establish value-only rows with one element per legend,
+external `start`/`end`/`step`, FreeBSD memory-class labels, disk-octet labels,
+interface RX/TX/overlap and per-core `cputemp` readings. They do not establish that
+Pulse's REST bridge, installed browser or complete appliance journey works.
+
+Value-only rows derive time from `start + row-index * step`, with positive step,
+valid ordered bounds, exact legend width and overflow-safe end checks. Explicit
+row timestamps and supported object aliases retain compatibility. A metric is
+never a timestamp, a null is never zero and a window mean is never a replacement
+for a missing current row. History retains measured buckets; native current
+readings accept only the last two steps before the requested end, preserving
+sample time rather than stamping an old value as newly measured. This allowance
+never exceeds the live query window, even with a coarse returned step. The five-state
+CORE CPU vector is normalized by its sum (RRD state rates need not sum to 100).
+All-zero CPU or complete memory-class vectors are empty buckets, not 100% usage;
+explicit zero usage, all-idle CPU, zero-free RAM with used pages and zero I/O
+remain measured zeros. Free memory comes from `memory-free_value`, not active
+pages or the sum of memory classes. ARC subtraction uses the matching free-RAM
+bucket when free RAM is present; independently reported ARC remains available
+without claiming measured memory usage. Pre-cancelled collection stops before
+reading the catalogue or posting a reporting query. Reporting I/O values remain rates in the existing bytes/s contract;
+step supplies time, not a second rate division; `overlap` is not extra traffic.
+
+Legacy REST reads `/reporting/graphs` once per live/History collection and sends
+its disk/interface identifiers, omitting identifiers on global CPU, memory,
+ARC and CPU-temperature graphs. Only missing/method-unsupported catalogue
+endpoints retain the older unscoped compatibility request. All other catalogue
+failures remain failures; no authentication, TLS, rate-limit, transport, decode
+or cancellation retry is added. Selection is deduplicated and capped at 256
+entries, refusing oversize rather than publishing a truncated total. Successful
+reporting remains one batch; graph-only 400/422/500 failures may split once per
+selected graph. Responses are bound to the selection: an omitted device stays
+absent. Device rates sum once per identifier only at simultaneous observed
+buckets of every selected member, never by carrying a stale member forward or
+assuming a missing member was idle. Other graphs remain independently usable.
+
+Native CPU temperature maps into the existing canonical host temperature and
+`temperature` History key, using the same package-versus-core outlier safeguard
+as current readings. Disk-temperature History uses the same envelope decoder.
+The canonical writer also records each positive finite TrueNAS host temperature
+in local and persistent `temperature` History, under the existing source/dedup
+gates. A full local CPU window must not make the existing Thermals panel depend
+on native fallback or lose its observed temperature. Missing temperature is not
+written as zero, and no additional sensor writes are added to other sources.
+No frontend route, resource identity, alert suppression policy, credential scope
+or recognised-legacy transport boundary changes.
+
+Verification: `internal/truenas/core_reporting_test.go` and its anonymised
+`testdata/core13_reporting.json` cover five source-bound native excerpts,
+row/timing/alias/zero/null/empty/finite controls, device totals, stale buckets,
+ARC alignment, current and canonical History projections, request validation,
+catalogue limits and failure boundaries. Unique overflow is rejected rather than
+truncated, while duplicate identifiers consume only one selection entry. The
+excerpt windows are deliberately
+shortened controls, not complete native windows. Extended
+`TestTrueNASPartialReportingPipeline` in
+`internal/monitoring/truenas_poller_test.go` crosses pinned-certificate HTTP,
+poller, canonical registry, writer, in-memory/persistent chart readbacks and
+native fallback, including temperature and the sufficiently covered local
+chart fast path. Existing CORE isolation, recognised
+transport/auth/TLS and modern SCALE aggregation tests remain required. Source
+proofs do not substitute for containing-release qualification or installed CORE
+live/collapsed/expanded/History acceptance.
+
 
 
 **Availability backfill preserves concurrent discovery changes (7 September 2026)**

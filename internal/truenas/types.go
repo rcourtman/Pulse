@@ -41,6 +41,24 @@ type SystemInfo struct {
 	TemperatureCelsius map[string]float64
 	IntervalSeconds    int
 	CollectedAt        time.Time
+	// Telemetry distinguishes an observed zero from an absent measurement.
+	// Live clients always populate it, including when collection fails. A nil
+	// value is retained for older static snapshots, not inferred by live reads.
+	Telemetry *SystemTelemetryAvailability
+}
+
+// SystemTelemetryAvailability is a bounded, non-secret observation summary.
+// Memory means an available/free reading was reported; capacity alone is not
+// usage. Errors describe the collection result, never an appliance diagnosis.
+type SystemTelemetryAvailability struct {
+	CPU           bool   `json:"cpu"`
+	Memory        bool   `json:"memory"`
+	NetIn         bool   `json:"netIn"`
+	NetOut        bool   `json:"netOut"`
+	DiskRead      bool   `json:"diskRead"`
+	DiskWrite     bool   `json:"diskWrite"`
+	ErrorCategory string `json:"errorCategory,omitempty"`
+	HTTPStatus    int    `json:"httpStatus,omitempty"`
 }
 
 // Pool mirrors the subset of TrueNAS pool fields needed for unified mapping.
@@ -186,6 +204,7 @@ type TimeSeriesPoint struct {
 // SystemMetricHistory stores provider-native TrueNAS system history before it
 // is normalized onto the canonical monitoring guest-chart surface.
 type SystemMetricHistory struct {
+	TemperatureCelsius   map[string][]TimeSeriesPoint
 	CPUPercent           []TimeSeriesPoint
 	MemoryPercent        []TimeSeriesPoint
 	MemoryUsedBytes      []TimeSeriesPoint
