@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "base_sha": "aa9981e9daf0d0d9df853009c3507958f227b881",
-  "verified_at": "2026-10-02T14:31:57.443706Z",
+  "base_sha": "ea47824467b90b496cbcf99ec11b75decc9adf73",
+  "verified_at": "2026-10-02T15:43:48.276938Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts"
@@ -23,7 +23,7 @@
     }
   ],
   "states": [
-    "Release v6.5 production pool drawer with synthetic partial PBS snapshots; not native collector or installed acceptance",
+    "Fresh v6.5 composed-source verification after merging reviewed capacity repair with canonical line; synthetic PBS snapshots in production pool drawer, not native acceptance",
     "Missing used/free/usage remain n/a; measured empty and full pools preserve 0 B and 0%",
     "Independent byte observations remain visible without total; absent capacity stays n/a",
     "Live transitions across five states on desktop Chromium light and phone WebKit dark; no page errors or horizontal overflow"
@@ -39,16 +39,16 @@
     "webkit": "26.0"
   },
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/chromium-absent.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/chromium-empty.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/chromium-full.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/chromium-missing.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/chromium-partial.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/webkit-absent.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/webkit-empty.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/webkit-full.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/webkit-missing.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/webkit-partial.png"
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-sgowlyrh/browser-v65/chromium-absent.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-sgowlyrh/browser-v65/chromium-empty.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-sgowlyrh/browser-v65/chromium-full.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-sgowlyrh/browser-v65/chromium-missing.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-sgowlyrh/browser-v65/chromium-partial.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-sgowlyrh/browser-v65/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-sgowlyrh/browser-v65/webkit-absent.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-sgowlyrh/browser-v65/webkit-empty.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-sgowlyrh/browser-v65/webkit-full.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-sgowlyrh/browser-v65/webkit-missing.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-sgowlyrh/browser-v65/webkit-partial.png"
   ]
 }
