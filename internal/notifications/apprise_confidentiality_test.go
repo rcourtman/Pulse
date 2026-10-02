@@ -305,10 +305,9 @@ func TestAppriseQueueConfidentiality(t *testing.T) {
 					t.Fatal(err)
 				}
 				q.SetProcessor(n.ProcessQueuedNotification)
-				q.processBatch()
-				// The autonomous worker can win the atomic claim. Its committed
-				// attempt audit, not the return from our stale snapshot, is proof
-				// the send completed. Stop processing before the retry wake.
+				// SetProcessor wakes the production dispatcher. Do not also invoke
+				// processBatch concurrently: that manufactures a second dispatcher
+				// with a stale pre-retry snapshot. Observe its committed audit.
 				deadline := time.Now().Add(3 * time.Second)
 				for {
 					var count int
