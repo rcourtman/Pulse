@@ -55,7 +55,6 @@ import {
   PHYSICAL_DISK_HEADER_SIZE_CLASS,
   PHYSICAL_DISK_HEADER_TEMP_CLASS,
   PHYSICAL_DISK_HEALTH_LABEL_CLASS,
-  PHYSICAL_DISK_HEALTH_SUMMARY_CLASS,
   PHYSICAL_DISK_HEALTH_WRAP_CLASS,
   PHYSICAL_DISK_DEVICE_TEXT_CLASS,
   PHYSICAL_DISK_LIFE_CLASS,
@@ -460,26 +459,30 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         data-storage-column="health"
                       >
                         <div class={PHYSICAL_DISK_HEALTH_WRAP_CLASS}>
-                          {/* The phone projection of the table container shows the
-                              shorter health word; the tone stays on each span so the
-                              rendered label is the styled element in either projection. */}
+                          {/* The row shows the verdict word only; the reason is the
+                              cell's title here and is spelled out in the disk drawer.
+                              The phone projection of the table container shows the
+                              shorter word; the tone stays on each span so the rendered
+                              label is the styled element in either projection. */}
                           <Show
                             when={healthCompactLabel() !== status().label}
-                            fallback={<span class={healthLabelClass()}>{status().label}</span>}
+                            fallback={
+                              <span class={healthLabelClass()} title={healthSummary() || undefined}>
+                                {status().label}
+                              </span>
+                            }
                           >
-                            <span class={`${healthLabelClass()} platform-table-label-compact`}>
+                            <span
+                              class={`${healthLabelClass()} platform-table-label-compact`}
+                              title={healthSummary() || undefined}
+                            >
                               {healthCompactLabel()}
                             </span>
-                            <span class={`${healthLabelClass()} platform-table-label-full`}>
-                              {status().label}
-                            </span>
-                          </Show>
-                          <Show when={healthSummary()}>
                             <span
-                              class={PHYSICAL_DISK_HEALTH_SUMMARY_CLASS}
-                              title={healthSummary()}
+                              class={`${healthLabelClass()} platform-table-label-full`}
+                              title={healthSummary() || undefined}
                             >
-                              {healthSummary()}
+                              {status().label}
                             </span>
                           </Show>
                         </div>

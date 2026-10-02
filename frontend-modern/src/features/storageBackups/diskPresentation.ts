@@ -248,10 +248,10 @@ export const PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS = 'text-[11px] text-muted';
 export const PHYSICAL_DISK_LIFE_CLASS = 'text-[11px] font-medium';
 export const PHYSICAL_DISK_HEALTH_WRAP_CLASS =
   'flex min-w-0 items-center gap-1.5 whitespace-nowrap';
-// The health word never yields its width to the optional summary beside it;
-// the summary is the part that truncates (it keeps its full text as a title).
+// The health word is the row's verdict and always renders whole. Its reason
+// lives in the cell title and in the disk drawer, not in a truncating sibling
+// that would compete with it for the track.
 export const PHYSICAL_DISK_HEALTH_LABEL_CLASS = 'shrink-0 text-[11px] font-semibold';
-export const PHYSICAL_DISK_HEALTH_SUMMARY_CLASS = 'hidden xl:block truncate text-[11px] text-muted';
 export const PHYSICAL_DISK_TEMPERATURE_CLASS = 'text-[11px] font-medium';
 export const PHYSICAL_DISK_SIZE_VALUE_CLASS = 'text-[11px] text-base-content';
 
