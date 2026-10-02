@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import textwrap
 import unittest
 from unittest.mock import patch
 
@@ -291,6 +292,47 @@ class IntegrationRangeTest(unittest.TestCase):
         self.write_receipt([CHANGED_PATH])
         self.commit("record proof")
         self.assertEqual(self.run_range()[0], 0)
+
+    def run_workflow_browser_step(self, *, base: str | None = None) -> subprocess.CompletedProcess:
+        workflow = (REPO_ROOT / ".github/workflows/canonical-governance.yml").read_text()
+        step = workflow.split("      - name: Validate final frontend browser evidence\n", 1)[1]
+        step = step.split("\n      - name:", 1)[0]
+        command = textwrap.dedent(step.split("        run: |\n", 1)[1])
+        for name in ("browser_verification_guard.py", "format_staged_frontend.py"):
+            self.write("scripts/release_control/" + name,
+                       (REPO_ROOT / "scripts/release_control" / name).read_text())
+        return subprocess.run(
+            ["bash", "-c", command], cwd=self.repo_root, capture_output=True, text=True,
+            env={**self.env, "WORKFLOW_OUTPUT_1":
+                 f"{base or self.base}...{self.git('rev-parse', 'HEAD')}"},
+        )
+
+    def test_workflow_accepts_additive_receipt_correction_but_not_unverified_edit(self) -> None:
+        self.write(CHANGED_PATH, "export const a = 1;\n")
+        self.write_receipt([CHANGED_PATH])
+        payload = json.loads((self.repo_root / RECEIPT_PATH).read_text())
+        payload["verified_at"] = "2026-10-02T13:00:00+00:00"
+        self.write(RECEIPT_PATH, json.dumps(payload))
+        original = self.commit("frontend with malformed timestamp")
+        self.assertNotEqual(self.run_workflow_browser_step().returncode, 0)
+
+        self.write_receipt([CHANGED_PATH])
+        self.commit("correct receipt without rewriting source history")
+        corrected = self.run_workflow_browser_step()
+        self.assertEqual(corrected.returncode, 0, corrected.stdout + corrected.stderr)
+        self.git("merge-base", "--is-ancestor", original, "HEAD")
+
+        self.write(CHANGED_PATH, "export const a = 2;\n")
+        self.commit("unverified later edit")
+        self.assertNotEqual(self.run_workflow_browser_step().returncode, 0)
+
+    def test_workflow_checks_merge_resolution_and_rejects_missing_range_base(self) -> None:
+        self.merge_advanced_main_into_candidate()
+        self.assertEqual(self.run_workflow_browser_step().returncode, 0)
+        self.assertNotEqual(self.run_workflow_browser_step(base="b" * 40).returncode, 0)
+        self.write(CHANGED_PATH, "export const a = 3;\n")
+        self.commit("unverified integration edit")
+        self.assertNotEqual(self.run_workflow_browser_step().returncode, 0)
 
     def test_blocks_frontend_edit_after_merge_without_fresh_proof(self) -> None:
         self.merge_advanced_main_into_candidate()
