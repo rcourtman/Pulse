@@ -1,23 +1,27 @@
 {
   "version": 1,
-  "base_sha": "74fd189fd03098b7ed94d806b15f570722048670",
-  "verified_at": "2026-10-03T09:42:20Z",
+  "base_sha": "7950f689c6f0c311c61e9c403c9781f7a977fedc",
+  "verified_at": "2026-10-03T09:45:04Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
     "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
-    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts"
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "786be66c40d33006edc1eda234df083ee68e0296103882ff108711026dd2ea29",
-    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "075994cbe8d47c47a95747ab4d5181c11666cf6272ec8fbe6026b5567de10dfb",
-    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "f001412aff663f53ed5ae4a64ebcaa381257dbb3c19497221cbebb77ee5fab08",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "dc2f9dcfbd51eb311596ff12a2588a645394e9ab717595a2886b41c89fae5c95"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "adbae773cc485f5dc16d1d316bbd5e1b1ace6be24404861ce02bf7dd8890bb25",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "ce0bf7e73d500c09a61df52b7c948428d83cebf6852ae737f7bcdb7ee0997ae0",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "7b7aea630dda12202b5734cf94d4c3409d6dc21b632efe918e7391d4b150e80c",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "0037e6f97e1180ef0c0d585ec5e9385dcbe4c4e1b51a7bc29d8631b4b0e87745",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "2ab0f6c58e18337f05ea85082ed5c465a625c5388ff82987eec41bbbe3005915",
+    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts": "4aab84754245dda70c3b3be3e81b15875a8664d38c8d0325329b2074b6c26fd5"
   },
   "routes": [
+    "/proxmox/overview",
     "/proxmox/backups/coverage",
-    "/proxmox/backups/coverage?posture=unprotected",
     "/proxmox/backups/date"
   ],
   "viewports": [
@@ -35,16 +39,17 @@
     }
   ],
   "states": [
-    "Mock estate: coverage rows whose newest guest snapshot is fresher than their PBS/PVE backup now show the backup age under Last backup instead of the snapshot age",
-    "Snapshot-only rows show None under Last backup with the posture engine's snapshot-only reason as the hover title",
-    "Rows with no artifacts show None with the no-backup title; attention rows with failed tasks keep their backup age",
-    "Phone layout keeps the Age header and the same values; the By date view and Backup Health strip are unchanged"
+    "Nodes table at 390px shows five columns (node, CPU, memory, disk, age) with Analytics A-F names whole; temperature returns at 560px and 1440px",
+    "Backup server rows at 390px show server, Healthy, datastore and used percentage whole; the backup count returns at 560px with its used/total pair whole",
+    "Coverage rows at 390px show whole compact ages (2h, 1d), the whole compact posture word, and the job dot; at 560px the posture word and Backup header fit",
+    "By date rows at 390px keep source and state badges whole with the repository in the row title; at 1440px Automation Lab Standalone no longer truncates in the nodes table",
+    "scrollWidth-over-clientWidth sweep of every table cell at the three widths: only identity strings (datastore names, long node names) clip, each with its full text on hover"
   ],
   "interactions": [
-    "Sorted by Last backup at 1440px and by Age at 390px and read the first row",
-    "Read the None cell hover titles for unprotected rows at both widths",
-    "Expanded a coverage row to its restore evidence at both widths",
-    "Read coverage row cells through the DOM at 1440px and compared them with the Posture explanation",
+    "Expanded the first node row and the first backup server row at each width",
+    "Sorted the coverage table by its age column at each width and read the first row",
+    "Read the By date first-row hover title at each width",
+    "Read the node table column widths and the node cell layout through the DOM at 390px, 360px and 430px",
     "Re-ran the clip sweep and coverage sort, hover-title and expansion checks on the rebased tree at 1440px and 390px"
   ]
 }
