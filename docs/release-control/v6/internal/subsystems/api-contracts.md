@@ -8776,8 +8776,20 @@ unchanged delivery last recorded 24 hours earlier. Agents poll every minute,
 and auditing each poll made this event over 99.9% of audit rows. Recorded
 successes carry `config=<desiredConfig hash>` and
 `reason=first_since_start|token_changed|config_changed|daily` in their details.
+The suppression tracker remembers at most 4,096 organisation/agent pairs.
+An expiry index replaces only entries last audited at least 24 hours ago,
+with no full-map scan on new-key admission. Recent entries are never evicted
+by key churn, so their unchanged minute polls stay suppressed. If every slot
+is recent, unremembered agents' successful fetches are recorded on every poll
+with `reason=capacity` until an expired slot is available. This conservative
+overflow can produce extra audit writes but must never suppress access events,
+change config authorisation/delivery, or grow either map or expiry index beyond
+the limit. Token, config and daily changes update the entry's expiry position;
+concurrent and out-of-order observations preserve that index.
 `TestAgentConfigFetchAuditsNewDeliveriesAndEveryFailure` and
-`TestAgentConfigFetchAuditTrackerRecordsOnlyNewDeliveries` pin the rule.
+`TestAgentConfigFetchAuditTrackerRecordsOnlyNewDeliveries` pin the rule;
+`TestAgentConfigFetchAuditCapacityContract` and the tracker capacity, expiry,
+churn and concurrency controls pin bounded state and conservative overflow.
 Agent profile delete and unassign clients must now also route canonical `204`
 success handling through shared allowed-status helpers in
 `frontend-modern/src/api/responseUtils.ts` instead of open-coding local
