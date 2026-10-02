@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "base_sha": "bbce1d6c32a66c0fbb7d917c816286aef0a57e94",
-  "verified_at": "2026-10-02T14:31:57.413108Z",
+  "base_sha": "b4d46803a4a824a0093a88ff7a44ad5ab505c1f4",
+  "verified_at": "2026-10-02T16:03:33.727150Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts"
+    "frontend-modern/src/components/shared/useHistoryChartState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts": "59ca48c06cb3c63f30ccb46cb30536cbc6d86fda1b50e6ea49ecefb9eb377fae"
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "f10b5cfc7cb296c60ad7e87bf7c3001c4308d29af702b8c7a7e77e7c4c4c3fb6"
   },
   "routes": [
-    "/browser-tests/pool-capacity.html"
+    "/browser-tests/history-selection.html"
   ],
   "viewports": [
     {
@@ -23,32 +23,29 @@
     }
   ],
   "states": [
-    "Release v6.4 production pool drawer with synthetic partial PBS snapshots; not native collector or installed acceptance",
-    "Missing used/free/usage remain n/a; measured empty and full pools preserve 0 B and 0%",
-    "Independent byte observations remain visible without total; absent capacity stays n/a",
-    "Live transitions across five states on desktop Chromium light and phone WebKit dark; no page errors or horizontal overflow"
+    "Synthetic delayed responses in the production shared History chart, not native PBS acceptance",
+    "B remains at 80% after late A=10%; C loading and failure clear B readings and accessible description",
+    "Desktop Chromium light and phone WebKit dark; no page errors or horizontal overflow"
   ],
   "interactions": [
-    "Switch missing, empty, full, partial and absent snapshots without reload",
-    "Read Used, Free, Total and Usage values in the actual Configuration rows"
+    "Select B and complete it before A; complete stale A",
+    "Select C and fail its request; inspect visible and accessible states"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/pool-capacity.cjs",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/history-selection.cjs",
   "browser_versions": {
     "playwright": "1.56.1",
     "chromium": "141.0.7390.37",
     "webkit": "26.0"
   },
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.4/chromium-absent.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.4/chromium-empty.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.4/chromium-full.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.4/chromium-missing.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.4/chromium-partial.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.4/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.4/webkit-absent.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.4/webkit-empty.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.4/webkit-full.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.4/webkit-missing.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.4/webkit-partial.png"
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-3nnbyhhx/browser-final-v6.4/chromium-b-loaded.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-3nnbyhhx/browser-final-v6.4/chromium-c-failed.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-3nnbyhhx/browser-final-v6.4/chromium-c-loading.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-3nnbyhhx/browser-final-v6.4/chromium-old-a-finished.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-3nnbyhhx/browser-final-v6.4/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-3nnbyhhx/browser-final-v6.4/webkit-b-loaded.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-3nnbyhhx/browser-final-v6.4/webkit-c-failed.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-3nnbyhhx/browser-final-v6.4/webkit-c-loading.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-3nnbyhhx/browser-final-v6.4/webkit-old-a-finished.png"
   ]
 }
