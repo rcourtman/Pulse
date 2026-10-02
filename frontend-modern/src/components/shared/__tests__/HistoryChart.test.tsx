@@ -322,7 +322,8 @@ describe('HistoryChart', () => {
 
     expect(layout.x).toBe(162);
     expect(layout.x).toBeGreaterThan(150);
-    expect(layout.y).toBe(47);
+    expect(layout.height).toBe(64);
+    expect(layout.y + layout.height / 2).toBe(70);
   });
 
   it('moves the tooltip to the left edge side near the right chart boundary', () => {
