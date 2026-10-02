@@ -1154,10 +1154,11 @@ describe('Storage', () => {
 
     render(() => <Storage />);
 
+    // zpool's upper-case state is presented titleized, like every other state.
     await waitFor(() => {
-      expect(screen.getAllByText('DEGRADED').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Degraded').length).toBeGreaterThan(0);
     });
-    expect(screen.getAllByText('DEGRADED')[0]).toHaveAttribute(
+    expect(screen.getAllByText('Degraded')[0]).toHaveAttribute(
       'title',
       '1 read, 2 checksum errors',
     );

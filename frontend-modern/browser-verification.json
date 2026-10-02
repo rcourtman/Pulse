@@ -1,16 +1,31 @@
 {
   "version": 1,
-  "base_sha": "e6540da45da4de4bcb954463373d8ea9f196eb56",
-  "verified_at": "2026-10-02T21:04:53Z",
+  "base_sha": "78796b411c1f37f57b303cae9fab5ddaa13e1121",
+  "verified_at": "2026-10-02T22:00:10Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx"
+    "frontend-modern/src/components/Storage/DiskList.tsx",
+    "frontend-modern/src/components/Storage/EnhancedStorageBar.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx",
+    "frontend-modern/src/components/Storage/useEnhancedStorageBarModel.ts",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts",
+    "frontend-modern/src/features/storageBackups/rowPresentation.ts",
+    "frontend-modern/src/features/storageBackups/storageBarPresentation.ts",
+    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx": "f2d8a72d62d06a89d3a70bd82d63d658ece3ac8acf3a0f688fb751a250d6f057"
+    "frontend-modern/src/components/Storage/DiskList.tsx": "d2ab3a7fe7eb31a5a79b8b8252906bb52bf09869e572a2d3b160570dffec7e49",
+    "frontend-modern/src/components/Storage/EnhancedStorageBar.tsx": "ed72a33e754e96ebd03374c34f9732b02411cd9055667f4e0051d6f7e66ab653",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx": "7b61e9fac5e3a9fbae831a3cf907a71f1be7158f06bfe7a9fe7d16fce7a2c928",
+    "frontend-modern/src/components/Storage/useEnhancedStorageBarModel.ts": "d03daecfe22ede32e46edc74a20e4ac11d732d4f9ca202c0b6f36c22a590aa44",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts": "d98159680411d0b1d27a62e84c92db3d9152b93c1f3652443bdac1a222fcce3c",
+    "frontend-modern/src/features/storageBackups/rowPresentation.ts": "0d5d6c00f7f6b39900442330c2c843be9b5e487db4ecd201387a20d6f9bd6980",
+    "frontend-modern/src/features/storageBackups/storageBarPresentation.ts": "562eac2212378e98823717f712c791133cebf1f44bd71c75c7db097b244f6cc0",
+    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts": "1c85d5b6049975be2c0320aee0144098590250a0a8d92a51616e43b00c9a0227"
   },
   "routes": [
-    "/kubernetes"
+    "/proxmox/storage",
+    "/proxmox"
   ],
   "viewports": [
     {
@@ -19,27 +34,51 @@
     },
     {
       "width": 1280,
-      "height": 900
+      "height": 800
     },
     {
       "width": 900,
-      "height": 900
+      "height": 844
+    },
+    {
+      "width": 700,
+      "height": 844
+    },
+    {
+      "width": 600,
+      "height": 844
+    },
+    {
+      "width": 560,
+      "height": 844
+    },
+    {
+      "width": 420,
+      "height": 844
     },
     {
       "width": 390,
-      "height": 900
+      "height": 844
+    },
+    {
+      "width": 360,
+      "height": 844
     }
   ],
   "states": [
-    "Mock estate (1 Kubernetes cluster, 2 nodes, 6 pods, 2 deployments) with one CronJob carrying lastSuccessfulTime, one completed Job, one DaemonSet and one StatefulSet in the Workload Controllers table, Chromium",
-    "Workload Controllers table at the full desktop layout where the Detail column is shown (1440px) and at container widths where it is hidden (1280, 900, 390px)",
-    "Controller row expanded to its detail disclosure at 390px"
+    "Proxmox Storage tab, pools table in compact (390/420/560), narrow (360), operational (600/700/900) and full (1280/1440) container layouts with mock data including Online, Degraded and resilvering ZFS pools",
+    "Pools table with the first pool row expanded (StoragePoolDetail drawer) at 390 and 1280/1440",
+    "Physical Disks sub-tab in narrow (360/390), compact (420/560), basic (600) and full (1280/1440) layouts with Healthy, Unknown and Needs Attention disks",
+    "Physical Disks table with the first disk row expanded (DiskDetail drawer) at 390 and 1280/1440",
+    "Proxmox overview host row expanded at 1280 to confirm no nested storage table renders in the host drawer",
+    "Re-run on the rebased tree (parent 78796b411c, after #2411 landed) at 360/390/600/1440 with identical results"
   ],
   "interactions": [
-    "Measured every controllers table header and cell for clipped text (scrollWidth over clientWidth) at each viewport; before the change the Detail cells needed 258px in a 119px column, after it the CronJob row reads \"Last success 1h ago\" and the Job row \"Completed 41m ago\" with no clipped element in the column and no horizontal page scroll",
-    "Read the Detail span title attributes: they carry the absolute local time (\"Last success: Oct 2, 2026, 08:51 PM\") instead of the raw RFC 3339 string",
-    "Probed the rendered width of every label the column can produce (Started, Completed, Last success, Last run with ages up to 365d) against the 135px Detail cell at 1440px; all fit whole",
-    "Compared before and after screenshots of the table at 1440px; the StatefulSet service name now truncates with an ellipsis inside the cell instead of being cut by the cell edge"
-  ],
-  "command": "playwright chromium against a private mock-mode stack built from this commit (backend :7693, vite :5213)"
+    "Switched between the Storage and Physical Disks view tabs",
+    "Clicked pool and disk rows to open and inspect their inline detail drawers",
+    "Ran a Playwright scrollWidth-over-clientWidth sweep over every th/td leaf per viewport: at 390 only the long identity strings remain clipped (two pool names, three disk models); at 1440 only the pre-existing backend-composed protection sentence and the by-design truncating disk health summary remain",
+    "Measured per-column text widths with Range rects and probed candidate compact labels before choosing column weights",
+    "Confirmed the usage bar shows percentage-only below the 34rem container query and the full used/total label above it",
+    "Confirmed Degraded/Faulted ZFS states render titleized and the Needs Attention / Replace Now health words render as Attention / Replace in the phone projection"
+  ]
 }

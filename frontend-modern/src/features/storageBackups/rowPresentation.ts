@@ -87,7 +87,9 @@ export function getStoragePoolStateLabel(record: StorageRecord): string {
   }
   const pool = getStorageRecordZfsPool(record);
   if (pool?.state) {
-    return pool.state === 'ONLINE' ? 'Online' : pool.state;
+    // zpool reports upper-case states; present them like every other state
+    // path so a DEGRADED pool reads the same as a degraded array.
+    return titleize(pool.state);
   }
   const status = getStorageRecordStatus(record);
   return status ? titleize(status) : '—';
