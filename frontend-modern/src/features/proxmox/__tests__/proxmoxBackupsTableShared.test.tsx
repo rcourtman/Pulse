@@ -8,8 +8,10 @@ import proxmoxBackupsTableSharedSource from '../proxmoxBackupsTableShared.tsx?ra
 import {
   ArtifactSourceBadge,
   ArtifactStateBadge,
+  ProxmoxBackupAgeText,
   ProxmoxBackupWorkloadTypeBadge,
   SortableHead,
+  formatCompactBackupAge,
 } from '../proxmoxBackupsTableShared';
 import type { RecoverableArtifact } from '../proxmoxBackupRecoveryModel';
 
@@ -84,6 +86,28 @@ describe('proxmoxBackupsTableShared', () => {
       expect(source).toContain('formatPlatformTableBytesValue');
       expect(source).not.toContain('formatBytes(');
     }
+  });
+
+  it('drops the age suffix in the phone projection and keeps the timestamp on hover', () => {
+    const createdAt = new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString();
+    expect(formatCompactBackupAge(createdAt)).toBe('18h');
+    expect(formatCompactBackupAge(new Date().toISOString())).toBe('now');
+
+    const artifact = {
+      id: 'pbs:1',
+      nativeId: '1',
+      sourceKind: 'pbs',
+      sourceLabel: 'PBS',
+      workload: { key: 'w', type: 'vm', typeLabel: 'VM', vmid: '100', label: 'VM 100' },
+      createdAt,
+      createdMs: Date.parse(createdAt),
+      location: 'main',
+      detail: '',
+      protected: false,
+    } as RecoverableArtifact;
+    render(() => <ProxmoxBackupAgeText artifact={artifact} compact />);
+    const age = screen.getByText('18h');
+    expect(age.closest('[title]')?.getAttribute('title')).toContain(createdAt);
   });
 
   it('keeps backup age text on the shared relative-time primitive', () => {

@@ -244,7 +244,13 @@ export function ProxmoxCoverageTable(props: {
                 headClass={getPlatformTableHeadClassForKind('text')}
               />
               <SortableHead
-                label={layoutMode() === 'compact' ? 'Age' : 'Last backup'}
+                label={
+                  layoutMode() === 'compact'
+                    ? 'Age'
+                    : layoutMode() === 'basic'
+                      ? 'Backup'
+                      : 'Last backup'
+                }
                 sortKey="latest"
                 currentSort={props.sortKey}
                 direction={props.sortDirection}
@@ -425,7 +431,12 @@ export function ProxmoxCoverageTable(props: {
                               </span>
                             }
                           >
-                            {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
+                            {(artifact) => (
+                              <ProxmoxBackupAgeText
+                                artifact={artifact()}
+                                compact={layoutMode() === 'compact'}
+                              />
+                            )}
                           </Show>
                         </TableCell>
                         <Show when={columnVisible('pbs')}>
@@ -440,7 +451,12 @@ export function ProxmoxCoverageTable(props: {
                                 </span>
                               }
                             >
-                              {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
+                              {(artifact) => (
+                                <ProxmoxBackupAgeText
+                                  artifact={artifact()}
+                                  compact={layoutMode() === 'compact'}
+                                />
+                              )}
                             </Show>
                           </TableCell>
                         </Show>
