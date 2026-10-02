@@ -1,57 +1,45 @@
 {
   "version": 1,
-  "base_sha": "e5d0843851a3837a90d71afaced3a009c0606bbf",
-  "verified_at": "2026-10-02T20:44:41.220410Z",
+  "base_sha": "e6540da45da4de4bcb954463373d8ea9f196eb56",
+  "verified_at": "2026-10-02T21:04:53Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/HistoryChart.tsx",
-    "frontend-modern/src/components/shared/useHistoryChartState.ts"
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/HistoryChart.tsx": "74fb7e6b466e1c2b2d2efb13e0a124d6c301896a7c9423432e903908cc9ee25b",
-    "frontend-modern/src/components/shared/useHistoryChartState.ts": "d6e8317019c8dc616bd9a4d3c6c71cb5329297ca0341e6ba28a6cc4c84db36b0"
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx": "f2d8a72d62d06a89d3a70bd82d63d658ece3ac8acf3a0f688fb751a250d6f057"
   },
   "routes": [
-    "/browser-tests/history-touch.html"
+    "/kubernetes"
   ],
   "viewports": [
     {
-      "width": 1365,
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 900,
       "height": 900
     },
     {
       "width": 390,
-      "height": 844
+      "height": 900
     }
   ],
   "states": [
-    "Production disk/pool details with stored multi-point, measured-zero singleton and empty history; 19 observed presentations across desktop Chromium and phone Chromium/WebKit",
-    "Actual touchscreen first/middle/last taps, shared I/O group focus transfer, keyboard navigation/exit and real mouse coexistence; phone WebKit dark-class presentation"
+    "Mock estate (1 Kubernetes cluster, 2 nodes, 6 pods, 2 deployments) with one CronJob carrying lastSuccessfulTime, one completed Job, one DaemonSet and one StatefulSet in the Workload Controllers table, Chromium",
+    "Workload Controllers table at the full desktop layout where the Detail column is shown (1440px) and at container widths where it is hidden (1280, 900, 390px)",
+    "Controller row expanded to its detail disclosure at 390px"
   ],
   "interactions": [
-    "Native touchscreen taps select the actual reading at that position instead of the latest sample; touch compatibility focus/mouse movement/leave cannot overwrite it",
-    "Primary contact cancellation, non-tap gesture rejection and native Chromium vertical pan with room-to-scroll precondition; no prevented touch default, pointer capture or touch-action change",
-    "Desktop/phone keyboard Home/Right/End/Escape and focus exit, pointer announcements remain quiet, range replacement, zero/empty responses and no horizontal overflow",
-    "Predecessor native Chromium/WebKit first tap near 10% instead displays 30%; final first/middle/last taps display 10/20/30%. Inspected predecessor and final phone, zero/empty and desktop screenshots"
+    "Measured every controllers table header and cell for clipped text (scrollWidth over clientWidth) at each viewport; before the change the Detail cells needed 258px in a 119px column, after it the CronJob row reads \"Last success 1h ago\" and the Job row \"Completed 41m ago\" with no clipped element in the column and no horizontal page scroll",
+    "Read the Detail span title attributes: they carry the absolute local time (\"Last success: Oct 2, 2026, 08:51 PM\") instead of the raw RFC 3339 string",
+    "Probed the rendered width of every label the column can produce (Started, Completed, Last success, Last run with ages up to 365d) against the 135px Detail cell at 1440px; all fit whole",
+    "Compared before and after screenshots of the table at 1440px; the StatefulSet service name now truncates with an ellipsis inside the cell instead of being cut by the cell edge"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/history-touch.cjs",
-  "browser_versions": {
-    "playwright": "1.56.1",
-    "chromium": "141.0.7390.37",
-    "webkit": "26.0"
-  },
-  "artifacts": [
-    "browser/result.json",
-    "browser/chromium-phone-first.png",
-    "browser/webkit-phone-first.png",
-    "browser/webkit-phone-middle.png",
-    "browser/webkit-phone-pool-first.png",
-    "browser/webkit-phone-pool-zero-singleton.png",
-    "browser/webkit-phone-pool-empty.png",
-    "browser/chromium-desktop-middle.png",
-    "browser/parent.json",
-    "browser/parent-chromium-phone-first.png",
-    "browser/parent-webkit-phone-first.png"
-  ],
-  "limitations": "Synthetic stored APIs, not native PBS/TrueNAS collection, physical phones or assistive-device speech. Native pan is Chromium-only; no physical/WebKit pan, pinch-zoom or whole-app theme-transition claim. Initial fixture and pan-driver failures are retained separately."
+  "command": "playwright chromium against a private mock-mode stack built from this commit (backend :7693, vite :5213)"
 }
