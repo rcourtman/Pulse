@@ -1,28 +1,21 @@
 {
   "version": 1,
-  "base_sha": "366c65f28c19eec25595d915dc98534eaf42a2c2",
-  "verified_at": "2026-10-02T21:45:07Z",
+  "base_sha": "a5e1f7f16610201d62acfa4bdd828ec353d22157",
+  "verified_at": "2026-10-02T22:27:01Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx",
-    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts"
+    "frontend-modern/src/hooks/useUnifiedResources.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx": "54f1f84dac768c6e0e333254d5c65e59751fa78b5ac55826cdaa37085a73c608",
-    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts": "9fde1740e300724ef9cab4a3b036c942bdab6e5d2060f262606b27f4b1a40ea6"
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "166e45835c56d00f1a3ddbc37f7127348a0e36dc7c42c921f972db7750c603c6"
   },
   "routes": [
-    "/proxmox/overview",
-    "/machines",
-    "/docker"
+    "/docker",
+    "/proxmox/storage"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 900
-    },
-    {
-      "width": 1100,
       "height": 900
     },
     {
@@ -31,12 +24,11 @@
     }
   ],
   "states": [
-    "Mock estate: five PVE nodes, three with two agent-reported disks (micro-bars) and two with one (single bar), Bars metrics mode, dark theme, Chromium",
-    "Phone width uses the aggregate disk mode and is unchanged; Machines and Docker host tables carry no multi-disk host in this estate, so their rows are unchanged"
+    "Mock estate, dark theme, Chromium, fresh browser context per load so REST and websocket race; Docker containers table (14 rows) and Proxmox Storage table (18 rows)",
+    "Both routes render their rows at 1.5s and 5s with no page or console errors and no horizontal scroll at either viewport; REST rows now carry sourceStatus, actionReadiness and technology at the top level (unit test pins the mapping)"
   ],
   "interactions": [
-    "Read the three multi-disk node rows at 1440px and 1100px: each shows the fullest disk percentage (52%, 82%, 78%) beside its micro-bars with the title \"Highest usage: <mount> <percent>\"; measured table cells for clipped text, none in the nodes table",
-    "Confirmed the hover tooltip Disk Breakdown still opens from the micro-bars"
+    "Loaded each route in a fresh context at both viewports and read row counts, lifecycle controls, console errors and document overflow"
   ],
   "command": "playwright chromium against a private mock-mode stack (backend :7685, vite :5203 from this branch)"
 }
