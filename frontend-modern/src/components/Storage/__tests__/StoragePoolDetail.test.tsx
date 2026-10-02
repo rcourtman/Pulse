@@ -1,3 +1,4 @@
+import { createSignal } from 'solid-js';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
 import { StoragePoolDetail } from '@/components/Storage/StoragePoolDetail';
@@ -41,6 +42,46 @@ const makeRecord = (overrides: Partial<StorageRecord> = {}): StorageRecord => ({
 });
 
 describe('StoragePoolDetail', () => {
+  it('updates capacity rows without presenting missing readings as an empty pool', () => {
+    const [record, setRecord] = createSignal(makeRecord());
+    render(() => (
+      <table>
+        <tbody>
+          <StoragePoolDetail record={record()} physicalDisks={[]} summarySeriesId="pool:tank" />
+        </tbody>
+      </table>
+    ));
+    const rowValue = (label: string) =>
+      screen.getByText(label, { exact: true }).parentElement?.lastElementChild?.textContent;
+    expect(rowValue('Usage')).toBe('40%');
+    setRecord(
+      makeRecord({
+        capacity: { totalBytes: 1000, usedBytes: null, freeBytes: null, usagePercent: null },
+      }),
+    );
+    expect(rowValue('Used')).toBe('n/a');
+    expect(rowValue('Free')).toBe('n/a');
+    expect(rowValue('Total')).toBe('1000 B');
+    expect(rowValue('Usage')).toBe('n/a');
+    setRecord(
+      makeRecord({
+        capacity: { totalBytes: 1000, usedBytes: 0, freeBytes: null, usagePercent: null },
+      }),
+    );
+    expect(rowValue('Used')).toBe('0 B');
+    expect(rowValue('Free')).toBe('1000 B');
+    expect(rowValue('Usage')).toBe('0%');
+    setRecord(
+      makeRecord({
+        capacity: { totalBytes: null, usedBytes: 500, freeBytes: 0, usagePercent: null },
+      }),
+    );
+    expect(rowValue('Used')).toBe('500 B');
+    expect(rowValue('Free')).toBe('0 B');
+    expect(rowValue('Total')).toBe('n/a');
+    expect(rowValue('Usage')).toBe('n/a');
+  });
+
   it('uses canonical metrics target for capacity history charts', () => {
     historyChartSpy.mockClear();
 

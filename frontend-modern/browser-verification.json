@@ -1,14 +1,16 @@
 {
   "version": 1,
-  "base_sha": "5f88b2002d1e1085053bf7bf3969aa61cdb0f637",
-  "verified_at": "2026-09-30T07:29:41.529Z",
+  "base_sha": "aa9981e9daf0d0d9df853009c3507958f227b881",
+  "verified_at": "2026-10-02T14:31:57.443706Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"],
+  "changed_paths": [
+    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts"
+  ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "a405acc597e5fdab9c5b82f6fcce6a58e11c4e4cc34046407987f0d74de9ee6b"
+    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts": "59ca48c06cb3c63f30ccb46cb30536cbc6d86fda1b50e6ea49ecefb9eb377fae"
   },
   "routes": [
-    "/browser-tests/pbs-retention-guard.html (production PBS table, resource drawer and History with synthetic refresh props)"
+    "/browser-tests/pool-capacity.html"
   ],
   "viewports": [
     {
@@ -21,75 +23,32 @@
     }
   ],
   "states": [
-    "initial-service",
-    "correlated-host",
-    "unchanged-identity-omission",
-    "changed-machine-without-host",
-    "reacquired-host",
-    "ambiguous-hosts",
-    "omitted-after-ambiguity"
+    "Release v6.5 production pool drawer with synthetic partial PBS snapshots; not native collector or installed acceptance",
+    "Missing used/free/usage remain n/a; measured empty and full pools preserve 0 B and 0%",
+    "Independent byte observations remain visible without total; absent capacity stays n/a",
+    "Live transitions across five states on desktop Chromium light and phone WebKit dark; no page errors or horizontal overflow"
   ],
   "interactions": [
-    "Desktop keyboard disclosure and phone row activation; keep drawer open across host match, unchanged omission, changed machine, reacquisition, ambiguity and later omission.",
-    "Check Metrics Target and host-disk withdrawal; force 6h/1h History reads after every transition.",
-    "14 target/layout observations and 50 History GETs; no wrong-host reads, page errors or horizontal overflow."
+    "Switch missing, empty, full, partial and absent snapshots without reload",
+    "Read Used, Free, Total and Usage values in the actual Configuration rows"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/pbs-retention-guard.cjs; Playwright 1.56.1, Chromium 141.0.7390.37",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/pool-capacity.cjs",
+  "browser_versions": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v65-browser-proof-final.log",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v65-browser-final-artifacts/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v65-browser-final-artifacts/retained-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v65-browser-final-artifacts/retained-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v65-browser-final-artifacts/replacement-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v65-browser-final-artifacts/replacement-390.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v65-browser-final-artifacts/ambiguous-omitted-1365.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-dxpp_7d7/v65-browser-final-artifacts/ambiguous-omitted-390.png"
-  ],
-  "notes": "Six screenshots inspected. Mock-backed UI proof of the bounded release-line retention repair; not installed topology, persisted History, full #1723 relief, or release qualification.",
-  "prior_verifications": [
-    {
-      "version": 1,
-      "base_sha": "0485fbd67d60741e68422507ada39bb8a178b4cc",
-      "verified_at": "2026-09-27T07:48:56Z",
-      "result": "passed",
-      "changed_paths": [
-        "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
-        "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx",
-        "frontend-modern/src/hooks/useWorkloads.ts",
-        "frontend-modern/src/types/workloads.ts"
-      ],
-      "content_sha256": {
-        "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "f4f8903e442d92a622fa2517f54288fb0dfa97882136e268e8e0f540390127fe",
-        "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "1a0b15141ee41e45dc884406bc4689828b034704c80f914fc0d2baa93d0b6edd",
-        "frontend-modern/src/hooks/useWorkloads.ts": "cf1b15b6554858c647108818d07f0f8c31655fdc8e9b8531fb8f9df4c7c41aa5",
-        "frontend-modern/src/types/workloads.ts": "4d779f40a56b83b83c8bbcb4b49f88e1db3432d071b8f6326094fa081547c1e6"
-      },
-      "routes": ["/browser-tests/guest-storage-2263.html"],
-      "viewports": [
-        {
-          "width": 1440,
-          "height": 900
-        },
-        {
-          "width": 390,
-          "height": 844
-        }
-      ],
-      "states": [
-        "Linked guest: one physical disk and a clean RAID1 array visible without loading SMART detail",
-        "Expanded disk while lazy detail request is held: loading status visible and keyboard focus retained",
-        "Loaded SMART overview and History: health attributes and empty-history chart placeholders visible",
-        "No-agent guest: no disk card and no child-resource request",
-        "HTTP 503 child-resource query: unavailable status visible instead of an empty disk card"
-      ],
-      "interactions": [
-        "Expand by keyboard, hold and release the SMART module, then switch History and Overview tabs",
-        "Collapse and reopen by pointer without a second SMART module request",
-        "Switch to no-agent and failing-query fixture states; assert exact parent-filtered disk requests only",
-        "Inspect desktop and phone screenshots for disk/RAID placement and overflow"
-      ],
-      "command": "pulse-worker-browser frontend-modern/browser-tests/guest-storage-2263.cjs on release/v6.5 (Playwright 1.56.1, Chromium 141.0.7390.37)",
-      "notes": "Offline synthetic fixture on assigned release/v6.5 source; passed log and screenshots are retained in this release-line worker output. This is not installed or field acceptance."
-    }
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/chromium-absent.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/chromium-empty.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/chromium-full.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/chromium-missing.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/chromium-partial.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/webkit-absent.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/webkit-empty.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/webkit-full.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/webkit-missing.png",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-0qx2_4p9/browser-v6.5/webkit-partial.png"
   ]
 }
