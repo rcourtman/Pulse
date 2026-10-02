@@ -1,20 +1,16 @@
 {
   "version": 1,
-  "base_sha": "c6edeee869a11f9206390e855fc63da744fb394a",
-  "verified_at": "2026-10-02T15:53:54.725571Z",
+  "base_sha": "df18123e7da3b682eed811c0e01c94a44dc2c29c",
+  "verified_at": "2026-10-02T16:36:02.327983Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/HistoryChart.tsx",
-    "frontend-modern/src/components/shared/HistoryChartOverlay.tsx",
-    "frontend-modern/src/components/shared/useHistoryChartState.ts"
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/HistoryChart.tsx": "a2ab0198a705e66ce9bea222066078709c8334fc342415916b8c179987b139e2",
-    "frontend-modern/src/components/shared/HistoryChartOverlay.tsx": "4192731461a19ba7c33185c2e616c5023dfef58d93e3893cd3c4fceb58598391",
-    "frontend-modern/src/components/shared/useHistoryChartState.ts": "8bebaa331f1e2dfc57587f517628bed1b0c4f7d9c9466e21597e7f9f7a4d7137"
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts": "035614af7ddee52c5ee56099b4f447b0137afd9dccf07be9981d44a486eb19a4"
   },
   "routes": [
-    "/browser-tests/history-status.html"
+    "/browser-tests/disk-temperature.html"
   ],
   "viewports": [
     {
@@ -27,25 +23,28 @@
     }
   ],
   "states": [
-    "Empty successful result, loaded readings, failed refresh, pending recovery, recovered empty result, failed refresh of empty result, changed-target loading and initial failure",
-    "Chromium desktop light and WebKit phone dark; screenshots inspected, no horizontal overflow or page errors; synthetic transport, not native collection"
+    "Temperature without extended SMART; critical temperature; Fahrenheit; absent temperature; full SMART snapshot",
+    "Chromium desktop light and WebKit phone dark: 10 final states, no page errors or horizontal overflow; synthetic inputs, not native collection"
   ],
   "interactions": [
-    "Advance polling clock without altering production timers; fail and recover HTTP responses; switch pool target",
-    "Parent control reproduces misleading empty promise and silent failed refresh; final warning retains data and clears only on recovery or selection replacement"
+    "Same-identity snapshot replacement and reactive temperature-unit changes",
+    "Parent Chromium and WebKit reproduce hidden 42 C; representative desktop and all five phone final screenshots inspected"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/history-status.cjs",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/disk-temperature.cjs",
   "browser_versions": {
     "playwright": "1.56.1",
     "chromium": "141.0.7390.37",
     "webkit": "26.0"
   },
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-d89v1n1d/browser/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-d89v1n1d/browser/parent.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-d89v1n1d/browser/chromium-refresh-failed.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-d89v1n1d/browser/webkit-refresh-failed.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-d89v1n1d/browser/webkit-empty.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-d89v1n1d/browser/webkit-initial-failed.png"
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ebfg3k6d/browser/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ebfg3k6d/browser/parent.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ebfg3k6d/browser/parent-chromium-temperature-hidden.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ebfg3k6d/browser/chromium-temperature-only.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ebfg3k6d/browser/webkit-temperature-only.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ebfg3k6d/browser/webkit-hot.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ebfg3k6d/browser/webkit-fahrenheit.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ebfg3k6d/browser/webkit-missing.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-ebfg3k6d/browser/webkit-extended.png"
   ]
 }
