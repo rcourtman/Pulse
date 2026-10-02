@@ -7,7 +7,6 @@ import {
   getStorageRecordShared,
   getStorageRecordStatus,
   getStorageRecordType,
-  getStorageRecordUsagePercent,
   getStorageRecordZfsPool,
 } from '@/features/storageBackups/recordPresentation';
 import { resolveStorageRecordMetricResourceId } from '@/features/storageBackups/storageMetricsIdentity';
@@ -106,10 +105,21 @@ export function resolveStoragePoolDetailChartTarget(
 export function buildStoragePoolDetailConfigRows(
   record: StorageRecord,
 ): StoragePoolDetailConfigRow[] {
-  const totalBytes = record.capacity.totalBytes || 0;
-  const usedBytes = record.capacity.usedBytes || 0;
+  // Missing collector observations are not measurements of an empty pool.
+  const observed = (value: number | null): number | null =>
+    typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+  const totalBytes = observed(record.capacity.totalBytes);
+  const usedBytes = observed(record.capacity.usedBytes);
   const freeBytes =
-    record.capacity.freeBytes ?? (totalBytes > 0 ? Math.max(totalBytes - usedBytes, 0) : 0);
+    observed(record.capacity.freeBytes) ??
+    (totalBytes !== null && usedBytes !== null ? Math.max(totalBytes - usedBytes, 0) : null);
+  const usagePercent =
+    observed(record.capacity.usagePercent) ??
+    (totalBytes !== null && totalBytes > 0 && usedBytes !== null
+      ? (usedBytes / totalBytes) * 100
+      : null);
+  const bytesLabel = (value: number | null): string =>
+    value === null ? 'n/a' : formatBytes(value);
   const content = getStorageRecordContent(record);
   const rows: StoragePoolDetailConfigRow[] = [
     { label: 'Node', value: getStorageRecordNodeLabel(record) },
@@ -125,10 +135,10 @@ export function buildStoragePoolDetailConfigRows(
             ? 'Yes'
             : 'No',
     },
-    { label: 'Used', value: totalBytes > 0 ? formatBytes(usedBytes) : 'n/a' },
-    { label: 'Free', value: totalBytes > 0 ? formatBytes(freeBytes) : 'n/a' },
-    { label: 'Total', value: totalBytes > 0 ? formatBytes(totalBytes) : 'n/a' },
-    { label: 'Usage', value: formatPercent(getStorageRecordUsagePercent(record)) },
+    { label: 'Used', value: bytesLabel(usedBytes) },
+    { label: 'Free', value: bytesLabel(freeBytes) },
+    { label: 'Total', value: bytesLabel(totalBytes) },
+    { label: 'Usage', value: usagePercent === null ? 'n/a' : formatPercent(usagePercent) },
   ];
 
   if (content) {
