@@ -730,7 +730,7 @@ export function ProxmoxCoverageTable(props: {
                                           >
                                             <span
                                               class="inline-block max-w-[24rem] truncate"
-                                              title={artifact.detail}
+                                              title={artifact.detailTitle ?? artifact.detail}
                                             >
                                               {artifact.detail || '—'}
                                             </span>

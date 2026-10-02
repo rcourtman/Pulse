@@ -854,6 +854,11 @@ ages use a suffix-free compact form with the timestamp on hover, and the
 recoverable row keeps its source and state badges while the repository
 location moves to the row title. Header width classes must not compete with
 the colgroup those tables size through the shared weighted helper.
+The shared guest table's phone name cell carries the same leading toggle,
+status dot, and backup badge, so it takes the same wider phone anchor. The
+recoverable row's Details cell names the PVE archive format rather than the
+volid, which repeats the storage, guest type, VMID, and timestamp the row
+already shows in their own columns; the volid stays on hover and in search.
 Optional numeric table cells follow the same split: unified-resource consumers
 own which count or replica field is meaningful, whether the domain should
 zero-default an absent scheduler/service/inventory count, whether a

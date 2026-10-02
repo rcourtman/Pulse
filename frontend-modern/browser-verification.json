@@ -1,28 +1,24 @@
 {
   "version": 1,
-  "base_sha": "3f2715e3f3f9b563ad3f119ba0d302b488b97e8a",
-  "verified_at": "2026-10-02T22:20:55Z",
+  "base_sha": "852ebdca080535c10b2d10dd39465953cd47b8ef",
+  "verified_at": "2026-10-02T22:35:55Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx",
     "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
     "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx",
-    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts"
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "adbae773cc485f5dc16d1d316bbd5e1b1ace6be24404861ce02bf7dd8890bb25",
-    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "ce0bf7e73d500c09a61df52b7c948428d83cebf6852ae737f7bcdb7ee0997ae0",
-    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "7b7aea630dda12202b5734cf94d4c3409d6dc21b632efe918e7391d4b150e80c",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "0037e6f97e1180ef0c0d585ec5e9385dcbe4c4e1b51a7bc29d8631b4b0e87745",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "2ab0f6c58e18337f05ea85082ed5c465a625c5388ff82987eec41bbbe3005915",
-    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts": "4aab84754245dda70c3b3be3e81b15875a8664d38c8d0325329b2074b6c26fd5"
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx": "7787854145257e13bc347c2513f89e595060e606857a9a7c4ae6c0a897b6c639",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "6a546a5c1e8a9bbe6a2bdeac61c988a8e9f35cf96888adff245a5efd7017769e",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "fdc9fc2720ed04771f5c9d271f8972a4dece25e165064183fcf59678466a970e",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "b872437fb4cfb61b07e0c949ae6f323d6fd3f2622e57480931f7ef74fafe79c2"
   },
   "routes": [
     "/proxmox/overview",
-    "/proxmox/backups/coverage",
-    "/proxmox/backups/date"
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
   ],
   "viewports": [
     {
@@ -39,16 +35,14 @@
     }
   ],
   "states": [
-    "Nodes table at 390px shows five columns (node, CPU, memory, disk, age) with Analytics A-F names whole; temperature returns at 560px and 1440px",
-    "Backup server rows at 390px show server, Healthy, datastore and used percentage whole; the backup count returns at 560px with its used/total pair whole",
-    "Coverage rows at 390px show whole compact ages (2h, 1d), the whole compact posture word, and the job dot; at 560px the posture word and Backup header fit",
-    "By date rows at 390px keep source and state badges whole with the repository in the row title; at 1440px Automation Lab Standalone no longer truncates in the nodes table",
-    "scrollWidth-over-clientWidth sweep of every table cell at the three widths: only identity strings (datastore names, long node names) clip, each with its full text on hover"
+    "Proxmox guest table at 390px: name cell widened from 66px to 95px of text so typical guest names render whole; CPU, memory, disk and age chips still fit",
+    "By date table at 1440px: Details cells show the archive format (vma.zst, tar.zst) or a PBS file count; the volid is the hover title; zero clipped cells where 136 clipped before",
+    "By date table at 560px and 390px: Details column hidden by layout as before; only datastore identity strings clip",
+    "Coverage restore-evidence disclosure: Details shows the archive format with the volid on hover"
   ],
   "interactions": [
-    "Expanded the first node row and the first backup server row at each width",
-    "Sorted the coverage table by its age column at each width and read the first row",
-    "Read the By date first-row hover title at each width",
-    "Read the node table column widths and the node cell layout through the DOM at 390px, 360px and 430px"
+    "scrollWidth-over-clientWidth sweep of every table cell on each route at the three widths",
+    "Measured the guest table column widths and name cell parts through the DOM at 390px, 360px and 430px",
+    "Scrolled the guests section and the By date table into view for screenshots"
   ]
 }
