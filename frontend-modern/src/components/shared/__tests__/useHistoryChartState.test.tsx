@@ -117,25 +117,56 @@ describe('History request ownership', () => {
     },
   );
 
-  it('does not overlap polling and preserves matching samples on refresh failure', async () => {
-    const initial = deferred();
-    request.mockReturnValueOnce(initial.promise);
-    const { state } = mount();
-    vi.advanceTimersByTime(120_000);
-    expect(request).toHaveBeenCalledTimes(1);
-    initial.resolve({ points: points(10), source: 'store' } as never);
-    await settle();
-    const refresh = deferred();
-    request.mockReturnValueOnce(refresh.promise);
-    vi.advanceTimersByTime(120_000);
-    expect(request).toHaveBeenCalledTimes(2);
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    refresh.reject(new Error('refresh failed'));
-    await settle();
-    expect(state.data()).toEqual(points(10));
-    expect(state.error()).toBeNull();
-    expect(state.loading()).toBe(false);
-  });
+  it.each([{ samples: points(10) }, { samples: [] }])(
+    'retains the last result %j and exposes refresh failure until recovery',
+    async ({ samples }) => {
+      const initial = deferred();
+      request.mockReturnValueOnce(initial.promise);
+      const { state } = mount();
+      vi.advanceTimersByTime(120_000);
+      expect(request).toHaveBeenCalledTimes(1);
+      initial.resolve({ points: samples, source: 'store' } as never);
+      await settle();
+      const refresh = deferred();
+      request.mockReturnValueOnce(refresh.promise);
+      vi.advanceTimersByTime(120_000);
+      expect(request).toHaveBeenCalledTimes(2);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      refresh.reject(new Error('refresh failed'));
+      await settle();
+      expect(state.data()).toEqual(samples);
+      expect(state.error()).toBeNull();
+      expect(state.refreshFailed()).toBe(true);
+      expect(state.source()).toBe('store');
+      expect(state.loading()).toBe(false);
+      const recovery = deferred();
+      request.mockReturnValueOnce(recovery.promise);
+      vi.advanceTimersByTime(10_000);
+      expect(state.refreshFailed()).toBe(true);
+      recovery.resolve({ points: points(30), source: 'memory' } as never);
+      await settle();
+      expect(state.refreshFailed()).toBe(false);
+      expect(state.data()).toEqual(points(30));
+      expect(state.source()).toBe('memory');
+    },
+  );
+
+  it.each([{ resourceId: 'b' }, { range: '6h' }, { data: [] }, { range: '90d' }])(
+    'clears refresh failure on selection replacement %j',
+    async (next) => {
+      request.mockResolvedValueOnce({ points: points(10), source: 'store' } as never);
+      const { state, change } = mount();
+      await settle();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      request.mockRejectedValueOnce(new Error('refresh failed'));
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(state.refreshFailed()).toBe(true);
+      request.mockReturnValueOnce(deferred().promise);
+      change(next as Partial<HistoryChartProps>);
+      expect(state.refreshFailed()).toBe(false);
+      expect(state.data()).toEqual([]);
+    },
+  );
 
   it('cancels fetched data when supplied data takes ownership, including empty samples', async () => {
     const old = deferred();
