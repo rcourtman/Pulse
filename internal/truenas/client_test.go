@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type apiResponse struct {
@@ -1088,8 +1089,8 @@ func TestGetSystemMetricHistoryUsesReportingRPC(t *testing.T) {
 			t.Fatalf("unexpected history graphs: %#v", params[0])
 		}
 		query, ok := params[1].(map[string]any)
-		if !ok || query["aggregate"] != false {
-			t.Fatalf("expected aggregate=false history query, got %#v", params[1])
+		if !ok || query["aggregate"] != true {
+			t.Fatalf("expected aggregate=true history query, got %#v", params[1])
 		}
 
 		now := time.Now().UTC().Truncate(time.Second)
@@ -1529,8 +1530,8 @@ func TestGetDiskTemperatureHistoryUsesReportingRPC(t *testing.T) {
 		if !ok {
 			t.Fatalf("unexpected history query: %#v", params[1])
 		}
-		if aggregate := query["aggregate"]; aggregate != false {
-			t.Fatalf("expected aggregate=false for history query, got %#v", aggregate)
+		if aggregate := query["aggregate"]; aggregate != true {
+			t.Fatalf("expected aggregate=true for history query, got %#v", aggregate)
 		}
 
 		now := time.Now().UTC().Truncate(time.Second)
@@ -2139,7 +2140,7 @@ func (s *isolatedReportingTransport) RoundTrip(r *http.Request) (*http.Response,
 		return nil, err
 	}
 	status, body := s.status, `[]`
-	if r.Method != http.MethodPost || len(request.Graphs) == 0 || request.Query["aggregate"] != false || request.Query["end"].(float64) <= request.Query["start"].(float64) {
+	if r.Method != http.MethodPost || len(request.Graphs) == 0 || request.Query["aggregate"] != true || request.Query["end"].(float64) <= request.Query["start"].(float64) {
 		return nil, fmt.Errorf("invalid reporting request")
 	}
 	if status == 0 {
@@ -2194,8 +2195,8 @@ func TestRESTReportingGraphFailurePreservesSnapshotTelemetry(t *testing.T) {
 			t.Fatal("inventory lost")
 		}
 	}
-	if transport.calls != 12 {
-		t.Fatalf("reporting calls = %d, want bounded batch + five graphs per snapshot", transport.calls)
+	if transport.calls != 2*(1+len(legacyRESTReportingGraphs())) {
+		t.Fatalf("reporting calls = %d, want bounded batch + selected graphs per snapshot", transport.calls)
 	}
 	history, err := client.GetSystemMetricHistory(context.Background(), time.Hour)
 	if err != nil {
@@ -2221,7 +2222,7 @@ func TestRESTReportingGraphFailureBoundaries(t *testing.T) {
 			}
 			want := 1
 			if status == 400 || status == 422 || status == 500 {
-				want = 6
+				want = 7
 			}
 			if transport.calls != want {
 				t.Fatalf("calls = %d, want %d", transport.calls, want)
@@ -2341,6 +2342,204 @@ func TestRESTReportingRequestMatchesNativeGraphShape(t *testing.T) {
 	for _, graph := range transport.graphs {
 		if _, present := graph["identifier"]; present {
 			t.Fatalf("legacy REST graph %v sends an identifier key the native client omits", graph)
+		}
+	}
+}
+
+// These are synthetic response controls, not a capture from #2077's appliance.
+// Pin the complete snapshot -> canonical row -> native History path so an
+// optional graph cannot turn a missing measurement into a zero-valued series.
+func TestRESTReportingObservationPresence(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() { SetFeatureEnabled(previous) })
+	for _, tc := range []struct {
+		name string
+		body string
+		want map[string]float64
+	}{
+		{"memory_only", `[{"name":"memory","legend":["free"],"data":[[1789000060,8]]}]`, map[string]float64{"memory": 50}},
+		{"arc_only", `[{"name":"arcsize","legend":["size"],"data":[[1789000060,8]]}]`, nil},
+		{"capacity_only", `[{"name":"memory","legend":["total"],"data":[[1789000060,16]]}]`, nil},
+		{"cpu_zero", `[{"name":"cpu","legend":["idle"],"data":[[1789000060,100]]}]`, map[string]float64{"cpu": 0}},
+		{"free_zero", `[{"name":"memory","legend":["free"],"data":[[1789000060,0]]}]`, map[string]float64{"memory": 100}},
+		{"network_in_zero", `[{"name":"interface","legend":["received"],"data":[[1789000060,0]]}]`, map[string]float64{"netin": 0}},
+		{"disk_write_zero", `[{"name":"disk","legend":["write"],"data":[[1789000060,0]]}]`, map[string]float64{"diskwrite": 0}},
+		{"null_array", `[{"name":"cpu","legend":["usage"],"data":[[1789000060,null]]}]`, nil},
+		{"null_object", `[{"name":"cpu","legend":["usage"],"data":[{"timestamp":1789000060,"usage":null}]}]`, nil},
+		{"malformed_object", `[{"name":"cpu","legend":["usage"],"data":[{"timestamp":1789000060,"usage":"missing","unrelated":10}]}]`, nil},
+		{"generic_zero", `[{"name":"cpu","legend":["usage"],"data":[{"timestamp":1789000060,"value":0}]}]`, map[string]float64{"cpu": 0}},
+		{"empty", `[]`, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			routes := alertArgsTransport(defaultAPIResponses())
+			routes["/api/v2.0/system/info"] = apiResponse{body: `{"hostname":"synthetic-core","version":"TrueNAS-13.0-U6.1","physmem":16,"cores":8}`}
+			routes["/api/v2.0/reporting/get_data"] = apiResponse{body: tc.body}
+			client := newLegacyRESTReportingClient(t, routes)
+			defer client.Close()
+			provider := NewLiveProviderForConnection(&APIFetcher{Client: client}, "synthetic-connection")
+			for cycle := 0; cycle < 2; cycle++ {
+				if err := provider.Refresh(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+				snapshot := provider.Snapshot()
+				if snapshot.System.CPUCount != 8 || snapshot.System.MemoryTotalBytes != 16 || len(snapshot.Pools) == 0 || len(snapshot.Disks) == 0 {
+					t.Fatal("partial/unavailable telemetry must not discard hardware or inventory")
+				}
+				var metrics *unifiedresources.ResourceMetrics
+				for _, record := range provider.Records() {
+					if record.Resource.Type == unifiedresources.ResourceTypeAgent {
+						metrics = record.Resource.Metrics
+					}
+				}
+				if metrics == nil {
+					t.Fatal("missing canonical host row")
+				}
+				for key, metric := range map[string]*unifiedresources.MetricValue{
+					"cpu": metrics.CPU, "memory": metrics.Memory, "netin": metrics.NetIn,
+					"netout": metrics.NetOut, "diskread": metrics.DiskRead, "diskwrite": metrics.DiskWrite,
+				} {
+					want, present := tc.want[key]
+					if (metric != nil) != present || (metric != nil && metric.Value != want) {
+						t.Errorf("cycle %d %s: metric=%+v, want present=%v value=%v", cycle, key, metric, present, want)
+					}
+				}
+				id, history, err := provider.SystemMetricHistory(context.Background(), time.Hour)
+				if err != nil || id != "synthetic-connection" {
+					t.Fatalf("native History target = %q, err=%v", id, err)
+				}
+				for _, key := range []string{"cpu", "memory", "netin", "netout", "diskread", "diskwrite"} {
+					want, present := tc.want[key]
+					points := history[key]
+					if (len(points) > 0) != present || (len(points) > 0 && (len(points) != 1 || points[0].Value != want || points[0].Timestamp.Unix() != 1789000060)) {
+						t.Errorf("cycle %d %s: history=%+v, want present=%v value=%v at original timestamp", cycle, key, points, present, want)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestRESTSnapshotRetainsSanitizedTelemetryFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		status         int
+		body, category string
+	}{
+		{"no_samples", 200, `[]`, "no_samples"},
+		{"bad_response", 200, `{`, "invalid_response"},
+		{"unauthorized", 401, `provider-private-text`, "authentication"},
+		{"forbidden", 403, `provider-private-text`, "authentication"},
+		{"missing_endpoint", 404, `provider-private-text`, "unsupported_endpoint"},
+		{"rejected_graphs", 422, `provider-private-text`, "request_rejected"},
+		{"rate_limited", 429, `provider-private-text`, "rate_limited"},
+		{"unavailable", 503, `provider-private-text`, "http_error"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			routes := alertArgsTransport(defaultAPIResponses())
+			routes["/api/v2.0/system/info"] = apiResponse{body: `{"hostname":"synthetic-core","version":"TrueNAS-13.0-U6.1","physmem":16}`}
+			transport := &isolatedReportingTransport{routes: routes, status: tc.status, body: tc.body}
+			client := newLegacyRESTReportingClient(t, routes)
+			client.httpClient.Transport = transport
+			defer client.Close()
+			provider := NewLiveProvider(&APIFetcher{Client: client})
+			if err := provider.Refresh(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			snapshot := provider.Snapshot()
+			availability := snapshot.System.Telemetry
+			if availability == nil || availability.ErrorCategory != tc.category {
+				t.Fatalf("missing optional telemetry failure: %+v", availability)
+			}
+			wantStatus := tc.status
+			if tc.status == 200 {
+				wantStatus = 0
+			}
+			if availability.HTTPStatus != wantStatus || len(snapshot.Pools) == 0 || len(snapshot.Disks) == 0 {
+				t.Fatalf("unexpected status/inventory: %+v", snapshot)
+			}
+			serialized, err := json.Marshal(availability)
+			if err != nil || strings.Contains(string(serialized), "provider-private-text") || strings.Contains(string(serialized), "truenas.invalid") || strings.Contains(string(serialized), "synthetic") {
+				t.Fatalf("diagnostics exposed provider text: %s, err=%v", serialized, err)
+			}
+			wantCalls := 1
+			if tc.status == 422 {
+				wantCalls = 1 + len(legacyRESTReportingGraphs())
+			}
+			if transport.calls != wantCalls {
+				t.Fatalf("reporting calls=%d, want %d", transport.calls, wantCalls)
+			}
+			availability.ErrorCategory = "mutated"
+			if provider.Snapshot().System.Telemetry.ErrorCategory != tc.category {
+				t.Fatal("returned snapshot shares mutable telemetry diagnostics")
+			}
+			transport.status, transport.body = 200, `[{"name":"cpu","legend":["usage"],"data":[[1789000060,0]]}]`
+			if err := provider.Refresh(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			recovered := provider.Snapshot().System.Telemetry
+			if recovered == nil || !recovered.CPU || recovered.Memory || recovered.NetIn || recovered.NetOut || recovered.DiskRead || recovered.DiskWrite || recovered.ErrorCategory != "" || recovered.HTTPStatus != 0 {
+				t.Fatalf("recovery retained failure or invented readings: %+v", recovered)
+			}
+		})
+	}
+}
+
+func TestRealtimeObservationPresence(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		fields map[string]any
+		want   SystemTelemetryAvailability
+	}{
+		{"empty", nil, SystemTelemetryAvailability{}},
+		{"cpu_zero", map[string]any{"cpu": map[string]any{"usage": 0}}, SystemTelemetryAvailability{CPU: true}},
+		{"cpu_nested_zero", map[string]any{"cpu": map[string]any{"usage": map[string]any{"percent": 0}}}, SystemTelemetryAvailability{CPU: true}},
+		{"cpu_null", map[string]any{"cpu": map[string]any{"usage": nil}}, SystemTelemetryAvailability{}},
+		{"capacity_only", map[string]any{"memory": map[string]any{"total": 16}}, SystemTelemetryAvailability{}},
+		{"free_zero", map[string]any{"memory": map[string]any{"total": 16, "available": 0}}, SystemTelemetryAvailability{Memory: true}},
+		{"free_null", map[string]any{"memory": map[string]any{"total": 16, "available": nil}}, SystemTelemetryAvailability{}},
+		{"network_in_zero", map[string]any{"interfaces": map[string]any{"eth0": map[string]any{"rx_bytes": 0}}}, SystemTelemetryAvailability{NetIn: true}},
+		{"disk_write_zero", map[string]any{"disks": map[string]any{"sda": map[string]any{"write_bytes": 0}}}, SystemTelemetryAvailability{DiskWrite: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			telemetry := parseSystemTelemetry(tc.fields, 2, time.Now().UTC())
+			if telemetry.Telemetry == nil || *telemetry.Telemetry != tc.want {
+				t.Fatalf("presence=%+v, want %+v", telemetry.Telemetry, tc.want)
+			}
+			system := systemInfoFromResponse(systemInfoResponse{Physmem: 16})
+			mergeSystemTelemetry(system, telemetry)
+			metrics := metricsFromTrueNASSystem(*system, 0, 0)
+			if (metrics.CPU != nil) != tc.want.CPU || (metrics.Memory != nil) != tc.want.Memory ||
+				(metrics.NetIn != nil) != tc.want.NetIn || (metrics.NetOut != nil) != tc.want.NetOut ||
+				(metrics.DiskRead != nil) != tc.want.DiskRead || (metrics.DiskWrite != nil) != tc.want.DiskWrite {
+				t.Fatalf("timestamp/interval fabricated missing siblings: %+v", metrics)
+			}
+			telemetry.Telemetry.CPU = !tc.want.CPU
+			if system.Telemetry.CPU != tc.want.CPU {
+				t.Fatal("merge retained caller-owned presence pointer")
+			}
+		})
+	}
+}
+
+func TestSystemTelemetryFailureCategoriesAreBounded(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want string
+	}{
+		{fmt.Errorf("wrapped: %w", context.Canceled), "cancelled"},
+		{fmt.Errorf("wrapped: %w", context.DeadlineExceeded), "timeout"},
+		{&RPCAuthError{Mechanism: "provider-private-text"}, "authentication"},
+		{&RPCError{Message: "provider-private-text", Reason: "provider-private-text"}, "method_error"},
+		{fmt.Errorf("provider-private-text"), "collection_error"},
+	} {
+		failure := systemTelemetryFailure(tc.err)
+		if failure.ErrorCategory != tc.want || failure.HTTPStatus != 0 || failure.CPU || failure.Memory {
+			t.Fatalf("failure=%+v, want %s", failure, tc.want)
+		}
+		body, err := json.Marshal(failure)
+		if err != nil || strings.Contains(string(body), "provider-private-text") {
+			t.Fatalf("unbounded failure detail: %s %v", body, err)
 		}
 	}
 }
