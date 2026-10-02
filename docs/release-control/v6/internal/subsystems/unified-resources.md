@@ -2553,6 +2553,11 @@ facet. Its value is owned by the backup recovery model, not by canonical
 resource identity: PBS instance and datastore form the repository scope, and
 the same value must survive the date/coverage route handoff so both views
 apply one repository selection without inventing a top-level recovery route.
+A PBS datastore resource takes its status from the storage vocabulary that PVE
+storage already uses (`available`/`unavailable` alongside online, degraded, and
+offline), so a healthy datastore is online and one PBS reports an error for is
+offline; the generic string mapper that left every datastore unknown is not a
+valid datastore status source.
 Unified-resource drawers and Kubernetes drill-down controls may own resource
 timeline filter semantics, namespace choices, and destination routes, but their
 native select chrome must compose the frontend-primitives-owned `FormSelect`.
