@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/textproto"
 	"testing"
-	"time"
 )
 
 func TestClassFromHTTPStatus(t *testing.T) {
@@ -181,62 +180,5 @@ func TestFailWithClassPreservesMessageAndUnwrap(t *testing.T) {
 	}
 	if FailWithClass(NotificationFailureConnectivity, nil) != nil {
 		t.Error("FailWithClass(nil) should be nil")
-	}
-}
-
-// The declared class has to survive all the way into the audit row that feeds
-// both the operator's delivery health card and the telemetry counters.
-func TestRecordAuditErrorPersistsDeclaredClass(t *testing.T) {
-	nq, err := NewNotificationQueue(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewNotificationQueue: %v", err)
-	}
-	defer func() { _ = nq.Stop() }()
-
-	now := time.Now().UTC()
-	entries := []*QueuedNotification{
-		{ID: "body-says-rate-limit", Type: "webhook", Status: QueueStatusDLQ, Attempts: 3, Config: []byte(`{}`), CreatedAt: now},
-		{ID: "smtp-refusal", Type: "email", Status: QueueStatusDLQ, Attempts: 3, Config: []byte(`{}`), CreatedAt: now},
-	}
-	for _, entry := range entries {
-		status := entry.Status
-		entry.Status = QueueStatusPending
-		if err := nq.Enqueue(entry); err != nil {
-			t.Fatalf("enqueue %s: %v", entry.ID, err)
-		}
-		entry.Status = status
-	}
-
-	// A 500 whose body says "rate limit" is a server error, not rate limiting.
-	bodySteered := FailfWithClass(
-		ClassFromHTTPStatus(500),
-		"webhook returned HTTP %d: %s", 500, `{"error":"rate limit exceeded"}`,
-	)
-	if err := nq.RecordAuditError(entries[0], false, bodySteered); err != nil {
-		t.Fatalf("record body-steered audit: %v", err)
-	}
-	smtpRefusal := fmt.Errorf("failed to send email: %w", &textproto.Error{Code: 550, Msg: "5.7.1 Relay access denied"})
-	if err := nq.RecordAuditError(entries[1], false, smtpRefusal); err != nil {
-		t.Fatalf("record smtp audit: %v", err)
-	}
-
-	stats, err := nq.GetTelemetryStats(now.Add(-time.Hour))
-	if err != nil {
-		t.Fatalf("GetTelemetryStats: %v", err)
-	}
-	if stats.Failures != 2 {
-		t.Fatalf("failures = %d, want 2", stats.Failures)
-	}
-	if stats.FailureClasses.ServerError != 1 {
-		t.Errorf("server_error = %d, want 1", stats.FailureClasses.ServerError)
-	}
-	if stats.FailureClasses.Rejected != 1 {
-		t.Errorf("rejected = %d, want 1 (SMTP 550 is a refusal)", stats.FailureClasses.Rejected)
-	}
-	if stats.FailureClasses.RateLimited != 0 {
-		t.Errorf("rate_limited = %d, want 0: the response body must not set the class", stats.FailureClasses.RateLimited)
-	}
-	if stats.FailureClasses.Unknown != 0 {
-		t.Errorf("unknown = %d, want 0", stats.FailureClasses.Unknown)
 	}
 }

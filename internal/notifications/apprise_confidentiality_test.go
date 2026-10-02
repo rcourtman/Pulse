@@ -117,7 +117,7 @@ func TestAppriseCLIConfidentiality(t *testing.T) {
 func TestAppriseHTTPConfidentiality(t *testing.T) {
 	for _, kind := range []string{"firing", "resolved", "test"} {
 		for _, status := range []int{http.StatusOK, http.StatusUnauthorized, http.StatusTooManyRequests, http.StatusInternalServerError} {
-			t.Run(fmt.Sprintf("%s/%d/attempts=%d", kind, status, maxAttempts), func(t *testing.T) {
+			t.Run(fmt.Sprintf("%s/%d", kind, status), func(t *testing.T) {
 				captured := captureAppriseLogs(t)
 				var calls atomic.Int32
 				configKey := appriseSecret + "/config"
