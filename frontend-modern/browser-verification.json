@@ -1,16 +1,23 @@
 {
   "version": 1,
-  "base_sha": "abf6bcec5b6b94d181264dae62a9983c48619ac6",
-  "verified_at": "2026-10-02T16:04:03.580037Z",
+  "base_sha": "f5e73b2ce1289c3f71be438c77021d7a696b00c5",
+  "verified_at": "2026-10-02T16:40:31.760601Z",
   "result": "passed",
   "changed_paths": [
+    "frontend-modern/src/components/shared/HistoryChart.tsx",
+    "frontend-modern/src/components/shared/HistoryChartOverlay.tsx",
+    "frontend-modern/src/components/shared/historyChartModel.ts",
     "frontend-modern/src/components/shared/useHistoryChartState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/useHistoryChartState.ts": "f10b5cfc7cb296c60ad7e87bf7c3001c4308d29af702b8c7a7e77e7c4c4c3fb6"
+    "frontend-modern/src/components/shared/HistoryChart.tsx": "a2ab0198a705e66ce9bea222066078709c8334fc342415916b8c179987b139e2",
+    "frontend-modern/src/components/shared/HistoryChartOverlay.tsx": "4192731461a19ba7c33185c2e616c5023dfef58d93e3893cd3c4fceb58598391",
+    "frontend-modern/src/components/shared/historyChartModel.ts": "bd9e8954ef7e274a1eb026752d304556df303f612c4485369f8c90a7183cc751",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "8bebaa331f1e2dfc57587f517628bed1b0c4f7d9c9466e21597e7f9f7a4d7137"
   },
   "routes": [
-    "/browser-tests/history-selection.html"
+    "/browser-tests/history-keyboard.html",
+    "/browser-tests/history-status.html"
   ],
   "viewports": [
     {
@@ -23,29 +30,24 @@
     }
   ],
   "states": [
-    "Synthetic delayed responses in the production shared History chart, not native PBS acceptance",
-    "B remains at 80% after late A=10%; C loading and failure clear B readings and accessible description",
-    "Desktop Chromium light and phone WebKit dark; no page errors or horizontal overflow"
+    "Empty successful result, loaded readings, failed refresh, pending recovery, recovered empty result, failed refresh of empty result, changed-target loading and initial failure",
+    "Chromium desktop light and WebKit phone dark; screenshots inspected, no horizontal overflow or page errors; synthetic transport, not native collection",
+    "Keyboard focus, Left/Right, Home/End, Escape, bounds, focus exit and empty data; grouped tooltip geometry and polite active-chart-only announcements"
   ],
   "interactions": [
-    "Select B and complete it before A; complete stale A",
-    "Select C and fail its request; inspect visible and accessible states"
+    "Advance polling clock without altering production timers; fail and recover HTTP responses; switch pool target",
+    "Parent control reproduces misleading empty promise and silent failed refresh; final warning retains data and clears only on recovery or selection replacement"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/history-selection.cjs",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/history-keyboard.cjs && pulse-worker-browser frontend-modern/browser-tests/history-status.cjs",
   "browser_versions": {
     "playwright": "1.56.1",
     "chromium": "141.0.7390.37",
     "webkit": "26.0"
   },
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-3nnbyhhx/browser-final-v6.5/chromium-b-loaded.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-3nnbyhhx/browser-final-v6.5/chromium-c-failed.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-3nnbyhhx/browser-final-v6.5/chromium-c-loading.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-3nnbyhhx/browser-final-v6.5/chromium-old-a-finished.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-3nnbyhhx/browser-final-v6.5/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-3nnbyhhx/browser-final-v6.5/webkit-b-loaded.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-3nnbyhhx/browser-final-v6.5/webkit-c-failed.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-3nnbyhhx/browser-final-v6.5/webkit-c-loading.png",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-3nnbyhhx/browser-final-v6.5/webkit-old-a-finished.png"
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-3t375h3z/keyboard65-parent.json",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-3t375h3z/keyboard65-result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-3t375h3z/status65-parent.json",
+    "/var/lib/pulse-maintainer/worker-outputs/release-line-3t375h3z/status65-result.json"
   ]
 }
