@@ -1077,9 +1077,10 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 	if !strings.Contains(installSmokeJob, "contents: write") {
 		t.Fatal("create-release.yml install_sh_smoke must grant contents: write so the called workflow can read unpublished draft assets")
 	}
-	qualificationJob := workflowJobBlock(t, workflow, "candidate_qualification")
-	if !strings.Contains(qualificationJob, publishedReleaseGuard) {
-		t.Fatal("candidate qualification must skip historical backfill and draft-only runs")
+	for _, job := range []string{"publish_release_tag", "publish_docker", "activate_release"} {
+		if !strings.Contains(workflowJobBlock(t, workflow, job), publishedReleaseGuard) {
+			t.Fatalf("public writer %s must carry the candidate predicate that skips historical backfill and draft-only runs", job)
+		}
 	}
 	for _, job := range []string{"promote_floating_tags", "publish_helm_pages", "promote_private_pro_runtime", "update_stable_demo"} {
 		if strings.Contains(workflow, "\n  "+job+":\n") {
@@ -3433,8 +3434,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	integrationJob := workflowJobBlock(t, createWorkflow, "integration_tests")
 	validationJob := workflowJobBlock(t, createWorkflow, "validate_release_assets")
 	privateStageJob := workflowJobBlock(t, createWorkflow, "stage_private_pro_runtime")
-	qualificationJob := workflowJobBlock(t, createWorkflow, "candidate_qualification")
-	readinessJob := workflowJobBlock(t, createWorkflow, "release_readiness")
+	qualificationJob := workflowJobBlock(t, createWorkflow, "publish_release_tag")
 	dispatchJob := workflowJobBlock(t, createWorkflow, "dispatch_release_convergence")
 	activationJob := workflowJobBlock(t, createWorkflow, "activate_release")
 	commitVerdictJob := workflowJobBlock(t, createWorkflow, "release_commit_verdict")
@@ -3580,11 +3580,28 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 			t.Fatalf("build-release-candidate.yml missing single-build contract: %s", needle)
 		}
 	}
-	for _, jobName := range []string{"publish_release_tag", "publish_docker", "publish_helm_chart"} {
+	for _, removedJoin := range []string{"candidate_qualification", "release_readiness"} {
+		if strings.Contains(createWorkflow, "\n  "+removedJoin+":\n") ||
+			strings.Contains(createWorkflow, "needs."+removedJoin+".") {
+			t.Fatalf("create-release.yml must not reintroduce the echo-only %s join", removedJoin)
+		}
+	}
+	for _, jobName := range []string{"publish_release_tag", "publish_docker", "publish_helm_chart", "activate_release"} {
 		job := workflowJobBlock(t, createWorkflow, jobName)
-		if !strings.Contains(job, "- candidate_qualification") ||
-			!strings.Contains(job, "needs.candidate_qualification.result == 'success'") {
-			t.Fatalf("public writer %s must require successful candidate qualification", jobName)
+		for _, dependency := range []string{
+			"publication_trust_preflight", "build_release_candidate", "qualify_release_containers",
+			"frontend_bundle", "frontend_checks", "windows_install_command_smoke", "backend_tests",
+			"release_smoke", "create_release", "validate_release_assets", "install_sh_smoke",
+		} {
+			if !strings.Contains(job, "- "+dependency) ||
+				!strings.Contains(job, "needs."+dependency+".result == 'success'") {
+				t.Fatalf("public writer %s must require successful candidate check %s itself", jobName, dependency)
+			}
+		}
+		if !strings.Contains(job, "!cancelled() && needs.prepare.result == 'success'") ||
+			!strings.Contains(job, "(needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped')") ||
+			!strings.Contains(job, "needs.stage_private_pro_runtime.result == 'success'") {
+			t.Fatalf("public writer %s must carry the complete cancellation-safe candidate predicate", jobName)
 		}
 	}
 	publishDockerJob := workflowJobBlock(t, createWorkflow, "publish_docker")
@@ -3656,11 +3673,11 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		}
 	}
 	for _, dependency := range []string{
-		"candidate_qualification", "publish_release_tag", "publish_docker", "publish_helm_chart",
+		"publish_release_tag", "publish_docker", "publish_helm_chart",
 	} {
-		if !strings.Contains(readinessJob, "- "+dependency) ||
-			!strings.Contains(readinessJob, "needs."+dependency+".result == 'success'") {
-			t.Fatalf("release readiness must require successful %s", dependency)
+		if !strings.Contains(activationJob, "- "+dependency) ||
+			!strings.Contains(activationJob, "needs."+dependency+".result == 'success'") {
+			t.Fatalf("release activation must require successful %s", dependency)
 		}
 	}
 
@@ -3674,8 +3691,8 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		"- promote_private_pro_runtime",
 		"- update_stable_demo",
 	} {
-		if strings.Contains(readinessJob, forbiddenDependency) {
-			t.Fatalf("immutable readiness must exclude mutable customer state: %s", forbiddenDependency)
+		if strings.Contains(activationJob, forbiddenDependency) {
+			t.Fatalf("immutable activation must exclude mutable customer state: %s", forbiddenDependency)
 		}
 	}
 	for _, dependency := range []string{"- create_release", "- stage_private_pro_runtime"} {
@@ -3683,8 +3700,8 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 			t.Fatalf("durable convergence dispatch missing staged dependency: %s", dependency)
 		}
 	}
-	if strings.Contains(dispatchJob, "- release_readiness") {
-		t.Fatal("durable convergence dispatch must prewarm before the readiness join")
+	if strings.Contains(dispatchJob, "- publish_release_tag") {
+		t.Fatal("durable convergence dispatch must prewarm before public publication")
 	}
 	if !strings.Contains(dispatchJob, "github.event.inputs.draft_only != 'true'") ||
 		!strings.Contains(dispatchJob, "historical_asset_backfill_only != 'true'") {
@@ -4250,7 +4267,7 @@ func TestReleaseCutGatesCriticalFrontendAndWindowsRuntimeProof(t *testing.T) {
 	windowsJob := workflowJobBlock(t, workflow, "windows_install_command_smoke")
 	smokeJob := workflowJobBlock(t, workflow, "release_smoke")
 	createJob := workflowJobBlock(t, workflow, "create_release")
-	qualificationJob := workflowJobBlock(t, workflow, "candidate_qualification")
+	qualificationJob := workflowJobBlock(t, workflow, "publish_release_tag")
 	verdictJob := workflowJobBlock(t, workflow, "release_commit_verdict")
 
 	for _, needle := range []string{

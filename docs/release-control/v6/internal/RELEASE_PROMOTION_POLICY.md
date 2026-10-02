@@ -641,14 +641,18 @@ without the other lanes changing the candidate underneath it.
    already proven before upload. Manual and release-edit repair validation may
    retain the full-download fallback when no same-run candidate manifest exists.
 4. Restricted draft asset verification and staged install smoke join container,
-   frontend, backend, integration and private Pro qualification at
-   `candidate_qualification`. A failed, cancelled, or missing required check
-   prevents public Git tags, versioned Docker images and Helm charts from being
-   created. A draft-only run never crosses this boundary. Public versioned
-   artifacts are publication, even before the GitHub release is announced.
-   After candidate qualification, publish the exact Git tag without rewriting
-   any existing identity, then publish and verify Docker and Helm artifacts.
-   `release_readiness` joins those verified public digests before activation.
+   frontend, backend, integration and private Pro qualification in one
+   candidate predicate that every public writer (`publish_release_tag`,
+   `publish_docker`, `publish_helm_chart` and `activate_release`) carries in
+   its own `needs` and `if`. There is no echo-only join job. A failed,
+   cancelled, or missing required check prevents public Git tags, versioned
+   Docker images and Helm charts from being created. A draft-only run never
+   crosses this boundary. Public versioned artifacts are publication, even
+   before the GitHub release is announced. After candidate qualification,
+   publish the exact Git tag without rewriting any existing identity, then
+   publish and verify Docker and Helm artifacts. `activate_release` joins the
+   tag and those verified public digests directly before activation, and the
+   commit verdict restates every candidate result.
    A draft with no exposed tag or versioned artifacts may be repaired under its
    intended version. An already exposed version must retain its source identity,
    even if its GitHub release remains a draft. Publication failures after first
