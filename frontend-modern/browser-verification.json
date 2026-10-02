@@ -1,16 +1,18 @@
 {
   "version": 1,
-  "base_sha": "e6540da45da4de4bcb954463373d8ea9f196eb56",
-  "verified_at": "2026-10-02T21:04:53Z",
+  "base_sha": "53bff9fab41dae620b6bb7355b8904dc4dd3056f",
+  "verified_at": "2026-10-02T21:10:53Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx"
+    "frontend-modern/src/features/storageBackups/resourceStoragePresentation.ts",
+    "frontend-modern/src/features/storageBackups/storageAdapters.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx": "f2d8a72d62d06a89d3a70bd82d63d658ece3ac8acf3a0f688fb751a250d6f057"
+    "frontend-modern/src/features/storageBackups/resourceStoragePresentation.ts": "933723fb9afeeb53afa46946a346daca19d50c0d61a81fc0730498ebd8c09bb2",
+    "frontend-modern/src/features/storageBackups/storageAdapters.ts": "d91a0d528d9318ee4d3fab95e7f3f770b1febb93136bfbc6176fc2719b4b6013"
   },
   "routes": [
-    "/kubernetes"
+    "/proxmox/storage"
   ],
   "viewports": [
     {
@@ -18,28 +20,17 @@
       "height": 900
     },
     {
-      "width": 1280,
-      "height": 900
-    },
-    {
-      "width": 900,
-      "height": 900
-    },
-    {
       "width": 390,
-      "height": 900
+      "height": 844
     }
   ],
   "states": [
-    "Mock estate (1 Kubernetes cluster, 2 nodes, 6 pods, 2 deployments) with one CronJob carrying lastSuccessfulTime, one completed Job, one DaemonSet and one StatefulSet in the Workload Controllers table, Chromium",
-    "Workload Controllers table at the full desktop layout where the Detail column is shown (1440px) and at container widths where it is hidden (1280, 900, 390px)",
-    "Controller row expanded to its detail disclosure at 390px"
+    "Mock estate (5 PVE nodes, 2 shared PBS storages, 1 shared NFS, 2 Ceph pools, 3 PBS datastores), dark theme, Chromium, backend built from this branch",
+    "Storage sub-tab with node-local, shared and PBS datastore rows; Physical Disks sub-tab"
   ],
   "interactions": [
-    "Measured every controllers table header and cell for clipped text (scrollWidth over clientWidth) at each viewport; before the change the Detail cells needed 258px in a 119px column, after it the CronJob row reads \"Last success 1h ago\" and the Job row \"Completed 41m ago\" with no clipped element in the column and no horizontal page scroll",
-    "Read the Detail span title attributes: they carry the absolute local time (\"Last success: Oct 2, 2026, 08:51 PM\") instead of the raw RFC 3339 string",
-    "Probed the rendered width of every label the column can produce (Started, Completed, Last success, Last run with ages up to 365d) against the 135px Detail cell at 1440px; all fit whole",
-    "Compared before and after screenshots of the table at 1440px; the StatefulSet service name now truncates with an ellipsis inside the cell instead of being cut by the cell edge"
+    "Read every Storage row at 1440px and 390px: shared PBS storage shows \"Shared \u00b7 5 nodes\", the NFS storage shows type \"NFS\" and host \"Shared\", PBS datastores show state Online",
+    "Switched to Physical Disks; measured table cells for clipped text at both viewports, no horizontal page scroll; remaining phone clipping is pre-existing in the shared storage table"
   ],
-  "command": "playwright chromium against a private mock-mode stack built from this commit (backend :7693, vite :5213)"
+  "command": "playwright chromium against a private mock-mode stack built from this branch (backend :7685, vite :5203)"
 }
