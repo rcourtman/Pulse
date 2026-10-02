@@ -1656,6 +1656,19 @@ HTTP polling through normal alert-manager publication, not destination delivery.
 
 ## Current State
 
+### Saved quiet-hours policy before queue activation
+
+`Monitor.New` binds `alerts.Manager.QuietHoursNotificationPolicy` to the
+notification manager after saved policy/destinations load and before
+`StartQueueProcessing`. The notification owner revalidates due stored work and
+owns all partitioning, delivery and cancellation; monitoring neither duplicates
+the schedule nor changes destination selection or operational lifecycle.
+`TestNewRevalidatesPersistedQuietHoursBeforeDelivery` in
+`internal/monitoring/monitor_notification_startup_test.go` reconstructs the
+actual monitor twice with due persisted work under a full-day saved schedule,
+checking pending state and no local delivery/audit. This is source bootstrap
+proof, not installed restart or provider acceptance.
+
 TrueNAS REST alert arguments may be object, scalar, array, null or absent.
 Non-object arguments must not abort snapshot collection or discard alerts.
 Only typed object fields supply disk identity and SMART counters; neither scalar

@@ -74,6 +74,8 @@ or displayed a notification.
 11. `internal/notifications/deadman_config.go`
 12. `internal/notifications/failure_class.go`
 
+Queue current-policy scheduling is owned by `internal/notifications/quiet_hours_queue.go`.
+
 ## Shared Boundaries
 
 1. `frontend-modern/src/api/notifications.ts` shared with `api-contracts`: the notifications frontend client is both a notification delivery control surface and a canonical API payload contract boundary.
@@ -140,6 +142,44 @@ stable opaque routing identities and must not expose credentials.
 
 
 ## Current State
+
+### Current-policy quiet-hours replay
+
+The persistent queue checks every due provider attempt against an immutable
+snapshot from `alerts.Manager.QuietHoursNotificationPolicy`, installed by
+`NotificationManager.SetQuietHoursPolicyProvider` before saved work is activated
+in the monitor constructor. The snapshot is obtained before queue/database or
+per-alert delivery locks; its evaluator does not call back into the alert owner.
+Stored replay timestamps are wake conditions, not evidence that the current
+schedule permits delivery. Full-day schedules recheck at the retained daily
+boundary, and late replay into another quiet interval remains held.
+
+`quiet_hours_queue.go` reloads the pending row after acquiring delivery gates,
+preserving cancellations that rewrote a grouped row after worker discovery.
+An all-held batch moves only its wake time. A mixed batch atomically retains the
+held original and creates one ready child with the admitted destination bytes,
+occurrence/transition links, creation time and remaining attempt budget. Child
+IDs bind the parent and exact ready payload; held work does not gain an attempt,
+audit entry, firing receipt or false success. Prior attempt audits remain on the
+original batch, while actual child attempts carry their own linked receipts.
+Already-due recovery groups cannot reopen their grouping window while held.
+Partition persistence or ambiguous linkage failure leaves the original intact
+and makes no provider attempt. Due-time refresh prevents stale worker snapshots
+from repeatedly postponing or claiming a now-held row. Actual retries retain
+the existing claim/cancellation gates and provider enabled checks.
+
+This does not accelerate a future stored deadline after a schedule edit; the
+current rule is applied at the next admitted wake. It does not change initial
+target selection, mutable recovery tag admission, acknowledgement semantics,
+operator retry budgets or at-least-once delivery after an interrupted send.
+
+`quiet_hours_queue_test.go` proves continuous/late/DST replay holds, mixed
+immediate/held delivery, exact admitted destination and operational linkage,
+budget retention, transaction rollback, durable reopen, cancellation and stale
+concurrent snapshots, grouped recoveries and all six provider/event families.
+`internal/monitoring/monitor_notification_startup_test.go` exercises the actual
+constructor with due persisted work across two startups. These are local source
+and HTTP-receipt proofs, not installed provider or natural-day acceptance.
 
 ### Persistent resolved-alert grouping
 
