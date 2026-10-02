@@ -1095,3 +1095,318 @@ func TestRPCSessionKeepaliveConcurrentCallsAndShutdown(t *testing.T) {
 		t.Fatal("keepalive did not exit after socket failure")
 	}
 }
+
+// The production poll loop has a cancellation context, not a per-request
+// deadline. A silent peer must still be bounded by ClientConfig.Timeout. These
+// fixtures never infer an appliance's reason for failing to reply.
+func awaitConfiguredRPCBudget(t *testing.T, operation func(context.Context) error) error {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- operation(ctx) }()
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(time.Second):
+		t.Error("RPC operation ignored the configured timeout")
+		cancel() // Also lets the pre-repair adverse control terminate safely.
+		select {
+		case err := <-done:
+			return err
+		case <-time.After(5 * time.Second):
+			t.Fatal("cancelled RPC operation did not stop")
+			return nil
+		}
+	}
+}
+
+func assertRPCTimeout(t *testing.T, err error) {
+	t.Helper()
+	if err == nil || (!errors.Is(err, context.DeadlineExceeded) && !isTimeoutError(err)) {
+		t.Errorf("expected a timeout, got %v", err)
+	}
+}
+
+func TestJSONRPCConfiguredTimeoutBoundsHandshake(t *testing.T) {
+	release := make(chan struct{})
+	var restRequests atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/current" {
+			restRequests.Add(1)
+		}
+		<-release // TCP/TLS succeeds, but no WebSocket handshake response follows.
+	}))
+	t.Cleanup(server.Close)
+	client := protocolFixtureClient(t, server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user", Timeout: 200 * time.Millisecond})
+	t.Cleanup(func() { close(release) })
+	err := awaitConfiguredRPCBudget(t, client.TestConnection)
+	assertRPCTimeout(t, err)
+	var handshake *RPCHandshakeError
+	if !errors.As(err, &handshake) || client.TransportStatus().Connected || restRequests.Load() != 0 {
+		t.Fatalf("handshake timeout lost its type/status or downgraded to REST: %v", err)
+	}
+}
+
+func TestJSONRPCConfiguredTimeoutBoundsAuthentication(t *testing.T) {
+	release := make(chan struct{})
+	var logins atomic.Int32
+	fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+		if request.Method == "auth.login_ex" {
+			logins.Add(1)
+			<-release
+		}
+		return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+	}, nil)
+	client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user", Timeout: 200 * time.Millisecond})
+	t.Cleanup(func() { close(release) })
+	err := awaitConfiguredRPCBudget(t, client.TestConnection)
+	assertRPCTimeout(t, err)
+	if fixture.sessions.Load() != 1 || logins.Load() != 1 || fixture.restRequests.Load() != 0 || client.TransportStatus().Connected {
+		t.Fatalf("silent authentication retried, downgraded or appeared connected: %+v", client.TransportStatus())
+	}
+}
+
+func TestJSONRPCConfiguredTimeoutBoundsReadAndRecovers(t *testing.T) {
+	release := make(chan struct{})
+	var reads atomic.Int32
+	fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+		if request.Method == "auth.login_ex" {
+			return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+		}
+		if request.Method == "system.info" && reads.Add(1) == 1 {
+			<-release
+		}
+		return protocolFixtureReply{result: map[string]any{"hostname": "timeout-fixture", "version": "TrueNAS-SCALE-25.10.7"}}
+	}, nil)
+	client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user", Timeout: 200 * time.Millisecond})
+	t.Cleanup(func() { close(release) })
+	err := awaitConfiguredRPCBudget(t, client.TestConnection)
+	assertRPCTimeout(t, err)
+	if fixture.sessions.Load() != 1 || reads.Load() != 1 || client.TransportStatus().Connected {
+		t.Fatal("expired operation gained a retry budget or retained its timed-out session")
+	}
+	if err := client.TestConnection(context.Background()); err != nil {
+		t.Fatalf("subsequent operation did not recover: %v", err)
+	}
+	if fixture.sessions.Load() != 2 || reads.Load() != 2 || fixture.restRequests.Load() != 0 || !client.TransportStatus().Connected {
+		t.Fatalf("subsequent operation did not negotiate one fresh RPC session: %+v", client.TransportStatus())
+	}
+}
+
+func TestJSONRPCConfiguredTimeoutIncludesReadRetryBackoff(t *testing.T) {
+	release := make(chan struct{})
+	var reads atomic.Int32
+	fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+		if request.Method == "auth.login_ex" {
+			return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+		}
+		if reads.Add(1) == 1 {
+			// The 100 ms reconnect backoff cannot fit in the remaining part of
+			// a 200 ms operation. It must not create a new deadline on retry.
+			time.Sleep(150 * time.Millisecond)
+			return protocolFixtureReply{close: true}
+		}
+		<-release
+		return protocolFixtureReply{result: nil}
+	}, nil)
+	client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user", Timeout: 200 * time.Millisecond})
+	t.Cleanup(func() { close(release) })
+	err := awaitConfiguredRPCBudget(t, client.TestConnection)
+	assertRPCTimeout(t, err)
+	if fixture.sessions.Load() != 1 || reads.Load() != 1 || fixture.restRequests.Load() != 0 {
+		t.Fatal("read retry restarted an exhausted operation budget")
+	}
+}
+
+func TestJSONRPCConfiguredTimeoutDoesNotExtendCallerDeadline(t *testing.T) {
+	release := make(chan struct{})
+	fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+		if request.Method == "auth.login_ex" {
+			return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+		}
+		<-release
+		return protocolFixtureReply{result: nil}
+	}, nil)
+	client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user", Timeout: 5 * time.Second})
+	t.Cleanup(func() { close(release) })
+	err := awaitConfiguredRPCBudget(t, func(parent context.Context) error {
+		ctx, cancel := context.WithTimeout(parent, 100*time.Millisecond)
+		defer cancel()
+		return client.TestConnection(ctx)
+	})
+	assertRPCTimeout(t, err)
+	if fixture.sessions.Load() != 1 || fixture.restRequests.Load() != 0 {
+		t.Fatal("caller deadline gained a retry or REST downgrade")
+	}
+}
+
+func TestJSONRPCConfiguredTimeoutDoesNotReplayAction(t *testing.T) {
+	release := make(chan struct{})
+	var actions atomic.Int32
+	fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+		if request.Method == "auth.login_ex" {
+			return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+		}
+		if request.Method == "app.start" {
+			actions.Add(1)
+			<-release
+		}
+		return protocolFixtureReply{result: nil}
+	}, nil)
+	client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user", Timeout: 200 * time.Millisecond})
+	t.Cleanup(func() { close(release) })
+	err := awaitConfiguredRPCBudget(t, func(ctx context.Context) error { return client.StartApp(ctx, "fixture-app") })
+	assertRPCTimeout(t, err)
+	if !strings.Contains(err.Error(), "outcome is unknown") || actions.Load() != 1 || fixture.sessions.Load() != 1 || fixture.restRequests.Load() != 0 {
+		t.Fatalf("timed-out action was replayed or lost its unknown outcome: %v", err)
+	}
+}
+
+func TestJSONRPCConfiguredTimeoutBoundsSubscriptions(t *testing.T) {
+	for _, stream := range []string{"telemetry", "app-stats", "app-logs"} {
+		t.Run(stream, func(t *testing.T) {
+			fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+				switch request.Method {
+				case "auth.login_ex":
+					return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+				case "core.subscribe":
+					return protocolFixtureReply{result: "fixture-subscription"} // No stream event ever arrives.
+				default:
+					return protocolFixtureReply{result: []any{}}
+				}
+			}, nil)
+			client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user", Timeout: 200 * time.Millisecond})
+			err := awaitConfiguredRPCBudget(t, func(ctx context.Context) error {
+				switch stream {
+				case "telemetry":
+					_, err := client.GetSystemTelemetry(ctx)
+					return err
+				case "app-stats":
+					_, err := client.GetAppStats(ctx)
+					return err
+				default:
+					_, err := client.GetAppLogs(ctx, "fixture-app", "fixture-container", 100)
+					return err
+				}
+			})
+			assertRPCTimeout(t, err)
+			if fixture.sessions.Load() != 1 || fixture.restRequests.Load() != 0 || client.TransportStatus().Connected {
+				t.Fatal("expired stream was retried, downgraded or left reusable")
+			}
+		})
+	}
+}
+
+func TestJSONRPCWaitingDeadlineDoesNotInterruptSessionOwner(t *testing.T) {
+	release := make(chan struct{})
+	started := make(chan struct{})
+	var reads atomic.Int32
+	fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+		if request.Method == "auth.login_ex" {
+			return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+		}
+		if reads.Add(1) == 1 {
+			close(started)
+			<-release
+		}
+		return protocolFixtureReply{result: map[string]any{"hostname": "session-owner"}}
+	}, nil)
+	client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user", Timeout: 5 * time.Second})
+	var released atomic.Bool
+	unblock := func() {
+		if released.CompareAndSwap(false, true) {
+			close(release)
+		}
+	}
+	t.Cleanup(unblock)
+	owner := make(chan error, 1)
+	go func() { owner <- client.TestConnection(context.Background()) }()
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("session owner did not dispatch")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	waiter := make(chan error, 1)
+	go func() { waiter <- client.TestConnection(ctx) }()
+	select {
+	case err := <-waiter:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Errorf("waiter error = %v, want caller deadline", err)
+		}
+	case <-time.After(time.Second):
+		t.Error("caller deadline could not abandon the session lock wait")
+		unblock() // Do not strand the predecessor's uncancellable mutex waiter.
+		<-waiter
+	}
+	if reads.Load() != 1 {
+		t.Error("cancelled waiter dispatched a request")
+	}
+	unblock()
+	if err := <-owner; err != nil {
+		t.Fatalf("waiter interrupted the session owner: %v", err)
+	}
+	if err := client.TestConnection(context.Background()); err != nil || fixture.sessions.Load() != 1 {
+		t.Fatalf("cancelled waiter poisoned the shared session: %v, sessions=%d", err, fixture.sessions.Load())
+	}
+}
+
+func TestJSONRPCPreCancelledCallDoesNotDispatch(t *testing.T) {
+	var actions atomic.Int32
+	fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+		if request.Method == "auth.login_ex" {
+			return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+		}
+		if request.Method == "app.start" {
+			actions.Add(1)
+		}
+		return protocolFixtureReply{result: map[string]any{"hostname": "cancel-fixture"}}
+	}, nil)
+	client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user"})
+	if err := client.TestConnection(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := client.StartApp(ctx, "fixture-app"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("pre-cancelled action error = %v", err)
+	}
+	if err := client.TestConnection(context.Background()); err != nil || fixture.sessions.Load() != 1 || actions.Load() != 0 {
+		t.Fatalf("pre-cancelled action dispatched or poisoned the session: %v", err)
+	}
+}
+
+func TestJSONRPCSnapshotContinuesAfterTelemetryTimeout(t *testing.T) {
+	fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+		switch request.Method {
+		case "auth.login_ex":
+			return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+		case "system.info":
+			return protocolFixtureReply{result: map[string]any{"hostname": "inventory-timeout", "version": "TrueNAS-SCALE-25.10.7", "system_serial": "FIXTURE-1", "physmem": 1024}}
+		case "core.subscribe":
+			return protocolFixtureReply{result: "silent-realtime"}
+		case "pool.query":
+			return protocolFixtureReply{result: []map[string]any{{"id": 1, "name": "tank", "status": "ONLINE"}}}
+		default:
+			return protocolFixtureReply{result: []any{}}
+		}
+	}, nil)
+	client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user", Timeout: 200 * time.Millisecond})
+	var snapshot *FixtureSnapshot
+	err := awaitConfiguredRPCBudget(t, func(ctx context.Context) error {
+		var err error
+		snapshot, err = client.FetchSnapshot(ctx)
+		return err
+	})
+	if err != nil || snapshot == nil || snapshot.System.Hostname != "inventory-timeout" || len(snapshot.Pools) != 1 {
+		t.Fatalf("optional telemetry timeout prevented usable inventory: %v, %+v", err, snapshot)
+	}
+	if snapshot.System.Telemetry == nil || snapshot.System.Telemetry.ErrorCategory != "timeout" || snapshot.System.Telemetry.CPU || snapshot.System.Telemetry.Memory {
+		t.Fatalf("silent telemetry appeared fresh or lost its timeout: %+v", snapshot.System.Telemetry)
+	}
+	if fixture.sessions.Load() != 2 || fixture.restRequests.Load() != 0 {
+		t.Fatalf("inventory did not recover on RPC after discarding the stream: sessions=%d rest=%d", fixture.sessions.Load(), fixture.restRequests.Load())
+	}
+}

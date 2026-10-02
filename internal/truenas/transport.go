@@ -8,12 +8,56 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
 var errRPCStreamSessionConsumed = errors.New("truenas rpc stream session cannot be reused")
+
+// rpcSessionMutex serializes the sole WebSocket reader/writer, while allowing
+// a caller to abandon its wait without interrupting the current session owner.
+// Its zero value is usable, including by Client.Close and protocol fixtures.
+type rpcSessionMutex struct {
+	once  sync.Once
+	token chan struct{}
+}
+
+func (m *rpcSessionMutex) LockContext(ctx context.Context) error {
+	m.once.Do(func() { m.token = make(chan struct{}, 1) })
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case m.token <- struct{}{}:
+		if err := ctx.Err(); err != nil {
+			m.Unlock()
+			return err
+		}
+		return nil
+	}
+}
+
+func (m *rpcSessionMutex) Lock()   { _ = m.LockContext(context.Background()) }
+func (m *rpcSessionMutex) Unlock() { <-m.token }
+
+// rpcOperationContext applies the same configured timeout as HTTP requests to
+// a whole RPC operation: lock wait, negotiation/authentication, exchange or
+// subscription, and its one permitted read retry share a single budget. A
+// shorter caller deadline is never extended. Keepalive has its own lifetime.
+func (c *Client) rpcOperationContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	timeout := c.config.Timeout
+	if timeout <= 0 {
+		timeout = defaultHTTPTimeout
+	}
+	return context.WithTimeout(ctx, timeout)
+}
 
 type discardRPCSessionError struct {
 	err error
@@ -170,7 +214,11 @@ func (c *Client) ensureTransport(ctx context.Context) (TransportMode, error) {
 	if c == nil {
 		return TransportUnknown, fmt.Errorf("truenas client is nil")
 	}
-	c.rpcMu.Lock()
+	ctx, cancel := c.rpcOperationContext(ctx)
+	defer cancel()
+	if err := c.rpcMu.LockContext(ctx); err != nil {
+		return TransportUnknown, err
+	}
 	defer c.rpcMu.Unlock()
 	return c.ensureTransportLocked(ctx)
 }
@@ -286,11 +334,15 @@ func (c *Client) callRPC(ctx context.Context, method string, params any, result 
 	return c.callRPCWithRetry(ctx, method, params, result, true)
 }
 
-func (c *Client) withRPC(ctx context.Context, operation func(*trueNASRPCClient) error) error {
+func (c *Client) withRPC(ctx context.Context, operation func(context.Context, *trueNASRPCClient) error) error {
 	if c == nil {
 		return fmt.Errorf("truenas client is nil")
 	}
-	c.rpcMu.Lock()
+	ctx, cancel := c.rpcOperationContext(ctx)
+	defer cancel()
+	if err := c.rpcMu.LockContext(ctx); err != nil {
+		return err
+	}
 	defer c.rpcMu.Unlock()
 
 	mode, err := c.ensureTransportLocked(ctx)
@@ -300,7 +352,7 @@ func (c *Client) withRPC(ctx context.Context, operation func(*trueNASRPCClient) 
 	if mode != TransportJSONRPC || c.rpc == nil {
 		return fmt.Errorf("truenas JSON-RPC operation is unavailable over negotiated transport %s", mode)
 	}
-	if err := operation(c.rpc); err != nil {
+	if err := operation(ctx, c.rpc); err != nil {
 		if errors.Is(err, errRPCStreamSessionConsumed) {
 			c.closeRPCLocked()
 			c.reconnect = 0
@@ -337,7 +389,7 @@ func (c *Client) withRPC(ctx context.Context, operation func(*trueNASRPCClient) 
 			status.LastConnectedAt = &now
 			status.LastError = ""
 		})
-		if err := operation(c.rpc); err != nil {
+		if err := operation(ctx, c.rpc); err != nil {
 			var secondTransportErr *RPCTransportError
 			if errors.As(err, &secondTransportErr) {
 				c.closeRPCLocked()
@@ -360,7 +412,11 @@ func (c *Client) callRPCWithRetry(ctx context.Context, method string, params any
 	if c == nil {
 		return fmt.Errorf("truenas client is nil")
 	}
-	c.rpcMu.Lock()
+	ctx, cancel := c.rpcOperationContext(ctx)
+	defer cancel()
+	if err := c.rpcMu.LockContext(ctx); err != nil {
+		return err
+	}
 	defer c.rpcMu.Unlock()
 
 	mode, err := c.ensureTransportLocked(ctx)
