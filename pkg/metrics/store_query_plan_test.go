@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -80,7 +81,7 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 				FROM metrics INDEXED BY ` + metricsIdentityIndex + `
 				WHERE resource_type = ? AND resource_id = ? AND tier = ?
 				AND timestamp >= ? AND timestamp <= ?
-				ORDER BY metric_type, timestamp ASC`,
+				ORDER BY timestamp ASC`,
 			args: []any{"vm", "vm-1", "raw", int64(0), farFuture},
 			// The planner uses an indexed SEARCH — it may pick idx_metrics_query_all
 			// using the time-major resource/tier/range prefix.
@@ -107,7 +108,7 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 				FROM metrics INDEXED BY ` + metricsIdentityIndex + `
 				WHERE resource_type = ? AND resource_id IN (?, ?, ?) AND tier = ?
 				AND timestamp >= ? AND timestamp <= ?
-				ORDER BY resource_id, metric_type, timestamp ASC`,
+				ORDER BY resource_id, timestamp ASC`,
 			args: []any{"vm", "vm-1", "vm-2", "vm-3", "raw", int64(0), farFuture},
 			// QueryAllBatch is the anti-N+1 dashboard path. The planner may choose
 			// idx_metrics_query_all
@@ -136,7 +137,7 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 				FROM metrics INDEXED BY ` + metricsIdentityIndex + `
 				WHERE resource_type = ? AND resource_id IN (?, ?, ?) AND metric_type IN (?, ?) AND tier = ?
 				AND timestamp >= ? AND timestamp <= ?
-				ORDER BY resource_id, metric_type, timestamp ASC`,
+				ORDER BY resource_id, timestamp ASC`,
 			args: []any{"vm", "vm-1", "vm-2", "vm-3", "cpu", "memory", "raw", int64(0), farFuture},
 		},
 		{
@@ -554,4 +555,36 @@ func explainQueryPlan(t *testing.T, db *sql.DB, query string, args []any) string
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+// Plain all-metric reads append rows to independent series. The time-major
+// identity index provides their chronology without a fleet-wide metric sort.
+// Downsampling still needs contiguous series for its one-bucket accumulator.
+func TestMetricsPlainReadsAvoidSeriesSort(t *testing.T) {
+	db := newPlanTestDB(t)
+	start, end := time.Unix(0, 0), time.Unix(9999999999, 0)
+	for _, step := range []int64{0, 1, 60} {
+		allSQL, allArgs := queryAllTierSQL("vm", "vm-1", start, end, step, TierRaw)
+		batchSQL, batchArgs := queryAllBatchTierSQL("vm", []string{"vm-1", "vm-2"}, nil, start, end, step, TierRaw)
+		filteredSQL, filteredArgs := queryAllBatchTierSQL("vm", []string{"vm-1", "vm-2"}, []string{"cpu", "memory"}, start, end, step, TierRaw)
+		for _, tc := range []struct {
+			name  string
+			query string
+			args  []interface{}
+		}{
+			{"all", allSQL, allArgs},
+			{"batch", batchSQL, batchArgs},
+			{"filtered", filteredSQL, filteredArgs},
+		} {
+			t.Run(fmt.Sprintf("%s/step=%d", tc.name, step), func(t *testing.T) {
+				plan := explainQueryPlan(t, db, tc.query, tc.args)
+				if !containsMetricsSearchWithIndex(plan, metricsIdentityIndex) || !strings.Contains(plan, "timestamp>?") || !strings.Contains(plan, "timestamp<?") {
+					t.Fatalf("expected bounded identity-index range read:\n%s", plan)
+				}
+				if step <= 1 && strings.Contains(plan, "TEMP B-TREE") {
+					t.Fatalf("plain read redundantly sorts series:\n%s", plan)
+				}
+			})
+		}
+	}
 }

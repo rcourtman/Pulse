@@ -3225,3 +3225,17 @@ a 5-second step previously reserved over a million slots per series; the
 preallocation is now capped at `maxQueryAllSeriesCapacity` and append still
 grows the slice for genuinely dense series. `pkg/metrics/store_additional_test.go`
 pins the cap in `TestEstimateQueryAllBatchSeriesCapacityCapsPreallocation`.
+
+### v6.4 time-major plain reads avoid metric sorting
+
+The existing one-tree metrics identity/write reduction stays intact. Plain
+`QueryAll`, `QueryAllBatch` and filtered batch reads need only chronological
+points within each output series, not contiguous metric rows. They use the
+identity index's timestamp order without a temporary metric-order sort.
+Downsampled batch reads retain resource/metric/timestamp ordering: their
+single-active-bucket accumulator requires contiguous series. The SQL builders
+are shared with exact query-plan tests, which require indexed timestamp bounds
+and no temporary tree for plain reads. Sparse, interleaved series, inclusive
+windows, filtered metrics, resource/tier isolation and grouped values remain
+covered in `pkg/metrics/store_additional_test.go`. Tier selection, fallback,
+retention, query output and latency thresholds are unchanged.

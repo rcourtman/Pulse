@@ -1565,16 +1565,13 @@ func (s *Store) QueryAll(resourceType, resourceID string, start, end time.Time, 
 	return result, nil
 }
 
-func (s *Store) queryAllWithTier(resourceType, resourceID string, start, end time.Time, stepSecs int64, tier Tier) (map[string][]MetricPoint, error) {
-	var rows *sql.Rows
-	var err error
-
+func queryAllTierSQL(resourceType, resourceID string, start, end time.Time, stepSecs int64, tier Tier) (string, []interface{}) {
 	sqlQuery := `
 		SELECT metric_type, timestamp, value, COALESCE(min_value, value), COALESCE(max_value, value)
 		FROM metrics INDEXED BY ` + metricsIdentityIndex + `
 		WHERE resource_type = ? AND resource_id = ? AND tier = ?
 		AND timestamp >= ? AND timestamp <= ?
-		ORDER BY metric_type, timestamp ASC
+		ORDER BY timestamp ASC
 	`
 	queryParams := []interface{}{resourceType, resourceID, string(tier), start.Unix(), end.Unix()}
 
@@ -1597,6 +1594,17 @@ func (s *Store) queryAllWithTier(resourceType, resourceID string, start, end tim
 			resourceType, resourceID, string(tier), start.Unix(), end.Unix(),
 		}
 	}
+
+	return sqlQuery, queryParams
+}
+
+func (s *Store) queryAllWithTier(resourceType, resourceID string, start, end time.Time, stepSecs int64, tier Tier) (map[string][]MetricPoint, error) {
+	var rows *sql.Rows
+	var err error
+
+	// Plain reads append to each metric's own slice. The time-major index
+	// already keeps every slice chronological; sorting by metric is redundant.
+	sqlQuery, queryParams := queryAllTierSQL(resourceType, resourceID, start, end, stepSecs, tier)
 
 	// Retry on SQLITE_BUSY
 	for i := 0; i < 5; i++ {
@@ -1750,7 +1758,7 @@ func normalizeMetricTypes(metricTypes []string) []string {
 	return normalized
 }
 
-func (s *Store) queryAllBatchWithTier(resourceType string, resourceIDs []string, metricTypes []string, start, end time.Time, stepSecs int64, tier Tier) (map[string]map[string][]MetricPoint, error) {
+func queryAllBatchTierSQL(resourceType string, resourceIDs []string, metricTypes []string, start, end time.Time, stepSecs int64, tier Tier) (string, []interface{}) {
 	placeholders := make([]string, len(resourceIDs))
 	for i := range resourceIDs {
 		placeholders[i] = "?"
@@ -1806,9 +1814,18 @@ func (s *Store) queryAllBatchWithTier(resourceType string, resourceIDs []string,
 			FROM metrics INDEXED BY `+metricsIdentityIndex+`
 			WHERE resource_type = ? AND resource_id IN (%s)%s AND tier = ?
 			AND timestamp >= ? AND timestamp <= ?
-			ORDER BY resource_id, metric_type, timestamp ASC
+			ORDER BY resource_id, timestamp ASC
 		`, inClause, metricClause)
 	}
+
+	return sqlQuery, params
+}
+
+func (s *Store) queryAllBatchWithTier(resourceType string, resourceIDs []string, metricTypes []string, start, end time.Time, stepSecs int64, tier Tier) (map[string]map[string][]MetricPoint, error) {
+	// Plain results need only per-series chronology, including filtered
+	// metric reads. Downsampling must retain contiguous series for the
+	// streaming aggregate below, so its SQL still orders by metric.
+	sqlQuery, params := queryAllBatchTierSQL(resourceType, resourceIDs, metricTypes, start, end, stepSecs, tier)
 
 	// Retry on SQLITE_BUSY
 	var rows *sql.Rows

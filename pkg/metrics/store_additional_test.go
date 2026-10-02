@@ -1726,3 +1726,103 @@ func assertStableLayoutQueries(t *testing.T, store *Store, base time.Time, updat
 		}
 	}
 }
+
+// Exercise time-major rows with interleaved, sparse metrics, tied timestamps,
+// deliberately reversed insertion order and the same ID in different resource
+// types. Plain reads must retain chronology without cross-series sorting;
+// grouped batch reads must still combine every point in a bucket exactly once.
+func TestMetricsTimeMajorReadsPreserveSeries(t *testing.T) {
+	suppressTestLogs(t)
+	cfg := DefaultConfig(t.TempDir())
+	cfg.FlushInterval, cfg.RollupInterval = time.Hour, time.Hour
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if err := store.WaitForMaintenance(30 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	base := time.Now().Add(-20 * time.Minute).Truncate(time.Minute)
+	rows := []WriteMetric{}
+	for _, kind := range []string{"vm", "ct"} {
+		for _, id := range []string{"b", "a"} {
+			for _, tier := range []Tier{TierMinute, TierRaw} {
+				for i := 11; i >= 0; i-- {
+					for _, metric := range []string{"memory", "cpu", "disk"} {
+						if metric == "disk" && i%3 != 0 {
+							continue
+						}
+						value := float64(i)
+						if metric == "memory" {
+							value += 100
+						}
+						if kind == "ct" {
+							value += 1000
+						}
+						if id == "b" {
+							value += 10000
+						}
+						if tier == TierMinute {
+							value += 100000
+						}
+						rows = append(rows, WriteMetric{ResourceType: kind, ResourceID: id,
+							MetricType: metric, Value: value, Timestamp: base.Add(time.Duration(i) * 10 * time.Second), Tier: tier})
+					}
+				}
+			}
+		}
+	}
+	store.WriteBatchSync(rows)
+	issue1124AssertConsolidatedIndexes(t, store)
+	start, end := base.Add(10*time.Second), base.Add(100*time.Second)
+	for _, kind := range []string{"vm", "ct"} {
+		for _, tier := range []Tier{TierRaw, TierMinute} {
+			for _, step := range []int64{0, 1, 60} {
+				all, err := store.queryAllBatchWithTier(kind, []string{"b", "a", "missing"}, nil, start, end, step, tier)
+				if err != nil {
+					t.Fatal(err)
+				}
+				filtered, err := store.queryAllBatchWithTier(kind, []string{"b", "a"}, []string{"cpu", "disk"}, start, end, step, tier)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(all) != 2 || len(filtered) != 2 {
+					t.Fatal("missing resource became a populated series")
+				}
+				for _, id := range []string{"a", "b"} {
+					one, err := store.queryAllWithTier(kind, id, start, end, step, tier)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if !reflect.DeepEqual(one, all[id]) {
+						t.Fatalf("single/batch mismatch: %s/%s/%s step=%d", kind, id, tier, step)
+					}
+					for _, metric := range []string{"cpu", "memory", "disk"} {
+						points, err := store.queryWithTier(kind, id, metric, start, end, step, tier)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if !reflect.DeepEqual(points, one[metric]) {
+							t.Fatalf("aggregation/value mismatch: %s/%s/%s/%s step=%d", kind, id, tier, metric, step)
+						}
+						for i := 1; i < len(points); i++ {
+							if !points[i].Timestamp.After(points[i-1].Timestamp) {
+								t.Fatal("series is not strictly chronological")
+							}
+						}
+					}
+					if len(filtered[id]) != 2 || !reflect.DeepEqual(filtered[id]["cpu"], one["cpu"]) || !reflect.DeepEqual(filtered[id]["disk"], one["disk"]) {
+						t.Fatal("filtered read leaked or lost metrics")
+					}
+					if step <= 1 && (len(one["cpu"]) != 10 || len(one["memory"]) != 10 || len(one["disk"]) != 3) {
+						t.Fatal("inclusive window or sparse observations changed")
+					}
+					if step > 1 && len(one["cpu"]) != 2 {
+						t.Fatal("bucket count changed")
+					}
+				}
+			}
+		}
+	}
+}
