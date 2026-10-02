@@ -7434,3 +7434,22 @@ real history hook and administration card: load a row, start a pending range
 read, confirm clear, then release the obsolete response at desktop and phone
 widths. Scripted API responses establish component behaviour, not installed
 backend deletion or destination delivery.
+
+### Shared canvas History responses belong to their selection
+
+`useHistoryChartState` cancels and invalidates old requests when the resource,
+metric, range, sampling cap, supplied-data mode or access state changes. Late
+successes and failures cannot replace the current selection's samples, loading
+or error state, even if cancellation is ignored. Selection changes clear old
+readings and hover state while loading; current initial failures remain visible.
+Matching supplied-sample refreshes retain pointer inspection; changing the selection
+clears it. Matching background refresh failures retain already loaded samples. Polls never
+overlap and stop for supplied data (including empty arrays), unavailable targets,
+locked ranges and unmount.
+
+`useHistoryChartState.test.tsx` checks delayed success/failure, each selection
+field, polling, supplied-data transitions, locked/empty targets and cleanup.
+`browser-tests/history-selection.cjs` exercises the production canvas chart and
+accessible description in desktop Chromium and phone WebKit, including a late
+old-target response and current-target loading/failure. Synthetic response proof
+is not native PBS collection or whole-report #1723 acceptance.
