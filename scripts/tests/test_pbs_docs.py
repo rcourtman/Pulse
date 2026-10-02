@@ -125,6 +125,17 @@ class PBSDocsTest(unittest.TestCase):
                        "Do not delete backups", "Do not clear History"):
             self.assertIn(phrase, text)
 
+    def test_history_checks_cover_batched_and_single_metric_requests(self):
+        history = DOC.read_text().split("### PBS is connected but History stays empty\n")[1].split("\n### ")[0]
+        for phrase in ("without\n   `metric`", "do not wait for a separate `metric=cpu` request",
+                       "`metrics: {}`", "`metrics.cpu` array", "CPU is absent",
+                       "`points` array for that single metric", "A measured zero is a\n   sample",
+                       "Do not edit or replay", "Do not share a HAR", "enable\nDebug logging"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, history)
+        self.assertNotIn("completed request with `metric=cpu`", history)
+        self.assertIn("does\n   not prove there is no data under another target", history)
+
     def test_every_documented_shell_recipe_parses(self):
         for command in blocks():
             with self.subTest(command=command):
