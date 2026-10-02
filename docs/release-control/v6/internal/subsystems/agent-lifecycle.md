@@ -5336,8 +5336,11 @@ pending or unknown rather than in-sync.
 
 Routine config polling is not a per-poll audit event:
 `/api/agents/agent/{id}/config` audits every failed fetch, and a successful one
-only on the agent's first delivery after start, a token or desired-config
-change, or once a day (see the API contract).
+normally on the agent's first delivery after start, a token or desired-config
+change, or once a day (see the API contract). Suppression is bounded to 4,096
+organisation/agent pairs. New keys replace only expired suppression entries;
+overflow deliveries are audited with `reason=capacity`, without evicting
+recent agents or restricting enrolment, config access, or command authority.
 That same canonical /api/auto-register path must also complete the live
 post-registration contract after persistence: it must trigger discovery refresh
 and emit the canonical `node_auto_registered` WebSocket payload instead of
