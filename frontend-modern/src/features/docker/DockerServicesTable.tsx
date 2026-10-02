@@ -74,7 +74,12 @@ const formatServiceUpdate = (
     return { label: 'Stable', title: 'No active service update reported' };
   }
 
-  const label = state || 'Updating';
+  // Docker reports the rollout state as a snake_case token
+  // ("rollback_started"); read it as words in the cell and keep the raw
+  // token, message and completion time in the title.
+  const label = state
+    ? state.replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase())
+    : 'Updating';
   const title = [state, message, completedAt].filter(Boolean).join(' | ') || label;
   return { label, title };
 };
