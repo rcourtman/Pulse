@@ -1325,6 +1325,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/api/ai_handlers_more_test.go",
                         "internal/api/ai_handlers_patrol_actions_additional_test.go",
                         "internal/api/alerting/external_probe_notifications_test.go",
+                        "internal/api/alerting/notifications_test.go",
                         "internal/api/audit_handlers_test.go",
                         "internal/api/availability_handlers_test.go",
                         "internal/api/contract_test.go",
