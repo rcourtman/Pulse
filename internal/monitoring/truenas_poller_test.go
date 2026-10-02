@@ -2015,6 +2015,133 @@ func TestTrueNASPollerUnresponsiveRPCDoesNotFreezeOtherConnections(t *testing.T)
 	}
 }
 
+// #2396's nonempty Apps path: an accepted subscription is then rejected by
+// middlewared. Keep the inventory, advance the poll ledger, observe native
+// alert disappearance and recover stats on the next ordinary poll. This is a
+// protocol/poller control, not a native appliance or incident-delivery proof.
+func TestTrueNASPollerSubscriptionRejectionKeepsPollingAndRecovers(t *testing.T) {
+	var reject atomic.Bool
+	var sessions, statsSubscriptions atomic.Int32
+	upgrader := websocket.Upgrader{}
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/current" {
+			t.Error("modern polling fell back to REST")
+			http.NotFound(w, r)
+			return
+		}
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		sessions.Add(1)
+		for {
+			var request struct {
+				ID     int64             `json:"id"`
+				Method string            `json:"method"`
+				Params []json.RawMessage `json:"params"`
+			}
+			if conn.ReadJSON(&request) != nil {
+				return
+			}
+			var result any = []any{}
+			var collection string
+			switch request.Method {
+			case "auth.login_ex":
+				result = map[string]any{"response_type": "SUCCESS"}
+			case "system.info":
+				result = map[string]any{"hostname": "reject-nas", "version": "TrueNAS-SCALE-25.04.2.6", "system_serial": "REJECT-FIXTURE"}
+			case "pool.query":
+				result = []map[string]any{{"id": 1, "name": "tank", "status": "ONLINE", "size": 1000, "allocated": 400}}
+			case "app.query":
+				result = []map[string]any{{"id": "fixture-app", "name": "fixture-app", "state": "RUNNING"}}
+			case "alert.list":
+				if !reject.Load() {
+					result = []map[string]any{{"id": "fixture-alert", "level": "WARNING", "formatted": "fixture warning", "source": "fixture"}}
+				}
+			case "core.subscribe":
+				if len(request.Params) != 1 || json.Unmarshal(request.Params[0], &collection) != nil {
+					t.Error("invalid subscription")
+					return
+				}
+				result = "fixture-sub"
+			case "core.unsubscribe":
+				result = nil
+			}
+			if conn.WriteJSON(map[string]any{"jsonrpc": "2.0", "id": request.ID, "result": result}) != nil {
+				return
+			}
+			if collection == "" {
+				continue
+			}
+			var params any
+			method := "collection_update"
+			if strings.HasPrefix(collection, "app.stats:") {
+				statsSubscriptions.Add(1)
+				if reject.Load() {
+					method = "notify_unsubscribed"
+					params = map[string]any{"collection": collection, "error": map[string]any{"error": 14, "errname": "EFAULT", "reason": "[EFAULT] Apps are not available", "trace": nil, "extra": nil}}
+				} else {
+					params = map[string]any{"collection": collection, "fields": []any{map[string]any{"app_name": "fixture-app", "cpu_usage": 12}}}
+				}
+			} else {
+				params = map[string]any{"collection": collection, "fields": map[string]any{"cpu": map[string]any{"usage": 10}}}
+			}
+			if conn.WriteJSON(map[string]any{"jsonrpc": "2.0", "method": method, "params": params}) != nil {
+				return
+			}
+		}
+	}))
+	t.Cleanup(server.Close)
+	client, err := truenas.NewClient(truenas.ClientConfig{
+		Host: server.URL, APIKey: "fixture-key", Username: "fixture-user", Timeout: 2 * time.Second,
+		InsecureSkipVerify: true, Fingerprint: fmt.Sprintf("%x", sha256.Sum256(server.Certificate().Raw)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(client.Close)
+	instance := config.TrueNASInstance{ID: "reject-connection", Host: server.URL, Enabled: true}
+	provider := truenas.NewLiveProviderForConnection(&truenas.APIFetcher{Client: client}, instance.ID)
+	poller := NewTrueNASPoller(nil, 0, nil)
+	poller.providersByOrg["default"] = map[string]*truenas.Provider{instance.ID: provider}
+	poller.configsByOrg["default"] = map[string]config.TrueNASInstance{instance.ID: instance}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var lastSuccess time.Time
+	for poll := 0; poll < 3; poll++ {
+		reject.Store(poll == 1)
+		poller.ensureConnectionRuntimeStatusLocked("default", instance.ID).nextPollAt = time.Now().Add(-time.Second)
+		started := time.Now()
+		poller.pollAll(ctx)
+		if elapsed := time.Since(started); elapsed >= time.Second {
+			t.Fatalf("rejection stalled poll %d for %s", poll, elapsed)
+		}
+		summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{instance})[instance.ID]
+		if summary.Poll.LastError != nil || summary.Poll.LastSuccessAt == nil || !summary.Poll.LastSuccessAt.After(lastSuccess) || summary.Poll.LastAttemptAt == nil {
+			t.Fatalf("optional stats rejection prevented poll progress: %+v", summary)
+		}
+		lastSuccess = *summary.Poll.LastSuccessAt
+		snapshot := provider.Snapshot()
+		if snapshot == nil || snapshot.System.Hostname != "reject-nas" || len(snapshot.Pools) != 1 || len(snapshot.Apps) != 1 || snapshot.System.CPUPercent != 10 {
+			t.Fatalf("poll %d lost usable inventory/telemetry: %+v", poll, snapshot)
+		}
+		if poll == 1 {
+			if snapshot.Apps[0].Stats != nil || len(snapshot.Alerts) != 0 {
+				t.Fatal("rejected stats fabricated data or left the former native alert")
+			}
+		} else if snapshot.Apps[0].Stats == nil || snapshot.Apps[0].Stats.CPUPercent != 12 || len(snapshot.Alerts) != 1 {
+			t.Fatal("healthy stats/native alerts did not return")
+		}
+		if !hasTrueNASHostForOrg(poller, "default", "reject-nas") {
+			t.Fatal("poll lost the appliance identity")
+		}
+	}
+	if statsSubscriptions.Load() != 3 || sessions.Load() != 2 {
+		t.Fatalf("rejection replayed or churned later polls: subscriptions=%d sessions=%d", statsSubscriptions.Load(), sessions.Load())
+	}
+}
+
 type trueNASMockServer struct {
 	server   *httptest.Server
 	requests atomic.Int64
