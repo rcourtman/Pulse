@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "base_sha": "811961243e6418c858c80fd073faf4251fe838d3",
-  "verified_at": "2026-10-02T12:57:15.855691+00:00",
+  "base_sha": "60a6c933e0057435dd49cb440995f275f6a567d6",
+  "verified_at": "2026-10-02T12:57:15.855691Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts"

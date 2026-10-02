@@ -20,6 +20,14 @@
 
 ## Purpose
 
+Storage pool Configuration key/value rows keep capacity absence distinct from
+measured zero: unavailable bytes and percentages render as `n/a`, while valid
+independent observations survive a missing total. Live partial snapshots must
+not invent an empty pool or available space. The existing shared row layout
+and responsive labels are unchanged; the production drawer browser fixture
+`frontend-modern/browser-tests/pool-capacity.cjs` verifies desktop and phone
+transitions and overflow alongside storage capacity regression tests.
+
 ### Shipped documentation table headers
 
 After sanitization, the documentation renderer assigns trusted `scope=col` to
