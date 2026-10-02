@@ -2234,7 +2234,7 @@ func TestTrueNASPartialReportingPipeline(t *testing.T) {
  {"name":"cputemp","legend":["cputemp0","cputemp1"],"data":[[41,42]]},
  {"name":"interface","identifier":"nic-a","legend":["rx","tx","overlap"],"data":[[8,16,8]]},
  {"name":"disk","identifier":"disk-a","legend":["disk_octets_read","disk_octets_write"],"data":[[0,32]]}
- ]`, 200, map[string]float64{"cpu": 10, "memory": 62.5, "netin": 8, "netout": 16, "diskread": 0, "diskwrite": 32}, "", true},
+ ]`, 200, map[string]float64{"cpu": 10, "memory": 62.5, "netin": 8, "netout": 16, "diskread": 0, "diskwrite": 32, "temperature": 42}, "", true},
 	}
 	var current atomic.Int64
 	var nativeEnd atomic.Int64
@@ -2389,7 +2389,7 @@ func TestTrueNASPartialReportingPipeline(t *testing.T) {
 		persistent.WriteBatchSync(writes)
 		inMemory := monitor.GetGuestMetrics("agent:"+instance.ID, time.Hour)
 		chart := monitor.GetGuestMetricsForChart("agent:"+instance.ID, "agent", instance.ID, time.Hour)
-		for _, key := range []string{"cpu", "memory", "disk", "netin", "netout", "diskread", "diskwrite"} {
+		for _, key := range []string{"cpu", "memory", "disk", "netin", "netout", "diskread", "diskwrite", "temperature"} {
 			if len(inMemory[key]) != counts[key] || len(chart[key]) != counts[key] {
 				t.Errorf("cycle %d %s chart contains fabricated/lost points: memory=%d chart=%d want=%d", index, key, len(inMemory[key]), len(chart[key]), counts[key])
 			}
@@ -2402,9 +2402,6 @@ func TestTrueNASPartialReportingPipeline(t *testing.T) {
 			continue
 		}
 		wantNative := len(cycle.want)
-		if cycle.native {
-			wantNative++
-		}
 		if err != nil || id != instance.ID || len(native) != wantNative {
 			t.Fatalf("cycle %d native History=%+v id=%q err=%v", index, native, id, err)
 		}
@@ -2429,5 +2426,15 @@ func TestTrueNASPartialReportingPipeline(t *testing.T) {
 				t.Fatalf("shared History fallback dropped native panels: %+v", shared)
 			}
 		}
+	}
+	// Once local CPU History covers the window, the chart's fast path must
+	// still retain Thermals without relying on another appliance request.
+	now := time.Now()
+	for i := 0; i <= 60; i++ {
+		monitor.metricsHistory.AddGuestMetric("agent:"+instance.ID, "cpu", 10, now.Add(time.Duration(i-60)*time.Minute))
+	}
+	chart := monitor.GetGuestMetricsForChart("agent:"+instance.ID, "agent", instance.ID, time.Hour)
+	if points := chart["temperature"]; len(points) != 1 || points[0].Value != 42 {
+		t.Fatalf("sufficiently covered local History lost Thermals: %+v", points)
 	}
 }

@@ -319,6 +319,11 @@ assuming a missing member was idle. Other graphs remain independently usable.
 Native CPU temperature maps into the existing canonical host temperature and
 `temperature` History key, using the same package-versus-core outlier safeguard
 as current readings. Disk-temperature History uses the same envelope decoder.
+The canonical writer also records each positive finite TrueNAS host temperature
+in local and persistent `temperature` History, under the existing source/dedup
+gates. A full local CPU window must not make the existing Thermals panel depend
+on native fallback or lose its observed temperature. Missing temperature is not
+written as zero, and no additional sensor writes are added to other sources.
 No frontend route, resource identity, alert suppression policy, credential scope
 or recognised-legacy transport boundary changes.
 
@@ -333,7 +338,8 @@ shortened controls, not complete native windows. Extended
 `TestTrueNASPartialReportingPipeline` in
 `internal/monitoring/truenas_poller_test.go` crosses pinned-certificate HTTP,
 poller, canonical registry, writer, in-memory/persistent chart readbacks and
-native fallback, including temperature. Existing CORE isolation, recognised
+native fallback, including temperature and the sufficiently covered local
+chart fast path. Existing CORE isolation, recognised
 transport/auth/TLS and modern SCALE aggregation tests remain required. Source
 proofs do not substitute for containing-release qualification or installed CORE
 live/collapsed/expanded/History acceptance.
