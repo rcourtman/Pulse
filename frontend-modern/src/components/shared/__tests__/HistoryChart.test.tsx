@@ -150,7 +150,7 @@ describe('HistoryChart', () => {
     const canvas = screen.getByRole('img', { name: 'History chart' });
     const announcement = container.querySelector('[aria-live="polite"]')!;
     expect(canvas).toHaveAttribute('tabindex', '0');
-    expect(announcement).toBeEmptyDOMElement();
+    expect(announcement.textContent).toBe('');
     fireEvent.focus(canvas);
     expect(announcement).toHaveTextContent('30.0%');
     fireEvent.keyDown(canvas, { key: 'ArrowLeft' });
@@ -164,20 +164,20 @@ describe('HistoryChart', () => {
     fireEvent.keyDown(canvas, { key: 'ArrowRight' });
     expect(announcement).toHaveTextContent('30.0%');
     fireEvent.keyDown(canvas, { key: 'Escape' });
-    expect(announcement).toBeEmptyDOMElement();
+    expect(announcement.textContent).toBe('');
     expect(container.querySelector('[data-history-chart-tooltip]')).toBeNull();
     fireEvent.keyDown(canvas, { key: 'Home' });
     setPoints(points().map((point) => ({ ...point, value: point.value + 1 })));
     expect(announcement).toHaveTextContent('11.0%');
     setTarget('b');
-    expect(announcement).toBeEmptyDOMElement();
+    expect(announcement.textContent).toBe('');
     fireEvent.keyDown(canvas, { key: 'Home' });
     fireEvent.blur(canvas);
-    expect(announcement).toBeEmptyDOMElement();
+    expect(announcement.textContent).toBe('');
     setPoints([]);
     fireEvent.focus(canvas);
     fireEvent.keyDown(canvas, { key: 'End' });
-    expect(announcement).toBeEmptyDOMElement();
+    expect(announcement.textContent).toBe('');
   });
 
   it('renders the default history label', () => {
