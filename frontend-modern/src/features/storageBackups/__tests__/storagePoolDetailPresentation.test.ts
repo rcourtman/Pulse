@@ -94,6 +94,71 @@ describe('storagePoolDetailPresentation', () => {
     expect(getZfsErrorTextClass()).toBe('font-medium text-red-600 dark:text-red-400');
   });
 
+  it.each([
+    [
+      'missing used',
+      { totalBytes: 1024, usedBytes: null, freeBytes: null, usagePercent: null },
+      ['n/a', 'n/a', '1.00 KB', 'n/a'],
+    ],
+    [
+      'all absent',
+      { totalBytes: null, usedBytes: null, freeBytes: null, usagePercent: null },
+      ['n/a', 'n/a', 'n/a', 'n/a'],
+    ],
+    [
+      'measured empty',
+      { totalBytes: 1024, usedBytes: 0, freeBytes: null, usagePercent: null },
+      ['0 B', '1.00 KB', '1.00 KB', '0%'],
+    ],
+    [
+      'measured full',
+      { totalBytes: 1024, usedBytes: 1024, freeBytes: 0, usagePercent: 100 },
+      ['1.00 KB', '0 B', '1.00 KB', '100%'],
+    ],
+    [
+      'independent observations',
+      { totalBytes: null, usedBytes: 512, freeBytes: 0, usagePercent: null },
+      ['512 B', '0 B', 'n/a', 'n/a'],
+    ],
+    [
+      'explicit ratio',
+      { totalBytes: null, usedBytes: null, freeBytes: null, usagePercent: 25 },
+      ['n/a', 'n/a', 'n/a', '25%'],
+    ],
+    [
+      'explicit zero ratio',
+      { totalBytes: null, usedBytes: null, freeBytes: null, usagePercent: 0 },
+      ['n/a', 'n/a', 'n/a', '0%'],
+    ],
+    [
+      'zero total',
+      { totalBytes: 0, usedBytes: 0, freeBytes: 0, usagePercent: null },
+      ['0 B', '0 B', '0 B', 'n/a'],
+    ],
+    [
+      'invalid observations',
+      { totalBytes: Infinity, usedBytes: NaN, freeBytes: -1, usagePercent: -1 },
+      ['n/a', 'n/a', 'n/a', 'n/a'],
+    ],
+    [
+      'derived ratio',
+      { totalBytes: 1024, usedBytes: 512, freeBytes: null, usagePercent: null },
+      ['512 B', '512 B', '1.00 KB', '50%'],
+    ],
+    [
+      'provider free differs from subtraction',
+      { totalBytes: 1024, usedBytes: 512, freeBytes: 256, usagePercent: 60 },
+      ['512 B', '256 B', '1.00 KB', '60%'],
+    ],
+  ] as const)('preserves capacity evidence: %s', (_name, capacity, expected) => {
+    const rows = buildStoragePoolDetailConfigRows(buildRecord({ capacity }));
+    expect(
+      ['Used', 'Free', 'Total', 'Usage'].map(
+        (label) => rows.find((row) => row.label === label)?.value,
+      ),
+    ).toEqual(expected);
+  });
+
   it('formats zfs error summaries canonically', () => {
     expect(getZfsErrorSummary(1, 2, 3)).toBe('Errors: R:1 W:2 C:3');
   });
