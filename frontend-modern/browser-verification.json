@@ -1,41 +1,46 @@
 {
   "version": 1,
-  "base_sha": "689079622dfa8fb472349ad13c36ad2068f0c38e",
-  "verified_at": "2026-10-02T21:27:29.856838Z",
+  "base_sha": "78796b411c1f37f57b303cae9fab5ddaa13e1121",
+  "verified_at": "2026-10-02T22:13:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/storageBackups/storageAdapters.ts",
-    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts"
+    "frontend-modern/src/components/Settings/ReportingPanel.tsx",
+    "frontend-modern/src/components/Settings/reportingSchedulesModel.ts",
+    "frontend-modern/src/components/Settings/useReportingPanelState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/storageBackups/storageAdapters.ts": "7933ab99a1cfdf35bcebf0f351ec2b6a8c486b1281a9a3daa36f828fa657c52e",
-    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts": "dd97511242f9375a725f69b3f8f40b2aee19998bdcdd2e82ce996d27f9fc519b"
+    "frontend-modern/src/components/Settings/ReportingPanel.tsx": "fbf12a7025b520e1f4ba99144f88a35778e9360f982b72bba251797361504afb",
+    "frontend-modern/src/components/Settings/reportingSchedulesModel.ts": "69fe58abb763e528ac3e3dfe5c50b969038e905fcf46974209cac29d1bc77e83",
+    "frontend-modern/src/components/Settings/useReportingPanelState.ts": "cc102740cf6eec47b8f3e5b4c9d6c24e1017d7ffd14bd653d25bfd45fc88b1af"
   },
-  "routes": ["/browser-tests/pool-ownership.html"],
+  "routes": [
+    "/settings/support/reporting"
+  ],
   "viewports": [
     {
-      "width": 1365,
+      "width": 1280,
       "height": 900
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "Production StoragePoolDetail through the real storage adapter; desktop Chromium light and phone WebKit dark; ZFS/UnRAID host A and B, missing ownership and direct children",
-    "12 recorded presentation states, plus per-engine History target replacement and Overview return"
+    "Pro licence active with advanced_reporting; Scheduled reports header mentions the Patrol weekly summary because sessionCapabilities.assistantEnabled is true",
+    "Create schedule form opened: Report type select present with Performance report selected; cadence, format, resources, tag filter, delivery, retention, attach and save-copy controls visible",
+    "Report type switched to Patrol weekly summary: form reduced to name, timezone, weekday, time, email recipients and Enabled; help text explains the email and that nothing is saved to disk; name placeholder reads Patrol weekly summary",
+    "Saved schedule row: Weekly Patrol, Monday at 09:00, scope Patrol activity, last 7 days, delivery Email config recipients; API record carries kind patrol_digest and format email",
+    "Run now without an email destination: Last run shows Failed with the server message naming Settings > Notifications",
+    "Edit reopens the saved schedule with Report type Patrol weekly summary selected",
+    "375px: form fields stack full width, table shows name with cadence line, no horizontal clipping"
   ],
   "interactions": [
-    "Replace the selected host in the mounted detail: a remote 82\u00b0C/99-error disk appears only on its owning host; local temperature and errors remain visible",
-    "Missing ownership omits inferred Physical Disks without removing ZFS information; direct children remain",
-    "History range and canonical history-a/history-b requests stay isolated while selected hosts change; no horizontal page overflow"
-  ],
-  "observations": {
-    "playwright": "1.56.1",
-    "expected_playwright": "1.56.1",
-    "result": "browser/result.json",
-    "parent": "browser/parent.json",
-    "driver": "frontend-modern/browser-tests/pool-ownership.cjs"
-  }
+    "Click Create schedule",
+    "Change Report type select to Patrol weekly summary",
+    "Type schedule name Weekly Patrol and click Save schedule",
+    "Click Run now on the saved schedule and reload",
+    "Click Edit on the saved schedule",
+    "Resize viewport to 375x812 and scroll through the form and table"
+  ]
 }

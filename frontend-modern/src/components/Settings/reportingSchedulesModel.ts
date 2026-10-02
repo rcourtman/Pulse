@@ -4,6 +4,12 @@ import type { ReportingFormat } from '@/components/Settings/reportingCatalogMode
 export type ReportScheduleCadenceType = 'monthly' | 'weekly';
 export type ReportScheduleRunStatus = '' | 'ok' | 'failed';
 export type ReportScheduleDeliveryMethod = 'email' | 'disk';
+// 'resources' is the multi-resource performance report; 'patrol_digest' emails
+// the last seven days of Patrol work and has no scope, format, or disk output.
+export type ReportScheduleKind = 'resources' | 'patrol_digest';
+// Digest schedules carry the server-assigned 'email' format: the email body is
+// the report, so there is no PDF or CSV artifact.
+export type ReportScheduleFormat = ReportingFormat | 'email';
 
 export interface ReportScheduleResource {
   resourceType: string;
@@ -14,6 +20,7 @@ export interface ReportScheduleResource {
 export interface ReportSchedule {
   id: string;
   name: string;
+  kind?: ReportScheduleKind;
   enabled: boolean;
   cadence: {
     type: ReportScheduleCadenceType;
@@ -26,7 +33,7 @@ export interface ReportSchedule {
     resources?: ReportScheduleResource[];
     tags?: string[];
   };
-  format: ReportingFormat;
+  format: ReportScheduleFormat;
   delivery: {
     method: ReportScheduleDeliveryMethod;
     to?: string[];
@@ -45,6 +52,7 @@ export interface ReportSchedule {
 export interface ReportScheduleFormState {
   id: string;
   name: string;
+  kind: ReportScheduleKind;
   enabled: boolean;
   cadenceType: ReportScheduleCadenceType;
   dayOfMonth: number;
@@ -77,6 +85,7 @@ const WEEKDAY_LABELS: Record<string, string> = {
 export const DEFAULT_REPORT_SCHEDULE_FORM = (): ReportScheduleFormState => ({
   id: '',
   name: '',
+  kind: 'resources',
   enabled: true,
   cadenceType: 'monthly',
   dayOfMonth: 1,
@@ -98,9 +107,18 @@ export function parseReportSchedulesResponse(value: unknown): ReportSchedule[] {
   return Array.isArray(schedules) ? schedules.map(normalizeReportSchedule) : [];
 }
 
+export function normalizeReportScheduleKind(kind: unknown): ReportScheduleKind {
+  return kind === 'patrol_digest' ? 'patrol_digest' : 'resources';
+}
+
+export function isPatrolDigestSchedule(schedule: Pick<ReportSchedule, 'kind'>): boolean {
+  return normalizeReportScheduleKind(schedule.kind) === 'patrol_digest';
+}
+
 export function normalizeReportSchedule(schedule: ReportSchedule): ReportSchedule {
   return {
     ...schedule,
+    kind: normalizeReportScheduleKind(schedule.kind),
     enabled: schedule.enabled !== false,
     cadence: {
       type: schedule.cadence?.type === 'weekly' ? 'weekly' : 'monthly',
@@ -113,7 +131,7 @@ export function normalizeReportSchedule(schedule: ReportSchedule): ReportSchedul
       resources: Array.isArray(schedule.scope?.resources) ? schedule.scope.resources : [],
       tags: Array.isArray(schedule.scope?.tags) ? schedule.scope.tags : [],
     },
-    format: schedule.format === 'csv' ? 'csv' : 'pdf',
+    format: schedule.format === 'csv' || schedule.format === 'email' ? schedule.format : 'pdf',
     delivery: {
       method: schedule.delivery?.method === 'disk' ? 'disk' : 'email',
       to: Array.isArray(schedule.delivery?.to) ? schedule.delivery.to : [],
@@ -129,13 +147,14 @@ export function scheduleToForm(schedule: ReportSchedule): ReportScheduleFormStat
   return {
     id: normalized.id,
     name: normalized.name,
+    kind: normalizeReportScheduleKind(normalized.kind),
     enabled: normalized.enabled,
     cadenceType: normalized.cadence.type,
     dayOfMonth: normalized.cadence.day_of_month ?? 1,
     weekday: normalized.cadence.weekday || 'monday',
     time: normalized.cadence.time,
     timezone: normalized.cadence.timezone,
-    format: normalized.format,
+    format: normalized.format === 'csv' ? 'csv' : 'pdf',
     deliveryMethod: normalized.delivery.method,
     recipients: (normalized.delivery.to ?? []).join(', '),
     attach: normalized.delivery.attach,
@@ -153,13 +172,73 @@ export function scheduleToSelectedResources(schedule: ReportSchedule): SelectedR
   }));
 }
 
+// applyReportScheduleKind switches the form between kinds. The Patrol weekly
+// summary is fleet-wide and email-only, so it pins the fields the server would
+// reject or ignore (cadence, delivery, attachments, disk copy, tag scope) rather
+// than leaving stale performance-report values behind hidden controls. Going
+// back to a performance report restores the delivery defaults it cleared.
+export function applyReportScheduleKind(
+  form: ReportScheduleFormState,
+  kind: ReportScheduleKind,
+): ReportScheduleFormState {
+  if (form.kind === kind) return form;
+  if (kind === 'patrol_digest') {
+    return {
+      ...form,
+      kind,
+      cadenceType: 'weekly',
+      deliveryMethod: 'email',
+      attach: false,
+      saveToDisk: false,
+      tagFilter: '',
+    };
+  }
+  const defaults = DEFAULT_REPORT_SCHEDULE_FORM();
+  return {
+    ...form,
+    kind,
+    attach: defaults.attach,
+    saveToDisk: defaults.saveToDisk,
+  };
+}
+
+export function reportScheduleKindLabel(kind: unknown): string {
+  return normalizeReportScheduleKind(kind) === 'patrol_digest'
+    ? 'Patrol weekly summary'
+    : 'Performance report';
+}
+
 export function buildReportSchedulePayload(
   form: ReportScheduleFormState,
   resources: SelectedResource[],
 ): Omit<ReportSchedule, 'created_at' | 'updated_at'> {
+  if (form.kind === 'patrol_digest') {
+    return {
+      id: form.id,
+      name: form.name.trim(),
+      kind: 'patrol_digest',
+      enabled: form.enabled,
+      cadence: {
+        type: 'weekly',
+        weekday: form.weekday,
+        time: form.time,
+        timezone: form.timezone.trim() || 'UTC',
+      },
+      scope: { resources: [], tags: [] },
+      format: 'email',
+      delivery: {
+        method: 'email',
+        to: parseCommaList(form.recipients),
+        attach: false,
+        save_to_disk: false,
+      },
+      retention_count: form.retentionCount,
+    };
+  }
   return {
     id: form.id,
     name: form.name.trim(),
+    kind: 'resources',
     enabled: form.enabled,
     cadence: {
       type: form.cadenceType,
@@ -210,6 +289,7 @@ export function reportScheduleCadenceLabel(schedule: ReportSchedule): string {
 }
 
 export function reportScheduleScopeLabel(schedule: ReportSchedule): string {
+  if (isPatrolDigestSchedule(schedule)) return 'Patrol activity, last 7 days';
   const resources = schedule.scope.resources?.length ?? 0;
   const tags = schedule.scope.tags?.length ?? 0;
   const parts = [];

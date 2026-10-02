@@ -7769,3 +7769,20 @@ replacement without retaining peer-host rows. The mounted
 `StoragePoolDetail.ownership.test.tsx` and production-component browser fixture
 `browser-tests/pool-ownership.cjs` verify desktop/phone presentation and History
 coexistence; they are not field collection or native recovery evidence.
+
+### Scheduled report kinds
+
+The Settings > Reporting schedule form composes the shared `FormSelect` for a
+"Report type" choice between the performance report and the Patrol weekly
+summary (`patrol_digest`). The choice renders only while the session's AI
+capability reports Patrol can run, or while an existing summary schedule is
+being edited, so an AI-off install sees the unchanged performance-report form.
+The summary variant hides the cadence, format, resource picker, tag filter,
+delivery, retention, attach, and save-copy controls and keeps name, weekday,
+time, timezone, recipients, and enabled; `reportingSchedulesModel.ts` owns the
+kind normalisation, the kind switch, the email-only payload, and the plain
+"Patrol activity, last 7 days" scope label. `ReportingPanel.test.tsx`,
+`useReportingPanelState.test.ts`, and `reportingSchedulesModel.branchcov2.test.ts`
+cover the gating, the reduced form, the pinned fields, and the saved payload.
+This is a presentation and form-state boundary; the schedule API contract,
+report rendering, and email delivery are unchanged.
