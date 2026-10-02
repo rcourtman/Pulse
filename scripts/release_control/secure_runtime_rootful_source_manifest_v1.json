@@ -12,6 +12,7 @@
     "scripts/install.sh",
     "scripts/release_ldflags.sh",
     "scripts/installtests/agent_state_dir_lifecycle_test.go",
+    "scripts/installtests/auto_update_intent_test.go",
     "scripts/installtests/backfill_release_assets_test.go",
     "scripts/installtests/build_release_assets_test.go",
     "scripts/installtests/container_dependency_contract_test.go",
