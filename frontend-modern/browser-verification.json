@@ -1,45 +1,46 @@
 {
   "version": 1,
-  "base_sha": "e6540da45da4de4bcb954463373d8ea9f196eb56",
-  "verified_at": "2026-10-02T21:04:53Z",
+  "base_sha": "78796b411c1f37f57b303cae9fab5ddaa13e1121",
+  "verified_at": "2026-10-02T22:13:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx"
+    "frontend-modern/src/components/Settings/ReportingPanel.tsx",
+    "frontend-modern/src/components/Settings/reportingSchedulesModel.ts",
+    "frontend-modern/src/components/Settings/useReportingPanelState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx": "f2d8a72d62d06a89d3a70bd82d63d658ece3ac8acf3a0f688fb751a250d6f057"
+    "frontend-modern/src/components/Settings/ReportingPanel.tsx": "fbf12a7025b520e1f4ba99144f88a35778e9360f982b72bba251797361504afb",
+    "frontend-modern/src/components/Settings/reportingSchedulesModel.ts": "69fe58abb763e528ac3e3dfe5c50b969038e905fcf46974209cac29d1bc77e83",
+    "frontend-modern/src/components/Settings/useReportingPanelState.ts": "cc102740cf6eec47b8f3e5b4c9d6c24e1017d7ffd14bd653d25bfd45fc88b1af"
   },
   "routes": [
-    "/kubernetes"
+    "/settings/support/reporting"
   ],
   "viewports": [
-    {
-      "width": 1440,
-      "height": 900
-    },
     {
       "width": 1280,
       "height": 900
     },
     {
-      "width": 900,
-      "height": 900
-    },
-    {
-      "width": 390,
-      "height": 900
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "Mock estate (1 Kubernetes cluster, 2 nodes, 6 pods, 2 deployments) with one CronJob carrying lastSuccessfulTime, one completed Job, one DaemonSet and one StatefulSet in the Workload Controllers table, Chromium",
-    "Workload Controllers table at the full desktop layout where the Detail column is shown (1440px) and at container widths where it is hidden (1280, 900, 390px)",
-    "Controller row expanded to its detail disclosure at 390px"
+    "Pro licence active with advanced_reporting; Scheduled reports header mentions the Patrol weekly summary because sessionCapabilities.assistantEnabled is true",
+    "Create schedule form opened: Report type select present with Performance report selected; cadence, format, resources, tag filter, delivery, retention, attach and save-copy controls visible",
+    "Report type switched to Patrol weekly summary: form reduced to name, timezone, weekday, time, email recipients and Enabled; help text explains the email and that nothing is saved to disk; name placeholder reads Patrol weekly summary",
+    "Saved schedule row: Weekly Patrol, Monday at 09:00, scope Patrol activity, last 7 days, delivery Email config recipients; API record carries kind patrol_digest and format email",
+    "Run now without an email destination: Last run shows Failed with the server message naming Settings > Notifications",
+    "Edit reopens the saved schedule with Report type Patrol weekly summary selected",
+    "375px: form fields stack full width, table shows name with cadence line, no horizontal clipping"
   ],
   "interactions": [
-    "Measured every controllers table header and cell for clipped text (scrollWidth over clientWidth) at each viewport; before the change the Detail cells needed 258px in a 119px column, after it the CronJob row reads \"Last success 1h ago\" and the Job row \"Completed 41m ago\" with no clipped element in the column and no horizontal page scroll",
-    "Read the Detail span title attributes: they carry the absolute local time (\"Last success: Oct 2, 2026, 08:51 PM\") instead of the raw RFC 3339 string",
-    "Probed the rendered width of every label the column can produce (Started, Completed, Last success, Last run with ages up to 365d) against the 135px Detail cell at 1440px; all fit whole",
-    "Compared before and after screenshots of the table at 1440px; the StatefulSet service name now truncates with an ellipsis inside the cell instead of being cut by the cell edge"
-  ],
-  "command": "playwright chromium against a private mock-mode stack built from this commit (backend :7693, vite :5213)"
+    "Click Create schedule",
+    "Change Report type select to Patrol weekly summary",
+    "Type schedule name Weekly Patrol and click Save schedule",
+    "Click Run now on the saved schedule and reload",
+    "Click Edit on the saved schedule",
+    "Resize viewport to 375x812 and scroll through the form and table"
+  ]
 }
