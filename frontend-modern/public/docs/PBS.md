@@ -221,6 +221,55 @@ private keys. If help is needed, provide only the HTTP status, relevant redacted
 error and which expected reading is missing. Do not clear History or recreate a
 working connection to make missing data look resolved.
 
+### PBS is connected but History stays empty
+
+Open **Proxmox → Backups → Backup Server → History**, not a datastore or the
+PBS virtual machine's row in **Overview**. Record which route fails. A working
+VM chart can use a different metrics target from the PBS host chart; it does
+not establish that the PBS chart can read the same series. Current CPU and
+memory values, a green connection badge, and an **API+Agent** label also do not
+prove that stored host history is available.
+
+Start with one affected PBS and a recent, unlocked time range:
+
+1. In the drawer's identity details, note **Metrics Target**. Compare it locally
+   with that PBS agent's **Connection** in **Settings → Infrastructure → Agent
+   Doctor**. Record whether they agree and whether the target changes during a
+   normal refresh; do not rename an agent or edit its ID to make them match.
+   An `agent:` prefix alone does not prove that the target is the reporting
+   agent. A hostname-based target is evidence to check, not proof of the cause.
+2. If the target is already known, inspect the chart's request instead of
+   collecting the identities again. In your signed-in browser, open developer
+   tools → **Network**, filter for `metrics-store/history`, then open the
+   affected **History** tab. Do not refresh or restart the server. Inspect one
+   completed request with `metric=cpu` and its `resourceType`, `resourceId` and
+   `range` query fields. Do not edit or replay the request.
+3. Check its HTTP status and **Response** locally. A successful JSON response
+   with an empty `points` array means this request returned no samples for that
+   target and range; it does not prove there is no data under another target.
+   Non-empty `points` with an empty chart points to a different display problem.
+   An error, a cancelled request, or an HTML sign-in page is not an empty series.
+   Record a redacted error if present rather than changing permissions.
+
+If no matching request appears, record that fact and the visible chart message;
+do not paste scripts into the browser console to force one. If opening the
+page makes the browser unresponsive, stop and retain the observations already
+available. No repeated reproduction is needed.
+
+When reporting this, share only the failing route, time range, whether the
+request target agrees with the drawer, HTTP status, and whether `points` is
+empty or non-empty. Use consistent placeholders for private hostnames and IDs.
+Do not share a HAR export, **Copy as cURL** output, request headers, cookies,
+tokens, or a full response. These checks use the existing browser session;
+they need no new API token or command-execution permission.
+
+Do not delete and re-add connections, re-enrol agents, clear History, or enable
+Debug logging for this check. A Proxmox log saying **Guest agent returned no
+filesystem info** refers to its QEMU guest-agent filesystem probe, not the
+Pulse Agent's stored History request. Restarting that guest is not a diagnosis
+of an empty PBS chart. See [VM Disk Monitoring](VM_DISK_MONITORING.md) if the
+separate symptom is missing filesystem information in a PVE VM row.
+
 ### Slow Backup Loading
 
 If you notice slow loading for PBS storage accessed via PVE:
