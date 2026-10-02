@@ -83,6 +83,9 @@ or displayed a notification.
 11. `internal/notifications/deadman_config.go`
 12. `internal/notifications/quiet_hours_queue.go`
 
+13. `internal/notifications/apprise_diagnostics.go`
+14. `internal/notifications/failure_class.go`
+
 ## Shared Boundaries
 
 1. `frontend-modern/src/api/notifications.ts` shared with `api-contracts`: the notifications frontend client is both a notification delivery control surface and a canonical API payload contract boundary.
@@ -149,6 +152,42 @@ stable opaque routing identities and must not expose credentials.
 
 
 ## Current State
+
+### Apprise diagnostic confidentiality
+
+Apprise CLI targets may carry credentials in arbitrary provider schemes. CLI
+output and HTTP response/error text may echo target credentials, API keys,
+configuration keys or private alert content. Firing, recovery, test and queued
+delivery must not copy those bytes into logs, returned errors, attempt audits,
+dead letters or delivery-log projections. Configuration-update logs use only
+normalised mode, counts, presence flags, timeout and TLS-policy flags. Authorised
+configuration reads/edits and private admitted queue configuration are unchanged.
+
+`apprise_diagnostics.go` retains structured failure classes and typed causes for
+`errors.Is`/`errors.As`, but formats only fixed safe reasons or a numeric CLI exit.
+HTTP status remains the authoritative retry verdict; response bodies are drained
+only to the existing size limit and discarded. CLI diagnostics retain byte and
+target counts, not output or target values. Shared URL validation and redirect
+checks use an opaque Apprise diagnostic label, including allowlist debug logs;
+ordinary webhook diagnostics retain their existing redaction. Endpoint, mounted
+path, escaped configuration key, target arguments, authentication headers,
+payloads, TLS verification, SSRF checks, retry budget and delivery state do not
+change. Existing historical logs/audits are not rewritten or claimed cleared.
+The v6.4 queue retains its existing retry-all-until-exhaustion policy, including
+HTTP 401; the diagnostic classifier does not import main's early-DLQ policy.
+Attempt audits retain the sender's declared Apprise class without recovering
+withheld error prose; other destinations and legacy audit callers still use
+the existing text classifier. This diagnostic observation never selects retry
+or dead-letter policy.
+
+Verification: `apprise_confidentiality_test.go` captures actual CLI/loopback HTTP
+logs and errors across firing, recovery and test sends; verifies unchanged
+arguments/requests; exercises malformed URLs, permitted and refused redirects,
+typed transport failures and the real queue's retry/DLQ/audit/log projection.
+`internal/api/alerting/notifications_test.go` covers configuration logging and
+the real sender's test-error HTTP response. All secrets are synthetic; these
+controls do not establish installed Apprise acceptance or prior user exposure.
+
 
 ### Current-policy quiet-hours replay
 
