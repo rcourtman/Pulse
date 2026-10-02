@@ -1540,8 +1540,8 @@ func classifyTrueNASError(err error, connectionID string) *internalerrors.Monito
 			}
 		}
 		// Transport-level errors: timeout takes precedence over generic connection failures.
-		var urlErr *url.Error
-		if (errors.As(err, &urlErr) && urlErr.Timeout()) || errors.Is(err, context.DeadlineExceeded) {
+		var netErr net.Error
+		if (errors.As(err, &netErr) && netErr.Timeout()) || errors.Is(err, context.DeadlineExceeded) {
 			errType = internalerrors.ErrorTypeTimeout
 		} else {
 			var netOpErr *net.OpError

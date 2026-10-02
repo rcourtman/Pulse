@@ -1476,6 +1476,12 @@ func (nq *NotificationQueue) notifyDeliveryHealthChanged() {
 
 // RecordAudit records a notification delivery attempt in the audit log
 func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool, errorMsg string) error {
+	return nq.recordAuditWithClass(notif, success, errorMsg, "")
+}
+
+// Only the Apprise sender declares a private diagnostic class on this line.
+// Keep legacy callers and other destinations on their existing text classifier.
+func (nq *NotificationQueue) recordAuditWithClass(notif *QueuedNotification, success bool, errorMsg string, declaredClass NotificationFailureClass) error {
 	nq.mu.Lock()
 	defer nq.mu.Unlock()
 
@@ -1498,6 +1504,9 @@ func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool
 	failureClass := ""
 	if !success {
 		failureClass = string(ClassifyNotificationFailure(errorMsg))
+		if declaredClass != "" {
+			failureClass = string(declaredClass)
+		}
 	}
 	_, err = nq.db.Exec(query,
 		notif.ID,
@@ -1925,7 +1934,14 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 	} else {
 		notif.Links = persistedLinks
 	}
-	if auditErr := nq.RecordAudit(notif, success, errorMsg); auditErr != nil {
+	// Withheld provider prose must not erase Apprise's known failure class.
+	// This observation does not participate in retry or DLQ decisions.
+	var declaredClass NotificationFailureClass
+	var declared *NotificationFailureError
+	if (notif.Type == "apprise" || notif.Type == "apprise_resolved") && errors.As(err, &declared) {
+		declaredClass = declared.Class
+	}
+	if auditErr := nq.recordAuditWithClass(notif, success, errorMsg, declaredClass); auditErr != nil {
 		log.Error().
 			Err(auditErr).
 			Str("component", "notification_queue").
