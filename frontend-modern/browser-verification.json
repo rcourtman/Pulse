@@ -1,15 +1,13 @@
 {
   "version": 1,
-  "base_sha": "6c7cd72cb2fd2dc4b769fb1b7da6423b4f37edb0",
-  "verified_at": "2026-10-02T22:36:43Z",
+  "base_sha": "572ea0158b7911bdef9e3405608c7a631b3d7648",
+  "verified_at": "2026-10-02T22:40:54Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Storage/StoragePoolRow.tsx",
-    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts"
+    "frontend-modern/src/features/storageBackups/rowPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Storage/StoragePoolRow.tsx": "09417822bd543ddbc312d0c15a4ea74971066d6623d421d889858e56262b9d3d",
-    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts": "2a93a0176b912283c77b384ee2c66c4bc62c21a04b645eb93917a41740ad2d6e"
+    "frontend-modern/src/features/storageBackups/rowPresentation.ts": "cabd37e3f736467aecff68359fcb97be08bcabbe5c5ec6e0a0da2fe67d2e3261"
   },
   "routes": [
     "/proxmox/storage"
@@ -20,24 +18,16 @@
       "height": 900
     },
     {
-      "width": 600,
-      "height": 844
-    },
-    {
       "width": 390,
-      "height": 844
-    },
-    {
-      "width": 360,
       "height": 844
     }
   ],
   "states": [
-    "Proxmox Storage tab pools table in compact (390), narrow (360), operational (600) and full (1440) container layouts with mock data including Online and Degraded pools",
-    "Pool rows at 390 measured per column with Range rects after the gutter change: name 126px for a 122px need, state 59 for 54, host 106 for 98, usage 39 for 28"
+    "Proxmox Storage tab pools table at 1440 (full layout, 13 rows) rendering the protection badges \"Protected\" and \"Backup Repository\" with matching titles and state words Online/Unknown",
+    "The mock backend did not emit its random ZFS-issue scenario (DEGRADED pool with \"resilver in progress\") in six boots during this pass, so the derived Resilvering/Scrubbing word was not observed live; it is pinned by rowPresentation.test.ts (scan string, scanDetails with percentage, and the non-ZFS fallback)"
   ],
   "interactions": [
-    "Ran the Playwright scrollWidth-over-clientWidth sweep over every th/td leaf at 1440 (nothing reported), 600 (unchanged pre-existing operational host/protection clips), 390 (only the two long pool identities) and 360 (identity strings only)",
-    "Confirmed the !px-1 gutter applies only in the narrow and compact layouts and the operational/full column geometry is byte-identical to the previous sweep"
+    "Ran the Playwright scrollWidth-over-clientWidth sweep over every th/td leaf at 1440: nothing reported in the pools table",
+    "Listed every rendered protection badge text and title at 1440 to confirm non-rebuild labels and titles are unchanged by the compact-label change"
   ]
 }
