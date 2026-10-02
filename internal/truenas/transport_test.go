@@ -1386,6 +1386,15 @@ func TestJSONRPCSnapshotContinuesAfterTelemetryTimeout(t *testing.T) {
 		case "system.info":
 			return protocolFixtureReply{result: map[string]any{"hostname": "inventory-timeout", "version": "TrueNAS-SCALE-25.10.7", "system_serial": "FIXTURE-1", "physmem": 1024}}
 		case "core.subscribe":
+			params, _ := request.Params.([]any)
+			event, _ := params[0].(string)
+			if strings.HasPrefix(event, "app.stats:") {
+				// Only live system telemetry is silent in this fixture. App
+				// inventory's separate best-effort subscription still replies.
+				return protocolFixtureReply{result: "empty-app-stats", notifications: []protocolFixtureNotification{{
+					method: "collection_update", params: map[string]any{"collection": event, "fields": []any{}},
+				}}}
+			}
 			return protocolFixtureReply{result: "silent-realtime"}
 		case "pool.query":
 			return protocolFixtureReply{result: []map[string]any{{"id": 1, "name": "tank", "status": "ONLINE"}}}

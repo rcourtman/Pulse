@@ -45,7 +45,7 @@ func (m *rpcSessionMutex) Lock()   { _ = m.LockContext(context.Background()) }
 func (m *rpcSessionMutex) Unlock() { <-m.token }
 
 // rpcOperationContext applies the same configured timeout as HTTP requests to
-// a whole RPC operation: lock wait, negotiation/authentication, exchange or
+// a serialized RPC/negotiation operation: lock wait, inline authentication, exchange or
 // subscription, and its one permitted read retry share a single budget. A
 // shorter caller deadline is never extended. Keepalive has its own lifetime.
 func (c *Client) rpcOperationContext(ctx context.Context) (context.Context, context.CancelFunc) {

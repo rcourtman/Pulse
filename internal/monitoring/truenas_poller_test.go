@@ -1893,8 +1893,9 @@ func TestTrueNASPollerUnresponsiveRPCDoesNotFreezeOtherConnections(t *testing.T)
 			defer conn.Close()
 			for {
 				var request struct {
-					ID     int64  `json:"id"`
-					Method string `json:"method"`
+					ID     int64             `json:"id"`
+					Method string            `json:"method"`
+					Params []json.RawMessage `json:"params"`
 				}
 				if err := conn.ReadJSON(&request); err != nil {
 					return
@@ -1917,9 +1918,18 @@ func TestTrueNASPollerUnresponsiveRPCDoesNotFreezeOtherConnections(t *testing.T)
 					return
 				}
 				if request.Method == "core.subscribe" {
+					var event string
+					if len(request.Params) != 1 || json.Unmarshal(request.Params[0], &event) != nil {
+						t.Error("subscription did not supply one event")
+						return
+					}
+					var fields any = map[string]any{"cpu": map[string]any{"usage": 12}}
+					if strings.HasPrefix(event, "app.stats:") {
+						fields = []any{}
+					}
 					if err := conn.WriteJSON(map[string]any{
 						"jsonrpc": "2.0", "method": "collection_update",
-						"params": map[string]any{"collection": "reporting.realtime", "fields": map[string]any{"cpu": map[string]any{"usage": 12}}},
+						"params": map[string]any{"collection": event, "fields": fields},
 					}); err != nil {
 						return
 					}

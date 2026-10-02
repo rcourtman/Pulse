@@ -135,10 +135,11 @@ This proves ingestion behaviour, not reporter installation or release delivery.
 
 ### TrueNAS RPC operation budgets and poll isolation
 
-The configured client timeout (30 seconds by default) bounds each logical
-JSON-RPC operation, including its session-lock wait, handshake/authentication,
+The configured client timeout (30 seconds by default) bounds each serialized
+RPC operation, including its session-lock wait, any inline authentication,
 method exchange or subscription, and the permitted read retry/backoff. They
-share one budget; a shorter caller deadline remains effective. A cancelled
+share one budget; initial transport negotiation before a method is separately
+bounded by the same timeout. A shorter caller deadline remains effective. A cancelled
 waiter neither dispatches a request nor alters the current owner's socket or
 transport status. RPC/stream readers receive the bounded context, and a
 timed-out socket is discarded before a subsequent operation authenticates a
