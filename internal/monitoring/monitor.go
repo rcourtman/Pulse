@@ -1931,6 +1931,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 	// The queue worker starts with the manager but has no processor until all
 	// saved destinations are installed. Activate it only after the last load;
 	// a slow migration or config read must not cancel due persisted work.
+	m.notificationMgr.SetQuietHoursPolicyProvider(m.alertManager.QuietHoursNotificationPolicy)
 	m.notificationMgr.StartQueueProcessing()
 
 	// In mock mode the canonical sampler owns demo chart history by default.
@@ -5537,6 +5538,18 @@ func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface, sinks ..
 		seenTargets[targetID] = struct{}{}
 		metricKey := fmt.Sprintf("agent:%s", targetID)
 		observedAt := unifiedResourceObservedAt(resource, now)
+
+		// Native TrueNAS temperature must also survive the local History path.
+		// A sufficiently covered ring/store read need not query native fallback.
+		if monitorHasSource(resource.Sources, unifiedresources.SourceTrueNAS) && resource.Temperature != nil {
+			value := *resource.Temperature
+			if value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0) {
+				if m.metricsHistory != nil {
+					m.metricsHistory.AddGuestMetric(metricKey, "temperature", value, observedAt)
+				}
+				appendStoreWrite("agent", targetID, "temperature", value, observedAt)
+			}
+		}
 
 		if metric := resource.Metrics.CPU; metric != nil {
 			value := metric.Percent

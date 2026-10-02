@@ -204,6 +204,7 @@ type TimeSeriesPoint struct {
 // SystemMetricHistory stores provider-native TrueNAS system history before it
 // is normalized onto the canonical monitoring guest-chart surface.
 type SystemMetricHistory struct {
+	TemperatureCelsius   map[string][]TimeSeriesPoint
 	CPUPercent           []TimeSeriesPoint
 	MemoryPercent        []TimeSeriesPoint
 	MemoryUsedBytes      []TimeSeriesPoint

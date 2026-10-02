@@ -20,7 +20,10 @@ SECRET = "synthetic-docker-docs-secret"
 
 def section(heading):
     guide = (ROOT / "docs/UNIFIED_AGENT.md").read_text()
-    return guide.split("### " + heading + "\n", 1)[1].split("\n### ", 1)[0]
+    marker = "### " + heading + "\n"
+    if marker not in guide:
+        raise AssertionError(f"missing diagnostic section: {heading}")
+    return guide.split(marker, 1)[1].split("\n### ", 1)[0]
 
 
 def command(heading):
@@ -105,6 +108,52 @@ class DockerTroubleshootingDocsTest(unittest.TestCase):
         for operation in ("test -S /var/run/docker.sock", "docker version --format", "docker ps -a"):
             self.assertIn(operation, recipe)
             self.assertIn(operation, source)
+
+    def test_command_channel_guidance_does_not_confuse_scope_with_admission(self):
+        text = section("Commands enabled but remote control blocked")
+        for required in (
+            "no admitted command channel connected", "not a connected session",
+            "Automatic updates ready", "Changing Proxmox API permissions cannot",
+            "locally on the affected node", "`dial websocket`", "`registration failed`",
+            "No matching entry is\ninconclusive", "not the full journal",
+            "Omit tokens, cookies, URLs, hostnames, addresses", "Keep saved identity and credentials intact",
+            "do not delete state, loosen TLS", "commands disabled remains an alternative",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, text)
+        for label in ("Connected and registered with Pulse command server",
+                      "WebSocket connection failed repeatedly, reconnecting"):
+            self.assertIn(label, text)
+            self.assertIn(label, (ROOT / "internal/hostagent/commands.go").read_text())
+        policy = (ROOT / "internal/api/connections_aggregator.go").read_text()
+        self.assertIn("agent reports command execution enabled, but no admitted command channel is connected", policy)
+        guest = section("Docker visible in one LXC but missing in another")
+        self.assertIn("#commands-enabled-but-remote-control-blocked", guest)
+        self.assertIn("do not repeat the guest probe", guest)
+        self.assertNotRegex(text, r"--property=Environment|systemctl (?:cat|restart)|--insecure")
+
+    def test_command_channel_journal_check_is_bounded_and_read_only(self):
+        recipe = command("Commands enabled but remote control blocked")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name, body in (
+                ("sudo", '#!/bin/sh\nexec "$@"\n'),
+                ("journalctl", '#!/usr/bin/python3\nimport json, sys\nfrom pathlib import Path\n'
+                 'Path("' + str(root / "argv.json") + '").write_text(json.dumps(sys.argv[1:]))\n'
+                 'print("WebSocket connection failed repeatedly, reconnecting")\n'),
+            ):
+                path = root / name
+                path.write_text(body)
+                path.chmod(0o700)
+            env = dict(os.environ, PATH=f"{root}:{os.environ['PATH']}", SYNTHETIC_SECRET=SECRET)
+            result = subprocess.run(["bash", "-eu", "-c", recipe], env=env,
+                                    capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads((root / "argv.json").read_text()), [
+                "-u", "pulse-agent.service", "--since", "15 minutes ago", "-n", "200",
+                "--no-pager", "--output=cat",
+            ])
+            self.assertNotIn(SECRET, result.stdout + result.stderr)
 
     def run_guest(self, *, socket="present", docker="ok", pct="ok", cli=True):
         with tempfile.TemporaryDirectory() as temporary:
