@@ -216,6 +216,99 @@ leave the original host unchanged. Follow
 [Clone identity recovery](UNIFIED_AGENT.md#duplicate-agents) for the configuration
 precedence, systemd example and checks after restart.
 
+#### Excessive CPU, writes or database growth
+
+First distinguish **Pulse server activity**, agent activity and total host or
+storage-device activity. A database's size is retained space, not the number of
+bytes written: repeated updates can produce high writes without growing the file.
+Keep the original running version, uptime, measurement time and workload before
+changing anything. A different binary can migrate persistent data; switching
+back to an older version does not make that data a clean older-version baseline.
+
+- For CPU, record the measuring tool, allocated CPUs or container quota and
+  whether its percentage represents one core or the whole allocation. A `ps`
+  `%CPU` value is an average since process start, not a recent sampling window.
+- Note fleet size, polling interval and whether Pulse dashboards are open. If
+  safe, close all Pulse tabs and compare another equal-length window, without
+  restarting the server or changing polling. A decrease narrows the workload;
+  it does not establish the cause or prove monitoring is healthy.
+- If the host is unresponsive or storage is nearly full, do not prolong the
+  failure to collect a benchmark. Keep existing observations and report the
+  interruption instead. Do not enable Debug or repeatedly export diagnostics
+  merely to measure performance; those actions add work and can change the result.
+
+For a responsive **Linux systemd / Proxmox LXC** install, the following reads
+two process-I/O samples, waiting 60 seconds between them. Run it inside the
+Pulse container for LXC, not on the Proxmox host. Substitute the actual service
+name (`pulse-backend` on some older installs). Use an account authorised to
+read the process counters; no service restart or database access is needed.
+
+```bash
+# systemd / Proxmox LXC: bounded process-write samples
+(
+  set -e
+  for sample in 1 2; do
+    date -u +'%Y-%m-%dT%H:%M:%SZ'
+    pid=$(systemctl show pulse --property=MainPID --value)
+    case "$pid" in
+      ''|0|*[!0-9]*) printf 'No running Pulse PID; sample unavailable.\n' >&2; exit 1 ;;
+    esac
+    TZ=UTC ps -p "$pid" -o pid=,lstart=
+    sudo awk '
+      $1 == "write_bytes:" || $1 == "cancelled_write_bytes:" { print; fields++ }
+      END { if (fields != 2) exit 1 }
+    ' "/proc/$pid/io"
+    if [ "$sample" -eq 1 ]; then sleep 60; fi
+  done
+)
+```
+
+Compare `write_bytes` only when both samples have the same PID and process
+start time, no restart occurred, and the counter did not decrease. Divide the
+byte difference by the **actual elapsed seconds**. This is storage-accounted
+process I/O, not filesystem growth or physical SSD wear; cancelled writes and
+background writeback can differ from device measurements. Keep
+`cancelled_write_bytes` alongside it, not as proof of bytes reaching the drive.
+An extrapolated GB/day rate is a projection of that short window, not a measured
+day's total. Preserve the window and units with the result.
+
+For **Docker / Compose**, run this on the Docker host, replacing `pulse` with
+the running container name. It reads only the start time and selected statistics,
+not the container environment or configuration.
+
+```bash
+# Docker: bounded container statistics
+(
+  set -e
+  for sample in 1 2; do
+    date -u +'%Y-%m-%dT%H:%M:%SZ'
+    docker inspect --format 'Started={{.State.StartedAt}}' pulse
+    stats=$(docker stats --no-stream --format \
+      'CPU={{.CPUPerc}} Memory={{.MemUsage}} BlockIO={{.BlockIO}}' pulse)
+    if [ -z "$stats" ]; then
+      printf 'Container statistics unavailable; no zero inferred.\n' >&2
+      exit 1
+    fi
+    printf '%s\n' "$stats"
+    if [ "$sample" -eq 1 ]; then sleep 60; fi
+  done
+)
+```
+
+Docker **BlockIO** is cumulative read / write activity, not bytes per second;
+compare its write side only across the same uninterrupted container run. Its
+displayed units are rounded. Container, process and whole-device counters have
+different scopes and must not be added together or compared as interchangeable
+measurements. A failed, denied or empty read is unavailable, not zero activity.
+
+Keep persistent data on durable storage. Do not delete or truncate history,
+incident, queue or audit files, remove database indexes, or move the data
+directory to tmpfs as a diagnostic workaround. These actions can lose evidence
+or protections without fixing the writer. Do not post databases, profiles, full
+`/proc` dumps, container configuration or raw environments. Share only the bounded
+measurements, workload, versions and a relevant manually redacted error; follow
+[Getting Help](#-getting-help) for any additional evidence.
+
 ### Notifications
 
 #### No alert when Pulse, power or internet goes down
