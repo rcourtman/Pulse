@@ -15,6 +15,19 @@
 
 ## Purpose
 
+### Physical disk observation provenance on v6.4 — issue #2319
+
+The read-only `PhysicalDiskView.SourceStatus` accessor returns the existing
+per-source observation and its actual presence, including an explicit zero
+status; nil or absent source metadata stays absent. A disk's inherited PVE
+instance is only presentation scope and cannot manufacture a Proxmox source.
+This small prerequisite of main's Agent-only SMART readback repair changes no
+resource wire shape, ID, collector, schedule or freshness policy. Status is
+returned by value, not as mutable source state. `TestView_PhysicalDiskSourceStatusRequiresAnObservation`
+in `internal/unifiedresources/views_test.go` covers Agent-only, explicit
+Proxmox, nil and caller-mutation boundaries; monitoring's repeated full/skip
+roundtrip test verifies the consuming no-churn path.
+
 ### Canonical RAID configured-member evidence — issue #2369
 
 Host RAID metadata and read views retain optional `requiredDevices` (configured

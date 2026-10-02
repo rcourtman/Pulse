@@ -25,6 +25,10 @@ That scope must not invent a Proxmox source during a skipped physical-disk poll.
 Agent-only disks remain visible through their Agent source. Explicit failed-
 query Agent fallback still supplies PVE inventory, while permission failures
 retain prior inventory and genuine PVE disks preserve identity and readings.
+The v6.4 prerequisite `PhysicalDiskView.SourceStatus` exposes the existing
+source map by value: explicit entry presence is provenance, not a healthy or
+freshness verdict. Its nil/Agent-only/Proxmox/mutation view regression pins
+the boundary before monitoring uses it; no source metadata is synthesized.
 No historical rows are deleted and no collection interval is changed.
 `TestPhysicalDiskSkippedPollDoesNotPromoteAgentOnlySMARTToPVEInventory` pins
 three empty-inventory/full-skip cycles with no new journal rows, and the
