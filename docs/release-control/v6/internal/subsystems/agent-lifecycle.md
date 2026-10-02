@@ -15,6 +15,24 @@
 
 ## Purpose
 
+### Release-line routine polling write repairs — issues #2319/#2320
+
+A linked Agent-only SMART disk's inherited PVE instance is presentation scope,
+not a PVE inventory observation. Skipped PVE polls require an actual Proxmox
+source before copying a disk into PVE-owned state. Agent source admission,
+identity, collected readings and command authority remain unchanged.
+`TestPhysicalDiskSkippedPollDoesNotPromoteAgentOnlySMARTToPVEInventory` pins
+repeated full/skip cycles; genuine PVE readback retains its existing continuity.
+
+Routine successful agent config fetches are audited on the first delivery
+since startup, a token or desired-config hash change, or after 24 hours since
+the previous audit. Every failed fetch remains audited. Signing, payloads,
+scopes, response delivery and existing security rows are unchanged.
+`TestAgentConfigFetchAuditsNewDeliveriesAndEveryFailure` and the tracker
+regressions in `internal/api/unified_agent_handlers_test.go` cover the rule.
+These are synthetic source controls, not installed field acceptance.
+
+
 ### MD RAID required members and spares — issue #2369
 
 Host RAID reports carry optional `requiredDevices`: the configured member count
