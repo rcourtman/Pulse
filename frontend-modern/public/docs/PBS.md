@@ -242,14 +242,24 @@ Start with one affected PBS and a recent, unlocked time range:
    collecting the identities again. In your signed-in browser, open developer
    tools → **Network**, filter for `metrics-store/history`, then open the
    affected **History** tab. Do not refresh or restart the server. Inspect one
-   completed request with `metric=cpu` and its `resourceType`, `resourceId` and
-   `range` query fields. Do not edit or replay the request.
-3. Check its HTTP status and **Response** locally. A successful JSON response
-   with an empty `points` array means this request returned no samples for that
-   target and range; it does not prove there is no data under another target.
-   Non-empty `points` with an empty chart points to a different display problem.
-   An error, a cancelled request, or an HTML sign-in page is not an empty series.
-   Record a redacted error if present rather than changing permissions.
+   completed request for the drawer's `resourceType`, `resourceId` and `range`.
+   The drawer normally fetches all chart metrics together: a request **without
+   `metric`** is expected, so do not wait for a separate `metric=cpu` request.
+   Do not edit or replay the request.
+3. Check its HTTP status and **Response** locally. The query determines which
+   response field to inspect:
+   - **No `metric` query field:** inspect the `metrics` object. An empty
+     `metrics: {}` means this request returned no series. If it has a `cpu`
+     entry, note whether the `metrics.cpu` array is empty or non-empty; other
+     metrics can be present even when CPU is absent.
+   - **`metric=cpu`:** inspect the `points` array for that single metric.
+     An empty array means this request returned no CPU samples.
+   A successful empty result applies only to this target and range; it does
+   not prove there is no data under another target. Non-empty samples with an
+   empty chart point to a different display problem. A measured zero is a
+   sample, not an empty result. An error, a cancelled request, or an HTML
+   sign-in page is not an empty series. Record a redacted error if present
+   rather than changing permissions.
 
 If no matching request appears, record that fact and the visible chart message;
 do not paste scripts into the browser console to force one. If opening the
@@ -257,8 +267,9 @@ page makes the browser unresponsive, stop and retain the observations already
 available. No repeated reproduction is needed.
 
 When reporting this, share only the failing route, time range, whether the
-request target agrees with the drawer, HTTP status, and whether `points` is
-empty or non-empty. Use consistent placeholders for private hostnames and IDs.
+request target agrees with the drawer, HTTP status, and the response shape:
+`metrics` empty, CPU absent, CPU empty/non-empty, or single-metric `points`
+empty/non-empty. Use consistent placeholders for private hostnames and IDs.
 Do not share a HAR export, **Copy as cURL** output, request headers, cookies,
 tokens, or a full response. These checks use the existing browser session;
 they need no new API token or command-execution permission.
