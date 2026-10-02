@@ -28,6 +28,9 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
     },
     hoverGroup,
   );
+  const refreshStatus = createMemo(() =>
+    chart.refreshFailed() ? 'Could not refresh history. Showing the last successful result.' : '',
+  );
   const accessibleDescription = createMemo(() =>
     getHistoryChartAccessibleDescription({
       data: chart.data(),
@@ -51,6 +54,14 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
         unit={props.unit}
       />
 
+      <p
+        role="status"
+        aria-label="History refresh status"
+        class="text-xs text-amber-700 dark:text-amber-300"
+      >
+        {refreshStatus()}
+      </p>
+
       <div
         class={`relative flex-1 w-full ${props.compact ? 'min-h-[120px]' : 'min-h-[200px]'}`}
         ref={containerRef}
@@ -69,8 +80,8 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
           onMouseLeave={chart.handleMouseLeave}
         />
         <p id={descriptionId} class="sr-only">
-          {accessibleDescription()} Use Left and Right arrow keys to inspect readings, Home and End
-          for the first and last reading, and Escape to clear inspection.
+          {refreshStatus()} {accessibleDescription()} Use Left and Right arrow keys to inspect
+          readings, Home and End for the first and last reading, and Escape to clear inspection.
         </p>
         <p class="sr-only" aria-live="polite" aria-atomic="true">
           {chart.keyboardInspecting() && chart.hoveredPoint()
