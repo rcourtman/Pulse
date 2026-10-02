@@ -14,9 +14,83 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
+
+// Configuration responses intentionally let an authorised editor round-trip
+// targets; routine logs must not duplicate their credentials or config keys.
+func TestAppriseConfigurationLogsWithholdSecrets(t *testing.T) {
+	const secret = "apprise-api-synthetic-secret"
+	var captured bytes.Buffer
+	original := log.Logger
+	log.Logger = zerolog.New(zerolog.SyncWriter(&captured))
+	defer func() { log.Logger = original }()
+	cfg := notifications.AppriseConfig{Enabled: true, Mode: notifications.AppriseModeHTTP, ServerURL: "https://fixture/" + secret,
+		ConfigKey: secret, APIKey: secret, CLIPath: secret, APIKeyHeader: secret, Targets: []string{"future://" + secret}}
+	manager := new(MockNotificationManager)
+	persistence := new(MockNotificationConfigPersistence)
+	monitor := new(MockNotificationMonitor)
+	manager.On("GetAppriseConfig").Return(cfg).Twice()
+	manager.On("SetAppriseConfig", mock.MatchedBy(func(got notifications.AppriseConfig) bool {
+		return got.ServerURL == cfg.ServerURL && got.ConfigKey == secret && got.APIKey == secret && got.Targets[0] == cfg.Targets[0]
+	})).Return().Once()
+	persistence.On("SaveAppriseConfig", mock.MatchedBy(func(got notifications.AppriseConfig) bool {
+		return got.ServerURL == cfg.ServerURL && got.ConfigKey == secret && got.APIKey == secret && got.Targets[0] == cfg.Targets[0]
+	})).Return(nil).Once()
+	monitor.On("GetNotificationManager").Return(manager)
+	monitor.On("GetConfigPersistence").Return(persistence)
+	body, _ := json.Marshal(cfg)
+	w := httptest.NewRecorder()
+	NewNotificationHandlers(nil, monitor).UpdateAppriseConfig(w, httptest.NewRequest(http.MethodPost, "/api/notifications/apprise", bytes.NewReader(body)))
+	if w.Code != http.StatusOK || strings.Contains(captured.String(), secret) {
+		t.Fatal("configuration update failed or a synthetic credential reached its log")
+	}
+	if !strings.Contains(captured.String(), "hasConfigKey") || !strings.Contains(captured.String(), "targetCount") {
+		t.Fatal("structured configuration diagnostics were lost")
+	}
+	var response map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil || response["apiKey"] != "" || response["hasApiKey"] != true {
+		t.Fatal("saved API-key response contract changed")
+	}
+	manager.AssertExpectations(t)
+	persistence.AssertExpectations(t)
+}
+
+// Exercise the real sender through the handler, not an assumed safe mock error.
+func TestAppriseTestResponseWithholdsProviderSecrets(t *testing.T) {
+	const secret = "apprise-api-synthetic-secret"
+	var captured bytes.Buffer
+	original := log.Logger
+	log.Logger = zerolog.New(zerolog.SyncWriter(&captured))
+	defer func() { log.Logger = original }()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, "provider-private-content ", secret, " ", r.URL.String())
+	}))
+	defer server.Close()
+	manager := notifications.NewNotificationManagerWithDataDir("", t.TempDir())
+	defer manager.Stop()
+	if err := manager.UpdateAllowedPrivateCIDRs("127.0.0.1/32,::1/128"); err != nil {
+		t.Fatal(err)
+	}
+	monitor := new(MockNotificationMonitor)
+	monitor.On("GetNotificationManager").Return(manager)
+	body, _ := json.Marshal(map[string]any{"method": "apprise", "config": notifications.AppriseConfig{Enabled: true, Mode: notifications.AppriseModeHTTP,
+		ServerURL: server.URL + "/" + secret, ConfigKey: secret, APIKey: secret}})
+	w := httptest.NewRecorder()
+	NewNotificationHandlers(nil, monitor).TestNotification(w, httptest.NewRequest(http.MethodPost, "/api/notifications/test", bytes.NewReader(body)))
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "HTTP 401") {
+		t.Fatal("structured HTTP failure was lost from the test result")
+	}
+	for _, forbidden := range []string{secret, "provider-private-content"} {
+		if strings.Contains(w.Body.String(), forbidden) || strings.Contains(captured.String(), forbidden) {
+			t.Error("test response or log exposed synthetic provider credentials/content")
+		}
+	}
+}
 
 func TestRedactSecretsFromURL(t *testing.T) {
 	tests := []struct {
