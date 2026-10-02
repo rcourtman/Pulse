@@ -1000,6 +1000,43 @@ func TestView_PhysicalDiskViewNodeFallsBackToIdentityHostnames(t *testing.T) {
 	}
 }
 
+func TestView_PhysicalDiskSourceStatusRequiresAnObservation(t *testing.T) {
+	var nilView PhysicalDiskView
+	if _, ok := nilView.SourceStatus(SourceProxmox); ok {
+		t.Fatal("nil view invented a Proxmox observation")
+	}
+	r := &Resource{
+		Type:         ResourceTypePhysicalDisk,
+		Sources:      []DataSource{SourceAgent},
+		Proxmox:      &ProxmoxData{Instance: "pve"},
+		PhysicalDisk: &PhysicalDiskMeta{},
+		SourceStatus: map[DataSource]SourceStatus{
+			SourceAgent: {Status: "online"},
+		},
+	}
+	v := NewPhysicalDiskView(r)
+	if v.Instance() != "pve" {
+		t.Fatal("fixture did not inherit its presentation instance")
+	}
+	if _, ok := v.SourceStatus(SourceProxmox); ok {
+		t.Fatal("Agent presentation scope invented a Proxmox observation")
+	}
+	if status, ok := v.SourceStatus(SourceAgent); !ok || status.Status != "online" {
+		t.Fatalf("actual Agent observation lost: %+v, %v", status, ok)
+	}
+	// Observation provenance is independent of freshness or appliance health.
+	// Even a zero-valued entry records that source; an absent map entry does not.
+	r.SourceStatus[SourceProxmox] = SourceStatus{}
+	status, ok := v.SourceStatus(SourceProxmox)
+	if !ok {
+		t.Fatal("explicit Proxmox observation was treated as absent")
+	}
+	status.Status = "offline"
+	if r.SourceStatus[SourceProxmox].Status != "" {
+		t.Fatal("caller modified the stored source status through the view")
+	}
+}
+
 func TestView_DockerHostViewAccessors(t *testing.T) {
 	now := time.Date(2026, 2, 10, 12, 4, 0, 0, time.UTC)
 	temp := 44.4

@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 )
 
 type hostRemovalLifecycleHTTPRuntime struct {
@@ -645,5 +646,75 @@ func TestHostAgentRenameKeepsCommandGateAlignedWithChannelAdmission(t *testing.T
 	}
 	if _, ok := router.admitAgentExecToken(rawToken, "agent-2", "web01"); ok {
 		t.Fatal("channel admission admitted a different agent ID on a matching hostname")
+	}
+}
+
+// Agents poll their config every minute. Only deliveries that tell an auditor
+// something new are recorded, while every failed fetch still is.
+func TestAgentConfigFetchAuditsNewDeliveriesAndEveryFailure(t *testing.T) {
+	capture := &auditCaptureLogger{}
+	prevLogger := audit.GetLogger()
+	prevManager := GetTenantAuditManager()
+	audit.SetLogger(capture)
+	SetTenantAuditManager(nil)
+	t.Cleanup(func() {
+		audit.SetLogger(prevLogger)
+		SetTenantAuditManager(prevManager)
+	})
+
+	handler, monitor := newUnifiedAgentHandlers(t, nil)
+	hostID := seedUnifiedAgentHost(t, monitor)
+	monitorState(t, monitor).UpsertHost(models.Host{ID: hostID, Hostname: "node-1", TokenID: "runtime-token"})
+	fetch := func(scopes ...string) int {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/"+hostID+"/config", nil)
+		attachAPITokenRecord(req, &config.APITokenRecord{ID: "runtime-token", Scopes: scopes})
+		rec := httptest.NewRecorder()
+		handler.HandleConfig(rec, req)
+		return rec.Code
+	}
+
+	for i := 0; i < 3; i++ {
+		if code := fetch(config.ScopeAgentConfigRead, config.ScopeAgentReport); code != http.StatusOK {
+			t.Fatalf("config fetch %d status = %d, want 200", i, code)
+		}
+	}
+	commandsEnabled := true
+	if err := monitor.UpdateHostAgentConfig(hostID, &commandsEnabled); err != nil {
+		t.Fatalf("UpdateHostAgentConfig: %v", err)
+	}
+	for i := 0; i < 2; i++ {
+		if code := fetch(config.ScopeAgentConfigRead, config.ScopeAgentReport); code != http.StatusOK {
+			t.Fatalf("config fetch after change %d status = %d, want 200", i, code)
+		}
+	}
+	for i := 0; i < 2; i++ {
+		if code := fetch(config.ScopeMonitoringRead); code == http.StatusOK {
+			t.Fatalf("config fetch with only %s succeeded", config.ScopeMonitoringRead)
+		}
+	}
+
+	capture.mu.Lock()
+	events := append([]audit.Event(nil), capture.events...)
+	capture.mu.Unlock()
+	var successes []string
+	failures := 0
+	for _, event := range events {
+		if event.EventType != "agent_config_fetch" {
+			continue
+		}
+		if event.Success {
+			successes = append(successes, event.Details)
+		} else {
+			failures++
+		}
+	}
+	if len(successes) != 2 ||
+		!strings.Contains(successes[0], "reason=first_since_start") ||
+		!strings.Contains(successes[1], "reason=config_changed") {
+		t.Fatalf("successful fetch audit events = %q, want the first delivery and the config change", successes)
+	}
+	if failures != 2 {
+		t.Fatalf("failed fetch audit events = %d, want every failure", failures)
 	}
 }
