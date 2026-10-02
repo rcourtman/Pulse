@@ -30,6 +30,7 @@ const buildRecord = (overrides: Partial<StorageRecord> = {}): StorageRecord => (
   observedAt: Date.now(),
   details: {
     node: 'truenas01',
+    parentId: 'host-truenas01',
     type: 'pool',
     zfsPool: {
       state: 'ONLINE',
@@ -66,6 +67,7 @@ const buildRecord = (overrides: Partial<StorageRecord> = {}): StorageRecord => (
 const buildDisk = (): Resource =>
   ({
     id: 'disk-1',
+    parentId: 'host-truenas01',
     type: 'physical_disk',
     name: 'disk-1',
     displayName: 'disk-1',
@@ -249,6 +251,7 @@ describe('storagePoolDetailPresentation', () => {
       },
       details: {
         type: 'unraid-array',
+        parentId: 'host-tower',
         platform: 'unraid',
         topology: 'array',
         arrayState: 'STARTED',
@@ -257,6 +260,7 @@ describe('storagePoolDetailPresentation', () => {
     const disks = [
       {
         id: 'parity',
+        parentId: 'host-tower',
         type: 'physical_disk',
         name: 'Parity',
         displayName: 'Parity',
@@ -277,6 +281,7 @@ describe('storagePoolDetailPresentation', () => {
       },
       {
         id: 'disk1',
+        parentId: 'host-tower',
         type: 'physical_disk',
         name: 'Disk 1',
         displayName: 'Disk 1',

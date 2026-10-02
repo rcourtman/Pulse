@@ -1,45 +1,41 @@
 {
   "version": 1,
-  "base_sha": "e6540da45da4de4bcb954463373d8ea9f196eb56",
-  "verified_at": "2026-10-02T21:04:53Z",
+  "base_sha": "689079622dfa8fb472349ad13c36ad2068f0c38e",
+  "verified_at": "2026-10-02T21:27:29.856838Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx"
+    "frontend-modern/src/features/storageBackups/storageAdapters.ts",
+    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx": "f2d8a72d62d06a89d3a70bd82d63d658ece3ac8acf3a0f688fb751a250d6f057"
+    "frontend-modern/src/features/storageBackups/storageAdapters.ts": "7933ab99a1cfdf35bcebf0f351ec2b6a8c486b1281a9a3daa36f828fa657c52e",
+    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts": "dd97511242f9375a725f69b3f8f40b2aee19998bdcdd2e82ce996d27f9fc519b"
   },
-  "routes": [
-    "/kubernetes"
-  ],
+  "routes": ["/browser-tests/pool-ownership.html"],
   "viewports": [
     {
-      "width": 1440,
-      "height": 900
-    },
-    {
-      "width": 1280,
-      "height": 900
-    },
-    {
-      "width": 900,
+      "width": 1365,
       "height": 900
     },
     {
       "width": 390,
-      "height": 900
+      "height": 844
     }
   ],
   "states": [
-    "Mock estate (1 Kubernetes cluster, 2 nodes, 6 pods, 2 deployments) with one CronJob carrying lastSuccessfulTime, one completed Job, one DaemonSet and one StatefulSet in the Workload Controllers table, Chromium",
-    "Workload Controllers table at the full desktop layout where the Detail column is shown (1440px) and at container widths where it is hidden (1280, 900, 390px)",
-    "Controller row expanded to its detail disclosure at 390px"
+    "Production StoragePoolDetail through the real storage adapter; desktop Chromium light and phone WebKit dark; ZFS/UnRAID host A and B, missing ownership and direct children",
+    "12 recorded presentation states, plus per-engine History target replacement and Overview return"
   ],
   "interactions": [
-    "Measured every controllers table header and cell for clipped text (scrollWidth over clientWidth) at each viewport; before the change the Detail cells needed 258px in a 119px column, after it the CronJob row reads \"Last success 1h ago\" and the Job row \"Completed 41m ago\" with no clipped element in the column and no horizontal page scroll",
-    "Read the Detail span title attributes: they carry the absolute local time (\"Last success: Oct 2, 2026, 08:51 PM\") instead of the raw RFC 3339 string",
-    "Probed the rendered width of every label the column can produce (Started, Completed, Last success, Last run with ages up to 365d) against the 135px Detail cell at 1440px; all fit whole",
-    "Compared before and after screenshots of the table at 1440px; the StatefulSet service name now truncates with an ellipsis inside the cell instead of being cut by the cell edge"
+    "Replace the selected host in the mounted detail: a remote 82\u00b0C/99-error disk appears only on its owning host; local temperature and errors remain visible",
+    "Missing ownership omits inferred Physical Disks without removing ZFS information; direct children remain",
+    "History range and canonical history-a/history-b requests stay isolated while selected hosts change; no horizontal page overflow"
   ],
-  "command": "playwright chromium against a private mock-mode stack built from this commit (backend :7693, vite :5213)"
+  "observations": {
+    "playwright": "1.56.1",
+    "expected_playwright": "1.56.1",
+    "result": "browser/result.json",
+    "parent": "browser/parent.json",
+    "driver": "frontend-modern/browser-tests/pool-ownership.cjs"
+  }
 }

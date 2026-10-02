@@ -238,6 +238,7 @@ describe('StoragePoolDetail', () => {
               [
                 {
                   id: 'disk1',
+                  parentId: 'storage-1',
                   type: 'physical_disk',
                   name: 'Disk 1',
                   displayName: 'Disk 1',
