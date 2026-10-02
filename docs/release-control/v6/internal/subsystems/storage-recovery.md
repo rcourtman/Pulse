@@ -2695,6 +2695,13 @@ vdev layout is reported` in
 
 ## Current State
 
+The agent config-fetch audit suppression cache is bounded to 4,096
+organisation/agent pairs, independently of persisted security audit history.
+Expiry-index pruning forgets only suppression state, never audit rows or
+recovery evidence. Unremembered overflow deliveries remain auditable with
+`reason=capacity`; cache expiry, overflow, or restart is not a successful
+storage operation or a reason to delete historical events.
+
 ### Container diagnostics shares private bootstrap transport (1 October 2026)
 
 Recovery-adjacent diagnostics now reuse the canonical complete installer
