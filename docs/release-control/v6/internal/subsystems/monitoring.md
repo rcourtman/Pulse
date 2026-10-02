@@ -1483,6 +1483,10 @@ service-history reads plus denial/recovery without fabricated samples.
    resource timestamps between cohorts, cover every node within twenty seconds,
    and refresh provider-backed fixtures only once per full rotation so one demo
    tick cannot manufacture an estate-wide WebSocket delta.
+   The mock estate carries shared storage in the shape the poller produces,
+   not the per-node shape the PVE API returns: a shared PBS storage is one
+   cluster-scoped row listing its reporting nodes (issue 1049), never one row
+   per node with a different usage figure on each.
    Mock metrics history must also stay bounded independently of estate size:
    eager multi-day PVE guest history is limited to a deterministic sample spread
    across the estate, while every omitted guest continues to receive the same

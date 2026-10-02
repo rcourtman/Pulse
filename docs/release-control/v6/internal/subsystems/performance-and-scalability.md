@@ -356,6 +356,9 @@ leaving broadcast headroom to coalesce several sampler invalidations. A cohort
 must not rebase unchanged guest, node, storage, or disk evidence, and the
 provider-backed fixture set refreshes once per full rotation rather than on
 every tick.
+Shared storage in the mock estate stays one row per cluster per store, so the
+Storage surface grows with the number of storages rather than with the node
+count times the number of shared storages.
 
 The browser applies resource deltas to its connection-scoped raw baseline, but
 canonicalizes and reconciles only changed resources plus the host-merge groups
