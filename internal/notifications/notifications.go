@@ -792,6 +792,20 @@ func (n *NotificationManager) StartQueueProcessing() {
 	}
 }
 
+// SetQuietHoursPolicyProvider binds persistent replay to the alert owner's
+// current schedule. Install it before StartQueueProcessing during bootstrap.
+// Each provider call must return a lock-independent, read-only evaluator.
+func (n *NotificationManager) SetQuietHoursPolicyProvider(provider func() func(*alerts.Alert, time.Time) *time.Time) {
+	n.mu.RLock()
+	queue := n.queue
+	n.mu.RUnlock()
+	if queue != nil {
+		queue.mu.Lock()
+		queue.quietHoursPolicy = provider
+		queue.mu.Unlock()
+	}
+}
+
 // SetTenantIdentityResolver installs an org-backed resolver for the tenant
 // identity stamped into webhook payloads. It overrides the
 // PULSE_TENANT_ID / PULSE_TENANT_NAME environment defaults; multi-tenant

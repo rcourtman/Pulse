@@ -1850,6 +1850,31 @@ keep schedules such as `00:00` to `23:59` active through the full final
 minute instead of expiring at `23:59:00`. Alert quiet-hours proofs should
 control time through the alert manager clock hook instead of depending on wall
 clock execution at whatever second the test runner happens to hit.
+The schedule compares local civil clock minutes on the selected calendar day,
+not `time.Date` instants. Both occurrences of a repeated minute have the same
+quiet-hours policy; nonexistent clock minutes do not shift the configured
+start or end. Initial queued replay uses the first real minute outside the
+current non-full-day window, including an unselected day reached at midnight.
+This does not reinterpret the day toggles as the previous evening's ownership.
+Full-day windows retain the existing daily revalidation boundary; it is not an
+invented open minute or permission to send during a continuous schedule.
+`TestQuietHoursDaylightSavingClockAndReplay` in
+`internal/alerts/quiet_hours_test.go` checks London, New York and Lord Howe
+(one-hour and half-hour changes), inclusive boundaries and exact UTC replay.
+`TestQuietHoursOvernightSelectedCalendarDays` checks overnight day selection.
+Quiet-hours location fallback is read-only; configuration updates own the
+location cache, including when public suppression helpers run concurrently.
+`Manager.QuietHoursNotificationPolicy` exposes an immutable read-only snapshot
+to the notification owner before it takes queue or per-alert delivery locks.
+Initial admission and queued replay share civil-clock/category semantics,
+including repeated/skipped minutes and inclusive ends. The queue revalidates
+every due attempt against current policy rather than trusting old replay
+metadata. Policy snapshots neither mutate alert lifecycle/acknowledgement nor
+select destinations; cancellation and actual delivery remain queue-owned.
+`TestQuietHoursDeliverySnapshotIsCurrentIndependentAndReadOnly` and
+`TestQuietHoursDeliverySnapshotConcurrentConfigUpdates` in
+`internal/alerts/quiet_hours_test.go` cover snapshot isolation and concurrent
+configuration reads. This establishes source scheduling, not external receipt.
 Quiet-hours suppression also applies to alert delivery lifecycle, not only the
 initial raised notification. Resolved notifications must not fan out when the
 alert was never notified or was already acknowledged, and monitoring-driven
