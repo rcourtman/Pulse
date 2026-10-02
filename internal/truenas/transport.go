@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rs/zerolog/log"
 )
 
 var errRPCStreamSessionConsumed = errors.New("truenas rpc stream session cannot be reused")
@@ -60,7 +61,8 @@ func (c *Client) rpcOperationContext(ctx context.Context) (context.Context, cont
 }
 
 type discardRPCSessionError struct {
-	err error
+	method string
+	err    error
 }
 
 func (e *discardRPCSessionError) Error() string {
@@ -69,7 +71,7 @@ func (e *discardRPCSessionError) Error() string {
 
 func (e *discardRPCSessionError) Unwrap() error { return e.err }
 
-func discardRPCSessionForStreamError(err error) error {
+func discardRPCSessionForStreamError(method string, err error) error {
 	if err == nil {
 		return nil
 	}
@@ -77,7 +79,7 @@ func discardRPCSessionForStreamError(err error) error {
 	if errors.As(err, &transportErr) {
 		return err
 	}
-	return &discardRPCSessionError{err: err}
+	return &discardRPCSessionError{method: method, err: err}
 }
 
 // TransportMode is the connection-local API transport selected for an
@@ -326,6 +328,7 @@ func (c *Client) openAuthenticatedRPC(ctx context.Context) (*trueNASRPCClient, s
 		_ = conn.Close()
 		return nil, "", err
 	}
+	rpc.openedAt = time.Now()
 	rpc.startKeepalive(25 * time.Second)
 	return rpc, authMechanism, nil
 }
@@ -354,13 +357,13 @@ func (c *Client) withRPC(ctx context.Context, operation func(context.Context, *t
 	}
 	if err := operation(ctx, c.rpc); err != nil {
 		if errors.Is(err, errRPCStreamSessionConsumed) {
-			c.closeRPCLocked()
+			c.discardRPCLocked("stream_complete", err)
 			c.reconnect = 0
 			return nil
 		}
 		var discardErr *discardRPCSessionError
 		if errors.As(err, &discardErr) {
-			c.closeRPCLocked()
+			c.discardRPCLocked("stream_error", err)
 			c.recordTransportError(err)
 			return err
 		}
@@ -369,7 +372,7 @@ func (c *Client) withRPC(ctx context.Context, operation func(context.Context, *t
 			c.recordRPCOperationError(err)
 			return err
 		}
-		c.closeRPCLocked()
+		c.discardRPCLocked("transport_error", err)
 		c.recordTransportError(err)
 		if err := c.waitReconnectBackoff(ctx); err != nil {
 			return err
@@ -390,9 +393,18 @@ func (c *Client) withRPC(ctx context.Context, operation func(context.Context, *t
 			status.LastError = ""
 		})
 		if err := operation(ctx, c.rpc); err != nil {
+			if errors.Is(err, errRPCStreamSessionConsumed) {
+				c.discardRPCLocked("stream_complete", err)
+				c.reconnect = 0
+				return nil
+			}
+			var secondDiscardErr *discardRPCSessionError
 			var secondTransportErr *RPCTransportError
-			if errors.As(err, &secondTransportErr) {
-				c.closeRPCLocked()
+			if errors.As(err, &secondDiscardErr) {
+				c.discardRPCLocked("stream_error", err)
+				c.recordTransportError(err)
+			} else if errors.As(err, &secondTransportErr) {
+				c.discardRPCLocked("transport_error", err)
 				c.recordTransportError(err)
 			} else {
 				c.recordRPCOperationError(err)
@@ -442,7 +454,7 @@ func (c *Client) callRPCWithRetry(ctx context.Context, method string, params any
 		return err
 	}
 
-	c.closeRPCLocked()
+	c.discardRPCLocked("transport_error", err)
 	c.recordTransportError(err)
 	if !retryRead {
 		return fmt.Errorf("truenas action %s transport failed after dispatch; outcome is unknown and Pulse will not replay it: %w", method, err)
@@ -470,7 +482,7 @@ func (c *Client) callRPCWithRetry(ctx context.Context, method string, params any
 	if err := c.rpc.call(ctx, method, params, result); err != nil {
 		var secondTransportErr *RPCTransportError
 		if errors.As(err, &secondTransportErr) {
-			c.closeRPCLocked()
+			c.discardRPCLocked("transport_error", err)
 			c.recordTransportError(err)
 		} else {
 			c.recordRPCOperationError(err)
@@ -502,7 +514,13 @@ func (c *Client) waitReconnectBackoff(ctx context.Context) error {
 }
 
 func (c *Client) closeRPCLocked() {
+	c.discardRPCLocked("client_closed", nil)
+}
+
+func (c *Client) discardRPCLocked(reason string, err error) {
 	if c.rpc != nil && c.rpc.conn != nil {
+		method, category := rpcSessionCloseDetails(err)
+		c.rpc.closeSocket(reason, method, category)
 		c.rpc.close()
 	}
 	c.rpc = nil
@@ -531,7 +549,7 @@ func (c *trueNASRPCClient) startKeepalive(interval time.Duration) {
 				if err := c.conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second)); err != nil {
 					// Unblock any in-flight reader; ordinary transport handling owns retry
 					// and status, including the no-replay rule for actions.
-					_ = c.conn.Close()
+					c.closeSocket("keepalive_write_error", "", "transport_error")
 					return
 				}
 			}
@@ -544,10 +562,66 @@ func (c *trueNASRPCClient) close() {
 	if c.keepaliveStop != nil {
 		close(c.keepaliveStop)
 	}
-	_ = c.conn.Close()
+	c.closeSocket("client_closed", "", "")
 	if c.keepaliveDone != nil {
 		<-c.keepaliveDone
 	}
+}
+
+// Record the first local disposal cause, including an idle keepalive failure
+// which may precede the next poll. Never log wire errors, params, subscription
+// IDs, endpoints or credentials. These fixed classifications explain a close;
+// they do not diagnose the appliance or proxy that caused an exchange to fail.
+func (c *trueNASRPCClient) closeSocket(reason, method, category string) {
+	c.closeOnce.Do(func() {
+		event := log.Info().
+			Str("component", "truenas_rpc").
+			Str("action", "close_session").
+			Str("reason", reason)
+		if !c.openedAt.IsZero() {
+			event.Dur("session_age", time.Since(c.openedAt))
+		}
+		if method != "" {
+			event.Str("method", method)
+		}
+		if category != "" {
+			event.Str("category", category)
+		}
+		event.Msg("Closing TrueNAS RPC session")
+		_ = c.conn.Close()
+	})
+}
+
+func rpcSessionCloseDetails(err error) (method, category string) {
+	if err == nil {
+		return "", ""
+	}
+	if errors.Is(err, errRPCStreamSessionConsumed) {
+		return "app.container_log_follow", "idle_timeout"
+	}
+	var discardErr *discardRPCSessionError
+	var transportErr *RPCTransportError
+	var rpcErr *RPCError
+	if errors.As(err, &discardErr) {
+		method = discardErr.method
+	} else if errors.As(err, &transportErr) {
+		method = transportErr.Method
+	} else if errors.As(err, &rpcErr) {
+		method = rpcErr.Method
+	}
+	switch {
+	case errors.Is(err, context.Canceled):
+		category = "cancelled"
+	case errors.Is(err, context.DeadlineExceeded) || isTimeoutError(err):
+		category = "timeout"
+	case errors.As(err, &rpcErr):
+		category = "method_error"
+	case errors.As(err, &transportErr):
+		category = "transport_error"
+	default:
+		category = "protocol_error"
+	}
+	return method, category
 }
 
 func (c *Client) recordTransportError(err error) {
