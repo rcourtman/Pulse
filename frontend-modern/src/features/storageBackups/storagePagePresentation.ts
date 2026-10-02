@@ -70,6 +70,15 @@ export const isStoragePoolColumnVisible = (
   columnId: StoragePoolTableColumnId,
 ): boolean => STORAGE_POOL_VISIBLE_COLUMNS[layout].includes(columnId);
 
+// On phones the pool row sheds the desktop cell gutter the same way its
+// headers (via the shared container query) and the physical-disk rows do:
+// four cells at 12px each were 48px of a 361px row, and the measured values
+// fit the tracks with only a pixel or two to spare.
+export const STORAGE_POOL_PHONE_CELL_PADDING_CLASS = '!px-1';
+
+export const getStoragePoolCellPaddingClass = (layout: StoragePoolTableLayoutMode): string =>
+  layout === 'narrow' || layout === 'compact' ? STORAGE_POOL_PHONE_CELL_PADDING_CLASS : '';
+
 export const getStoragePoolColumnWidthStyle = (
   layout: StoragePoolTableLayoutMode,
   columnId: StoragePoolTableColumnId,

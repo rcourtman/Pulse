@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getStoragePoolCellPaddingClass,
   getStoragePoolColumnWidthStyle,
   getStoragePoolTableColumns,
   getStoragePoolTableLayoutModeForContainer,
@@ -67,6 +68,13 @@ describe('storagePagePresentation', () => {
     expect(isStoragePoolColumnVisible('narrow', 'protection')).toBe(false);
     expect(getStoragePoolColumnWidthStyle('narrow', 'name')).toEqual({ width: '35%' });
     expect(getStoragePoolColumnWidthStyle('narrow', 'usage')).toEqual({ width: '13%' });
+  });
+
+  it('sheds the desktop cell gutter only on the phone pool layouts', () => {
+    expect(getStoragePoolCellPaddingClass('narrow')).toBe('!px-1');
+    expect(getStoragePoolCellPaddingClass('compact')).toBe('!px-1');
+    expect(getStoragePoolCellPaddingClass('operational')).toBe('');
+    expect(getStoragePoolCellPaddingClass('full')).toBe('');
   });
 
   it('keeps the desktop pool column widths on the canonical weighted helper', () => {

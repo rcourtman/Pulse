@@ -1,21 +1,15 @@
 {
   "version": 1,
-  "base_sha": "c02b2d81ccee3fb5b4c9df1aa74f65c49d39eced",
-  "verified_at": "2026-10-02T22:11:13Z",
+  "base_sha": "6c7cd72cb2fd2dc4b769fb1b7da6423b4f37edb0",
+  "verified_at": "2026-10-02T22:36:43Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Storage/DiskDetail.tsx",
-    "frontend-modern/src/components/Storage/DiskList.tsx",
-    "frontend-modern/src/components/Storage/useDiskDetailModel.ts",
-    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts",
-    "frontend-modern/src/features/storageBackups/diskPresentation.ts"
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx",
+    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Storage/DiskDetail.tsx": "04e5bacb4900cc77a94fdb804363048ed53f4b84dc1c0e9610878a106a1db1a6",
-    "frontend-modern/src/components/Storage/DiskList.tsx": "47da15179f6c7e98583d9db2a858790233660f8dc4eb9ea85681f262b50514f5",
-    "frontend-modern/src/components/Storage/useDiskDetailModel.ts": "ee5059bb3a7e0069561e4f103e2fd89101e096ad32b3b27c6f4777c26c1388f8",
-    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts": "4b348777cc39de3021e21c8f34e9e2029f2bc30e6768dfaa26c8ec6420d27d10",
-    "frontend-modern/src/features/storageBackups/diskPresentation.ts": "fc637ecfee6ffff80ee826bdb8ff546ef0dd8ffa5cd0790c19b1fdcf71dcfb65"
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx": "09417822bd543ddbc312d0c15a4ea74971066d6623d421d889858e56262b9d3d",
+    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts": "2a93a0176b912283c77b384ee2c66c4bc62c21a04b645eb93917a41740ad2d6e"
   },
   "routes": [
     "/proxmox/storage"
@@ -26,23 +20,24 @@
       "height": 900
     },
     {
-      "width": 1280,
-      "height": 900
+      "width": 600,
+      "height": 844
     },
     {
       "width": 390,
       "height": 844
+    },
+    {
+      "width": 360,
+      "height": 844
     }
   ],
   "states": [
-    "Proxmox Storage tab, Physical Disks sub-tab in full (1280/1440) and narrow (390) container layouts with Healthy, Unknown and Needs Attention disks from mock data",
-    "Physical Disks table with the first (Needs Attention) disk row expanded so the DiskDetail drawer header shows the verdict and its reason at 1280 and 390",
-    "Rows at 1280/1440 showing the health verdict word whole with no inline summary sentence"
+    "Proxmox Storage tab pools table in compact (390), narrow (360), operational (600) and full (1440) container layouts with mock data including Online and Degraded pools",
+    "Pool rows at 390 measured per column with Range rects after the gutter change: name 126px for a 122px need, state 59 for 54, host 106 for 98, usage 39 for 28"
   ],
   "interactions": [
-    "Switched to the Physical Disks view tab and clicked the first disk row to open its inline drawer",
-    "Ran the Playwright scrollWidth-over-clientWidth sweep over every th/td leaf: the disks table reports nothing at 1440 (previously the truncating health summary) and only a long disk model identity at 1280 and 390",
-    "Screenshot-checked the drawer header at 1280: \"Needs Attention\" in amber followed by \"SSD life remaining is 7%\" beneath the model line",
-    "Confirmed the row health word carries the reason as its title attribute"
+    "Ran the Playwright scrollWidth-over-clientWidth sweep over every th/td leaf at 1440 (nothing reported), 600 (unchanged pre-existing operational host/protection clips), 390 (only the two long pool identities) and 360 (identity strings only)",
+    "Confirmed the !px-1 gutter applies only in the narrow and compact layouts and the operational/full column geometry is byte-identical to the previous sweep"
   ]
 }
