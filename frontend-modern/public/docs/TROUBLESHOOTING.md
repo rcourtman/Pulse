@@ -329,8 +329,12 @@ consequential, manually redacted error.
   transport; TrueNAS 26 removed the former `/api/v2.0` REST endpoints.
 
 #### TrueNAS pools/datasets not appearing
-- TrueNAS data appears in the unified resource model and may take one polling cycle (30s) to appear.
+- TrueNAS data appears in the unified resource model and may take one configured
+  polling cycle (60 seconds by default) to appear.
 - Check **Infrastructure** (TrueNAS host), **Storage** (pools/datasets), and **Recovery** (snapshots/replication).
+- For data that stops refreshing, use the [TrueNAS polling checks](TRUENAS.md#stale-truenas-data)
+  before testing or restarting. A stale badge is not proof of an invalid key,
+  and a successful connection test is not proof that collection has recovered.
 
 ### Navigation (v6)
 
