@@ -7729,3 +7729,26 @@ actual series pixels and tooltips in desktop Chromium and phone WebKit, using
 the production chart and API transport with synthetic stored samples. This
 does not establish native collection, whole-report resolution or availability
 in a release. Existing request, source, units and access boundaries are unchanged.
+
+### Shared History touch inspection preserves native scrolling
+
+A primary touch tap inside a Storage History plot selects the nearest actual
+observation at that horizontal position. Compatibility mouse focus must not
+replace that reading with the latest sample or announce it as keyboard input.
+The existing hover group and timestamp reconciliation remain shared with mouse
+and keyboard inspection. Single measured-zero observations remain inspectable;
+empty data and a changed selection cannot inherit an old touch.
+
+Movement beyond ten CSS pixels, cancellation, multiple contacts and release
+outside the plot are not taps. Inspection neither prevents native touch defaults
+nor captures the pointer or changes touch-action: page scrolling and pinch zoom
+remain browser-owned. Blur and Escape clear inspection, and supported keyboard
+keys resume the existing dated, politely announced sample navigation.
+
+Mounted `HistoryChart.test.tsx` regressions cover focus ordering, gesture
+rejection, selection ownership, refresh, empty/zero and input coexistence.
+`browser-tests/history-touch.cjs` exercises actual touchscreen taps through the
+production disk/pool details and API transport in phone Chromium/WebKit, native
+vertical panning in Chromium, and desktop mouse/keyboard controls. Synthetic
+sample presentation is not native collector, physical device, assistive-device
+or installed whole-report acceptance.

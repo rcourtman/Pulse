@@ -1,18 +1,18 @@
 {
   "version": 1,
-  "base_sha": "ad7f7a1063d45e26f77faf35bacbca6877f41cac",
-  "verified_at": "2026-10-02T18:37:50.309899Z",
+  "base_sha": "e5d0843851a3837a90d71afaced3a009c0606bbf",
+  "verified_at": "2026-10-02T20:44:41.220410Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/historyChartModel.ts",
+    "frontend-modern/src/components/shared/HistoryChart.tsx",
     "frontend-modern/src/components/shared/useHistoryChartState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/historyChartModel.ts": "c96437081022b073dca0c730a8617954987f712ee84e058c6078ae3cad05f162",
-    "frontend-modern/src/components/shared/useHistoryChartState.ts": "38af5f416fb95874e708b08d66fdbcf27b85660840e0096cb1dd24d9bc744991"
+    "frontend-modern/src/components/shared/HistoryChart.tsx": "74fb7e6b466e1c2b2d2efb13e0a124d6c301896a7c9423432e903908cc9ee25b",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "d6e8317019c8dc616bd9a4d3c6c71cb5329297ca0341e6ba28a6cc4c84db36b0"
   },
   "routes": [
-    "/browser-tests/history-sparse.html"
+    "/browser-tests/history-touch.html"
   ],
   "viewports": [
     {
@@ -25,37 +25,33 @@
     }
   ],
   "states": [
-    "Single stored 42% before inspection, pointer inspection, measured zero, multiple observations, successful empty response, restored singleton",
-    "Desktop Chromium light and phone WebKit dark-class presentation; 12 observations, no page errors or horizontal overflow"
+    "Production disk/pool details with stored multi-point, measured-zero singleton and empty history; 19 observed presentations across desktop Chromium and phone Chromium/WebKit",
+    "Actual touchscreen first/middle/last taps, shared I/O group focus transfer, keyboard navigation/exit and real mouse coexistence; phone WebKit dark-class presentation"
   ],
   "interactions": [
-    "Pointer at three plot positions resolves to the real singleton timestamp; no mouse live announcements",
-    "Tab, Home/End, Left/Right, Escape and focus exit; matching API refreshes across sparse, populated and empty results",
-    "Both actual predecessor engines reproduce zero series pixels and missing pointer tooltip. Parent phone and final phone singleton/tooltip/zero/empty plus final desktop multi screenshots inspected."
+    "Native touchscreen taps select the actual reading at that position instead of the latest sample; touch compatibility focus/mouse movement/leave cannot overwrite it",
+    "Primary contact cancellation, non-tap gesture rejection and native Chromium vertical pan with room-to-scroll precondition; no prevented touch default, pointer capture or touch-action change",
+    "Desktop/phone keyboard Home/Right/End/Escape and focus exit, pointer announcements remain quiet, range replacement, zero/empty responses and no horizontal overflow",
+    "Predecessor native Chromium/WebKit first tap near 10% instead displays 30%; final first/middle/last taps display 10/20/30%. Inspected predecessor and final phone, zero/empty and desktop screenshots"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/history-sparse.cjs",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/history-touch.cjs",
   "browser_versions": {
     "playwright": "1.56.1",
     "chromium": "141.0.7390.37",
     "webkit": "26.0"
   },
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/parent.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/parent-chromium-single.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/parent-webkit-single.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/chromium-single.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/chromium-pointer.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/chromium-zero.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/chromium-multiple.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/chromium-empty.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/chromium-recovered-single.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/webkit-single.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/webkit-pointer.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/webkit-zero.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/webkit-multiple.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/webkit-empty.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/webkit-recovered-single.png"
+    "browser/result.json",
+    "browser/chromium-phone-first.png",
+    "browser/webkit-phone-first.png",
+    "browser/webkit-phone-middle.png",
+    "browser/webkit-phone-pool-first.png",
+    "browser/webkit-phone-pool-zero-singleton.png",
+    "browser/webkit-phone-pool-empty.png",
+    "browser/chromium-desktop-middle.png",
+    "browser/parent.json",
+    "browser/parent-chromium-phone-first.png",
+    "browser/parent-webkit-phone-first.png"
   ],
-  "limitations": "Synthetic samples, not native PBS/TrueNAS collection, assistive-device testing or whole-application theme-transition acceptance."
+  "limitations": "Synthetic stored APIs, not native PBS/TrueNAS collection, physical phones or assistive-device speech. Native pan is Chromium-only; no physical/WebKit pan, pinch-zoom or whole-app theme-transition claim. Initial fixture and pan-driver failures are retained separately."
 }
