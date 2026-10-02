@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
@@ -1816,6 +1817,14 @@ func TestClassifyTrueNASError(t *testing.T) {
 			expectedRetry: true,
 		},
 		{
+			name: "WebSocket socket deadline classifies as timeout",
+			err: &truenas.RPCTransportError{Method: "system.info", Phase: "read", Err: &net.OpError{
+				Op: "read", Net: "tcp", Err: os.ErrDeadlineExceeded,
+			}},
+			expectedType:  "timeout",
+			expectedRetry: true,
+		},
+		{
 			name:          "net.OpError classifies as connection",
 			err:           &net.OpError{Op: "dial", Net: "tcp", Addr: nil, Err: fmt.Errorf("connection refused")},
 			expectedType:  "connection",
@@ -1863,6 +1872,146 @@ func TestClassifyTrueNASError(t *testing.T) {
 				t.Errorf("expected op %q, got %q", "truenas_poll", result.Op)
 			}
 		})
+	}
+}
+
+func TestTrueNASPollerUnresponsiveRPCDoesNotFreezeOtherConnections(t *testing.T) {
+	var stalled atomic.Bool
+	release := make(chan struct{})
+	newServer := func(hostname string, mayStall bool) *httptest.Server {
+		upgrader := websocket.Upgrader{}
+		return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/api/current" {
+				t.Error("modern polling fell back to REST")
+				http.NotFound(w, r)
+				return
+			}
+			conn, err := upgrader.Upgrade(w, r, nil)
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+			for {
+				var request struct {
+					ID     int64             `json:"id"`
+					Method string            `json:"method"`
+					Params []json.RawMessage `json:"params"`
+				}
+				if err := conn.ReadJSON(&request); err != nil {
+					return
+				}
+				var result any = []any{}
+				switch request.Method {
+				case "auth.login_ex":
+					result = map[string]any{"response_type": "SUCCESS"}
+				case "system.info":
+					if mayStall && stalled.Load() {
+						<-release
+					}
+					result = map[string]any{"hostname": hostname, "version": "TrueNAS-SCALE-25.10.7", "system_serial": hostname}
+				case "core.subscribe":
+					result = "fixture-realtime"
+				case "core.unsubscribe":
+					result = nil
+				}
+				if err := conn.WriteJSON(map[string]any{"jsonrpc": "2.0", "id": request.ID, "result": result}); err != nil {
+					return
+				}
+				if request.Method == "core.subscribe" {
+					var event string
+					if len(request.Params) != 1 || json.Unmarshal(request.Params[0], &event) != nil {
+						t.Error("subscription did not supply one event")
+						return
+					}
+					var fields any = map[string]any{"cpu": map[string]any{"usage": 12}}
+					if strings.HasPrefix(event, "app.stats:") {
+						fields = []any{}
+					}
+					if err := conn.WriteJSON(map[string]any{
+						"jsonrpc": "2.0", "method": "collection_update",
+						"params": map[string]any{"collection": event, "fields": fields},
+					}); err != nil {
+						return
+					}
+				}
+			}
+		}))
+	}
+	brokenServer := newServer("timeout-nas", true)
+	healthyServer := newServer("healthy-nas", false)
+	t.Cleanup(brokenServer.Close)
+	t.Cleanup(healthyServer.Close)
+	poller := NewTrueNASPoller(nil, 0, nil)
+	instances := []config.TrueNASInstance{
+		{ID: "timeout-connection", Host: brokenServer.URL, Enabled: true},
+		{ID: "healthy-connection", Host: healthyServer.URL, Enabled: true},
+	}
+	poller.providersByOrg["default"] = make(map[string]*truenas.Provider)
+	poller.configsByOrg["default"] = make(map[string]config.TrueNASInstance)
+	for i, instance := range instances {
+		server := []*httptest.Server{brokenServer, healthyServer}[i]
+		client, err := truenas.NewClient(truenas.ClientConfig{
+			Host: server.URL, APIKey: "fixture-key", Username: "fixture-user", Timeout: 200 * time.Millisecond,
+			InsecureSkipVerify: true, Fingerprint: fmt.Sprintf("%x", sha256.Sum256(server.Certificate().Raw)),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(client.Close)
+		poller.providersByOrg["default"][instance.ID] = truenas.NewLiveProviderForConnection(&truenas.APIFetcher{Client: client}, instance.ID)
+		poller.configsByOrg["default"][instance.ID] = instance
+	}
+	t.Cleanup(func() { close(release) })
+	due := func() {
+		for _, instance := range instances {
+			poller.ensureConnectionRuntimeStatusLocked("default", instance.ID).nextPollAt = time.Now().Add(-time.Second)
+		}
+	}
+	poller.pollAll(context.Background())
+	before := poller.ConnectionSummaries("default", instances)
+	for _, instance := range instances {
+		if before[instance.ID].Poll.LastSuccessAt == nil {
+			t.Fatal("initial successful poll was not established")
+		}
+	}
+	stalled.Store(true)
+	due()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() { poller.pollAll(ctx); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Error("one unresponsive RPC froze the shared poll cycle")
+		cancel() // Safely terminate the pre-repair adverse control.
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("poll cycle did not stop after cancellation")
+		}
+	}
+	after := poller.ConnectionSummaries("default", instances)
+	broken, healthy := after[instances[0].ID], after[instances[1].ID]
+	if broken.Poll.LastError == nil || broken.Poll.LastError.Category != "timeout" || broken.Poll.ConsecutiveFailures != 1 || !broken.Poll.LastSuccessAt.Equal(*before[instances[0].ID].Poll.LastSuccessAt) {
+		t.Fatalf("failed connection lost truthful timeout or previous success: %+v", broken)
+	}
+	if healthy.Poll.LastError != nil || !healthy.Poll.LastSuccessAt.After(*before[instances[1].ID].Poll.LastSuccessAt) {
+		t.Fatalf("healthy connection did not continue polling: %+v", healthy)
+	}
+	if !hasTrueNASHostForOrg(poller, "default", "timeout-nas") || !hasTrueNASHostForOrg(poller, "default", "healthy-nas") {
+		t.Fatal("timeout discarded a cached host identity")
+	}
+	status := poller.statusByOrg["default"][instances[0].ID]
+	if !status.nextPollAt.Equal(status.lastAttemptAt.Add(defaultTrueNASPollInterval)) {
+		t.Fatal("timeout changed completion-based failure backoff")
+	}
+	stalled.Store(false)
+	due()
+	poller.pollAll(context.Background())
+	recovered := poller.ConnectionSummaries("default", instances)[instances[0].ID]
+	if recovered.Poll.LastError != nil || recovered.Poll.ConsecutiveFailures != 0 || !recovered.Poll.LastSuccessAt.After(*broken.Poll.LastSuccessAt) || recovered.Transport == nil || !recovered.Transport.Connected || recovered.Transport.Mode != truenas.TransportJSONRPC {
+		t.Fatalf("next poll did not recover the original connection over RPC: %+v", recovered)
 	}
 }
 

@@ -107,6 +107,10 @@ func (n *NotificationManager) createSecureWebhookClient(timeout time.Duration) *
 
 // createSecureWebhookClientWithTLS creates a secure HTTP client with optional TLS verification override.
 func (n *NotificationManager) createSecureWebhookClientWithTLS(timeout time.Duration, skipTLSVerify bool) *http.Client {
+	return n.createSecureWebhookClientWithURLDiagnostics(timeout, skipTLSVerify, RedactWebhookURLSecrets)
+}
+
+func (n *NotificationManager) createSecureWebhookClientWithURLDiagnostics(timeout time.Duration, skipTLSVerify bool, diagnosticURL func(string) string) *http.Client {
 	// dedicated transport that pins DNS resolution to prevent rebinding
 	transport := &http.Transport{
 		// Proxy intentionally nil — outbound proxies would bypass DialContext
@@ -195,7 +199,7 @@ func (n *NotificationManager) createSecureWebhookClientWithTLS(timeout time.Dura
 				return fmt.Errorf("stopped after %d redirects", WebhookMaxRedirects)
 			}
 			// Re-validate strictly on redirect
-			return n.ValidateWebhookURL(req.URL.String())
+			return n.validateWebhookURL(req.URL.String(), diagnosticURL)
 		},
 	}
 }
@@ -2071,7 +2075,6 @@ func (n *NotificationManager) sendGroupedApprise(config AppriseConfig, alertList
 			log.Warn().
 				Err(err).
 				Str("mode", string(cfg.Mode)).
-				Str("serverUrl", cfg.ServerURL).
 				Msg("failed to send Apprise notification via API")
 			return fmt.Errorf("apprise HTTP send failed: %w", err)
 		}
@@ -2080,8 +2083,7 @@ func (n *NotificationManager) sendGroupedApprise(config AppriseConfig, alertList
 			log.Warn().
 				Err(err).
 				Str("mode", string(cfg.Mode)).
-				Str("cliPath", cfg.CLIPath).
-				Strs("targets", cfg.Targets).
+				Int("targetCount", len(cfg.Targets)).
 				Msg("failed to send Apprise notification")
 			return fmt.Errorf("apprise CLI send failed: %w", err)
 		}
@@ -2246,18 +2248,18 @@ func (n *NotificationManager) sendAppriseViaCLI(cfg AppriseConfig, title, body s
 		if len(output) > 0 {
 			log.Debug().
 				Str("cliPath", "apprise").
-				Strs("targets", cfg.Targets).
-				Str("output", string(output)).
+				Int("targetCount", len(cfg.Targets)).
+				Int("outputBytes", len(output)).
 				Msg("apprise CLI output (error)")
 		}
-		return fmt.Errorf("execute apprise CLI %q: %w", "apprise", err)
+		return safeAppriseError("execute apprise CLI", err)
 	}
 
 	if len(output) > 0 {
 		log.Debug().
 			Str("cliPath", "apprise").
-			Strs("targets", cfg.Targets).
-			Str("output", string(output)).
+			Int("targetCount", len(cfg.Targets)).
+			Int("outputBytes", len(output)).
 			Msg("apprise CLI output")
 	}
 	return nil
@@ -2282,16 +2284,19 @@ func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body,
 	serverURL := cfg.ServerURL
 	lowerURL := strings.ToLower(serverURL)
 	if !strings.HasPrefix(lowerURL, "http://") && !strings.HasPrefix(lowerURL, "https://") {
-		return fmt.Errorf("apprise server URL must start with http or https: %s", serverURL)
+		return fmt.Errorf("apprise server URL must start with http or https")
 	}
 
-	validatedBaseURL, err := n.validatedWebhookBaseURL(serverURL)
+	validatedBaseURL, err := securityutil.NormalizeHTTPBaseURL(serverURL, "")
+	if err == nil {
+		err = n.validateWebhookURL(validatedBaseURL.String(), appriseDiagnosticURL)
+	}
 	if err != nil {
+		err = safeAppriseError("apprise server URL validation failed", err)
 		log.Error().
 			Err(err).
-			Str("serverURL", serverURL).
 			Msg("apprise server URL validation failed - possible SSRF attempt")
-		return fmt.Errorf("apprise server URL validation failed: %w", err)
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.TimeoutSeconds)*time.Second)
@@ -2304,7 +2309,7 @@ func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body,
 
 	targetURL, err := securityutil.ResolveRelativeURL(validatedBaseURL, notifyEndpoint)
 	if err != nil {
-		return fmt.Errorf("apprise server URL validation failed: %w", err)
+		return safeAppriseError("apprise server URL validation failed", err)
 	}
 
 	payload := map[string]any{
@@ -2325,7 +2330,7 @@ func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body,
 
 	req, err := securityutil.NewValidatedRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(payloadBytes))
 	if err != nil {
-		return fmt.Errorf("failed to create Apprise request: %w", err)
+		return safeAppriseError("failed to create Apprise request", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
@@ -2338,32 +2343,30 @@ func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body,
 		}
 	}
 
-	client := n.createSecureWebhookClientWithTLS(
+	client := n.createSecureWebhookClientWithURLDiagnostics(
 		time.Duration(cfg.TimeoutSeconds)*time.Second,
 		validatedBaseURL.Scheme == "https" && cfg.SkipTLSVerify,
+		appriseDiagnosticURL,
 	)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to reach Apprise server: %w", err)
+		return safeAppriseError("failed to reach Apprise server", err)
 	}
 	defer resp.Body.Close()
 
 	limited := io.LimitReader(resp.Body, WebhookMaxResponseSize)
-	respBody, _ := io.ReadAll(limited)
+	responseBytes, _ := io.Copy(io.Discard, limited)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		if len(respBody) > 0 {
-			return FailfWithClass(ClassFromHTTPStatus(resp.StatusCode), "apprise server returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
-		}
 		return FailfWithClass(ClassFromHTTPStatus(resp.StatusCode), "apprise server returned HTTP %d", resp.StatusCode)
 	}
 
-	if len(respBody) > 0 {
+	if responseBytes > 0 {
 		log.Debug().
 			Str("mode", string(cfg.Mode)).
-			Str("serverUrl", cfg.ServerURL).
-			Str("response", string(respBody)).
+			Int("statusCode", resp.StatusCode).
+			Int64("responseBytes", responseBytes).
 			Msg("apprise API response")
 	}
 
@@ -2391,7 +2394,6 @@ func (n *NotificationManager) sendResolvedApprise(config AppriseConfig, alertLis
 			log.Warn().
 				Err(err).
 				Str("mode", string(cfg.Mode)).
-				Str("serverUrl", cfg.ServerURL).
 				Msg("failed to send resolved Apprise notification via API")
 			return fmt.Errorf("apprise HTTP send failed: %w", err)
 		}
@@ -2400,8 +2402,7 @@ func (n *NotificationManager) sendResolvedApprise(config AppriseConfig, alertLis
 			log.Warn().
 				Err(err).
 				Str("mode", string(cfg.Mode)).
-				Str("cliPath", cfg.CLIPath).
-				Strs("targets", cfg.Targets).
+				Int("targetCount", len(cfg.Targets)).
 				Msg("failed to send resolved Apprise notification")
 			return fmt.Errorf("apprise CLI send failed: %w", err)
 		}
@@ -3493,6 +3494,12 @@ func isNumeric(s string) bool {
 
 // ValidateWebhookURL validates that a webhook URL is safe and properly formed
 func (n *NotificationManager) ValidateWebhookURL(webhookURL string) error {
+	return n.validateWebhookURL(webhookURL, RedactWebhookURLSecrets)
+}
+
+// Validation and redirect security are shared; only diagnostic URL rendering
+// differs for Apprise, whose endpoint path may itself be a configuration key.
+func (n *NotificationManager) validateWebhookURL(webhookURL string, diagnosticURL func(string) string) error {
 	if webhookURL == "" {
 		return fmt.Errorf("webhook URL cannot be empty")
 	}
@@ -3528,7 +3535,7 @@ func (n *NotificationManager) ValidateWebhookURL(webhookURL string) error {
 		}
 		log.Debug().
 			Str("host", host).
-			Str("url", RedactWebhookURLSecrets(webhookURL)).
+			Str("url", diagnosticURL(webhookURL)).
 			Msg("localhost webhook URL allowed via allowlist")
 	}
 
@@ -3551,7 +3558,7 @@ func (n *NotificationManager) ValidateWebhookURL(webhookURL string) error {
 			if n.isIPInAllowlist(ip) {
 				log.Debug().
 					Str("ip", ip.String()).
-					Str("url", RedactWebhookURLSecrets(webhookURL)).
+					Str("url", diagnosticURL(webhookURL)).
 					Msg("webhook URL resolves to private IP in allowlist")
 			} else {
 				return fmt.Errorf("webhook URL resolves to private IP %s - private networks are not allowed for security (configure allowlist in System Settings)", ip.String())
@@ -3575,7 +3582,7 @@ func (n *NotificationManager) ValidateWebhookURL(webhookURL string) error {
 	// This helps prevent SSRF attacks using numeric IPs to bypass filters
 	if u.Scheme == "https" && isNumericIP(host) {
 		log.Warn().
-			Str("url", RedactWebhookURLSecrets(webhookURL)).
+			Str("url", diagnosticURL(webhookURL)).
 			Msg("webhook URL uses numeric IP with HTTPS - certificate validation may fail")
 	}
 
@@ -3876,7 +3883,7 @@ func (n *NotificationManager) SendTestAppriseWithConfig(config AppriseConfig) er
 		Bool("enabled", cfg.Enabled).
 		Str("mode", string(cfg.Mode)).
 		Int("targetCount", len(cfg.Targets)).
-		Str("serverURL", cfg.ServerURL).
+		Bool("hasServerURL", cfg.ServerURL != "").
 		Msg("testing Apprise notification with provided config")
 
 	if !cfg.Enabled {

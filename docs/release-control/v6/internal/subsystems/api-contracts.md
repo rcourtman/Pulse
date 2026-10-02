@@ -2115,6 +2115,13 @@ payload shape change when the portal presents compact client rows.
 66. `internal/api/ai_intelligence_handlers.go` shared with `ai-runtime`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
 67. `internal/api/alerting/notification_queue.go` shared with `notifications`: the notification queue and DLQ handler is both a notification delivery consequence surface and a canonical API payload boundary for operational transition links.
 68. `internal/api/alerting/notifications.go` shared with `notifications`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
+    Apprise configuration-update logs contain normalised mode, counts and
+    presence flags, not endpoint paths, config keys, targets or arbitrary CLI
+    and header strings. Test-error responses retain safe structured failure
+    summaries and HTTP status, never raw Apprise output or provider response
+    bodies. Request/response schemas and authorised configuration round-trips
+    remain unchanged; `internal/api/alerting/notifications_test.go` exercises
+    both the update log and the real sender through the test handler.
 69. `internal/api/configapi/config_setup_handlers.go` shared with `agent-lifecycle`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
 70. `internal/api/configapi/setup_script_render.go` shared with `agent-lifecycle`, `storage-recovery`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
     That same shared boundary also owns reachable-host selection truth for canonical Proxmox registration: runtime callers may propose ordered `candidateHosts`, but the API contract must persist and echo the first candidate Pulse can actually reach instead of freezing the caller's rejected first preference into the stored node endpoint.

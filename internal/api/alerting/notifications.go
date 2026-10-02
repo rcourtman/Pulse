@@ -321,17 +321,16 @@ func (h *NotificationHandlers) UpdateAppriseConfig(w http.ResponseWriter, r *htt
 		config.MinimumSeverity = existingConfig.MinimumSeverity
 	}
 
+	diagnosticConfig := notifications.NormalizeAppriseConfig(config)
 	log.Info().
-		Bool("enabled", config.Enabled).
-		Str("mode", string(config.Mode)).
-		Int("targetCount", len(config.Targets)).
-		Str("cliPath", config.CLIPath).
-		Str("serverUrl", config.ServerURL).
-		Str("configKey", config.ConfigKey).
-		Bool("hasApiKey", config.APIKey != "").
-		Str("apiKeyHeader", config.APIKeyHeader).
-		Bool("skipTlsVerify", config.SkipTLSVerify).
-		Int("timeoutSeconds", config.TimeoutSeconds).
+		Bool("enabled", diagnosticConfig.Enabled).
+		Str("mode", string(diagnosticConfig.Mode)).
+		Int("targetCount", len(diagnosticConfig.Targets)).
+		Bool("hasServerURL", diagnosticConfig.ServerURL != "").
+		Bool("hasConfigKey", diagnosticConfig.ConfigKey != "").
+		Bool("hasApiKey", diagnosticConfig.APIKey != "").
+		Bool("skipTlsVerify", diagnosticConfig.SkipTLSVerify).
+		Int("timeoutSeconds", diagnosticConfig.TimeoutSeconds).
 		Msg("Parsed Apprise configuration update")
 
 	if err := monitor.GetConfigPersistence().SaveAppriseConfig(config); err != nil {
