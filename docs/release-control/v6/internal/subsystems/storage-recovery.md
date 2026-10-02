@@ -2819,6 +2819,20 @@ transport-induced absence. Preserving this read-only evidence adds no backup,
 restore, retention, or recovery authority. The behavior is pinned by
 `useUnifiedResources.test.ts` and `useWorkloads.test.ts`.
 
+### Coverage rows name the last backup, not the newest restore point
+
+The Proxmox coverage row's `Last backup` cell is the newest completed PBS
+snapshot or PVE backup file. A guest snapshot never fills it: it shares the
+guest's own storage, and the protection posture engine already refuses to count
+snapshots as independent recovery, so a fresh snapshot beside a stale posture
+must not read as a fresh backup. Snapshot-only rows show `None` and carry the
+engine's own reason on hover; the guest snapshot keeps its dedicated column and
+the restore-evidence disclosure. The backup-location filter re-derives that
+pointer from completed, non-snapshot artifacts under the same rule. This is a
+presentation and sort change only; it adds no backup, restore, or retention
+authority. Pinned by `proxmoxBackupRecoveryModel.test.ts` and
+`ProxmoxCoverageTable.test.tsx`.
+
 ### Retained Patrol objectives do not create recovery authority
 
 The shared `internal/api` retained-objective endpoints may scope an outcome to
@@ -6302,35 +6316,3 @@ This changes no collector, health thresholds, history policy or server identity.
 `frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx` exercises
 snapshot replacement, in-place reconciliation, missing evidence, target changes
 and fault/recovery using the real keyed renderer.
-
-Touch inspection in the existing pool and physical-disk History charts selects
-an actual stored reading rather than substituting the latest sample on focus.
-Page pan/cancel and multi-contact gestures do not imply a selected observation;
-browser-owned scrolling remains available. This changes no source target, API,
-units, collection, retention, access or recovery boundary. The production
-disk/pool fixture `frontend-modern/browser-tests/history-touch.cjs` and mounted
-`HistoryChart.test.tsx` regressions verify presentation/input behaviour only,
-not live appliance collection or recovery success.
-
-### Pool-to-physical-disk ownership in Storage details
-
-`storagePoolDetailPresentation.ts` must scope inferred ZFS device and UnRAID
-array/cache-group membership to the owning host. An explicit disk parent equal
-to the canonical pool ID or its retained resource reference remains a direct
-association. Otherwise, matching canonical host parents establishes scope;
-conflicting parents cannot be overridden by names, paths or group labels.
-When canonical parents are unavailable, only a complete matching native
-Proxmox instance/node pair establishes scope. `storageAdapters.ts` retains that
-instance alongside the native node. Display names and unscoped hostnames alone
-are insufficient. Unknown ownership must not present another host's SMART,
-temperature, counters or topology counts as this pool's evidence.
-
-ZFS device matching compares full identifiers with only the optional `/dev/`
-prefix normalized, not arbitrary suffixes or invented partition associations.
-This is read-only presentation: no collector, canonical server identity,
-metrics target, health threshold, persistence or recovery authority changes.
-`storagePoolDiskOwnership.test.ts`, the mounted
-`StoragePoolDetail.ownership.test.tsx` and `browser-tests/pool-ownership.cjs`
-cover repeated paths/groups, direct children, scoped legacy snapshots, missing
-ownership and live target replacement. Synthetic presentation proof does not
-establish native appliance, installation or recovery acceptance.
