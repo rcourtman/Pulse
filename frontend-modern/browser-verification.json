@@ -1,16 +1,20 @@
 {
   "version": 1,
-  "base_sha": "93531c9cd3bfc9278633476ba26a1c77e66bc802",
-  "verified_at": "2026-10-02T14:23:47.145834Z",
+  "base_sha": "cf5d6cdf066539b6e29f589e42d408edb1ceb73a",
+  "verified_at": "2026-10-02T15:02:34.899181Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/useHistoryChartState.ts"
+    "frontend-modern/src/components/shared/HistoryChart.tsx",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts",
+    "frontend-modern/src/components/shared/historyChartModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/useHistoryChartState.ts": "f10b5cfc7cb296c60ad7e87bf7c3001c4308d29af702b8c7a7e77e7c4c4c3fb6"
+    "frontend-modern/src/components/shared/HistoryChart.tsx": "24cd863fb6288bc2c13ef2d26e02aad95d3e4f54278f3078b1703fabf8785f8c",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "b1ebd93d5fee328b78f8f88f1837514a30d12be069d852d08f5d7f2b6ce999ec",
+    "frontend-modern/src/components/shared/historyChartModel.ts": "bd9e8954ef7e274a1eb026752d304556df303f612c4485369f8c90a7183cc751"
   },
   "routes": [
-    "/browser-tests/history-selection.html"
+    "/browser-tests/history-keyboard.html"
   ],
   "viewports": [
     {
@@ -23,23 +27,22 @@
     }
   ],
   "states": [
-    "Synthetic delayed transport using the production shared chart, with hidden selector matching storage drawers; not native PBS acceptance",
-    "Selected B remains 80% after old A completes at 10%; new C clears readings while loading and displays its own failure",
-    "Desktop Chromium light and phone WebKit dark: eight states, no page errors or overflow in storage layout"
+    "Populated, empty and linked charts in Chromium light and WebKit phone dark; synthetic data, not native PBS acceptance",
+    "Visible keyboard focus, wrapped timestamp and reading contained within tooltip; no horizontal overflow or page errors"
   ],
   "interactions": [
-    "Select B, complete B then delayed A",
-    "Select C then fail its request; verify accessible description and plotted extrema"
+    "Tab into and out of both charts; arrows, Home/End, endpoint clamping, Escape; only focused chart announces keyboard readings",
+    "Parent Tab skips both charts; final empty chart invents no reading"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/history-selection.cjs",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/history-keyboard.cjs",
   "browser_versions": {
     "playwright": "1.56.1",
     "chromium": "141.0.7390.37",
     "webkit": "26.0"
   },
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-wwhurxzu/browser/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-wwhurxzu/browser/webkit-old-a-finished.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-wwhurxzu/browser/chromium-c-loading.png"
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-tuqfk84d/browser/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-tuqfk84d/browser/webkit-keyboard.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-tuqfk84d/browser/chromium-keyboard.png"
   ]
 }

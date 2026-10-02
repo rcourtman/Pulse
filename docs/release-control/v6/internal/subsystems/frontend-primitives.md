@@ -7686,3 +7686,16 @@ field, polling, supplied-data transitions, locked/empty targets and cleanup.
 accessible description in desktop Chromium and phone WebKit, including a late
 old-target response and current-target loading/failure. Synthetic response proof
 is not native PBS collection or whole-report #1723 acceptance.
+
+### Shared History keyboard inspection
+
+The existing Storage pool and disk canvas charts accept keyboard focus with a
+visible focus indicator. Focus selects the latest observed sample; Left/Right
+step through actual observations, Home/End select the endpoints, and Escape or
+blur clears inspection without trapping focus. Each keyboard-selected timestamp
+and formatted value is announced politely. Pointer inspection remains available
+without announcing every mouse move. Matching sample refreshes retain inspection;
+selection changes and empty data clear stale readings. No readings are invented
+for missing data. Tooltips reserve room for a wrapped local timestamp and reading. The mounted HistoryChart regression and history-keyboard browser
+fixture cover navigation, bounds, focus exit, refresh and replacement. Synthetic
+browser proof does not establish native collector or assistive-device acceptance.

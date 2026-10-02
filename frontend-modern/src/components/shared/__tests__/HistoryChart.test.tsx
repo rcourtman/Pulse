@@ -130,6 +130,56 @@ describe('HistoryChart', () => {
     expect(historyChartTooltipSource).not.toContain('ChartsAPI.getMetricsHistory');
   });
 
+  it('inspects actual readings with the keyboard and clears on escape, blur and selection changes', () => {
+    const [target, setTarget] = createSignal('a');
+    const [points, setPoints] = createSignal([
+      { timestamp: 1_000, value: 10, min: 10, max: 10 },
+      { timestamp: 2_000, value: 20, min: 20, max: 20 },
+      { timestamp: 3_000, value: 30, min: 30, max: 30 },
+    ]);
+    const { container } = render(() => (
+      <HistoryChart
+        resourceType="disk"
+        resourceId={target()}
+        metric="usage"
+        unit="%"
+        hideSelector
+        data={points()}
+      />
+    ));
+    const canvas = screen.getByRole('img', { name: 'History chart' });
+    const announcement = container.querySelector('[aria-live="polite"]')!;
+    expect(canvas).toHaveAttribute('tabindex', '0');
+    expect(announcement).toBeEmptyDOMElement();
+    fireEvent.focus(canvas);
+    expect(announcement).toHaveTextContent('30.0%');
+    fireEvent.keyDown(canvas, { key: 'ArrowLeft' });
+    expect(announcement).toHaveTextContent('20.0%');
+    fireEvent.keyDown(canvas, { key: 'Home' });
+    fireEvent.keyDown(canvas, { key: 'ArrowLeft' });
+    expect(announcement).toHaveTextContent('10.0%');
+    fireEvent.keyDown(canvas, { key: 'ArrowRight', ctrlKey: true });
+    expect(announcement).toHaveTextContent('10.0%');
+    fireEvent.keyDown(canvas, { key: 'End' });
+    fireEvent.keyDown(canvas, { key: 'ArrowRight' });
+    expect(announcement).toHaveTextContent('30.0%');
+    fireEvent.keyDown(canvas, { key: 'Escape' });
+    expect(announcement).toBeEmptyDOMElement();
+    expect(container.querySelector('[data-history-chart-tooltip]')).toBeNull();
+    fireEvent.keyDown(canvas, { key: 'Home' });
+    setPoints(points().map((point) => ({ ...point, value: point.value + 1 })));
+    expect(announcement).toHaveTextContent('11.0%');
+    setTarget('b');
+    expect(announcement).toBeEmptyDOMElement();
+    fireEvent.keyDown(canvas, { key: 'Home' });
+    fireEvent.blur(canvas);
+    expect(announcement).toBeEmptyDOMElement();
+    setPoints([]);
+    fireEvent.focus(canvas);
+    fireEvent.keyDown(canvas, { key: 'End' });
+    expect(announcement).toBeEmptyDOMElement();
+  });
+
   it('renders the default history label', () => {
     render(() => <HistoryChart resourceType="agent" resourceId="node-1" metric="cpu" />);
 
