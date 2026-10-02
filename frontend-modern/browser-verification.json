@@ -1,19 +1,17 @@
 {
   "version": 1,
-  "base_sha": "e5d0843851a3837a90d71afaced3a009c0606bbf",
-  "verified_at": "2026-10-02T20:44:41.220410Z",
+  "base_sha": "689079622dfa8fb472349ad13c36ad2068f0c38e",
+  "verified_at": "2026-10-02T21:27:29.856838Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/HistoryChart.tsx",
-    "frontend-modern/src/components/shared/useHistoryChartState.ts"
+    "frontend-modern/src/features/storageBackups/storageAdapters.ts",
+    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/HistoryChart.tsx": "74fb7e6b466e1c2b2d2efb13e0a124d6c301896a7c9423432e903908cc9ee25b",
-    "frontend-modern/src/components/shared/useHistoryChartState.ts": "d6e8317019c8dc616bd9a4d3c6c71cb5329297ca0341e6ba28a6cc4c84db36b0"
+    "frontend-modern/src/features/storageBackups/storageAdapters.ts": "7933ab99a1cfdf35bcebf0f351ec2b6a8c486b1281a9a3daa36f828fa657c52e",
+    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts": "dd97511242f9375a725f69b3f8f40b2aee19998bdcdd2e82ce996d27f9fc519b"
   },
-  "routes": [
-    "/browser-tests/history-touch.html"
-  ],
+  "routes": ["/browser-tests/pool-ownership.html"],
   "viewports": [
     {
       "width": 1365,
@@ -25,33 +23,19 @@
     }
   ],
   "states": [
-    "Production disk/pool details with stored multi-point, measured-zero singleton and empty history; 19 observed presentations across desktop Chromium and phone Chromium/WebKit",
-    "Actual touchscreen first/middle/last taps, shared I/O group focus transfer, keyboard navigation/exit and real mouse coexistence; phone WebKit dark-class presentation"
+    "Production StoragePoolDetail through the real storage adapter; desktop Chromium light and phone WebKit dark; ZFS/UnRAID host A and B, missing ownership and direct children",
+    "12 recorded presentation states, plus per-engine History target replacement and Overview return"
   ],
   "interactions": [
-    "Native touchscreen taps select the actual reading at that position instead of the latest sample; touch compatibility focus/mouse movement/leave cannot overwrite it",
-    "Primary contact cancellation, non-tap gesture rejection and native Chromium vertical pan with room-to-scroll precondition; no prevented touch default, pointer capture or touch-action change",
-    "Desktop/phone keyboard Home/Right/End/Escape and focus exit, pointer announcements remain quiet, range replacement, zero/empty responses and no horizontal overflow",
-    "Predecessor native Chromium/WebKit first tap near 10% instead displays 30%; final first/middle/last taps display 10/20/30%. Inspected predecessor and final phone, zero/empty and desktop screenshots"
+    "Replace the selected host in the mounted detail: a remote 82\u00b0C/99-error disk appears only on its owning host; local temperature and errors remain visible",
+    "Missing ownership omits inferred Physical Disks without removing ZFS information; direct children remain",
+    "History range and canonical history-a/history-b requests stay isolated while selected hosts change; no horizontal page overflow"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/history-touch.cjs",
-  "browser_versions": {
+  "observations": {
     "playwright": "1.56.1",
-    "chromium": "141.0.7390.37",
-    "webkit": "26.0"
-  },
-  "artifacts": [
-    "browser/result.json",
-    "browser/chromium-phone-first.png",
-    "browser/webkit-phone-first.png",
-    "browser/webkit-phone-middle.png",
-    "browser/webkit-phone-pool-first.png",
-    "browser/webkit-phone-pool-zero-singleton.png",
-    "browser/webkit-phone-pool-empty.png",
-    "browser/chromium-desktop-middle.png",
-    "browser/parent.json",
-    "browser/parent-chromium-phone-first.png",
-    "browser/parent-webkit-phone-first.png"
-  ],
-  "limitations": "Synthetic stored APIs, not native PBS/TrueNAS collection, physical phones or assistive-device speech. Native pan is Chromium-only; no physical/WebKit pan, pinch-zoom or whole-app theme-transition claim. Initial fixture and pan-driver failures are retained separately."
+    "expected_playwright": "1.56.1",
+    "result": "browser/result.json",
+    "parent": "browser/parent.json",
+    "driver": "frontend-modern/browser-tests/pool-ownership.cjs"
+  }
 }

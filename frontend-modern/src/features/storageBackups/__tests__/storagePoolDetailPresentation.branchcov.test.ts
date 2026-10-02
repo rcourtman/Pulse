@@ -453,16 +453,18 @@ describe('getStoragePoolLinkedDisks branch coverage', () => {
       id: 'cache-pool-1',
       name: '  My Cache  ',
       source: unraidSource(),
-      details: { type: 'unraid-cache-pool', platform: 'unraid' },
+      details: { type: 'unraid-cache-pool', platform: 'unraid', parentId: 'host-1' },
     });
     const disks = [
       {
         id: 'in',
+        parentId: 'host-1',
         name: 'in',
         physicalDisk: { devPath: '/dev/sda', storageRole: 'cache', storageGroup: 'My Cache' },
       },
       {
         id: 'out',
+        parentId: 'host-1',
         name: 'out',
         physicalDisk: { devPath: '/dev/sdb', storageRole: 'cache', storageGroup: 'other' },
       },
@@ -476,16 +478,18 @@ describe('getStoragePoolLinkedDisks branch coverage', () => {
       id: 'arr-1',
       name: 'Tower',
       source: unraidSource(),
-      details: { type: 'pool', platform: 'unraid', topology: 'array' },
+      details: { type: 'pool', platform: 'unraid', topology: 'array', parentId: 'host-1' },
     });
     const disks = [
       {
         id: 'in',
+        parentId: 'host-1',
         name: 'in',
         physicalDisk: { devPath: '/dev/sda', storageRole: 'data', storageGroup: 'unraid-array' },
       },
       {
         id: 'out',
+        parentId: 'host-1',
         name: 'out',
         physicalDisk: { devPath: '/dev/sdb', storageRole: 'data', storageGroup: 'nope' },
       },

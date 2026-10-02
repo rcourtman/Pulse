@@ -224,6 +224,10 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
       parentId: resource.parentId,
       parentName: resource.parentName,
       node: proxmoxNativeNode || (platformData.node as string | undefined) || storageNodes[0],
+      instance:
+        resource.proxmox?.instance ||
+        (proxmoxPlatform?.instance as string | undefined) ||
+        (platformData.instance as string | undefined),
       nodeHints,
       hostLabel,
       platformLabel,

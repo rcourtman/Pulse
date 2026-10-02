@@ -7752,3 +7752,20 @@ production disk/pool details and API transport in phone Chromium/WebKit, native
 vertical panning in Chromium, and desktop mouse/keyboard controls. Synthetic
 sample presentation is not native collector, physical device, assistive-device
 or installed whole-report acceptance.
+
+### Shared Storage presenters preserve disk ownership
+
+Pool-detail presenters under `features/storageBackups/` must not use repeated
+device paths, UnRAID group labels or host display names as fleet-wide identity.
+Direct pool children are retained; inferred membership requires the same
+canonical host parent, or a complete native Proxmox instance/node pair when
+parents are missing. Known parent conflicts win over native names. Full ZFS
+device identifiers may normalize an optional `/dev/` prefix but must not match
+arbitrary suffixes. Missing ownership produces no invented linked-disk facts.
+The storage adapter preserves the instance needed for that presentation scope;
+this does not rewrite canonical resources or History targets. Existing keyed
+pool details must update linked disks and local health through target/snapshot
+replacement without retaining peer-host rows. The mounted
+`StoragePoolDetail.ownership.test.tsx` and production-component browser fixture
+`browser-tests/pool-ownership.cjs` verify desktop/phone presentation and History
+coexistence; they are not field collection or native recovery evidence.
