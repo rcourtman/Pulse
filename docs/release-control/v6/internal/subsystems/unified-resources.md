@@ -23,6 +23,22 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### No-op identity lists do not create change history — issue #2319 companion
+
+Resource change emission compares hostname/IP/MAC lists order-independently,
+including equivalent nil/empty lists, while scalar machine/DMI/cluster/guest
+identifiers and actual list-member changes remain exact change evidence.
+This carries reviewed main `a5aa881ac530` through this line's existing
+`recordRegistryChanges` List boundary; it does not import main's newer locked-
+generation/clone optimization or change canonical matching, wire fields,
+source authority, collection timing or existing persisted rows.
+`TestResourceChangeIdentityIgnoresSetOrderAndEmptySlices` and
+`TestRegistryListComparisonTreatsIdentityListsAsSets` pin no-op order/nil cases
+and one real new-address row. The serial-bearing SMART guard-removal fixture
+then reports one tags-only row; final guarded full/skip cycles add no rows.
+These are synthetic in-memory journal controls, not installed writes or CPU.
+
+
 ### Release-line PBS retention revocation — 30 September 2026
 
 PBS drawer host-target retention is bound to the unchanged identity evidence

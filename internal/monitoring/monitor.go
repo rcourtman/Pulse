@@ -854,6 +854,13 @@ func physicalDisksForInstanceFromReadState(readState unifiedresources.ReadState,
 		if disk == nil || disk.Instance() != instance {
 			continue
 		}
+		// A linked host Agent's SMART disk inherits the PVE instance for
+		// presentation, but that does not make it a PVE inventory record.
+		// Feeding it back into State.PhysicalDisks invents a PVE source and
+		// alternates tags/history whenever the real disks/list is empty.
+		if _, observedByPVE := disk.SourceStatus(unifiedresources.SourceProxmox); !observedByPVE {
+			continue
+		}
 		out = append(out, physicalDiskFromReadStateView(disk))
 	}
 	return out

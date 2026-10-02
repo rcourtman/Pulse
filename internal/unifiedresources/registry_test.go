@@ -6604,3 +6604,36 @@ func TestIssue2076USBLinkedDiskAmbiguity(t *testing.T) {
 		})
 	}
 }
+
+func TestRegistryListComparisonTreatsIdentityListsAsSets(t *testing.T) {
+	store := NewMemoryStore()
+	now := time.Date(2026, 9, 29, 17, 0, 0, 0, time.UTC)
+	entry := IngestRecord{
+		SourceID: "disk-1",
+		Resource: Resource{Type: ResourceTypePhysicalDisk, Name: "disk", Status: StatusOnline, LastSeen: now},
+		Identity: ResourceIdentity{MachineID: "serial-1", Hostnames: []string{"node", "node.example"}},
+	}
+	before := NewRegistry(store)
+	before.IngestRecords(SourceAgent, []IngestRecord{entry})
+
+	reordered := entry
+	reordered.Identity = ResourceIdentity{
+		MachineID: "serial-1", Hostnames: []string{"node.example", "node"},
+		IPAddresses: []string{}, MACAddresses: []string{},
+	}
+	after := NewRegistry(store)
+	after.IngestRecords(SourceAgent, []IngestRecord{reordered})
+	recordRegistryChanges(store, before.List(), after.List(), now.Add(time.Minute), nil, SourcePulseDiff, "")
+	if len(store.changes) != 0 {
+		t.Fatalf("equivalent identity lists emitted %d history rows: %+v", len(store.changes), store.changes)
+	}
+
+	changed := reordered
+	changed.Identity.IPAddresses = []string{"192.0.2.10"}
+	later := NewRegistry(store)
+	later.IngestRecords(SourceAgent, []IngestRecord{changed})
+	recordRegistryChanges(store, after.List(), later.List(), now.Add(2*time.Minute), nil, SourcePulseDiff, "")
+	if len(store.changes) != 1 || !sameStringSet(mustChangedFields(t, &store.changes[0]), []string{"identity"}) {
+		t.Fatalf("real address change not recorded once: %+v", store.changes)
+	}
+}
