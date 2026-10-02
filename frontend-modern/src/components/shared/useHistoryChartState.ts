@@ -90,6 +90,8 @@ export function useHistoryChartState(
   const dataMin = createMemo(() => getHistoryChartDataMin(data()));
   const dataMax = createMemo(() => getHistoryChartDataMax(data()));
 
+  let previousSelection: string | undefined;
+
   // One effect owns a selection, its request and its polling timer. Cleanup
   // invalidates completions even when a transport ignores cancellation.
   createEffect(() => {
@@ -117,8 +119,20 @@ export function useHistoryChartState(
     setSource(suppliedData !== undefined ? 'live' : null);
     setError(null);
     setLoading(false);
-    setHoveredPoint(null);
-    setHoveredTimestamp(null);
+    const selection = JSON.stringify([
+      resourceType,
+      resourceId,
+      metric,
+      chartRange,
+      pointsCap,
+      locked,
+      suppliedData !== undefined,
+    ]);
+    if (selection !== previousSelection) {
+      setHoveredPoint(null);
+      setHoveredTimestamp(null);
+    }
+    previousSelection = selection;
     if (suppliedData !== undefined || locked || !resourceId || !resourceType) return;
 
     const loadData = async () => {

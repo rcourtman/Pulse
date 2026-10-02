@@ -7675,7 +7675,8 @@ metric, range, sampling cap, supplied-data mode or access state changes. Late
 successes and failures cannot replace the current selection's samples, loading
 or error state, even if cancellation is ignored. Selection changes clear old
 readings and hover state while loading; current initial failures remain visible.
-Matching background refresh failures retain already loaded samples. Polls never
+Matching supplied-sample refreshes retain pointer inspection; changing the selection
+clears it. Matching background refresh failures retain already loaded samples. Polls never
 overlap and stop for supplied data (including empty arrays), unavailable targets,
 locked ranges and unmount.
 

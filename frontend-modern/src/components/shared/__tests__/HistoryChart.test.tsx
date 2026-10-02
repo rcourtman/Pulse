@@ -233,6 +233,32 @@ describe('HistoryChart', () => {
     rectSpy.mockRestore();
   });
 
+  it('keeps pointer inspection when matching supplied samples refresh', () => {
+    const rectSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 400,
+      bottom: 120,
+      width: 400,
+      height: 120,
+      toJSON: () => ({}),
+    });
+    const samples = (value: number) =>
+      [1000, 2000, 3000].map((timestamp) => ({ timestamp, value, min: value, max: value }));
+    const [data, setData] = createSignal(samples(10));
+    const { container } = render(() => (
+      <HistoryChart resourceType="agent" resourceId="a" metric="cpu" data={data()} />
+    ));
+    fireEvent.mouseMove(container.querySelector('canvas')!, { clientX: 220 });
+    expect(container.querySelector('[data-history-chart-tooltip="true"]')).not.toBeNull();
+    setData(samples(20));
+    expect(container.querySelector('[data-history-chart-tooltip="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-history-chart-tooltip="true"]')).toHaveTextContent('20');
+    rectSpy.mockRestore();
+  });
+
   it('exposes the sub-day and Relay history ranges as first-class chart options', () => {
     expect(HISTORY_CHART_RANGES).toEqual(['1h', '6h', '12h', '24h', '7d', '14d', '30d', '90d']);
   });

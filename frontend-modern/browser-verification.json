@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "base_sha": "9dc6bd0ffe4de520bf9afc43ad10fb169026325d",
-  "verified_at": "2026-10-02T14:15:24.462877Z",
+  "base_sha": "93531c9cd3bfc9278633476ba26a1c77e66bc802",
+  "verified_at": "2026-10-02T14:23:47.145834Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/components/shared/useHistoryChartState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/useHistoryChartState.ts": "ff9dff0db01ae3141b3a130477cb8128ea4da8ea4e93f23c360278f6a47b152a"
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "f10b5cfc7cb296c60ad7e87bf7c3001c4308d29af702b8c7a7e77e7c4c4c3fb6"
   },
   "routes": [
     "/browser-tests/history-selection.html"
