@@ -1557,6 +1557,10 @@ service-history reads plus denial/recovery without fabricated samples.
    failing job's last good sync falls behind by its failure count, and a
    long-running demo never reports healthy jobs as overdue. A mock job never
    targets its own source node, and an estate without a second node has none.
+   The mock estate carries shared storage in the shape the poller produces,
+   not the per-node shape the PVE API returns: a shared PBS storage is one
+   cluster-scoped row listing its reporting nodes (issue 1049), never one row
+   per node with a different usage figure on each.
    Mock metrics history must also stay bounded independently of estate size:
    eager multi-day PVE guest history is limited to a deterministic sample spread
    across the estate, while every omitted guest continues to receive the same
