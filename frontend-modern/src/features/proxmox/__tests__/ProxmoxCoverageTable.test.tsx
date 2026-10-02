@@ -213,4 +213,39 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(document.body.textContent).toContain('workload-0');
     expect(document.body.textContent).not.toContain('workload-599');
   });
+
+  it('marks an empty evidence cell with a short label and the full reason on hover', () => {
+    render(() => (
+      <ProxmoxCoverageTable
+        rows={[row]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKeys={new Set<string>()}
+        onToggleExpand={() => {}}
+        showPbsColumn={true}
+        showArchiveColumn={true}
+        showSnapshotColumn={true}
+        showTaskColumn={true}
+        layoutWidth={() => 1_200}
+      />
+    ));
+
+    // The header already names the source, so the cell does not repeat it and
+    // cannot truncate to "No PVE backup f…".
+    const empty = (title: string) => document.querySelector(`td span[title="${title}"]`);
+    for (const title of [
+      'No restore point',
+      'No PBS snapshot',
+      'No PVE backup file',
+      'No guest snapshot',
+      'No recent task',
+    ]) {
+      expect(empty(title)).toHaveTextContent(/^None$/);
+    }
+  });
 });

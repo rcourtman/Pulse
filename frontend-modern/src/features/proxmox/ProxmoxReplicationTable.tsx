@@ -24,6 +24,10 @@ import {
   PlatformWindowedRows,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
+import {
+  getPlatformResourceDetailRowInteractionProps,
+  PlatformResourceDetailToggleButton,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import type { ReplicationJob, ReplicationJobsResponse } from '@/types/api';
 import { buildPlatformSearchSuggestions } from '@/features/platformPage/platformSearchSuggestions';
@@ -68,6 +72,9 @@ export const REPLICATION_MOBILE_COLUMN_WIDTHS: Readonly<
   nextSync: 13,
 };
 
+// The guest column carries the disclosure control beside the name, and the
+// error text is why a failed job needs attention, so both take the share the
+// timing columns can spare. An 8% error column clipped the message mid-word.
 const REPLICATION_COLUMN_WIDTH_CLASS: Record<
   PlatformTableContainerLayout,
   Record<ReplicationColumn, string>
@@ -85,52 +92,52 @@ const REPLICATION_COLUMN_WIDTH_CLASS: Record<
     error: 'w-0',
   },
   basic: {
-    status: 'w-[14%]',
-    job: 'w-[11%]',
-    guest: 'w-[28%]',
-    route: 'w-[17%]',
+    status: 'w-[13%]',
+    job: 'w-[9%]',
+    guest: 'w-[31%]',
+    route: 'w-[16%]',
     schedule: 'w-0',
-    lastSync: 'w-[15%]',
-    nextSync: 'w-[15%]',
+    lastSync: 'w-[14%]',
+    nextSync: 'w-[17%]',
     duration: 'w-0',
     fails: 'w-0',
     error: 'w-0',
   },
   operational: {
     status: 'w-[11%]',
-    job: 'w-[7%]',
-    guest: 'w-[21%]',
-    route: 'w-[12%]',
-    schedule: 'w-[9%]',
+    job: 'w-[8%]',
+    guest: 'w-[25%]',
+    route: 'w-[14%]',
+    schedule: 'w-0',
     lastSync: 'w-[11%]',
-    nextSync: 'w-[13%]',
+    nextSync: 'w-[14%]',
     duration: 'w-[11%]',
-    fails: 'w-[5%]',
+    fails: 'w-[6%]',
     error: 'w-0',
   },
   expanded: {
-    status: 'w-[10%]',
-    job: 'w-[7%]',
+    status: 'w-[9%]',
+    job: 'w-[6%]',
     guest: 'w-[20%]',
     route: 'w-[11%]',
     schedule: 'w-[8%]',
-    lastSync: 'w-[10%]',
-    nextSync: 'w-[12%]',
-    duration: 'w-[10%]',
-    fails: 'w-[4%]',
-    error: 'w-[8%]',
+    lastSync: 'w-[8%]',
+    nextSync: 'w-[11%]',
+    duration: 'w-[8%]',
+    fails: 'w-[5%]',
+    error: 'w-[14%]',
   },
   full: {
-    status: 'w-[10%]',
+    status: 'w-[9%]',
     job: 'w-[7%]',
     guest: 'w-[20%]',
     route: 'w-[11%]',
     schedule: 'w-[8%]',
-    lastSync: 'w-[10%]',
-    nextSync: 'w-[12%]',
-    duration: 'w-[10%]',
+    lastSync: 'w-[9%]',
+    nextSync: 'w-[11%]',
+    duration: 'w-[8%]',
     fails: 'w-[4%]',
-    error: 'w-[8%]',
+    error: 'w-[13%]',
   },
 };
 
@@ -291,6 +298,8 @@ export const ProxmoxReplicationTable: Component<{
         job.targetNode,
         job.instance,
         job.lastSyncStatus,
+        job.error,
+        job.comment,
       ]
         .filter(Boolean)
         .join(' ')
@@ -329,21 +338,23 @@ export const ProxmoxReplicationTable: Component<{
   const layout = createMemo(() =>
     getPlatformTableContainerLayout(observedWidth.width() ?? 1920, [520, 720, 960, 1200]),
   );
-  const canRevealDetails = createMemo(() => layout() === 'compact');
-  const mobilePaddingClass = () => (canRevealDetails() ? '!px-1' : '');
-  const mobileHeadClass = () => (canRevealDetails() ? '!px-1 !text-[9px]' : '');
-  const mobileLastSyncClass = () =>
-    canRevealDetails() ? '![padding-inline:2px] !tracking-normal' : '';
-  const showJob = createMemo(() => !canRevealDetails());
+  const isCompact = createMemo(() => layout() === 'compact');
+  const mobilePaddingClass = () => (isCompact() ? '!px-1' : '');
+  const mobileHeadClass = () => (isCompact() ? '!px-1 !text-[9px]' : '');
+  const mobileLastSyncClass = () => (isCompact() ? '![padding-inline:2px] !tracking-normal' : '');
+  const showJob = createMemo(() => !isCompact());
   const showNext = createMemo(() => true);
   const showOperational = createMemo(() => ['operational', 'expanded', 'full'].includes(layout()));
+  // The cron-style schedule is the least actionable column, and the mid-width
+  // table cannot fit it without clipping the route and next-sync values.
+  const showSchedule = createMemo(() => ['expanded', 'full'].includes(layout()));
   const showError = createMemo(() => ['expanded', 'full'].includes(layout()));
   const columnWidthClass = (column: ReplicationColumn) =>
-    canRevealDetails() ? '' : REPLICATION_COLUMN_WIDTH_CLASS[layout()][column];
+    isCompact() ? '' : REPLICATION_COLUMN_WIDTH_CLASS[layout()][column];
   const visibleColumnCount = createMemo(() => {
     if (layout() === 'compact') return REPLICATION_MOBILE_COLUMNS.length;
     if (layout() === 'basic') return 6;
-    return showError() ? 10 : 9;
+    return showError() ? 10 : 8;
   });
 
   return (
@@ -430,7 +441,7 @@ export const ProxmoxReplicationTable: Component<{
                     <TableHead
                       class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('status')} ${mobileHeadClass()}`}
                     >
-                      {canRevealDetails() ? 'State' : 'Status'}
+                      {isCompact() ? 'State' : 'Status'}
                     </TableHead>
                     <Show when={showJob()}>
                       <TableHead
@@ -445,7 +456,7 @@ export const ProxmoxReplicationTable: Component<{
                     >
                       Route
                     </TableHead>
-                    <Show when={showOperational()}>
+                    <Show when={showSchedule()}>
                       <TableHead
                         class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('schedule')}`}
                       >
@@ -497,51 +508,46 @@ export const ProxmoxReplicationTable: Component<{
                         const guestLabel = formatGuestLabel(job);
                         const jobKey = `${job.id}:${job.jobId}:${job.guestId ?? index()}`;
                         const detailRowId = `replication-job-detail-${index()}`;
-                        const isExpanded = () => canRevealDetails() && expandedJobKey() === jobKey;
+                        const errorText = (job.error ?? '').trim();
+                        const comment = (job.comment ?? '').trim();
+                        const isExpanded = () => expandedJobKey() === jobKey;
                         const toggleDetails = () => {
-                          if (!canRevealDetails()) return;
                           setExpandedJobKey(isExpanded() ? null : jobKey);
                         };
                         return (
                           <>
                             <TableRow
-                              class={`${getPlatformTableRowClass()} ${canRevealDetails() ? 'cursor-pointer' : ''}`}
-                              aria-controls={isExpanded() ? detailRowId : undefined}
-                              aria-expanded={
-                                canRevealDetails() ? (isExpanded() ? 'true' : 'false') : undefined
-                              }
-                              onClick={toggleDetails}
-                              onKeyDown={(event) => {
-                                if (
-                                  !canRevealDetails() ||
-                                  (event.key !== 'Enter' && event.key !== ' ')
-                                ) {
-                                  return;
-                                }
-                                event.preventDefault();
-                                toggleDetails();
-                              }}
-                              tabIndex={canRevealDetails() ? 0 : undefined}
+                              {...getPlatformResourceDetailRowInteractionProps({
+                                expanded: isExpanded(),
+                                onToggle: toggleDetails,
+                                class: getPlatformTableRowClass(),
+                              })}
                             >
                               <TableCell
                                 class={`${getPlatformTableCellClassForKind('name')} text-base-content ${mobilePaddingClass()}`}
                                 title={guestLabel}
                               >
-                                <span
-                                  class={`block truncate ${canRevealDetails() ? 'text-[10px]' : ''}`}
-                                >
-                                  {canRevealDetails()
-                                    ? formatMobileReplicationGuestLabel(job)
-                                    : guestLabel}
-                                </span>
+                                <div class="flex min-w-0 items-center gap-2">
+                                  <PlatformResourceDetailToggleButton
+                                    expanded={isExpanded()}
+                                    resourceLabel={`replication job ${job.jobId || job.id}`}
+                                    controlsId={detailRowId}
+                                    onToggle={toggleDetails}
+                                  />
+                                  <span
+                                    class={`min-w-0 truncate ${isCompact() ? 'text-[10px]' : ''}`}
+                                  >
+                                    {isCompact()
+                                      ? formatMobileReplicationGuestLabel(job)
+                                      : guestLabel}
+                                  </span>
+                                </div>
                               </TableCell>
                               <TableCell
                                 class={`${getPlatformTableCellClassForKind('text')} ${mobilePaddingClass()}`}
                               >
-                                <div
-                                  class={`flex items-center ${canRevealDetails() ? 'gap-0' : 'gap-2'}`}
-                                >
-                                  <Show when={!canRevealDetails()}>
+                                <div class={`flex items-center ${isCompact() ? 'gap-0' : 'gap-2'}`}>
+                                  <Show when={!isCompact()}>
                                     <StatusDot
                                       size="sm"
                                       variant={ind.variant}
@@ -550,7 +556,7 @@ export const ProxmoxReplicationTable: Component<{
                                     />
                                   </Show>
                                   <span
-                                    class={`${canRevealDetails() ? 'text-[10px]' : 'text-[11px]'} font-medium ${ind.tone}`}
+                                    class={`${isCompact() ? 'text-[10px]' : 'text-[11px]'} font-medium ${ind.tone}`}
                                   >
                                     {ind.label}
                                   </span>
@@ -567,7 +573,7 @@ export const ProxmoxReplicationTable: Component<{
                                 class={`${getPlatformTableCellClassForKind('text')} text-base-content ${mobilePaddingClass()}`}
                               >
                                 <Show
-                                  when={canRevealDetails()}
+                                  when={isCompact()}
                                   fallback={
                                     <span class="inline-flex items-center gap-1 font-mono text-[11px]">
                                       <span>{sourceNode}</span>
@@ -584,7 +590,7 @@ export const ProxmoxReplicationTable: Component<{
                                   </span>
                                 </Show>
                               </TableCell>
-                              <Show when={showOperational()}>
+                              <Show when={showSchedule()}>
                                 <TableCell
                                   class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
                                 >
@@ -595,7 +601,7 @@ export const ProxmoxReplicationTable: Component<{
                                 class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content ${mobilePaddingClass()} ${mobileLastSyncClass()}`}
                               >
                                 <Show
-                                  when={canRevealDetails()}
+                                  when={isCompact()}
                                   fallback={
                                     <PlatformTableRelativeTimeValue value={syncTimeValue(job)} />
                                   }
@@ -612,9 +618,9 @@ export const ProxmoxReplicationTable: Component<{
                                   class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content ${mobilePaddingClass()}`}
                                 >
                                   <span
-                                    class={`${NEXT_SYNC_TONE_CLASS[next.tone]} ${canRevealDetails() ? 'text-[10px]' : ''}`}
+                                    class={`${NEXT_SYNC_TONE_CLASS[next.tone]} ${isCompact() ? 'text-[10px]' : ''}`}
                                   >
-                                    {canRevealDetails()
+                                    {isCompact()
                                       ? compactReplicationNextSyncText(next.text, next.tone)
                                       : next.text}
                                   </span>
@@ -647,14 +653,14 @@ export const ProxmoxReplicationTable: Component<{
                                   class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                                 >
                                   <Show
-                                    when={!!job.error?.trim()}
+                                    when={errorText}
                                     fallback={<span class="text-muted">—</span>}
                                   >
                                     <span
-                                      class="inline-block max-w-[18rem] truncate text-red-600 dark:text-red-300"
-                                      title={job.error ?? ''}
+                                      class="block truncate text-red-600 dark:text-red-300"
+                                      title={errorText}
                                     >
-                                      {job.error}
+                                      {errorText}
                                     </span>
                                   </Show>
                                 </TableCell>
@@ -666,9 +672,21 @@ export const ProxmoxReplicationTable: Component<{
                                 colspan={visibleColumnCount()}
                                 class="bg-surface-alt/60 hover:bg-surface-alt/60"
                                 cellClass="!whitespace-normal"
-                                contentClass="px-2 py-2"
+                                contentClass="px-2 py-2 sm:px-4 sm:py-3"
                               >
-                                <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1 text-[10px] leading-4">
+                                {/* The row truncates and narrower layouts drop columns, so
+                                    the expansion is where the whole job is always readable,
+                                    starting with why it failed. */}
+                                <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-[10px] leading-4 sm:text-xs sm:leading-5">
+                                  <Show when={errorText}>
+                                    <dt class="font-semibold text-muted">Error</dt>
+                                    <dd
+                                      class="break-words text-red-600 dark:text-red-300"
+                                      data-replication-job-error
+                                    >
+                                      {errorText}
+                                    </dd>
+                                  </Show>
                                   <dt class="font-semibold text-muted">Guest</dt>
                                   <dd class="break-all text-base-content">{guestLabel}</dd>
                                   <dt class="font-semibold text-muted">Job</dt>
@@ -679,6 +697,33 @@ export const ProxmoxReplicationTable: Component<{
                                   <dd class="font-mono text-base-content">
                                     {sourceNode} → {targetNode}
                                   </dd>
+                                  <dt class="font-semibold text-muted">Schedule</dt>
+                                  <dd class="font-mono text-base-content">{job.schedule || '—'}</dd>
+                                  <dt class="font-semibold text-muted">Last sync</dt>
+                                  <dd class="text-base-content">
+                                    {formatPlatformTableRelativeTimeValue(syncTimeValue(job))}
+                                  </dd>
+                                  <dt class="font-semibold text-muted">Next sync</dt>
+                                  <dd
+                                    class={NEXT_SYNC_TONE_CLASS[next.tone] || 'text-base-content'}
+                                  >
+                                    {next.text}
+                                  </dd>
+                                  <dt class="font-semibold text-muted">Duration</dt>
+                                  <dd class="text-base-content">
+                                    <PlatformTableDurationValue
+                                      seconds={job.lastSyncDurationSeconds}
+                                      fallbackText={job.lastSyncDurationHuman}
+                                    />
+                                  </dd>
+                                  <dt class="font-semibold text-muted">Failures</dt>
+                                  <dd class="tabular-nums text-base-content">
+                                    {job.failCount ?? 0}
+                                  </dd>
+                                  <Show when={comment}>
+                                    <dt class="font-semibold text-muted">Comment</dt>
+                                    <dd class="break-words text-base-content">{comment}</dd>
+                                  </Show>
                                 </dl>
                               </InlineDetailTableRow>
                             </Show>
