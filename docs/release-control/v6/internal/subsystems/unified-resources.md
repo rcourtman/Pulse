@@ -23,6 +23,34 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Detail snapshot and selection ownership
+
+ResourceDetailDrawer reads the current resource through a reactive getter in
+its state, derived identity/telemetry and Overview consumers. Replacing a
+same-ID object must update the header, availability evidence and metrics target
+without remounting the drawer or discarding its selected History range. This
+also preserves the reconciled-store clients used by platform table rows.
+Transient loss of a same-resource metrics target withdraws its History panel
+and shows the existing unavailable notice; returning the target restores the
+selected tab. No target or alias is inferred to fill the gap.
+
+A different canonical ID disposes per-resource tabs, disclosures and outstanding
+reads before rendering the new resource. Late completions cannot become the
+new resource's facets or intelligence. Discovery source-key replacement does
+not retain a former target's identification while the next read is pending.
+Availability fleet selection stores an ID, not a clicked snapshot: the open
+drawer resolves that ID in the current fleet. Removing the selected check
+closes and clears its selection, including when the ID subsequently reappears.
+
+ResourceDetailDrawer.snapshot.test.tsx covers immutable and reconciled-store
+updates, target withdrawal/restoration, current availability and late facet
+completion. The existing History consumer guard and AvailabilityFleetView
+regressions protect composition. The production-components/browser client
+fixture browser-tests/drawer-snapshot.cjs exercises PBS History requests and
+availability selection on desktop Chromium and phone WebKit with synthetic
+snapshots. It proves no native appliance, release or installed recovery result.
+Resource identity, policy, permissions, collectors and persistence are unchanged.
+
 ### Canonical RAID configured-member evidence — issue #2369
 
 Host RAID metadata and read views retain optional `requiredDevices` (configured

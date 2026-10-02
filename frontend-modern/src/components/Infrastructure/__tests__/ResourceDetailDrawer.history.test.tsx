@@ -236,7 +236,7 @@ describe('ResourceDetailDrawer change history section', () => {
     );
     expect(resourceDetailDrawerHistoryStateSource).toContain('resourceFacetRelationships');
     expect(resourceDetailDrawerDerivedStateSource).toContain('options.resourceRelationships?.()');
-    expect(resourceDetailDrawerDerivedStateSource).toContain('resource.relationships ?? []');
+    expect(resourceDetailDrawerDerivedStateSource).toContain('resource().relationships ?? []');
     expect(resourceActionHistorySource).toContain('getActionAuditRecordStatePresentation');
     expect(resourceActionHistorySource).toContain('getActionAuditResultPresentation');
     expect(resourceActionHistorySource).toContain('getActionAuditVerificationOutcomePresentation');

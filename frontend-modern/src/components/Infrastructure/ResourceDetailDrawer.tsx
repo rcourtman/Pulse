@@ -65,7 +65,9 @@ export const getSpecializedTabAvailabilityMessage = (tab: SpecializedDrawerTab):
 const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const presentation = () => props.presentation ?? DEFAULT_RESOURCE_DETAIL_DRAWER_PRESENTATION;
   const drawer = useResourceDetailDrawerState({
-    resource: props.resource,
+    get resource() {
+      return props.resource;
+    },
     presentation: presentation(),
     resolveResourceLabel: props.resolveResourceLabel,
     initialShowAccessContext: props.initialShowAccessContext,
@@ -378,16 +380,22 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
 export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props) => {
   return (
-    <DrawerContent
-      resource={props.resource}
-      onClose={props.onClose}
-      presentation={props.presentation}
-      resolveResourceLabel={props.resolveResourceLabel}
-      initialShowAccessContext={props.initialShowAccessContext}
-      initialShowHostDetails={props.initialShowHostDetails}
-      initialShowTrueNASDetails={props.initialShowTrueNASDetails}
-      onResourceActionSettled={props.onResourceActionSettled}
-    />
+    // Local tabs, disclosures and asynchronous reads belong to one canonical
+    // resource. Same-ID snapshots stay mounted; a different ID starts fresh.
+    <Show when={props.resource.id} keyed>
+      {(_resourceId) => (
+        <DrawerContent
+          resource={props.resource}
+          onClose={props.onClose}
+          presentation={props.presentation}
+          resolveResourceLabel={props.resolveResourceLabel}
+          initialShowAccessContext={props.initialShowAccessContext}
+          initialShowHostDetails={props.initialShowHostDetails}
+          initialShowTrueNASDetails={props.initialShowTrueNASDetails}
+          onResourceActionSettled={props.onResourceActionSettled}
+        />
+      )}
+    </Show>
   );
 };
 

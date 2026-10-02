@@ -35,10 +35,10 @@ type TimelineFacetRequest = {
 export const useResourceDetailDrawerHistoryState = (
   options: UseResourceDetailDrawerHistoryStateOptions,
 ) => {
-  const { resource } = options;
+  const resource = () => options.resource;
   const enableRemoteHistory = options.enableRemoteHistory ?? true;
 
-  const resourceFacetId = createMemo(() => resource.id.trim());
+  const resourceFacetId = createMemo(() => resource().id.trim());
   const [timelineKindFilter, setTimelineKindFilter] = createSignal<ResourceChangeKind | ''>('');
   const [timelineSourceTypeFilter, setTimelineSourceTypeFilter] = createSignal<
     ResourceChangeSourceType | ''
@@ -124,16 +124,16 @@ export const useResourceDetailDrawerHistoryState = (
   const refetchTimelineFacets = timelineFacetsState.refetch;
 
   const resourceTimeline = createMemo(
-    () => resourceFacets()?.recentChanges ?? resource.recentChanges ?? [],
+    () => resourceFacets()?.recentChanges ?? resource().recentChanges ?? [],
   );
   const resourceFacetCapabilities = createMemo<readonly ResourceCapability[]>(
-    () => resourceFacets()?.capabilities ?? resource.capabilities ?? [],
+    () => resourceFacets()?.capabilities ?? resource().capabilities ?? [],
   );
   const resourceFacetRelationships = createMemo<readonly ResourceRelationship[]>(
-    () => resourceFacets()?.relationships ?? resource.relationships ?? [],
+    () => resourceFacets()?.relationships ?? resource().relationships ?? [],
   );
   const resourceFacetCounts = createMemo(
-    () => resourceFacets()?.counts ?? resource.facetCounts ?? null,
+    () => resourceFacets()?.counts ?? resource().facetCounts ?? null,
   );
   const historyFacetBundle = createMemo(() =>
     timelineFacetRequest() ? (timelineFacets() ?? resourceFacets()) : resourceFacets(),
