@@ -1,22 +1,51 @@
 {
   "version": 1,
-  "base_sha": "ad7f7a1063d45e26f77faf35bacbca6877f41cac",
-  "verified_at": "2026-10-02T18:37:50.309899Z",
+  "base_sha": "e5d0843851a3837a90d71afaced3a009c0606bbf",
+  "verified_at": "2026-10-02T20:33:38Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/historyChartModel.ts",
-    "frontend-modern/src/components/shared/useHistoryChartState.ts"
+    "frontend-modern/src/features/proxmox/ProxmoxCephClusterDrawer.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/historyChartModel.ts": "c96437081022b073dca0c730a8617954987f712ee84e058c6078ae3cad05f162",
-    "frontend-modern/src/components/shared/useHistoryChartState.ts": "38af5f416fb95874e708b08d66fdbcf27b85660840e0096cb1dd24d9bc744991"
+    "frontend-modern/src/features/proxmox/ProxmoxCephClusterDrawer.tsx": "9e828c5dde7d4cb461d7c936edb8f14f1c667eaa488a81802d14014aaf0ead6e",
+    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx": "ea2b08b041148b12e0aee0afc652a43ab2f4bb937820ec513edfea36a043305d",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "bd5d7b7838852b23c5561c3e722777eb24d4e3324de863eb380c080a5796f2c8",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx": "0d0ed89d9d2dd164638dadd9f233d308d1cc52616fa2c5be4402c31659403a1d",
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "e9fe8c62cdad1f7759f5215044b30c086a3e37ebd50b83cb3f6c64a5c5d58feb",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "39b479e996c89716c095ea8cae7ecccc397989af3e3a0a83ec5c4c228a75e8b5",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "f4768c045d61983799c04245ba8bb2df7fc8da4af5a6f7d88f2968d7d1624c95"
   },
   "routes": [
-    "/browser-tests/history-sparse.html"
+    "/proxmox/replication",
+    "/proxmox/backups",
+    "/proxmox/ceph",
+    "/proxmox/mail"
   ],
   "viewports": [
     {
-      "width": 1365,
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 1100,
+      "height": 900
+    },
+    {
+      "width": 900,
+      "height": 900
+    },
+    {
+      "width": 700,
       "height": 900
     },
     {
@@ -25,37 +54,17 @@
     }
   ],
   "states": [
-    "Single stored 42% before inspection, pointer inspection, measured zero, multiple observations, successful empty response, restored singleton",
-    "Desktop Chromium light and phone WebKit dark-class presentation; 12 observations, no page errors or horizontal overflow"
+    "Mock estate (5 PVE nodes, 8 replication jobs with 2 failed, 3 PBS datastores, 69 backup targets, 1 Ceph cluster, 2 Mail Gateways), dark theme, Chromium",
+    "Replication: failed and healthy rows collapsed and expanded at full, expanded, operational, basic and compact container layouts",
+    "Backups: Coverage and By date views, protected, attention, unprotected and unknown rows, empty evidence cells",
+    "Ceph: single auto-opened cluster with pools and services, pool table in the half-width card and the phone card",
+    "Mail Gateway: healthy and degraded instances at every container layout"
   ],
   "interactions": [
-    "Pointer at three plot positions resolves to the real singleton timestamp; no mouse live announcements",
-    "Tab, Home/End, Left/Right, Escape and focus exit; matching API refreshes across sparse, populated and empty results",
-    "Both actual predecessor engines reproduce zero series pixels and missing pointer tooltip. Parent phone and final phone singleton/tooltip/zero/empty plus final desktop multi screenshots inspected."
+    "Expanded a failed replication job by its disclosure button at 1440px and by row tap at 390px; the detail shows the whole error and the full job record",
+    "Switched Backups between Coverage and By date; sortable headers render uppercase beside the plain ones",
+    "Measured every table cell and header for clipped text (scrollWidth over clientWidth) at each viewport; at 1440px all four tabs report none, and no viewport scrolls horizontally",
+    "Compared before and after screenshots: Mail Gateway Version/Spam/Virus/Quarantine and Ceph Services no longer truncate, Ceph phone pool usage reads 50.1% instead of a clipped 0.1%"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/history-sparse.cjs",
-  "browser_versions": {
-    "playwright": "1.56.1",
-    "chromium": "141.0.7390.37",
-    "webkit": "26.0"
-  },
-  "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/parent.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/parent-chromium-single.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/parent-webkit-single.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/chromium-single.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/chromium-pointer.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/chromium-zero.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/chromium-multiple.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/chromium-empty.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/chromium-recovered-single.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/webkit-single.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/webkit-pointer.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/webkit-zero.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/webkit-multiple.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/webkit-empty.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/webkit-recovered-single.png"
-  ],
-  "limitations": "Synthetic samples, not native PBS/TrueNAS collection, assistive-device testing or whole-application theme-transition acceptance."
+  "command": "playwright chromium against a private mock-mode stack built from this commit (backend :7685, vite :5203)"
 }

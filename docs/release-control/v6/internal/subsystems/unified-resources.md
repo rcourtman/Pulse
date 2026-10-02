@@ -820,6 +820,21 @@ guest identity on one line and makes every row keyboard- and touch-operable so
 the complete guest identity and job context are available through an explicit
 detail disclosure rather than hover-only title text. Compact status, route,
 last-sync, and next-sync values must remain fully visible in the scanning row.
+The same disclosure stays available at every container width and leads with
+the job's complete error text: the scanning row keeps the error on one
+truncated line, and the narrower layouts drop the error, schedule, duration,
+and failure columns, so the reason a job failed must never depend on the
+column being present or wide enough. Replication search matches that error
+text.
+`ProxmoxCephTable` and `ProxmoxMailGatewayTable` size every visible column
+through `getPlatformTableWeightedColumnWidthStyle` above their phone
+projections. A fixed-layout table that sizes only its always-on columns leaves
+the optional ones to split the remainder, which clips their headers and values
+on a full-width desktop table. The Ceph row keeps the health message ahead of
+the daemon tally as width shrinks, keeps one five-value phone projection
+(cluster, health, OSDs, pools, capacity) whose values each fit whole, and
+leaves quorum membership and the FSID to the cluster disclosure, where the
+FSID stays searchable and is shown in full.
 Optional numeric table cells follow the same split: unified-resource consumers
 own which count or replica field is meaningful, whether the domain should
 zero-default an absent scheduler/service/inventory count, whether a

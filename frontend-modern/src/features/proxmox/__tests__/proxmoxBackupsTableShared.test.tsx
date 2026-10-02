@@ -9,6 +9,7 @@ import {
   ArtifactSourceBadge,
   ArtifactStateBadge,
   ProxmoxBackupWorkloadTypeBadge,
+  SortableHead,
 } from '../proxmoxBackupsTableShared';
 import type { RecoverableArtifact } from '../proxmoxBackupRecoveryModel';
 
@@ -94,6 +95,28 @@ describe('proxmoxBackupsTableShared', () => {
     expect(proxmoxBackupsTableSharedSource).toContain('getTableSortIndicator');
     expect(proxmoxBackupsTableSharedSource).not.toContain('ArrowUpDownIcon');
     expect(proxmoxBackupsTableSharedSource).not.toContain('SORT_ICON_CLASS');
+  });
+
+  it('keeps sortable headers in the same uppercase as their plain neighbours', () => {
+    render(() => (
+      <table>
+        <thead>
+          <tr>
+            <SortableHead
+              label="Workload"
+              sortKey="workload"
+              currentSort={() => 'posture'}
+              direction={() => 'asc'}
+              onSort={() => undefined}
+              headClass=""
+            />
+          </tr>
+        </thead>
+      </table>
+    ));
+
+    // A button resets text-transform, so the header casing must be restated.
+    expect(screen.getByRole('button', { name: 'Sort by Workload' })).toHaveClass('uppercase');
   });
 });
 

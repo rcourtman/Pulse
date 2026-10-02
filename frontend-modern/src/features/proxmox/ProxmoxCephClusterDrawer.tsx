@@ -152,6 +152,10 @@ export const ProxmoxCephClusterDrawer: Component<{
             when={pools().length > 0}
             fallback={<p class="text-xs text-muted">No pools reported.</p>}
           >
+            {/* In a narrow card five columns clip every value, and a clipped
+                usage label reads as a different number ("0.1%" for 50.1%). The
+                object count is the least actionable figure, so it yields its
+                track there and stays in the pool expansion. */}
             <PlatformDetailTable class="min-w-0 table-fixed text-xs">
               <PlatformDetailTableHeader>
                 <TableHead
@@ -160,22 +164,22 @@ export const ProxmoxCephClusterDrawer: Component<{
                   Pool
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[16%]`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-phone-hidden md:w-[16%]`}
                 >
-                  <PlatformResponsiveTableLabel compact="Obj" full="Objects" />
+                  Objects
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-20 md:w-[20%]`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-25 md:w-[20%]`}
                 >
-                  <PlatformResponsiveTableLabel compact="Store" full="Stored" />
+                  Stored
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-20 md:w-[20%]`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-25 md:w-[20%]`}
                 >
                   <PlatformResponsiveTableLabel compact="Avail" full="Available" />
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[20%]`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-20 md:w-[20%]`}
                 >
                   Used
                 </TableHead>
@@ -208,7 +212,7 @@ export const ProxmoxCephClusterDrawer: Component<{
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content platform-table-phone-hidden`}
                           >
                             <PlatformTableNumberValue
                               value={pool.objects}

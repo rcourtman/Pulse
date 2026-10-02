@@ -342,8 +342,11 @@ export function ProxmoxBackupWorkloadTypeBadge(props: {
 // Sortable column header — matches the shared active-only table pattern.
 // Clicking an inactive column sorts it with the supplied default direction;
 // clicking the active column flips direction.
+// Buttons reset text-transform and letter-spacing, so a sortable header has to
+// restate the header casing or it renders in sentence case beside its
+// uppercase non-sortable neighbours.
 const SORT_BUTTON_CLASS =
-  'inline-flex min-w-0 max-w-full items-center gap-1 rounded-sm outline-none transition-colors hover:text-base-content focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface';
+  'inline-flex min-w-0 max-w-full items-center gap-1 rounded-sm uppercase tracking-[inherit] outline-none transition-colors hover:text-base-content focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface';
 
 export function SortableHead<K extends string>(props: {
   label: string;
