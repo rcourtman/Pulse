@@ -6245,3 +6245,19 @@ state. The Recovery settings item and its capability gate are untouched.
 `internal/api/onboarding_handlers.go` changed only the human-readable pairing
 readiness messages so they name Settings > Pulse Mobile. This opens no new
 storage or recovery path.
+
+### Live physical-disk row continuity
+
+Physical Disks uses the canonical keyed windowed renderer, which retains row
+owners across resource snapshots. Disk presentation must therefore stay
+reactive: health and its evidence, temperature, endurance, capacity, device,
+host and placement labels reflect the latest snapshot rather than the mount-time
+sample. Removed readings revert to their existing unknown/placeholders without
+retaining old warning text or colour. Metric summary identities, highlight
+matching and disclosure control IDs track the current canonical disk target.
+Unchanged resource IDs keep their mounted row, focus and expanded detail;
+attention filtering and the displayed health must agree through fault/recovery.
+This changes no collector, health thresholds, history policy or server identity.
+`frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx` exercises
+snapshot replacement, in-place reconciliation, missing evidence, target changes
+and fault/recovery using the real keyed renderer.

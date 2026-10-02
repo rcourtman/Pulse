@@ -1,5 +1,6 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { DiskList } from '@/components/Storage/DiskList';
@@ -81,6 +82,159 @@ describe('DiskList', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it('refreshes keyed disk rows without losing the expanded detail or keyboard focus', async () => {
+    const initial = buildDisk('sda', 'tower', { diskType: 'ssd', wearout: 96 });
+    const [disks, setDisks] = createSignal([initial]);
+    const [selectedDiskId, setSelectedDiskId] = createSignal<string | null>('sda');
+    const view = render(() => (
+      <DiskList
+        disks={disks()}
+        nodes={[]}
+        selectedNode={null}
+        searchTerm=""
+        selectedDiskId={selectedDiskId()}
+        onSelectedDiskChange={setSelectedDiskId}
+      />
+    ));
+    const row = view.container.querySelector('[data-row-id="sda"]')!;
+    const detail = screen.getByTestId('disk-detail');
+    const disclosure = within(row as HTMLElement).getByRole('button');
+    disclosure.focus();
+    const initialControls = disclosure.getAttribute('aria-controls');
+
+    setDisks([
+      {
+        ...buildDisk('sda', 'archive', {
+          model: 'Replacement SSD',
+          devPath: '/dev/sdz',
+          diskType: 'ssd',
+          wearout: 4,
+          sizeBytes: 4_000_000_000_000,
+          temperature: 63,
+          storageRole: 'cache_pool',
+          storageGroup: 'Archive Pool',
+          health: 'FAILED',
+          risk: {
+            level: 'critical',
+            reasons: [{ code: 'smart-failed', severity: 'critical', summary: 'SMART failed.' }],
+          },
+        }),
+        metricsTarget: { resourceType: 'disk', resourceId: 'disk:archive:sdz' },
+      },
+    ]);
+
+    await waitFor(() =>
+      expect(within(row as HTMLElement).getByText('Replace Now')).toBeInTheDocument(),
+    );
+    for (const text of [
+      'Replacement SSD',
+      '/dev/sdz',
+      'archive',
+      'Cache Pool',
+      'Archive Pool',
+      'SMART failed.',
+      '4%',
+      '63°C',
+    ]) {
+      expect(within(row as HTMLElement).getByText(text)).toBeInTheDocument();
+    }
+    expect(within(row as HTMLElement).getByText('3.64 TB')).toBeInTheDocument();
+    expect(screen.queryByText('Healthy')).not.toBeInTheDocument();
+    expect(screen.queryByText('96%')).not.toBeInTheDocument();
+    expect(view.container.querySelector('[data-row-id="sda"]')).toBe(row);
+    expect(screen.getByTestId('disk-detail')).toBe(detail);
+    expect(document.activeElement).toBe(disclosure);
+    expect(disclosure.getAttribute('aria-label')).toContain('Replacement SSD');
+    expect(row).toHaveAttribute('data-summary-series-id', 'disk:archive:sdz');
+    expect(disclosure.getAttribute('aria-controls')).not.toBe(initialControls);
+    expect(
+      view.container.querySelector('[data-inline-detail-for="disk:archive:sdz"]'),
+    ).not.toBeNull();
+    expect(document.getElementById(disclosure.getAttribute('aria-controls')!)).not.toBeNull();
+  });
+
+  it('removes obsolete readings and fault styling when a keyed snapshot stops reporting them', async () => {
+    const [disks, setDisks] = createSignal([
+      buildDisk('sda', 'tower', {
+        health: 'FAILED',
+        diskType: 'ssd',
+        wearout: 4,
+        temperature: 63,
+        risk: {
+          level: 'critical',
+          reasons: [{ code: 'smart-failed', severity: 'critical', summary: 'SMART failed.' }],
+        },
+      }),
+    ]);
+    const view = render(() => (
+      <DiskList
+        disks={disks()}
+        nodes={[]}
+        selectedNode={null}
+        searchTerm=""
+        selectedDiskId={null}
+        onSelectedDiskChange={() => {}}
+      />
+    ));
+    const row = view.container.querySelector('[data-row-id="sda"]')!;
+    expect(within(row as HTMLElement).getByText('Replace Now')).toHaveClass('text-red-700');
+    setDisks([
+      buildDisk('sda', 'tower', {
+        health: 'UNKNOWN',
+        diskType: '',
+        wearout: -1,
+        temperature: 0,
+        sizeBytes: 0,
+        storageRole: '',
+        storageGroup: '',
+        model: '',
+        devPath: '',
+      }),
+    ]);
+    await waitFor(() =>
+      expect(within(row as HTMLElement).getByText('Unknown')).toBeInTheDocument(),
+    );
+    for (const text of ['Replace Now', 'SMART failed.', '4%', '63°C', 'Parity', 'Tower Array']) {
+      expect(within(row as HTMLElement).queryByText(text)).not.toBeInTheDocument();
+    }
+    expect(within(row as HTMLElement).getByText('Unknown')).not.toHaveClass('text-red-700');
+    expect(within(row as HTMLElement).getByText('sda')).toBeInTheDocument();
+    for (const column of ['temp', 'life', 'size', 'device', 'role', 'parent']) {
+      expect(row.querySelector(`td[data-storage-column="${column}"]`)).toHaveTextContent('—');
+    }
+    expect(view.container.querySelector('[data-row-id="sda"]')).toBe(row);
+  });
+
+  it('keeps the attention filter and row health consistent during live updates and recovery', async () => {
+    const [disks, setDisks] = createStore({ items: [buildDisk('sda', 'tower')] });
+    const [healthFilter, setHealthFilter] = createSignal<'all' | 'attention'>('all');
+    const view = render(() => (
+      <DiskList
+        disks={disks.items}
+        nodes={[]}
+        selectedNode={null}
+        searchTerm=""
+        healthFilter={healthFilter()}
+        selectedDiskId={null}
+        onSelectedDiskChange={() => {}}
+      />
+    ));
+    const row = view.container.querySelector('[data-row-id="sda"]');
+    setDisks(
+      'items',
+      reconcile([buildDisk('sda', 'tower', { smart: { pendingSectors: 2 }, temperature: 52 })]),
+    );
+    await waitFor(() => expect(screen.getByText('Needs Attention')).toBeInTheDocument());
+    expect(view.container.querySelector('[data-row-id="sda"]')).toBe(row);
+    setHealthFilter('attention');
+    expect(screen.getByText('Needs Attention')).toBeInTheDocument();
+    setDisks('items', reconcile([buildDisk('sda', 'tower')]));
+    await waitFor(() => expect(screen.getByText('No disks need attention')).toBeInTheDocument());
+    setHealthFilter('all');
+    await waitFor(() => expect(screen.getByText('Healthy')).toBeInTheDocument());
+    expect(screen.queryByText('52°C')).not.toBeInTheDocument();
   });
 
   it('renders physical disks in a single-line operational grid', () => {
