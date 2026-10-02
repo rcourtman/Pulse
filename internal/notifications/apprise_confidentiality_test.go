@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/x509"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -323,7 +324,10 @@ func TestAppriseQueueConfidentiality(t *testing.T) {
 					time.Sleep(time.Millisecond)
 				}
 				q.SetProcessor(nil)
-				var gotStatus, lastError, rawConfig string
+				var gotStatus, rawConfig string
+				// Retry scheduling leaves last_error nullable; the attempt audit
+				// holds the failure text. DLQ also retains it on the queue row.
+				var lastError sql.NullString
 				var attempts int
 				if err := q.db.QueryRow("SELECT status, attempts, last_error, config FROM notification_queue WHERE id = ?", notif.ID).Scan(&gotStatus, &attempts, &lastError, &rawConfig); err != nil {
 					t.Fatal(err)
@@ -335,7 +339,10 @@ func TestAppriseQueueConfidentiality(t *testing.T) {
 				if gotStatus != string(wantStatus) || attempts != 1 || rawConfig != string(config) {
 					t.Error("queue lifecycle, attempt budget or admitted credentials changed")
 				}
-				assertAppriseConfidential(t, lastError)
+				if status == http.StatusUnauthorized && (!lastError.Valid || !strings.Contains(lastError.String, "HTTP 401")) {
+					t.Error("DLQ error observation was lost")
+				}
+				assertAppriseConfidential(t, lastError.String)
 				var auditError, class string
 				if err := q.db.QueryRow("SELECT error_message, failure_class FROM notification_audit WHERE notification_id = ?", notif.ID).Scan(&auditError, &class); err != nil {
 					t.Fatal(err)

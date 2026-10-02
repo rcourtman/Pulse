@@ -51,9 +51,12 @@ func TestAppriseConfigurationLogsWithholdSecrets(t *testing.T) {
 	if !strings.Contains(captured.String(), "hasConfigKey") || !strings.Contains(captured.String(), "targetCount") {
 		t.Fatal("structured configuration diagnostics were lost")
 	}
-	var response map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil || response["apiKey"] != "" || response["hasApiKey"] != true {
+	var response appriseConfigResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil || response.APIKey != "" || !response.HasAPIKey {
 		t.Fatal("saved API-key response contract changed")
+	}
+	if response.ServerURL != cfg.ServerURL || response.ConfigKey != cfg.ConfigKey || len(response.Targets) != 1 || response.Targets[0] != cfg.Targets[0] {
+		t.Fatal("authorised configuration round-trip changed")
 	}
 	manager.AssertExpectations(t)
 	persistence.AssertExpectations(t)
