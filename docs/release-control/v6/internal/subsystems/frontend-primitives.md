@@ -7699,3 +7699,17 @@ selection changes and empty data clear stale readings. No readings are invented
 for missing data. Tooltips reserve room for a wrapped local timestamp and reading. The mounted HistoryChart regression and history-keyboard browser
 fixture cover navigation, bounds, focus exit, refresh and replacement. Synthetic
 browser proof does not establish native collector or assistive-device acceptance.
+
+### Shared History request-state honesty
+
+An empty successful response states only that the selected time range has no
+samples; it does not claim collection is running or promise future readings.
+A failed matching background refresh keeps the last successful data and source,
+with a visible polite status also included in the chart's accessible description.
+The warning persists while retrying and clears only on success or selection
+replacement. This applies to previously empty results too. Initial failures
+remain separate errors. No polling frequency, request or access policy changes.
+`useHistoryChartState.test.tsx` covers failure, pending recovery, empty results
+and selection changes; `browser-tests/history-status.cjs` checks actual chart
+states in desktop Chromium and phone WebKit with synthetic transport failures.
+These checks do not establish native collection or released availability.

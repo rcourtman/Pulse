@@ -36,6 +36,7 @@ export function useHistoryChartState(
   const [data, setData] = createSignal(props.data ?? []);
   const [keyboardInspecting, setKeyboardInspecting] = createSignal(false);
   const [loading, setLoading] = createSignal(false);
+  const [refreshFailed, setRefreshFailed] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [source, setSource] = createSignal<'store' | 'memory' | 'live' | 'mock_synthetic' | null>(
     null,
@@ -119,6 +120,7 @@ export function useHistoryChartState(
     setData(suppliedData ?? []);
     setSource(suppliedData !== undefined ? 'live' : null);
     setError(null);
+    setRefreshFailed(false);
     setLoading(false);
     const selection = JSON.stringify([
       resourceType,
@@ -154,12 +156,13 @@ export function useHistoryChartState(
         if (!active) return;
         setData('points' in result ? (result.points ?? []) : []);
         setSource(result.source ?? 'store');
+        setRefreshFailed(false);
         hasLoaded = true;
       } catch (err) {
         if (!active) return;
         console.error('Failed to fetch metrics history:', err);
-        if (!hasLoaded) setError('Failed to load history data');
-        setSource(null);
+        if (hasLoaded) setRefreshFailed(true);
+        else setError('Failed to load history data');
       } finally {
         if (active) {
           pending = false;
@@ -416,6 +419,7 @@ export function useHistoryChartState(
     dataMax,
     dataMin,
     error,
+    refreshFailed,
     handleFocus,
     handleBlur,
     handleKeyDown,
