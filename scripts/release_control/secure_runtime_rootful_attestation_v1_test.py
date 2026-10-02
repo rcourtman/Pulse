@@ -506,7 +506,11 @@ if module.MAX_RECEIPT_BYTES <= 0:
             path.relative_to(repo_root).as_posix()
             for path in (repo_root / "scripts" / "installtests").glob("*_test.go")
         }
-        self.assertTrue(compiled_test_inputs.issubset(manifest["exact_paths"]))
+        self.assertFalse(
+            compiled_test_inputs - set(manifest["exact_paths"]),
+            "compiled installtests inputs outside the source manifest: "
+            + ", ".join(sorted(compiled_test_inputs - set(manifest["exact_paths"]))),
+        )
         recursive_roots = set(manifest["recursive_roots"])
         unbound_dependencies = set()
         for target, include_tests in (
