@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { temperatureStore } from '@/utils/temperature';
 import type { PhysicalDiskPresentationData } from '@/features/storageBackups/diskPresentation';
 import {
   getDiskDetailAttributeCards,
@@ -50,6 +51,40 @@ describe('diskDetailPresentation.branchcov0724pm', () => {
   describe('getDiskDetailAttributeCards empty-collection guard (L86)', () => {
     it('returns an empty array when smartAttributes is absent', () => {
       expect(getDiskDetailAttributeCards(makeDiskData({ type: 'hdd' }))).toEqual([]);
+    });
+  });
+
+  describe('independently reported temperature', () => {
+    it.each(['hdd', 'ssd', 'nvme'])('shows %s temperature without extended SMART data', (type) => {
+      expect(getDiskDetailAttributeCards(makeDiskData({ type, temperature: 42 }))).toEqual([
+        { label: 'Temperature', value: '42°C', ok: true },
+      ]);
+    });
+
+    it.each([0, -1, NaN, Infinity, -Infinity])('does not invent a card for %s', (temperature) => {
+      expect(getDiskDetailAttributeCards(makeDiskData({ temperature }))).toEqual([]);
+    });
+
+    it('keeps configured thresholds and display units independent of attribute presence', () => {
+      const disk = makeDiskData({ type: 'nvme', temperature: 65 });
+      expect(getDiskDetailAttributeCards(disk, { warning: 70, critical: 80 })).toEqual([
+        { label: 'Temperature', value: '65°C', ok: true },
+      ]);
+      temperatureStore.setUnit('fahrenheit');
+      try {
+        expect(getDiskDetailAttributeCards(disk, { warning: 50, critical: 60 })).toEqual([
+          { label: 'Temperature', value: '149°F', ok: false },
+        ]);
+      } finally {
+        temperatureStore.setUnit('celsius');
+      }
+    });
+
+    it('treats empty and missing SMART data alike without inventing counters', () => {
+      const disk = makeDiskData({ temperature: 42 });
+      expect(getDiskDetailAttributeCards({ ...disk, smartAttributes: {} })).toEqual(
+        getDiskDetailAttributeCards(disk),
+      );
     });
   });
 

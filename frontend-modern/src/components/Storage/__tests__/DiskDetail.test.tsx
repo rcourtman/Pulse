@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { DiskDetail } from '@/components/Storage/DiskDetail';
 import type { Resource } from '@/types/resource';
@@ -107,9 +107,38 @@ describe('DiskDetail', () => {
     expect(screen.queryByText(/:diskwrite:/)).not.toBeInTheDocument();
   });
 
-  it('shows an explicit overview fallback when SMART details are unavailable', () => {
+  it('keeps standalone temperature readings visible through snapshot replacement', () => {
+    const initial = buildDisk();
+    delete initial.physicalDisk!.smart;
+    const [disk, setDisk] = createSignal(initial);
+    render(() => <DiskDetail disk={disk()} nodes={[]} />);
+
+    expect(screen.getByText('42°C')).toBeInTheDocument();
+    expect(screen.queryByText('Power-On Time')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Detailed SMART attributes are not available for this disk.'),
+    ).not.toBeInTheDocument();
+
+    setDisk({ ...initial, physicalDisk: { ...initial.physicalDisk!, temperature: 65 } });
+    expect(screen.getByText('65°C')).toHaveClass('text-red-600');
+    expect(screen.queryByText('42°C')).not.toBeInTheDocument();
+
+    setDisk({ ...initial, physicalDisk: { ...initial.physicalDisk!, temperature: 0 } });
+    expect(screen.queryByText('Temperature')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Detailed SMART attributes are not available for this disk.'),
+    ).toHaveAttribute('role', 'status');
+
+    setDisk(buildDisk());
+    expect(screen.getByText('42°C')).toBeInTheDocument();
+    expect(screen.getByText('Power-On Time')).toBeInTheDocument();
+    expect(screen.getByText('Reallocated Sectors')).toBeInTheDocument();
+  });
+
+  it('shows an explicit overview fallback when no detail readings are available', () => {
     const disk = buildDisk();
     delete disk.physicalDisk!.smart;
+    delete disk.physicalDisk!.temperature;
 
     render(() => <DiskDetail disk={disk} nodes={[]} />);
 
