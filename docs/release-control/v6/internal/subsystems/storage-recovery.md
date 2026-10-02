@@ -21,6 +21,22 @@
 
 ## Purpose
 
+### Independent physical disk temperature
+
+Disk Overview displays a finite positive reported temperature even when the
+optional extended SMART object is missing or empty. Temperature formatting and
+configured per-disk-type thresholds remain unchanged; absent counters are not
+invented. When no detail readings or collection messages remain, the existing
+accessible unavailable-details message is shown. This presentation does not
+establish fresh collection, SMART health or native appliance acceptance.
+
+Verification: `DiskDetail.test.tsx` covers same-identity snapshot replacement
+through temperature-only, hot, missing and extended-SMART states;
+`diskDetailPresentation.branchcov0724pm.test.ts` covers disk types, invalid
+readings, units and configured thresholds. The production detail fixture in
+`frontend-modern/browser-tests/disk-temperature.cjs` checks desktop and phone
+presentation with synthetic snapshots, including the predecessor's omission.
+
 ### Pool detail capacity observations
 
 The existing pool drawer's Configuration rows preserve missing capacity as
