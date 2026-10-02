@@ -5953,9 +5953,11 @@
             "match_prefixes": [],
             "match_files": [
               "internal/truenas/client.go",
+              "internal/truenas/core_reporting.go",
               "internal/truenas/disk_health.go",
               "internal/truenas/fixtures.go",
               "internal/truenas/provider.go",
+              "internal/truenas/telemetry.go",
               "internal/truenas/transport.go",
               "internal/truenas/types.go"
             ],
@@ -5968,6 +5970,7 @@
               "internal/truenas/client_api_shapes_test.go",
               "internal/truenas/client_test.go",
               "internal/truenas/contract_test.go",
+              "internal/truenas/core_reporting_test.go",
               "internal/truenas/provider_pool_health_contract_test.go",
               "internal/truenas/provider_test.go",
               "internal/truenas/transport_test.go"

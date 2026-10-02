@@ -57,6 +57,9 @@ type TrueNASConnectionObservedSummary struct {
 	Shares            int        `json:"shares"`
 	Disks             int        `json:"disks"`
 	RecoveryArtifacts int        `json:"recoveryArtifacts"`
+	// Telemetry is separate from poll success: inventory can be current even
+	// when optional CPU/memory/IO collection failed or only partly succeeded.
+	Telemetry *truenas.SystemTelemetryAvailability `json:"telemetry,omitempty"`
 }
 
 // TrueNASConnectionSummary merges poll health with the most recent discovered
@@ -930,6 +933,7 @@ func buildTrueNASObservedSummary(snapshot *truenas.FixtureSnapshot) *TrueNASConn
 		Shares:            len(snapshot.Shares),
 		Disks:             len(snapshot.Disks),
 		RecoveryArtifacts: len(snapshot.ZFSSnapshots) + len(snapshot.ReplicationTasks),
+		Telemetry:         cloneTrueNASTelemetryAvailability(snapshot.System.Telemetry),
 	}
 	if host != "" || resourceID != "" {
 		summary.Systems = 1
@@ -989,7 +993,16 @@ func cloneTrueNASObservedSummary(value *TrueNASConnectionObservedSummary) *TrueN
 		Shares:            value.Shares,
 		Disks:             value.Disks,
 		RecoveryArtifacts: value.RecoveryArtifacts,
+		Telemetry:         cloneTrueNASTelemetryAvailability(value.Telemetry),
 	}
+}
+
+func cloneTrueNASTelemetryAvailability(value *truenas.SystemTelemetryAvailability) *truenas.SystemTelemetryAvailability {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
 }
 
 func (p *TrueNASPoller) ingestRecoveryPoints(ctx context.Context, orgID string, connectionID string, provider *truenas.Provider) {

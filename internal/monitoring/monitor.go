@@ -5432,6 +5432,18 @@ func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface, sinks ..
 		metricKey := fmt.Sprintf("agent:%s", targetID)
 		observedAt := unifiedResourceObservedAt(resource, now)
 
+		// Native TrueNAS temperature must also survive the local History path.
+		// A sufficiently covered ring/store read need not query native fallback.
+		if monitorHasSource(resource.Sources, unifiedresources.SourceTrueNAS) && resource.Temperature != nil {
+			value := *resource.Temperature
+			if value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0) {
+				if m.metricsHistory != nil {
+					m.metricsHistory.AddGuestMetric(metricKey, "temperature", value, observedAt)
+				}
+				appendStoreWrite("agent", targetID, "temperature", value, observedAt)
+			}
+		}
+
 		if metric := resource.Metrics.CPU; metric != nil {
 			value := metric.Percent
 			if value == 0 {
