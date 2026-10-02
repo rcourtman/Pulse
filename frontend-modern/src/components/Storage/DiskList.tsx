@@ -320,15 +320,20 @@ export const DiskList: Component<DiskListProps> = (props) => {
           <TableBody class={PHYSICAL_DISK_TABLE_BODY_CLASS}>
             <PlatformWindowedRows items={model.filteredDisks} estimatedRowHeight={32}>
               {(disk) => {
-                const data = model.getDiskData(disk);
-                const status = getPhysicalDiskHealthStatus(data);
-                const hostLabel = getPhysicalDiskHostLabel(data, disk);
-                const healthSummary = getPhysicalDiskHealthSummary(status);
+                // Windowed rows retain their owner by resource ID across live
+                // snapshots. Derive the presentation reactively, not just when
+                // the row first mounts, so health and identity cannot go stale.
+                const data = createMemo(() => model.getDiskData(disk));
+                const status = createMemo(() => getPhysicalDiskHealthStatus(data()));
+                const hostLabel = createMemo(() => getPhysicalDiskHostLabel(data(), disk));
+                const healthSummary = createMemo(() => getPhysicalDiskHealthSummary(status()));
                 const isSelected = () => model.selectedDisk()?.id === disk.id;
-                const summarySeriesId = resolvePhysicalDiskMetricResourceId(disk);
+                const summarySeriesId = createMemo(() => resolvePhysicalDiskMetricResourceId(disk));
                 const isSummaryHighlighted = () =>
-                  props.highlightedSummarySeriesId === summarySeriesId;
-                const detailControlsId = buildSummaryDisclosureControlsId(summarySeriesId);
+                  props.highlightedSummarySeriesId === summarySeriesId();
+                const detailControlsId = createMemo(() =>
+                  buildSummaryDisclosureControlsId(summarySeriesId()),
+                );
                 const interactiveRowHandlers = createSummaryInteractiveRowPreviewHandlers({
                   onPreview: () => props.onHoverChange?.(disk.id),
                   onPreviewClear: () => props.onHoverChange?.(null),
@@ -338,7 +343,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                   <>
                     <TableRow
                       data-row-id={disk.id}
-                      data-summary-series-id={summarySeriesId}
+                      data-summary-series-id={summarySeriesId()}
                       data-summary-row-active={
                         isSummaryHighlighted() && !isSelected() ? 'true' : 'false'
                       }
@@ -358,18 +363,18 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         <div class={PHYSICAL_DISK_NAME_WRAP_CLASS}>
                           <SummaryRowActionButton
                             kind="disclosure"
-                            subjectLabel={data.model || 'disk'}
+                            subjectLabel={data().model || 'disk'}
                             expanded={isSelected()}
-                            controlsId={detailControlsId}
+                            controlsId={detailControlsId()}
                             hideWhenRowTappableOnMobile
                             onAction={() => model.toggleSelectedDisk(disk)}
                             onPreviewClear={() => props.onHoverChange?.(null)}
                           />
                           <span
                             class={PHYSICAL_DISK_NAME_TEXT_CLASS}
-                            title={data.devPath || data.model || disk.name || 'Unknown Disk'}
+                            title={data().devPath || data().model || disk.name || 'Unknown Disk'}
                           >
-                            {data.model || 'Unknown Disk'}
+                            {data().model || 'Unknown Disk'}
                           </span>
                         </div>
                       </TableCell>
@@ -379,11 +384,11 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         data-storage-column="device"
                       >
                         <Show
-                          when={data.devPath}
+                          when={data().devPath}
                           fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
                         >
-                          <span class={PHYSICAL_DISK_DEVICE_TEXT_CLASS} title={data.devPath}>
-                            {data.devPath}
+                          <span class={PHYSICAL_DISK_DEVICE_TEXT_CLASS} title={data().devPath}>
+                            {data().devPath}
                           </span>
                         </Show>
                       </TableCell>
@@ -393,11 +398,11 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         data-storage-column="host"
                       >
                         <Show
-                          when={hostLabel}
+                          when={hostLabel()}
                           fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
                         >
-                          <span class={PHYSICAL_DISK_VALUE_TEXT_CLASS} title={hostLabel}>
-                            {hostLabel}
+                          <span class={PHYSICAL_DISK_VALUE_TEXT_CLASS} title={hostLabel()}>
+                            {hostLabel()}
                           </span>
                         </Show>
                       </TableCell>
@@ -407,14 +412,14 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         data-storage-column="role"
                       >
                         <Show
-                          when={getPhysicalDiskRoleLabel(data)}
+                          when={getPhysicalDiskRoleLabel(data())}
                           fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
                         >
                           <span
                             class={PHYSICAL_DISK_VALUE_TEXT_CLASS}
-                            title={getPhysicalDiskRoleLabel(data)}
+                            title={getPhysicalDiskRoleLabel(data())}
                           >
-                            {getPhysicalDiskRoleLabel(data)}
+                            {getPhysicalDiskRoleLabel(data())}
                           </span>
                         </Show>
                       </TableCell>
@@ -424,14 +429,14 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         data-storage-column="parent"
                       >
                         <Show
-                          when={getPhysicalDiskParentLabel(data)}
+                          when={getPhysicalDiskParentLabel(data())}
                           fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
                         >
                           <span
                             class={PHYSICAL_DISK_VALUE_TEXT_CLASS}
-                            title={getPhysicalDiskParentLabel(data)}
+                            title={getPhysicalDiskParentLabel(data())}
                           >
-                            {getPhysicalDiskParentLabel(data)}
+                            {getPhysicalDiskParentLabel(data())}
                           </span>
                         </Show>
                       </TableCell>
@@ -441,12 +446,15 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         data-storage-column="health"
                       >
                         <div class={PHYSICAL_DISK_HEALTH_WRAP_CLASS}>
-                          <span class={`${PHYSICAL_DISK_HEALTH_LABEL_CLASS} ${status.tone}`}>
-                            {status.label}
+                          <span class={`${PHYSICAL_DISK_HEALTH_LABEL_CLASS} ${status().tone}`}>
+                            {status().label}
                           </span>
-                          <Show when={healthSummary}>
-                            <span class={PHYSICAL_DISK_HEALTH_SUMMARY_CLASS} title={healthSummary}>
-                              {healthSummary}
+                          <Show when={healthSummary()}>
+                            <span
+                              class={PHYSICAL_DISK_HEALTH_SUMMARY_CLASS}
+                              title={healthSummary()}
+                            >
+                              {healthSummary()}
                             </span>
                           </Show>
                         </div>
@@ -457,13 +465,13 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         data-storage-column="life"
                       >
                         <Show
-                          when={getPhysicalDiskLifeLabel(data)}
+                          when={getPhysicalDiskLifeLabel(data())}
                           fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
                         >
                           <span
-                            class={`${PHYSICAL_DISK_LIFE_CLASS} ${getPhysicalDiskLifeTextClass(data)}`}
+                            class={`${PHYSICAL_DISK_LIFE_CLASS} ${getPhysicalDiskLifeTextClass(data())}`}
                           >
-                            {getPhysicalDiskLifeLabel(data)}
+                            {getPhysicalDiskLifeLabel(data())}
                           </span>
                         </Show>
                       </TableCell>
@@ -473,17 +481,17 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         data-storage-column="temp"
                       >
                         <Show
-                          when={data.temperature > 0}
+                          when={data().temperature > 0}
                           fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
                         >
                           <span
                             class={`${PHYSICAL_DISK_TEMPERATURE_CLASS} ${getTemperatureTextClass(
-                              data.temperature,
-                              getDiskTemperatureThresholds(data.type),
+                              data().temperature,
+                              getDiskTemperatureThresholds(data().type),
                               'diskTemperature',
                             )}`}
                           >
-                            {formatTemperature(data.temperature)}
+                            {formatTemperature(data().temperature)}
                           </span>
                         </Show>
                       </TableCell>
@@ -493,7 +501,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         data-storage-column="size"
                       >
                         <Show
-                          when={data.size > 0}
+                          when={data().size > 0}
                           fallback={
                             <span
                               class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}
@@ -504,15 +512,15 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           }
                         >
                           <span class={PHYSICAL_DISK_SIZE_VALUE_CLASS}>
-                            {formatBytes(data.size)}
+                            {formatBytes(data().size)}
                           </span>
                         </Show>
                       </TableCell>
                     </TableRow>
                     <Show when={isSelected()}>
-                      <TableRow data-inline-detail-for={summarySeriesId}>
+                      <TableRow data-inline-detail-for={summarySeriesId()}>
                         <TableCell
-                          id={detailControlsId}
+                          id={detailControlsId()}
                           colSpan={9}
                           class={PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS}
                         >
