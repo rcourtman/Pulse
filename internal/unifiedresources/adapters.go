@@ -1562,7 +1562,11 @@ func resourceFromPBSDatastore(instance models.PBSInstance, datastore models.PBSD
 	name := strings.TrimSpace(datastore.Name)
 	assessment := storagehealth.AssessPBSDatastore(datastore)
 	risk := storageRiskFromAssessment(assessment)
-	status := storageStatus(statusFromString(datastore.Status), risk)
+	// The PBS poller reports datastores as "available"/"unavailable", the same
+	// storage vocabulary PVE uses; the generic string mapper does not know it
+	// and left every healthy datastore "unknown".
+	datastoreStatus, _ := statusFromStorageState(datastore.Status)
+	status := storageStatus(datastoreStatus, risk)
 	incidents := incidentsFromAssessment("pulse", string(SourcePBS), "pbs-datastore:"+name, assessment, instance.LastSeen)
 	status = incidentsStatus(status, incidents)
 
