@@ -72,6 +72,55 @@ import (
 	tmock "github.com/stretchr/testify/mock"
 )
 
+func TestAgentConfigFetchAuditCapacityContract(t *testing.T) {
+	capture := &auditCaptureLogger{}
+	previousLogger, previousManager := audit.GetLogger(), GetTenantAuditManager()
+	audit.SetLogger(capture)
+	SetTenantAuditManager(nil)
+	t.Cleanup(func() {
+		audit.SetLogger(previousLogger)
+		SetTenantAuditManager(previousManager)
+	})
+	handler, monitor := newUnifiedAgentHandlers(t, nil)
+	hostID := seedUnifiedAgentHost(t, monitor)
+	monitorState(t, monitor).UpsertHost(models.Host{ID: hostID, Hostname: "node-1", TokenID: "runtime-token"})
+	for i := 0; i < maxAgentConfigFetchAudits; i++ {
+		handler.configFetchAudits.observe("other-org", fmt.Sprint(i), "token", "hash", time.Now())
+	}
+	for _, scopes := range [][]string{
+		{config.ScopeAgentConfigRead, config.ScopeAgentReport},
+		{config.ScopeAgentConfigRead, config.ScopeAgentReport},
+		{config.ScopeMonitoringRead},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/"+hostID+"/config", nil)
+		attachAPITokenRecord(req, &config.APITokenRecord{ID: "runtime-token", Scopes: scopes})
+		rec := httptest.NewRecorder()
+		handler.HandleConfig(rec, req)
+		if (rec.Code == http.StatusOK) != (scopes[0] == config.ScopeAgentConfigRead) {
+			t.Fatalf("capacity changed config authorisation: status=%d", rec.Code)
+		}
+	}
+	capture.mu.Lock()
+	defer capture.mu.Unlock()
+	successes, failures := 0, 0
+	for _, event := range capture.events {
+		if event.EventType != "agent_config_fetch" {
+			continue
+		}
+		if event.Success {
+			successes++
+			if !strings.Contains(event.Details, "reason=capacity") || !strings.Contains(event.Details, "config=sha256:") {
+				t.Fatal("unremembered config delivery lost its capacity reason or config hash")
+			}
+		} else {
+			failures++
+		}
+	}
+	if successes != 2 || failures != 1 || len(handler.configFetchAudits.last) != maxAgentConfigFetchAudits {
+		t.Fatalf("capacity audit contract: successes=%d failures=%d remembered=%d", successes, failures, len(handler.configFetchAudits.last))
+	}
+}
+
 func TestHandleVersionBuildIdentityContract(t *testing.T) {
 	oldBuildVersion := updates.BuildVersion
 	t.Cleanup(func() { updates.BuildVersion = oldBuildVersion })

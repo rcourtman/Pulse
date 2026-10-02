@@ -36,7 +36,16 @@ Pulse automatically captures the following events:
 | `agent_profile_assigned` | Agent profile assignments | Profile `production` assigned to agent |
 | `agent_profile_unassigned` | Agent profile removals | Profile removed from agent |
 | `user_roles_updated` | RBAC role assignments changed | Updated roles for user jane: [operator] |
-| `agent_config_fetch` | Every failed agent configuration fetch. A successful fetch is recorded on the agent's first delivery after Pulse starts, when its token or delivered configuration changes, and otherwise once a day; agents poll every minute, so repeat polls are not recorded | `agent_id=… token_id=… config=sha256:… reason=config_changed` |
+| `agent_config_fetch` | Every failed agent configuration fetch. A successful fetch is normally recorded on the agent's first delivery after Pulse starts, when its token or delivered configuration changes, and otherwise once a day; unchanged minute polls are suppressed while the agent is remembered (see below) | `agent_id=… token_id=… config=sha256:… reason=config_changed` |
+
+Config-fetch suppression remembers up to 4,096 organisation/agent pairs per
+Pulse process. New agents can replace entries last recorded at least 24 hours
+ago; a forgotten agent's next successful fetch is recorded again. If all slots
+are recent, additional agents' successful fetches are recorded on every poll
+with `reason=capacity` until a slot expires. This keeps memory bounded without
+hiding access events or displacing recent agents' suppression. It does not
+limit enrolment or configuration delivery, and every failed fetch is still
+recorded. No existing audit rows are removed by this tracker.
 
 Each event includes:
 - **Timestamp** (UTC)

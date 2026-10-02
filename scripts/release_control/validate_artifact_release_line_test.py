@@ -9,6 +9,32 @@ import validate_artifact_release_line as validator
 
 
 class ValidateArtifactReleaseLineTest(unittest.TestCase):
+    def test_published_646_packet_uses_its_selected_line_not_main(self) -> None:
+        # This is the real control-plane lookup used by convergence, not an
+        # injected branch answer. The frozen tag need not be an ancestor of main.
+        source = "1abc97cbc1fd7aefa052b4607a531af3e3b97eb6"
+        fetched = []
+        refs = {"origin/release/v6.4": "line", "origin/main": "main"}
+        result = validator.validate_artifact_release_line(
+            tag="v6.4.6-rc.1", purpose="floating-tag promotion",
+            fetch_refs_fn=fetched.append,
+            tag_exists_fn=lambda tag: tag == "v6.4.6-rc.1",
+            tag_commit_fn=lambda tag: source,
+            ref_commit_fn=refs.__getitem__,
+            ref_is_ancestor_fn=lambda a, b: (a, b) == (source, "line"),
+        )
+        self.assertEqual(fetched, ["release/v6.4"])
+        self.assertEqual(result["required_branch"], "release/v6.4")
+        with self.assertRaisesRegex(ValueError, "not reachable from origin/release/v6.4"):
+            validator.validate_artifact_release_line(
+                tag="v6.4.6-rc.1", purpose="floating-tag promotion",
+                fetch_refs_fn=lambda branch: None,
+                tag_exists_fn=lambda tag: True,
+                tag_commit_fn=lambda tag: "unrelated",
+                ref_commit_fn=refs.__getitem__,
+                ref_is_ancestor_fn=lambda a, b: False,
+            )
+
     def validate(
         self,
         *,
