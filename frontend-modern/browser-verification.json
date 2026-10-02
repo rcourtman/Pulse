@@ -1,51 +1,22 @@
 {
   "version": 1,
   "base_sha": "e5d0843851a3837a90d71afaced3a009c0606bbf",
-  "verified_at": "2026-10-02T20:33:38Z",
+  "verified_at": "2026-10-02T20:44:41.220410Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxCephClusterDrawer.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"
+    "frontend-modern/src/components/shared/HistoryChart.tsx",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxCephClusterDrawer.tsx": "9e828c5dde7d4cb461d7c936edb8f14f1c667eaa488a81802d14014aaf0ead6e",
-    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx": "ea2b08b041148b12e0aee0afc652a43ab2f4bb937820ec513edfea36a043305d",
-    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "bd5d7b7838852b23c5561c3e722777eb24d4e3324de863eb380c080a5796f2c8",
-    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx": "0d0ed89d9d2dd164638dadd9f233d308d1cc52616fa2c5be4402c31659403a1d",
-    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "e9fe8c62cdad1f7759f5215044b30c086a3e37ebd50b83cb3f6c64a5c5d58feb",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "39b479e996c89716c095ea8cae7ecccc397989af3e3a0a83ec5c4c228a75e8b5",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "f4768c045d61983799c04245ba8bb2df7fc8da4af5a6f7d88f2968d7d1624c95"
+    "frontend-modern/src/components/shared/HistoryChart.tsx": "74fb7e6b466e1c2b2d2efb13e0a124d6c301896a7c9423432e903908cc9ee25b",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "d6e8317019c8dc616bd9a4d3c6c71cb5329297ca0341e6ba28a6cc4c84db36b0"
   },
   "routes": [
-    "/proxmox/replication",
-    "/proxmox/backups",
-    "/proxmox/ceph",
-    "/proxmox/mail"
+    "/browser-tests/history-touch.html"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 900
-    },
-    {
-      "width": 1280,
-      "height": 900
-    },
-    {
-      "width": 1100,
-      "height": 900
-    },
-    {
-      "width": 900,
-      "height": 900
-    },
-    {
-      "width": 700,
+      "width": 1365,
       "height": 900
     },
     {
@@ -54,17 +25,33 @@
     }
   ],
   "states": [
-    "Mock estate (5 PVE nodes, 8 replication jobs with 2 failed, 3 PBS datastores, 69 backup targets, 1 Ceph cluster, 2 Mail Gateways), dark theme, Chromium",
-    "Replication: failed and healthy rows collapsed and expanded at full, expanded, operational, basic and compact container layouts",
-    "Backups: Coverage and By date views, protected, attention, unprotected and unknown rows, empty evidence cells",
-    "Ceph: single auto-opened cluster with pools and services, pool table in the half-width card and the phone card",
-    "Mail Gateway: healthy and degraded instances at every container layout"
+    "Production disk/pool details with stored multi-point, measured-zero singleton and empty history; 19 observed presentations across desktop Chromium and phone Chromium/WebKit",
+    "Actual touchscreen first/middle/last taps, shared I/O group focus transfer, keyboard navigation/exit and real mouse coexistence; phone WebKit dark-class presentation"
   ],
   "interactions": [
-    "Expanded a failed replication job by its disclosure button at 1440px and by row tap at 390px; the detail shows the whole error and the full job record",
-    "Switched Backups between Coverage and By date; sortable headers render uppercase beside the plain ones",
-    "Measured every table cell and header for clipped text (scrollWidth over clientWidth) at each viewport; at 1440px all four tabs report none, and no viewport scrolls horizontally",
-    "Compared before and after screenshots: Mail Gateway Version/Spam/Virus/Quarantine and Ceph Services no longer truncate, Ceph phone pool usage reads 50.1% instead of a clipped 0.1%"
+    "Native touchscreen taps select the actual reading at that position instead of the latest sample; touch compatibility focus/mouse movement/leave cannot overwrite it",
+    "Primary contact cancellation, non-tap gesture rejection and native Chromium vertical pan with room-to-scroll precondition; no prevented touch default, pointer capture or touch-action change",
+    "Desktop/phone keyboard Home/Right/End/Escape and focus exit, pointer announcements remain quiet, range replacement, zero/empty responses and no horizontal overflow",
+    "Predecessor native Chromium/WebKit first tap near 10% instead displays 30%; final first/middle/last taps display 10/20/30%. Inspected predecessor and final phone, zero/empty and desktop screenshots"
   ],
-  "command": "playwright chromium against a private mock-mode stack built from this commit (backend :7685, vite :5203)"
+  "command": "pulse-worker-browser frontend-modern/browser-tests/history-touch.cjs",
+  "browser_versions": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "artifacts": [
+    "browser/result.json",
+    "browser/chromium-phone-first.png",
+    "browser/webkit-phone-first.png",
+    "browser/webkit-phone-middle.png",
+    "browser/webkit-phone-pool-first.png",
+    "browser/webkit-phone-pool-zero-singleton.png",
+    "browser/webkit-phone-pool-empty.png",
+    "browser/chromium-desktop-middle.png",
+    "browser/parent.json",
+    "browser/parent-chromium-phone-first.png",
+    "browser/parent-webkit-phone-first.png"
+  ],
+  "limitations": "Synthetic stored APIs, not native PBS/TrueNAS collection, physical phones or assistive-device speech. Native pan is Chromium-only; no physical/WebKit pan, pinch-zoom or whole-app theme-transition claim. Initial fixture and pan-driver failures are retained separately."
 }

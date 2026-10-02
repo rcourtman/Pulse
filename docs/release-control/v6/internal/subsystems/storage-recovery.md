@@ -6302,3 +6302,12 @@ This changes no collector, health thresholds, history policy or server identity.
 `frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx` exercises
 snapshot replacement, in-place reconciliation, missing evidence, target changes
 and fault/recovery using the real keyed renderer.
+
+Touch inspection in the existing pool and physical-disk History charts selects
+an actual stored reading rather than substituting the latest sample on focus.
+Page pan/cancel and multi-contact gestures do not imply a selected observation;
+browser-owned scrolling remains available. This changes no source target, API,
+units, collection, retention, access or recovery boundary. The production
+disk/pool fixture `frontend-modern/browser-tests/history-touch.cjs` and mounted
+`HistoryChart.test.tsx` regressions verify presentation/input behaviour only,
+not live appliance collection or recovery success.

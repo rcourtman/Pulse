@@ -78,10 +78,15 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
           aria-describedby={descriptionId}
           onMouseMove={chart.handleMouseMove}
           onMouseLeave={chart.handleMouseLeave}
+          onPointerDown={chart.handlePointerDown}
+          onPointerMove={chart.handlePointerMove}
+          onPointerUp={chart.handlePointerUp}
+          onPointerCancel={chart.handlePointerCancel}
         />
         <p id={descriptionId} class="sr-only">
-          {refreshStatus()} {accessibleDescription()} Use Left and Right arrow keys to inspect
-          readings, Home and End for the first and last reading, and Escape to clear inspection.
+          {refreshStatus()} {accessibleDescription()} Tap the chart to inspect a reading, or use
+          Left and Right arrow keys, Home and End for the first and last reading, and Escape to
+          clear inspection.
         </p>
         <p class="sr-only" aria-live="polite" aria-atomic="true">
           {chart.keyboardInspecting() && chart.hoveredPoint()
