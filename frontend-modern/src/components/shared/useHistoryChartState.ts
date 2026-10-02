@@ -34,14 +34,13 @@ export function useHistoryChartState(
 ) {
   const [range, setRange] = createSignal<HistoryTimeRange>(props.range || '24h');
   const [data, setData] = createSignal(props.data ?? []);
+  const [keyboardInspecting, setKeyboardInspecting] = createSignal(false);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [source, setSource] = createSignal<'store' | 'memory' | 'live' | 'mock_synthetic' | null>(
     null,
   );
   const [maxPoints, setMaxPoints] = createSignal<number | null>(null);
-  const [refreshTick, setRefreshTick] = createSignal(0);
-  const [hasLoadedOnce, setHasLoadedOnce] = createSignal(false);
   const [localHoveredTimestamp, setLocalHoveredTimestamp] = createSignal<number | null>(null);
   const [hoveredPoint, setHoveredPoint] = createSignal<HistoryChartHoverPoint | null>(null);
   const [chartWidth, setChartWidth] = createSignal(300);
@@ -60,14 +59,6 @@ export function useHistoryChartState(
   createEffect(() => {
     if (props.range) {
       setRange(props.range);
-    }
-  });
-
-  createEffect(() => {
-    if (props.data) {
-      setData(props.data);
-      if (!hasLoadedOnce()) setHasLoadedOnce(true);
-      setSource('live');
     }
   });
 
@@ -100,82 +91,85 @@ export function useHistoryChartState(
   const dataMin = createMemo(() => getHistoryChartDataMin(data()));
   const dataMax = createMemo(() => getHistoryChartDataMax(data()));
 
-  const loadData = async (
-    chartRange: HistoryTimeRange,
-    pointsCap: number | null,
-    isBackgroundRefresh: boolean,
-  ) => {
-    if (!isBackgroundRefresh && !hasLoadedOnce()) {
-      setLoading(true);
-    }
-    setError(null);
-    if (!isBackgroundRefresh) {
-      setSource(null);
-    }
+  let previousSelection: string | undefined;
 
-    try {
-      const result = await ChartsAPI.getMetricsHistory({
-        resourceType: props.resourceType,
-        resourceId: props.resourceId,
-        metric: props.metric,
-        range: chartRange,
-        maxPoints: pointsCap ?? undefined,
-      });
-
-      if ('points' in result) {
-        setData(result.points || []);
-        setSource(result.source ?? 'store');
-      } else {
-        setData([]);
-        setSource(result.source ?? 'store');
-      }
-      if (!hasLoadedOnce()) {
-        setHasLoadedOnce(true);
-      }
-    } catch (err) {
-      console.error('Failed to fetch metrics history:', err);
-      if (!hasLoadedOnce()) {
-        setError('Failed to load history data');
-      }
-      setSource(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  createEffect(async () => {
-    if (props.data) return;
-    if (!props.resourceId || !props.resourceType) return;
-
+  // One effect owns a selection, its request and its polling timer. Cleanup
+  // invalidates completions even when a transport ignores cancellation.
+  createEffect(() => {
+    const suppliedData = props.data;
+    const resourceId = props.resourceId;
+    const resourceType = props.resourceType;
+    const metric = props.metric;
     const chartRange = range();
-    const locked = isLocked();
     const pointsCap = maxPoints();
-
-    if (locked) {
-      setLoading(false);
-      setError(null);
-      setSource(null);
-      return;
-    }
-
-    void loadData(chartRange, pointsCap, false);
-  });
-
-  createEffect(() => {
-    const tick = refreshTick();
-    if (tick === 0) return;
-    if (!props.resourceId || !props.resourceType || isLocked()) return;
-
-    void loadData(range(), maxPoints(), true);
-  });
-
-  createEffect(() => {
+    const locked = isLocked();
     const interval = refreshIntervalMs();
-    if (!interval || interval <= 0) return;
-    const timer = window.setInterval(() => {
-      setRefreshTick((value) => value + 1);
-    }, interval);
-    onCleanup(() => window.clearInterval(timer));
+    let active = true;
+    let pending = false;
+    let hasLoaded = false;
+    let controller: AbortController | undefined;
+    let timer: number | undefined;
+
+    onCleanup(() => {
+      active = false;
+      controller?.abort();
+      if (timer !== undefined) window.clearInterval(timer);
+    });
+
+    setData(suppliedData ?? []);
+    setSource(suppliedData !== undefined ? 'live' : null);
+    setError(null);
+    setLoading(false);
+    const selection = JSON.stringify([
+      resourceType,
+      resourceId,
+      metric,
+      chartRange,
+      pointsCap,
+      locked,
+      suppliedData !== undefined,
+    ]);
+    if (selection !== previousSelection) {
+      setHoveredPoint(null);
+      setHoveredTimestamp(null);
+    }
+    previousSelection = selection;
+    if (suppliedData !== undefined || locked || !resourceId || !resourceType) return;
+
+    const loadData = async () => {
+      if (!active || pending) return;
+      pending = true;
+      controller = new AbortController();
+      if (!hasLoaded) setLoading(true);
+      setError(null);
+      try {
+        const result = await ChartsAPI.getMetricsHistory({
+          resourceType,
+          resourceId,
+          metric,
+          range: chartRange,
+          maxPoints: pointsCap ?? undefined,
+          signal: controller.signal,
+        });
+        if (!active) return;
+        setData('points' in result ? (result.points ?? []) : []);
+        setSource(result.source ?? 'store');
+        hasLoaded = true;
+      } catch (err) {
+        if (!active) return;
+        console.error('Failed to fetch metrics history:', err);
+        if (!hasLoaded) setError('Failed to load history data');
+        setSource(null);
+      } finally {
+        if (active) {
+          pending = false;
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadData();
+    if (interval > 0) timer = window.setInterval(() => void loadData(), interval);
   });
 
   const drawChart = () => {
@@ -358,11 +352,47 @@ export function useHistoryChartState(
     onCleanup(() => resizeObserver.disconnect());
   });
 
+  const handleFocus = () => {
+    setKeyboardInspecting(true);
+    const points = data();
+    setHoveredTimestamp(points.length ? points[points.length - 1].timestamp : null);
+  };
+
+  const handleBlur = () => {
+    setKeyboardInspecting(false);
+    setHoveredTimestamp(null);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.key === 'Escape') {
+      setHoveredTimestamp(null);
+      return;
+    }
+    const points = data();
+    if (!points.length || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    setKeyboardInspecting(true);
+    const timestamp = hoveredTimestamp();
+    const index =
+      timestamp === null
+        ? points.length - 1
+        : points.indexOf(findHistoryChartClosestPoint(points, timestamp));
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? points.length - 1
+          : Math.max(0, Math.min(points.length - 1, index + (event.key === 'ArrowLeft' ? -1 : 1)));
+    setHoveredTimestamp(points[next].timestamp);
+  };
+
   const handleMouseMove = (event: MouseEvent) => {
     const canvas = refs.getCanvas();
     const points = data();
     if (!canvas || points.length === 0) return;
 
+    setKeyboardInspecting(false);
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const width = rect.width;
@@ -377,6 +407,7 @@ export function useHistoryChartState(
   };
 
   const handleMouseLeave = () => {
+    if (keyboardInspecting()) return;
     setHoveredTimestamp(null);
   };
 
@@ -385,6 +416,10 @@ export function useHistoryChartState(
     dataMax,
     dataMin,
     error,
+    handleFocus,
+    handleBlur,
+    handleKeyDown,
+    keyboardInspecting,
     handleMouseLeave,
     handleMouseMove,
     chartHeight,

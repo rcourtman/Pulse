@@ -1,16 +1,20 @@
 {
   "version": 1,
-  "base_sha": "60a6c933e0057435dd49cb440995f275f6a567d6",
-  "verified_at": "2026-10-02T12:57:15.855691Z",
+  "base_sha": "cf5d6cdf066539b6e29f589e42d408edb1ceb73a",
+  "verified_at": "2026-10-02T15:02:34.899181Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts"
+    "frontend-modern/src/components/shared/HistoryChart.tsx",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts",
+    "frontend-modern/src/components/shared/historyChartModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts": "59ca48c06cb3c63f30ccb46cb30536cbc6d86fda1b50e6ea49ecefb9eb377fae"
+    "frontend-modern/src/components/shared/HistoryChart.tsx": "24cd863fb6288bc2c13ef2d26e02aad95d3e4f54278f3078b1703fabf8785f8c",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "b1ebd93d5fee328b78f8f88f1837514a30d12be069d852d08f5d7f2b6ce999ec",
+    "frontend-modern/src/components/shared/historyChartModel.ts": "bd9e8954ef7e274a1eb026752d304556df303f612c4485369f8c90a7183cc751"
   },
   "routes": [
-    "/browser-tests/pool-capacity.html"
+    "/browser-tests/history-keyboard.html"
   ],
   "viewports": [
     {
@@ -23,26 +27,22 @@
     }
   ],
   "states": [
-    "Production pool drawer with synthetic partial PBS snapshots, not native collector or installed acceptance",
-    "Missing used/free/usage remain n/a; measured empty and full pools preserve 0 B and 0%",
-    "Independent byte observations remain visible without total; absent capacity stays n/a",
-    "Live transitions across five states on desktop Chromium light and phone WebKit dark; no page errors or horizontal overflow"
+    "Populated, empty and linked charts in Chromium light and WebKit phone dark; synthetic data, not native PBS acceptance",
+    "Visible keyboard focus, wrapped timestamp and reading contained within tooltip; no horizontal overflow or page errors"
   ],
   "interactions": [
-    "Switch missing, empty, full, partial and absent snapshots without reload",
-    "Read Used, Free, Total and Usage values in the actual Configuration rows"
+    "Tab into and out of both charts; arrows, Home/End, endpoint clamping, Escape; only focused chart announces keyboard readings",
+    "Parent Tab skips both charts; final empty chart invents no reading"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/pool-capacity.cjs",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/history-keyboard.cjs",
   "browser_versions": {
     "playwright": "1.56.1",
     "chromium": "141.0.7390.37",
     "webkit": "26.0"
   },
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-5pdbcfmm/browser/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-5pdbcfmm/browser/chromium-partial.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-5pdbcfmm/browser/webkit-missing.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-5pdbcfmm/browser/chromium-full.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-5pdbcfmm/browser/webkit-empty.png"
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-tuqfk84d/browser/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-tuqfk84d/browser/webkit-keyboard.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-tuqfk84d/browser/chromium-keyboard.png"
   ]
 }

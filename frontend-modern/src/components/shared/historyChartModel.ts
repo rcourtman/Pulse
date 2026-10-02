@@ -279,7 +279,8 @@ export function getHistoryChartTooltipLayout({
   chartHeight: number;
 }): HistoryChartTooltipLayout {
   const width = 156;
-  const height = 46;
+  // Allow a wrapped local timestamp plus the reading at normal text size.
+  const height = 64;
   const margin = 8;
   const pointGap = 12;
   const minX = margin;
