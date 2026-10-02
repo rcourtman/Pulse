@@ -21,6 +21,24 @@
 
 ## Purpose
 
+### Pool detail capacity observations
+
+The existing pool drawer's Configuration rows preserve missing capacity as
+`n/a`, independently for Used, Free, Total and Usage. Finite non-negative
+observations, including measured zero, remain visible even when another field
+is absent. Free space may be derived only when both total and used bytes are
+observed; usage may be derived only when used is observed and total is positive.
+Explicit provider free-space and percentage observations take precedence over
+those derived values. Unknown capacity is not an empty pool or proof of free
+space. This presentation does not establish freshness, pool health or recovery.
+
+Regression verification: the capacity evidence matrix in
+`frontend-modern/src/features/storageBackups/__tests__/storagePoolDetailPresentation.test.ts`
+and the production-drawer fixture in
+`frontend-modern/browser-tests/pool-capacity.cjs` cover missing, empty, full and
+partial snapshots, including live transitions on desktop and phone viewports.
+These synthetic checks are not native collector acceptance.
+
 ### Release-line PBS retention revocation — 30 September 2026
 
 PBS drawer host-target retention is bound to the unchanged identity evidence
