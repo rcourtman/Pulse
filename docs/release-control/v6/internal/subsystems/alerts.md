@@ -1500,6 +1500,18 @@ actually enforced at dispatch. `internal/alerts/flapping_threshold_test.go`
 pins these boundaries through normal configuration updates and notification
 callbacks, alongside the existing flapping cooldown and one-shot callback tests.
 
+Ordinary retention cleanup and hourly tracking cleanup retire a served
+suppression deadline, its flapping latch and its observations atomically under
+the manager lock, using the same expiry rule as dispatch. Neither sweep may
+leave an active occurrence in unbounded flapping suppression after deleting its
+deadline. The next burst starts a fresh observation window and can arm a new
+bounded cooldown and one-shot callback. Unexpired cooldowns, other keys' policy
+and pending bursts without a deadline remain unchanged; expiry does not clear,
+acknowledge or change the identity of an active alert. The cleanup regression
+controls in `internal/alerts/flapping_threshold_test.go` exercise both sweeps,
+drained and retained windows, dispatch callbacks and delivery diagnosis. These
+modeled-time controls are not installed notification-destination acceptance.
+
 ### Monitor-only delivery is terminal
 
 Monitor-only alerts remain visible, but neither a firing nor a recovery
