@@ -45,9 +45,8 @@ func (m *Manager) cleanupStaleMaps() {
 		}
 	}
 
-	for alertID, suppressUntil := range m.suppressedUntil {
-		if now.After(suppressUntil) {
-			delete(m.suppressedUntil, alertID)
+	for alertID := range m.suppressedUntil {
+		if m.expireSuppressionNoLock(alertID, now) {
 			cleaned++
 		}
 	}
