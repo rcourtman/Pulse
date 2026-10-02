@@ -649,7 +649,7 @@ func applyDemoOfflineDockerContainers(containers []models.DockerContainer, now t
 	finished = finished.Add(-18 * time.Minute)
 	for i := range containers {
 		profile := offlineProfiles[i%len(offlineProfiles)]
-		containers[i].Name = profile.Name
+		containers[i].Name = demoContainerProfileName(profile.Name, i/len(offlineProfiles))
 		containers[i].Image = profile.Image
 		containers[i].Labels = mergeScenarioLabelSet(containers[i].Labels, profile.Tags)
 		containers[i].State = "exited"
@@ -662,6 +662,16 @@ func applyDemoOfflineDockerContainers(containers []models.DockerContainer, now t
 	return containers
 }
 
+// demoContainerProfileName keeps container names unique per host. Docker
+// refuses two containers with one name on a host, so a profile reused for a
+// second round takes a numbered suffix instead of producing duplicate rows.
+func demoContainerProfileName(name string, round int) string {
+	if round <= 0 {
+		return name
+	}
+	return fmt.Sprintf("%s-%d", name, round+1)
+}
+
 func applyDemoDockerContainerProfiles(
 	containers []models.DockerContainer,
 	profiles []demoDockerContainerProfile,
@@ -672,7 +682,7 @@ func applyDemoDockerContainerProfiles(
 	})
 	for i := range containers {
 		profile := profiles[i%len(profiles)]
-		containers[i].Name = profile.Name
+		containers[i].Name = demoContainerProfileName(profile.Name, i/len(profiles))
 		containers[i].Image = profile.Image
 		containers[i].Labels = mergeScenarioLabelSet(containers[i].Labels, profile.Tags)
 		containers[i].State = "running"

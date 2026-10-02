@@ -362,6 +362,9 @@ replication on schedule adds no per-tick change for jobs that did not run.
 Shared storage in the mock estate stays one row per cluster per store, so the
 Storage surface grows with the number of storages rather than with the node
 count times the number of shared storages.
+Demo Docker container names stay unique per host (numbered suffixes on reused
+profiles), so image "used by" lists and container rows never collapse two
+distinct containers into what reads as a duplicated row.
 
 The browser applies resource deltas to its connection-scoped raw baseline, but
 canonicalizes and reconciles only changed resources plus the host-merge groups
