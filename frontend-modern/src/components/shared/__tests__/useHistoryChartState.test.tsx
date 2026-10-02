@@ -1,0 +1,188 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
+import { cleanup, render } from '@solidjs/testing-library';
+import { ChartsAPI } from '@/api/charts';
+import type { HistoryChartProps } from '../historyChartModel';
+import { useHistoryChartState, type HistoryChartState } from '../useHistoryChartState';
+
+vi.mock('@/stores/license', () => ({
+  isRangeLocked: (range: string) => range === '90d',
+  loadRuntimeCapabilities: vi.fn(),
+  maxHistoryDays: () => 7,
+}));
+vi.mock('@/api/charts', () => ({ ChartsAPI: { getMetricsHistory: vi.fn() } }));
+const request = vi.mocked(ChartsAPI.getMetricsHistory);
+const points = (value: number) => [{ timestamp: 1000, value, min: value, max: value }];
+const settle = async () => {
+  await Promise.resolve();
+  await Promise.resolve();
+};
+function deferred() {
+  let resolve!: (result: Awaited<ReturnType<typeof ChartsAPI.getMetricsHistory>>) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<Awaited<ReturnType<typeof ChartsAPI.getMetricsHistory>>>(
+    (yes, no) => {
+      resolve = yes;
+      reject = no;
+    },
+  );
+  return { promise, resolve, reject };
+}
+function mount() {
+  const [props, setProps] = createSignal<HistoryChartProps>({
+    resourceId: 'a',
+    resourceType: 'agent',
+    metric: 'cpu',
+    range: '1h',
+  });
+  let state!: HistoryChartState;
+  const view = render(() => {
+    state = useHistoryChartState(
+      {
+        get resourceId() {
+          return props().resourceId;
+        },
+        get resourceType() {
+          return props().resourceType;
+        },
+        get metric() {
+          return props().metric;
+        },
+        get range() {
+          return props().range;
+        },
+        get data() {
+          return props().data;
+        },
+      },
+      { getCanvas: () => undefined, getContainer: () => undefined },
+    );
+    return <div />;
+  });
+  return {
+    state,
+    unmount: view.unmount,
+    change: (next: Partial<HistoryChartProps>) => setProps((p) => ({ ...p, ...next })),
+  };
+}
+
+describe('History request ownership', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    request.mockReset();
+  });
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it.each(['success', 'failure'])(
+    'ignores a superseded %s even when cancellation is ignored',
+    async (completion) => {
+      const old = deferred(),
+        current = deferred();
+      request.mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
+      const { state, change } = mount();
+      const signal = request.mock.calls[0][0].signal!;
+      change({ resourceId: 'b' });
+      expect(signal.aborted).toBe(true);
+      current.resolve({ points: points(80), source: 'store' } as never);
+      await settle();
+      if (completion === 'success') old.resolve({ points: points(10), source: 'store' } as never);
+      else old.reject(new Error('old error'));
+      await settle();
+      expect(state.data()).toEqual(points(80));
+      expect(state.error()).toBeNull();
+      expect(state.loading()).toBe(false);
+    },
+  );
+
+  it.each([{ resourceId: 'b' }, { resourceType: 'node' }, { metric: 'memory' }, { range: '6h' }])(
+    'clears old readings on selection change %j and exposes its failure',
+    async (next) => {
+      request.mockResolvedValueOnce({ points: points(10), source: 'store' } as never);
+      const { state, change } = mount();
+      await settle();
+      const current = deferred();
+      request.mockReturnValueOnce(current.promise);
+      change(next as Partial<HistoryChartProps>);
+      expect(state.data()).toEqual([]);
+      expect(state.loading()).toBe(true);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      current.reject(new Error('current failed'));
+      await settle();
+      expect(state.error()).toBe('Failed to load history data');
+      expect(state.data()).toEqual([]);
+    },
+  );
+
+  it('does not overlap polling and preserves matching samples on refresh failure', async () => {
+    const initial = deferred();
+    request.mockReturnValueOnce(initial.promise);
+    const { state } = mount();
+    vi.advanceTimersByTime(120_000);
+    expect(request).toHaveBeenCalledTimes(1);
+    initial.resolve({ points: points(10), source: 'store' } as never);
+    await settle();
+    const refresh = deferred();
+    request.mockReturnValueOnce(refresh.promise);
+    vi.advanceTimersByTime(120_000);
+    expect(request).toHaveBeenCalledTimes(2);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    refresh.reject(new Error('refresh failed'));
+    await settle();
+    expect(state.data()).toEqual(points(10));
+    expect(state.error()).toBeNull();
+    expect(state.loading()).toBe(false);
+  });
+
+  it('cancels fetched data when supplied data takes ownership, including empty samples', async () => {
+    const old = deferred();
+    request.mockReturnValueOnce(old.promise);
+    const { state, change } = mount();
+    change({ data: [] });
+    expect(request.mock.calls[0][0].signal?.aborted).toBe(true);
+    old.resolve({ points: points(10), source: 'store' } as never);
+    await settle();
+    vi.advanceTimersByTime(120_000);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(state.data()).toEqual([]);
+    expect(state.source()).toBe('live');
+    change({ data: points(80) });
+    expect(state.data()).toEqual(points(80));
+    request.mockResolvedValueOnce({ points: points(30), source: 'store' } as never);
+    change({ data: undefined });
+    await settle();
+    expect(state.data()).toEqual(points(30));
+  });
+
+  it.each([{ range: '90d' }, { resourceId: '' }])(
+    'invalidates in-flight work for unavailable selection %j',
+    async (next) => {
+      const old = deferred();
+      request.mockReturnValueOnce(old.promise);
+      const { state, change } = mount();
+      change(next as Partial<HistoryChartProps>);
+      old.resolve({ points: points(10), source: 'store' } as never);
+      await settle();
+      vi.advanceTimersByTime(120_000);
+      expect(request).toHaveBeenCalledTimes(1);
+      expect(state.data()).toEqual([]);
+      expect(state.loading()).toBe(false);
+    },
+  );
+
+  it('aborts and stops polling on unmount without consuming a late completion', async () => {
+    const old = deferred();
+    request.mockReturnValueOnce(old.promise);
+    const { state, unmount } = mount();
+    unmount();
+    expect(request.mock.calls[0][0].signal?.aborted).toBe(true);
+    old.resolve({ points: points(10), source: 'store' } as never);
+    await settle();
+    vi.advanceTimersByTime(120_000);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(state.data()).toEqual([]);
+  });
+});

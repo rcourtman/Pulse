@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "base_sha": "60a6c933e0057435dd49cb440995f275f6a567d6",
-  "verified_at": "2026-10-02T12:57:15.855691Z",
+  "base_sha": "46d2727828d20680cdc6d3a1ff1b419c3ec2bca4",
+  "verified_at": "2026-10-02T14:15:24.462877+00:00",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts"
+    "frontend-modern/src/components/shared/useHistoryChartState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts": "59ca48c06cb3c63f30ccb46cb30536cbc6d86fda1b50e6ea49ecefb9eb377fae"
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "ff9dff0db01ae3141b3a130477cb8128ea4da8ea4e93f23c360278f6a47b152a"
   },
   "routes": [
-    "/browser-tests/pool-capacity.html"
+    "/browser-tests/history-selection.html"
   ],
   "viewports": [
     {
@@ -23,26 +23,23 @@
     }
   ],
   "states": [
-    "Production pool drawer with synthetic partial PBS snapshots, not native collector or installed acceptance",
-    "Missing used/free/usage remain n/a; measured empty and full pools preserve 0 B and 0%",
-    "Independent byte observations remain visible without total; absent capacity stays n/a",
-    "Live transitions across five states on desktop Chromium light and phone WebKit dark; no page errors or horizontal overflow"
+    "Synthetic delayed transport using the production shared chart, with hidden selector matching storage drawers; not native PBS acceptance",
+    "Selected B remains 80% after old A completes at 10%; new C clears readings while loading and displays its own failure",
+    "Desktop Chromium light and phone WebKit dark: eight states, no page errors or overflow in storage layout"
   ],
   "interactions": [
-    "Switch missing, empty, full, partial and absent snapshots without reload",
-    "Read Used, Free, Total and Usage values in the actual Configuration rows"
+    "Select B, complete B then delayed A",
+    "Select C then fail its request; verify accessible description and plotted extrema"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/pool-capacity.cjs",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/history-selection.cjs",
   "browser_versions": {
     "playwright": "1.56.1",
     "chromium": "141.0.7390.37",
     "webkit": "26.0"
   },
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-5pdbcfmm/browser/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-5pdbcfmm/browser/chromium-partial.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-5pdbcfmm/browser/webkit-missing.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-5pdbcfmm/browser/chromium-full.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-5pdbcfmm/browser/webkit-empty.png"
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-wwhurxzu/browser/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-wwhurxzu/browser/webkit-old-a-finished.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-wwhurxzu/browser/chromium-c-loading.png"
   ]
 }
