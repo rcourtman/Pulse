@@ -66,7 +66,7 @@ type Client struct {
 	baseURL    string
 	rpcURL     string
 
-	rpcMu     sync.Mutex
+	rpcMu     rpcSessionMutex
 	rpc       *trueNASRPCClient
 	mode      TransportMode
 	closed    bool
@@ -251,7 +251,7 @@ func (c *Client) GetSystemTelemetry(ctx context.Context) (*SystemInfo, error) {
 
 	var telemetry *SystemInfo
 	var temperatures map[string]float64
-	err = c.withRPC(ctx, func(rpc *trueNASRPCClient) error {
+	err = c.withRPC(ctx, func(ctx context.Context, rpc *trueNASRPCClient) error {
 		temperatures, _ = rpc.getSystemTemperatures(ctx)
 		subscriptionName := fmt.Sprintf("reporting.realtime:{\"interval\":%d}", defaultRealtimeIntervalSeconds)
 		subscriptionID, err := rpc.subscribe(ctx, subscriptionName)
@@ -506,7 +506,7 @@ func (c *Client) GetSystemMetricHistory(ctx context.Context, duration time.Durat
 	}
 
 	var history *SystemMetricHistory
-	err = c.withRPC(ctx, func(rpc *trueNASRPCClient) error {
+	err = c.withRPC(ctx, func(ctx context.Context, rpc *trueNASRPCClient) error {
 		var err error
 		history, err = rpc.getSystemMetricHistory(ctx, duration)
 		return err
@@ -1332,7 +1332,7 @@ func (c *Client) GetDiskTemperatureHistory(ctx context.Context, identifiers []st
 	}
 
 	var history map[string][]TimeSeriesPoint
-	err := c.withRPC(ctx, func(rpc *trueNASRPCClient) error {
+	err := c.withRPC(ctx, func(ctx context.Context, rpc *trueNASRPCClient) error {
 		var err error
 		history, err = rpc.getDiskTemperatureHistory(ctx, identifiers, duration)
 		return err
@@ -1434,7 +1434,7 @@ func (c *Client) getDiskTemperaturesFromReporting(ctx context.Context, identifie
 	}
 
 	var temperatures map[string]int
-	err := c.withRPC(ctx, func(rpc *trueNASRPCClient) error {
+	err := c.withRPC(ctx, func(ctx context.Context, rpc *trueNASRPCClient) error {
 		var err error
 		temperatures, err = rpc.getDiskTemperatures(ctx, identifiers)
 		return err
@@ -1449,7 +1449,7 @@ func (c *Client) getDiskTemperatureAggregates(ctx context.Context, identifiers [
 	}
 
 	var aggregates map[string]DiskTemperatureAggregate
-	err := c.withRPC(ctx, func(rpc *trueNASRPCClient) error {
+	err := c.withRPC(ctx, func(ctx context.Context, rpc *trueNASRPCClient) error {
 		var err error
 		aggregates, err = rpc.getDiskTemperatureAggregates(ctx, identifiers, windowDays)
 		return err
@@ -1805,7 +1805,7 @@ func (c *Client) parseAppsWithStats(ctx context.Context, response []map[string]a
 // failure.
 func (c *Client) GetAppStats(ctx context.Context) (map[string]AppStats, error) {
 	var stats map[string]AppStats
-	err := c.withRPC(ctx, func(rpc *trueNASRPCClient) error {
+	err := c.withRPC(ctx, func(ctx context.Context, rpc *trueNASRPCClient) error {
 		subscriptionName := fmt.Sprintf("app.stats:{\"interval\":%d}", defaultAppStatsIntervalSeconds)
 		subscriptionID, err := rpc.subscribe(ctx, subscriptionName)
 		if err != nil {
@@ -1861,7 +1861,7 @@ func (c *Client) GetAppLogs(ctx context.Context, appName, containerID string, ta
 	}
 	subscriptionName := fmt.Sprintf("app.container_log_follow:%s", string(subscriptionJSON))
 	var lines []AppLogLine
-	err = c.withRPC(ctx, func(rpc *trueNASRPCClient) error {
+	err = c.withRPC(ctx, func(ctx context.Context, rpc *trueNASRPCClient) error {
 		subscriptionID, err := rpc.subscribe(ctx, subscriptionName)
 		if err != nil {
 			return err
@@ -2615,6 +2615,11 @@ func (c *trueNASRPCClient) call(ctx context.Context, method string, params any, 
 	if c == nil || c.conn == nil {
 		return fmt.Errorf("truenas rpc connection is nil")
 	}
+	// A cancelled waiter must not dispatch an action or poison a healthy
+	// session by setting an already-expired socket deadline.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	stopContext := c.armContext(ctx)
 	defer stopContext()
 
@@ -2759,6 +2764,15 @@ func (c *trueNASRPCClient) readAppLogEvents(ctx context.Context, tailLines int) 
 		var message trueNASRPCResponse
 		if err := c.conn.ReadJSON(&message); err != nil {
 			if isTimeoutError(err) {
+				// The normal idle window completes a bounded tail. A caller or
+				// operation budget expiring first is a failure, not evidence that
+				// the log stream successfully returned no data.
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					return nil, false, &RPCTransportError{Method: "app.container_log_follow", Phase: "read", Err: ctxErr}
+				}
+				if ctxDeadline, ok := ctx.Deadline(); ok && !time.Now().Before(ctxDeadline) {
+					return nil, false, &RPCTransportError{Method: "app.container_log_follow", Phase: "read", Err: context.DeadlineExceeded}
+				}
 				// Gorilla WebSocket documents a timed-out read as terminal for
 				// the connection. Preserve the collected log data, then make
 				// the caller discard this stream session instead of reusing it.
