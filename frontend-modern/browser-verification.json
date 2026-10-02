@@ -1,31 +1,20 @@
 {
   "version": 1,
-  "base_sha": "e5d0843851a3837a90d71afaced3a009c0606bbf",
-  "verified_at": "2026-10-02T20:33:38Z",
+  "base_sha": "e33c6be1effb7fc5e094a6e23cbb1f440a7939fe",
+  "verified_at": "2026-10-02T21:45:07Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxCephClusterDrawer.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"
+    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx",
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxCephClusterDrawer.tsx": "9e828c5dde7d4cb461d7c936edb8f14f1c667eaa488a81802d14014aaf0ead6e",
-    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx": "ea2b08b041148b12e0aee0afc652a43ab2f4bb937820ec513edfea36a043305d",
-    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "bd5d7b7838852b23c5561c3e722777eb24d4e3324de863eb380c080a5796f2c8",
-    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx": "0d0ed89d9d2dd164638dadd9f233d308d1cc52616fa2c5be4402c31659403a1d",
-    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "e9fe8c62cdad1f7759f5215044b30c086a3e37ebd50b83cb3f6c64a5c5d58feb",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "39b479e996c89716c095ea8cae7ecccc397989af3e3a0a83ec5c4c228a75e8b5",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "f4768c045d61983799c04245ba8bb2df7fc8da4af5a6f7d88f2968d7d1624c95"
+    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx": "54f1f84dac768c6e0e333254d5c65e59751fa78b5ac55826cdaa37085a73c608",
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts": "9fde1740e300724ef9cab4a3b036c942bdab6e5d2060f262606b27f4b1a40ea6"
   },
   "routes": [
-    "/proxmox/replication",
-    "/proxmox/backups",
-    "/proxmox/ceph",
-    "/proxmox/mail"
+    "/proxmox/overview",
+    "/machines",
+    "/docker"
   ],
   "viewports": [
     {
@@ -33,19 +22,7 @@
       "height": 900
     },
     {
-      "width": 1280,
-      "height": 900
-    },
-    {
       "width": 1100,
-      "height": 900
-    },
-    {
-      "width": 900,
-      "height": 900
-    },
-    {
-      "width": 700,
       "height": 900
     },
     {
@@ -54,17 +31,12 @@
     }
   ],
   "states": [
-    "Mock estate (5 PVE nodes, 8 replication jobs with 2 failed, 3 PBS datastores, 69 backup targets, 1 Ceph cluster, 2 Mail Gateways), dark theme, Chromium",
-    "Replication: failed and healthy rows collapsed and expanded at full, expanded, operational, basic and compact container layouts",
-    "Backups: Coverage and By date views, protected, attention, unprotected and unknown rows, empty evidence cells",
-    "Ceph: single auto-opened cluster with pools and services, pool table in the half-width card and the phone card",
-    "Mail Gateway: healthy and degraded instances at every container layout"
+    "Mock estate: five PVE nodes, three with two agent-reported disks (micro-bars) and two with one (single bar), Bars metrics mode, dark theme, Chromium",
+    "Phone width uses the aggregate disk mode and is unchanged; Machines and Docker host tables carry no multi-disk host in this estate, so their rows are unchanged"
   ],
   "interactions": [
-    "Expanded a failed replication job by its disclosure button at 1440px and by row tap at 390px; the detail shows the whole error and the full job record",
-    "Switched Backups between Coverage and By date; sortable headers render uppercase beside the plain ones",
-    "Measured every table cell and header for clipped text (scrollWidth over clientWidth) at each viewport; at 1440px all four tabs report none, and no viewport scrolls horizontally",
-    "Compared before and after screenshots: Mail Gateway Version/Spam/Virus/Quarantine and Ceph Services no longer truncate, Ceph phone pool usage reads 50.1% instead of a clipped 0.1%"
+    "Read the three multi-disk node rows at 1440px and 1100px: each shows the fullest disk percentage (52%, 82%, 78%) beside its micro-bars with the title \"Highest usage: <mount> <percent>\"; measured table cells for clipped text, none in the nodes table",
+    "Confirmed the hover tooltip Disk Breakdown still opens from the micro-bars"
   ],
-  "command": "playwright chromium against a private mock-mode stack built from this commit (backend :7685, vite :5203)"
+  "command": "playwright chromium against a private mock-mode stack (backend :7685, vite :5203 from this branch)"
 }
