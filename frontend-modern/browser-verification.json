@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "base_sha": "46d2727828d20680cdc6d3a1ff1b419c3ec2bca4",
-  "verified_at": "2026-10-02T14:15:24.462877+00:00",
+  "base_sha": "9dc6bd0ffe4de520bf9afc43ad10fb169026325d",
+  "verified_at": "2026-10-02T14:15:24.462877Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/components/shared/useHistoryChartState.ts"

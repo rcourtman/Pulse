@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
+import { ChartsAPI } from '@/api/charts';
+import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import historyChartHeaderSource from '@/components/shared/HistoryChartHeader.tsx?raw';
 import historyChartHoverGroupSource from '@/components/shared/HistoryChartHoverGroup.tsx?raw';
 import historyChartOverlaySource from '@/components/shared/HistoryChartOverlay.tsx?raw';
@@ -158,6 +160,24 @@ describe('HistoryChart', () => {
     expect(description).toHaveTextContent('24-hour history contains 2 data points');
     expect(description).toHaveTextContent('Values increased from 10.0% to 30.0%.');
     expect(description).toHaveTextContent('Minimum 8.0%. Maximum 35.0%.');
+  });
+
+  it('removes previous-target values from the accessible chart while the next target loads', async () => {
+    const request = vi.mocked(ChartsAPI.getMetricsHistory);
+    request.mockResolvedValueOnce({
+      points: [{ timestamp: 1000, value: 10, min: 10, max: 10 }],
+      source: 'store',
+    } as never);
+    const [target, setTarget] = createSignal('a');
+    render(() => <HistoryChart resourceType="agent" resourceId={target()} metric="cpu" unit="%" />);
+    const chart = screen.getByRole('img', { name: 'History chart' });
+    const description = document.getElementById(chart.getAttribute('aria-describedby')!)!;
+    await waitFor(() => expect(description).toHaveTextContent('10.0%'));
+    request.mockImplementationOnce(() => new Promise(() => {}));
+    setTarget('b');
+    expect(description).toHaveTextContent('Loading');
+    expect(description).not.toHaveTextContent('10.0%');
+    expect(screen.queryByText('Min')).not.toBeInTheDocument();
   });
 
   it('synchronizes the hovered timestamp across charts in the same group', () => {
