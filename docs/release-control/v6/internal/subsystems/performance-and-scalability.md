@@ -356,6 +356,9 @@ leaving broadcast headroom to coalesce several sampler invalidations. A cohort
 must not rebase unchanged guest, node, storage, or disk evidence, and the
 provider-backed fixture set refreshes once per full rotation rather than on
 every tick.
+Mock replication timing is advanced in that same full-rotation refresh, and
+only a job whose schedule phase has passed is rewritten, so keeping demo
+replication on schedule adds no per-tick change for jobs that did not run.
 Shared storage in the mock estate stays one row per cluster per store, so the
 Storage surface grows with the number of storages rather than with the node
 count times the number of shared storages.

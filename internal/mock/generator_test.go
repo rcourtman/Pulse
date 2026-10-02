@@ -1194,6 +1194,104 @@ func TestFixtureGraphIncludesBackupRunningFixture(t *testing.T) {
 	}
 }
 
+func replicationFixtureEstate() ([]models.Node, []models.VM) {
+	nodes := []models.Node{{Name: "pve1"}, {Name: "pve2"}, {Name: "pve3"}}
+	vms := make([]models.VM, 0, 9)
+	for i := 0; i < 9; i++ {
+		// Every guest lives on pve1, so the old (i+1) modulo target picked the
+		// source node for every third job.
+		vms = append(vms, models.VM{VMID: 100 + i, Name: "guest", Node: "pve1", Instance: "cluster"})
+	}
+	return nodes, vms
+}
+
+func TestGenerateReplicationJobsNeverTargetsTheSourceNode(t *testing.T) {
+	nodes, vms := replicationFixtureEstate()
+
+	jobs := generateReplicationJobs(nodes, vms)
+	if len(jobs) == 0 {
+		t.Fatal("expected replication jobs for a three-node estate")
+	}
+	for _, job := range jobs {
+		if job.TargetNode == job.SourceNode {
+			t.Fatalf("job %s replicates %s to itself", job.JobID, job.SourceNode)
+		}
+	}
+}
+
+func TestGenerateReplicationJobsNeedsASecondNode(t *testing.T) {
+	_, vms := replicationFixtureEstate()
+
+	if jobs := generateReplicationJobs([]models.Node{{Name: "pve1"}}, vms); len(jobs) != 0 {
+		t.Fatalf("expected no replication jobs without a target node, got %d", len(jobs))
+	}
+}
+
+func TestRebaseMockReplicationJobsKeepsJobsOnSchedule(t *testing.T) {
+	nodes, vms := replicationFixtureEstate()
+	jobs := generateReplicationJobs(nodes, vms)
+	jobs[0].FailCount = 2
+	jobs[0].LastSyncStatus = "error"
+	for i := 1; i < len(jobs); i++ {
+		jobs[i].FailCount = 0
+		jobs[i].LastSyncStatus = "ok"
+	}
+
+	start := time.Date(2026, 10, 2, 9, 7, 0, 0, time.UTC)
+	// A long-running demo used to leave every job hours overdue; walk the
+	// fixture clock well past one schedule window.
+	for _, now := range []time.Time{start, start.Add(47 * time.Minute), start.Add(26 * time.Hour)} {
+		rebaseMockReplicationJobs(jobs, now)
+		for i, job := range jobs {
+			if job.LastSyncTime == nil || job.NextSyncTime == nil {
+				t.Fatalf("job %s lost its sync times", job.JobID)
+			}
+			if job.LastSyncUnix != job.LastSyncTime.Unix() || job.NextSyncUnix != job.NextSyncTime.Unix() {
+				t.Fatalf("job %s unix companions drifted from its sync times", job.JobID)
+			}
+			if !job.NextSyncTime.After(now) || job.NextSyncTime.Sub(now) > mockReplicationInterval {
+				t.Fatalf("job %s next sync %s is not within one interval after %s", job.JobID, job.NextSyncTime, now)
+			}
+			age := now.Sub(*job.LastSyncTime)
+			if i == 0 {
+				if age < 2*mockReplicationInterval {
+					t.Fatalf("failing job last synced %s ago, want at least two missed intervals", age)
+				}
+				continue
+			}
+			if age < 0 || age >= mockReplicationInterval {
+				t.Fatalf("healthy job %s last synced %s ago, want inside one interval", job.JobID, age)
+			}
+		}
+	}
+}
+
+func TestRebaseMockReplicationJobsLeavesUnchangedJobsAlone(t *testing.T) {
+	nodes, vms := replicationFixtureEstate()
+	jobs := generateReplicationJobs(nodes, vms)
+	start := time.Date(2026, 10, 2, 9, 0, 0, 0, time.UTC)
+	rebaseMockReplicationJobs(jobs, start)
+	before := append([]models.ReplicationJob(nil), jobs...)
+
+	// One second later no job's phase can have passed for all of them, and a
+	// job whose phase has not passed must keep its polled stamp and pointers so
+	// the refresh does not manufacture a change for every job on every tick.
+	rebaseMockReplicationJobs(jobs, start.Add(time.Second))
+	unchanged := 0
+	for i := range jobs {
+		if jobs[i].LastSyncUnix != before[i].LastSyncUnix {
+			continue
+		}
+		unchanged++
+		if !jobs[i].LastPolled.Equal(before[i].LastPolled) || jobs[i].LastSyncTime != before[i].LastSyncTime {
+			t.Fatalf("job %s was rewritten although its schedule phase had not passed", jobs[i].JobID)
+		}
+	}
+	if unchanged < len(jobs)-1 {
+		t.Fatalf("expected at most one job to roll over in one second, %d of %d stayed put", unchanged, len(jobs))
+	}
+}
+
 func TestBuildFixtureStateMergesSharedPBSStorageLikeThePoller(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.NodeCount = 5

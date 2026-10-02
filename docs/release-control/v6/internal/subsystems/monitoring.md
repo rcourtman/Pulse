@@ -1483,6 +1483,13 @@ service-history reads plus denial/recovery without fabricated samples.
    resource timestamps between cohorts, cover every node within twenty seconds,
    and refresh provider-backed fixtures only once per full rotation so one demo
    tick cannot manufacture an estate-wide WebSocket delta.
+   Mock replication timing follows that same refresh instead of staying at its
+   startup stamp: each job keeps a stable phase inside its schedule window and
+   is rewritten only when that phase passes, so a healthy job always last
+   synced less than one interval ago with its next sync in the future, a
+   failing job's last good sync falls behind by its failure count, and a
+   long-running demo never reports healthy jobs as overdue. A mock job never
+   targets its own source node, and an estate without a second node has none.
    The mock estate carries shared storage in the shape the poller produces,
    not the per-node shape the PVE API returns: a shared PBS storage is one
    cluster-scoped row listing its reporting nodes (issue 1049), never one row
