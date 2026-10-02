@@ -1,16 +1,18 @@
 {
   "version": 1,
-  "base_sha": "df18123e7da3b682eed811c0e01c94a44dc2c29c",
-  "verified_at": "2026-10-02T16:36:02.327983Z",
+  "base_sha": "ad7f7a1063d45e26f77faf35bacbca6877f41cac",
+  "verified_at": "2026-10-02T18:37:50.309899Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts"
+    "frontend-modern/src/components/shared/historyChartModel.ts",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts": "035614af7ddee52c5ee56099b4f447b0137afd9dccf07be9981d44a486eb19a4"
+    "frontend-modern/src/components/shared/historyChartModel.ts": "c96437081022b073dca0c730a8617954987f712ee84e058c6078ae3cad05f162",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "38af5f416fb95874e708b08d66fdbcf27b85660840e0096cb1dd24d9bc744991"
   },
   "routes": [
-    "/browser-tests/disk-temperature.html"
+    "/browser-tests/history-sparse.html"
   ],
   "viewports": [
     {
@@ -23,28 +25,37 @@
     }
   ],
   "states": [
-    "Temperature without extended SMART; critical temperature; Fahrenheit; absent temperature; full SMART snapshot",
-    "Chromium desktop light and WebKit phone dark: 10 final states, no page errors or horizontal overflow; synthetic inputs, not native collection"
+    "Single stored 42% before inspection, pointer inspection, measured zero, multiple observations, successful empty response, restored singleton",
+    "Desktop Chromium light and phone WebKit dark-class presentation; 12 observations, no page errors or horizontal overflow"
   ],
   "interactions": [
-    "Same-identity snapshot replacement and reactive temperature-unit changes",
-    "Parent Chromium and WebKit reproduce hidden 42 C; representative desktop and all five phone final screenshots inspected"
+    "Pointer at three plot positions resolves to the real singleton timestamp; no mouse live announcements",
+    "Tab, Home/End, Left/Right, Escape and focus exit; matching API refreshes across sparse, populated and empty results",
+    "Both actual predecessor engines reproduce zero series pixels and missing pointer tooltip. Parent phone and final phone singleton/tooltip/zero/empty plus final desktop multi screenshots inspected."
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/disk-temperature.cjs",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/history-sparse.cjs",
   "browser_versions": {
     "playwright": "1.56.1",
     "chromium": "141.0.7390.37",
     "webkit": "26.0"
   },
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-ebfg3k6d/browser/result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-ebfg3k6d/browser/parent.json",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-ebfg3k6d/browser/parent-chromium-temperature-hidden.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-ebfg3k6d/browser/chromium-temperature-only.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-ebfg3k6d/browser/webkit-temperature-only.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-ebfg3k6d/browser/webkit-hot.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-ebfg3k6d/browser/webkit-fahrenheit.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-ebfg3k6d/browser/webkit-missing.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-ebfg3k6d/browser/webkit-extended.png"
-  ]
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/parent.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/parent-chromium-single.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/parent-webkit-single.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/chromium-single.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/chromium-pointer.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/chromium-zero.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/chromium-multiple.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/chromium-empty.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/chromium-recovered-single.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/webkit-single.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/webkit-pointer.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/webkit-zero.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/webkit-multiple.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/webkit-empty.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-i9rj2yde/browser/webkit-recovered-single.png"
+  ],
+  "limitations": "Synthetic samples, not native PBS/TrueNAS collection, assistive-device testing or whole-application theme-transition acceptance."
 }
