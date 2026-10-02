@@ -790,6 +790,13 @@ dense platform table rendering must use `PlatformTableRelativeTimeValue` /
 `formatPlatformTableRelativeTimeValue` for relative labels, compact defaults,
 invalid/empty markers, and tabular styling instead of importing
 `formatRelativeTime` or declaring local timestamp-age helpers in table files.
+Kubernetes controller Detail timestamps (Job completion and start, CronJob
+last success and last schedule) are relative-age values under that rule:
+`KubernetesControllersTable` renders them as a labelled age through
+`formatPlatformTableRelativeTimeValue` with the absolute
+`formatPlatformTableDateTimeValue` time as hover title, never as the raw RFC
+3339 string the agent reports, and the Detail column carries enough weight
+for those labelled ages to fit whole on a full-width desktop table.
 Duration and interval cells keep the same split: unified-resource or
 source-specific consumers own which elapsed duration, human fallback, or poll
 interval field is meaningful, while dense platform table rendering must use
