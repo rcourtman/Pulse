@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "base_sha": "65a36dd4e7a83e682b9dadc4bb624d79fcb10546",
-  "verified_at": "2026-10-02T15:52:23.739120+00:00",
+  "base_sha": "c6edeee869a11f9206390e855fc63da744fb394a",
+  "verified_at": "2026-10-02T15:53:54.725571Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/components/shared/HistoryChart.tsx",

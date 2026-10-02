@@ -5283,7 +5283,8 @@ describe('shared primitive guardrails', () => {
     expect(historyChartHeaderSource).not.toContain('ChartsAPI.getMetricsHistory');
     expect(historyChartHeaderSource).not.toContain('setupCanvasDPR');
 
-    expect(historyChartOverlaySource).toContain('Collecting data... History will appear here.');
+    expect(historyChartOverlaySource).toContain('No history samples in this time range.');
+    expect(historyChartOverlaySource).not.toContain('History will appear here.');
     expect(historyChartOverlaySource).toContain(
       'Historical data beyond {props.chart.lockDays()} days requires a higher license plan.',
     );
