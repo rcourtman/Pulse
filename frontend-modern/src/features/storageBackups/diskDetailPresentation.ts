@@ -82,8 +82,8 @@ export function getDiskDetailAttributeCards(
   disk: PhysicalDiskPresentationData,
   diskTempThresholds?: MetricDisplayThresholds | null,
 ): DiskDetailAttributeCard[] {
-  const attrs = disk.smartAttributes;
-  if (!attrs) return [];
+  // Temperature is reported independently of optional extended SMART attributes.
+  const attrs = disk.smartAttributes ?? {};
 
   const cards: DiskDetailAttributeCard[] = [];
   const isNvme = disk.type?.toLowerCase() === 'nvme';
@@ -96,7 +96,7 @@ export function getDiskDetailAttributeCards(
     });
   }
 
-  if (disk.temperature > 0) {
+  if (Number.isFinite(disk.temperature) && disk.temperature > 0) {
     cards.push({
       label: 'Temperature',
       value: formatTemperature(disk.temperature),

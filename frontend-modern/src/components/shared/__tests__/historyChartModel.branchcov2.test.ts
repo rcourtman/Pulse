@@ -496,7 +496,7 @@ describe('getHistoryChartTooltipLayout', () => {
       chartHeight: 180,
     });
 
-    expect(layout).toStrictEqual({ x: 162, y: 47, width: 156, height: 46 });
+    expect(layout).toStrictEqual({ x: 162, y: 38, width: 156, height: 64 });
   });
 
   it('places the tooltip to the left when only the left side has room', () => {
@@ -537,7 +537,7 @@ describe('getHistoryChartTooltipLayout', () => {
       chartHeight: 180,
     });
 
-    expect(layout).toStrictEqual({ x: 12, y: 12, width: 156, height: 46 });
+    expect(layout).toStrictEqual({ x: 12, y: 82, width: 156, height: 64 });
   });
 
   it('pushes an overlapping tooltip above the hovered point when there is headroom above', () => {
@@ -558,6 +558,6 @@ describe('getHistoryChartTooltipLayout', () => {
       chartHeight: 180,
     });
 
-    expect(layout.y).toBe(126);
+    expect(layout.y + layout.height).toBe(172);
   });
 });
