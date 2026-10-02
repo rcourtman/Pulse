@@ -723,6 +723,14 @@ installer download and the agent's subsequent Pulse TLS connection.
 
 ## Shared Boundaries
 
+The shared monitor constructor also composes notification bootstrap: it loads
+saved alert policy and destinations, binds the alert owner's immutable
+quiet-hours policy provider, then activates persistent queue delivery.
+This ordering is notifications/alerts-owned and must not change agent enrollment
+or transport. `internal/monitoring/monitor_notification_startup_test.go` checks
+the actual constructor and reconstruction, including holding due persisted
+notifications under a saved continuous schedule without provider attempts.
+
 - Local administrator setup synchronises the router authorizer before returning a browser session, so API Access remains available to manage agent credentials. This changes neither agent token scopes nor command-policy intent, and must not grant an unrelated identity access to credential management.
 
 ### Notification recovery reload ownership

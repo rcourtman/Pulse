@@ -377,70 +377,66 @@ func isSupportedInfrastructureSymptom(alert *Alert) bool {
 		strings.TrimSpace(alert.Correlation.PrimaryAlertID) != ""
 }
 
-// isInQuietHours checks if the current time is within quiet hours
-func (m *Manager) isInQuietHours() bool {
-	if !m.config.Schedule.QuietHours.Enabled {
-		return false
-	}
+// quietHoursClock compares civil clock minutes, not date-constructed instants.
+// time.Date chooses only one side of a repeated hour and normalizes missing
+// minutes to a different hour, neither of which is the user's daily schedule.
+type quietHoursClock struct {
+	location *time.Location
+	start    int
+	end      int
+	days     [7]bool
+}
 
-	// Use cached location if available
+func (m *Manager) quietHoursClock() (quietHoursClock, bool) {
+	quiet := m.config.Schedule.QuietHours
+	if !quiet.Enabled {
+		return quietHoursClock{}, false
+	}
 	loc := m.quietHoursLoc
 	if loc == nil {
-		// Fallback to loading if not cached yet (shouldn't happen with UpdateConfig)
 		var err error
-		loc, err = time.LoadLocation(m.config.Schedule.QuietHours.Timezone)
+		loc, err = time.LoadLocation(quiet.Timezone)
 		if err != nil {
-			log.Warn().Err(err).Str("timezone", m.config.Schedule.QuietHours.Timezone).Msg("failed to load timezone, using local time")
+			log.Warn().Err(err).Str("timezone", quiet.Timezone).Msg("failed to load timezone, using local time")
 			loc = time.Local
 		}
-		m.quietHoursLoc = loc
+		// Do not populate the cache here: public suppression helpers can call
+		// this path while holding only a read lock. UpdateConfig owns the cache.
 	}
-
-	nowFn := m.now
-	if nowFn == nil {
-		nowFn = time.Now
-	}
-	now := nowFn().In(loc).Truncate(time.Minute)
-	dayName := strings.ToLower(now.Format("Monday"))
-
-	// Check if today is enabled for quiet hours
-	if enabled, ok := m.config.Schedule.QuietHours.Days[dayName]; !ok || !enabled {
-		return false
-	}
-
-	// Parse start and end times
-	startTime, err := time.ParseInLocation("15:04", m.config.Schedule.QuietHours.Start, loc)
+	start, err := time.Parse("15:04", quiet.Start)
 	if err != nil {
-		log.Warn().Err(err).Str("start", m.config.Schedule.QuietHours.Start).Msg("failed to parse quiet hours start time")
-		return false
+		log.Warn().Err(err).Str("start", quiet.Start).Msg("failed to parse quiet hours start time")
+		return quietHoursClock{}, false
 	}
-
-	endTime, err := time.ParseInLocation("15:04", m.config.Schedule.QuietHours.End, loc)
+	end, err := time.Parse("15:04", quiet.End)
 	if err != nil {
-		log.Warn().Err(err).Str("end", m.config.Schedule.QuietHours.End).Msg("failed to parse quiet hours end time")
+		log.Warn().Err(err).Str("end", quiet.End).Msg("failed to parse quiet hours end time")
+		return quietHoursClock{}, false
+	}
+	clock := quietHoursClock{location: loc, start: start.Hour()*60 + start.Minute(), end: end.Hour()*60 + end.Minute()}
+	for i, day := range [...]string{"sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"} {
+		clock.days[i] = quiet.Days[day]
+	}
+	return clock, true
+}
+
+func (clock quietHoursClock) contains(at time.Time) bool {
+	local := at.In(clock.location)
+	if !clock.days[local.Weekday()] {
 		return false
 	}
-
-	// Set to today's date
-	startTime = time.Date(now.Year(), now.Month(), now.Day(), startTime.Hour(), startTime.Minute(), 0, 0, loc)
-	endTime = time.Date(now.Year(), now.Month(), now.Day(), endTime.Hour(), endTime.Minute(), 0, 0, loc)
-
-	// Quiet hours are configured with minute precision, so treat the start and
-	// end minute as inclusive for user-facing schedules such as 00:00-23:59.
-	endExclusive := endTime.Add(time.Minute)
-
-	// Handle overnight quiet hours (e.g., 22:00 to 08:00)
-	if endTime.Before(startTime) {
-		if !now.Before(startTime) || now.Before(endExclusive) {
-			return true
-		}
-	} else {
-		if !now.Before(startTime) && now.Before(endExclusive) {
-			return true
-		}
+	minute := local.Hour()*60 + local.Minute()
+	if clock.start > clock.end {
+		return minute >= clock.start || minute <= clock.end
 	}
+	return minute >= clock.start && minute <= clock.end
+}
 
-	return false
+// isInQuietHours checks the selected local calendar day and includes the whole
+// configured end minute, including both copies of it during a clock rollback.
+func (m *Manager) isInQuietHours() bool {
+	clock, valid := m.quietHoursClock()
+	return valid && clock.contains(m.policyNow())
 }
 
 func quietHoursCategoryForAlert(alert *Alert) string {
@@ -488,6 +484,14 @@ func (m *Manager) shouldSuppressNotification(alert *Alert) (bool, string) {
 		return false, ""
 	}
 
+	return quietHoursSuppressionForAlert(alert, m.config.Schedule.QuietHours.Suppress)
+}
+
+func quietHoursSuppressionForAlert(alert *Alert, suppress QuietHoursSuppression) (bool, string) {
+	if alert == nil {
+		return false, ""
+	}
+
 	if alert.Level != AlertLevelCritical {
 		return true, "non-critical"
 	}
@@ -495,15 +499,15 @@ func (m *Manager) shouldSuppressNotification(alert *Alert) (bool, string) {
 	category := quietHoursCategoryForAlert(alert)
 	switch category {
 	case "performance":
-		if m.config.Schedule.QuietHours.Suppress.Performance {
+		if suppress.Performance {
 			return true, category
 		}
 	case "storage":
-		if m.config.Schedule.QuietHours.Suppress.Storage {
+		if suppress.Storage {
 			return true, category
 		}
 	case "offline":
-		if m.config.Schedule.QuietHours.Suppress.Offline {
+		if suppress.Offline {
 			return true, category
 		}
 	}
@@ -512,41 +516,71 @@ func (m *Manager) shouldSuppressNotification(alert *Alert) (bool, string) {
 }
 
 func (m *Manager) quietHoursReplayAt() time.Time {
-	nowFn := m.now
-	if nowFn == nil {
-		nowFn = time.Now
+	now := m.policyNow()
+	clock, valid := m.quietHoursClock()
+	if !valid {
+		return now.Add(time.Minute).UTC()
 	}
-	now := nowFn()
+	return clock.replayAt(now)
+}
 
-	loc := m.quietHoursLoc
-	if loc == nil {
-		var err error
-		loc, err = time.LoadLocation(m.config.Schedule.QuietHours.Timezone)
-		if err != nil {
-			log.Warn().Err(err).Str("timezone", m.config.Schedule.QuietHours.Timezone).Msg("failed to load timezone for quiet-hours replay, using local time")
-			loc = time.Local
+// QuietHoursNotificationPolicy returns an immutable snapshot of the current
+// quiet-hours rule. The delivery owner obtains it before taking queue or
+// per-alert delivery locks, so evaluation never calls back into this manager
+// while cancellation is waiting for those locks. It does not mutate alert
+// lifecycle, acknowledgement, metadata or destination selection.
+func (m *Manager) QuietHoursNotificationPolicy() func(*Alert, time.Time) *time.Time {
+	m.mu.RLock()
+	clock, valid := m.quietHoursClock()
+	suppress := m.config.Schedule.QuietHours.Suppress
+	m.mu.RUnlock()
+	return func(alert *Alert, now time.Time) *time.Time {
+		if !valid || !clock.contains(now) {
+			return nil
 		}
-		m.quietHoursLoc = loc
+		if suppressed, _ := quietHoursSuppressionForAlert(alert, suppress); !suppressed {
+			return nil
+		}
+		replayAt := clock.replayAt(now)
+		return &replayAt
 	}
+}
 
-	localNow := now.In(loc).Truncate(time.Minute)
-	startTime, startErr := time.ParseInLocation("15:04", m.config.Schedule.QuietHours.Start, loc)
-	endTime, endErr := time.ParseInLocation("15:04", m.config.Schedule.QuietHours.End, loc)
-	if startErr != nil || endErr != nil {
+func (clock quietHoursClock) replayAt(now time.Time) time.Time {
+	if !clock.contains(now) {
 		return now.Add(time.Minute).UTC()
 	}
 
-	startTime = time.Date(localNow.Year(), localNow.Month(), localNow.Day(), startTime.Hour(), startTime.Minute(), 0, 0, loc)
-	endTime = time.Date(localNow.Year(), localNow.Month(), localNow.Day(), endTime.Hour(), endTime.Minute(), 0, 0, loc)
-	endExclusive := endTime.Add(time.Minute)
-	if endTime.Before(startTime) && !localNow.Before(startTime) {
-		endExclusive = endExclusive.AddDate(0, 0, 1)
-	}
-
-	if !endExclusive.After(localNow) {
+	// A full-day window has no non-quiet clock minute. Preserve its existing
+	// daily revalidation boundary. The queue must check policy again there,
+	// not invent an end to a continuous schedule or attempt a provider send.
+	if (clock.end-clock.start+24*60)%(24*60) == 24*60-1 {
+		local := now.In(clock.location)
+		endExclusive := time.Date(local.Year(), local.Month(), local.Day(), clock.end/60, clock.end%60, 0, 0, clock.location).Add(time.Minute)
+		if clock.start > clock.end && local.Hour()*60+local.Minute() >= clock.start {
+			endExclusive = endExclusive.AddDate(0, 0, 1)
+		}
+		if endExclusive.After(now) {
+			return endExclusive.UTC()
+		}
 		return now.Add(time.Minute).UTC()
 	}
-	return endExclusive.UTC()
+
+	// Walk real minutes through the current window, rather than constructing
+	// its end on a local date. This handles repeated ends, skipped ends, half-
+	// hour DST transitions and a midnight leading into an unselected day. A
+	// non-full-day window has an exit within three real days even when a
+	// forward clock change skips its entire gap on the first day.
+	candidate := now.Truncate(time.Minute).Add(time.Minute)
+	limit := candidate.Add(72 * time.Hour)
+	for candidate.Before(limit) {
+		if !clock.contains(candidate) {
+			return candidate.UTC()
+		}
+		candidate = candidate.Add(time.Minute)
+	}
+	log.Warn().Msg("could not find quiet-hours window end within three days")
+	return now.Add(time.Minute).UTC()
 }
 
 func markQuietHoursNotificationReplay(alert *Alert, reason string, replayAt time.Time) {
