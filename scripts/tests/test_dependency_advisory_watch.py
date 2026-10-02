@@ -180,6 +180,11 @@ class WorkflowContractTest(unittest.TestCase):
         self.assertNotIn("npm install", self.text)
         self.assertNotIn("actions/cache", self.text)
         self.assertNotRegex(self.text, r"(?m)^\s+cache(-dependency-path)?:")
+        # setup-node turns npm caching on automatically when package.json
+        # declares packageManager, so the absence of `cache:` is not enough.
+        setup_node = [step for step in audit if str(step.get("uses", "")).startswith("actions/setup-node@")]
+        self.assertEqual(1, len(setup_node))
+        self.assertIs(False, setup_node[0].get("with", {}).get("package-manager-cache"))
 
     def test_audit_matches_the_required_build_and_test_audit(self) -> None:
         build = yaml.safe_load(BUILD_AND_TEST.read_text(encoding="utf-8"))
