@@ -1,31 +1,31 @@
 {
   "version": 1,
-  "base_sha": "e5d0843851a3837a90d71afaced3a009c0606bbf",
-  "verified_at": "2026-10-02T20:33:38Z",
+  "base_sha": "e33c6be1effb7fc5e094a6e23cbb1f440a7939fe",
+  "verified_at": "2026-10-02T21:46:19Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxCephClusterDrawer.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"
+    "frontend-modern/src/components/Storage/DiskList.tsx",
+    "frontend-modern/src/components/Storage/EnhancedStorageBar.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx",
+    "frontend-modern/src/components/Storage/useEnhancedStorageBarModel.ts",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts",
+    "frontend-modern/src/features/storageBackups/rowPresentation.ts",
+    "frontend-modern/src/features/storageBackups/storageBarPresentation.ts",
+    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxCephClusterDrawer.tsx": "9e828c5dde7d4cb461d7c936edb8f14f1c667eaa488a81802d14014aaf0ead6e",
-    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx": "ea2b08b041148b12e0aee0afc652a43ab2f4bb937820ec513edfea36a043305d",
-    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "bd5d7b7838852b23c5561c3e722777eb24d4e3324de863eb380c080a5796f2c8",
-    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx": "0d0ed89d9d2dd164638dadd9f233d308d1cc52616fa2c5be4402c31659403a1d",
-    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "e9fe8c62cdad1f7759f5215044b30c086a3e37ebd50b83cb3f6c64a5c5d58feb",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "39b479e996c89716c095ea8cae7ecccc397989af3e3a0a83ec5c4c228a75e8b5",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "f4768c045d61983799c04245ba8bb2df7fc8da4af5a6f7d88f2968d7d1624c95"
+    "frontend-modern/src/components/Storage/DiskList.tsx": "d2ab3a7fe7eb31a5a79b8b8252906bb52bf09869e572a2d3b160570dffec7e49",
+    "frontend-modern/src/components/Storage/EnhancedStorageBar.tsx": "ed72a33e754e96ebd03374c34f9732b02411cd9055667f4e0051d6f7e66ab653",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx": "7b61e9fac5e3a9fbae831a3cf907a71f1be7158f06bfe7a9fe7d16fce7a2c928",
+    "frontend-modern/src/components/Storage/useEnhancedStorageBarModel.ts": "d03daecfe22ede32e46edc74a20e4ac11d732d4f9ca202c0b6f36c22a590aa44",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts": "d98159680411d0b1d27a62e84c92db3d9152b93c1f3652443bdac1a222fcce3c",
+    "frontend-modern/src/features/storageBackups/rowPresentation.ts": "0d5d6c00f7f6b39900442330c2c843be9b5e487db4ecd201387a20d6f9bd6980",
+    "frontend-modern/src/features/storageBackups/storageBarPresentation.ts": "562eac2212378e98823717f712c791133cebf1f44bd71c75c7db097b244f6cc0",
+    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts": "1c85d5b6049975be2c0320aee0144098590250a0a8d92a51616e43b00c9a0227"
   },
   "routes": [
-    "/proxmox/replication",
-    "/proxmox/backups",
-    "/proxmox/ceph",
-    "/proxmox/mail"
+    "/proxmox/storage",
+    "/proxmox"
   ],
   "viewports": [
     {
@@ -34,37 +34,50 @@
     },
     {
       "width": 1280,
-      "height": 900
-    },
-    {
-      "width": 1100,
-      "height": 900
+      "height": 800
     },
     {
       "width": 900,
-      "height": 900
+      "height": 844
     },
     {
       "width": 700,
-      "height": 900
+      "height": 844
+    },
+    {
+      "width": 600,
+      "height": 844
+    },
+    {
+      "width": 560,
+      "height": 844
+    },
+    {
+      "width": 420,
+      "height": 844
     },
     {
       "width": 390,
       "height": 844
+    },
+    {
+      "width": 360,
+      "height": 844
     }
   ],
   "states": [
-    "Mock estate (5 PVE nodes, 8 replication jobs with 2 failed, 3 PBS datastores, 69 backup targets, 1 Ceph cluster, 2 Mail Gateways), dark theme, Chromium",
-    "Replication: failed and healthy rows collapsed and expanded at full, expanded, operational, basic and compact container layouts",
-    "Backups: Coverage and By date views, protected, attention, unprotected and unknown rows, empty evidence cells",
-    "Ceph: single auto-opened cluster with pools and services, pool table in the half-width card and the phone card",
-    "Mail Gateway: healthy and degraded instances at every container layout"
+    "Proxmox Storage tab, pools table in compact (390/420/560), narrow (360), operational (600/700/900) and full (1280/1440) container layouts with mock data including Online, Degraded and resilvering ZFS pools",
+    "Pools table with the first pool row expanded (StoragePoolDetail drawer) at 390 and 1280",
+    "Physical Disks sub-tab in narrow (360/390), compact (420/560) and full (1280/1440) layouts with Healthy, Unknown and Needs Attention disks",
+    "Physical Disks table with the first disk row expanded (DiskDetail drawer) at 390 and 1280",
+    "Proxmox overview host row expanded at 1280 to confirm no nested storage table renders in the host drawer"
   ],
   "interactions": [
-    "Expanded a failed replication job by its disclosure button at 1440px and by row tap at 390px; the detail shows the whole error and the full job record",
-    "Switched Backups between Coverage and By date; sortable headers render uppercase beside the plain ones",
-    "Measured every table cell and header for clipped text (scrollWidth over clientWidth) at each viewport; at 1440px all four tabs report none, and no viewport scrolls horizontally",
-    "Compared before and after screenshots: Mail Gateway Version/Spam/Virus/Quarantine and Ceph Services no longer truncate, Ceph phone pool usage reads 50.1% instead of a clipped 0.1%"
-  ],
-  "command": "playwright chromium against a private mock-mode stack built from this commit (backend :7685, vite :5203)"
+    "Switched between the Storage and Physical Disks view tabs",
+    "Clicked pool and disk rows to open and inspect their inline detail drawers",
+    "Ran a Playwright scrollWidth-over-clientWidth sweep over every th/td leaf per viewport: at 390 only the long identity strings remain clipped (two pool names, three disk models); at 1440 only the pre-existing backend-composed protection sentence and the by-design truncating disk health summary remain",
+    "Measured per-column text widths with Range rects and probed candidate compact labels before choosing column weights",
+    "Confirmed the usage bar shows percentage-only below the 34rem container query and the full used/total label above it",
+    "Confirmed Degraded/Faulted ZFS states render titleized and the Needs Attention / Replace Now health words render as Attention / Replace in the phone projection"
+  ]
 }
