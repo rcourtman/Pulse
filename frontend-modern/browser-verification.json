@@ -1,13 +1,17 @@
 {
   "version": 1,
-  "base_sha": "e6540da45da4de4bcb954463373d8ea9f196eb56",
-  "verified_at": "2026-10-02T21:04:53Z",
+  "base_sha": "78796b411c1f37f57b303cae9fab5ddaa13e1121",
+  "verified_at": "2026-10-02T21:38:37Z",
   "result": "passed",
   "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts",
     "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx": "f2d8a72d62d06a89d3a70bd82d63d658ece3ac8acf3a0f688fb751a250d6f057"
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "5356c4527e5bccaf86d1dbcaf808cdbeacfce05c8bd58879ab8f90287db1cca8",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts": "79a9a4414958bbd3034bc145ea5f5b5a1f58a52af4ff8de8b46f18888f5aed51",
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx": "f6f1b090580e4bea0d6496b908f72049c886c4faeee7aca3a3b11e9417c67df7"
   },
   "routes": [
     "/kubernetes"
@@ -31,15 +35,16 @@
     }
   ],
   "states": [
-    "Mock estate (1 Kubernetes cluster, 2 nodes, 6 pods, 2 deployments) with one CronJob carrying lastSuccessfulTime, one completed Job, one DaemonSet and one StatefulSet in the Workload Controllers table, Chromium",
-    "Workload Controllers table at the full desktop layout where the Detail column is shown (1440px) and at container widths where it is hidden (1280, 900, 390px)",
-    "Controller row expanded to its detail disclosure at 390px"
+    "Mock estate (1 Kubernetes cluster, 2 nodes, 6 pods, 2 deployments) with one CronJob carrying lastScheduleTime and lastSuccessfulTime, one completed Job with startTime and completionTime, one DaemonSet and one StatefulSet in the Workload Controllers table, Chromium",
+    "Workload Controllers table at the full desktop layout where Scope and Detail show (1440px), at container widths where they are hidden (1280 and 900px), and at the phone projection (390px) where the row keeps Controller, Kind, Ready and Issues and the Target column is demoted",
+    "Each CronJob, Job, DaemonSet and StatefulSet row expanded to its inline detail at all four widths; the summary tables show Runtime context, the new per-kind controller section and Identity"
   ],
   "interactions": [
-    "Measured every controllers table header and cell for clipped text (scrollWidth over clientWidth) at each viewport; before the change the Detail cells needed 258px in a 119px column, after it the CronJob row reads \"Last success 1h ago\" and the Job row \"Completed 41m ago\" with no clipped element in the column and no horizontal page scroll",
-    "Read the Detail span title attributes: they carry the absolute local time (\"Last success: Oct 2, 2026, 08:51 PM\") instead of the raw RFC 3339 string",
-    "Probed the rendered width of every label the column can produce (Started, Completed, Last success, Last run with ages up to 365d) against the 135px Detail cell at 1440px; all fit whole",
-    "Compared before and after screenshots of the table at 1440px; the StatefulSet service name now truncates with an ellipsis inside the cell instead of being cut by the cell edge"
+    "Measured every controllers table header and cell for clipped text (scrollWidth over clientWidth) at each viewport: at 390px the Kind track is 90px and \"DaemonSet\", \"StatefulSet\" and \"CronJob\" fit whole where the 54px track had clipped them, no Target cell remains to clip \"1 completions\", and only the four long controller names truncate with an ellipsis; no viewport scrolls horizontally",
+    "Expanded each controller row by tapping it and read the new section: the CronJob shows Schedule \"0 2 * * *\", Last run and Last success as \"Oct 2, 2026, 10:25 PM (7m ago)\" style absolute times, Active, Namespace and Cluster; the Job shows Started, Completed, Duration 5m, Target \"1 completion\", Succeeded, Namespace and Cluster; the DaemonSet and StatefulSet show Target, Current, Ready, Available, Updated and the StatefulSet Service name whole",
+    "Measured the expansion for clipped text at each width: the wrapped timestamp values no longer clip at 390px (an earlier single-line \"absolute \u00b7 age\" value needed 169px in a 142px cell), and the only remaining clipped values are the pre-existing Identity IDs and alias badges",
+    "Read the Job row Target at 1440px as \"1 completion\" after the pluralization fix, matching the expansion",
+    "Compared before and after screenshots at 1440 and 390px: the desktop drawer gains a Job or CronJob card between Runtime context and Identity, and the phone row reads Controller, Kind, Ready, Issues with every kind label whole"
   ],
-  "command": "playwright chromium against a private mock-mode stack built from this commit (backend :7693, vite :5213)"
+  "command": "playwright chromium against a private mock-mode stack built from this commit (backend :7697, vite :5217), sweep script in the session scratchpad"
 }
