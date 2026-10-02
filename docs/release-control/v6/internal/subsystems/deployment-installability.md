@@ -6269,7 +6269,9 @@ The second job is a fail-fast-free matrix over those branches. A scheduled job
 runs in the default branch's cache and token scope, so it never checks out,
 installs or runs another branch's code: each entry fetches the audited branch
 and reads only its `frontend-modern/package.json` and `package-lock.json` as
-data with `git show`, uses no dependency cache, and repeats the required
+data with `git show`, uses no dependency cache (its `actions/setup-node` step
+sets `package-manager-cache: false`, because that pin turns npm caching on by
+itself once `package.json` names npm as its `packageManager`), and repeats the required
 build-and-test audit against that lockfile with the same `actions/setup-node`
 pin and Node.js 24 and `scripts/npm-audit-retry.sh all` with
 `NPM_AUDIT_REQUIRE_RESULT=true`. `npm audit` answers from the lockfile, so the
