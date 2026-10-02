@@ -35,7 +35,7 @@ export const HistoryChartOverlay: Component<HistoryChartOverlayProps> = (props) 
                 <path d="M21 21v-5h-5" />
               </svg>
             </div>
-            <p class="text-sm text-slate-500">Collecting data... History will appear here.</p>
+            <p class="text-sm text-slate-500">No history samples in this time range.</p>
           </div>
         </div>
       </Show>
