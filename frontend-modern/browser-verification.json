@@ -1,23 +1,16 @@
 {
   "version": 1,
-  "base_sha": "73ca5f336e4ee3f9b234969f79cd1cee1a52737a",
-  "verified_at": "2026-10-02T16:40:31.728157Z",
+  "base_sha": "a5b531998f80d4bfdd7df06d4b37802e6cc054eb",
+  "verified_at": "2026-10-02T18:07:50Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/HistoryChart.tsx",
-    "frontend-modern/src/components/shared/HistoryChartOverlay.tsx",
-    "frontend-modern/src/components/shared/historyChartModel.ts",
-    "frontend-modern/src/components/shared/useHistoryChartState.ts"
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/HistoryChart.tsx": "a2ab0198a705e66ce9bea222066078709c8334fc342415916b8c179987b139e2",
-    "frontend-modern/src/components/shared/HistoryChartOverlay.tsx": "4192731461a19ba7c33185c2e616c5023dfef58d93e3893cd3c4fceb58598391",
-    "frontend-modern/src/components/shared/historyChartModel.ts": "bd9e8954ef7e274a1eb026752d304556df303f612c4485369f8c90a7183cc751",
-    "frontend-modern/src/components/shared/useHistoryChartState.ts": "8bebaa331f1e2dfc57587f517628bed1b0c4f7d9c9466e21597e7f9f7a4d7137"
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts": "035614af7ddee52c5ee56099b4f447b0137afd9dccf07be9981d44a486eb19a4"
   },
   "routes": [
-    "/browser-tests/history-keyboard.html",
-    "/browser-tests/history-status.html"
+    "/browser-tests/disk-temperature.html"
   ],
   "viewports": [
     {
@@ -30,24 +23,20 @@
     }
   ],
   "states": [
-    "Empty successful result, loaded readings, failed refresh, pending recovery, recovered empty result, failed refresh of empty result, changed-target loading and initial failure",
-    "Chromium desktop light and WebKit phone dark; screenshots inspected, no horizontal overflow or page errors; synthetic transport, not native collection",
-    "Keyboard focus, Left/Right, Home/End, Escape, bounds, focus exit and empty data; grouped tooltip geometry and polite active-chart-only announcements"
+    "Reported temperature without optional extended SMART attributes",
+    "Hot replacement reading with configured severity",
+    "Fahrenheit display of hot reading",
+    "Missing reading with accessible unavailable-details status",
+    "Extended SMART counters restored without invented absent values"
   ],
   "interactions": [
-    "Advance polling clock without altering production timers; fail and recover HTTP responses; switch pool target",
-    "Parent control reproduces misleading empty promise and silent failed refresh; final warning retains data and clears only on recovery or selection replacement"
+    "Click Hot reading, Fahrenheit, No reading and Extended SMART synthetic snapshot controls; inspect production DiskDetail Overview on Chromium and WebKit",
+    "Confirm 42 C then 65 C then 149 F, severity classes, counter absence/presence, no horizontal overflow or uncaught page errors",
+    "Inspect all ten retained screenshots; exact predecessor-helper controls reproduce hidden 42 C on both viewports"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/history-keyboard.cjs && pulse-worker-browser frontend-modern/browser-tests/history-status.cjs",
-  "browser_versions": {
-    "playwright": "1.56.1",
-    "chromium": "141.0.7390.37",
-    "webkit": "26.0"
-  },
-  "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-3t375h3z/keyboard64-parent.json",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-3t375h3z/keyboard64-result.json",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-3t375h3z/status64-parent.json",
-    "/var/lib/pulse-maintainer/worker-outputs/release-line-3t375h3z/status64-result.json"
+  "playwright": "1.56.1",
+  "browser_versions": [
+    "chromium 141.0.7390.37",
+    "webkit 26.0"
   ]
 }
