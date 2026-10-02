@@ -66,6 +66,43 @@ precede marker production. Legacy reports without the marker retain the
 existing default policy; matched agent and server support is required.
 This proves ingestion behaviour, not reporter installation or release delivery.
 
+### TrueNAS RPC operation budgets and poll isolation
+
+The configured client timeout (30 seconds by default) bounds each serialized
+RPC operation, including its session-lock wait, any inline authentication,
+method exchange or subscription, and the permitted read retry/backoff. They
+share one budget; initial transport negotiation before a method is separately
+bounded by the same timeout. A shorter caller deadline remains effective. A cancelled
+waiter neither dispatches a request nor alters the current owner's socket or
+transport status. RPC/stream readers receive the bounded context, and a
+timed-out socket is discarded before a subsequent operation authenticates a
+fresh session. Modern appliances never downgrade to REST on timeout, and an
+action timeout after dispatch retains its unknown outcome without replay.
+Keepalive still belongs to the session, not any completed operation's context.
+
+Optional live-telemetry timeouts do not prevent otherwise usable inventory;
+unobserved metrics remain unavailable. A required-method timeout returns a
+truthful failure, preserves the prior successful observation/cached identity,
+and lets the shared poll cycle continue to other connections. Socket deadline
+errors are classified as timeout, not credential or generic connection failures.
+The next normal poll can recover; completion-based failure backoff is unchanged.
+This is an operation budget, not a new total-snapshot deadline or parallel poller.
+The app-log idle window still yields a bounded tail; an earlier caller/operation
+deadline is an error rather than a successful empty log response.
+
+`TestJSONRPCConfiguredTimeout*`,
+`TestJSONRPCWaitingDeadlineDoesNotInterruptSessionOwner`,
+`TestJSONRPCPreCancelledCallDoesNotDispatch` and
+`TestJSONRPCSnapshotContinuesAfterTelemetryTimeout` in
+`internal/truenas/transport_test.go` cover silent handshake/authentication,
+read/retry budgets, all three stream readers, queued cancellation, caller
+deadlines, recovery and action no-replay.
+`TestTrueNASPollerUnresponsiveRPCDoesNotFreezeOtherConnections` and
+`TestClassifyTrueNASError` in `internal/monitoring/truenas_poller_test.go`
+cover actual TLS/RPC clients through two successful/failed/recovered poll cycles,
+cached identities, truthful health and unchanged backoff. These are controlled
+runtime proofs, not native SCALE acceptance or a diagnosis/resolution of #2382.
+
 ### TrueNAS persistent-session liveness and successful poll cadence
 
 Authenticated JSON-RPC WebSocket sessions send transport-only PING controls
