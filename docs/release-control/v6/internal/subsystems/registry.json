@@ -6162,6 +6162,7 @@
               "internal/truenas/disk_health.go",
               "internal/truenas/fixtures.go",
               "internal/truenas/provider.go",
+              "internal/truenas/subscription.go",
               "internal/truenas/telemetry.go",
               "internal/truenas/testdata/core13_reporting.json",
               "internal/truenas/transport.go",

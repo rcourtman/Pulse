@@ -17,6 +17,32 @@
 
 ## Purpose
 
+### Exact TrueNAS subscription termination — issue #2396
+
+JSON-RPC stream readers and the subscription-acknowledgement wait recognise
+`notify_unsubscribed` only for the exact requested collection, including its
+arguments. An unrelated interval or event source cannot reject the current
+subscription. A matching rejection ends the operation promptly, discards the
+stream session and is not retried or downgraded to REST. A subsequent ordinary
+read may authenticate a fresh session within the existing operation budget.
+The notification uses middleware errno fields, not a JSON-RPC response error;
+only its numeric errno and a fixed message survive, never provider reason,
+trace, extra fields or private collection arguments. Malformed termination
+cannot leave a stream reusable. A clean end without telemetry remains
+unavailable, not a zero sample; a clean log end returns the bounded collected
+tail and retains the socket without cancelling an already-ended subscription.
+
+`TestJSONRPCSubscriptionTerminationRejectsWithoutWaitingOrRetry` covers all
+three readers before/after acknowledgement, cleanup, confidentiality and fresh
+read recovery. The adjacent termination controls pin exact-collection
+isolation, malformed events, absent samples and clean log completion.
+`TestTrueNASPollerSubscriptionRejectionKeepsPollingAndRecovers` exercises
+three connected protocol/poller snapshots: usable inventory and poll-ledger
+progress during rejected nonempty Apps enrichment, native alert disappearance,
+then ordinary stats recovery with stable identity. These are source controls
+using the reporter's source-derived envelope, not a retained wire capture,
+native appliance/incident acceptance or release availability.
+
 ### RAID count provenance across ingestion — issue #2369
 
 Agent ingestion, host snapshots and canonical read-state projection retain
