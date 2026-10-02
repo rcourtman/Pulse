@@ -20,6 +20,23 @@
 
 ## Purpose
 
+### Successful agent-config audit information — issue #2320
+
+`/api/agents/agent/{id}/config` still signs, scopes and delivers the same config.
+Every failed fetch is audited. A successful fetch is new audit information
+only on first delivery after startup, a different token or desired-config hash,
+or 24 hours after the last audited success. Recorded successes include
+`config=<desiredConfig hash>` and
+`reason=first_since_start|token_changed|config_changed|daily`. Tracking is
+isolated by organization and agent; a nil tracker audits every success.
+Existing security log rows age under retention, never deletion by this repair.
+`TestAgentConfigFetchAuditsNewDeliveriesAndEveryFailure` and
+`TestAgentConfigFetchAuditTrackerRecordsOnlyNewDeliveries` verify runtime
+scope failures and the per-agent/organization/token/config/daily decisions.
+The additional day/restart/concurrency control compares 1,440 unchanged polls
+with one audit event. This is source proof, not a natural installed day.
+
+
 ### Ollama credential lifecycle
 Settings return only `ollama_username` and `ollama_password_set`, never the
 password. An omitted password preserves it, a supplied password replaces it
