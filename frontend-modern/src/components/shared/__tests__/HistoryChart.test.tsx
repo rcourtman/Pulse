@@ -231,6 +231,46 @@ describe('HistoryChart', () => {
     expect(screen.queryByText('Min')).not.toBeInTheDocument();
   });
 
+  it('exposes a stored singleton to pointer inspection without treating a later empty response as zero', async () => {
+    const request = vi.mocked(ChartsAPI.getMetricsHistory);
+    request.mockResolvedValueOnce({
+      points: [{ timestamp: 1000, value: 42, min: 42, max: 42 }],
+      source: 'store',
+    } as never);
+    const [target, setTarget] = createSignal('pool-a');
+    const { container } = render(() => (
+      <HistoryChart
+        resourceType="storage"
+        resourceId={target()}
+        metric="usage"
+        unit="%"
+        range="1h"
+      />
+    ));
+    const chart = screen.getByRole('img', { name: 'History chart' });
+    const description = document.getElementById(chart.getAttribute('aria-describedby')!)!;
+    const rectSpy = vi.spyOn(chart, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 300,
+      bottom: 200,
+      width: 300,
+      height: 200,
+      toJSON: () => ({}),
+    });
+    await waitFor(() => expect(description).toHaveTextContent('1 data point'));
+    fireEvent.mouseMove(chart, { clientX: 175 });
+    expect(container.querySelector('[data-history-chart-tooltip]')).toHaveTextContent('42.0%');
+    request.mockResolvedValueOnce({ points: [], source: 'store' } as never);
+    setTarget('pool-b');
+    await waitFor(() => expect(description).toHaveTextContent('No 1-hour history'));
+    expect(description).not.toHaveTextContent('0.0%');
+    expect(container.querySelector('[data-history-chart-tooltip]')).toBeNull();
+    rectSpy.mockRestore();
+  });
+
   it('synchronizes the hovered timestamp across charts in the same group', () => {
     const rectSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect').mockReturnValue({
       x: 0,

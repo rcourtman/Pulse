@@ -7713,3 +7713,19 @@ remain separate errors. No polling frequency, request or access policy changes.
 and selection changes; `browser-tests/history-status.cjs` checks actual chart
 states in desktop Chromium and phone WebKit with synthetic transport failures.
 These checks do not establish native collection or released availability.
+
+### Shared History single observations
+
+A single stored observation renders as a visible centred marker with one real
+timestamp label, including measured zero. It must not imply a trend or invent
+a duration. Pointer and keyboard inspection resolve to that actual observation;
+ordinary multi-observation interpolation and empty-result states are unchanged.
+The geometry's inverse timestamp mapping is shared by pointer inspection.
+
+`HistoryChart.sparse.test.tsx` and `historyChartModel.branchcov2.test.ts` cover
+marker geometry, one timestamp label, pointer bounds, keyboard inspection and
+single/zero/multiple/empty refreshes. `browser-tests/history-sparse.cjs` checks
+actual series pixels and tooltips in desktop Chromium and phone WebKit, using
+the production chart and API transport with synthetic stored samples. This
+does not establish native collection, whole-report resolution or availability
+in a release. Existing request, source, units and access boundaries are unchanged.
