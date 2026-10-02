@@ -1,16 +1,24 @@
 {
   "version": 1,
-  "base_sha": "e6540da45da4de4bcb954463373d8ea9f196eb56",
-  "verified_at": "2026-10-02T21:04:53Z",
+  "base_sha": "b052d29b19909e8ed2581043426d76bb9d20c2a0",
+  "verified_at": "2026-10-02T22:15:42Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx": "f2d8a72d62d06a89d3a70bd82d63d658ece3ac8acf3a0f688fb751a250d6f057"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "786be66c40d33006edc1eda234df083ee68e0296103882ff108711026dd2ea29",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "075994cbe8d47c47a95747ab4d5181c11666cf6272ec8fbe6026b5567de10dfb",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "f001412aff663f53ed5ae4a64ebcaa381257dbb3c19497221cbebb77ee5fab08",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "dc2f9dcfbd51eb311596ff12a2588a645394e9ab717595a2886b41c89fae5c95"
   },
   "routes": [
-    "/kubernetes"
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/coverage?posture=unprotected",
+    "/proxmox/backups/date"
   ],
   "viewports": [
     {
@@ -18,11 +26,7 @@
       "height": 900
     },
     {
-      "width": 1280,
-      "height": 900
-    },
-    {
-      "width": 900,
+      "width": 560,
       "height": 900
     },
     {
@@ -31,15 +35,15 @@
     }
   ],
   "states": [
-    "Mock estate (1 Kubernetes cluster, 2 nodes, 6 pods, 2 deployments) with one CronJob carrying lastSuccessfulTime, one completed Job, one DaemonSet and one StatefulSet in the Workload Controllers table, Chromium",
-    "Workload Controllers table at the full desktop layout where the Detail column is shown (1440px) and at container widths where it is hidden (1280, 900, 390px)",
-    "Controller row expanded to its detail disclosure at 390px"
+    "Mock estate: coverage rows whose newest guest snapshot is fresher than their PBS/PVE backup now show the backup age under Last backup instead of the snapshot age",
+    "Snapshot-only rows show None under Last backup with the posture engine's snapshot-only reason as the hover title",
+    "Rows with no artifacts show None with the no-backup title; attention rows with failed tasks keep their backup age",
+    "Phone layout keeps the Age header and the same values; the By date view and Backup Health strip are unchanged"
   ],
   "interactions": [
-    "Measured every controllers table header and cell for clipped text (scrollWidth over clientWidth) at each viewport; before the change the Detail cells needed 258px in a 119px column, after it the CronJob row reads \"Last success 1h ago\" and the Job row \"Completed 41m ago\" with no clipped element in the column and no horizontal page scroll",
-    "Read the Detail span title attributes: they carry the absolute local time (\"Last success: Oct 2, 2026, 08:51 PM\") instead of the raw RFC 3339 string",
-    "Probed the rendered width of every label the column can produce (Started, Completed, Last success, Last run with ages up to 365d) against the 135px Detail cell at 1440px; all fit whole",
-    "Compared before and after screenshots of the table at 1440px; the StatefulSet service name now truncates with an ellipsis inside the cell instead of being cut by the cell edge"
-  ],
-  "command": "playwright chromium against a private mock-mode stack built from this commit (backend :7693, vite :5213)"
+    "Sorted by Last backup at 1440px and by Age at 390px and read the first row",
+    "Read the None cell hover titles for unprotected rows at both widths",
+    "Expanded a coverage row to its restore evidence at both widths",
+    "Read coverage row cells through the DOM at 1440px and compared them with the Posture explanation"
+  ]
 }

@@ -2819,6 +2819,20 @@ transport-induced absence. Preserving this read-only evidence adds no backup,
 restore, retention, or recovery authority. The behavior is pinned by
 `useUnifiedResources.test.ts` and `useWorkloads.test.ts`.
 
+### Coverage rows name the last backup, not the newest restore point
+
+The Proxmox coverage row's `Last backup` cell is the newest completed PBS
+snapshot or PVE backup file. A guest snapshot never fills it: it shares the
+guest's own storage, and the protection posture engine already refuses to count
+snapshots as independent recovery, so a fresh snapshot beside a stale posture
+must not read as a fresh backup. Snapshot-only rows show `None` and carry the
+engine's own reason on hover; the guest snapshot keeps its dedicated column and
+the restore-evidence disclosure. The backup-location filter re-derives that
+pointer from completed, non-snapshot artifacts under the same rule. This is a
+presentation and sort change only; it adds no backup, restore, or retention
+authority. Pinned by `proxmoxBackupRecoveryModel.test.ts` and
+`ProxmoxCoverageTable.test.tsx`.
+
 ### Retained Patrol objectives do not create recovery authority
 
 The shared `internal/api` retained-objective endpoints may scope an outcome to

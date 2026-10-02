@@ -50,6 +50,10 @@ import { useProxmoxBackupTableWindowing } from './useProxmoxBackupTableWindowing
 // "None" instead of restating the source ("No PVE backup file"). The long form
 // truncated at most widths and stays available as the hover title.
 const COVERAGE_EMPTY_LABEL = 'None';
+const COVERAGE_NO_BACKUP_TITLE = 'No PBS snapshot or PVE backup file';
+// Matches the posture engine's own wording for a snapshot-only subject.
+const COVERAGE_SNAPSHOT_ONLY_TITLE =
+  'No PBS snapshot or PVE backup file. Guest snapshots alone do not prove independent recovery.';
 
 const coveragePostureVariant = (
   posture: WorkloadCoverageRow['posture'],
@@ -240,7 +244,7 @@ export function ProxmoxCoverageTable(props: {
                 headClass={getPlatformTableHeadClassForKind('text')}
               />
               <SortableHead
-                label={layoutMode() === 'compact' ? 'Age' : 'Restore'}
+                label={layoutMode() === 'compact' ? 'Age' : 'Last backup'}
                 sortKey="latest"
                 currentSort={props.sortKey}
                 direction={props.sortDirection}
@@ -407,9 +411,16 @@ export function ProxmoxCoverageTable(props: {
                           class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                         >
                           <Show
-                            when={row.latestRecovery}
+                            when={row.latestBackup}
                             fallback={
-                              <span class="text-muted" title="No restore point">
+                              <span
+                                class="text-muted"
+                                title={
+                                  row.latestSnapshot
+                                    ? COVERAGE_SNAPSHOT_ONLY_TITLE
+                                    : COVERAGE_NO_BACKUP_TITLE
+                                }
+                              >
                                 {COVERAGE_EMPTY_LABEL}
                               </span>
                             }

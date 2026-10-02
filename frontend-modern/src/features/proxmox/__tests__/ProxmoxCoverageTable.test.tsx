@@ -80,7 +80,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(headers).toContain('Target ID');
     expect(headers).toContain('Node');
     expect(headers).toContain('Posture▲');
-    expect(headers).toContain('Restore');
+    expect(headers).toContain('Last backup');
     expect(headers).toContain('PBS snapshot');
     expect(headers).toContain('Guest snapshot');
     expect(headers).not.toContain('PVE file');
@@ -239,7 +239,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
     // cannot truncate to "No PVE backup f…".
     const empty = (title: string) => document.querySelector(`td span[title="${title}"]`);
     for (const title of [
-      'No restore point',
+      'No PBS snapshot or PVE backup file',
       'No PBS snapshot',
       'No PVE backup file',
       'No guest snapshot',

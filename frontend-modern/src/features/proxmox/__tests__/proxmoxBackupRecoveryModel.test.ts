@@ -186,8 +186,47 @@ describe('proxmoxBackupRecoveryModel', () => {
 
     const failed = model.recoverableArtifacts.find((artifact) => artifact.id.includes('failed'));
     expect(failed).toMatchObject({ failed: true, running: false, verified: undefined });
-    expect(model.coverageRows[0].latestRecovery?.createdAt).toBe('2026-05-25T01:34:25Z');
+    expect(model.coverageRows[0].latestBackup?.createdAt).toBe('2026-05-25T01:34:25Z');
     expect(recoverableArtifactMatchesSearch(failed!, 'failed incomplete')).toBe(true);
+  });
+
+  it('keeps a fresh guest snapshot from standing in for the last backup', () => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [pbsBackup({ backupTime: '2026-05-05T01:34:25Z' })],
+      archives: [],
+      snapshots: [snapshot({ time: '2026-05-26T03:00:00Z' })],
+      tasks: [],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    });
+
+    const row = model.coverageRows[0];
+    expect(row.latestSnapshot?.createdAt).toBe('2026-05-26T03:00:00Z');
+    expect(row.latestBackup?.sourceKind).toBe('pbs');
+    expect(row.latestBackup?.createdAt).toBe('2026-05-05T01:34:25Z');
+    expect(
+      getRecoveryAgeBand(
+        row.latestBackup?.createdMs,
+        model.coverageRows.length && Date.parse('2026-05-26T08:00:00Z'),
+      ),
+    ).toBe('aging');
+  });
+
+  it('reports no last backup for a snapshot-only workload', () => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [],
+      archives: [],
+      snapshots: [snapshot()],
+      tasks: [],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    });
+
+    const row = model.coverageRows[0];
+    expect(row.latestBackup).toBeUndefined();
+    expect(row.latestSnapshot?.sourceKind).toBe('snapshot');
+    expect(row.artifacts).toHaveLength(1);
+    expect(model.coverageSummary.recoverableArtifacts).toBe(1);
   });
 
   it('uses canonical workload attention while retaining the failed task as evidence', () => {
