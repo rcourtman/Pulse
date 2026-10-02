@@ -126,15 +126,18 @@ const BACKUP_SERVER_WEIGHTS: Record<
     used: 18,
     backups: 9,
   },
+  // Memory and Used carry a percentage plus a used/total pair, the longest
+  // values in the row, so they take the slack from the one-word status and
+  // version cells instead of truncating.
   full: {
     server: 15,
-    status: 10,
-    version: 8,
+    status: 8,
+    version: 7,
     cpu: 6,
-    memory: 11,
+    memory: 13.5,
     uptime: 7,
     datastore: 13,
-    used: 15,
+    used: 15.5,
     backups: 8,
     dedup: 7,
   },
@@ -196,30 +199,33 @@ const COVERAGE_WEIGHTS: Record<
   Partial<Record<CoverageColumnId, number>>
 > = {
   compact: { workload: 40, posture: 18, latest: 16, pbs: 16, task: 10 },
-  basic: { workload: 31, node: 18, posture: 19, latest: 20, task: 12 },
-  operational: { workload: 28, type: 9, node: 14, posture: 17, latest: 17, task: 15 },
+  // Above the phone projection the identity columns (workload, node) take the
+  // slack that the short type badge, target id, and age cells cannot use, so
+  // names stay whole instead of truncating beside empty space.
+  basic: { workload: 31, node: 20, posture: 20, latest: 14, task: 15 },
+  operational: { workload: 27, type: 8, node: 17, posture: 17, latest: 15, task: 16 },
   expanded: {
-    workload: 17,
-    type: 7,
-    node: 10,
-    posture: 13,
-    latest: 12,
-    pbs: 11,
-    archive: 10.5,
-    snapshot: 11.5,
-    task: 8,
+    workload: 19,
+    type: 6.5,
+    node: 13.5,
+    posture: 13.5,
+    latest: 9.5,
+    pbs: 9.5,
+    archive: 10,
+    snapshot: 9.5,
+    task: 9,
   },
   full: {
-    workload: 14.5,
-    type: 6,
-    targetId: 8.5,
-    node: 9,
+    workload: 17,
+    type: 5.5,
+    targetId: 8,
+    node: 11.5,
     posture: 11,
-    latest: 10,
-    pbs: 11.5,
-    archive: 10,
-    snapshot: 12.5,
-    task: 8,
+    latest: 8.5,
+    pbs: 10.5,
+    archive: 8.5,
+    snapshot: 12,
+    task: 7.5,
   },
 };
 
