@@ -281,6 +281,7 @@ describe('reporting panel model', () => {
       {
         id: '',
         name: ' Acme monthly ',
+        kind: 'resources',
         enabled: true,
         cadenceType: 'monthly',
         dayOfMonth: 1,

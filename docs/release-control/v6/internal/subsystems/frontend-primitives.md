@@ -7729,3 +7729,20 @@ actual series pixels and tooltips in desktop Chromium and phone WebKit, using
 the production chart and API transport with synthetic stored samples. This
 does not establish native collection, whole-report resolution or availability
 in a release. Existing request, source, units and access boundaries are unchanged.
+
+### Scheduled report kinds
+
+The Settings > Reporting schedule form composes the shared `FormSelect` for a
+"Report type" choice between the performance report and the Patrol weekly
+summary (`patrol_digest`). The choice renders only while the session's AI
+capability reports Patrol can run, or while an existing summary schedule is
+being edited, so an AI-off install sees the unchanged performance-report form.
+The summary variant hides the cadence, format, resource picker, tag filter,
+delivery, retention, attach, and save-copy controls and keeps name, weekday,
+time, timezone, recipients, and enabled; `reportingSchedulesModel.ts` owns the
+kind normalisation, the kind switch, the email-only payload, and the plain
+"Patrol activity, last 7 days" scope label. `ReportingPanel.test.tsx`,
+`useReportingPanelState.test.ts`, and `reportingSchedulesModel.branchcov2.test.ts`
+cover the gating, the reduced form, the pinned fields, and the saved payload.
+This is a presentation and form-state boundary; the schedule API contract,
+report rendering, and email delivery are unchanged.

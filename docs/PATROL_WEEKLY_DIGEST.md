@@ -1,9 +1,11 @@
 # Patrol Weekly Digest
 
 Status: building — endpoint and in-app "This week" card on `main` (PRs #1856
-and #1860, 2026-09-02); the weekly email lands as a `patrol_digest` report
-schedule kind. Demand ledger: `pulse-pro/FEATURE_REQUESTS.md`, "Patrol weekly digest
-(what Patrol did for you)", a named bet under the Patrol operations loop.
+and #1860, 2026-09-02); the weekly email is the `patrol_digest` report
+schedule kind, and Settings > Reporting creates it through the "Report type"
+choice on the schedule form (2026-10-02). Demand ledger:
+`pulse-pro/FEATURE_REQUESTS.md`, "Patrol weekly digest (what Patrol did for
+you)", a named bet under the Patrol operations loop.
 
 ## The job, in the customer's words
 
@@ -80,9 +82,18 @@ reused, and the run renders the same digest as plain-language HTML and text
 `SendEmailWithRetry`. Digest schedules are weekly and email-only; nothing is
 written to disk. A run without an email destination fails with a message that
 names the missing setting instead of silently doing nothing. Webhook and
-Apprise channels are out of scope. The Settings > Reporting form gains a
-"Report type" selector for the kind in a follow-up; its browser proof needs a
-Pro-licensed instance, which the isolated verification stack does not have.
+Apprise channels are out of scope.
+
+In Settings > Reporting, "Create schedule" offers a "Report type" choice
+between the performance report and the Patrol weekly summary. The choice only
+appears while the session reports that Patrol can run (AI on with a provider
+configured, the same capability that shows the Patrol navigation), and an
+existing summary schedule keeps showing its type so it can be edited after AI
+is switched off. Choosing the summary reduces the form to a name, weekday,
+time, timezone, and optional recipients: cadence is pinned to weekly, delivery
+to email, and the format, resources, tag filter, retention, attachment, and
+save-copy controls are hidden because the server fixes those values. The
+schedules table describes a summary's scope as "Patrol activity, last 7 days".
 
 ## API
 
