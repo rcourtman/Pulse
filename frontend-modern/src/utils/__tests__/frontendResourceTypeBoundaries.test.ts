@@ -2448,7 +2448,8 @@ describe('frontend resource type boundaries', () => {
     expect(historyChartModelSource).toContain('HISTORY_CHART_RANGES');
     expect(historyChartModelSource).toContain('getHistoryChartScale');
     expect(historyChartHeaderSource).toContain('formatHistoryChartTooltipValue');
-    expect(historyChartOverlaySource).toContain('Collecting data... History will appear here.');
+    expect(historyChartOverlaySource).toContain('No history samples in this time range.');
+    expect(historyChartOverlaySource).not.toContain('History will appear here.');
     expect(historyChartOverlaySource).not.toContain('presentationPolicyHidesUpgradePrompts');
     expect(historyChartOverlaySource).not.toContain(
       'Unlock {props.chart.lockTierLabel()} Features',
