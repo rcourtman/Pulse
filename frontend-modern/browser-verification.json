@@ -1,34 +1,45 @@
 {
   "version": 1,
-  "base_sha": "a5e1f7f16610201d62acfa4bdd828ec353d22157",
-  "verified_at": "2026-10-02T22:27:01Z",
+  "base_sha": "5522c099357e21a4bbbc8cc79c29f0c93924069f",
+  "verified_at": "2026-10-02T22:44:39Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/hooks/useUnifiedResources.ts"
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx",
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/hooks/useUnifiedResources.ts": "166e45835c56d00f1a3ddbc37f7127348a0e36dc7c42c921f972db7750c603c6"
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx": "29284b34d9631f118a449da1c274b1028e3cea57aed37a3ac056e48e05b2b613",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx": "736edcc6e7ca67624504efd5a891740e34a9babb3d871be1d8b34f26dc57dc83",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx": "58cf1656ba22475b52dc9a582a4d8f0cc8c01f38bfb3775518edac73dbf22b80",
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts": "b821b9caf65d5c247e543a6d6dbf0925f735b617c6393066d0f8c15a10e05e72"
   },
   "routes": [
-    "/docker",
-    "/proxmox/storage"
+    "/docker/overview",
+    "/docker/images",
+    "/docker/storage",
+    "/docker/networks",
+    "/docker/swarm"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 900
+      "height": 1000
     },
     {
       "width": 390,
-      "height": 844
+      "height": 1000
     }
   ],
   "states": [
-    "Mock estate, dark theme, Chromium, fresh browser context per load so REST and websocket race; Docker containers table (14 rows) and Proxmox Storage table (18 rows)",
-    "Both routes render their rows at 1.5s and 5s with no page or console errors and no horizontal scroll at either viewport; REST rows now carry sourceStatus, actionReadiness and technology at the top level (unit test pins the mapping)"
+    "Mock estate with five Docker hosts (two Docker-in-LXC, one offline), 27 containers with pending updates, 13 images, Swarm services in rollback, dark theme, Chromium",
+    "Containers table at compact width (1320px table): Host, Engine (\"docker 26.1.3\") and the Update control render whole; on a phone the row keeps container, state, CPU, memory and Update with Restarts in the expansion, and the state word no longer clips",
+    "Images table on a phone keeps image, size and update verdict with host and consumers in the expansion; Swarm services read \"Rollback started\"; Swarm tasks show Started as an age with the stamp in the title"
   ],
   "interactions": [
-    "Loaded each route in a fresh context at both viewports and read row counts, lifecycle controls, console errors and document overflow"
+    "Measured every containers-table column against its content need at 1440px and 390px before and after the change; swept every Docker tab for clipped short values and horizontal overflow at both widths (overview and images report none; storage, networks and swarm phone clipping is pre-existing and unchanged)",
+    "Read the Swarm services and tasks rows and the images used-by cells after the change"
   ],
   "command": "playwright chromium against a private mock-mode stack (backend :7685, vite :5203 from this branch)"
 }

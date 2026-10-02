@@ -1512,7 +1512,11 @@ describe('Docker native tables', () => {
     expect(screen.getByText('replicated')).toBeInTheDocument();
     expect(screen.getByText('4')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();
-    expect(screen.getByText('rollback_started')).toBeInTheDocument();
+    // The snake_case rollout token reads as words; the raw token stays in the title.
+    expect(screen.getByText('Rollback started')).toBeInTheDocument();
+    expect(
+      screen.getByText('Rollback started').closest('[title]')?.getAttribute('title'),
+    ).toContain('rollback_started');
     expect(screen.getByText('18080:8080/tcp')).toBeInTheDocument();
     expect(screen.getByText('manager-1')).toBeInTheDocument();
     expect(document.querySelector('[data-docker-service-row="service-1"]')).not.toBeNull();
@@ -1651,7 +1655,10 @@ describe('Docker native tables', () => {
     expect(screen.getByText('web.2')).toBeInTheDocument();
     expect(screen.getByText('web')).toBeInTheDocument();
     expect(screen.getByText('running 2 minutes')).toBeInTheDocument();
-    expect(screen.getByText('2026-05-24T13:05:00Z')).toBeInTheDocument();
+    // The raw RFC3339 stamp moves to the title; the cell shows an age.
+    const started = screen.getByTitle('2026-05-24T13:05:00Z');
+    expect(started).toBeInTheDocument();
+    expect(started.textContent).toMatch(/ago$/);
   });
 
   it('renders Docker Swarm secret API metadata without secret data', () => {

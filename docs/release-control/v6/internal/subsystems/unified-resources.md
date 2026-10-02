@@ -5421,6 +5421,16 @@ read-only status and governed UpdateButton content. The boundary must preserve
 full action names, review semantics and native agent/container identity; it must
 not hide update labels to satisfy width constraints. DockerNativeTables.test.ts
 checks that the governed update action remains inside that boundary.
+A phone row (under 440px) keeps container, state, CPU, memory and the update
+control and defers the restart count to the row expansion, so the state word
+and the Update control fit whole instead of clipping to "runni…" beside an
+unreadable Restarts header. At compact width (a 1280-1536px laptop window) the
+Host, Engine and Updates columns take enough share that "docker 26.1.3", a
+host name and the Update control render whole; the percentage-only CPU and
+memory bars yield the difference. Swarm services show the rollout state as
+words ("Rollback started") with the raw token, message and completion time in
+the title, and Swarm tasks show Started as an age with the RFC3339 stamp in
+the title, matching every other platform table's time cells.
 
 ResourceDetailDrawer headings wrap long display names rather than ellipsising
 them. Overview rows may still truncate identity; keyboard expansion exposes the
