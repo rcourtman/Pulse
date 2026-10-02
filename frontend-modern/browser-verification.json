@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "base_sha": "33d6d729c1dc7c0913a970fd4c463a9f9575b7b1",
-  "verified_at": "2026-10-02T10:16:57.632722Z",
+  "base_sha": "811961243e6418c858c80fd073faf4251fe838d3",
+  "verified_at": "2026-10-02T12:57:15.855691+00:00",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Storage/DiskList.tsx"
+    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Storage/DiskList.tsx": "df63db162779ff0d2064475a9db1fd67ac748703f398a88d108ecdd154dae9d2"
+    "frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts": "59ca48c06cb3c63f30ccb46cb30536cbc6d86fda1b50e6ea49ecefb9eb377fae"
   },
   "routes": [
-    "/browser-tests/disk-live-refresh.html"
+    "/browser-tests/pool-capacity.html"
   ],
   "viewports": [
     {
@@ -23,31 +23,26 @@
     }
   ],
   "states": [
-    "Production DiskList, DiskDetail, keyed renderer and styles with synthetic PBS collector snapshots, not installed appliance evidence",
-    "Healthy to failed disk updates health, warning text, endurance, temperature, model and canonical target without remounting the row or its expanded detail",
-    "Missing measurements remove obsolete values and critical styling; unavailable detail evidence remains visible; recovery restores current values",
-    "Disclosure keyboard focus and aria-controls survive same-ID updates; changed metric targets update summary/detail linkage",
-    "Attention filter includes the failed disk, removes the recovered disk and returns current healthy values in All",
-    "Desktop Chromium light and phone-emulated WebKit dark have no outer-page overflow or page errors; six fault/missing/recovered screenshots inspected; existing dense phone truncation is unchanged"
+    "Production pool drawer with synthetic partial PBS snapshots, not native collector or installed acceptance",
+    "Missing used/free/usage remain n/a; measured empty and full pools preserve 0 B and 0%",
+    "Independent byte observations remain visible without total; absent capacity stays n/a",
+    "Live transitions across five states on desktop Chromium light and phone WebKit dark; no page errors or horizontal overflow"
   ],
   "interactions": [
-    "Expand the real disk row and focus its disclosure, apply fault/missing/recovery snapshots without navigating or reloading",
-    "Check current values, stable owner, focus, live disclosure target and selected detail after each snapshot",
-    "Toggle Attention/All across fault and recovery"
+    "Switch missing, empty, full, partial and absent snapshots without reload",
+    "Read Used, Free, Total and Usage values in the actual Configuration rows"
   ],
-  "command": "pulse-worker-browser frontend-modern/browser-tests/disk-live-refresh.cjs",
+  "command": "pulse-worker-browser frontend-modern/browser-tests/pool-capacity.cjs",
   "browser_versions": {
     "playwright": "1.56.1",
     "chromium": "141.0.7390.37",
     "webkit": "26.0"
   },
   "artifacts": [
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-zuzev1gs/browser/chromium-fault.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-zuzev1gs/browser/chromium-missing.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-zuzev1gs/browser/chromium-recovered.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-zuzev1gs/browser/webkit-fault.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-zuzev1gs/browser/webkit-missing.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-zuzev1gs/browser/webkit-recovered.png",
-    "/var/lib/pulse-maintainer/worker-outputs/web-product-zuzev1gs/browser/result.json"
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-5pdbcfmm/browser/result.json",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-5pdbcfmm/browser/chromium-partial.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-5pdbcfmm/browser/webkit-missing.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-5pdbcfmm/browser/chromium-full.png",
+    "/var/lib/pulse-maintainer/worker-outputs/web-product-5pdbcfmm/browser/webkit-empty.png"
   ]
 }
