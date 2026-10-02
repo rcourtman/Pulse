@@ -13,6 +13,12 @@ import (
 
 // BenchmarkNormalizeRoute measures route normalization with representative
 // API paths of varying complexity.
+//
+// The "/" fast path is deliberately not timed here. Paired CI runs measured it
+// at either 2.18ns or 2.50ns, about one CPU cycle apart, and changes that never
+// touched this code flipped it both ways by 13-30%.
+// TestNormalizeRoute_RootFastPathDoesNotAllocate pins what matters about the
+// path instead.
 func BenchmarkNormalizeRoute(b *testing.B) {
 	paths := []struct {
 		name string
@@ -23,7 +29,6 @@ func BenchmarkNormalizeRoute(b *testing.B) {
 		{"with_uuid", "/api/nodes/550e8400-e29b-41d4-a716-446655440000"},
 		{"deep_path_truncated", "/api/v1/orgs/123/resources/456/metrics"},
 		{"with_query_params", "/api/metrics-store/history?resourceType=vm&resourceId=pve1:node1:100&metric=cpu&range=1h"},
-		{"root", "/"},
 		{"metrics_history", "/api/metrics-store/history"},
 	}
 
