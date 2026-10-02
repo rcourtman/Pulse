@@ -260,7 +260,7 @@ func (c *Client) GetSystemTelemetry(ctx context.Context) (*SystemInfo, error) {
 		}
 		telemetry, err = rpc.readSystemTelemetryEvent(ctx, defaultRealtimeIntervalSeconds)
 		if err != nil {
-			return discardRPCSessionForStreamError(err)
+			return discardRPCSessionForStreamError("reporting.realtime", err)
 		}
 		return rpc.unsubscribe(ctx, subscriptionID)
 	})
@@ -1743,12 +1743,18 @@ func (c *Client) getAppsREST(ctx context.Context) ([]App, error) {
 }
 
 func (c *Client) parseAppsWithStats(ctx context.Context, response []map[string]any) []App {
+	apps := make([]App, 0, len(response))
+	// There is nothing to enrich when app.query returns an empty inventory.
+	// Subscribing anyway can wait on a stopped Apps service and needlessly
+	// discard an otherwise healthy, persistent monitoring session.
+	if len(response) == 0 {
+		return apps
+	}
 	statsByApp, err := c.GetAppStats(ctx)
 	if err != nil {
 		statsByApp = nil
 	}
 
-	apps := make([]App, 0, len(response))
 	for _, item := range response {
 		activeWorkloads := readMapAny(item, "active_workloads", "activeWorkloads")
 
@@ -1813,7 +1819,7 @@ func (c *Client) GetAppStats(ctx context.Context) (map[string]AppStats, error) {
 		}
 		stats, err = rpc.readAppStatsEvent(ctx, defaultAppStatsIntervalSeconds)
 		if err != nil {
-			return discardRPCSessionForStreamError(err)
+			return discardRPCSessionForStreamError("app.stats", err)
 		}
 		return rpc.unsubscribe(ctx, subscriptionID)
 	})
@@ -1869,7 +1875,7 @@ func (c *Client) GetAppLogs(ctx context.Context, appName, containerID string, ta
 		var reusable bool
 		lines, reusable, err = rpc.readAppLogEvents(ctx, tailLines)
 		if err != nil {
-			return discardRPCSessionForStreamError(err)
+			return discardRPCSessionForStreamError("app.container_log_follow", err)
 		}
 		if !reusable {
 			return errRPCStreamSessionConsumed
@@ -2335,6 +2341,8 @@ func appendDiskTemperature(out map[string]int, diskName string, value any) {
 type trueNASRPCClient struct {
 	conn          *websocket.Conn
 	nextID        int64
+	openedAt      time.Time
+	closeOnce     sync.Once
 	keepaliveStop chan struct{}
 	keepaliveDone chan struct{}
 }
@@ -2346,7 +2354,7 @@ func (c *trueNASRPCClient) subscribe(ctx context.Context, event string) (string,
 	}
 	subscriptionID = strings.TrimSpace(subscriptionID)
 	if subscriptionID == "" {
-		return "", &discardRPCSessionError{err: fmt.Errorf("truenas rpc core.subscribe returned an empty subscription id")}
+		return "", &discardRPCSessionError{method: "core.subscribe", err: fmt.Errorf("truenas rpc core.subscribe returned an empty subscription id")}
 	}
 	return subscriptionID, nil
 }
@@ -2357,7 +2365,7 @@ func (c *trueNASRPCClient) unsubscribe(ctx context.Context, subscriptionID strin
 		return fmt.Errorf("truenas rpc subscription id is required")
 	}
 	if err := c.call(ctx, "core.unsubscribe", []any{subscriptionID}, nil); err != nil {
-		return &discardRPCSessionError{err: fmt.Errorf("unsubscribe %q: %w", subscriptionID, err)}
+		return &discardRPCSessionError{method: "core.unsubscribe", err: fmt.Errorf("unsubscribe %q: %w", subscriptionID, err)}
 	}
 	return nil
 }
