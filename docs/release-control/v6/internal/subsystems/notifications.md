@@ -15,6 +15,33 @@
 
 ## Purpose
 
+### Pending firing groups count occurrences, not callbacks
+
+Before a grouping window expires, repeated firing callbacks with the same full
+alert ID and start instant occupy one slot. The newest observed snapshot owns
+the whole payload and operational linkage, including a genuine later severity
+downgrade. Equal observation times prefer higher severity; an unknown time
+cannot replace a known later observation. Missing ID/start identity remains
+separate, as do different occurrences of a reusable ID. The index is scoped to
+the pending window and discarded on flush, disable, cancellation or stop; callbacks
+do not extend the original timer or establish delivery.
+
+`firing_grouping_occurrence_test.go` verifies timestamp/severity ordering,
+instant equality across time-zone/monotonic representations, cloned payloads,
+concurrent callbacks, occurrence-qualified cancellation, all-destination and
+webhook-only disable/zero-window flushes, and notification disable/re-enable.
+Stopping the manager cancels its volatile firing timer and snapshots, rather
+than letting an abandoned timer send directly after its queue is closed.
+Committed queue work retains its existing restart semantics.
+`TestPendingFiringGroupStopCancelsTimer` checks actual timer/HTTP silence after stop.
+The connected `TestPendingFiringGroupHTTPAcrossRestart` uses actual timer expiry,
+persistent queue reopen, the autonomous sender and two loopback receivers: one
+snapshot per occurrence/destination, truthful counts/latest content, ordinary
+cooldown and independent firing/recovery receipts. Ungrouped admissions,
+scheduled escalation, retry budgets, queue schema and delivery policy are
+unchanged. This is source acceptance, not a native destination, natural schedule
+cycle or a reproduced cause of the existing flood reports.
+
 ### Completion order cannot replace a newer occurrence's cooldown
 
 Firing completions still record an independent delivery receipt for their own
