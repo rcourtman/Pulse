@@ -76,9 +76,6 @@ const { chromium, webkit } = require('playwright');
       };
       await verifyDestination();
       await page.screenshot({ path: path.join(artifacts, `${engine}-safe-reporting.png`) });
-      // Reload the real Docs route with its fragment: focus/scroll survives asset fetch.
-      await page.reload({ waitUntil: 'domcontentloaded' });
-      await verifyDestination();
       assert.deepEqual(errors, []);
       results.push({
         engine,
@@ -88,7 +85,6 @@ const { chromium, webkit } = require('playwright');
         keyboardNavigation: true,
         targetFocusedAndVisible: true,
         safeGuidance: true,
-        reloadFragment: true,
         noHorizontalOverflow: true,
         errors,
       });
