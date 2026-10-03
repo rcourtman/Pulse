@@ -15,6 +15,37 @@
 
 ## Purpose
 
+### Delivery verdicts survive session cleanup and interrupted diagnostics
+
+A successful final SMTP DATA reply establishes server acceptance. Plain SMTP,
+TLS and STARTTLS delivery must not resend an accepted message because QUIT
+fails, nor turn that cleanup failure into a terminal delivery audit. Cleanup
+still runs, with only a fixed local diagnostic; the provider's reply text is
+not copied into it. Missing acknowledgement, certificate failures and rejected
+DATA replies remain errors with their existing retry policy. A connection test
+without a completed DATA transaction still reports QUIT failure. Server
+acceptance is not proof of arrival in a recipient's inbox or exactly-once
+recovery after a process crash.
+
+The ntfy plain-text recovery path, like the shared firing sender, retains the
+HTTP rejection class when reading the diagnostic response body fails. It
+preserves the wrapped read error, existing retry budgets and bounded body read;
+401/403/422 remain permanent failures, while transient HTTP verdicts remain
+retryable. Incomplete 2xx responses retain the existing failure behaviour.
+Historical audit rows are not rewritten and operator retry stays explicit.
+
+Verification: `email_acceptance_test.go` uses actual guest-local plain/TLS/
+STARTTLS SMTP sessions for clean, missing and rejected QUIT, permanent and
+transient DATA rejection, missing acknowledgement, threaded/attachment sends,
+connection-only tests and certificate refusal. Its connected persistent queue
+control retains one accepted send and zero terminal failures after reopen.
+`ntfy_response_verdict_test.go` exercises real interrupted HTTP bodies, then
+queue/audit/telemetry readback after reopen and an explicit repaired-destination
+retry without erasing the original rejection. These are synthetic source
+controls, not a cause attribution for aggregate fleet counters, installed
+provider acceptance or a reporter's confirmation.
+
+
 ### Pending firing groups count occurrences, not callbacks
 
 Before a grouping window expires, repeated firing callbacks with the same full
