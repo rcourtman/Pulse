@@ -43,7 +43,7 @@ export type DockerContainerLifecycleControlsProps = {
 };
 
 const buttonBaseClass =
-  'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded border text-muted transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface sm:h-7 sm:w-7';
+  'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border text-muted transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface sm:h-7 sm:w-7';
 const enabledButtonClass =
   'border-border-subtle bg-surface hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950/40 dark:hover:text-blue-300';
 const disabledButtonClass = 'cursor-not-allowed border-border-subtle bg-surface-alt opacity-55';
@@ -210,7 +210,7 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
           ref={menuTriggerRef}
           type="button"
           id={menuButton.triggerId}
-          class={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border ${enabledButtonClass}`}
+          class={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm border ${enabledButtonClass}`}
           title={`Container actions for ${dockerContainerLifecycleName(props.resource)}`}
           aria-label={`Container actions for ${dockerContainerLifecycleName(props.resource)}`}
           aria-haspopup="menu"
@@ -239,7 +239,7 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
               data-docker-lifecycle-menu-root
               role="menu"
               aria-labelledby={menuButton.triggerId}
-              class="fixed z-[9999] w-52 rounded-md border border-border bg-surface p-1 text-left shadow-lg"
+              class="fixed z-9999 w-52 rounded-md border border-border bg-surface p-1 text-left shadow-lg"
               style={{ left: `${menuPosition().left}px`, top: `${menuPosition().top}px` }}
               onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
@@ -261,7 +261,7 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
                       type="button"
                       role="menuitem"
                       tabindex="-1"
-                      class="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 disabled:cursor-not-allowed disabled:opacity-50"
+                      class="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/60 disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={disabled()}
                       title={titleForAction(spec.action, spec.label)}
                       aria-label={titleForAction(spec.action, spec.label)}

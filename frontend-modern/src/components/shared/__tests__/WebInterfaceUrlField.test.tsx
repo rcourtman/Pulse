@@ -95,7 +95,7 @@ describe('WebInterfaceUrlField', () => {
     ));
 
     expect(await screen.findByText('Web interface')).toBeInTheDocument();
-    expect(container.querySelector('.shadow-sm')).toBeNull();
+    expect(container.querySelector('.shadow-xs')).toBeNull();
   });
 
   it('saves a host URL through metadata API', async () => {

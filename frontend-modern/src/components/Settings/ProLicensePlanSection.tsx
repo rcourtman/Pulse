@@ -111,11 +111,11 @@ const commercialMigrationNoticeTone = (notice: Notice): InlineNoticeTone =>
 const statusStateClass = (state: 'active' | 'partial' | 'missing') => {
   switch (state) {
     case 'active':
-      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200';
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-200';
     case 'partial':
-      return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200';
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-200';
     case 'missing':
-      return 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200';
+      return 'bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-200';
   }
 };
 
@@ -406,7 +406,7 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
         )}
       </Show>
       <Show when={licenseEntitlementsLoadError()}>
-        <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 text-sm text-amber-800 dark:text-amber-200">
+        <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 p-3 text-sm text-amber-800 dark:text-amber-200">
           <p class="font-medium">Could not load license status</p>
           <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
             The license server could not be reached. Some features may be temporarily restricted.

@@ -50,7 +50,7 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
                 fill="none"
                 stroke="currentColor"
                 stroke-width="2"
-                class="flex-shrink-0 mt-0.5"
+                class="shrink-0 mt-0.5"
               >
                 <path d="M9 12l2 2 4-4"></path>
                 <circle cx="12" cy="12" r="10"></circle>
@@ -64,7 +64,7 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
                 fill="none"
                 stroke="currentColor"
                 stroke-width="2"
-                class="flex-shrink-0 mt-0.5"
+                class="shrink-0 mt-0.5"
               >
                 <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
               </svg>
@@ -77,7 +77,7 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
                 fill="none"
                 stroke="currentColor"
                 stroke-width="2"
-                class="flex-shrink-0 mt-0.5"
+                class="shrink-0 mt-0.5"
               >
                 <circle cx="12" cy="12" r="10"></circle>
                 <line x1="15" y1="9" x2="9" y2="15"></line>
@@ -117,7 +117,7 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
         {(message) => (
           <div
             role="alert"
-            class="mx-6 mb-2 rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+            class="mx-6 mb-2 rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/25 dark:text-rose-200"
           >
             {message()}
           </div>
@@ -134,7 +134,7 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
               class={`px-4 py-2 text-sm rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 props.deleteConfirming
                   ? 'bg-rose-600 text-white hover:bg-rose-700'
-                  : 'border border-rose-300 text-rose-700 hover:bg-rose-50 dark:border-rose-900 dark:text-rose-300 dark:hover:bg-rose-950'
+                  : 'border border-rose-300 text-rose-700 hover:bg-rose-50 dark:border-rose-900/25 dark:text-rose-300 dark:hover:bg-rose-950/25'
               }`}
             >
               {props.deletePending

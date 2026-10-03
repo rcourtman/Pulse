@@ -229,7 +229,7 @@ export const PatrolObjectivesPanel: Component = () => {
           <Show
             when={!loadError()}
             fallback={
-              <div class="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/30 dark:text-red-100">
+              <div class="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900/25 dark:border-red-900/25 dark:bg-red-950/30 dark:text-red-100">
                 <p>Patrol objectives could not be loaded.</p>
                 <Button class="mt-3" size="sm" onClick={() => void loadObjectives()}>
                   Try again
@@ -267,10 +267,10 @@ export const PatrolObjectivesPanel: Component = () => {
                 <div
                   class={`mb-4 rounded-lg border px-4 py-3 ${
                     protectionSummary().tone === 'success'
-                      ? 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-900 dark:bg-emerald-950/20'
+                      ? 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/25 dark:bg-emerald-950/20'
                       : protectionSummary().tone === 'warning'
-                        ? 'border-amber-200 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/20'
-                        : 'border-border-subtle bg-surface-alt/40'
+                        ? 'border-amber-200 bg-amber-50/70 dark:border-amber-900/25 dark:bg-amber-950/20'
+                        : 'border-border-subtle '
                   }`}
                   aria-live="polite"
                 >
@@ -298,7 +298,7 @@ export const PatrolObjectivesPanel: Component = () => {
                         <article class="flex flex-col gap-3 p-4 lg:flex-row lg:items-start lg:justify-between">
                           <div class="min-w-0 flex-1">
                             <div class="flex flex-wrap items-center gap-2">
-                              <h3 class="break-words text-sm font-semibold text-base-content">
+                              <h3 class="wrap-break-word text-sm font-semibold text-base-content">
                                 {objective.brief}
                               </h3>
                               <Show when={objective.status === 'paused'}>

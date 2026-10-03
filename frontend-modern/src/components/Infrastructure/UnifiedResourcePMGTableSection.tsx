@@ -156,10 +156,10 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
 
               const rowClass = createMemo(() => {
                 const baseBorder = 'border-b border-border-subtle';
-                const baseHover = `cursor-pointer transition-all duration-200 relative hover:shadow-sm group ${baseBorder}`;
+                const baseHover = `cursor-pointer transition-all duration-200 relative hover:shadow-xs group ${baseBorder}`;
 
                 if (isExpanded()) {
-                  return `cursor-pointer transition-all duration-200 relative hover:shadow-sm z-10 group bg-blue-50 dark:bg-blue-900 ${baseBorder}`;
+                  return `cursor-pointer transition-all duration-200 relative hover:shadow-xs z-10 group bg-blue-50 dark:bg-blue-900/25 ${baseBorder}`;
                 }
 
                 let className = baseHover;
@@ -223,7 +223,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                           recentChanges={resource.recentChanges}
                           counts={resource.facetCounts}
                           maxVisibleBadges={1}
-                          class="hidden max-w-[48%] shrink-0 flex-nowrap overflow-hidden lg:flex"
+                          class="hidden max-w-[48%] shrink-0 flex-nowrap! overflow-hidden lg:flex"
                         />
                       </div>
                     </TableCell>
@@ -355,7 +355,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                           {(link) => (
                             <a
                               href={link().href}
-                              class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800"
+                              class="inline-flex items-center rounded-sm border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-200 dark:hover:bg-blue-800"
                               title={link().label}
                               aria-label={link().ariaLabel}
                               onClick={(event) => event.stopPropagation()}

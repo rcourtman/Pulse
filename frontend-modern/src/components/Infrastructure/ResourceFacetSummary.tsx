@@ -25,7 +25,7 @@ export interface ResourceFacetSummaryProps {
 }
 
 const badgeBase =
-  'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap';
+  'inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap';
 
 const countLabel = (count: number, singular: string, plural = `${singular}s`) =>
   `${count} ${count === 1 ? singular : plural}`;
@@ -42,7 +42,7 @@ const buildFacetBadges = (
     badges.push({
       label: `Timeline ${changeCount}`,
       title: countLabel(changeCount, 'timeline event'),
-      className: `${badgeBase} bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300`,
+      className: `${badgeBase} bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300`,
     });
   }
 

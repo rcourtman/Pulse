@@ -20,18 +20,18 @@ export function normalizeAIControlLevel(value?: string): AIControlLevel {
 
 export function getAIControlLevelPanelClass(level: AIControlLevel): string {
   return level === 'autonomous'
-    ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900'
-    : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900';
+    ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25'
+    : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/25';
 }
 
 export function getAIControlLevelBadgeClass(level: AIControlLevel): string {
   switch (level) {
     case 'autonomous':
-      return 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300';
+      return 'bg-red-100 dark:bg-red-900/25 text-red-700 dark:text-red-300';
     case 'controlled':
-      return 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300';
+      return 'bg-amber-100 dark:bg-amber-900/25 text-amber-700 dark:text-amber-300';
     default:
-      return 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300';
+      return 'bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300';
   }
 }
 
@@ -55,18 +55,18 @@ export function getAIChatControlLevelPresentation(
         label: 'Chat actions',
         description: 'Eligible chat-only actions',
         pillClassName:
-          'border-red-200 text-red-700 bg-red-50 dark:border-red-800 dark:text-red-200 dark:bg-red-900',
+          'border-red-200 text-red-700 bg-red-50 dark:border-red-800 dark:text-red-200 dark:bg-red-900/25',
         dotClassName: 'bg-red-500',
-        selectedClassName: 'bg-red-50 dark:bg-red-900',
+        selectedClassName: 'bg-red-50 dark:bg-red-900/25',
       };
     case 'controlled':
       return {
         label: 'Ask first',
         description: 'Asks before chat-only actions',
         pillClassName:
-          'border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-200 dark:bg-amber-900',
+          'border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-200 dark:bg-amber-900/25',
         dotClassName: 'bg-amber-500',
-        selectedClassName: 'bg-amber-50 dark:bg-amber-900',
+        selectedClassName: 'bg-amber-50 dark:bg-amber-900/25',
       };
     default:
       return {

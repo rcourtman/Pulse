@@ -69,7 +69,7 @@ describe('proxmoxBackupsTableShared', () => {
     expect(proxmoxBackupsTableSharedSource).toContain('presentation().badgeTone');
     expect(proxmoxBackupsTableSharedSource).not.toContain('presentation().badgeClassName');
     expect(proxmoxBackupsTableSharedSource).not.toMatch(
-      /inline-flex items-center rounded-sm px-1\.5 py-0\.5 text-\[10px\] font-semibold/,
+      /inline-flex items-center rounded-xs px-1\.5 py-0\.5 text-\[10px\] font-semibold/,
     );
   });
 

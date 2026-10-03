@@ -89,7 +89,7 @@ describe('DetailSectionTable', () => {
       'lg:flex',
       'lg:flex-none',
       'lg:basis-[calc(50%-0.25rem)]',
-      'lg:rounded',
+      'lg:rounded-sm',
       'lg:border',
       'lg:p-3',
     );
@@ -202,7 +202,7 @@ describe('DetailSectionTable', () => {
     ));
 
     const label = screen.getByText(path);
-    expect(label).toHaveClass('whitespace-normal', '[overflow-wrap:anywhere]', 'text-left');
+    expect(label).toHaveClass('whitespace-normal', 'wrap-anywhere', 'text-left');
     expect(label.closest('td')).toHaveAttribute('colspan', '2');
     expect(label.closest('tr')?.querySelectorAll('td')).toHaveLength(1);
     expect(label.closest('tr')).toHaveClass('lg:grid-cols-[minmax(0,1fr)]');

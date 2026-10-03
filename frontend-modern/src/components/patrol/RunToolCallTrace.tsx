@@ -161,21 +161,21 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
                 {(call: ToolCallRecord, index) => {
                   const status = verifiedStatus(call.verification);
                   return (
-                    <div class="border border-border rounded">
+                    <div class="border border-border rounded-sm">
                       <button
                         type="button"
                         onClick={() => setExpandedCall(expandedCall() === call.id ? null : call.id)}
                         class="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-xs hover:bg-surface-hover"
                       >
                         <div class="flex items-center gap-2 min-w-0">
-                          <span class="text-muted font-mono w-5 text-right flex-shrink-0">
+                          <span class="text-muted font-mono w-5 text-right shrink-0">
                             {index() + 1}.
                           </span>
                           <span class="font-medium text-base-content font-mono truncate">
                             {call.tool_name}
                           </span>
                         </div>
-                        <div class="flex items-center gap-2 flex-shrink-0">
+                        <div class="flex items-center gap-2 shrink-0">
                           <span
                             class="inline-flex items-center justify-center w-4"
                             title={verifiedTooltip(call.verification)}
@@ -200,7 +200,7 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
                           <Show when={call.input}>
                             <div>
                               <div class="text-[10px] font-medium text-muted mb-1">Input</div>
-                              <pre class="text-[11px] font-mono bg-base rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap text-base-content">
+                              <pre class="text-[11px] font-mono bg-base rounded-sm p-2 max-h-32 overflow-auto whitespace-pre-wrap text-base-content">
                                 {truncate(call.input, 500)}
                               </pre>
                             </div>
@@ -208,7 +208,7 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
                           <Show when={call.output}>
                             <div>
                               <div class="text-[10px] font-medium text-muted mb-1">Output</div>
-                              <pre class="text-[11px] font-mono bg-base rounded p-2 max-h-32 overflow-auto whitespace-pre-wrap text-base-content">
+                              <pre class="text-[11px] font-mono bg-base rounded-sm p-2 max-h-32 overflow-auto whitespace-pre-wrap text-base-content">
                                 {truncate(call.output, 500)}
                               </pre>
                             </div>

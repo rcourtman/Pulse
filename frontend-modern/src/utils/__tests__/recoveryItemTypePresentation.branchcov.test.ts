@@ -13,9 +13,9 @@ import {
 // describe the documented badge composition rather than echoing the function
 // under test. They are the building blocks the module concatenates.
 const BADGE_BASE_CLASSES =
-  'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap';
+  'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap';
 const TABLE_BADGE_BASE_CLASSES =
-  'inline-flex items-center px-1 py-0.5 text-[10px] font-medium rounded whitespace-nowrap';
+  'inline-flex items-center px-1 py-0.5 text-[10px] font-medium rounded-sm whitespace-nowrap';
 const DEFAULT_BADGE_TONE_CLASSES = 'bg-surface-alt text-base-content';
 
 describe('recoveryItemTypePresentation branch coverage', () => {
@@ -94,7 +94,7 @@ describe('recoveryItemTypePresentation branch coverage', () => {
     });
 
     it('renders the pod case via the workload presentation path', () => {
-      const podTone = 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300';
+      const podTone = 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300';
       const presentation = getRecoveryItemTypePresentation('pod');
       expect(presentation).not.toBeNull();
       expect(presentation).toMatchObject({
@@ -181,7 +181,7 @@ describe('recoveryItemTypePresentation branch coverage', () => {
     });
 
     it('returns the table badge classes for known keys', () => {
-      const podTone = 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300';
+      const podTone = 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300';
       expect(getRecoveryItemTypeBadgeClass('pod')).toBe(`${TABLE_BADGE_BASE_CLASSES} ${podTone}`);
       expect(getRecoveryItemTypeBadgeClass('pvc')).toBe(
         `${TABLE_BADGE_BASE_CLASSES} ${DEFAULT_BADGE_TONE_CLASSES}`,

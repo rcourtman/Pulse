@@ -739,7 +739,7 @@ export function GuestRow(props: GuestRowProps) {
                   <span class="text-xs text-muted truncate max-w-[80px]" title={props.guest.node}>
                     {props.guest.node}
                   </span>
-                  <span class="rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                  <span class="rounded-sm px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300">
                     {clusterName()}
                   </span>
                 </Show>

@@ -38,7 +38,7 @@ export const BillingAdminPanel: Component = () => {
         bodyClass="space-y-4"
       >
         <Show when={state.orgsError()}>
-          <div class="rounded-md border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 p-3 text-sm text-red-800 dark:text-red-200">
+          <div class="rounded-md border border-red-200 dark:border-red-900/25 bg-red-50 dark:bg-red-900/25 p-3 text-sm text-red-800 dark:text-red-200">
             {state.orgsError()}
           </div>
         </Show>

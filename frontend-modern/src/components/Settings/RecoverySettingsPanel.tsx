@@ -80,7 +80,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                     }
                   }}
                 />
-                <div class="w-11 h-6 bg-surface-alt peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
+                <div class="w-11 h-6 bg-surface-alt peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
               </label>
             </div>
 
@@ -178,9 +178,9 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
 
             {/* Env override warning */}
             <Show when={props.backupPollingEnvLocked()}>
-              <div class="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900 p-3 text-xs text-amber-700 dark:text-amber-200">
+              <div class="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/25 p-3 text-xs text-amber-700 dark:text-amber-200">
                 <svg
-                  class="w-4 h-4 flex-shrink-0 mt-0.5"
+                  class="w-4 h-4 shrink-0 mt-0.5"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -217,9 +217,9 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Export Section */}
-          <div class="group border border-border rounded-md p-5 bg-blue-50 dark:bg-blue-900 hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-200">
+          <div class="group border border-border rounded-md p-5 bg-blue-50 dark:bg-blue-900/25 hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-200">
             <div class="flex items-start gap-4">
-              <div class="flex-shrink-0 w-12 h-12 bg-blue-500 rounded-md flex items-center justify-center shadow-sm shadow-blue-500">
+              <div class="shrink-0 w-12 h-12 bg-blue-500 rounded-md flex items-center justify-center shadow-xs shadow-blue-500">
                 {/* Archive/Download Box Icon */}
                 <svg
                   class="w-6 h-6 text-white"
@@ -292,7 +292,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                     props.setUseCustomPassphrase(!props.securityStatus()?.hasAuthentication);
                     props.setShowExportDialog(true);
                   }}
-                  class="w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-all duration-200 inline-flex items-center justify-center gap-2 shadow-sm hover:shadow-sm"
+                  class="w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-all duration-200 inline-flex items-center justify-center gap-2 shadow-xs hover:shadow-xs"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -311,7 +311,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
           {/* Import Section */}
           <div class="group border border-border rounded-md p-5 bg-surface-alt hover:border-border transition-all duration-200">
             <div class="flex items-start gap-4">
-              <div class="flex-shrink-0 w-12 h-12 bg-slate-500 rounded-md flex items-center justify-center shadow-sm shadow-gray-500">
+              <div class="shrink-0 w-12 h-12 bg-slate-500 rounded-md flex items-center justify-center shadow-xs shadow-gray-500">
                 {/* Upload/Restore Icon */}
                 <svg
                   class="w-6 h-6 text-white"
@@ -370,7 +370,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                 <button
                   type="button"
                   onClick={() => props.setShowImportDialog(true)}
-                  class="w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 bg-slate-600 text-white text-sm font-medium rounded-md hover:bg-slate-700 transition-all duration-200 inline-flex items-center justify-center gap-2 shadow-sm hover:shadow-sm"
+                  class="w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 bg-slate-600 text-white text-sm font-medium rounded-md hover:bg-slate-700 transition-all duration-200 inline-flex items-center justify-center gap-2 shadow-xs hover:shadow-xs"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -388,10 +388,10 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
         </div>
 
         {/* Security Tips */}
-        <div class="mt-6 p-4 bg-amber-50 dark:bg-amber-900 rounded-md border border-amber-200 dark:border-amber-800">
+        <div class="mt-6 p-4 bg-amber-50 dark:bg-amber-900/25 rounded-md border border-amber-200 dark:border-amber-800">
           <div class="flex gap-3">
             {/* Shield Icon */}
-            <div class="flex-shrink-0 w-10 h-10 bg-amber-100 dark:bg-amber-900 rounded-md flex items-center justify-center">
+            <div class="shrink-0 w-10 h-10 bg-amber-100 dark:bg-amber-900/25 rounded-md flex items-center justify-center">
               <svg
                 class="w-5 h-5 text-amber-600 dark:text-amber-400"
                 fill="none"
@@ -413,7 +413,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
               <ul class="space-y-2">
                 <li class="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
                   <svg
-                    class="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5"
+                    class="w-4 h-4 text-amber-500 shrink-0 mt-0.5"
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >
@@ -427,7 +427,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                 </li>
                 <li class="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
                   <svg
-                    class="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5"
+                    class="w-4 h-4 text-amber-500 shrink-0 mt-0.5"
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >
@@ -443,7 +443,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                 </li>
                 <li class="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
                   <svg
-                    class="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5"
+                    class="w-4 h-4 text-amber-500 shrink-0 mt-0.5"
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >

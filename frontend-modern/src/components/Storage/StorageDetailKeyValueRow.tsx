@@ -17,7 +17,7 @@ export const StorageDetailKeyValueRow: Component<StorageDetailKeyValueRowProps> 
     label={props.label}
     labelClass={STORAGE_DETAIL_KEY_CLASS}
     value={props.value}
-    valueClass={`${STORAGE_DETAIL_VALUE_CLASS} break-words`}
+    valueClass={`${STORAGE_DETAIL_VALUE_CLASS} wrap-break-word`}
     valueTitle={props.value}
   />
 );

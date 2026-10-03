@@ -228,7 +228,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                       >
                         {/* Checkbox */}
                         <div
-                          class={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center ${
+                          class={`w-4 h-4 rounded border shrink-0 flex items-center justify-center ${
                             isSelected(resource.id)
                               ? 'bg-blue-600 border-blue-600'
                               : 'border-slate-600'
@@ -261,7 +261,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                         {/* Name and ID */}
                         <div class="flex-1 min-w-0">
                           <div
-                            class="text-sm text-white sm:truncate break-words"
+                            class="text-sm text-white sm:truncate wrap-break-word"
                             title={getPreferredInfrastructureDisplayName(resource)}
                           >
                             {getPreferredInfrastructureDisplayName(resource)}
@@ -276,7 +276,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                             <Show when={resource.tags && resource.tags.length > 0}>
                               <For each={resource.tags?.slice(0, 2)}>
                                 {(tag) => (
-                                  <span class="text-xs px-1.5 py-0.5 rounded bg-surface-hover text-slate-300">
+                                  <span class="text-xs px-1.5 py-0.5 rounded-sm bg-surface-hover text-slate-300">
                                     {tag}
                                   </span>
                                 )}
@@ -292,17 +292,17 @@ export function ResourcePicker(props: ResourcePickerProps) {
 
                         {/* Type badge */}
                         <span
-                          class={`hidden sm:inline-flex text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${badge.badgeClasses}`}
+                          class={`hidden sm:inline-flex text-xs px-2 py-0.5 rounded-full shrink-0 ${badge.badgeClasses}`}
                         >
                           {badge.label}
                         </span>
 
                         {/* Tags */}
                         <Show when={resource.tags && resource.tags.length > 0}>
-                          <div class="hidden sm:flex gap-1 flex-shrink-0">
+                          <div class="hidden sm:flex gap-1 shrink-0">
                             <For each={resource.tags?.slice(0, 2)}>
                               {(tag) => (
-                                <span class="text-xs px-1.5 py-0.5 rounded bg-surface-hover text-slate-300">
+                                <span class="text-xs px-1.5 py-0.5 rounded-sm bg-surface-hover text-slate-300">
                                   {tag}
                                 </span>
                               )}

@@ -117,7 +117,7 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
                   {(prerequisite) => (
                     <li class="flex items-start gap-2 text-sm text-base-content">
                       <AlertTriangleIcon
-                        class="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500"
+                        class="mt-0.5 h-4 w-4 shrink-0 text-amber-500"
                         aria-hidden="true"
                       />
                       <span>{prerequisite}</span>
@@ -159,7 +159,7 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
                 type="checkbox"
                 checked={acknowledged()}
                 onChange={(e) => setAcknowledged(e.currentTarget.checked)}
-                class="mt-1 w-4 h-4 text-blue-600 bg-surface-alt rounded focus:ring-blue-500 focus:ring-2"
+                class="mt-1 w-4 h-4 text-blue-600 bg-surface-alt rounded-sm focus:ring-blue-500 focus:ring-2"
                 disabled={props.isApplying}
               />
               <span class="text-sm text-base-content">

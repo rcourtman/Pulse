@@ -633,7 +633,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
                 ref={guestsHeading}
                 id="proxmox-guests-heading"
                 tabIndex={-1}
-                class="inline-flex flex-wrap items-center gap-1.5 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                class="inline-flex flex-wrap items-center gap-1.5 rounded-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40"
               >
                 {selectedNodeLabel() ? `Guests on ${selectedNodeLabel()}` : 'Guests'}
                 <Show when={showSharedFilterToolbar()}>

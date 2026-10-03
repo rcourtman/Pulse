@@ -526,7 +526,7 @@ describe('tab path helpers', () => {
     expect(alertHistoryTableSectionSource).toContain('alert-history-full-detail-column');
     expect(alertHistoryTableAlertRowSource).toContain('alert-history-timestamp-column');
     expect(alertHistoryTableSectionSource).not.toContain(
-      'overflow-hidden rounded border border-border',
+      'overflow-hidden rounded-sm border border-border',
     );
     expect(alertHistoryTableSectionSource).not.toContain('<div class="overflow-x-auto">');
     expect(alertHistoryTableSectionSource).not.toContain(
@@ -872,7 +872,7 @@ describe('quiet suppress presentation helpers', () => {
 
   it('returns the selected quiet suppress checkbox presentation', () => {
     expect(getAlertQuietSuppressCheckboxClass(true)).toBe(
-      'mt-1 flex h-4 w-4 items-center justify-center rounded border-2 border-blue-500 bg-blue-500',
+      'mt-1 flex h-4 w-4 items-center justify-center rounded-sm border-2 border-blue-500 bg-blue-500',
     );
   });
 });
@@ -886,13 +886,13 @@ describe('incident event filter presentation helpers', () => {
 
   it('returns the shared action button presentation', () => {
     expect(getAlertIncidentEventFilterActionButtonClass()).toBe(
-      'px-2 py-0.5 rounded border border-border text-muted hover:bg-surface-hover',
+      'px-2 py-0.5 rounded-sm border border-border text-muted hover:bg-surface-hover',
     );
   });
 
   it('returns the selected compact chip presentation', () => {
     expect(getAlertIncidentEventFilterChipClass(true, 'compact')).toBe(
-      'px-2 py-0.5 rounded border text-[10px] transition-colors border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
+      'px-2 py-0.5 rounded-sm border text-[10px] transition-colors border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-300',
     );
   });
 });
@@ -900,19 +900,19 @@ describe('incident event filter presentation helpers', () => {
 describe('incident timeline presentation helpers', () => {
   it('returns the acknowledged badge presentation', () => {
     expect(getAlertIncidentAcknowledgedBadgeClass()).toBe(
-      'px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+      'px-2 py-0.5 rounded-sm bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300',
     );
   });
 
   it('returns the surface event-card presentation', () => {
     expect(getAlertIncidentTimelineEventCardClass('surface')).toBe(
-      'rounded border border-border bg-surface p-2 whitespace-normal break-words',
+      'rounded-sm border border-border bg-surface p-2 whitespace-normal wrap-break-word',
     );
   });
 
   it('returns the note editor presentation', () => {
     expect(getAlertIncidentNoteTextareaClass()).toBe(
-      'w-full rounded border border-border bg-surface p-2 text-xs text-base-content',
+      'w-full rounded-sm border border-border bg-surface p-2 text-xs text-base-content',
     );
     expect(getAlertIncidentNoteSaveButtonClass()).toBe(
       'px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed',
@@ -932,7 +932,9 @@ describe('incident timeline presentation helpers', () => {
   });
 
   it('returns the resource incident panel presentation', () => {
-    expect(getAlertResourceIncidentCardClass()).toBe('rounded border border-border bg-surface p-3');
+    expect(getAlertResourceIncidentCardClass()).toBe(
+      'rounded-sm border border-border bg-surface p-3',
+    );
     expect(getAlertResourceIncidentSummaryRowClass()).toBe(
       'mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted',
     );
@@ -940,7 +942,7 @@ describe('incident timeline presentation helpers', () => {
       'flex flex-wrap items-center gap-1.5',
     );
     expect(getAlertResourceIncidentActivityChipClass()).toBe(
-      'rounded bg-surface-alt px-2 py-0.5 text-[10px] font-medium text-base-content',
+      'rounded-sm bg-surface-alt px-2 py-0.5 text-[10px] font-medium text-base-content',
     );
     expect(getAlertResourceIncidentToggleButtonClass()).toBe(
       'px-2 py-1 text-[10px] border rounded-md border-border text-muted hover:bg-surface-hover',

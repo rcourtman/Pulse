@@ -155,7 +155,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             class="mb-3"
             titleClass="text-base-content"
           />
-          <div class="rounded-md border border-border bg-surface p-3 text-sm shadow-sm">
+          <div class="rounded-md border border-border bg-surface p-3 text-sm shadow-xs">
             <div class="flex items-start justify-between gap-3">
               <div>
                 <p class="font-medium text-base-content">Monitor physical disk health (SMART)</p>
@@ -182,7 +182,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
                   label="Physical disk health polling interval"
                   labelClass="sr-only"
                   fieldBaseClass="contents"
-                  selectBaseClass="rounded border bg-surface px-2 py-1 text-xs text-base-content"
+                  selectBaseClass="rounded-sm border bg-surface px-2 py-1 text-xs text-base-content"
                   value={state.formData().physicalDiskPollingMinutes}
                   onChange={(event) =>
                     state.updateField(
@@ -201,7 +201,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
           </div>
 
           <Show when={state.showTemperatureMonitoringSection()}>
-            <div class="rounded-md border border-border bg-surface p-3 text-sm shadow-sm">
+            <div class="rounded-md border border-border bg-surface p-3 text-sm shadow-xs">
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <p class="font-medium text-base-content">Temperature monitoring</p>
@@ -226,13 +226,13 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
                 />
               </div>
               <Show when={!state.temperatureMonitoringEnabledValue()}>
-                <p class="mt-3 rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200">
+                <p class="mt-3 rounded-sm border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-200">
                   Pulse will skip SSH temperature polling for this node. Existing monitoring
                   readings will stop refreshing.
                 </p>
               </Show>
               <Show when={modalProps.temperatureMonitoringLocked}>
-                <p class="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
+                <p class="mt-3 rounded-sm border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/25 dark:text-amber-200">
                   {getTemperatureMonitoringLockedCopy()}
                 </p>
               </Show>

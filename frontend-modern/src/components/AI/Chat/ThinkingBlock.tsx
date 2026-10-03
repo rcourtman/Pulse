@@ -63,7 +63,7 @@ export const ThinkingBlock: Component<ThinkingBlockProps> = (props) => {
       />
       <span class="min-w-0 truncate">
         {statusText()}
-        <span class="text-muted/80">
+        <span class="">
           {durationLabel()
             ? props.isStreaming
               ? ` (${durationLabel()})`

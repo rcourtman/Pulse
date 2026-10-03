@@ -31,9 +31,9 @@ export const ALERT_RESOURCE_INCIDENT_NOTE_SAVED = 'Incident note saved';
 export const ALERT_RESOURCE_INCIDENT_NOTE_SAVE_FAILURE = 'Failed to save incident note';
 export const ALERT_RESOURCE_INCIDENT_VIEW_TITLE = 'View incidents for this resource';
 
-const ALERT_INCIDENT_STATUS_BASE = 'px-2 py-0.5 rounded';
+const ALERT_INCIDENT_STATUS_BASE = 'px-2 py-0.5 rounded-sm';
 const ALERT_INCIDENT_EVENT_FILTER_BUTTON_BASE =
-  'px-2 py-0.5 rounded border text-[10px] transition-colors';
+  'px-2 py-0.5 rounded-sm border text-[10px] transition-colors';
 
 export type AlertIncidentEventFilterVariant = 'compact' | 'panel';
 
@@ -57,12 +57,12 @@ export function getAlertIncidentStatusPresentation(
     case 'acknowledged':
       return {
         label,
-        className: `${ALERT_INCIDENT_STATUS_BASE} bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300`,
+        className: `${ALERT_INCIDENT_STATUS_BASE} bg-emerald-100 dark:bg-emerald-900/25 text-emerald-700 dark:text-emerald-300`,
       };
     case 'open':
       return {
         label,
-        className: `${ALERT_INCIDENT_STATUS_BASE} bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300`,
+        className: `${ALERT_INCIDENT_STATUS_BASE} bg-red-100 dark:bg-red-900/25 text-red-700 dark:text-red-300`,
       };
     default:
       return {
@@ -85,8 +85,8 @@ export function getAlertHistoryStatusPresentation(
     return {
       label: 'active',
       className:
-        'text-xs px-2 py-0.5 rounded bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 font-medium',
-      rowClassName: 'bg-red-50 dark:bg-red-900',
+        'text-xs px-2 py-0.5 rounded-sm bg-red-100 dark:bg-red-900/25 text-red-700 dark:text-red-300 font-medium',
+      rowClassName: 'bg-red-50 dark:bg-red-900/25',
     };
   }
 
@@ -94,14 +94,14 @@ export function getAlertHistoryStatusPresentation(
     return {
       label: 'acknowledged',
       className:
-        'text-xs px-2 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300',
+        'text-xs px-2 py-0.5 rounded-sm bg-yellow-100 dark:bg-yellow-900/25 text-yellow-700 dark:text-yellow-300',
       rowClassName: '',
     };
   }
 
   return {
     label: normalized || 'resolved',
-    className: 'text-xs px-2 py-0.5 rounded bg-surface-hover text-base-content',
+    className: 'text-xs px-2 py-0.5 rounded-sm bg-surface-hover text-base-content',
     rowClassName: '',
   };
 }
@@ -194,7 +194,7 @@ export function getAlertIncidentEventFilterContainerClass(
   variant: AlertIncidentEventFilterVariant,
 ): string {
   if (variant === 'panel') {
-    return 'flex flex-wrap items-center gap-1.5 rounded border border-border bg-surface-alt/50 p-2';
+    return 'flex flex-wrap items-center gap-1.5 rounded-sm border border-border p-2';
   }
 
   return 'flex flex-wrap items-center gap-2 text-[10px] text-muted';
@@ -211,7 +211,7 @@ export function getAlertIncidentEventFilterLabelClass(
 }
 
 export function getAlertIncidentEventFilterActionButtonClass(): string {
-  return 'px-2 py-0.5 rounded border border-border text-muted hover:bg-surface-hover';
+  return 'px-2 py-0.5 rounded-sm border border-border text-muted hover:bg-surface-hover';
 }
 
 export function getAlertIncidentEventFilterChipClass(
@@ -219,7 +219,7 @@ export function getAlertIncidentEventFilterChipClass(
   variant: AlertIncidentEventFilterVariant,
 ): string {
   if (selected) {
-    return `${ALERT_INCIDENT_EVENT_FILTER_BUTTON_BASE} border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300`;
+    return `${ALERT_INCIDENT_EVENT_FILTER_BUTTON_BASE} border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-300`;
   }
 
   if (variant === 'panel') {
@@ -230,15 +230,15 @@ export function getAlertIncidentEventFilterChipClass(
 }
 
 export function getAlertIncidentAcknowledgedBadgeClass(): string {
-  return 'px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300';
+  return 'px-2 py-0.5 rounded-sm bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300';
 }
 
 export function getAlertIncidentTimelineEventCardClass(variant: 'surface' | 'alt'): string {
-  return `rounded border border-border ${variant === 'alt' ? 'bg-surface-alt' : 'bg-surface'} p-2 whitespace-normal break-words`;
+  return `rounded-sm border border-border ${variant === 'alt' ? 'bg-surface-alt' : 'bg-surface'} p-2 whitespace-normal wrap-break-word`;
 }
 
 export function getAlertIncidentNoteTextareaClass(): string {
-  return 'w-full rounded border border-border bg-surface p-2 text-xs text-base-content';
+  return 'w-full rounded-sm border border-border bg-surface p-2 text-xs text-base-content';
 }
 
 export function getAlertIncidentNoteSaveButtonClass(): string {
@@ -266,7 +266,7 @@ export function getAlertIncidentTimelineOutputClass(): string {
 }
 
 export function getAlertResourceIncidentCardClass(): string {
-  return 'rounded border border-border bg-surface p-3';
+  return 'rounded-sm border border-border bg-surface p-3';
 }
 
 export function getAlertResourceIncidentSummaryRowClass(): string {
@@ -278,7 +278,7 @@ export function getAlertResourceIncidentActivitySummaryClass(): string {
 }
 
 export function getAlertResourceIncidentActivityChipClass(): string {
-  return 'rounded bg-surface-alt px-2 py-0.5 text-[10px] font-medium text-base-content';
+  return 'rounded-sm bg-surface-alt px-2 py-0.5 text-[10px] font-medium text-base-content';
 }
 
 export function getAlertResourceIncidentToggleButtonClass(): string {

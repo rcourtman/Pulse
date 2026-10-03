@@ -224,22 +224,25 @@ describe('containerUpdateBadgeModel.branchcov', () => {
       expect(getUpdateButtonClass('updating')).toBe(
         [
           BASE_CLASS,
-          'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-wait',
+          'bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300 cursor-wait',
         ].join(' '),
       );
     });
 
     it('returns the green "success" classes', () => {
       expect(getUpdateButtonClass('success')).toBe(
-        [BASE_CLASS, 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'].join(' '),
+        [BASE_CLASS, 'bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300'].join(
+          ' ',
+        ),
       );
     });
 
     it('returns the red cursor-help "error" classes', () => {
       expect(getUpdateButtonClass('error')).toBe(
-        [BASE_CLASS, 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 cursor-help'].join(
-          ' ',
-        ),
+        [
+          BASE_CLASS,
+          'bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-300 cursor-help',
+        ].join(' '),
       );
     });
 
@@ -248,7 +251,7 @@ describe('containerUpdateBadgeModel.branchcov', () => {
       expect(getUpdateButtonClass('idle')).toBe(
         [
           BASE_CLASS,
-          'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900',
+          'bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900/25',
         ].join(' '),
       );
     });
@@ -259,7 +262,7 @@ describe('containerUpdateBadgeModel.branchcov', () => {
       expect(getUpdateButtonClass(bogus)).toBe(
         [
           BASE_CLASS,
-          'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900',
+          'bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900/25',
         ].join(' '),
       );
     });

@@ -27,8 +27,8 @@ export const getStorageRowAlertPresentation = (options: {
   if (showAlertHighlight) {
     classes.push(
       options.alertState.severity === 'critical'
-        ? 'bg-red-50 dark:bg-red-950'
-        : 'bg-yellow-50 dark:bg-yellow-950',
+        ? 'bg-red-50 dark:bg-red-950/25'
+        : 'bg-yellow-50 dark:bg-yellow-950/25',
     );
     classes.push(
       options.alertState.severity === 'critical'
@@ -36,7 +36,7 @@ export const getStorageRowAlertPresentation = (options: {
         : STORAGE_ROW_WARNING_ALERT_ACCENT_CLASS,
     );
   } else if (options.isResourceHighlighted) {
-    classes.push('bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300 dark:ring-blue-600');
+    classes.push('bg-blue-50 dark:bg-blue-900/25 ring-1 ring-blue-300 dark:ring-blue-600');
   } else if (hasAcknowledgedOnlyAlert) {
     classes.push('bg-surface-alt', STORAGE_ROW_ACKNOWLEDGED_ALERT_ACCENT_CLASS);
   }

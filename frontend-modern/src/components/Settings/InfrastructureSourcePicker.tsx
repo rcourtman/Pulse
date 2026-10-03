@@ -17,13 +17,13 @@ interface InfrastructureSourcePickerProps {
 }
 
 const readinessBadgeClass =
-  'inline-flex items-center rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200';
+  'inline-flex items-center rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-800 dark:border-blue-900/25 dark:bg-blue-950/40 dark:text-blue-200';
 
 // Primary-path cards present the main onboarding journeys up front so users
 // pick a path before scanning the per-source card grid. The grid below stays
 // as a direct alternative for users who already know which source they want.
 const primaryPathCardClass =
-  'group flex h-full items-start gap-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-left transition-colors hover:border-blue-500 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:hover:bg-blue-900';
+  'group flex h-full items-start gap-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-left transition-colors hover:border-blue-500 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:hover:bg-blue-900/25';
 
 const CARD_ICON: Record<InfrastructureSourcePickerItemId, Component<{ class?: string }>> = {
   vmware: ServerCog,
@@ -112,7 +112,7 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
               >
                 <div
                   aria-hidden="true"
-                  class="flex h-10 w-10 flex-none items-center justify-center rounded-md border border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                  class="flex h-10 w-10 flex-none items-center justify-center rounded-md border border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-200"
                 >
                   <Search class="h-5 w-5" />
                 </div>
@@ -132,7 +132,7 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
             >
               <div
                 aria-hidden="true"
-                class="flex h-10 w-10 flex-none items-center justify-center rounded-md border border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                class="flex h-10 w-10 flex-none items-center justify-center rounded-md border border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-200"
               >
                 <Download class="h-5 w-5" />
               </div>
@@ -214,7 +214,7 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
             <button
               type="button"
               onClick={() => setShowAllSources(true)}
-              class="mt-1 inline-flex items-center text-xs font-medium text-blue-700 hover:text-blue-900 hover:underline dark:text-blue-300 dark:hover:text-blue-100"
+              class="mt-1 inline-flex items-center text-xs font-medium text-blue-700 hover:text-blue-900/25 hover:underline dark:text-blue-300 dark:hover:text-blue-100"
             >
               Show {hiddenCount()} more source{hiddenCount() === 1 ? '' : 's'}
             </button>

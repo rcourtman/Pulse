@@ -54,7 +54,7 @@ describe('ProxmoxReplicationTable', () => {
   });
 
   it('removes phone tracking and excess padding from the tight last-sync column', () => {
-    expect(replicationTableSource).toContain('![padding-inline:2px] !tracking-normal');
+    expect(replicationTableSource).toContain('px-[2px]! tracking-normal!');
   });
 
   it('renders replication duration cells through the shared duration format', () => {
@@ -118,7 +118,7 @@ describe('ProxmoxReplicationTable', () => {
     const detail = document.querySelector('[data-replication-job-error]');
     expect(detail).toHaveTextContent(error);
     // The expansion wraps; only the one-line row cell truncates.
-    expect(detail?.className).toContain('break-words');
+    expect(detail?.className).toContain('wrap-break-word');
     expect(detail?.className).not.toContain('truncate');
   });
 

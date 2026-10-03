@@ -35,7 +35,7 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
               Number.isFinite(rebuildPercent()) && rebuildPercent() > 0 && rebuildPercent() < 100;
 
             return (
-              <div class="rounded border border-dashed border-border p-2 overflow-hidden">
+              <div class="rounded-sm border border-dashed border-border p-2 overflow-hidden">
                 <div class="flex items-start justify-between gap-2 min-w-0">
                   <div class="min-w-0">
                     <div
@@ -79,7 +79,7 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
                     <For each={array.devices}>
                       {(device) => (
                         <span
-                          class={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${getRaidDeviceBadgeClass(device)}`}
+                          class={`inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[10px] font-medium ${getRaidDeviceBadgeClass(device)}`}
                           title={`slot ${device.slot} • ${device.state}`}
                         >
                           {device.device}

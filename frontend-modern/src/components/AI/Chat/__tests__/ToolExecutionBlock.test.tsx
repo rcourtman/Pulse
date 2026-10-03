@@ -93,7 +93,7 @@ describe('ToolExecutionBlock', () => {
     expect(toolExecutionBlockSource).not.toContain('lucide-solid/icons/copy');
     expect(toolExecutionBlockSource).not.toContain("lucide-solid/icons/check';");
     expect(toolExecutionBlockSource).not.toContain(
-      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
     );
   });
 
@@ -432,7 +432,7 @@ describe('ToolExecutionBlock', () => {
       .closest('[data-testid="tool-input-summary"]');
     expect(summary).toBeInTheDocument();
     expect(summary?.className).toContain('whitespace-pre-wrap');
-    expect(summary?.className).toContain('break-words');
+    expect(summary?.className).toContain('wrap-break-word');
     expect(summary?.className).not.toContain('truncate');
   });
 
@@ -755,7 +755,7 @@ describe('ToolExecutionBlock', () => {
     expect(detailBlocks.length).toBeGreaterThanOrEqual(2);
     for (const block of detailBlocks) {
       expect(block.className).toContain('whitespace-pre-wrap');
-      expect(block.className).toContain('break-words');
+      expect(block.className).toContain('wrap-break-word');
       expect(block.className).not.toContain('break-all');
     }
   });
@@ -1022,7 +1022,7 @@ describe('PendingToolBlock', () => {
       .closest('[data-testid="tool-input-summary"]');
     expect(summary).toBeInTheDocument();
     expect(summary?.className).toContain('whitespace-pre-wrap');
-    expect(summary?.className).toContain('break-words');
+    expect(summary?.className).toContain('wrap-break-word');
     expect(summary?.className).not.toContain('truncate');
   });
 
@@ -1142,7 +1142,7 @@ describe('PendingToolBlock', () => {
     expect(progress).toBeInTheDocument();
     expect(progress).toHaveAttribute('title', 'Running command.');
     expect(progress.className).not.toContain('hidden');
-    expect(progress.className).toContain('break-words');
+    expect(progress.className).toContain('wrap-break-word');
     expect(progress.className).not.toContain('truncate');
   });
 

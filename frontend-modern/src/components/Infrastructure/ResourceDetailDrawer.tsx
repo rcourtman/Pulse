@@ -43,7 +43,7 @@ interface ResourceDetailDrawerProps {
 }
 
 const TabAvailabilityNotice: Component<{ message: string }> = (props) => (
-  <div class="rounded border border-dashed border-border bg-surface-hover p-4 text-sm text-muted">
+  <div class="rounded-sm border border-dashed border-border bg-surface-hover p-4 text-sm text-muted">
     {props.message}
   </div>
 );
@@ -86,7 +86,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         />
         <h2
           id={headingId()}
-          class="text-sm font-semibold text-base-content min-w-0 [overflow-wrap:anywhere] m-0"
+          class="text-sm font-semibold text-base-content min-w-0 wrap-anywhere m-0"
           title={drawer.displayName()}
         >
           {drawer.displayName()}
@@ -103,7 +103,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         <Show when={drawer.healthIssue()}>
           {(issue) => (
             <span
-              class="inline-flex max-w-full items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+              class="inline-flex max-w-full items-center rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/25 dark:text-amber-300"
               title={issue().title}
             >
               {issue().compactLabel}

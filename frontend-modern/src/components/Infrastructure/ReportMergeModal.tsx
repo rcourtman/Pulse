@@ -28,7 +28,7 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
         label: badge?.label || getSourcePlatformLabel(source),
         classes:
           badge?.classes ||
-          'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-base-content',
+          'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-base-content',
       };
     }),
   );
@@ -125,7 +125,7 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
           value={notes()}
           onInput={(event) => setNotes(event.currentTarget.value)}
           rows={3}
-          textareaBaseClass="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          textareaBaseClass="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
           placeholder="Example: Agent running on a different host with same hostname."
         />
 
@@ -133,7 +133,7 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
           <div
             role="alert"
             aria-live="assertive"
-            class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-900 dark:text-red-200"
+            class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/25 dark:bg-red-900/25 dark:text-red-200"
           >
             {error()}
           </div>

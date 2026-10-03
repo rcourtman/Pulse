@@ -89,9 +89,9 @@ export const CommercialUsageMeters: Component<CommercialUsageMetersProps> = (pro
             </span>
           </div>
           <Show when={typeof item.limit === 'number'}>
-            <div class="h-2 w-full rounded bg-surface-hover">
+            <div class="h-2 w-full rounded-sm bg-surface-hover">
               <div
-                class={`h-2 rounded ${item.accentClass}`}
+                class={`h-2 rounded-sm ${item.accentClass}`}
                 style={{ width: `${usageRatio(item.current, item.limit)}%` }}
               />
             </div>

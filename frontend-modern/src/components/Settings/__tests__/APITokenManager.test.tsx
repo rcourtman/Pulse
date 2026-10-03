@@ -261,7 +261,7 @@ describe('APITokenManager', () => {
     expect(apiTokenManagerSource).not.toContain(
       'min-h-10 sm:min-h-10 rounded-full border px-3 py-2 text-sm font-semibold transition',
     );
-    expect(apiTokenManagerSource).not.toContain('border-blue-500 bg-blue-600 text-white shadow-sm');
+    expect(apiTokenManagerSource).not.toContain('border-blue-500 bg-blue-600 text-white shadow-xs');
     expect(apiTokenManagerSource).not.toContain('hover:border-blue-400 hover:text-blue-600');
 
     render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);

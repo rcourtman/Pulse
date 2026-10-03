@@ -61,17 +61,18 @@ describe('alertIncidentPresentation', () => {
     expect(getAlertIncidentStatusPresentation('open', true)).toEqual({
       label: 'acknowledged',
       className:
-        'px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300',
+        'px-2 py-0.5 rounded-sm bg-emerald-100 dark:bg-emerald-900/25 text-emerald-700 dark:text-emerald-300',
     });
 
     expect(getAlertIncidentStatusPresentation('open', false)).toEqual({
       label: 'open',
-      className: 'px-2 py-0.5 rounded bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300',
+      className:
+        'px-2 py-0.5 rounded-sm bg-red-100 dark:bg-red-900/25 text-red-700 dark:text-red-300',
     });
 
     expect(getAlertIncidentStatusPresentation('resolved', false)).toEqual({
       label: 'resolved',
-      className: 'px-2 py-0.5 rounded bg-surface-hover text-base-content',
+      className: 'px-2 py-0.5 rounded-sm bg-surface-hover text-base-content',
     });
   });
 
@@ -86,20 +87,20 @@ describe('alertIncidentPresentation', () => {
     expect(getAlertHistoryStatusPresentation('active')).toEqual({
       label: 'active',
       className:
-        'text-xs px-2 py-0.5 rounded bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 font-medium',
-      rowClassName: 'bg-red-50 dark:bg-red-900',
+        'text-xs px-2 py-0.5 rounded-sm bg-red-100 dark:bg-red-900/25 text-red-700 dark:text-red-300 font-medium',
+      rowClassName: 'bg-red-50 dark:bg-red-900/25',
     });
 
     expect(getAlertHistoryStatusPresentation('acknowledged')).toEqual({
       label: 'acknowledged',
       className:
-        'text-xs px-2 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300',
+        'text-xs px-2 py-0.5 rounded-sm bg-yellow-100 dark:bg-yellow-900/25 text-yellow-700 dark:text-yellow-300',
       rowClassName: '',
     });
 
     expect(getAlertHistoryStatusPresentation('resolved')).toEqual({
       label: 'resolved',
-      className: 'text-xs px-2 py-0.5 rounded bg-surface-hover text-base-content',
+      className: 'text-xs px-2 py-0.5 rounded-sm bg-surface-hover text-base-content',
       rowClassName: '',
     });
   });
@@ -150,7 +151,7 @@ describe('alertIncidentPresentation', () => {
       'flex flex-wrap items-center gap-2 text-[10px] text-muted',
     );
     expect(getAlertIncidentEventFilterContainerClass('panel')).toBe(
-      'flex flex-wrap items-center gap-1.5 rounded border border-border bg-surface-alt/50 p-2',
+      'flex flex-wrap items-center gap-1.5 rounded-sm border border-border p-2',
     );
     expect(getAlertIncidentEventFilterLabelClass('compact')).toBe(
       'uppercase tracking-wide text-[9px] text-muted',
@@ -159,31 +160,31 @@ describe('alertIncidentPresentation', () => {
       'mr-1 text-xs font-medium text-muted',
     );
     expect(getAlertIncidentEventFilterActionButtonClass()).toBe(
-      'px-2 py-0.5 rounded border border-border text-muted hover:bg-surface-hover',
+      'px-2 py-0.5 rounded-sm border border-border text-muted hover:bg-surface-hover',
     );
     expect(getAlertIncidentEventFilterChipClass(true, 'compact')).toBe(
-      'px-2 py-0.5 rounded border text-[10px] transition-colors border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
+      'px-2 py-0.5 rounded-sm border text-[10px] transition-colors border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-300',
     );
     expect(getAlertIncidentEventFilterChipClass(false, 'compact')).toBe(
-      'px-2 py-0.5 rounded border text-[10px] transition-colors border-border text-slate-500',
+      'px-2 py-0.5 rounded-sm border text-[10px] transition-colors border-border text-slate-500',
     );
     expect(getAlertIncidentEventFilterChipClass(false, 'panel')).toBe(
-      'px-2 py-0.5 rounded border text-[10px] transition-colors font-medium border-border text-muted hover:bg-surface-alt',
+      'px-2 py-0.5 rounded-sm border text-[10px] transition-colors font-medium border-border text-muted hover:bg-surface-alt',
     );
   });
 
   it('returns canonical incident timeline presentation classes', () => {
     expect(getAlertIncidentAcknowledgedBadgeClass()).toBe(
-      'px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+      'px-2 py-0.5 rounded-sm bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300',
     );
     expect(getAlertIncidentTimelineEventCardClass('alt')).toBe(
-      'rounded border border-border bg-surface-alt p-2 whitespace-normal break-words',
+      'rounded-sm border border-border bg-surface-alt p-2 whitespace-normal wrap-break-word',
     );
     expect(getAlertIncidentTimelineEventCardClass('surface')).toBe(
-      'rounded border border-border bg-surface p-2 whitespace-normal break-words',
+      'rounded-sm border border-border bg-surface p-2 whitespace-normal wrap-break-word',
     );
     expect(getAlertIncidentNoteTextareaClass()).toBe(
-      'w-full rounded border border-border bg-surface p-2 text-xs text-base-content',
+      'w-full rounded-sm border border-border bg-surface p-2 text-xs text-base-content',
     );
     expect(getAlertIncidentNoteSaveButtonClass()).toBe(
       'px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed',
@@ -200,7 +201,9 @@ describe('alertIncidentPresentation', () => {
   });
 
   it('returns canonical resource incident card presentation classes', () => {
-    expect(getAlertResourceIncidentCardClass()).toBe('rounded border border-border bg-surface p-3');
+    expect(getAlertResourceIncidentCardClass()).toBe(
+      'rounded-sm border border-border bg-surface p-3',
+    );
     expect(getAlertResourceIncidentSummaryRowClass()).toBe(
       'mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted',
     );
@@ -208,7 +211,7 @@ describe('alertIncidentPresentation', () => {
       'flex flex-wrap items-center gap-1.5',
     );
     expect(getAlertResourceIncidentActivityChipClass()).toBe(
-      'rounded bg-surface-alt px-2 py-0.5 text-[10px] font-medium text-base-content',
+      'rounded-sm bg-surface-alt px-2 py-0.5 text-[10px] font-medium text-base-content',
     );
     expect(getAlertResourceIncidentToggleButtonClass()).toBe(
       'px-2 py-1 text-[10px] border rounded-md border-border text-muted hover:bg-surface-hover',

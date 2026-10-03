@@ -8,15 +8,15 @@ export interface SourceTypePresentation {
 const SOURCE_TYPE_PRESENTATION: Record<SourceType, SourceTypePresentation> = {
   agent: {
     label: 'Agent',
-    badgeClasses: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-400',
+    badgeClasses: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-400',
   },
   api: {
     label: 'API',
-    badgeClasses: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-400',
+    badgeClasses: 'bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-400',
   },
   hybrid: {
     label: 'Hybrid',
-    badgeClasses: 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-400',
+    badgeClasses: 'bg-teal-100 text-teal-700 dark:bg-teal-900/25 dark:text-teal-400',
   },
 };
 

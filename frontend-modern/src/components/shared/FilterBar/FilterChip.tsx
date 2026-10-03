@@ -115,7 +115,7 @@ export const FilterChip: Component<FilterChipProps> = (props) => {
 
   return (
     <div ref={containerRef} class="relative inline-flex">
-      <div class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 text-xs dark:border-blue-900 dark:bg-blue-950/40">
+      <div class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 text-xs dark:border-blue-900/25 dark:bg-blue-950/40">
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
@@ -155,7 +155,7 @@ export const FilterChip: Component<FilterChipProps> = (props) => {
               onKeyDown={handleSearchKeyDown}
               placeholder="Filter values..."
               aria-label={`Filter ${props.filter.label} values`}
-              class="w-full bg-transparent py-1.5 pl-7 pr-2 text-xs text-base-content placeholder-muted outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:rounded"
+              class="w-full bg-transparent py-1.5 pl-7 pr-2 text-xs text-base-content placeholder-muted outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:rounded-sm"
             />
           </div>
           <div class="max-h-64 overflow-y-auto py-1">

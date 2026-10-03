@@ -237,7 +237,7 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span
-                              class="inline-block max-w-[14rem] truncate"
+                              class="inline-block max-w-56 truncate"
                               title={dockerTextValue(
                                 resource.docker?.error ||
                                   resource.docker?.message ||
@@ -256,7 +256,7 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-narrow-hidden hidden text-base-content md:table-cell`}
                           >
                             <span
-                              class="inline-block max-w-[12rem] truncate"
+                              class="inline-block max-w-48 truncate"
                               title={dockerTextValue(resource.docker?.startedAt)}
                             >
                               {dockerTextValue(resource.docker?.startedAt)}
