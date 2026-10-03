@@ -1381,7 +1381,7 @@ func TestTrueNASHandlers_HandlePreviewSavedConnection_ReturnsUnavailableWhenSupp
 	assertMonitoredSystemUsageUnavailableReason(t, rec, monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending)
 }
 
-func TestTrueNASHandlers_HandleTestSavedConnection_UpdatesPollSummaryFailure(t *testing.T) {
+func TestTrueNASHandlers_HandleTestSavedConnection_FailureDoesNotInventPollAttempt(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
 
 	connection := config.TrueNASInstance{
@@ -1415,11 +1415,11 @@ func TestTrueNASHandlers_HandleTestSavedConnection_UpdatesPollSummaryFailure(t *
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
 	summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
-	if summary.Poll == nil || summary.Poll.LastError == nil {
-		t.Fatalf("expected saved retest failure to update poll summary, got %+v", summary.Poll)
+	if summary.Poll == nil || summary.Poll.LastError != nil || summary.Poll.LastAttemptAt != nil || summary.Poll.LastSuccessAt != nil {
+		t.Fatalf("a separate failed probe must not invent a runtime poll attempt, got %+v", summary.Poll)
 	}
-	if summary.Poll.LastError.Message != "authentication failed" {
-		t.Fatalf("expected failure message preserved, got %+v", summary.Poll.LastError)
+	if !strings.Contains(rec.Body.String(), "authentication failed") {
+		t.Fatalf("expected probe failure in its own response, got %s", rec.Body.String())
 	}
 }
 

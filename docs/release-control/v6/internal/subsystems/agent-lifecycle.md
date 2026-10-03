@@ -15,6 +15,17 @@
 
 ## Purpose
 
+### TrueNAS probes are not fleet or inventory liveness
+
+A separate settings connection probe does not establish runtime provider
+freshness, verified fleet credentials, observed resources or readiness for
+monitored-system accounting. These remain tied to actual scheduled refreshes.
+Stored-secret selection, tenant isolation and authentication responses remain
+unchanged. The connections continuity test seeds its success from a real local
+runtime poll rather than a probe-shaped synthetic success. The API contract
+control retains a runtime inventory error despite a subsequent successful
+system-information probe; no synthetic success establishes installed acceptance.
+
 ### Podman interval CPU evidence — issue #2447
 
 Every one-shot container stats response retains a cumulative CPU baseline,

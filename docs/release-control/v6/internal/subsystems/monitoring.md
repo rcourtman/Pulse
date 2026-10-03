@@ -273,8 +273,11 @@ or appliance health, and sending keepalives is not proactive pong-timeout detect
 Successful TrueNAS refreshes target start-to-start cadence, bounded below by
 completion plus min(five seconds, configured interval), preventing back-to-back
 load on slow appliances. Failed refreshes retain a full completion-based retry
-interval. Manual connection tests retain completion-based scheduling. Observed
-last-attempt and last-success timestamps remain completion timestamps; resource
+interval. Manual connection probes use a separate client and do not alter
+scheduling or poll evidence: success must not clear a runtime error or advance
+last-attempt, last-success, observed collection or inventory readiness. Failure
+remains in the probe response, not a fabricated runtime attempt. Observed
+last-attempt and last-success timestamps remain runtime completion timestamps; resource
 freshness thresholds must not be extended to hide genuinely stale devices.
 
 `TestAuthenticatedRPCSurvivesIdleTransportTimeout` and
@@ -285,6 +288,11 @@ server, opening-context cancellation, concurrent controls/RPCs and sender dispos
 `internal/monitoring/truenas_poller_test.go` verifies due boundaries, short/slow
 cycles, completion timestamps and unchanged failure backoff. These are synthetic
 runtime proofs, not native firmware timeout or reporter-resolution evidence.
+`TestTrueNASSavedProbePreservesRuntimeEvidence` in `internal/api/contract_test.go`
+checks the actual saved probe and list handlers against never-polled and
+previously observed-but-failing runtime states. A synthetic successful login
+with a required pool-method failure is not attribution of the native #2382
+regression; the failing appliance/session method remains field evidence.
 
 ### TrueNAS empty app inventories and session-disposal evidence
 

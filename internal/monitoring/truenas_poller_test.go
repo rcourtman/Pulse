@@ -396,7 +396,7 @@ func TestTrueNASPollerConnectionSummariesCaptureFailures(t *testing.T) {
 	}
 }
 
-func TestTrueNASPollerManualConnectionTestsUpdateSummariesWithoutClearingObservedCounts(t *testing.T) {
+func TestTrueNASPollerRuntimeRecoveryUpdatesSummariesAndObservedCounts(t *testing.T) {
 	poller := NewTrueNASPoller(nil, time.Minute, nil)
 	connection := config.TrueNASInstance{
 		ID:               "manual-test-conn",
@@ -416,24 +416,28 @@ func TestTrueNASPollerManualConnectionTestsUpdateSummariesWithoutClearingObserve
 	}
 	firstSuccess := time.Date(2026, time.March, 30, 10, 0, 0, 0, time.UTC)
 	failureAt := firstSuccess.Add(2 * time.Minute)
-	manualSuccessAt := failureAt.Add(2 * time.Minute)
+	recoveryAt := failureAt.Add(2 * time.Minute)
 
 	poller.mu.Lock()
 	poller.recordConnectionSuccessLocked("default", connection.ID, connection, firstSuccess, firstSuccess, snapshot)
 	poller.recordConnectionFailureLocked("default", connection.ID, connection, errors.New("manual auth failed"), failureAt)
 	poller.mu.Unlock()
 
-	poller.RecordConnectionTestSuccess("default", connection.ID, connection, manualSuccessAt)
+	snapshot.CollectedAt = recoveryAt
+	poller.mu.Lock()
+	poller.recordConnectionSuccessLocked("default", connection.ID, connection, recoveryAt, recoveryAt, snapshot)
+	poller.mu.Unlock()
 
 	summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
 	if summary.Poll == nil || summary.Poll.LastSuccessAt == nil {
-		t.Fatalf("expected manual success to update poll summary, got %+v", summary.Poll)
+		t.Fatalf("expected runtime recovery to update poll summary, got %+v", summary.Poll)
 	}
-	if summary.Poll.LastError != nil {
-		t.Fatalf("expected manual success to clear previous error, got %+v", summary.Poll.LastError)
+	if summary.Poll.LastError != nil || summary.Poll.ConsecutiveFailures != 0 || !summary.Poll.LastSuccessAt.Equal(recoveryAt) {
+		t.Fatalf("expected runtime recovery to clear previous error, got %+v", summary.Poll)
 	}
-	if summary.Observed == nil || summary.Observed.Host != "manual-test" || summary.Observed.StoragePools != 1 {
-		t.Fatalf("expected observed summary to be preserved after manual success, got %+v", summary.Observed)
+	if summary.Observed == nil || summary.Observed.Host != "manual-test" || summary.Observed.StoragePools != 1 ||
+		summary.Observed.CollectedAt == nil || !summary.Observed.CollectedAt.Equal(recoveryAt) {
+		t.Fatalf("expected observed summary to advance after runtime recovery, got %+v", summary.Observed)
 	}
 }
 
@@ -1653,7 +1657,9 @@ func TestTrueNASPollerSupplementalInventoryReadyAtUsesPersistedActiveConnections
 	}
 
 	attemptedAt := time.Now().UTC()
-	poller.RecordConnectionTestSuccess("default", connection.ID, connection, attemptedAt)
+	poller.mu.Lock()
+	poller.recordConnectionSuccessLocked("default", connection.ID, connection, attemptedAt, attemptedAt, &truenas.FixtureSnapshot{CollectedAt: attemptedAt})
+	poller.mu.Unlock()
 
 	readyAt, settled := poller.SupplementalInventoryReadyAt(nil, "default")
 	if !settled {
