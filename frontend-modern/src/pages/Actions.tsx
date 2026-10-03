@@ -294,7 +294,7 @@ export function Actions() {
                     <button
                       type="button"
                       aria-label={`Review ${title()} on ${action.request.resourceId}, ${state().label}`}
-                      class={`group w-full border-l-2 px-3 py-3 text-left transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-blue-500 sm:px-4 ${state().accentClass}`}
+                      class={`group w-full border-l-2 px-3 py-3 text-left transition-colors hover:bg-surface-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-blue-500 sm:px-4 ${state().accentClass}`}
                       onClick={() => openAction(action)}
                     >
                       <div class="flex items-center gap-3">
