@@ -227,10 +227,14 @@ installed service must contain `SyslogLevelPrefix=true` and
 repair an older generated unit rather than adding a JSON-parsing wrapper.
 
 #### VMs show "-" for disk usage
-- Install **QEMU Guest Agent** in the VM.
-- Enable "QEMU Guest Agent" in Proxmox VM Options.
-- Restart the VM.
-- See [VM Disk Monitoring](VM_DISK_MONITORING.md).
+- Read the disk value's explanation and observation time first; a dash is not
+  proof that the agent is missing.
+- Check the guest-local service, current VM Options and the configured API
+  token's read permissions. Schedule any setup change or restart outside backups.
+- Do not run guest-agent probes during backup freeze/thaw. An OK backup task
+  or an absent lock does not confirm thaw.
+- See [VM Disk Monitoring](VM_DISK_MONITORING.md) for the passive host preflight
+  and backup safety precaution; it does not verify a fresh disk poll.
 
 #### Temperature data missing
 - Install `lm-sensors` on the host.
@@ -615,7 +619,12 @@ For PVE 8 only, use `VM.Monitor` instead of the `VM.GuestAgent.*` privileges.
 
 Note: The built-in `PVEAuditor` role cannot be modified. Create a custom role (e.g. `PulseMonitor`) with the above privileges added, and assign it to your Pulse API token. After upgrading to PVE 9, add the `VM.GuestAgent.*` privileges and remove legacy `VM.Monitor` from the custom role.
 
-**Rocky Linux / RHEL VMs**: The default qemu-guest-agent configuration may block file-read RPCs (`guest-file-open`, `guest-file-read`, `guest-file-close`). If memory or disk data is missing for these VMs, check `/etc/sysconfig/qemu-ga` and ensure those operations are not blocked, then restart the agent. Refer to your distro's qemu-guest-agent documentation for the exact config syntax.
+**Rocky Linux / RHEL VMs**: File-read restrictions in `/etc/sysconfig/qemu-ga`
+can explain missing guest memory; they do not by themselves establish why disk
+usage is absent. Review the guest's policy before changing it. Schedule any
+allowlist change or agent restart outside backups, following the guest OS's
+documentation. See [VM Disk Monitoring](VM_DISK_MONITORING.md) for the distinct
+permissions and backup safety boundary.
 
 ### Proxmox pending-update access
 
