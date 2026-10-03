@@ -167,7 +167,14 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
     def test_proxy_probe_preserves_roles_reports_status_only_and_never_follows_redirects(self):
         for status in (200, 401, 403, 302):
             with proxy_server(status) as (port, requests):
-                for role in ("X-Proxy-Roles: none\n", "", "X-Proxy-Roles:\n"):
+                # curl's colon-only form removes a header. A semicolon sends
+                # an explicitly empty header; cover both as well as omission.
+                for role, expected_role in (
+                    ("X-Proxy-Roles: none\n", "none"),
+                    ("", None),
+                    ("X-Proxy-Roles:\n", None),
+                    ("X-Proxy-Roles;\n", ""),
+                ):
                     with self.subTest(status=status, role=role), tempfile.TemporaryDirectory() as temporary:
                         before = len(requests)
                         result = self.exercise_proxy(Path(temporary), port, role)
@@ -179,7 +186,7 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
                         self.assertEqual((method, path), ("GET", "/api/system/settings"))
                         self.assertEqual(headers["X-Proxy-Secret"], TEST_TOKEN)
                         self.assertEqual(headers["X-Authentik-Username"], "testuser")
-                        self.assertEqual(headers.get("X-Proxy-Roles"), None if not role else ("none" if "none" in role else ""))
+                        self.assertEqual(headers.get("X-Proxy-Roles"), expected_role)
                         for unexpected in ("X-API-Token", "Authorization", "Cookie", "X-Curlrc-Injected"):
                             self.assertNotIn(unexpected, headers)
 
