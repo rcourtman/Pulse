@@ -11,6 +11,11 @@ const { chromium, webkit } = require('playwright');
   const root = path.join(workspace, 'frontend-modern');
   const output = path.join(workspace, 'tmp', 'configuration-migration');
   fs.mkdirSync(output, { recursive: true });
+  const binding = JSON.parse(fs.readFileSync(
+    path.join(workspace, 'tmp', 'configuration-migration-binding.json'), 'utf8'));
+  assert.match(binding.sourceSha, /^[0-9a-f]{40}$/);
+  for (const [file, digest] of Object.entries(binding.contentSha256))
+    assert.equal(createHash('sha256').update(fs.readFileSync(path.join(workspace, file))).digest('hex'), digest, file);
   process.chdir(root);
   const { createServer } = await import(path.join(root, 'node_modules/vite/dist/node/index.js'));
   const server = await createServer({
@@ -65,6 +70,10 @@ const { chromium, webkit } = require('playwright');
       const guide = exporting.getByRole('link', { name: 'migration guide', exact: true });
       await guide.scrollIntoViewIfNeeded();
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+      const warning = exporting.locator('strong', { hasText: 'Configuration only:' }).locator('..');
+      assert.ok(await warning.isVisible(), 'configuration scope warning is visible');
+      const iconWidth = await exporting.locator('svg').first().evaluate((el) => el.getBoundingClientRect().width);
+      assert.ok(iconWidth >= 15, 'Tailwind4 warning icon does not shrink');
       await page.screenshot({ animations: 'disabled', path: path.join(output, `${engine}-export.png`) });
       await guide.focus();
       const popupPromise = page.waitForEvent('popup');
@@ -120,14 +129,16 @@ const { chromium, webkit } = require('playwright');
       assert.deepEqual(errors, []);
       observations.push({ engine, browserVersion: browser.version(), width, height,
         warningScope: true, keyboardGuideAndRetargetLinks: true, syntheticExportAndRejectedImport: true,
-        noPageOverflow: true, errors });
+        noPageOverflow: true, warningIconWidth: iconWidth, errors });
       await browser.close();
       browser = undefined;
     }
     const files = ['frontend-modern/src/components/Settings/BackupTransferDialogs.tsx',
       'frontend-modern/public/docs/MIGRATION.md', 'frontend-modern/public/docs/UNIFIED_AGENT.md'];
     const result = { result: 'passed', playwrightVersion: require('playwright/package.json').version,
-      baseSha: '73d2c64e0f5bce57f3a1dc6f9e055b4784e079bd',
+      sourceSha: binding.sourceSha, baseSha: binding.sourceSha,
+      dependencySnapshot: binding.dependencySnapshot,
+      manifestSha256: binding.manifestSha256, verifiedAt: new Date().toISOString(),
       scope: 'Real dialog/flow/production Docs rendering with synthetic API; no native migration or shipment',
       contentSha256: Object.fromEntries(files.map((file) => [file,
         createHash('sha256').update(fs.readFileSync(path.join(workspace, file))).digest('hex')])), observations };
