@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "50756d745ea7ae62d3e1bbdccd03a03ce8963a1a",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/components/Storage/EnhancedStorageBar.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx",
+    "frontend-modern/src/components/Workloads/DiskList.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx",
+    "frontend-modern/src/components/shared/HistoryChartOverlay.tsx",
+    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx",
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts",
+    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx": "4fc443b465a7fe78df9f2b3faad6337bdddd118f9cfd33faa9217aaeb2d43c1b",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "b922b64a4388855c29296b178df553c60ba9395bd63d1433f79c6112030c8399",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "aca82b1f7a6f330d1f6fd7bdb6301420d3a7bb4f7f22fa5666e013a8a656ed26",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "ddad24a010a2a194f37977f3c3aa3fa647b431bd65d1d75e9f5aea6d42f72692",
+    "frontend-modern/src/components/Storage/EnhancedStorageBar.tsx": "8021e55b50564fc9dfa29ebb83a824541b3ba34a1a6fc0fcc3793af5e5e4f701",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx": "abab4dcd8a67c39a846a97e46d3ba4e910b577f84318ed1e9c6a2c1cb6dc81fa",
+    "frontend-modern/src/components/Workloads/DiskList.tsx": "b9828bd9a9593093cfaeee5816a644b22177c0e91146c1592e01149a1c833793",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "83a0d0c00786ab3a9115d0534a6d5a08f3c428109469a932c7d4f7fd9accc2b4",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "33ce83ef5a529cbab740326de6c6b04ac62ca2024f07f3414262f68c69727186",
+    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx": "ff67b81bc5722f27f49820aeed76e5cc20b770cbd2fae4dbd1f267b10519995d",
+    "frontend-modern/src/components/shared/HistoryChartOverlay.tsx": "a41425ff8dc2cd0768c7a9bf2f1192a3a058498d002ba3e8723979c5aaa60950",
+    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx": "75530d5d16a579d415a5bc2c9f86e507555de1446d06529315b6c31919b03e03",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx": "a6d61e02ed31912abe9d1a33776a923412bef9aaa03b44d84facee723e0cc190",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx": "6cc99405c7bdb2b2edfd992f6b17b2636bb9285a53e949e41609dfa8b339cacf",
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx": "5d7362905632cf4e69c4a878f972ac40544bda2959db2822a431bcc74ba35089",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "b791a50845befbdcfdca979355188fb1e977878ce69e8a72cbbdf90fda5e8cbe",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "97a95f97c94795005300fe55fdca81756b6ce9f11e977d1a3f683775eb0dc88d",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "f85558ab1092078b9a3d160c986450d2167552b10b2f76c10087fceef5af0689",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "1dc95dd84f499e38a8fca77650ae72ff6c903b7c03c8fdc3cf366b309817e488",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "80079e8de47bbaa368ff511445209fe61fdbcd7ac0ce8003ef7d90ab338df2de",
+    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts": "908af893071386d1a11a7191694b9fef399e4b134e78188bee90faa80f758e91",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx": "426d43f1635b659949e2317740ca09b54dfff89b1cd93c4dc6035a6b82fc2d13",
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts": "90670aaa66ce08fb90570b757029e10ea232c21f2e64ea4ce5e6cc3daa829d41",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts": "6e1faea3be9f1c7bacc8bc74ee03b2849c0e254bdee29cf6fb912c90d0ae6623",
+    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts": "51a917ac758ce2611f444d6c37240de1e706282adad81f1feaa621aee939d115",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "c51181ed80bc33907d331f2fd646b5aa209ebde622fb1ec1b6b70b8dcc2fd7d8"
+  },
+  "routes": [
+    "/browser-tests/guest-disk-deferral.html",
+    "/browser-tests/proxmox-docker-rows.html",
+    "/browser-tests/operator-tables-consent.html",
+    "/browser-tests/notification-evidence.html",
+    "/browser-tests/resource-evidence-access.html",
+    "/browser-tests/history-access.html",
+    "/browser-tests/history-keyboard.html",
+    "/browser-tests/drawer-snapshot.html",
+    "/browser-tests/backups.html"
+  ],
+  "states": [
+    "Eight guest disk deferral/uncertainty families with and without retained observations; seven distinct unavailable states; fresh same-VM resumption",
+    "PBS/NAS pool health and capacity, full SMART reason, Kubernetes absolute started/completed and last-run context",
+    "REST-mapped Docker/PMG/storage rows and disclosures; fresh and missing facets; Swarm lifecycle details",
+    "Backup age, source and archive detail remain independent of guest snapshots, including snapshot-only repository scope",
+    "Notification initial/held pending, denied/unavailable and retained-transient read states",
+    "History/action denial withdraws prior samples, cache and fallback; transient failures retain truthful last-known evidence; pending retry and remount",
+    "Same-ID drawer replacement, target withdrawal, explicit selection and removed/restored availability checks",
+    "History overlay keyboard focus, arrow/Home/End bounds, grouped tooltips, Escape and empty data",
+    "Rollback consent reports unknown restore scope; rejection keeps consent and pending submissions cannot be duplicated or cancelled"
+  ],
+  "interactions": [
+    "Open/close real rows and detail disclosures; hover disk bars on desktop; use phone touch controls",
+    "Select By date and Coverage using real router links; query filter to empty and back; scope to snapshot-only location and remove scope",
+    "Retry History and action/facet reads; select target and range; retain denial during pending refresh; read fresh successful result",
+    "Keyboard activation, Tab, Enter, arrow keys, Home, End and Escape; cancel restore before mutation and observe synthetic rejection/pending acceptance",
+    "Inspect actual desktop and phone screenshots and assert rendered bounds and final data, not just route or HTTP success"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-03T16:56:27Z",
+  "evidence": [
+    "Current invocation OUTCOME/RECEIPTS.md and hash-verified browser artifacts (nine production-component fixture families), synthetic production-component/CSS observations only"
+  ],
+  "limitations": [
+    "Not native appliance/QGA/thaw, full-app/server, installation, signed persistent-state recovery or released acceptance.",
+    "Fresh additive receipt covers the 26 missing final contents against published main. Existing valid own-parent proofs are retained rather than rewritten."
+  ]
+}
