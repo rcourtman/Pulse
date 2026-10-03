@@ -139,7 +139,9 @@ func (m *Monitor) SetAlertResolvedAICallback(callback func(*alerts.Alert)) {
 	if m.alertManager == nil {
 		return
 	}
+	m.mu.Lock()
 	m.alertResolvedAICallback = callback
+	m.mu.Unlock()
 	log.Info().Msg("alert-resolved AI callback registered")
 }
 
@@ -220,41 +222,56 @@ func (m *Monitor) handleAlertFired(alert *alerts.Alert) {
 }
 
 func (m *Monitor) handleAlertResolved(alertID string) {
-	var resolvedAlert *alerts.ResolvedAlert
+	// Compatibility for ID-only callers. The live monitor is wired to the
+	// occurrence snapshot callback, not a lookup after asynchronous dispatch.
+	if m.alertManager == nil {
+		return
+	}
+	m.handleResolvedAlert(m.alertManager.GetResolvedAlert(alertID))
+}
+
+func (m *Monitor) handleResolvedAlert(resolvedAlert *alerts.ResolvedAlert) {
+	if resolvedAlert == nil || resolvedAlert.Alert == nil {
+		return
+	}
+	alertID := resolvedAlert.Alert.ID
 
 	if m.wsHub != nil {
-		m.wsHub.BroadcastAlertResolvedToTenant(m.GetOrgID(), alertID)
+		// The legacy websocket message has only an ID. Do not remove a current
+		// firing occurrence that is already visible under that reusable ID.
+		active := false
+		if m.alertManager != nil {
+			_, active = m.alertManager.DiagnoseAlertDelivery(alertID)
+		}
+		if !active {
+			m.wsHub.BroadcastAlertResolvedToTenant(m.GetOrgID(), alertID)
+		}
 	}
 
 	// Always trigger AI callback, regardless of notification suppression.
-	if m.alertResolvedAICallback != nil {
-		if resolvedAlert == nil {
-			resolvedAlert = m.alertManager.GetResolvedAlert(alertID)
-		}
-		if resolvedAlert != nil && resolvedAlert.Alert != nil {
-			go m.alertResolvedAICallback(resolvedAlert.Alert)
-		}
+	m.mu.RLock()
+	aiCallback := m.alertResolvedAICallback
+	m.mu.RUnlock()
+	if aiCallback != nil {
+		go aiCallback(resolvedAlert.Alert.Clone())
 	}
 
 	// Handle notifications — recovery notifications respect quiet hours.
 	// If the original alert would have been suppressed during quiet hours,
 	// the recovery notification is also suppressed to avoid noise.
 	if m.notificationMgr != nil {
-		firingNeverDelivered := m.notificationMgr.CancelAlert(alertID)
+		firingNeverDelivered := m.notificationMgr.CancelResolvedAlert(resolvedAlert.Alert)
 		if m.notificationMgr.GetNotifyOnResolve() {
-			if resolvedAlert == nil {
-				resolvedAlert = m.alertManager.GetResolvedAlert(alertID)
-			}
 			if resolvedAlert != nil && resolvedAlert.Alert != nil {
 				if firingNeverDelivered {
 					// The firing notification was still in the grouping window
 					// or waiting in the queue (e.g. quiet-hours replay) when the
-					// alert resolved, and CancelAlert just cancelled it. A
+					// alert resolved, and exact cancellation just cancelled it. A
 					// recovery for an alert the user never saw fire is noise.
 					log.Info().
 						Str("alertID", alertID).
 						Msg("Resolved notification suppressed because the firing notification was cancelled before delivery")
-				} else if m.alertManager.ShouldSuppressResolvedNotification(resolvedAlert.Alert) {
+				} else if m.alertManager != nil && m.alertManager.ShouldSuppressResolvedNotification(resolvedAlert.Alert) {
 					log.Info().
 						Str("alertID", alertID).
 						Msg("Resolved notification suppressed during quiet hours")

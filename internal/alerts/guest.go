@@ -551,7 +551,7 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 
 	// Send recovery notification (async to avoid deadlock because callback acquires m.mu.RLock
 	// via ShouldSuppressResolvedNotification, and we currently hold m.mu.Lock)
-	m.safeCallResolvedAlertCallback(alert, effectiveAlertID(alert, alertID), true)
+	m.safeCallResolvedAlertCallback(resolvedAlert, effectiveAlertID(alert, alertID), true)
 
 	// Log recovery
 	log.Info().

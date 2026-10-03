@@ -115,7 +115,7 @@ func (m *Manager) clearAlert(alertID string) {
 
 	m.addRecentlyResolvedUnlocked(resolvedAlert)
 
-	m.safeCallResolvedAlertCallback(alert, publicID, false)
+	m.safeCallResolvedAlertCallback(resolvedAlert, publicID, false)
 
 	log.Info().
 		Str("alertID", publicID).
@@ -738,7 +738,7 @@ func (m *Manager) resolveDiscreteRecoveryNoLock(resourceID, specKey, alertID str
 	resolvedAlert := m.newResolvedAlert(alert, time.Now(), nil)
 	m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 
-	m.safeCallResolvedAlertCallback(alert, alertID, true)
+	m.safeCallResolvedAlertCallback(resolvedAlert, alertID, true)
 
 	log.Info().
 		Str(strings.ToLower(resourceKind), resourceName).
@@ -790,7 +790,7 @@ func (m *Manager) clearAlertNoLock(alertID string) {
 
 	m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 
-	m.safeCallResolvedAlertCallback(alert, publicID, true)
+	m.safeCallResolvedAlertCallback(resolvedAlert, publicID, true)
 
 	log.Info().
 		Str("alertID", publicID).

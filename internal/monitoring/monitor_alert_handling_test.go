@@ -1205,3 +1205,139 @@ func TestMonitorLifecycleRefireReopensRetainedOccurrence(t *testing.T) {
 		})
 	}
 }
+
+type occurrenceHTTPReceipt struct {
+	Alerts []*alerts.Alert `json:"alerts"`
+}
+
+func occurrenceNotifier(t *testing.T, dir string, endpoint string) *notifications.NotificationManager {
+	t.Helper()
+	n := notifications.NewNotificationManagerWithDeferredQueue("", dir)
+	t.Cleanup(n.Stop)
+	if err := n.UpdateAllowedPrivateCIDRs("127.0.0.1/32,::1/128"); err != nil {
+		t.Fatal(err)
+	}
+	n.AddWebhook(notifications.WebhookConfig{ID: "ops", Enabled: true, URL: endpoint, Service: "generic"})
+	n.SetGroupingWindow(0)
+	n.SetNotifyOnResolve(false)
+	return n
+}
+
+func occurrenceManager(t *testing.T) (*alerts.Manager, models.PBSInstance) {
+	t.Helper()
+	a := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(a.Stop)
+	cfg := a.GetConfig()
+	cfg.Enabled, cfg.ActivationState, cfg.FlappingEnabled = true, alerts.ActivationActive, false
+	cfg.Schedule.QuietHours.Enabled = false
+	cfg.TimeThresholds["pbs"] = 0
+	cfg.PBSDefaults.CPU = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
+	a.UpdateConfig(cfg)
+	return a, models.PBSInstance{ID: "recurring-pbs", Name: "backup", Host: "pbs.invalid", Status: "online", ConnectionHealth: "healthy", CPU: 99}
+}
+
+func occurrenceEndpoint(t *testing.T) (string, <-chan occurrenceHTTPReceipt) {
+	t.Helper()
+	receipts := make(chan occurrenceHTTPReceipt, 8)
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		var receipt occurrenceHTTPReceipt
+		if err := json.NewDecoder(r.Body).Decode(&receipt); err != nil {
+			t.Errorf("decode HTTP acceptance: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		receipts <- receipt
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(s.Close)
+	return s.URL, receipts
+}
+
+func awaitOccurrenceRows(t *testing.T, n *notifications.NotificationManager, count int) []*notifications.QueuedNotification {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		rows, err := n.GetQueue().GetPending(10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) == count {
+			return rows
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("pending rows = %d, want %d", len(rows), count)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func assertOccurrenceHTTP(t *testing.T, n *notifications.NotificationManager, receipts <-chan occurrenceHTTPReceipt, current *alerts.Alert) {
+	t.Helper()
+	n.StartQueueProcessing()
+	select {
+	case got := <-receipts:
+		if len(got.Alerts) != 1 || got.Alerts[0].ID != current.ID || !got.Alerts[0].StartTime.Equal(current.StartTime) {
+			t.Fatalf("wrong HTTP occurrence: %+v", got)
+		}
+		t.Logf("HTTP 200 accepted current occurrence %s at %s", current.ID, current.StartTime.Format(time.RFC3339Nano))
+	case <-time.After(12 * time.Second):
+		t.Fatal("current firing did not reach the local HTTP destination")
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		stats, err := n.GetQueueStats()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stats["sent"] == 1 && stats["cancelled"] == 1 && stats["pending"] == 0 && stats["sending"] == 0 {
+			t.Logf("persistent queue completion: %v", stats)
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("queue completion = %v", stats)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	select {
+	case extra := <-receipts:
+		t.Fatalf("obsolete or duplicate delivery: %+v", extra)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+// This existing-interface control also runs against the exact predecessor.
+// It models a delayed ID callback after the next occurrence has entered the
+// real persistent queue. It does not assert native timing or cause a refire.
+func TestMonitorDelayedIDResolutionPreservesNewQueuedOccurrence(t *testing.T) {
+	endpoint, receipts := occurrenceEndpoint(t)
+	dir := t.TempDir()
+	n := occurrenceNotifier(t, dir, endpoint)
+	a, pbs := occurrenceManager(t)
+	a.CheckPBS(pbs)
+	active := a.GetActiveAlerts()
+	if len(active) != 1 {
+		t.Fatalf("PBS firing = %+v", active)
+	}
+	old := active[0].Clone()
+	pbs.CPU = 0
+	a.CheckPBS(pbs)
+	if r := a.GetResolvedAlert(old.ID); r == nil || !r.Alert.StartTime.Equal(old.StartTime) {
+		t.Fatal("missing resolved PBS snapshot")
+	}
+	current := old.Clone()
+	current.StartTime = current.StartTime.Add(time.Nanosecond)
+	n.SendAlert(old)
+	n.SendAlert(current)
+	awaitOccurrenceRows(t, n, 2)
+	m := &Monitor{alertManager: a, notificationMgr: n}
+	m.handleAlertResolved(old.ID)
+	rows, err := n.GetQueue().GetPending(10)
+	if err != nil || len(rows) != 1 || len(rows[0].Alerts) != 1 || !rows[0].Alerts[0].StartTime.Equal(current.StartTime) {
+		t.Fatalf("delayed recovery cancelled the replacement occurrence: rows=%+v err=%v", rows, err)
+	}
+	// Resume the autonomous processor only after reopening the same disk state.
+	n.Stop()
+	n = occurrenceNotifier(t, dir, endpoint)
+	assertOccurrenceHTTP(t, n, receipts, current)
+}
