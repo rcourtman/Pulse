@@ -56,7 +56,7 @@ const { chromium, webkit } = require('playwright');
       await page.getByRole('button', { name: 'Create Backup', exact: true }).click();
       const exporting = page.getByRole('dialog', { name: 'Export configuration', exact: true });
       await exporting.waitFor();
-      await exporting.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished))); 
+      await exporting.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
       let text = await exporting.innerText();
       for (const phrase of ['Configuration only:', 'SSO settings', 'API-token records',
         'not history, TrueNAS/vSphere connections', 'Local login credentials and sessions are not included'])
@@ -96,7 +96,7 @@ const { chromium, webkit } = require('playwright');
       await page.getByRole('button', { name: 'Restore Configuration', exact: true }).click();
       const importing = page.getByRole('dialog', { name: 'Import configuration', exact: true });
       await importing.waitFor();
-      await importing.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished))); 
+      await importing.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
       text = await importing.innerText();
       for (const phrase of ['Back up the destination first', 'not the whole installation',
         'inventory, enrolment state, profiles and assignments are not', 'verify fresh admission'])
