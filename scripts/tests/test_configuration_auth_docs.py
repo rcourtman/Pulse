@@ -18,7 +18,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-GUIDES = ("CONFIGURATION.md", "DOCKER.md", "i18n/de/README.md", "i18n/es/README.md")
+GUIDES = ("CONFIGURATION.md", "INSTALL.md", "DOCKER.md", "i18n/de/README.md", "i18n/es/README.md")
 HASH = "$2a$12$" + "a" * 53  # Synthetic file/argv sentinel, not a real password.
 CONTENT = f"PULSE_AUTH_USER=admin\nPULSE_AUTH_PASS={HASH}\n"
 
@@ -97,6 +97,21 @@ class ConfigurationAuthDocsTest(unittest.TestCase):
                          "Do not source the file", "Deployment-supplied environment values take precedence",
                          "complete bcrypt hash", "unquoted", "no `$$` substitution",
                          "this new-container example is not an upgrade procedure"):
+            self.assertIn(expected, text)
+
+    def test_install_quick_start_preserves_data_and_bootstrap_route(self):
+        text = (ROOT / "docs/INSTALL.md").read_text(encoding="utf-8")
+        compose = next(block for block in re.findall(r"```yaml\n(.*?)```", text, re.S)
+                       if "services:" in block)
+        for expected in ("image: ${PULSE_IMAGE:-rcourtman/pulse:vX.Y.Z}",
+                         "pulse_data:/data", "PULSE_DEPLOYMENT_METHOD=docker_compose"):
+            self.assertIn(expected, compose)
+        self.assertNotRegex(compose, r"PULSE_AUTH_(?:USER|PASS)")
+        for expected in ("[bootstrap-token setup](#step-1-get-the-token)",
+                         "[authentication guide](CONFIGURATION.md#private-docker-authentication-file)",
+                         "Leave authentication overrides unset for a new install",
+                         "not a Compose interpolation recipe", "do not reset authentication",
+                         "deployment-supplied password takes precedence"):
             self.assertIn(expected, text)
 
     def test_preparation_preserves_existing_file_and_protects_both_paths(self):

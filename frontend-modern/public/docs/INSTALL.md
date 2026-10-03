@@ -107,6 +107,9 @@ docker run -d \
   rcourtman/pulse:vX.Y.Z
 ```
 
+For a new container, continue with [bootstrap-token setup](#step-1-get-the-token)
+in your browser; do not add an example password to the command.
+
 ### Docker Compose
 Create a `docker-compose.yml` file:
 
@@ -122,8 +125,6 @@ services:
       - pulse_data:/data
     environment:
       - PULSE_DEPLOYMENT_METHOD=docker_compose
-      - PULSE_AUTH_USER=admin
-      - PULSE_AUTH_PASS=secret123
 
 volumes:
   pulse_data:
@@ -134,7 +135,22 @@ to the private Pulse Pro image shown on
 <https://pulserelay.pro/download.html> without rebuilding the file around a
 second deployment path.
 
-> **Note**: Plain text passwords set via `PULSE_AUTH_PASS` are auto-hashed on startup. For production, prefer Quick Security Setup or a pre-hashed bcrypt value.
+Leave authentication overrides unset for a new install and complete
+[bootstrap-token setup](#step-1-get-the-token) in your browser. Do not deploy a
+shared example password. If automation must skip setup, use a private
+deployment-managed credential source. The
+[authentication guide](CONFIGURATION.md#private-docker-authentication-file)
+explains the visibility and override limits; its `docker run --env-file`
+example is not a Compose interpolation recipe.
+
+For an existing installation, preserve its image, data mounts and managed
+configuration; do not reset authentication to repeat first-time setup. If you
+used a shared example password, replace it in your deployment's credential
+source. A deployment-supplied password takes precedence over changes made in
+Pulse's password-change UI. Hashing it inside Pulse does not remove the
+original value from Docker's environment or your deployment file. Never share
+full `docker inspect` or resolved Compose output.
+
 > **Note**: Docker monitoring requires the unified agent on the Docker host with socket access; the Pulse server container does not need `/var/run/docker.sock`. See [UNIFIED_AGENT.md](UNIFIED_AGENT.md).
 
 ---
