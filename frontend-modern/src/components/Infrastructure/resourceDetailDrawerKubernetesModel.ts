@@ -3,9 +3,18 @@ import {
   compactDetailRows as compactRows,
   compactDetailSections as compactSections,
   formatDetailBytesValue,
+  formatDetailCountValue,
+  formatDetailIntegerValue,
   makeDetailRow as makeRow,
+  type DetailRow,
   type DetailSection,
+  type DetailValueTone,
 } from '@/components/shared/detailSectionModel';
+import {
+  formatPlatformTableDateTimeValue,
+  formatPlatformTableDurationValue,
+  formatPlatformTableRelativeTimeValue,
+} from '@/features/platformPage/sharedPlatformPage';
 
 export type ResourceDetailDrawerKubernetesSection = DetailSection;
 
@@ -118,6 +127,146 @@ export const buildKubernetesDetailSections = (
   }
 
   return compactSections(sections);
+};
+
+const countRow = (
+  label: string,
+  value: number | undefined,
+  options: { noun?: string; tone?: (count: number) => DetailValueTone } = {},
+): DetailRow | null => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  const text = options.noun
+    ? formatDetailCountValue(value, options.noun)
+    : formatDetailIntegerValue(value);
+  return makeRow(label, text, options.tone ? { tone: options.tone(value) } : {});
+};
+
+const warnWhenPositive = (count: number): DetailValueTone => (count > 0 ? 'warning' : 'default');
+const dangerWhenPositive = (count: number): DetailValueTone => (count > 0 ? 'danger' : 'default');
+
+// Kubernetes reports controller timestamps as RFC 3339 strings. The table row
+// only has room for an age, so the expansion carries the absolute time first
+// and the age after it: "Oct 2, 2026, 09:13 PM (1h ago)". The value wraps
+// because a phone-width detail cell is too narrow for both on one line.
+const timestampRow = (label: string, timestamp?: string | null): DetailRow | null => {
+  const raw = asString(timestamp);
+  if (!raw) return null;
+  const absolute = formatPlatformTableDateTimeValue(raw, {
+    emptyText: '',
+    dateTimeFormat: { year: 'numeric' },
+  });
+  if (!absolute) return makeRow(label, raw, { wrap: true });
+  const relative = formatPlatformTableRelativeTimeValue(raw, { emptyText: '' });
+  return makeRow(label, relative ? `${absolute} (${relative})` : absolute, { wrap: true });
+};
+
+const elapsedSeconds = (start?: string | null, end?: string | null): number | undefined => {
+  const startedAt = Date.parse(asString(start) ?? '');
+  const endedAt = Date.parse(asString(end) ?? '');
+  if (!Number.isFinite(startedAt) || !Number.isFinite(endedAt) || endedAt < startedAt) {
+    return undefined;
+  }
+  return (endedAt - startedAt) / 1000;
+};
+
+type ControllerRows = { label: string; rows: Array<DetailRow | null> };
+
+// Each kind leads with what its narrow table row drops: the Detail column
+// (service name, timestamps) below the large layout and Target on a phone.
+const controllerRows = (resource: Resource): ControllerRows | null => {
+  const k = resource.kubernetes;
+  if (!k) return null;
+  switch (resource.type) {
+    case 'k8s-replicaset':
+      return {
+        label: 'ReplicaSet',
+        rows: [
+          countRow('Target', k.desiredReplicas, { noun: 'pod' }),
+          countRow('Current', k.currentReplicas),
+          countRow('Ready', k.readyReplicas),
+          countRow('Available', k.availableReplicas),
+          countRow('Fully labeled', k.fullyLabeledReplicas),
+          countRow('Observed generation', k.observedGeneration),
+        ],
+      };
+    case 'k8s-statefulset':
+      return {
+        label: 'StatefulSet',
+        rows: [
+          makeRow('Service', k.serviceName),
+          countRow('Target', k.desiredReplicas, { noun: 'pod' }),
+          countRow('Current', k.currentReplicas),
+          countRow('Ready', k.readyReplicas),
+          countRow('Available', k.availableReplicas),
+          countRow('Updated', k.updatedReplicas),
+        ],
+      };
+    case 'k8s-daemonset':
+      return {
+        label: 'DaemonSet',
+        rows: [
+          countRow('Target', k.desiredNumberScheduled, { noun: 'node' }),
+          countRow('Current', k.currentNumberScheduled),
+          countRow('Ready', k.numberReady),
+          countRow('Available', k.numberAvailable),
+          countRow('Updated', k.updatedReplicas),
+          countRow('Unavailable', k.numberUnavailable, { tone: warnWhenPositive }),
+          countRow('Misscheduled', k.numberMisscheduled, { tone: warnWhenPositive }),
+        ],
+      };
+    case 'k8s-job':
+      return {
+        label: 'Job',
+        rows: [
+          timestampRow('Started', k.startTime),
+          timestampRow('Completed', k.completionTime),
+          makeRow(
+            'Duration',
+            formatPlatformTableDurationValue(elapsedSeconds(k.startTime, k.completionTime), {
+              emptyText: '',
+            }),
+          ),
+          countRow('Target', k.desiredReplicas, { noun: 'completion' }),
+          countRow('Active', k.active),
+          countRow('Succeeded', k.succeeded),
+          countRow('Failed', k.failed, { tone: dangerWhenPositive }),
+        ],
+      };
+    case 'k8s-cronjob':
+      return {
+        label: 'CronJob',
+        rows: [
+          makeRow('Schedule', k.schedule, { valueClass: 'font-mono' }),
+          timestampRow('Last run', k.lastScheduleTime),
+          timestampRow('Last success', k.lastSuccessfulTime),
+          makeRow('Suspended', k.suspend === true ? 'Yes' : null, { tone: 'warning' }),
+          countRow('Active', k.active),
+        ],
+      };
+    default:
+      return null;
+  }
+};
+
+// Workload-controller facts for the always-visible summary of the resource
+// drawer, the same slot Docker containers use for their timestamps. The
+// controllers table hides Scope and Detail below its large layout and Target
+// on a phone, so without this a Job's completion time or a CronJob's last
+// success is unreachable from a narrow row.
+export const buildKubernetesControllerSection = (resource: Resource): DetailSection | null => {
+  const controller = controllerRows(resource);
+  if (!controller) return null;
+  const rows = compactRows([
+    ...controller.rows,
+    makeRow('Namespace', resource.kubernetes?.namespace),
+    makeRow('Cluster', resource.kubernetes?.clusterName),
+  ]);
+  if (rows.length === 0) return null;
+  return {
+    label: controller.label,
+    rows,
+    testId: 'resource-kubernetes-controller-section',
+  };
 };
 
 export const buildKubernetesDetailsSummary = (resource: Resource): string | null => {

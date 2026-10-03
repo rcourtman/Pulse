@@ -23,6 +23,23 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Narrow controller and backup summaries retain their source facts
+
+Kubernetes controller row expansions expose supplied kind-specific targets,
+counts, absolute timestamps, valid elapsed durations and namespace/cluster when
+responsive rows hide those columns. Missing facts are omitted and the ordinary
+pluralisation model handles singular targets. Job/CronJob timestamp regressions
+and the production composed-table browser fixture verify this existing summary.
+
+Proxmox Coverage uses latestBackup for completed independent backup evidence,
+with guest-local snapshots retained separately. Responsive backup-server, host
+and guest rows allocate space through existing canonical weighted-width helpers;
+archive format is presentation only, with the provider identifier retained in
+hover and search. The recovery-model, table and guest regressions plus desktop/
+phone browser rendering verify attribution, visible facts and source composition.
+These frontend improvements change no collector, API authority or native status.
+
+
 ### Resource evidence fallback access boundaries
 
 When the existing resource-facet reader receives a final HTTP 401/403, its

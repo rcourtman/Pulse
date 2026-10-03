@@ -15,6 +15,16 @@
 
 ## Purpose
 
+### Phone workload identity weights
+
+The existing phone guest projection allocates 38 percent to the name cell,
+which includes disclosure, status and backup controls, while normalising every
+remaining visible metric weight. Narrow/mobile/desktop modes and windowing
+ownership remain unchanged. Guest column regressions verify the sums and the
+production composed-table browser fixture checks identity and all configured
+metric tracks at narrow width; this is readability, not a throughput claim.
+
+
 ### Bounded confidence/priority work in broadcast grouping — issue #2199
 
 The general identity matcher retains every confidence, reason, ordering and

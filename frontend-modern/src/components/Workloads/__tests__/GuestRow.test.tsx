@@ -1308,23 +1308,26 @@ describe('GUEST_COLUMNS', () => {
   });
 
   it('derives mobile overrides from the canonical guest column model', () => {
+    // The phone name cell carries the toggle, status dot, and backup badge, so
+    // it takes a wider anchor than the shared 30% and the metric chips share
+    // the rest.
     expect(getGuestColumnStyle('name', true)).toEqual({
-      width: '30%',
-      'max-width': '30%',
+      width: '38%',
+      'max-width': '38%',
     });
     expect(getGuestColumnStyle('cpu', true)).toEqual({
-      width: '11.3235%',
-      'max-width': '11.3235%',
+      width: '10.0294%',
+      'max-width': '10.0294%',
     });
     expect(getGuestColumnStyle('availability', true)).toEqual({
-      width: '7.2059%',
-      'max-width': '7.2059%',
+      width: '6.3824%',
+      'max-width': '6.3824%',
     });
     expect(getGuestColumnStyle('type', true)).toEqual({
-      width: '9.2647%',
-      'max-width': '9.2647%',
+      width: '8.2059%',
+      'max-width': '8.2059%',
     });
-    expect(getGuestColumnWidthStyle('name', true)).toEqual({ width: '30%' });
+    expect(getGuestColumnWidthStyle('name', true)).toEqual({ width: '38%' });
     expect(getGuestColumnWidthStyle('diskIo', true)).toEqual({ width: '170px' });
   });
 
