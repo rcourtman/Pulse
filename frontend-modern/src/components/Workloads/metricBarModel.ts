@@ -22,6 +22,9 @@ export interface MetricBarPresentation {
   width: number;
 }
 
+// Horizontal padding around the label inside the bar (px-0.5 in MetricBar.tsx).
+const LABEL_PADDING_PX = 4;
+
 export function buildMetricBarPresentation(
   props: MetricBarProps,
   containerWidth: number,
@@ -31,7 +34,8 @@ export function buildMetricBarPresentation(
   const showSublabel =
     showLabel &&
     Boolean(props.sublabel) &&
-    containerWidth >= estimateTextWidth(`${props.label} (${props.sublabel})`);
+    containerWidth >=
+      estimateTextWidth(props.label, { detail: ` (${props.sublabel})` }) + LABEL_PADDING_PX;
   const metric = props.type || 'cpu';
   const metricType: MetricType = metric === 'generic' ? 'cpu' : metric;
 
