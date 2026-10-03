@@ -1913,7 +1913,7 @@ func TestProxmoxGuestAgentContinuityUsesCanonicalEvidenceAndRetryPaths(t *testin
 		"monitor_pve_guest_builders.go": {
 			"guestAgentAvailable := shouldQueryGuestAgent(state.detailedStatus, prevVM, now) ||",
 			"m.hasRecentGuestMetadataEvidence(instanceName, res.Node, res.VMID, now)",
-			"if guestAgentAvailable && state.detailedStatus == nil {",
+			`if guestAgentAvailable && res.Lock == "" && state.detailedStatus == nil {`,
 		},
 		"monitor_polling_vm.go": {
 			"prevVMByID := prevGuests.vmsByID",
