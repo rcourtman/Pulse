@@ -367,12 +367,16 @@ test.describe('Alert operator qualification', () => {
         }),
       }),
     );
-    let heldEventsAvailable = true;
-    await page.route('**/api/alerts/events**', (route) =>
-      route.fulfill({
-        status: heldEventsAvailable ? 200 : 503,
+    let heldEventsStatus = 200;
+    let heldEventsBarrier: Promise<void> | null = null;
+    let releaseHeldEvents: (() => void) | undefined;
+    await page.route('**/api/alerts/events**', async (route) => {
+      const status = heldEventsStatus;
+      if (heldEventsBarrier) await heldEventsBarrier;
+      await route.fulfill({
+        status,
         contentType: 'application/json',
-        body: heldEventsAvailable
+        body: status === 200
           ? JSON.stringify([
               {
                 id: 'held-1',
@@ -386,8 +390,8 @@ test.describe('Alert operator qualification', () => {
               },
             ])
           : JSON.stringify({ error: 'event log unavailable' }),
-      }),
-    );
+      });
+    });
 
     await page.goto('/alerts/overview', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText('Delivery Node').first()).toBeVisible();
@@ -407,21 +411,82 @@ test.describe('Alert operator qualification', () => {
         { exact: false },
       ),
     ).toBeVisible();
-    await expect(page.getByText('Deferred')).toBeVisible();
-    await expect(page.getByText('Quiet hours')).toBeVisible();
-    await expect(page.getByText('Delivered', { exact: true })).toBeVisible();
+    const activity = page.locator('#notification-delivery-activity');
+    const deferred = activity.getByText('Deferred', { exact: true });
+    const delivered = activity.getByText('Delivered', { exact: true });
+    const heldWarning = activity.getByRole('alert').filter({
+      hasText: 'Pulse could not read held or deferred notifications. Refresh to try again.',
+    });
+    const heldLoading = activity.getByText('Loading held and deferred notifications...', {
+      exact: true,
+    });
+    const refresh = activity.getByRole('button', { name: 'Refresh delivery status' });
+    await expect(deferred).toBeVisible();
+    await expect(activity.getByText('Quiet hours', { exact: true })).toBeVisible();
+    await expect(delivered).toBeVisible();
+    await expect(heldLoading).toHaveCount(0);
+    await expect(heldWarning).toHaveCount(0);
 
-    heldEventsAvailable = false;
-    const refresh = page
-      .getByRole('heading', { name: 'Recent delivery activity' })
-      .locator('..')
-      .locator('..')
-      .getByRole('button', { name: 'Refresh delivery status' });
+    // A pending refresh retains known evidence until its result arrives. The
+    // independently successful attempt read must keep Refresh usable.
+    heldEventsStatus = 503;
+    heldEventsBarrier = new Promise<void>((resolve) => { releaseHeldEvents = resolve; });
     await refresh.focus();
     await page.keyboard.press('Enter');
-    await expect(page.getByText('Deferred')).toHaveCount(0);
-    await expect(page.getByText('Delivered', { exact: true })).toBeVisible();
-    await expect(page.getByText(/Delivery history is unavailable/i)).toHaveCount(0);
+    await expect(heldLoading).toBeVisible();
+    await expect(deferred).toBeVisible();
+    await expect(delivered).toBeVisible();
+    await expect(refresh).toBeEnabled();
+    releaseHeldEvents!();
+    heldEventsBarrier = null;
+    await expect(heldWarning).toBeVisible();
+    await expect(heldLoading).toHaveCount(0);
+    // Substring text lookup is case-insensitive and also matches the warning's
+    // "deferred notifications". Assert the exact status badge, not useful copy.
+    await expect(deferred).toHaveCount(0);
+    await expect(activity.getByText('Delivery Node (cpu)', { exact: true })).toHaveCount(0);
+    await expect(delivered).toBeVisible();
+    await expect(activity.getByText(/could not read the delivery log/i)).toHaveCount(0);
+    await expect(activity.getByText(/No alert deliveries were attempted/)).toHaveCount(0);
+
+    heldEventsStatus = 200;
+    await refresh.focus();
+    await page.keyboard.press('Enter');
+    await expect(deferred).toBeVisible();
+    await expect(heldWarning).toHaveCount(0);
+
+    // Permission withdrawal removes previously readable held evidence, not
+    // independent delivery attempts.
+    heldEventsStatus = 403;
+    const denied = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === '/api/alerts/events' && response.status() === 403,
+    );
+    await refresh.focus();
+    await page.keyboard.press('Enter');
+    await denied;
+    await expect(heldLoading).toHaveCount(0);
+    await expect(heldWarning).toBeVisible();
+    await expect(deferred).toHaveCount(0);
+    await expect(delivered).toBeVisible();
+
+    // A pending retry keeps the failure visible; only a healthy held read
+    // restores that source's rows and clears its warning.
+    heldEventsStatus = 200;
+    heldEventsBarrier = new Promise<void>((resolve) => { releaseHeldEvents = resolve; });
+    await refresh.focus();
+    await page.keyboard.press('Enter');
+    await expect(heldLoading).toBeVisible();
+    await expect(heldWarning).toBeVisible();
+    await expect(deferred).toHaveCount(0);
+    await expect(delivered).toBeVisible();
+    await expect(refresh).toBeEnabled();
+    releaseHeldEvents!();
+    heldEventsBarrier = null;
+    await expect(deferred).toBeVisible();
+    await expect(heldLoading).toHaveCount(0);
+    await expect(heldWarning).toHaveCount(0);
+    await expect(delivered).toBeVisible();
+
   });
 
   test('mounts a bounded runway and renders 10,000 History records within budget', async ({ page }, testInfo) => {
