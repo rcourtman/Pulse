@@ -143,7 +143,8 @@ describe('docsLinks', () => {
     expect(setup).toContain('::1/128');
     expect(setup).toContain('Wildcard ranges `0.0.0.0/0` and `::/0` are rejected');
     expect(setup).toContain('not an authentication bypass');
-    expect(setup).toContain('PROXY_AUTH.md#-header-trust-boundary');
+    expect(setup).toContain('[proxy authentication guide](PROXY_AUTH.md)');
+    expect(setup).toContain('including its Header Trust Boundary');
     const nginx = proxy.split('### Nginx')[1].split('### Caddy')[0];
     expect(nginx).toContain('HTTPS `server` block');
     expect(nginx).toContain('proxy_set_header X-Forwarded-Proto $scheme;');

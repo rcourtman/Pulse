@@ -91,8 +91,10 @@ const { chromium, webkit } = require('playwright');
       const authentication = page.getByRole('link', { name: 'proxy authentication guide', exact: true });
       await authentication.focus();
       await page.keyboard.press('Enter');
-      await page.waitForFunction(inViewport, '-header-trust-boundary');
-      assert.ok(page.url().endsWith('/docs/PROXY_AUTH#-header-trust-boundary'));
+      const boundary = page.getByRole('heading', { name: '⚠️ Header Trust Boundary', exact: true });
+      await boundary.waitFor();
+      assert.ok(page.url().endsWith('/docs/PROXY_AUTH'));
+      await boundary.scrollIntoViewIfNeeded();
       assert.ok((await page.locator('article').innerText()).includes('never append to them'));
       assert.deepEqual(errors, []);
       observations.push({

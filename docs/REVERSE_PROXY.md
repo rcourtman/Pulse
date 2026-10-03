@@ -8,7 +8,7 @@ Use HTTPS at the public proxy and keep Pulse's backend private. The examples
 below are configuration fragments, not complete TLS or authentication setups.
 Keep Pulse authentication enabled; TLS termination does not authenticate users.
 For identity supplied by an IdP/proxy, follow the separate
-[proxy authentication guide](PROXY_AUTH.md#-header-trust-boundary).
+[proxy authentication guide](PROXY_AUTH.md), including its Header Trust Boundary.
 
 **Forwarded HTTPS headers are trusted only from a configured immediate peer.**
 Set `PULSE_TRUSTED_PROXY_CIDRS` in Pulse's deployment configuration to the proxy
