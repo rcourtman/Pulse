@@ -349,17 +349,61 @@ class Host:
             values["PULSE_MOCK_" + key.upper()] = value
         return values
 
-    def profile_matches(self, request):
-        text = (PATHS["data"] / ".env").read_text().splitlines()
-        values = self.profile_values(request)
-        return (all(text.count(key + "=" + value) == 1 for key, value in values.items())
-                and "demo_fixtures" in json.loads((PATHS["data"] / "billing.json").read_text()).get("capabilities", []))
+    def profile_admission(self):
+        """Read-only prerequisite; this transaction never grants entitlements.
 
-    def profile(self, request, unhealthy):
+        The running application owns billing HMAC verification, encrypted
+        secrets and legacy migration. Do not decrypt, clear integrity, re-sign
+        or rewrite billing/key material to enable a demo profile.
+        """
         env_file = PATHS["data"] / ".env"
         billing_file = PATHS["data"] / "billing.json"
         if env_file.is_symlink() or billing_file.is_symlink():
             raise Failure("configuration-symlink")
+        if not env_file.is_file():
+            raise Failure("configuration-shape")
+
+        def unique_fields(pairs):
+            result = {}
+            for key, value in pairs:
+                if key in result:
+                    raise Failure("billing-shape")
+                result[key] = value
+            return result
+
+        def invalid_constant(_value):
+            raise Failure("billing-shape")
+
+        try:
+            fd = os.open(billing_file, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            with os.fdopen(fd, "rb") as stream:
+                if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                    raise Failure("billing-shape")
+                raw = stream.read(1024 * 1024 + 1)
+            if len(raw) > 1024 * 1024:
+                raise Failure("billing-shape")
+            billing = json.loads(raw, object_pairs_hook=unique_fields,
+                                 parse_constant=invalid_constant)
+        except (OSError, ValueError, UnicodeError, RecursionError) as exc:
+            raise Failure("billing-observation") from exc
+        if (not isinstance(billing, dict)
+                or not isinstance(billing.get("capabilities"), list)
+                or not all(isinstance(capability, str) for capability in billing["capabilities"])):
+            raise Failure("billing-shape")
+        if "demo_fixtures" not in billing["capabilities"]:
+            raise Failure("billing-demo-capability-required")
+
+    def profile_matches(self, request):
+        self.profile_admission()
+        text = (PATHS["data"] / ".env").read_text().splitlines()
+        values = self.profile_values(request)
+        return all(text.count(key + "=" + value) == 1 for key, value in values.items())
+
+    def profile(self, request, unhealthy):
+        env_file = PATHS["data"] / ".env"
+        # Recheck after quiescent capture too; a failed prerequisite must not
+        # partially change the profile or bypass the application's licence gate.
+        self.profile_admission()
         values = self.profile_values(request)
         text = env_file.read_text()
         for key, value in values.items():
@@ -369,14 +413,6 @@ class Host:
         data_owner = PATHS["data"].stat()
         os.chown(env_file, data_owner.st_uid, data_owner.st_gid)
         os.chmod(env_file, 0o600)
-        billing = json.loads(billing_file.read_text())
-        if not isinstance(billing, dict) or not isinstance(billing.get("capabilities", []), list):
-            raise Failure("billing-shape")
-        billing["capabilities"] = sorted(set(billing.get("capabilities", []) + ["demo_fixtures"]))
-        billing.pop("integrity", None)
-        billing_file.write_text(json.dumps(billing))
-        os.chown(billing_file, data_owner.st_uid, data_owner.st_gid)
-        os.chmod(billing_file, 0o600)
         if unhealthy:
             for relative in DEMO_HISTORY:
                 path = PATHS["data"] / relative
@@ -546,6 +582,9 @@ class Transaction:
                 if (prior.get("status") not in TERMINAL
                         or (prior.get("child_result_required") and not self.host.prior_closed(entry, prior["status"]))):
                     raise Failure("prior-recovery-required")
+            # Refuse absent/malformed or unprovisioned billing before stopping
+            # a service, installing a binary or changing any estate file.
+            self.host.profile_admission()
             states = self.host.state()
             if not all(active(states[name]) for name in ("pulse-relay", "caddy")) or self.host.status(RELAY_HEALTH) != "200":
                 raise Failure("cohost-unhealthy")

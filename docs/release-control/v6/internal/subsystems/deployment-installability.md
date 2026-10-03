@@ -34,6 +34,20 @@ browser fixture exercise those states; neither proves a binary/data rollback.
 
 ### Demo transactions share the service host, not just a workflow queue
 
+The demo runtime profile does not grant or rewrite billing entitlements. Before
+the first stop/install/profile mutation, the transaction requires regular,
+bounded, unambiguous existing billing state containing `demo_fixtures`; missing
+capability or malformed/unavailable state refuses without estate mutation. The
+helper rechecks before profile writes and leaves all billing/key bytes,
+ownership and modes unchanged, including encrypted or legacy plaintext secrets
+and integrity. Only the canonical application verifies HMAC/entitlements and
+performs encrypted-at-rest migration; the read-only shape check cannot make a
+tampered signature valid. Recovery retains the full original private estate.
+Synthetic native fixtures provision their non-secret capability before starting
+the transaction on their admitted fresh empty runner, not by granting it during
+recovery. Connected Python and `TestBillingState_DemoProfilePreservesCanonicalState`
+controls cover these boundaries without asserting installed acceptance.
+
 Stable demo update and recovery keep their existing publication/activation,
 exact-tag installer signing key, Tailscale, pinned SSH and environment boundaries.
 The mutating paths now share the Relay host's existing

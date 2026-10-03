@@ -156,7 +156,7 @@ class TransactionTest(unittest.TestCase):
                 path.chmod(0o755 if name == "binary" else 0o644)
         (self.paths["dropins"] / "limits.conf").write_bytes(b"old limits")
         (self.paths["data"] / ".env").write_text("PRIVATE_TOKEN=not-logged\n")
-        (self.paths["data"] / "billing.json").write_text('{"capabilities":[],"integrity":"private"}')
+        (self.paths["data"] / "billing.json").write_text('{"capabilities":["demo_fixtures"],"integrity":"private"}')
         (self.paths["data"] / "persisted-history").write_bytes(b"original history")
         (self.paths["data"] / "alerts").mkdir()
         (self.paths["data"] / "alerts/events.db").write_bytes(b"synthetic opaque persistent file")
@@ -187,6 +187,105 @@ class TransactionTest(unittest.TestCase):
         result = tx.run()
         self.assertEqual(tx.receipt, json.loads((self.attempt / "receipt.json").read_text()))
         return result, tx.receipt
+
+    def test_profile_preserves_encrypted_and_legacy_billing_bytes_key_and_metadata(self):
+        billing_path = self.paths["data"] / "billing.json"
+        key_path = self.paths["data"] / ".encryption.key"
+        key_path.write_bytes(b"synthetic-original-key")
+        key_path.chmod(0o600)
+        for representation in ("synthetic-legacy-plaintext", "synthetic-encrypted-ciphertext"):
+            with self.subTest(representation=representation):
+                billing = {"capabilities": ["other-feature", "demo_fixtures"],
+                           "integrity": "original-synthetic-signature",
+                           "entitlement_jwt": representation + "-jwt",
+                           "entitlement_refresh_token": representation + "-refresh",
+                           "limits": {"resources": 100}, "subscription_state": "active",
+                           "other_field": {"preserve": [1, 2]}}
+                billing_path.write_text(json.dumps(billing, indent=2) + "\n")
+                billing_path.chmod(0o640)
+                before = engine.estate_hash({"billing": billing_path, "key": key_path})
+                self.host.profile(request(), False)
+                self.host.profile(request(), False)
+                self.assertEqual(engine.estate_hash({"billing": billing_path, "key": key_path}), before)
+                self.assertTrue(self.host.profile_matches(request()))
+
+    def test_missing_demo_capability_refuses_before_any_service_or_estate_mutation(self):
+        (self.paths["data"] / "billing.json").write_text('{"capabilities":[],"integrity":"unchanged"}')
+        before = engine.estate_hash(self.paths)
+        code, receipt = self.run_transaction("update", "v6.4.6")
+        self.assertEqual((code, receipt["status"], receipt["failure"]),
+                         (1, "refused", "billing-demo-capability-required"))
+        self.assertFalse(receipt["mutated"])
+        self.assertEqual((self.host.stops, self.host.starts, self.host.install_count), (0, 0, 0))
+        self.assertEqual(engine.estate_hash(self.paths), before)
+        self.assertFalse((self.attempt / "snapshot").exists())
+
+    def test_malformed_billing_refuses_before_mutation_with_fixed_diagnostics(self):
+        path = self.paths["data"] / "billing.json"
+        cases = (b"private-malformed-input", b"[]", b"null", b"{}",
+                 b'{"capabilities":"demo_fixtures"}',
+                 b'{"capabilities":["demo_fixtures",{}]}',
+                 b'{"capabilities":[],"capabilities":["demo_fixtures"]}',
+                 b'{"capabilities":["demo_fixtures"],"other":NaN}',
+                 b'{"capabilities":["demo_fixtures"],"other":"\xff"}',
+                 b" " * (1024 * 1024 + 1))
+        for value in cases:
+            with self.subTest(length=len(value)):
+                path.write_bytes(value)
+                before = engine.estate_hash(self.paths)
+                code, receipt = self.run_transaction()
+                self.assertEqual((code, receipt["status"]), (1, "refused"))
+                self.assertIn(receipt["failure"], {"billing-shape", "billing-observation"})
+                self.assertEqual(self.host.stops, 0)
+                self.assertFalse(receipt["mutated"])
+                self.assertEqual(engine.estate_hash(self.paths), before)
+                self.assertNotIn("private-malformed-input", json.dumps(receipt))
+
+    def test_missing_symlink_and_nonregular_billing_refuse_without_touching_target(self):
+        path = self.paths["data"] / "billing.json"
+        target = self.paths["data"] / "other-billing"
+        target.write_text('{"capabilities":["demo_fixtures"]}')
+        path.unlink()
+        for kind in ("missing", "symlink", "directory"):
+            with self.subTest(kind=kind):
+                if kind == "symlink":
+                    path.symlink_to(target)
+                elif kind == "directory":
+                    path.mkdir()
+                before = engine.estate_hash(self.paths)
+                code, receipt = self.run_transaction()
+                self.assertEqual((code, receipt["status"]), (1, "refused"))
+                self.assertEqual(self.host.stops, 0)
+                self.assertEqual(engine.estate_hash(self.paths), before)
+                if kind == "symlink":
+                    path.unlink()
+                elif kind == "directory":
+                    path.rmdir()
+
+    def test_profile_rechecks_capability_before_changing_environment(self):
+        path = self.paths["data"] / "billing.json"
+        self.host.profile_admission()
+        path.write_text('{"capabilities":[]}')
+        before = engine.estate_hash(self.paths)
+        with self.assertRaisesRegex(engine.Failure, "^billing-demo-capability-required$"):
+            self.host.profile(request(), True)
+        self.assertEqual(engine.estate_hash(self.paths), before)
+
+    def test_late_update_failure_preserves_full_billing_and_key_through_recovery(self):
+        path = self.paths["data"] / "billing.json"
+        path.write_text(json.dumps({"capabilities": ["demo_fixtures"],
+                                   "integrity": "synthetic-original-signature",
+                                   "entitlement_jwt": "synthetic-original-secret",
+                                   "other": {"keep": True}}))
+        (self.paths["data"] / ".encryption.key").write_text("synthetic-original-key")
+        before = engine.estate_hash(self.paths)
+        self.host.fail_at = 55
+        code, receipt = self.run_transaction("update", "v6.4.6")
+        self.assertEqual((code, receipt["status"]), (1, "rolled_back"))
+        self.assertEqual(engine.estate_hash(self.paths), before)
+        self.assertEqual(receipt["recovery"]["elapsed_seconds"], 300)
+        for secret in ("synthetic-original-signature", "synthetic-original-secret", "synthetic-original-key"):
+            self.assertNotIn(secret, json.dumps(receipt))
 
     def test_healthy_profile_change_keeps_data_and_watches_complete_window(self):
         code, receipt = self.run_transaction()

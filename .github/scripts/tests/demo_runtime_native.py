@@ -92,7 +92,7 @@ def main():
         Path("/etc/pulse").mkdir(mode=0o755)
         os.chown("/etc/pulse", owner.pw_uid, owner.pw_gid)
         Path("/etc/pulse/.env").write_text("DEMO_MODE=true\n")
-        Path("/etc/pulse/billing.json").write_text('{"capabilities":[]}')
+        Path("/etc/pulse/billing.json").write_text('{"capabilities":["demo_fixtures"],"limits":{},"meters_enabled":[],"plan_version":"community","subscription_state":"active"}')
         Path("/etc/pulse/persistent-marker").write_text("original data")
         for path in Path("/etc/pulse").iterdir():
             os.chown(path, owner.pw_uid, owner.pw_gid)

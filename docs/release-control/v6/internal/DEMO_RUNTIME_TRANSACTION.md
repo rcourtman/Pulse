@@ -18,6 +18,17 @@ workflow queue does not exclude another repository's host deployment.
   file lock through capture, atomic runtime/profile work, forward observation,
   complete restoration and recovery observation. It does not restart Relay or
   Caddy, upgrade a package, lift the Caddy hold or activate frozen commercial copy.
+- Billing and `.encryption.key` are read-only to the profile helper. Before the
+  first service stop or estate mutation, it requires regular, bounded,
+  unambiguous billing JSON with an already provisioned `demo_fixtures`
+  capability. Missing capability or unavailable/malformed state refuses the
+  transaction with fixed diagnostics; it never grants the capability, drops
+  integrity or rewrites secret-bearing JSON. It rechecks after quiescent capture
+  before changing the environment. The application still owns HMAC/entitlement
+  verification, encryption and legacy plaintext migration; this shape check
+  does not authenticate a licence. Full-state snapshots/recovery preserve the
+  original private billing/key estate. Native fixtures seed non-secret demo
+  capability state only while provisioning their fresh empty disposable estate.
 - The complete quiescent **chosen footprint**: Pulse executable, VERSION,
   unit/drop-in identity and demo data estate is retained
   privately before mutation. No backup or database is deleted for space. The
@@ -68,6 +79,16 @@ post-replacement fsync loss, cancellation and failed-terminal non-replay. The
 unchanged-parent control retains the adverse skipped restoration. Collection
 controls wait for writer closure and reject favourable stale terminals.
 The production window is not shortened. This is **not native acceptance**.
+
+Connected billing controls also pass actual canonical encrypted and legacy
+secret state through the real profile helper, retain every billing/key byte and
+metadata, then use the canonical loader to verify encryption/migration and HMAC.
+A tampered signature remains rejected by that loader, not laundered by the
+helper. Malformed, missing, duplicate-key, nonregular and unprovisioned billing
+refuse before service/binary/data mutation. Late failures retain full-state
+recovery and sanitised evidence. These are synthetic source tests; they do not
+establish production capability provisioning, a green CodeQL check or native
+forward/reverse acceptance.
 
 `demo-runtime-native.yml` now carries the next executable acceptance rather
 than requiring a worker to obtain system mode: exact PR/main source, a fresh
