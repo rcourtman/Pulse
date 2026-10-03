@@ -384,7 +384,7 @@ export function PatrolAttentionWorkbench(
   return (
     <section
       aria-label="Patrol decision inbox"
-      class="overflow-hidden rounded-xl border border-border bg-surface shadow-xs"
+      class="overflow-clip rounded-xl border border-border bg-surface shadow-xs"
     >
       <div class="border-b border-border px-4 py-4 sm:px-6">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -877,7 +877,7 @@ function AttentionDetail(props: {
       aria-labelledby="attention-detail-title"
       aria-busy={props.loading}
     >
-      <div class="sticky top-0 z-20 border-b border-border px-4 py-3 backdrop-blur-sm sm:px-5">
+      <div class="sticky top-0 z-20 border-b border-border bg-surface/95 px-4 py-3 backdrop-blur-sm sm:px-5">
         <div class="flex items-center justify-between gap-3">
           <button
             type="button"
