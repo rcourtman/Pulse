@@ -131,6 +131,31 @@ describe('docsLinks', () => {
     }
   });
 
+  it('keeps configuration transfer separate from full-state recovery', () => {
+    const migration = readFileSync(path.join(repoRoot, 'docs', 'MIGRATION.md'), 'utf8');
+    const agent = readFileSync(path.join(repoRoot, 'docs', 'UNIFIED_AGENT.md'), 'utf8');
+    const scope = migration
+      .split('### Configuration transfer')[1]
+      .split('### Full-state recovery')[0];
+    expect(scope).toContain('Proxmox VE, PBS and PMG');
+    expect(scope).toContain('| TrueNAS, vSphere and Machine Availability');
+    expect(scope).toContain('SSO configuration **is included**');
+    expect(scope).toContain(
+      'Server-side host/Docker/Kubernetes agent inventory and enrolment state',
+    );
+    expect(migration).toContain('not a full backup of the installation');
+    expect(migration).toContain('Stop Pulse before taking that');
+    expect(migration).toContain('matching `.encryption.key`');
+    expect(migration).toContain('reload/apply failure');
+    expect(migration).toContain('it does not merge');
+    expect(migration).toContain('UNIFIED_AGENT.md#moving-pulse-to-a-new-address');
+    expect(migration).not.toContain('Update the `--token` flag');
+    expect(migration).not.toContain('Restored in < 5 minutes');
+    expect(migration).not.toContain('re-enable in Settings');
+    expect(agent).toContain('restores API-token records, not the server-side');
+    expect(agent).toContain('MIGRATION.md#configuration-transfer');
+  });
+
   it('keeps lockout and incident reporting guidance safe for the affected client', () => {
     const troubleshooting = readFileSync(path.join(repoRoot, 'docs', 'TROUBLESHOOTING.md'), 'utf8');
     const recovery = troubleshooting.split('### Recovery Mode')[1].split('\n---')[0];
