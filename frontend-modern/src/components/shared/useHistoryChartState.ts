@@ -1,5 +1,6 @@
-import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { batch, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { ChartsAPI, type HistoryTimeRange } from '@/api/charts';
+import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 import { isRangeLocked, loadRuntimeCapabilities, maxHistoryDays } from '@/stores/license';
 import { calculateOptimalPoints } from '@/utils/downsample';
 import { setupCanvasDPR } from '@/utils/canvasRenderQueue';
@@ -148,7 +149,6 @@ export function useHistoryChartState(
       pending = true;
       controller = new AbortController();
       if (!hasLoaded) setLoading(true);
-      setError(null);
       try {
         const result = await ChartsAPI.getMetricsHistory({
           resourceType,
@@ -161,12 +161,27 @@ export function useHistoryChartState(
         if (!active) return;
         setData('points' in result ? (result.points ?? []) : []);
         setSource(result.source ?? 'store');
+        setError(null);
         setRefreshFailed(false);
         hasLoaded = true;
       } catch (err) {
         if (!active) return;
         console.error('Failed to fetch metrics history:', err);
-        if (hasLoaded) setRefreshFailed(true);
+        const accessError = getAPIReadAccessErrorMessage(err);
+        if (accessError) {
+          hasLoaded = false;
+          pendingTouch = undefined;
+          touchTimestamp = null;
+          batch(() => {
+            setData([]);
+            setSource(null);
+            setHoveredPoint(null);
+            setHoveredTimestamp(null);
+            setKeyboardInspecting(false);
+            setRefreshFailed(false);
+            setError(accessError);
+          });
+        } else if (hasLoaded) setRefreshFailed(true);
         else setError('Failed to load history data');
       } finally {
         if (active) {

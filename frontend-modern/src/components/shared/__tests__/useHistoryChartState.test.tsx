@@ -217,3 +217,45 @@ describe('History request ownership', () => {
     expect(state.data()).toEqual([]);
   });
 });
+
+describe('History access errors', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    request.mockReset();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+  it.each([
+    [401, 'Sign in again or check your API token.'],
+    [403, 'Access denied. Check your permissions and license plan.'],
+  ])(
+    'withdraws stored samples and source on status %s until a successful read',
+    async (status, message) => {
+      request.mockResolvedValueOnce({ points: points(42), source: 'store' } as never);
+      const { state } = mount();
+      await settle();
+      request.mockRejectedValueOnce(
+        Object.assign(new Error('private transport detail'), { status }),
+      );
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(state.data()).toEqual([]);
+      expect(state.source()).toBeNull();
+      expect(state.refreshFailed()).toBe(false);
+      expect(state.error()).toBe(message);
+      const retry = deferred();
+      request.mockReturnValueOnce(retry.promise);
+      vi.advanceTimersByTime(10_000);
+      expect(state.data()).toEqual([]);
+      expect(state.error()).toBe(message);
+      retry.resolve({ points: points(12), source: 'store' } as never);
+      await settle();
+      expect(state.data()).toEqual(points(12));
+      expect(state.error()).toBeNull();
+      expect(state.source()).toBe('store');
+    },
+  );
+});

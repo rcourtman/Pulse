@@ -921,7 +921,17 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     single-observation caption rather than a collecting claim or invented trend.
     Successful empty reads say `No stored history in this range`. Only
     metrics-store samples may contribute chart geometry, bounds, or hover
-    inspection, including valid measured zero. This presentation adds no fetch,
+    inspection, including valid measured zero. Same-source transient failures
+    retain those observations with a warning, but final HTTP 401/403 responses
+    withdraw the batch charts, inspection and its retained remount entries.
+    The shared query cache advances its generation so a pre-denial read cannot
+    restore a former cached range. Access guidance comes from numeric status,
+    never raw transport text; the existing target/range-scoped retry remains
+    focusable while pending, and only a successful read restores history.
+    Runtime denial/cache/recovery controls are in
+    `GuestDrawerHistory.refresh.test.tsx` and `createNonSuspendingQuery.test.tsx`,
+    with real client 403/503 browser controls in `browser-tests/history-access.cjs`.
+    These are client presentation proofs, not native authorisation or collection. This presentation adds no fetch,
     point expansion, polling or retention budget. Verify sparse and mixed-series
     geometry and failed-refresh/source-change behaviour in
     `GuestDrawerHistory.sparse.test.tsx`, with rendered phone/desktop coverage in

@@ -220,3 +220,105 @@ describe('GuestDrawerHistory refresh recovery', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 });
+
+const accessTarget = { resourceType: 'agent', resourceId: 'pbs-host' } as const;
+const accessResponse = (range: HistoryTimeRange): AllMetricsHistoryResponse => ({
+  ...accessTarget,
+  range,
+  start: 1000,
+  end: 2000,
+  source: 'store',
+  metrics: {
+    cpu: [
+      { timestamp: 1000, value: 41, min: 41, max: 41 },
+      { timestamp: 2000, value: 42, min: 42, max: 42 },
+    ],
+  },
+});
+const accessPaths = (container: HTMLElement) =>
+  container.querySelectorAll('[data-testid="guest-history-plot"] path');
+const settleAccess = () => vi.advanceTimersByTimeAsync(0);
+
+describe('drawer History access failures', () => {
+  it.each([
+    [401, 'Sign in again or check your API token.'],
+    [403, 'Access denied. Check your permissions and license plan.'],
+  ])(
+    'removes samples, inspection and current legends after %s; retry stays scoped',
+    async (status, message) => {
+      vi.useFakeTimers();
+      let deny = false;
+      let complete!: (value: AllMetricsHistoryResponse) => void;
+      const fetch = vi.spyOn(ChartsAPI, 'getMetricsHistory').mockImplementation(async (request) => {
+        if (deny) throw Object.assign(new Error('private transport detail'), { status });
+        return accessResponse(request.range!);
+      });
+      const [range, setRange] = createSignal<HistoryTimeRange>('1h');
+      const view = render(() => (
+        <GuestDrawerHistory target={accessTarget} range={range()} currentMetrics={{ cpu: 99 }} />
+      ));
+      await settleAccess();
+      setRange('24h');
+      await settleAccess();
+      expect(accessPaths(view.container)).toHaveLength(1);
+      const inspection = screen.getByRole('slider', { name: 'Inspect Utilization history' });
+      fireEvent.focus(inspection);
+      expect(view.container).toHaveTextContent('42.0%');
+      const region = screen.getByRole('status', { name: 'History refresh status' });
+      deny = true;
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(accessPaths(view.container)).toHaveLength(0);
+      expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+      expect(view.container).not.toHaveTextContent('42.0%');
+      expect(view.container).not.toHaveTextContent('99.0%');
+      expect(view.container).not.toHaveTextContent('private transport detail');
+      expect(region).toHaveTextContent(message);
+      expect(region).not.toHaveTextContent('previously loaded');
+      const retry = screen.getByRole('button', { name: 'Retry history' });
+      retry.focus();
+      fetch.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            complete = resolve;
+          }),
+      );
+      fireEvent.click(retry);
+      fireEvent.click(retry);
+      expect(retry).toHaveFocus();
+      expect(retry).toHaveAttribute('aria-disabled', 'true');
+      expect(accessPaths(view.container)).toHaveLength(0);
+      expect(region).toHaveTextContent(message);
+      expect(fetch.mock.calls.at(-1)![0]).toMatchObject({
+        ...accessTarget,
+        range: '24h',
+        maxPoints: 240,
+      });
+      complete(accessResponse('24h'));
+      await settleAccess();
+      expect(accessPaths(view.container)).toHaveLength(1);
+      expect(region).toBeEmptyDOMElement();
+      expect(retry).toHaveFocus();
+    },
+  );
+
+  it('does not resurrect another cached range or remount after denial', async () => {
+    vi.useFakeTimers();
+    const fetch = vi
+      .spyOn(ChartsAPI, 'getMetricsHistory')
+      .mockImplementation(async (request) => accessResponse(request.range!));
+    const [range, setRange] = createSignal<HistoryTimeRange>('1h');
+    const view = render(() => <GuestDrawerHistory target={accessTarget} range={range()} />);
+    await settleAccess();
+    setRange('24h');
+    await settleAccess();
+    expect(accessPaths(view.container)).toHaveLength(1);
+    fetch.mockRejectedValueOnce(Object.assign(new Error('denied'), { status: 403 }));
+    await vi.advanceTimersByTimeAsync(30_000);
+    fetch.mockImplementation(() => new Promise(() => {}));
+    setRange('1h');
+    expect(accessPaths(view.container)).toHaveLength(0);
+    view.unmount();
+    const next = render(() => <GuestDrawerHistory target={accessTarget} range="24h" />);
+    expect(accessPaths(next.container)).toHaveLength(0);
+  });
+});
