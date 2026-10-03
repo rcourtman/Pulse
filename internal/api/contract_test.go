@@ -2903,7 +2903,7 @@ func TestContract_TrueNASConnectionsDisabledMessageIsExplicit(t *testing.T) {
 	}
 }
 
-func TestContract_TrueNASSavedConnectionTestsUpdateRuntimeSummary(t *testing.T) {
+func TestContract_TrueNASSavedConnectionTestsPreserveRuntimeSummary(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
 
 	connection := config.TrueNASInstance{
@@ -2934,8 +2934,8 @@ func TestContract_TrueNASSavedConnectionTestsUpdateRuntimeSummary(t *testing.T) 
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 	summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
-	if summary.Poll == nil || summary.Poll.LastSuccessAt == nil {
-		t.Fatalf("expected saved manual test to refresh poll summary, got %+v", summary.Poll)
+	if summary.Poll == nil || summary.Poll.LastAttemptAt != nil || summary.Poll.LastSuccessAt != nil || summary.Observed != nil {
+		t.Fatalf("a saved probe must not invent runtime polling or inventory, got %+v", summary)
 	}
 }
 
