@@ -35,7 +35,7 @@ export function StatusDot(props: StatusDotProps): JSX.Element {
 
   const className = () =>
     [
-      'inline-block rounded-full flex-shrink-0',
+      'inline-block rounded-full shrink-0',
       SIZE_CLASSES[size()],
       VARIANT_CLASSES[variant()],
       props.pulse ? 'animate-pulse' : '',

@@ -14,7 +14,7 @@ describe('MetadataBadge', () => {
 
     const badge = screen.getByText('pending');
     expect(badge).toHaveClass('inline-flex');
-    expect(badge).toHaveClass('rounded');
+    expect(badge).toHaveClass('rounded-sm');
     expect(badge).toHaveClass('text-[10px]');
     expect(badge).toHaveClass('uppercase');
     expect(badge).toHaveClass('bg-amber-100');

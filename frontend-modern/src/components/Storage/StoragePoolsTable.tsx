@@ -141,8 +141,8 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
             </TableHeader>
             <TableBody ref={tableWindow.setBodyRef} class={STORAGE_POOLS_BODY_CLASS}>
               <Show when={tableWindow.topSpacerHeight() > 0}>
-                <TableRow aria-hidden="true" class="h-0 !border-0">
-                  <TableCell colspan={99} class="h-0 !border-0 !p-0 leading-[0]">
+                <TableRow aria-hidden="true" class="h-0 border-0!">
+                  <TableCell colspan={99} class="h-0 border-0! p-0! leading-0">
                     <svg
                       aria-hidden="true"
                       width="1"
@@ -200,8 +200,8 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                 }}
               </For>
               <Show when={tableWindow.bottomSpacerHeight() > 0}>
-                <TableRow aria-hidden="true" class="h-0 !border-0">
-                  <TableCell colspan={99} class="h-0 !border-0 !p-0 leading-[0]">
+                <TableRow aria-hidden="true" class="h-0 border-0!">
+                  <TableCell colspan={99} class="h-0 border-0! p-0! leading-0">
                     <svg
                       aria-hidden="true"
                       width="1"

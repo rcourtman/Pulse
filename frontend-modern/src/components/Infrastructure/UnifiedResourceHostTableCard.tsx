@@ -350,7 +350,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                     'cursor-pointer transition-all duration-200 relative group hover:bg-surface-hover';
 
                   if (isExpanded()) {
-                    return 'cursor-pointer transition-all duration-200 relative z-10 group bg-blue-50 dark:bg-blue-900';
+                    return 'cursor-pointer transition-all duration-200 relative z-10 group bg-blue-50 dark:bg-blue-900/25';
                   }
 
                   let className = baseHover;
@@ -433,7 +433,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                               <Show when={healthIssue()}>
                                 {(issue) => (
                                   <span
-                                    class="hidden shrink-0 whitespace-nowrap rounded bg-amber-100 px-1 text-[9px] font-medium text-amber-700 dark:bg-amber-900 dark:text-amber-300 lg:inline"
+                                    class="hidden shrink-0 whitespace-nowrap rounded-sm bg-amber-100 px-1 text-[9px] font-medium text-amber-700 dark:bg-amber-900/25 dark:text-amber-300 lg:inline"
                                     title={issue().title}
                                   >
                                     {issue().compactLabel}
@@ -443,7 +443,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                               <Show when={availabilityProbe()}>
                                 {(probe) => (
                                   <span
-                                    class={`hidden shrink-0 whitespace-nowrap rounded px-1 text-[9px] font-medium lg:inline ${probe().toneClassName}`}
+                                    class={`hidden shrink-0 whitespace-nowrap rounded-sm px-1 text-[9px] font-medium lg:inline ${probe().toneClassName}`}
                                     title={probe().detailLabel}
                                   >
                                     {probe().methodLabel}
@@ -470,7 +470,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                                   recentChanges={resource.recentChanges}
                                   counts={resource.facetCounts}
                                   maxVisibleBadges={1}
-                                  class="hidden max-w-[48%] shrink-0 flex-nowrap overflow-hidden lg:flex"
+                                  class="hidden max-w-[48%] shrink-0 flex-nowrap! overflow-hidden lg:flex"
                                 />
                               </Show>
                             </div>

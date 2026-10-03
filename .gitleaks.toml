@@ -16,8 +16,10 @@ paths = [
     '''_test\.go$''',
     '''_test\.ts$''',
     '''tests/integration/''',
-    # Generated receipt contains required SHA-256 content digests
+    # Generated receipts contain required SHA-256 content digests. The single
+    # shared receipt is retired but remains in history.
     '''^frontend-modern/browser-verification\.json$''',
+    '''^frontend-modern/browser-verification/[0-9a-f]{16}\.json$''',
     # tmp/ is gitignored but shows up in --no-git scans
     '''^tmp/''',
 ]

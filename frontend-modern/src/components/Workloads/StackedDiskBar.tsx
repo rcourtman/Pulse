@@ -26,7 +26,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
             fallback={
               <div
                 data-stacked-disk-trigger
-                class="relative w-full h-full overflow-hidden bg-surface-hover rounded"
+                class="relative w-full h-full overflow-hidden bg-surface-hover rounded-sm"
                 onMouseEnter={state.handleMouseEnter}
                 onMouseLeave={state.handleMouseLeave}
               >
@@ -158,7 +158,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                 <For each={presentation().miniDisks}>
                   {(disk) => (
                     <div
-                      class="relative min-w-0 flex-1 overflow-hidden rounded-sm bg-surface-alt"
+                      class="relative min-w-0 flex-1 overflow-hidden rounded-xs bg-surface-alt"
                       title={disk.title}
                     >
                       <svg
@@ -200,12 +200,12 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
             <For each={presentation().verticalBars}>
               {(bar) => (
                 <div
-                  class="group/disk relative h-full w-[5px] shrink-0 cursor-help overflow-hidden rounded-sm bg-surface-hover ring-1 ring-transparent transition-[transform,box-shadow,ring-color] duration-100 hover:scale-y-[1.08] hover:ring-base-content/30"
+                  class="group/disk relative h-full w-[5px] shrink-0 cursor-help overflow-hidden rounded-xs bg-surface-hover ring-1 ring-transparent transition-[transform,box-shadow,ring-color] duration-100 hover:scale-y-[1.08] hover:ring-base-content/30"
                   title={bar.title}
                 >
                   <div
                     data-stacked-disk-fill="vertical"
-                    class="absolute inset-0 rounded-sm brightness-100 transition-[filter] duration-100 group-hover/disk:brightness-125"
+                    class="absolute inset-0 rounded-xs brightness-100 transition-[filter] duration-100 group-hover/disk:brightness-125"
                   >
                     <svg
                       aria-hidden="true"
@@ -262,7 +262,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                     {item.used}/{item.total}
                   </span>
                 </div>
-                <div class="relative h-1.5 w-full overflow-hidden rounded bg-surface-hover">
+                <div class="relative h-1.5 w-full overflow-hidden rounded-sm bg-surface-hover">
                   <svg
                     aria-hidden="true"
                     class="absolute inset-0 h-full w-full"

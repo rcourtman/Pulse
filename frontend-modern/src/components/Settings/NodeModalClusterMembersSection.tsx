@@ -54,7 +54,7 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
                     <span class="truncate">{endpoint.displayName || endpoint.nodeName}</span>
                     <Show when={endpoint.pulseReachable === false}>
                       <span
-                        class="inline-flex flex-shrink-0 items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                        class="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/25 dark:text-amber-300"
                         title={endpoint.pulseError || 'Pulse could not connect to this node'}
                       >
                         Unreachable

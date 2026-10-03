@@ -18,7 +18,7 @@ export interface InfoCardKeyValueRowProps extends Omit<
   desktopAt?: 'sm' | 'lg';
 }
 
-export const INFO_CARD_FRAME_CLASS = 'rounded border border-border bg-surface p-3 shadow-sm';
+export const INFO_CARD_FRAME_CLASS = 'rounded-sm border border-border bg-surface p-3 shadow-xs';
 
 export const INFO_CARD_KEY_VALUE_ROW_CLASS = 'flex min-w-0 items-start justify-between gap-3';
 

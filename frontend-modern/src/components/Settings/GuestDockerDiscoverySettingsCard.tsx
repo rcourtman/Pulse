@@ -75,7 +75,7 @@ export const GuestDockerDiscoverySettingsCard: Component<GuestDockerDiscoverySet
         <span class="hidden sm:inline">
           {getGuestDockerDiscoveryPresentation().environmentHint}{' '}
         </span>
-        <code class="block max-w-full overflow-x-auto whitespace-nowrap rounded bg-surface-hover px-1 py-0.5 text-base-content sm:inline sm:overflow-visible">
+        <code class="block max-w-full overflow-x-auto whitespace-nowrap rounded-sm bg-surface-hover px-1 py-0.5 text-base-content sm:inline sm:overflow-visible">
           {GUEST_DOCKER_INVENTORY_ENV_VAR}=true
         </code>
       </p>

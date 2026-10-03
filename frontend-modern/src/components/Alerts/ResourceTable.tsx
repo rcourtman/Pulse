@@ -145,14 +145,14 @@ export function ResourceTable(props: ResourceTableProps) {
       </Show>
 
       <Show when={selectedIds().size > 0 && props.onBulkEdit}>
-        <div class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-base border border-border shadow-2xl rounded-full px-5 py-3 flex items-center gap-6 z-[100] animate-in slide-in-from-bottom-5">
+        <div class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-base border border-border shadow-2xl rounded-full px-5 py-3 flex items-center gap-6 z-100 animate-in slide-in-from-bottom-5">
           <span class="text-sm font-medium text-white">
             {selectedIds().size} <span class="text-slate-400">selected</span>
           </span>
           <div class="flex items-center gap-2">
             <button
               type="button"
-              class="bg-blue-600 hover:bg-blue-500 text-white rounded-full px-5 py-1.5 text-sm font-medium transition-colors shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              class="bg-blue-600 hover:bg-blue-500 text-white rounded-full px-5 py-1.5 text-sm font-medium transition-colors shadow-xs focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
               onClick={() => {
                 if (props.onBulkEdit) {
                   props.onBulkEdit(Array.from(selectedIds()));

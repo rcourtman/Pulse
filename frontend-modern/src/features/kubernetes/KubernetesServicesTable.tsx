@@ -266,7 +266,7 @@ export const KubernetesServicesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-[12rem] truncate" title={scope()}>
+                            <span class="inline-block max-w-48 truncate" title={scope()}>
                               {scope()}
                             </span>
                           </TableCell>
@@ -284,7 +284,7 @@ export const KubernetesServicesTable: Component<{
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             <span
-                              class="inline-block max-w-[12rem] truncate"
+                              class="inline-block max-w-48 truncate"
                               title={externalIps().title}
                             >
                               {externalIps().label}
@@ -293,17 +293,14 @@ export const KubernetesServicesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-[15rem] truncate" title={ports().title}>
+                            <span class="inline-block max-w-60 truncate" title={ports().title}>
                               {ports().label}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
-                            <span
-                              class="inline-block max-w-[13rem] truncate"
-                              title={selector().title}
-                            >
+                            <span class="inline-block max-w-52 truncate" title={selector().title}>
                               {selector().label}
                             </span>
                           </TableCell>

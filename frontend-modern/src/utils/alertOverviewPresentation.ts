@@ -401,10 +401,10 @@ export function getAlertOverviewCardPresentation(
   const stateClass = acknowledged
     ? 'border-border bg-surface-alt'
     : isCritical
-      ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900'
+      ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/25'
       : isInformational
-        ? 'border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-900'
-        : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900';
+        ? 'border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/25'
+        : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/25';
   const iconClassName = acknowledged
     ? 'mr-3 mt-0.5 transition-all text-green-600 dark:text-green-400'
     : isCritical
@@ -428,7 +428,7 @@ export function getAlertOverviewCardPresentation(
 }
 
 export function getAlertOverviewAcknowledgedBadgeClass(): string {
-  return 'px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded';
+  return 'px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded-sm';
 }
 
 export function getAlertOverviewStartedAtClass(): string {
@@ -440,7 +440,7 @@ export function getAlertOverviewStartedAtClass(): string {
 export function getAlertOverviewPrimaryActionClass(acknowledged: boolean): string {
   const stateClass = acknowledged
     ? 'text-base-content border-border hover:bg-surface-hover'
-    : 'text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900';
+    : 'text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/25';
   return `px-3 py-1.5 text-xs font-medium border rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed ${stateClass}`;
 }
 

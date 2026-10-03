@@ -6,7 +6,7 @@ This document outlines the standard UI primitives, tokens, and components that c
 
 ## Core Principles
 1. **Never hardcode hex values** or use static `gray` / `white` / `slate` labels for structural layout colors. 
-2. Use the **Semantic Tokens**. These resolve dynamically inside `tailwind.config.js` via `index.css` CSS-variables to flawlessly support light/dark transitions without needing a literal `dark:` prefix in the layout classes.
+2. Use the **Semantic Tokens**. These are declared as Tailwind `@theme` colors in `index.css` and resolve through its CSS variables to flawlessly support light/dark transitions without needing a literal `dark:` prefix in the layout classes.
 
 ## Enforcement
 - `npm run lint` is a hard gate for design-system regressions in `src/components` and `src/pages`.

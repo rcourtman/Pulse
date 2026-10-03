@@ -209,7 +209,7 @@ export const DockerSecretsTable: Component<DockerNativeTableProps> = (props) => 
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span
-                              class="inline-block max-w-[12rem] truncate"
+                              class="inline-block max-w-48 truncate"
                               title={dockerTextValue(resource.docker?.objectCreatedAt)}
                             >
                               <PlatformTableRelativeTimeValue

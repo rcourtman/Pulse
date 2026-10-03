@@ -76,16 +76,16 @@ describe('getStatusIndicatorBadgeToneClasses (branch coverage)', () => {
     // Direct table-hit arm for all five variants, with full string assertion
     // (the sibling test only uses toContain for four of them).
     expect(getStatusIndicatorBadgeToneClasses('success')).toBe(
-      'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+      'bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300',
     );
     expect(getStatusIndicatorBadgeToneClasses('warning')).toBe(
-      'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+      'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
     );
     expect(getStatusIndicatorBadgeToneClasses('danger')).toBe(
-      'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+      'bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-300',
     );
     expect(getStatusIndicatorBadgeToneClasses('info')).toBe(
-      'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+      'bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300',
     );
     expect(getStatusIndicatorBadgeToneClasses('muted')).toBe('bg-surface-alt text-base-content');
   });

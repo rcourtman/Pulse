@@ -647,7 +647,7 @@ export const ProxmoxBackupsTable: Component<{
           <Show when={protectionPostures.response.error}>
             <div
               role="status"
-              class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
+              class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900/25 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
             >
               Protection posture is unavailable. Pulse is showing restore evidence without guessing
               whether workloads are protected.
@@ -724,7 +724,7 @@ export const ProxmoxBackupsTable: Component<{
             <Show
               when={hasRecoverableActivityInRange()}
               fallback={
-                <div class="flex flex-col gap-2 rounded-md border border-border-subtle bg-surface-alt/25 px-3 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex flex-col gap-2 rounded-md border border-border-subtle px-3 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
                   <span>No backup activity in the selected {chartRange()}-day window.</span>
                   <div class="flex items-center gap-2">
                     <button
@@ -835,7 +835,7 @@ export const ProxmoxBackupsTable: Component<{
             />
 
             <Show when={orphanedTotalCount() > 0}>
-              <div class="rounded-lg border border-border-subtle bg-surface-alt/25">
+              <div class="rounded-lg border border-border-subtle">
                 <button
                   type="button"
                   onClick={() => setShowOrphaned((v) => !v)}

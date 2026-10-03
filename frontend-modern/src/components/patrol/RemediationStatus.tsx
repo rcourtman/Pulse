@@ -18,11 +18,11 @@ export const RemediationStatus: Component<RemediationStatusProps> = (props) => {
   const presentation = () => getRemediationPresentation(props.result.success);
 
   return (
-    <div class={`mt-2 p-2 rounded text-xs ${presentation().panelClass}`}>
+    <div class={`mt-2 p-2 rounded-sm text-xs ${presentation().panelClass}`}>
       <div class="flex items-center gap-2">
         <Show when={props.result.success}>
           <svg
-            class={`w-4 h-4 flex-shrink-0 ${presentation().iconClass}`}
+            class={`w-4 h-4 shrink-0 ${presentation().iconClass}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -38,7 +38,7 @@ export const RemediationStatus: Component<RemediationStatusProps> = (props) => {
         </Show>
         <Show when={!props.result.success}>
           <svg
-            class={`w-4 h-4 flex-shrink-0 ${presentation().iconClass}`}
+            class={`w-4 h-4 shrink-0 ${presentation().iconClass}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -77,7 +77,7 @@ export const RemediationStatus: Component<RemediationStatusProps> = (props) => {
           {showOutput() ? 'Hide output' : 'Show output'}
         </button>
         <Show when={showOutput()}>
-          <div class="bg-surface rounded p-2 font-mono mt-1 max-h-32 overflow-auto whitespace-pre-wrap text-[11px] text-base-content">
+          <div class="bg-surface rounded-sm p-2 font-mono mt-1 max-h-32 overflow-auto whitespace-pre-wrap text-[11px] text-base-content">
             {props.result.output}
           </div>
         </Show>

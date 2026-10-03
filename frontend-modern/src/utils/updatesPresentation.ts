@@ -38,7 +38,7 @@ export function getUpdateBuildBadges(
     badges.push({
       label: 'Development',
       className:
-        'inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+        'inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
     });
   }
 
@@ -46,7 +46,7 @@ export function getUpdateBuildBadges(
     badges.push({
       label: 'Docker',
       className:
-        'inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+        'inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300',
     });
   }
 

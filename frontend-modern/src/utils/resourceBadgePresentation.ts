@@ -28,11 +28,11 @@ export interface ResourceBadge {
 }
 
 const baseBadge =
-  'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap';
+  'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap';
 
 const typeClasses = 'bg-surface-alt text-base-content';
-const availabilityBadgeClasses = 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300';
-const dockerRuntimeBadgeClasses = 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-400';
+const availabilityBadgeClasses = 'bg-sky-100 text-sky-700 dark:bg-sky-900/25 dark:text-sky-300';
+const dockerRuntimeBadgeClasses = 'bg-sky-100 text-sky-700 dark:bg-sky-900/25 dark:text-sky-400';
 const podmanRuntimeBadgeClasses =
   'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300';
 

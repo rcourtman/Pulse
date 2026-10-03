@@ -418,7 +418,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
                 Summary
               </div>
               <ChartVisibilityToggleButton
-                class="!inline-flex"
+                class="inline-flex!"
                 collapsed={props.chartsCollapsed?.() ?? false}
                 onToggle={() => props.onChartsToggle?.()}
               />
@@ -458,7 +458,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
           <div class="flex items-center gap-2">
             <Show when={props.metricHistoryHintVisible?.()}>
               <span
-                class="hidden whitespace-nowrap text-[11px] text-muted/80 lg:inline"
+                class="hidden whitespace-nowrap text-[11px] lg:inline"
                 data-testid="workload-history-hover-hint"
               >
                 Hover a guest to preview history

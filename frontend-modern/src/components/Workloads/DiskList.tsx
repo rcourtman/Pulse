@@ -18,12 +18,12 @@ export function DiskList(props: DiskListProps) {
         <For each={diskPresentation()}>
           {(disk) => {
             return (
-              <div class="rounded border border-border bg-surface-hover px-1.5 py-1 text-[10px] leading-tight shadow-sm">
+              <div class="rounded-sm border border-border bg-surface-hover px-1.5 py-1 text-[10px] leading-tight shadow-xs">
                 <div class="truncate text-base-content" title={disk.labelTitle}>
                   {disk.label}
                 </div>
                 <div class="mt-0.5 text-[9px] text-muted">{disk.usageText}</div>
-                <div class="relative mt-1 h-1.5 w-full overflow-hidden rounded bg-surface-hover">
+                <div class="relative mt-1 h-1.5 w-full overflow-hidden rounded-sm bg-surface-hover">
                   <div
                     class={`absolute inset-y-0 left-0 ${disk.progressClass}`}
                     style={{ width: disk.progressWidth }}

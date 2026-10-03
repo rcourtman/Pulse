@@ -134,11 +134,11 @@ const modelRouteSecondaryId = (entry: ResolvedModelRoute) => {
 const annotationBadgeClass = (tone?: AIModelPickerAnnotation['tone']) => {
   switch (tone) {
     case 'warning':
-      return 'shrink-0 rounded border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200';
+      return 'shrink-0 rounded-sm border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200';
     case 'positive':
-      return 'shrink-0 rounded border border-green-200 bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-800 dark:border-green-800 dark:bg-green-950/60 dark:text-green-200';
+      return 'shrink-0 rounded-sm border border-green-200 bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-800 dark:border-green-800 dark:bg-green-950/60 dark:text-green-200';
     default:
-      return 'shrink-0 rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] font-semibold text-muted';
+      return 'shrink-0 rounded-sm border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] font-semibold text-muted';
   }
 };
 
@@ -159,7 +159,7 @@ const ModelAnnotationNote: Component<{ annotation: AIModelPickerAnnotation }> = 
 );
 
 const CurrentSelectionBadge: Component = () => (
-  <span class="shrink-0 rounded border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-blue-700 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200">
+  <span class="shrink-0 rounded-sm border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-blue-700 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200">
     {' '}
     {CURRENT_SELECTION_LABEL}{' '}
   </span>
@@ -470,7 +470,7 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
   const isSelectedRoute = (modelId: string) => selectedModel() === modelId;
   const optionClass = (isSelected: boolean) =>
     `w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${
-      isSelected ? 'bg-blue-50 dark:bg-blue-900' : ''
+      isSelected ? 'bg-blue-50 dark:bg-blue-900/25' : ''
     }`;
 
   createEffect(() => {
@@ -684,7 +684,7 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
 
       <Show when={isOpen()}>
         <div
-          class={`fixed overflow-hidden rounded-md border border-border bg-surface shadow-sm z-[9999] ${props.dropdownClass || DEFAULT_DROPDOWN_CLASS}`}
+          class={`fixed overflow-hidden rounded-md border border-border bg-surface shadow-xs z-9999 ${props.dropdownClass || DEFAULT_DROPDOWN_CLASS}`}
           role="dialog"
           aria-label={props.title || 'Select model'}
           style={dropdownStyle()}

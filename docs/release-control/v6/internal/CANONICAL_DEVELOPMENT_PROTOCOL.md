@@ -231,10 +231,10 @@ misaligned, off-screen, or otherwise unusable fails this gate. Known browser
 defects in the changed journey remain part of the current task and block the
 commit unless the user explicitly narrows the requested scope.
 
-The durable proof boundary is
-`frontend-modern/browser-verification.json`. Every commit that changes
+The durable proof boundary is one receipt file per commit under
+`frontend-modern/browser-verification/`. Every commit that changes
 user-visible source under `frontend-modern/src/` or the frontend HTML entry
-must update that receipt with:
+must add its own receipt there with:
 
 1. `base_sha`, equal to the parent revision whose current build was exercised
 2. the exact changed user-visible frontend source paths and SHA-256 digests of
@@ -245,13 +245,55 @@ must update that receipt with:
 6. the interactions exercised
 7. a UTC verification timestamp and `result: "passed"`
 
+The receipt's file name is fixed by what it verified, not chosen: the first 16
+hexadecimal characters of the SHA-256 of its `content_sha256` map, serialized
+as compact JSON with sorted keys, followed by `.json`. A commit records exactly
+one receipt and never edits another commit's.
+
+Receipts are separate files because a shared one made every pair of open
+frontend pull requests conflict. Until 2026-10-03 each frontend commit rewrote
+`frontend-modern/browser-verification.json`, so the first pull request to merge
+left every other one conflicting, and each conflict cost a rebuild on the new
+`main` and a fresh browser pass. Files that are only ever added cannot collide.
+The shared file is retired and deleted. The guard refuses a staged tree or a
+range tip that carries it, so resolving a merge by keeping the file cannot
+bring it back. Range mode still accepts it as evidence from a commit that
+modified it, because that commit was verified while its own parent still
+carried the file. A pull request that still rewrites it is repaired by merging
+`main` and removing the file with `git rm`, not by a rebuild.
+
 `scripts/release_control/browser_verification_guard.py` enforces the receipt
 against the staged index locally and against the final integration range in
 canonical governance CI. Canonical contract completion remains checked per commit. A stale receipt, later source edit, incomplete path coverage,
-missing responsive viewport, or omitted state/interaction evidence is a hard failure. Agents may
-print a non-passing receipt skeleton with
-`python3 scripts/release_control/browser_verification_guard.py --print-template`
-after staging the intended frontend paths.
+missing responsive viewport, or omitted state/interaction evidence is a hard failure. After
+staging the intended frontend paths, agents may write a non-passing receipt
+skeleton to the path the staged content requires with
+`python3 scripts/release_control/browser_verification_guard.py --write-template`,
+or print it with `--print-template`, which also names that path. Editing a
+staged frontend file afterwards changes the fingerprint, so the receipt must be
+re-verified and moved to the new name.
+
+Concluding a merge stages everything the other parent brought. The
+staged-index guard does not count content a merged parent already carries as
+the commit's own change, so merging current `main` into a branch needs no
+receipt for the frontend work `main` brought and cannot be asked to vouch for
+it. A merge commit may not record a receipt. Frontend content that differs from
+every parent, a conflict resolution or two edits git combined, can be
+committed, but it has had no browser pass: verify it and record its receipt in
+a follow-up commit, which range mode requires. Because receipts no longer
+conflict, two open pull requests that edit different parts of one frontend
+file can both merge; range mode evaluates the merged result on the pull
+request when its check runs and again on the push to `main`, where combined
+content that no receipt verified fails.
+
+A receipt is read from the commit that recorded it, so once that commit is on
+`main` its file is dead weight.
+`python3 scripts/release_control/browser_verification_guard.py --prune`
+deletes every receipt already on `origin/main`. A change that records a
+receipt must not delete one: git reads a deleted receipt beside a newly added
+one as a rename, and that rename conflicts with any other change that deletes
+the same receipt. Pruning therefore lands only in changes that record no
+receipt, and the guard enforces that per commit in both modes.
 
 An integration range that merges reviewed work onto a main that has moved is
 validated with `--base <range-base> --commit <range-tip>`. The tip of such a

@@ -142,7 +142,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
         <Show when={state.config()?.identity_fingerprint}>
           <div class={formField}>
             <span class={labelClass()}>Instance Fingerprint</span>
-            <code class="block text-xs font-mono text-base-content bg-surface-alt rounded px-3 py-2 select-all break-all">
+            <code class="block text-xs font-mono text-base-content bg-surface-alt rounded-sm px-3 py-2 select-all break-all">
               {state.config()!.identity_fingerprint}
             </code>
             <p class={formHelpText}>

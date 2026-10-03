@@ -172,7 +172,7 @@ const dockerSection = (docker: NonNullable<Resource['docker']>): DetailSection =
             <For each={labelEntries}>
               {([key, value]) => (
                 <span
-                  class="inline-flex max-w-full items-center truncate rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
+                  class="inline-flex max-w-full items-center truncate rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px]"
                   title={value ? `${key}: ${value}` : key}
                 >
                   {key}
@@ -203,7 +203,7 @@ export const InlineResourceSummaryTables: Component<ResourceSummaryPresentationP
               <For each={props.drawer.identityIpValues()}>
                 {(ip) => (
                   <span
-                    class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+                    class="inline-flex items-center rounded-sm bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/25 dark:text-blue-200"
                     title={ip}
                   >
                     {ip}
@@ -228,7 +228,7 @@ export const InlineResourceSummaryTables: Component<ResourceSummaryPresentationP
               <For each={props.drawer.aliasPreviewValues()}>
                 {(value) => (
                   <span
-                    class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
+                    class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px]"
                     title={value}
                   >
                     {value}
@@ -236,7 +236,7 @@ export const InlineResourceSummaryTables: Component<ResourceSummaryPresentationP
                 )}
               </For>
               <Show when={props.drawer.hasAliasOverflow()}>
-                <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
+                <span class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] text-muted">
                   +
                   {props.drawer.identityAliasValues().length -
                     props.drawer.aliasPreviewValues().length}

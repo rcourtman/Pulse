@@ -103,7 +103,7 @@ export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
                   {(item) => (
                     <div class="flex items-center justify-between text-sm text-base-content">
                       <span>{item.description}</span>
-                      <span class="rounded bg-surface-alt px-2 py-1 text-xs font-medium text-base-content">
+                      <span class="rounded-sm bg-surface-alt px-2 py-1 text-xs font-medium text-base-content">
                         {item.keys}
                       </span>
                     </div>

@@ -299,7 +299,7 @@ describe('alertOverviewPresentation', () => {
   it('returns canonical active alert card presentation', () => {
     expect(getAlertOverviewCardPresentation('critical', false, false)).toEqual({
       cardClassName:
-        'border rounded-md p-3 sm:p-4 transition-all border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900',
+        'border rounded-md p-3 sm:p-4 transition-all border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/25',
       iconClassName: 'mr-3 mt-0.5 transition-all text-red-600 dark:text-red-400',
       resourceClassName: 'text-sm font-medium truncate text-red-700 dark:text-red-400',
     });
@@ -311,25 +311,25 @@ describe('alertOverviewPresentation', () => {
     });
     expect(getAlertOverviewCardPresentation('info', false, false)).toEqual({
       cardClassName:
-        'border rounded-md p-3 sm:p-4 transition-all border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-900',
+        'border rounded-md p-3 sm:p-4 transition-all border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/25',
       iconClassName: 'mr-3 mt-0.5 transition-all text-blue-600 dark:text-blue-400',
       resourceClassName: 'text-sm font-medium truncate text-blue-700 dark:text-blue-400',
     });
     expect(getAlertOverviewCardPresentation('notice', false, false)).toEqual({
       cardClassName:
-        'border rounded-md p-3 sm:p-4 transition-all border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900',
+        'border rounded-md p-3 sm:p-4 transition-all border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/25',
       iconClassName: 'mr-3 mt-0.5 transition-all text-yellow-600 dark:text-yellow-400',
       resourceClassName: 'text-sm font-medium truncate text-yellow-700 dark:text-yellow-400',
     });
     expect(getAlertOverviewAcknowledgedBadgeClass()).toBe(
-      'px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded',
+      'px-2 py-0.5 text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded-sm',
     );
     expect(getAlertOverviewStartedAtClass()).toBe('text-xs text-muted');
     expect(getAlertOverviewPrimaryActionClass(true)).toBe(
       'px-3 py-1.5 text-xs font-medium border rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed text-base-content border-border hover:bg-surface-hover',
     );
     expect(getAlertOverviewPrimaryActionClass(false)).toBe(
-      'px-3 py-1.5 text-xs font-medium border rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900',
+      'px-3 py-1.5 text-xs font-medium border rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/25',
     );
     expect(getAlertOverviewSecondaryActionClass()).toBe(
       'px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover',

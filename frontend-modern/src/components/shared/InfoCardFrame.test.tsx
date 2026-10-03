@@ -21,12 +21,12 @@ describe('InfoCardFrame', () => {
 
     const card = screen.getByTestId('card');
 
-    expect(card).toHaveClass('rounded');
+    expect(card).toHaveClass('rounded-sm');
     expect(card).toHaveClass('border');
     expect(card).toHaveClass('border-border');
     expect(card).toHaveClass('bg-surface');
     expect(card).toHaveClass('p-3');
-    expect(card).toHaveClass('shadow-sm');
+    expect(card).toHaveClass('shadow-xs');
     expect(screen.getByText('Storage')).toBeInTheDocument();
   });
 

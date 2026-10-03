@@ -22,17 +22,17 @@ interface ExternalTextLinkProps extends Omit<
 export const EXTERNAL_TEXT_LINK_REL = 'noopener noreferrer';
 
 export const EXTERNAL_TEXT_LINK_BASE_CLASS =
-  'underline-offset-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60';
+  'underline-offset-2 transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/60';
 
 export const EXTERNAL_TEXT_LINK_VARIANT_CLASSES: Record<ExternalTextLinkVariant, string> = {
   inline: 'text-blue-600 hover:underline dark:text-blue-400',
   inlineSubtle: 'text-blue-600 hover:underline dark:text-blue-300',
   muted: 'text-muted hover:text-base-content hover:underline',
   compact:
-    'inline-flex min-h-10 items-center rounded px-1 py-1 text-sm text-blue-600 hover:underline dark:text-blue-400 sm:min-h-9',
+    'inline-flex min-h-10 items-center rounded-sm px-1 py-1 text-sm text-blue-600 hover:underline dark:text-blue-400 sm:min-h-9',
   compactAction:
-    'inline-flex min-h-10 items-center rounded px-1 text-xs font-medium text-blue-700 hover:underline dark:text-blue-300 sm:min-h-9',
-  compactInherit: 'inline-flex min-h-10 items-center rounded px-1 underline sm:min-h-9',
+    'inline-flex min-h-10 items-center rounded-sm px-1 text-xs font-medium text-blue-700 hover:underline dark:text-blue-300 sm:min-h-9',
+  compactInherit: 'inline-flex min-h-10 items-center rounded-sm px-1 underline sm:min-h-9',
   inlineAction:
     'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-blue-600 hover:underline dark:text-blue-300',
 };

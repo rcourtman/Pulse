@@ -19,12 +19,13 @@ import {
 //   - non-canonical state values falling through to the default arm
 //   - lookup edge inputs (truthy/falsy non-boolean values cast to boolean)
 
-const REMOVED_BADGE = 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
-const CONNECTED_BADGE = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
+const REMOVED_BADGE = 'bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-200';
+const CONNECTED_BADGE = 'bg-green-100 text-green-800 dark:bg-green-900/25 dark:text-green-300';
 const DEFAULT_BADGE = 'bg-surface-alt text-base-content';
-const LOOKUP_CONNECTED_BADGE = 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
+const LOOKUP_CONNECTED_BADGE =
+  'bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300';
 const LOOKUP_DISCONNECTED_BADGE =
-  'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
+  'bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-200';
 
 describe('getUnifiedAgentStatusPresentation — branch coverage', () => {
   describe('state === "removed" guard', () => {

@@ -43,10 +43,10 @@ export function IncidentTimelineEventCard(props: IncidentTimelineEventCardProps)
       <Show when={props.event.evidence}>
         {(evidence) => (
           <details class="text-xs text-muted mt-2">
-            <summary class="cursor-pointer rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
+            <summary class="cursor-pointer rounded-sm focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2">
               {INCIDENT_EVIDENCE_DETAILS}
             </summary>
-            <dl class="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 break-words">
+            <dl class="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 wrap-break-word">
               <dt>Observed</dt>
               <dd>
                 {formatIncidentEvidenceTime(evidence().observedAt) ?? INCIDENT_TIME_UNAVAILABLE}

@@ -45,23 +45,23 @@ export const CONNECTION_TYPE_LABELS: Record<ConnectionType, string> = {
 const STATE_PRESENTATION: Record<ConnectionState, { label: string; badgeClass: string }> = {
   active: {
     label: 'Active',
-    badgeClass: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+    badgeClass: 'bg-green-100 text-green-800 dark:bg-green-900/25 dark:text-green-300',
   },
   paused: {
     label: 'Paused',
-    badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+    badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-200',
   },
   unauthorized: {
     label: 'Unauthorized',
-    badgeClass: 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200',
+    badgeClass: 'bg-rose-100 text-rose-800 dark:bg-rose-900/25 dark:text-rose-200',
   },
   unreachable: {
     label: 'Unreachable',
-    badgeClass: 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200',
+    badgeClass: 'bg-rose-100 text-rose-800 dark:bg-rose-900/25 dark:text-rose-200',
   },
   stale: {
     label: 'Stale',
-    badgeClass: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+    badgeClass: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/25 dark:text-yellow-200',
   },
   pending: {
     label: 'Pending',
