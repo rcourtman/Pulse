@@ -263,7 +263,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
           class={`min-w-0 flex-1 overflow-visible lg:overflow-hidden ${props.isMobileMenuOpen() ? 'hidden lg:block' : 'block'}`}
         >
           <Show when={props.flatTabs().length > 0}>
-            <div class="sticky top-0 z-40 flex min-h-12 items-center border-b border-border-subtle px-2 backdrop-blur-sm lg:hidden">
+            <div class="sticky top-0 z-40 flex min-h-12 items-center border-b border-border-subtle bg-surface/95 px-2 backdrop-blur-sm lg:hidden">
               <button
                 type="button"
                 onClick={() => {

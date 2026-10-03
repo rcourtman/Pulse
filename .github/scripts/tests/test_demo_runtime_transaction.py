@@ -145,7 +145,10 @@ class TransactionTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        root = Path(self.tmp.name)
+        # Model an owned estate, not the OS alias leading to its temporary
+        # directory (for example macOS /var -> /private/var). The production
+        # history guard still rejects symlinks introduced inside the estate.
+        root = Path(self.tmp.name).resolve()
         self.paths = {name: root / "estate" / name for name in engine.PATHS}
         for name, path in self.paths.items():
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -555,7 +558,7 @@ class TransactionTest(unittest.TestCase):
     def test_unhealthy_recovery_retains_original_generated_history(self):
         self.host.unhealthy = True
         code, receipt = self.run_transaction()
-        self.assertEqual(code, 0)
+        self.assertEqual(code, 0, receipt.get("failure"))
         self.assertFalse(receipt["healthy_baseline"])
         self.assertFalse((self.paths["data"] / "alerts/events.db").exists())
         self.assertEqual((self.attempt / "snapshot/data/alerts/events.db").read_bytes(), b"synthetic opaque persistent file")
@@ -588,7 +591,7 @@ class TransactionTest(unittest.TestCase):
     def test_listener_readiness_does_not_spend_the_watch_window(self):
         self.host.ready_until = 30
         code, receipt = self.run_transaction()
-        self.assertEqual(code, 0)
+        self.assertEqual(code, 0, receipt.get("failure"))
         self.assertEqual(receipt["forward"]["elapsed_seconds"], 300)
         self.assertGreaterEqual(self.host.clock, 330)
         self.assertEqual(self.host.starts, 1)
@@ -919,6 +922,29 @@ class RuntimeSelectionTest(unittest.TestCase):
             with self.subTest(entries=[x[0] for x in entries]), tempfile.TemporaryDirectory() as directory:
                 with self.assertRaises(engine.Failure):
                     engine.runtime_members(self.archive(directory, entries), 'v6.4.6')
+
+
+class PortableTransactionFixtureTest(unittest.TestCase):
+    def test_recovery_controls_accept_a_symlinked_temporary_parent(self):
+        # macOS commonly exposes its temporary directory through /var ->
+        # /private/var. Exercise both failing recovery paths with a real
+        # equivalent alias, without changing the production symlink guard.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            real = root / "real"
+            real.mkdir()
+            alias = root / "alias"
+            alias.symlink_to(real, target_is_directory=True)
+            cases = unittest.TestSuite([
+                TransactionTest("test_unhealthy_recovery_retains_original_generated_history"),
+                TransactionTest("test_listener_readiness_does_not_spend_the_watch_window"),
+            ])
+            result = unittest.TestResult()
+            with patch.object(tempfile, "tempdir", str(alias)):
+                cases.run(result)
+            self.assertEqual(result.testsRun, 2)
+            self.assertEqual(result.errors, [])
+            self.assertEqual(result.failures, [])
 
 
 class NativeGateTest(unittest.TestCase):

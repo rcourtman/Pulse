@@ -179,8 +179,19 @@ describe('RBAC paywall settings panels', () => {
     render(() => <RolesPanel />);
 
     const edit = await screen.findByRole('button', { name: 'Edit role' });
-    expect(edit).toHaveClass('min-h-11', 'min-w-11', 'sm:min-h-0', 'sm:min-w-0');
+    // The negative margin keeps the 44px phone target inside the row's
+    // existing height, so custom roles line up with built-in ones.
+    expect(edit).toHaveClass(
+      '-my-2',
+      'min-h-11',
+      'min-w-11',
+      'sm:my-0',
+      'sm:min-h-0',
+      'sm:min-w-0',
+    );
     expect(screen.getByRole('button', { name: 'Delete role' })).toHaveClass(
+      '-my-2',
+      'sm:my-0',
       'min-h-11',
       'min-w-11',
       'sm:min-h-0',
