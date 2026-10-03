@@ -343,8 +343,12 @@ describe('ProxmoxBackupsTable', () => {
     for (const table of tables) {
       expectCanonicalPlatformTableShell(table);
     }
-    expect(apiFetchMock).toHaveBeenCalledWith('/api/backups/pbs');
-    expect(apiFetchMock).toHaveBeenCalledWith('/api/backups/pve');
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/backups/pbs', {
+      signal: expect.any(AbortSignal),
+    });
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/backups/pve', {
+      signal: expect.any(AbortSignal),
+    });
     expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
     const postureURL = new URL(apiFetchJSONMock.mock.calls[0][0], 'https://pulse.invalid');
     expect(postureURL.pathname).toBe('/api/recovery/postures');
@@ -792,7 +796,9 @@ describe('independent Proxmox backup inventory reads', () => {
         new RegExp(`${source.toUpperCase()} backup inventory is unavailable`),
       );
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-      expect(recoverableRows()).toHaveLength(1);
+      // A failed source can now be actionable before the independent read
+      // settles. Wait for that read's evidence, not the failure notice.
+      await waitFor(() => expect(recoverableRows()).toHaveLength(1));
       if (source === 'pbs') expect(serverTable()).toHaveTextContent('Unavailable');
       const retry = screen.getByRole('button', { name: `Retry ${source.toUpperCase()} inventory` });
       const pending = deferred<Response>();
