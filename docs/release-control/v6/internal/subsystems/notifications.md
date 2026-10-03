@@ -15,6 +15,24 @@
 
 ## Purpose
 
+### Completion order cannot replace a newer occurrence's cooldown
+
+Firing completions still record an independent delivery receipt for their own
+occurrence and destination. The reusable-ID cooldown, however, belongs to the
+newest known occurrence: a late older completion or unknown legacy start cannot
+evict it. Within the same occurrence, successful completion times and delivered
+severity only advance. A genuinely newer occurrence begins its own severity
+history. No queue schema, retry budget, recovery selection or schedule changes.
+
+`TestNotificationCooldownReceiptOrdering` verifies older, unknown and equal-start
+completion ordering, including legacy zero starts. The connected
+`TestLateFiringHTTPReceiptPreservesCurrentCooldown` holds an older HTTP response
+while the newer firing completes through the persistent sender. It verifies that
+the ordinary repeat adds no queue row, a current severity increase still reaches
+the receiver, and both occurrence/destination receipts survive queue reopen.
+This is loopback source acceptance, not native delivery, restart cooldown
+persistence, a natural schedule cycle or resolution of the original flood reports.
+
 ### Queue recovery handler ownership after reload
 
 Router monitor replacement must refresh the existing queue/DLQ handler as well

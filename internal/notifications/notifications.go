@@ -1291,14 +1291,29 @@ func (n *NotificationManager) markAlertsNotified(alertsToSend []*alerts.Alert, s
 			continue
 		}
 		level := alert.Level
-		// Destinations and retries can complete out of order. A late warning
-		// receipt must not re-enable critical delivery for this occurrence.
-		if previous, ok := n.lastNotified[alert.ID]; ok && previous.alertStart.Equal(alert.StartTime) && notificationSeverityRank(previous.level) > notificationSeverityRank(level) {
-			level = previous.level
+		lastSent := sentAt
+		if previous, ok := n.lastNotified[alert.ID]; ok {
+			// Destinations and retries can complete out of order. An older
+			// occurrence still owns its delivery receipt, but must not replace
+			// the current occurrence's repeat-delivery cooldown. Unknown legacy
+			// starts likewise cannot evict a known occurrence.
+			if previous.alertStart.After(alert.StartTime) {
+				continue
+			}
+			if previous.alertStart.Equal(alert.StartTime) {
+				// A late warning cannot re-enable critical delivery, and an
+				// earlier completion cannot shorten the same occurrence's hold.
+				if notificationSeverityRank(previous.level) > notificationSeverityRank(level) {
+					level = previous.level
+				}
+				if previous.lastSent.After(lastSent) {
+					lastSent = previous.lastSent
+				}
+			}
 		}
 		n.lastNotified[alert.ID] = notificationRecord{
 			level:      level,
-			lastSent:   sentAt,
+			lastSent:   lastSent,
 			alertStart: alert.StartTime,
 		}
 	}
