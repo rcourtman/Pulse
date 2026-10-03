@@ -93,8 +93,10 @@ const BACKUP_SERVER_VISIBLE: Record<
 > = {
   // Reachability and datastore exhaustion are the two risks that can stop all
   // future backups. Host telemetry and space-efficiency context return only as
-  // the table gains enough room to keep those headline answers readable.
-  compact: ['server', 'status', 'datastore', 'used', 'backups'],
+  // the table gains enough room to keep those headline answers readable. The
+  // phone projection keeps those two answers whole ("Healthy", "33.6%") and
+  // lets the backup count return with the first wider layout.
+  compact: ['server', 'status', 'datastore', 'used'],
   basic: ['server', 'status', 'datastore', 'used', 'backups'],
   operational: ['server', 'status', 'cpu', 'memory', 'datastore', 'used', 'backups'],
   expanded: ['server', 'status', 'cpu', 'memory', 'uptime', 'datastore', 'used', 'backups'],
@@ -105,8 +107,10 @@ const BACKUP_SERVER_WEIGHTS: Record<
   ProxmoxBackupsTableLayoutMode,
   Partial<Record<BackupServerColumnId, number>>
 > = {
-  compact: { server: 40, status: 15, datastore: 15, used: 20, backups: 10 },
-  basic: { server: 24, status: 14, datastore: 20, used: 28, backups: 14 },
+  compact: { server: 40, status: 23, datastore: 22, used: 15 },
+  // Just above the phone projection the used cell carries its used/total
+  // pair again, the longest value in the row, so it takes the most room.
+  basic: { server: 24, status: 13.6, datastore: 18.2, used: 28.4, backups: 9.8 },
   operational: {
     server: 20,
     status: 12,
@@ -175,7 +179,7 @@ export const COVERAGE_COLUMNS: readonly BackupTableColumn<CoverageColumnId>[] = 
   { id: 'targetId', label: 'Target ID', kind: 'text' },
   { id: 'node', label: 'Node', kind: 'text' },
   { id: 'posture', label: 'Posture', kind: 'text' },
-  { id: 'latest', label: 'Restore', kind: 'numeric-value' },
+  { id: 'latest', label: 'Last backup', kind: 'numeric-value' },
   { id: 'pbs', label: 'PBS snapshot', kind: 'text' },
   { id: 'archive', label: 'PVE file', kind: 'text' },
   { id: 'snapshot', label: 'Guest snapshot', kind: 'text' },
@@ -198,11 +202,14 @@ const COVERAGE_WEIGHTS: Record<
   ProxmoxBackupsTableLayoutMode,
   Partial<Record<CoverageColumnId, number>>
 > = {
-  compact: { workload: 40, posture: 18, latest: 16, pbs: 16, task: 10 },
+  // Posture keeps its whole compact word ("Unknown"), the two age cells hold
+  // the suffix-free compact age, and the job dot takes what a "Job" header
+  // needs.
+  compact: { workload: 40, posture: 21, latest: 14.5, pbs: 14.5, task: 10 },
   // Above the phone projection the identity columns (workload, node) take the
   // slack that the short type badge, target id, and age cells cannot use, so
   // names stay whole instead of truncating beside empty space.
-  basic: { workload: 31, node: 20, posture: 20, latest: 14, task: 15 },
+  basic: { workload: 31, node: 18, posture: 22, latest: 15, task: 14 },
   operational: { workload: 27, type: 8, node: 17, posture: 17, latest: 15, task: 16 },
   expanded: {
     workload: 19,
@@ -287,7 +294,10 @@ const RECOVERABLE_VISIBLE: Record<ProxmoxBackupsTableLayoutMode, readonly Recove
   // A recovery-point feed starts with identity, source, location, age, and
   // verification. Size and verbose details progressively return with usable
   // room; the full values remain available through their title affordance.
-  compact: ['workload', 'source', 'location', 'created', 'state'],
+  // The phone projection keeps the source and state badges and the age whole;
+  // the repository location returns with the first wider layout and stays in
+  // the row's hover title meanwhile.
+  compact: ['workload', 'source', 'created', 'state'],
   basic: ['workload', 'source', 'location', 'created', 'state'],
   operational: ['workload', 'type', 'source', 'location', 'created', 'size', 'state'],
   expanded: ['workload', 'type', 'targetId', 'source', 'location', 'created', 'size', 'state'],
@@ -301,7 +311,7 @@ const RECOVERABLE_WEIGHTS: Record<
   // Reserve enough phone-width space for complete state badges (including
   // Failed and Running) rather than clipping the recovery answer at the
   // scroll edge. Identity remains on the canonical 40% anchor.
-  compact: { workload: 40, source: 12, location: 17, created: 15, state: 16 },
+  compact: { workload: 40, source: 16, created: 14, state: 30 },
   basic: { workload: 28, source: 14, location: 23, created: 18, state: 17 },
   operational: {
     workload: 24,

@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "base_sha": "1f140a5d380c20dc5eaee14cde07666b75436a9d",
+  "verified_at": "2026-10-03T20:25:42Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx": "7787854145257e13bc347c2513f89e595060e606857a9a7c4ae6c0a897b6c639",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "b791a50845befbdcfdca979355188fb1e977878ce69e8a72cbbdf90fda5e8cbe",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "97a95f97c94795005300fe55fdca81756b6ce9f11e977d1a3f683775eb0dc88d",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "f85558ab1092078b9a3d160c986450d2167552b10b2f76c10087fceef5af0689",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "1dc95dd84f499e38a8fca77650ae72ff6c903b7c03c8fdc3cf366b309817e488",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "b872437fb4cfb61b07e0c949ae6f323d6fd3f2622e57480931f7ef74fafe79c2",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "0037e6f97e1180ef0c0d585ec5e9385dcbe4c4e1b51a7bc29d8631b4b0e87745",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "41202d1ae6095d882b124a55aed4110c74f38047d51b83b07bf52a6e95ca6b01",
+    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts": "908af893071386d1a11a7191694b9fef399e4b134e78188bee90faa80f758e91"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 560,
+      "height": 900
+    },
+    {
+      "width": 440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "PR #2435 rebuilt as one commit on origin/main 1f140a5d38 (after Tailwind 4, #2443/#2444), checked on a private mock stack built from main with Vite serving this tree, light at every width and dark at 1440 and 390",
+    "Overview: the nodes table shows Node, CPU, Mem, Disk, Age at 390 and 440 with no clipped cell and adds Temp from 560; the guests table phone name cell is 95px wide (artifact-cache-310 needs 101px, so long mock names still truncate by a few characters); no table scrolls horizontally",
+    "Backups By date at 1440: Details reads vma.zst or the PBS file count, zero clipped cells in either table; at 560/440/390 only workload and datastore identity strings clip",
+    "Backups Coverage at 1440: the column is Last backup with ages such as 9d ago and the timestamp in the hover title; only London Edge Standalone clips; at 440/390 the row shows Workload, Posture, Age, PBS, Job and the only clipped hits are sr-only task labels; the mock emitted no snapshot-only workload, so the None state is covered by unit tests rather than seen live"
+  ],
+  "interactions": [
+    "scrollWidth-over-clientWidth sweep of every visible table cell on the three routes at 1440, 560, 440 and 390, then DOM probes to separate sr-only spans from real clipping",
+    "Read the Last backup and Details column values and hover titles across all rows at 1440",
+    "vitest for src/features/proxmox, src/components/Workloads and src/features/platformPage on the rebuilt tree: 125 files, 2192 tests passed"
+  ]
+}
