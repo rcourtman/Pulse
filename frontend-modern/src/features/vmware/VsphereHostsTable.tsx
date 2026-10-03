@@ -378,8 +378,8 @@ export const VsphereHostsTable: Component<{
                       const s = hostAlertStyles();
                       if (!s.hasUnacknowledgedAlert) return '';
                       return s.severity === 'critical'
-                        ? 'bg-red-50 dark:bg-red-950'
-                        : 'bg-yellow-50 dark:bg-yellow-950';
+                        ? 'bg-red-50 dark:bg-red-950/25'
+                        : 'bg-yellow-50 dark:bg-yellow-950/25';
                     };
                     return (
                       <>
@@ -503,7 +503,7 @@ export const VsphereHostsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
                           >
-                            <span class="inline-block max-w-[12rem] truncate" title={vcenter()}>
+                            <span class="inline-block max-w-48 truncate" title={vcenter()}>
                               {vcenter()}
                             </span>
                           </TableCell>

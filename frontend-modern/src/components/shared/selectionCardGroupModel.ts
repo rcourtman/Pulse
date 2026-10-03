@@ -45,9 +45,9 @@ export function getSelectionCardGroupClass(
 
 function getSelectionCardActiveClass(tone: SelectionCardTone): string {
   if (tone === 'success') {
-    return 'border-green-500 bg-green-50 dark:bg-green-900';
+    return 'border-green-500 bg-green-50 dark:bg-green-900/25';
   }
-  return 'border-blue-500 bg-blue-50 dark:bg-blue-900';
+  return 'border-blue-500 bg-blue-50 dark:bg-blue-900/25';
 }
 
 function getSelectionCardInactiveClass(variant: SelectionCardGroupVariant): string {
@@ -96,8 +96,8 @@ export function getSelectionCardTitleClass(
     return 'text-sm font-semibold text-base-content';
   }
   return tone === 'success'
-    ? 'text-sm font-semibold text-green-900 dark:text-green-100'
-    : 'text-sm font-semibold text-blue-900 dark:text-blue-100';
+    ? 'text-sm font-semibold text-green-900/25 dark:text-green-100'
+    : 'text-sm font-semibold text-blue-900/25 dark:text-blue-100';
 }
 
 export function getSelectionCardDescriptionClass(variant: SelectionCardGroupVariant): string {

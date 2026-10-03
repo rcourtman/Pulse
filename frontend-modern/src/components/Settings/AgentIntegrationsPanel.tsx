@@ -204,7 +204,7 @@ export const AgentIntegrationsPanel: Component = () => {
       title="External agents"
       noPadding
       class={`scroll-mt-20 transition-shadow ${
-        panelHighlight() ? 'ring-2 ring-blue-500 shadow-sm' : ''
+        panelHighlight() ? 'ring-2 ring-blue-500 shadow-xs' : ''
       }`}
     >
       <span id={PULSE_MCP_SETUP_ANCHOR} class="sr-only" aria-hidden="true" />
@@ -294,7 +294,7 @@ export const AgentIntegrationsPanel: Component = () => {
               </li>
             </ol>
             <details
-              class="rounded-md border border-border bg-surface-alt/40 p-3"
+              class="rounded-md border border-border p-3"
               onToggle={(event) => setInstallerCommandsOpen(event.currentTarget.open)}
             >
               <summary class="cursor-pointer text-sm font-semibold text-base-content">
@@ -326,7 +326,7 @@ export const AgentIntegrationsPanel: Component = () => {
               </Show>
             </details>
             <details
-              class="rounded-md border border-border bg-surface-alt/40 p-3"
+              class="rounded-md border border-border p-3"
               onToggle={(event) => setClientConfigOpen(event.currentTarget.open)}
             >
               <summary class="cursor-pointer text-sm font-semibold text-base-content">
@@ -379,7 +379,7 @@ export const AgentIntegrationsPanel: Component = () => {
             </details>
             <Show when={hasClientBuilderDetails()}>
               <details
-                class="rounded-md border border-border bg-surface-alt/40 p-3"
+                class="rounded-md border border-border p-3"
                 onToggle={(event) => setAdvancedClientDetailsOpen(event.currentTarget.open)}
               >
                 <summary class="cursor-pointer text-sm font-semibold text-base-content">
@@ -405,7 +405,7 @@ export const AgentIntegrationsPanel: Component = () => {
                           />
                           <span>
                             External agents expose {posture().label}{' '}
-                            <span class="text-muted/80">through Patrol mode</span>
+                            <span class="">through Patrol mode</span>
                           </span>
                         </div>
                       )}
@@ -420,7 +420,7 @@ export const AgentIntegrationsPanel: Component = () => {
                             Built-in Pulse views and connected clients all sit behind the same
                             Patrol policy. Connected agents do not get separate powers.
                           </p>
-                          <ul class="divide-y divide-border rounded-md border border-border bg-surface-alt/40">
+                          <ul class="divide-y divide-border rounded-md border border-border">
                             <For each={surfaceContractEntries()}>
                               {(entry) => (
                                 <li class="space-y-1 p-3">
@@ -460,7 +460,7 @@ export const AgentIntegrationsPanel: Component = () => {
                             build clients against this instance. They do not change Patrol mode.
                           </p>
                           <Show when={workflowPrompts().length > 0}>
-                            <details class="rounded-md border border-border bg-surface-alt/40 p-3">
+                            <details class="rounded-md border border-border p-3">
                               <summary class="cursor-pointer text-sm font-semibold text-base-content">
                                 <span>Agent starting points</span>{' '}
                                 <span class="ml-2 text-xs font-normal text-muted">
@@ -481,7 +481,7 @@ export const AgentIntegrationsPanel: Component = () => {
                                               prompt.name === AGENT_WORKFLOW_PROMPT_OPERATIONS_LOOP
                                             }
                                           >
-                                            <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                                            <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/25 dark:text-emerald-300">
                                               Patrol
                                             </span>
                                           </Show>
@@ -532,7 +532,7 @@ export const AgentIntegrationsPanel: Component = () => {
                             </p>
                           </Show>
                           <Show when={errorCodeSummaries().length > 0}>
-                            <details class="rounded-md border border-border bg-surface-alt/40 p-3 text-xs text-muted">
+                            <details class="rounded-md border border-border p-3 text-xs text-muted">
                               <summary class="cursor-pointer text-sm font-semibold text-base-content">
                                 Failure codes{' '}
                                 <span class="ml-2 text-xs font-normal text-muted">
@@ -571,7 +571,7 @@ export const AgentIntegrationsPanel: Component = () => {
                             design notes.
                           </p>
                           <Show when={manifest() && grouped().length > 0}>
-                            <details class="rounded-md border border-border bg-surface-alt/40 p-3">
+                            <details class="rounded-md border border-border p-3">
                               <summary class="cursor-pointer text-sm font-semibold text-base-content">
                                 Agent capabilities{' '}
                                 <span class="ml-2 text-xs font-normal text-muted">

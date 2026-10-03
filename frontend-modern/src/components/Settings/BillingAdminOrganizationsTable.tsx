@@ -55,7 +55,7 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
               <div class="text-xs text-muted">
                 <span class="font-mono">{org.org_id}</span>
                 {getBillingAdminOrganizationBadges(org).map((badge) => (
-                  <span class={`ml-2 rounded px-1.5 py-0.5 ${badge.badgeClass}`}>
+                  <span class={`ml-2 rounded-sm px-1.5 py-0.5 ${badge.badgeClass}`}>
                     {badge.label}
                   </span>
                 ))}

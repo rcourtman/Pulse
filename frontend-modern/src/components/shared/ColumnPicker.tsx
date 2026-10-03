@@ -69,7 +69,7 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
                 type="checkbox"
                 checked={state.isColumnChecked(column.id)}
                 onChange={() => state.handleColumnToggle(column.id)}
-                class="h-3.5 w-3.5 rounded border-border text-blue-600 focus:ring-blue-500 focus:ring-offset-0 dark:checked:bg-blue-600"
+                class="h-3.5 w-3.5 rounded-sm border-border text-blue-600 focus:ring-blue-500 focus:ring-offset-0 dark:checked:bg-blue-600"
               />
               <span class={getColumnPickerOptionTextClass(state.isColumnChecked(column.id))}>
                 {column.label}

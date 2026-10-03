@@ -29,7 +29,7 @@ export function getAlertActivationPresentation({
     trackClass: `relative h-6 w-11 rounded-full transition ${
       isActive ? 'bg-blue-600' : 'bg-surface-hover'
     }${isBusy ? ' opacity-50' : ''}`,
-    thumbClass: `absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white shadow transition-all ${
+    thumbClass: `absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white shadow-sm transition-all ${
       isActive ? 'translate-x-5' : 'translate-x-0'
     }`,
   };

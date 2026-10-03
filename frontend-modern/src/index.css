@@ -1,114 +1,231 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/*
+ * Tailwind CSS v4 entry point.
+ *
+ * The cascade is arranged to render exactly as the Tailwind v3 build did.
+ * v3 emitted one flat stylesheet, so a component rule with a more specific
+ * selector (for example the container-aware table-cell rules below) beat a
+ * plain utility. v4 uses native cascade layers, where any utility beats any
+ * rule in an earlier layer regardless of specificity. To keep the v3 contract
+ * the former `@layer components` rules and the former unlayered rules live in
+ * the utilities layer, before and after the generated utilities respectively.
+ */
+@layer theme, base, components, utilities;
+
+@import 'tailwindcss/theme.css' layer(theme);
+@import './tailwind-palette.css';
+@import 'tailwindcss/preflight.css' layer(base);
+
+@plugin '@tailwindcss/typography';
+
+@source '../index.html';
+@source './**/*.{js,ts,jsx,tsx}';
+
+/* v3 class-strategy dark mode, including its selector specificity. */
+@custom-variant dark (&:is(.dark *));
+
+/* v3 applied hover styles on touch devices too; v4 limits them to
+   hover-capable pointers unless the variant is redefined. */
+@custom-variant hover (&:hover);
 
 /*
- * Respect the operating-system motion preference across the whole product.
- * Keep animations technically present for components that depend on their
- * completion state, but finish them immediately and prevent repeated motion.
- * This also covers Tailwind animation/transition utilities and future shared
- * primitives instead of requiring every call site to remember an override.
+ * v3 spacing between children: the margin goes on every visible child after
+ * the first and overrides that child's own margin utilities. v4 instead puts
+ * a zero-specificity margin on every child but the last, which lets a child's
+ * own margin win and moves the gap when the last child is not rendered. The
+ * v4 rules are neutralised after the generated utilities below.
  */
-@media (prefers-reduced-motion: reduce) {
-  html:focus-within {
-    scroll-behavior: auto;
-  }
-
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    animation-delay: 0ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    transition-delay: 0ms !important;
+@utility space-y-* {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-top: --spacing(--value(number));
+    margin-bottom: 0;
   }
 }
 
-/*
- * Neutralize a Tailwind color/font-size collision: the dead `base` alias in
- * the color palette was making Tailwind emit `color: var(--color-bg-base)` on
- * `.text-base` / `.sm\:text-base`, painting text the same color as the
- * background. The alias has been removed from tailwind.config.js; this rule
- * keeps things visible until the next dev-server restart picks up that change.
- */
-@layer utilities {
-  .text-base,
-  .sm\:text-base,
-  .md\:text-base,
-  .lg\:text-base,
-  .xl\:text-base,
-  .\32xl\:text-base {
-    color: inherit;
-  }
-
-  .view-options-grid > * [role='group'] > button {
-    box-sizing: border-box;
-    height: 1.75rem;
-    min-height: 1.75rem;
-    padding-top: 0;
-    padding-bottom: 0;
-  }
-
-  .view-options-grid > * > :last-child:not([role='group']) > button {
-    box-sizing: border-box;
-    width: 100%;
-    height: 2rem;
-    min-height: 2rem;
-  }
-
-  @media (max-width: 640px) {
-    .view-options-grid > * [role='group'] > button {
-      height: 2.5rem;
-      min-height: 2.5rem;
-    }
-
-    .view-options-grid > * > :last-child:not([role='group']) > button {
-      height: 2.75rem;
-      min-height: 2.75rem;
-    }
+@utility space-x-* {
+  & > :not([hidden]) ~ :not([hidden]) {
+    margin-right: 0;
+    margin-left: --spacing(--value(number));
   }
 }
 
-/* Update banner animation */
-@keyframes slideDown {
-  from {
-    transform: translateY(-100%);
-    opacity: 0;
-  }
-
-  to {
-    transform: translateY(0);
-    opacity: 1;
+/* v3 dividers follow the same rule: the border sits on every visible child
+   after the first and overrides that child's own border width and color. */
+@utility divide-y {
+  & > :not([hidden]) ~ :not([hidden]) {
+    border-top-width: 1px;
+    border-bottom-width: 0;
   }
 }
 
-.animate-slideDown {
+@utility divide-y-0 {
+  & > :not([hidden]) ~ :not([hidden]) {
+    border-top-width: 0;
+    border-bottom-width: 0;
+  }
+}
+
+@utility divide-x {
+  & > :not([hidden]) ~ :not([hidden]) {
+    border-right-width: 0;
+    border-left-width: 1px;
+  }
+}
+
+@utility divide-* {
+  & > :not([hidden]) ~ :not([hidden]) {
+    border-color: --value(--color-*);
+    border-color: --alpha(--value(--color-*) / calc(--modifier(integer) * 1%));
+  }
+}
+
+/* Pulse helpers, declared as utilities so responsive and state variants
+   (for example xl:pb-0 next to pb-safe-or-14) override them as in v3. */
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@utility pb-safe-or-14 {
+  padding-bottom: max(3.5rem, env(safe-area-inset-bottom, 3.5rem));
+}
+
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility animate-slideDown {
   animation: slideDown 0.3s ease-out;
 }
 
-/* Notification animations */
-@keyframes slide-in-card {
-  from {
-    opacity: 0;
-    transform: translateX(100%) scale(0.95);
-    filter: blur(4px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-    filter: blur(0);
-  }
-}
-
-.animate-slide-in-card {
+@utility animate-slide-in-card {
   animation: slide-in-card 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Custom styles */
+@utility animate-fade-in {
+  animation: fade-in 0.6s ease-out forwards;
+}
+
+@utility animate-slide-up {
+  animation: slide-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+}
+
+@utility animate-enter {
+  animation: enter 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@theme {
+  --breakpoint-*: initial;
+  --breakpoint-xs: 400px;
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+
+  /* v3 font stacks; v4.3 swapped system-ui for a named-font stack. */
+  --font-sans:
+    ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+    'Noto Color Emoji';
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
+
+  /* v3 line heights are absolute, so text that only changes font-size (for
+     example text-[11px]) inherits the parent's line box unchanged. v4's
+     defaults are ratios, which would rescale it. */
+  --text-xs--line-height: 1rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl--line-height: 2rem;
+  --text-3xl--line-height: 2.25rem;
+  --text-4xl--line-height: 2.5rem;
+
+  /* v3 defaults: a bare ring is 3px and a ring without an explicit color
+     is translucent blue-500. */
+  --default-ring-width: 3px;
+  --default-ring-color: rgb(59 130 246 / 0.5);
+
+  --animate-spin-slow: spin 2s linear infinite;
+  --animate-fadeIn: fadeIn 0.2s ease-in;
+  --animate-slideInRight: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+
+  @keyframes fadeIn {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideInRight {
+    0% {
+      transform: translateX(100%);
+    }
+    100% {
+      transform: translateX(0);
+    }
+  }
+}
+
+/* Semantic design system colors, resolved at runtime from the CSS variables
+   defined in the base layer below. */
+@theme inline {
+  --color-surface: var(--color-bg-surface);
+  --color-surface-hover: var(--color-bg-surface-hover);
+  --color-surface-alt: var(--color-bg-surface-alt);
+  --color-border: var(--color-border-base);
+  --color-border-subtle: var(--color-border-subtle);
+  --color-base-content: var(--color-text-base);
+  --color-muted: var(--color-text-muted);
+}
+
 @layer base {
+  /*
+   * Tailwind v3 preflight behaviour that v4 changed: borders default to
+   * gray-200 rather than currentcolor, placeholders use gray-400, and buttons
+   * show the pointer cursor.
+   */
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-gray-400);
+  }
+
+  button,
+  [role='button'] {
+    cursor: pointer;
+  }
+
+  :disabled {
+    cursor: default;
+  }
+
+  /* v3 preflight reset margins and padding element by element and left table
+     cells and options with their browser padding; v4 zeroes every element. */
+  th,
+  td {
+    padding: 1px;
+  }
+
+  option,
+  optgroup {
+    padding: revert;
+  }
+
   :root {
     color-scheme: light;
 
@@ -121,14 +238,14 @@
     --pulse-panel-padding: clamp(0.75rem, 1.4vw, 1.25rem);
 
     /* Semantic Colors - Light Mode */
-    --color-bg-base: theme('colors.slate.100');
-    --color-bg-surface: theme('colors.white');
-    --color-bg-surface-hover: theme('colors.slate.50');
-    --color-bg-surface-alt: theme('colors.slate.100');
-    --color-border-subtle: theme('colors.slate.100');
-    --color-border-base: theme('colors.slate.200');
-    --color-text-base: theme('colors.slate.900');
-    --color-text-muted: theme('colors.slate.600');
+    --color-bg-base: var(--color-slate-100);
+    --color-bg-surface: var(--color-white);
+    --color-bg-surface-hover: var(--color-slate-50);
+    --color-bg-surface-alt: var(--color-slate-100);
+    --color-border-subtle: var(--color-slate-100);
+    --color-border-base: var(--color-slate-200);
+    --color-text-base: var(--color-slate-900);
+    --color-text-muted: var(--color-slate-600);
     --color-summary-row-bg: rgba(14, 165, 233, 0.05);
     --color-summary-row-bg-hover: rgba(14, 165, 233, 0.08);
     --color-summary-row-border: rgba(14, 165, 233, 0.16);
@@ -148,15 +265,15 @@
     color-scheme: dark;
 
     /* Semantic Colors - Dark Mode */
-    --color-bg-base: theme('colors.slate.900');
-    --color-bg-surface: theme('colors.slate.800');
-    --color-bg-surface-hover: theme('colors.slate.700');
-    --color-bg-surface-alt: theme('colors.slate.800');
+    --color-bg-base: var(--color-slate-900);
+    --color-bg-surface: var(--color-slate-800);
+    --color-bg-surface-hover: var(--color-slate-700);
+    --color-bg-surface-alt: var(--color-slate-800);
     /* Fallback */
-    --color-border-subtle: theme('colors.slate.800');
-    --color-border-base: theme('colors.slate.700');
-    --color-text-base: theme('colors.slate.100');
-    --color-text-muted: theme('colors.slate.400');
+    --color-border-subtle: var(--color-slate-800);
+    --color-border-base: var(--color-slate-700);
+    --color-text-base: var(--color-slate-100);
+    --color-text-muted: var(--color-slate-400);
     --color-summary-row-bg: rgba(56, 189, 248, 0.08);
     --color-summary-row-bg-hover: rgba(56, 189, 248, 0.12);
     --color-summary-row-border: rgba(56, 189, 248, 0.18);
@@ -220,46 +337,47 @@
      (e.g. the Assistant launcher tab) off the true screen edge. */
 }
 
-@layer components {
+@layer utilities {
+  /* Former v3 component rules: emitted before the generated utilities. */
   /* Assistant code-block syntax highlighting (highlight.js tokens).
      Chat code blocks always render on the dark prose-pre slate background,
      so a single readable-on-dark palette serves both app themes. */
   .prose pre code.hljs-highlighted .hljs-comment,
   .prose pre code.hljs-highlighted .hljs-quote {
-    color: theme('colors.slate.400');
+    color: var(--color-slate-400);
     font-style: italic;
   }
   .prose pre code.hljs-highlighted .hljs-keyword,
   .prose pre code.hljs-highlighted .hljs-selector-tag,
   .prose pre code.hljs-highlighted .hljs-literal,
   .prose pre code.hljs-highlighted .hljs-built_in {
-    color: theme('colors.violet.300');
+    color: var(--color-violet-300);
   }
   .prose pre code.hljs-highlighted .hljs-string,
   .prose pre code.hljs-highlighted .hljs-regexp,
   .prose pre code.hljs-highlighted .hljs-addition {
-    color: theme('colors.emerald.300');
+    color: var(--color-emerald-300);
   }
   .prose pre code.hljs-highlighted .hljs-number,
   .prose pre code.hljs-highlighted .hljs-symbol,
   .prose pre code.hljs-highlighted .hljs-bullet {
-    color: theme('colors.amber.300');
+    color: var(--color-amber-300);
   }
   .prose pre code.hljs-highlighted .hljs-title,
   .prose pre code.hljs-highlighted .hljs-section,
   .prose pre code.hljs-highlighted .hljs-name,
   .prose pre code.hljs-highlighted .hljs-function {
-    color: theme('colors.sky.300');
+    color: var(--color-sky-300);
   }
   .prose pre code.hljs-highlighted .hljs-attr,
   .prose pre code.hljs-highlighted .hljs-attribute,
   .prose pre code.hljs-highlighted .hljs-variable,
   .prose pre code.hljs-highlighted .hljs-template-variable {
-    color: theme('colors.cyan.300');
+    color: var(--color-cyan-300);
   }
   .prose pre code.hljs-highlighted .hljs-meta,
   .prose pre code.hljs-highlighted .hljs-deletion {
-    color: theme('colors.rose.300');
+    color: var(--color-rose-300);
   }
 
   .touch-scroll {
@@ -661,7 +779,7 @@
 
   /* Card styles */
   .card {
-    @apply bg-surface border border-border shadow-sm rounded-md;
+    @apply bg-surface border border-border shadow-xs rounded-md;
   }
 
   .table-row {
@@ -764,12 +882,13 @@
   }
 
   /* Form input — reusable base for text inputs, textareas, selects */
-  .form-input {
-    @apply w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  .form-input,
+  .form-select {
+    @apply w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .form-select {
-    @apply form-input pr-8 appearance-none;
+    @apply pr-8 appearance-none;
   }
 
   /* Progress bars */
@@ -817,11 +936,11 @@
   /* Custom scrollbar - subtle styling */
   .custom-scrollbar {
     scrollbar-width: thin;
-    scrollbar-color: theme('colors.gray.300') theme('colors.gray.100');
+    scrollbar-color: var(--color-gray-300) var(--color-gray-100);
   }
 
   .dark .custom-scrollbar {
-    scrollbar-color: theme('colors.gray.700') theme('colors.gray.800');
+    scrollbar-color: var(--color-gray-700) var(--color-gray-800);
   }
 
   .custom-scrollbar::-webkit-scrollbar {
@@ -830,635 +949,719 @@
   }
 
   .custom-scrollbar::-webkit-scrollbar-track {
-    @apply bg-slate-100 dark:bg-slate-800;
+    background-color: var(--color-slate-100);
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-track {
+    background-color: var(--color-slate-800);
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-slate-300 dark:bg-slate-700 rounded-full;
+    border-radius: 9999px;
+    background-color: var(--color-slate-300);
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: var(--color-slate-700);
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    @apply bg-slate-400 dark:bg-slate-600;
-  }
-}
-
-/* Global scrollbar styling */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
-  /* gray-400 with transparency */
-}
-
-.dark * {
-  scrollbar-color: rgba(55, 65, 81, 0.5) transparent;
-  /* gray-700 with transparency */
-}
-
-/* Make scrollbars even more subtle on hover */
-*:hover {
-  scrollbar-color: rgba(156, 163, 175, 0.7) rgba(243, 244, 246, 0.5);
-  /* Slightly more visible on hover */
-}
-
-.dark *:hover {
-  scrollbar-color: rgba(75, 85, 99, 0.7) rgba(31, 41, 55, 0.3);
-  /* dark mode hover */
-}
-
-*::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-*::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-*::-webkit-scrollbar-thumb {
-  background-color: rgba(156, 163, 175, 0.5);
-  border-radius: 10px;
-}
-
-.dark *::-webkit-scrollbar-thumb {
-  background-color: rgba(55, 65, 81, 0.5);
-}
-
-*::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(156, 163, 175, 0.8);
-}
-
-.dark *::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(75, 85, 99, 0.8);
-}
-
-/* Dark mode transitions - Only apply to elements that actually change colors */
-body,
-.card,
-.table-row,
-.bg-white,
-.bg-slate-50,
-.bg-slate-100,
-.bg-slate-200,
-.bg-slate-300,
-.bg-slate-700,
-.bg-slate-800,
-.bg-slate-900,
-.text-slate-500,
-.text-slate-600,
-.text-slate-700,
-.text-slate-800,
-.text-slate-900,
-.border-slate-200,
-.border-slate-300,
-.border-slate-600,
-.border-slate-700,
-.dark\:bg-slate-700,
-.dark\:bg-slate-800,
-.dark\:bg-slate-900,
-.dark\:text-slate-100,
-.dark\:text-slate-200,
-.dark\:text-slate-300,
-.dark\:text-slate-400,
-.dark\:border-slate-600,
-.dark\:border-slate-700 {
-  transition:
-    background-color 150ms ease-in-out,
-    color 150ms ease-in-out,
-    border-color 150ms ease-in-out;
-}
-
-/* Pulse brand motion - visible, calm live-state rhythm. */
-@keyframes pulse-brand-logo {
-  0%,
-  100% {
-    transform: scale(1);
+    background-color: var(--color-slate-400);
   }
 
-  46% {
-    transform: scale(1.035);
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-slate-600);
   }
 
-  66% {
-    transform: scale(1.012);
+  .view-options-grid > * [role='group'] > button {
+    box-sizing: border-box;
+    height: 1.75rem;
+    min-height: 1.75rem;
+    padding-top: 0;
+    padding-bottom: 0;
   }
-}
 
-@keyframes pulse-brand-wave {
-  0% {
-    opacity: 0.34;
+  .view-options-grid > * > :last-child:not([role='group']) > button {
+    box-sizing: border-box;
+    width: 100%;
+    height: 2rem;
+    min-height: 2rem;
+  }
+
+  @media (max-width: 640px) {
+    .view-options-grid > * [role='group'] > button {
+      height: 2.5rem;
+      min-height: 2.5rem;
+    }
+
+    .view-options-grid > * > :last-child:not([role='group']) > button {
+      height: 2.75rem;
+      min-height: 2.75rem;
+    }
+  }
+
+  @tailwind utilities source(none);
+
+  /* Neutralise v4's own zero-specificity space-x, space-y and divide rules;
+     the v3 forms are declared with @utility at the top of this file. These
+     reset to the preflight values, and any utility on the child still wins. */
+  :where([class*='space-y-'] > :not(:last-child)) {
+    margin-block: 0;
+  }
+
+  :where([class*='space-x-'] > :not(:last-child)) {
+    margin-inline: 0;
+  }
+
+  :where([class*='divide-'] > :not(:last-child)) {
+    border-width: 0;
+    border-style: solid;
+    border-color: var(--color-gray-200);
+  }
+
+  /* Former unlayered rules: emitted after the generated utilities. */
+  /*
+   * Respect the operating-system motion preference across the whole product.
+   * Keep animations technically present for components that depend on their
+   * completion state, but finish them immediately and prevent repeated motion.
+   * This also covers Tailwind animation/transition utilities and future shared
+   * primitives instead of requiring every call site to remember an override.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    html:focus-within {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-delay: 0ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      transition-delay: 0ms !important;
+    }
+  }
+
+  /* Update banner animation */
+  @keyframes slideDown {
+    from {
+      transform: translateY(-100%);
+      opacity: 0;
+    }
+
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  /* Notification animations */
+  @keyframes slide-in-card {
+    from {
+      opacity: 0;
+      transform: translateX(100%) scale(0.95);
+      filter: blur(4px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  /* Global scrollbar styling */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+    /* gray-400 with transparency */
+  }
+
+  .dark * {
+    scrollbar-color: rgba(55, 65, 81, 0.5) transparent;
+    /* gray-700 with transparency */
+  }
+
+  /* Make scrollbars even more subtle on hover */
+  *:hover {
+    scrollbar-color: rgba(156, 163, 175, 0.7) rgba(243, 244, 246, 0.5);
+    /* Slightly more visible on hover */
+  }
+
+  .dark *:hover {
+    scrollbar-color: rgba(75, 85, 99, 0.7) rgba(31, 41, 55, 0.3);
+    /* dark mode hover */
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.5);
+    border-radius: 10px;
+  }
+
+  .dark *::-webkit-scrollbar-thumb {
+    background-color: rgba(55, 65, 81, 0.5);
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(156, 163, 175, 0.8);
+  }
+
+  .dark *::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(75, 85, 99, 0.8);
+  }
+
+  /* Dark mode transitions - Only apply to elements that actually change colors */
+  body,
+  .card,
+  .table-row,
+  .bg-white,
+  .bg-slate-50,
+  .bg-slate-100,
+  .bg-slate-200,
+  .bg-slate-300,
+  .bg-slate-700,
+  .bg-slate-800,
+  .bg-slate-900,
+  .text-slate-500,
+  .text-slate-600,
+  .text-slate-700,
+  .text-slate-800,
+  .text-slate-900,
+  .border-slate-200,
+  .border-slate-300,
+  .border-slate-600,
+  .border-slate-700,
+  .dark\:bg-slate-700,
+  .dark\:bg-slate-800,
+  .dark\:bg-slate-900,
+  .dark\:text-slate-100,
+  .dark\:text-slate-200,
+  .dark\:text-slate-300,
+  .dark\:text-slate-400,
+  .dark\:border-slate-600,
+  .dark\:border-slate-700 {
+    transition:
+      background-color 150ms ease-in-out,
+      color 150ms ease-in-out,
+      border-color 150ms ease-in-out;
+  }
+
+  /* Pulse brand motion - visible, calm live-state rhythm. */
+  @keyframes pulse-brand-logo {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+
+    46% {
+      transform: scale(1.035);
+    }
+
+    66% {
+      transform: scale(1.012);
+    }
+  }
+
+  @keyframes pulse-brand-wave {
+    0% {
+      opacity: 0.34;
+      transform: translateY(-50%) scale(0.9);
+    }
+
+    68%,
+    100% {
+      opacity: 0;
+      transform: translateY(-50%) scale(2);
+    }
+  }
+
+  @keyframes pulse-brand-bg {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    46% {
+      opacity: 0.96;
+      transform: scale(1.025);
+    }
+  }
+
+  @keyframes pulse-brand-ring {
+    0% {
+      opacity: 0.9;
+      transform: scale(0.96);
+      stroke-width: 14;
+    }
+
+    56% {
+      opacity: 0.22;
+      transform: scale(1.32);
+      stroke-width: 5;
+    }
+
+    74% {
+      opacity: 0;
+      transform: scale(1.36);
+      stroke-width: 4;
+    }
+
+    75% {
+      opacity: 0;
+      transform: scale(0.96);
+      stroke-width: 14;
+    }
+
+    100% {
+      opacity: 0.9;
+      transform: scale(0.96);
+      stroke-width: 14;
+    }
+  }
+
+  @keyframes pulse-brand-center {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+
+    46% {
+      transform: scale(0.86);
+    }
+
+    64% {
+      transform: scale(1.05);
+    }
+  }
+
+  .pulse-brand-lockup {
+    --pulse-brand-wave-color: rgba(37, 99, 235, 0.34);
+    position: relative;
+  }
+
+  .dark .pulse-brand-lockup {
+    --pulse-brand-wave-color: rgba(96, 165, 250, 0.4);
+  }
+
+  .pulse-brand-lockup::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 20px;
+    height: 20px;
+    border: 1px solid var(--pulse-brand-wave-color);
+    border-radius: 9999px;
+    opacity: 0;
+    pointer-events: none;
     transform: translateY(-50%) scale(0.9);
   }
 
-  68%,
-  100% {
-    opacity: 0;
-    transform: translateY(-50%) scale(2);
-  }
-}
-
-@keyframes pulse-brand-bg {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
+  .pulse-brand-logo,
+  .pulse-brand-logo .pulse-bg,
+  .pulse-brand-logo .pulse-ring,
+  .pulse-brand-logo .pulse-center {
+    transform-origin: center;
+    transform-box: fill-box;
   }
 
-  46% {
-    opacity: 0.96;
-    transform: scale(1.025);
-  }
-}
-
-@keyframes pulse-brand-ring {
-  0% {
-    opacity: 0.9;
-    transform: scale(0.96);
-    stroke-width: 14;
+  .animate-pulse-brand {
+    --pulse-brand-cycle: 3.4s;
   }
 
-  56% {
-    opacity: 0.22;
-    transform: scale(1.32);
-    stroke-width: 5;
+  .animate-pulse-brand::before {
+    animation: pulse-brand-wave var(--pulse-brand-cycle) ease-in-out infinite;
   }
 
-  74% {
-    opacity: 0;
-    transform: scale(1.36);
-    stroke-width: 4;
+  .animate-pulse-brand .pulse-brand-logo {
+    animation: pulse-brand-logo var(--pulse-brand-cycle) ease-in-out infinite;
+    will-change: transform;
   }
 
-  75% {
-    opacity: 0;
-    transform: scale(0.96);
-    stroke-width: 14;
+  .animate-pulse-brand .pulse-bg {
+    animation: pulse-brand-bg var(--pulse-brand-cycle) ease-in-out infinite;
+    will-change: opacity, transform;
   }
 
-  100% {
-    opacity: 0.9;
-    transform: scale(0.96);
-    stroke-width: 14;
-  }
-}
-
-@keyframes pulse-brand-center {
-  0%,
-  100% {
-    transform: scale(1);
+  .animate-pulse-brand .pulse-ring {
+    animation: pulse-brand-ring var(--pulse-brand-cycle) ease-in-out infinite;
+    will-change: opacity, stroke-width, transform;
   }
 
-  46% {
-    transform: scale(0.86);
-  }
-
-  64% {
-    transform: scale(1.05);
-  }
-}
-
-.pulse-brand-lockup {
-  --pulse-brand-wave-color: rgba(37, 99, 235, 0.34);
-  position: relative;
-}
-
-.dark .pulse-brand-lockup {
-  --pulse-brand-wave-color: rgba(96, 165, 250, 0.4);
-}
-
-.pulse-brand-lockup::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 20px;
-  height: 20px;
-  border: 1px solid var(--pulse-brand-wave-color);
-  border-radius: 9999px;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-50%) scale(0.9);
-}
-
-.pulse-brand-logo,
-.pulse-brand-logo .pulse-bg,
-.pulse-brand-logo .pulse-ring,
-.pulse-brand-logo .pulse-center {
-  transform-origin: center;
-  transform-box: fill-box;
-}
-
-.animate-pulse-brand {
-  --pulse-brand-cycle: 3.4s;
-}
-
-.animate-pulse-brand::before {
-  animation: pulse-brand-wave var(--pulse-brand-cycle) ease-in-out infinite;
-}
-
-.animate-pulse-brand .pulse-brand-logo {
-  animation: pulse-brand-logo var(--pulse-brand-cycle) ease-in-out infinite;
-  will-change: transform;
-}
-
-.animate-pulse-brand .pulse-bg {
-  animation: pulse-brand-bg var(--pulse-brand-cycle) ease-in-out infinite;
-  will-change: opacity, transform;
-}
-
-.animate-pulse-brand .pulse-ring {
-  animation: pulse-brand-ring var(--pulse-brand-cycle) ease-in-out infinite;
-  will-change: opacity, stroke-width, transform;
-}
-
-.animate-pulse-brand .pulse-center {
-  animation: pulse-brand-center var(--pulse-brand-cycle) ease-in-out infinite;
-  will-change: transform;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-pulse-brand,
-  .animate-pulse-brand::before,
-  .animate-pulse-brand .pulse-brand-logo,
-  .animate-pulse-brand .pulse-bg,
-  .animate-pulse-brand .pulse-ring,
   .animate-pulse-brand .pulse-center {
-    animation: none;
-  }
-}
-
-/* Stable table layout */
-.table-fixed {
-  table-layout: fixed;
-}
-
-/* Prevent text from affecting column widths */
-.table-fixed td,
-.table-fixed th {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/*
- * Dense platform tables should spend their width on operational values, not
- * oversized heading chrome. Keep headings readable without making every row
- * taller, then let unusually long labels provide a container-aware compact
- * form below the first table-column reveal breakpoint.
- */
-.table-scroll-shell > .table-fixed.platform-table th {
-  padding-right: 0.375rem;
-  padding-left: 0.375rem;
-  font-size: 11px;
-  letter-spacing: 0.025em;
-}
-
-/*
- * Docker's single-line rows are the canonical operator density. Every
- * platform summary row uses the same 32px scan rhythm; inline drawers remain
- * content-sized. Secondary context belongs in another column, a tooltip, or
- * the expanded detail row rather than making the overview row taller.
- */
-.table-scroll-shell > .table-fixed.platform-table > tbody > tr:not([data-inline-detail-for]) {
-  height: 2rem;
-}
-
-.platform-table-label-compact {
-  display: inline;
-}
-
-.platform-table-label-full {
-  display: none;
-}
-
-/*
- * Table columns and inline status labels can opt into the same container-led
- * phone priority contract. Keeping these rules beside the canonical mobile
- * widths means a header can never disappear at a different breakpoint from
- * its body cells, and nested panels respond to their own usable width rather
- * than the browser viewport.
- */
-.platform-table-phone-only,
-.platform-table-phone-only-inline {
-  display: none;
-}
-
-@container (min-width: 34rem) {
-  .platform-table-label-compact {
-    display: none;
+    animation: pulse-brand-center var(--pulse-brand-cycle) ease-in-out infinite;
+    will-change: transform;
   }
 
-  .platform-table-label-full {
-    display: inline;
+  @media (prefers-reduced-motion: reduce) {
+    .animate-pulse-brand,
+    .animate-pulse-brand::before,
+    .animate-pulse-brand .pulse-brand-logo,
+    .animate-pulse-brand .pulse-bg,
+    .animate-pulse-brand .pulse-ring,
+    .animate-pulse-brand .pulse-center {
+      animation: none;
+    }
   }
-}
 
-@container (max-width: 33.999rem) {
-  .table-scroll-shell > .table-fixed.platform-table th {
-    padding-right: 0.25rem;
-    padding-left: 0.25rem;
-    font-size: 10px;
-    letter-spacing: 0;
+  /* Stable table layout */
+  .table-fixed {
+    table-layout: fixed;
+  }
+
+  /* Prevent text from affecting column widths */
+  .table-fixed td,
+  .table-fixed th {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /*
-   * Proxmox Overview is the phone-density reference: identity receives a
-   * stable 30% anchor and the remaining operational tracks share the rest.
-   * Keeping that anchor at the shared table boundary prevents each provider
-   * from silently choosing a different mobile table geometry.
+   * Dense platform tables should spend their width on operational values, not
+   * oversized heading chrome. Keep headings readable without making every row
+   * taller, then let unusually long labels provide a container-aware compact
+   * form below the first table-column reveal breakpoint.
    */
-  .table-scroll-shell > .table-fixed.platform-table th.platform-table-name-column {
-    width: 30%;
+  .table-scroll-shell > .table-fixed.platform-table th {
+    padding-right: 0.375rem;
+    padding-left: 0.375rem;
+    font-size: 11px;
+    letter-spacing: 0.025em;
   }
 
-  .table-scroll-shell > .table-fixed.platform-table th.platform-table-mobile-w-30 {
-    width: 30%;
+  /*
+   * Docker's single-line rows are the canonical operator density. Every
+   * platform summary row uses the same 32px scan rhythm; inline drawers remain
+   * content-sized. Secondary context belongs in another column, a tooltip, or
+   * the expanded detail row rather than making the overview row taller.
+   */
+  .table-scroll-shell > .table-fixed.platform-table > tbody > tr:not([data-inline-detail-for]) {
+    height: 2rem;
   }
 
-  .table-scroll-shell > .table-fixed.platform-table th.platform-table-mobile-w-25 {
-    width: 25%;
+  .platform-table-label-compact {
+    display: inline;
   }
 
-  .table-scroll-shell > .table-fixed.platform-table th.platform-table-mobile-w-20 {
-    width: 20%;
-  }
-
-  .table-scroll-shell > .table-fixed.platform-table th.platform-table-mobile-w-15 {
-    width: 15%;
-  }
-
-  .table-scroll-shell > .table-fixed.platform-table th.platform-table-mobile-w-10 {
-    width: 10%;
-  }
-
-  .table-scroll-shell > .table-fixed.platform-table :is(th, td).platform-table-phone-hidden,
-  .platform-table-phone-hidden-inline {
+  .platform-table-label-full {
     display: none;
   }
 
-  .table-scroll-shell > .table-fixed.platform-table :is(th, td).platform-table-phone-only {
-    display: table-cell;
-  }
-
+  /*
+   * Table columns and inline status labels can opt into the same container-led
+   * phone priority contract. Keeping these rules beside the canonical mobile
+   * widths means a header can never disappear at a different breakpoint from
+   * its body cells, and nested panels respond to their own usable width rather
+   * than the browser viewport.
+   */
+  .platform-table-phone-only,
   .platform-table-phone-only-inline {
-    display: inline-flex;
-  }
-}
-
-/* At the narrowest supported phone width, spend the extra identity space once
-   at the shared boundary. Source tables still choose which lower-priority
-   field disappears; the shell only guarantees that the surviving identity
-   remains a single readable scan target. */
-@container (max-width: 22.499rem) {
-  .table-scroll-shell > .table-fixed.platform-table th.platform-table-name-column {
-    width: 40%;
-  }
-
-  .table-scroll-shell > .table-fixed.platform-table :is(th, td).platform-table-narrow-hidden {
     display: none;
   }
-}
 
-/* Rebalance the TrueNAS app inventory whenever another priority tier appears.
-   Hidden fixed-table tracks otherwise keep their desktop percentage and leave
-   a large unused strip while visible operational columns become unreadable. */
-@container (min-width: 34rem) and (max-width: 63.999rem) {
-  .table-scroll-shell > .table-fixed th.truenas-app-name-column {
-    width: 28%;
+  @container (min-width: 34rem) {
+    .platform-table-label-compact {
+      display: none;
+    }
+
+    .platform-table-label-full {
+      display: inline;
+    }
   }
 
-  .table-scroll-shell > .table-fixed th.truenas-app-cpu-column {
-    width: 15%;
+  @container (max-width: 33.999rem) {
+    .table-scroll-shell > .table-fixed.platform-table th {
+      padding-right: 0.25rem;
+      padding-left: 0.25rem;
+      font-size: 10px;
+      letter-spacing: 0;
+    }
+
+    /*
+     * Proxmox Overview is the phone-density reference: identity receives a
+     * stable 30% anchor and the remaining operational tracks share the rest.
+     * Keeping that anchor at the shared table boundary prevents each provider
+     * from silently choosing a different mobile table geometry.
+     */
+    .table-scroll-shell > .table-fixed.platform-table th.platform-table-name-column {
+      width: 30%;
+    }
+
+    .table-scroll-shell > .table-fixed.platform-table th.platform-table-mobile-w-30 {
+      width: 30%;
+    }
+
+    .table-scroll-shell > .table-fixed.platform-table th.platform-table-mobile-w-25 {
+      width: 25%;
+    }
+
+    .table-scroll-shell > .table-fixed.platform-table th.platform-table-mobile-w-20 {
+      width: 20%;
+    }
+
+    .table-scroll-shell > .table-fixed.platform-table th.platform-table-mobile-w-15 {
+      width: 15%;
+    }
+
+    .table-scroll-shell > .table-fixed.platform-table th.platform-table-mobile-w-10 {
+      width: 10%;
+    }
+
+    .table-scroll-shell > .table-fixed.platform-table :is(th, td).platform-table-phone-hidden,
+    .platform-table-phone-hidden-inline {
+      display: none;
+    }
+
+    .table-scroll-shell > .table-fixed.platform-table :is(th, td).platform-table-phone-only {
+      display: table-cell;
+    }
+
+    .platform-table-phone-only-inline {
+      display: inline-flex;
+    }
   }
 
-  .table-scroll-shell > .table-fixed th.truenas-app-memory-column,
-  .table-scroll-shell > .table-fixed th.truenas-app-containers-column {
-    width: 20%;
+  /* At the narrowest supported phone width, spend the extra identity space once
+     at the shared boundary. Source tables still choose which lower-priority
+     field disappears; the shell only guarantees that the surviving identity
+     remains a single readable scan target. */
+  @container (max-width: 22.499rem) {
+    .table-scroll-shell > .table-fixed.platform-table th.platform-table-name-column {
+      width: 40%;
+    }
+
+    .table-scroll-shell > .table-fixed.platform-table :is(th, td).platform-table-narrow-hidden {
+      display: none;
+    }
   }
 
-  .table-scroll-shell > .table-fixed th.truenas-app-updates-column {
-    width: 17%;
-  }
-}
+  /* Rebalance the TrueNAS app inventory whenever another priority tier appears.
+     Hidden fixed-table tracks otherwise keep their desktop percentage and leave
+     a large unused strip while visible operational columns become unreadable. */
+  @container (min-width: 34rem) and (max-width: 63.999rem) {
+    .table-scroll-shell > .table-fixed th.truenas-app-name-column {
+      width: 28%;
+    }
 
-@container (min-width: 64rem) and (max-width: 75.999rem) {
-  .table-scroll-shell > .table-fixed th.truenas-app-name-column {
-    width: 19%;
-  }
+    .table-scroll-shell > .table-fixed th.truenas-app-cpu-column {
+      width: 15%;
+    }
 
-  .table-scroll-shell > .table-fixed th.truenas-app-version-column,
-  .table-scroll-shell > .table-fixed th.truenas-app-updates-column {
-    width: 11%;
-  }
+    .table-scroll-shell > .table-fixed th.truenas-app-memory-column,
+    .table-scroll-shell > .table-fixed th.truenas-app-containers-column {
+      width: 20%;
+    }
 
-  .table-scroll-shell > .table-fixed th.truenas-app-cpu-column {
-    width: 10%;
-  }
-
-  .table-scroll-shell > .table-fixed th.truenas-app-memory-column,
-  .table-scroll-shell > .table-fixed th.truenas-app-containers-column {
-    width: 14%;
+    .table-scroll-shell > .table-fixed th.truenas-app-updates-column {
+      width: 17%;
+    }
   }
 
-  .table-scroll-shell > .table-fixed th.truenas-app-ports-column {
-    width: 21%;
-  }
-}
+  @container (min-width: 64rem) and (max-width: 75.999rem) {
+    .table-scroll-shell > .table-fixed th.truenas-app-name-column {
+      width: 19%;
+    }
 
-/* Keep name column single line to avoid wrapping while giving it more space */
-.table-fixed td:first-child {
-  white-space: nowrap;
-}
+    .table-scroll-shell > .table-fixed th.truenas-app-version-column,
+    .table-scroll-shell > .table-fixed th.truenas-app-updates-column {
+      width: 11%;
+    }
 
-/* Hide scrollbars but keep functionality */
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
+    .table-scroll-shell > .table-fixed th.truenas-app-cpu-column {
+      width: 10%;
+    }
 
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
+    .table-scroll-shell > .table-fixed th.truenas-app-memory-column,
+    .table-scroll-shell > .table-fixed th.truenas-app-containers-column {
+      width: 14%;
+    }
 
-/*
-  Height of the mobile bottom navigation bar. MobileNavBar overwrites this at
-  runtime with its measured height, which already includes the safe-area inset
-  via pb-safe - consumers must NOT add env(safe-area-inset-bottom) on top.
-
-  The declared value is only a pre-measurement fallback, and it deliberately
-  UNDER-estimates. Reserving more than the bar's real height leaves a band
-  between an overlay's backdrop and the bar that is neither dimmed nor
-  click-blocked, which is the defect this variable exists to prevent; reserving
-  slightly less is harmless because the opaque bar paints over it.
-*/
-:root {
-  --pulse-mobile-nav-height: calc(2.5rem + env(safe-area-inset-bottom, 0px));
-}
-
-.pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-.pb-safe-or-14 {
-  padding-bottom: max(3.5rem, env(safe-area-inset-bottom, 3.5rem));
-}
-
-/* Login page animations */
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
+    .table-scroll-shell > .table-fixed th.truenas-app-ports-column {
+      width: 21%;
+    }
   }
 
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
+  /* Keep name column single line to avoid wrapping while giving it more space */
+  .table-fixed td:first-child {
+    white-space: nowrap;
   }
 
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+  /* Hide scrollbars but keep functionality */
 
-@keyframes pulse-slow {
-  0%,
-  100% {
-    opacity: 0.25;
-  }
+  /*
+    Height of the mobile bottom navigation bar. MobileNavBar overwrites this at
+    runtime with its measured height, which already includes the safe-area inset
+    via pb-safe - consumers must NOT add env(safe-area-inset-bottom) on top.
 
-  50% {
-    opacity: 0.75;
-  }
-}
-
-.animate-fade-in {
-  animation: fade-in 0.6s ease-out forwards;
-}
-
-.animate-slide-up {
-  animation: slide-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-fade-in,
-  .animate-slide-up {
-    animation: none;
-  }
-}
-
-.delay-100 {
-  animation-delay: 100ms;
-}
-
-.delay-200 {
-  animation-delay: 200ms;
-}
-
-.delay-300 {
-  animation-delay: 300ms;
-}
-
-/* Staggered Entry Animation */
-@keyframes enter {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
+    The declared value is only a pre-measurement fallback, and it deliberately
+    UNDER-estimates. Reserving more than the bar's real height leaves a band
+    between an overlay's backdrop and the bar that is neither dimmed nor
+    click-blocked, which is the defect this variable exists to prevent; reserving
+    slightly less is harmless because the opaque bar paints over it.
+  */
+  :root {
+    --pulse-mobile-nav-height: calc(2.5rem + env(safe-area-inset-bottom, 0px));
   }
 
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  /* Login page animations */
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
-}
 
-.animate-enter {
-  animation: enter 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-}
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
 
-/* ---------------------------------------------------------------------------
-   Workload table manual column sizing
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 
-   Default (no pinned widths): none of this applies and the responsive weights
-   keep the table inside its container, as they always have. Once an operator
-   drags a column edge the table opts into its pinned pixel widths, which means
-   it may exceed the shell — `.table-scroll-shell` already scrolls, so the
-   trade the operator asked for is simply allowed to happen.
-   --------------------------------------------------------------------------- */
-/* The table publishes an explicit pixel width while manual sizing is on (see
-   `sumWorkloadColumnWidths`). `width: auto` would drop the table out of
-   `table-layout: fixed` and let a narrow column snap back to its content
-   minimum, so only the floor is expressed here. */
-.table-scroll-shell > table.workload-table--manual-widths {
-  min-width: 100%;
-}
+  @keyframes pulse-slow {
+    0%,
+    100% {
+      opacity: 0.25;
+    }
 
-.workload-col-resizer {
-  position: absolute;
-  top: 0;
-  right: -3px;
-  z-index: 1;
-  display: block;
-  width: 7px;
-  height: 100%;
-  cursor: col-resize;
-  /* Keeps the hit target from selecting header text mid-drag. */
-  user-select: none;
-  touch-action: none;
-  background-clip: content-box;
-  background-color: transparent;
-  border-right: 2px solid transparent;
-  transition: border-color 0.12s ease-in-out;
-}
+    50% {
+      opacity: 0.75;
+    }
+  }
 
-.workload-col-resizer:hover,
-.workload-col-resizer:focus-visible {
-  border-right-color: var(--color-border-strong, currentColor);
-  outline: none;
-}
+  @media (prefers-reduced-motion: reduce) {
+    .animate-fade-in,
+    .animate-slide-up {
+      animation: none;
+    }
+  }
 
-.workload-col-resizer:focus-visible {
-  border-right-width: 3px;
-}
+  .delay-100 {
+    animation-delay: 100ms;
+  }
 
-@media (prefers-reduced-motion: reduce) {
+  .delay-200 {
+    animation-delay: 200ms;
+  }
+
+  .delay-300 {
+    animation-delay: 300ms;
+  }
+
+  /* Staggered Entry Animation */
+  @keyframes enter {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* ---------------------------------------------------------------------------
+     Workload table manual column sizing
+
+     Default (no pinned widths): none of this applies and the responsive weights
+     keep the table inside its container, as they always have. Once an operator
+     drags a column edge the table opts into its pinned pixel widths, which means
+     it may exceed the shell — `.table-scroll-shell` already scrolls, so the
+     trade the operator asked for is simply allowed to happen.
+     --------------------------------------------------------------------------- */
+  /* The table publishes an explicit pixel width while manual sizing is on (see
+     `sumWorkloadColumnWidths`). `width: auto` would drop the table out of
+     `table-layout: fixed` and let a narrow column snap back to its content
+     minimum, so only the floor is expressed here. */
+  .table-scroll-shell > table.workload-table--manual-widths {
+    min-width: 100%;
+  }
+
   .workload-col-resizer {
-    transition: none;
-  }
-}
-
-/* Phone update states must remain readable inside the existing, non-scrolling
- * Docker table. Wrap the badge rather than clipping it or hiding its label. */
-@container (max-width: 33.999rem) {
-  .docker-container-update-cell {
-    padding-inline: 0.125rem;
-  }
-
-  .docker-container-update-cell > :is(span, div),
-  .docker-container-update-cell button {
-    max-width: 100%;
-    white-space: normal;
-    overflow-wrap: anywhere;
-    overflow: visible;
-    text-overflow: clip;
+    position: absolute;
+    top: 0;
+    right: -3px;
+    z-index: 1;
+    display: block;
+    width: 7px;
+    height: 100%;
+    cursor: col-resize;
+    /* Keeps the hit target from selecting header text mid-drag. */
+    user-select: none;
+    touch-action: none;
+    background-clip: content-box;
+    background-color: transparent;
+    border-right: 2px solid transparent;
+    transition: border-color 0.12s ease-in-out;
   }
 
-  .docker-container-update-cell > span,
-  .docker-container-update-cell button {
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.125rem;
-    padding-inline: 0.125rem;
-    font-size: 10px;
+  .workload-col-resizer:hover,
+  .workload-col-resizer:focus-visible {
+    border-right-color: var(--color-border-strong, currentColor);
+    outline: none;
   }
 
-  .docker-container-update-cell svg {
-    flex-shrink: 0;
+  .workload-col-resizer:focus-visible {
+    border-right-width: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .workload-col-resizer {
+      transition: none;
+    }
+  }
+
+  /* Phone update states must remain readable inside the existing, non-scrolling
+   * Docker table. Wrap the badge rather than clipping it or hiding its label. */
+  @container (max-width: 33.999rem) {
+    .docker-container-update-cell {
+      padding-inline: 0.125rem;
+    }
+
+    .docker-container-update-cell > :is(span, div),
+    .docker-container-update-cell button {
+      max-width: 100%;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      overflow: visible;
+      text-overflow: clip;
+    }
+
+    .docker-container-update-cell > span,
+    .docker-container-update-cell button {
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.125rem;
+      padding-inline: 0.125rem;
+      font-size: 10px;
+    }
+
+    .docker-container-update-cell svg {
+      flex-shrink: 0;
+    }
   }
 }

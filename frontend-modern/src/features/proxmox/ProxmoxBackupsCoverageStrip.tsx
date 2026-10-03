@@ -34,7 +34,7 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
     );
 
   return (
-    <div class="rounded-lg border border-border-subtle bg-surface-alt/25 px-3 py-2">
+    <div class="rounded-lg border border-border-subtle px-3 py-2">
       <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
           {props.title}
@@ -69,9 +69,9 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
         <For each={props.segments}>
           {(segment) => (
             <li
-              class={`inline-flex items-center gap-1.5 ${segment.muted ? 'text-muted/70' : 'text-base-content'}`}
+              class={`inline-flex items-center gap-1.5 ${segment.muted ? '' : 'text-base-content'}`}
             >
-              <span class={`h-2 w-2 shrink-0 rounded-sm ${segment.toneClass}`} aria-hidden="true" />
+              <span class={`h-2 w-2 shrink-0 rounded-xs ${segment.toneClass}`} aria-hidden="true" />
               <span class="tabular-nums">
                 {segment.display ?? String(Math.max(0, Math.round(segment.value)))}
               </span>

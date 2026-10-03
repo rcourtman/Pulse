@@ -113,11 +113,11 @@ const countGuestsForNode = (guests: Resource[], node: Resource): GuestCounts => 
 };
 
 const VMS_BADGE =
-  'inline-flex min-w-[2rem] justify-center items-center rounded-md bg-sky-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-sky-700 dark:bg-sky-900/40 dark:text-sky-300';
+  'inline-flex min-w-8 justify-center items-center rounded-md bg-sky-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-sky-700 dark:bg-sky-900/40 dark:text-sky-300';
 const CTS_BADGE =
-  'inline-flex min-w-[2rem] justify-center items-center rounded-md bg-violet-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-violet-700 dark:bg-violet-900/40 dark:text-violet-300';
+  'inline-flex min-w-8 justify-center items-center rounded-md bg-violet-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-violet-700 dark:bg-violet-900/40 dark:text-violet-300';
 const ZERO_BADGE =
-  'inline-flex min-w-[2rem] justify-center items-center rounded-md bg-surface-alt px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted';
+  'inline-flex min-w-8 justify-center items-center rounded-md bg-surface-alt px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted';
 
 // Shim a canonical Resource into the legacy Node shape that
 // `useWorkloadTableMetricHistory.getNodeMetricSeries` uses for its chart-key
@@ -477,8 +477,8 @@ export const ProxmoxNodesTable: Component<{
                   const styles = alertStyles();
                   if (!styles.hasUnacknowledgedAlert) return '';
                   return styles.severity === 'critical'
-                    ? 'bg-red-50 dark:bg-red-950'
-                    : 'bg-yellow-50 dark:bg-yellow-950';
+                    ? 'bg-red-50 dark:bg-red-950/25'
+                    : 'bg-yellow-50 dark:bg-yellow-950/25';
                 };
                 const cpuSeries = () => metricHistory.getNodeMetricSeries(legacyNode(), 'cpu');
                 const memorySeries = () =>
@@ -519,7 +519,7 @@ export const ProxmoxNodesTable: Component<{
                               >
                                 <button
                                   type="button"
-                                  class={`block max-w-full truncate rounded-sm text-left ${SUMMARY_ROW_ACTION_BUTTON_FOCUS_CLASS}`}
+                                  class={`block max-w-full truncate rounded-xs text-left ${SUMMARY_ROW_ACTION_BUTTON_FOCUS_CLASS}`}
                                   aria-label={`Show guests on ${name()}`}
                                   aria-controls="proxmox-guests-section"
                                   aria-pressed={isGuestFilterSelected()}
@@ -538,7 +538,7 @@ export const ProxmoxNodesTable: Component<{
                               </ResourceNameWithWebInterfaceLink>
                             </div>
                             <Show when={!isOnline()}>
-                              <span class="hidden rounded bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted sm:inline-flex">
+                              <span class="hidden rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted sm:inline-flex">
                                 {availabilityLabel()}
                               </span>
                             </Show>
@@ -551,7 +551,7 @@ export const ProxmoxNodesTable: Component<{
                                 class={`hidden rounded px-1 py-0 text-[9px] font-medium whitespace-nowrap sm:inline-flex ${
                                   pendingUpdates() >= 10
                                     ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400'
-                                    : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400'
+                                    : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/25 dark:text-yellow-400'
                                 }`}
                                 title={`${pendingUpdates()} pending apt update${pendingUpdates() !== 1 ? 's' : ''}`}
                               >
@@ -565,7 +565,7 @@ export const ProxmoxNodesTable: Component<{
                       return (
                         <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                           <Show when={version()} fallback={<span class="text-muted">—</span>}>
-                            <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 font-mono text-[10px] text-base-content">
+                            <span class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 font-mono text-[10px] text-base-content">
                               {version()}
                             </span>
                           </Show>

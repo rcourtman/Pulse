@@ -199,12 +199,12 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <div class="w-[12rem]">
+            <div class="w-48">
               <SearchInput
                 value={search}
                 onChange={setSearch}
                 placeholder={drawerPresentation.searchPlaceholder}
-                inputClass="py-1 text-xs font-medium shadow-sm"
+                inputClass="py-1 text-xs font-medium shadow-xs"
                 typeToSearch
                 clearOnEscape
               />
@@ -227,17 +227,17 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
         >
           <div class="mt-2 flex flex-wrap gap-2 text-[11px]">
             <Show when={asTrimmedString(swarm()?.nodeRole)}>
-              <span class="inline-flex items-center rounded bg-surface-alt px-2 py-0.5 text-base-content">
+              <span class="inline-flex items-center rounded-sm bg-surface-alt px-2 py-0.5 text-base-content">
                 {formatSwarmRoleLabel(asTrimmedString(swarm()?.nodeRole))}
               </span>
             </Show>
             <Show when={asTrimmedString(swarm()?.localState)}>
-              <span class="inline-flex items-center rounded bg-surface-alt px-2 py-0.5 text-base-content">
+              <span class="inline-flex items-center rounded-sm bg-surface-alt px-2 py-0.5 text-base-content">
                 {formatSwarmStateLabel(asTrimmedString(swarm()?.localState))}
               </span>
             </Show>
             <Show when={typeof swarm()?.controlAvailable === 'boolean'}>
-              <span class="inline-flex items-center rounded bg-surface-alt px-2 py-0.5 text-base-content">
+              <span class="inline-flex items-center rounded-sm bg-surface-alt px-2 py-0.5 text-base-content">
                 {formatSwarmControlLabel(swarm()?.controlAvailable)}
               </span>
             </Show>
@@ -245,7 +245,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
         </Show>
 
         <Show when={asTrimmedString(swarm()?.error)}>
-          <div class="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
+          <div class="mt-2 rounded-sm border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-800 dark:border-amber-700 dark:bg-amber-900/25 dark:text-amber-200">
             {asTrimmedString(swarm()?.error)}
           </div>
         </Show>

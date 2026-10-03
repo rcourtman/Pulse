@@ -121,7 +121,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
     return (
       <button
         type="button"
-        class={`inline-flex min-h-11 items-center justify-center px-2 py-0.5 text-xs font-medium rounded transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 sm:min-h-0 ${config.className} ${disabled ? 'opacity-60 cursor-not-allowed pointer-events-none' : ''}`.trim()}
+        class={`inline-flex min-h-11 items-center justify-center px-2 py-0.5 text-xs font-medium rounded-sm transition-colors duration-150 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 sm:min-h-0 ${config.className} ${disabled ? 'opacity-60 cursor-not-allowed pointer-events-none' : ''}`.trim()}
         disabled={disabled}
         onClick={() => {
           if (disabled) return;
@@ -179,13 +179,13 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
       >
         <Card
           padding="sm"
-          class="border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900"
+          class="border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/25"
         >
           <div class="flex justify-between items-center mb-3">
             <div class="flex items-center gap-2">
               <span class="font-semibold text-sm">Global Defaults</span>
               <Show when={props.hasCustomGlobalDefaults()}>
-                <span class="text-[10px] px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                <span class="text-[10px] px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 rounded-sm">
                   {getAlertResourceTableCustomBadgeLabel()}
                 </span>
               </Show>
@@ -218,7 +218,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                 const isOff = () => isAlertResourceMetricOff(value());
 
                 return (
-                  <div class="p-2 bg-surface rounded border border-border-subtle flex flex-col gap-1">
+                  <div class="p-2 bg-surface rounded-sm border border-border-subtle flex flex-col gap-1">
                     <span class="text-[10px] uppercase text-slate-500 font-medium">{column}</span>
                     <div class="flex items-center gap-1.5">
                       <div class="relative flex-1">
@@ -230,7 +230,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                           value={isOff() ? '' : value()}
                           placeholder={getAlertResourceTableMetricPlaceholder(isOff())}
                           disabled={isOff()}
-                          class={`min-h-11 w-full rounded border p-1 text-center text-sm sm:min-h-0 ${isOff() ? 'bg-surface-hover' : ' border-border'}`}
+                          class={`min-h-11 w-full rounded-sm border p-1 text-center text-sm sm:min-h-0 ${isOff() ? 'bg-surface-hover' : ' border-border'}`}
                           onInput={(e) => {
                             const nextValue = parseFloat(e.currentTarget.value);
                             // An empty box is mid-edit, not a disable request:
@@ -284,7 +284,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
               }}
             </For>
             <Show when={props.table.showOfflineAlertsColumn}>
-              <div class="p-2 bg-surface rounded border border-border-subtle flex flex-col gap-1">
+              <div class="p-2 bg-surface rounded-sm border border-border-subtle flex flex-col gap-1">
                 <span class="text-[10px] uppercase text-slate-500 font-medium">Offline alerts</span>
                 <div class="flex items-center min-h-11 sm:min-h-0">
                   <Show
@@ -473,7 +473,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                   label="Override note"
                   labelClass="sr-only"
                   fieldBaseClass="w-full"
-                  textareaBaseClass="w-full text-xs p-2 rounded border border-border bg-surface-alt"
+                  textareaBaseClass="w-full text-xs p-2 rounded-sm border border-border bg-surface-alt"
                   rows={2}
                   placeholder={getAlertResourceTableEditNotePlaceholder()}
                   value={props.table.editingNote()}
@@ -505,7 +505,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                       const titlePrefix = metric === 'backup' ? 'Backup' : 'Snapshot';
 
                       return (
-                        <div class="flex justify-between items-center p-1.5 bg-surface-alt rounded">
+                        <div class="flex justify-between items-center p-1.5 bg-surface-alt rounded-sm">
                           <span class="text-[10px] uppercase font-bold tracking-wider">
                             {column}
                           </span>
@@ -524,7 +524,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                     const bounds = getAlertResourceMetricBounds(metric);
 
                     return (
-                      <div class="flex justify-between items-center p-1.5 bg-surface-alt rounded">
+                      <div class="flex justify-between items-center p-1.5 bg-surface-alt rounded-sm">
                         <span class="text-[10px] uppercase font-bold tracking-wider">
                           {column.replace(/mb\/s|%|°c/gi, '').trim()}
                         </span>
@@ -535,7 +535,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                             <button
                               type="button"
                               onClick={(e) => startEditing(resource, metric, e)}
-                              class="min-h-11 min-w-11 font-mono text-xs font-medium cursor-pointer rounded px-1 -mx-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                              class="min-h-11 min-w-11 font-mono text-xs font-medium cursor-pointer rounded-sm px-1 -mx-1 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-400"
                               aria-label={`Edit ${column} threshold for ${getAlertResourceLabel(resource)}`}
                             >
                               <MetricValueWithHeat
@@ -554,7 +554,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                               max={bounds.max}
                               value={isDisabled() ? '' : (thresholds()?.[metric] ?? '')}
                               placeholder={getAlertResourceTableMetricPlaceholder(isDisabled())}
-                              class="min-h-11 w-16 text-right text-xs p-1 rounded border border-border bg-surface"
+                              class="min-h-11 w-16 text-right text-xs p-1 rounded-sm border border-border bg-surface"
                               onInput={(e) => {
                                 const nextValue = parseFloat(e.currentTarget.value);
                                 if (
@@ -601,7 +601,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                     const disabledGlobally = () => props.table.globalDisableFlag?.() ?? false;
 
                     return (
-                      <div class="flex justify-between items-center p-1.5 bg-surface-alt rounded">
+                      <div class="flex justify-between items-center p-1.5 bg-surface-alt rounded-sm">
                         <span class="text-[10px] uppercase font-bold tracking-wider">Offline</span>
                         <Show
                           when={supportsTriState}

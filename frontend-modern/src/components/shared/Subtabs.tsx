@@ -41,7 +41,7 @@ export const subtabsListClass =
 export const subtabsRailClass = 'relative min-w-0 flex-1';
 export const subtabsTrailingRowClass = 'flex flex-wrap items-center justify-between gap-3';
 export const subtabButtonClass =
-  'inline-flex min-h-9 shrink-0 select-none items-center whitespace-nowrap border-b-2 px-1 py-1 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500 sm:min-h-10 sm:py-2 sm:text-sm';
+  'inline-flex min-h-9 shrink-0 select-none items-center whitespace-nowrap border-b-2 px-1 py-1 text-xs font-medium transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500 sm:min-h-10 sm:py-2 sm:text-sm';
 export const subtabButtonActiveClass = 'border-blue-600 text-base-content';
 export const subtabButtonInactiveClass = 'border-transparent text-muted hover:text-base-content';
 export const Subtabs: Component<SubtabsProps> = (props) => {
@@ -186,11 +186,11 @@ export const Subtabs: Component<SubtabsProps> = (props) => {
       <Show when={canScrollLeft()}>
         <button
           type="button"
-          class="absolute inset-y-0 left-0 z-10 flex w-10 items-center justify-start bg-gradient-to-r from-surface via-surface to-transparent pl-1 text-muted hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500 sm:hidden"
+          class="absolute inset-y-0 left-0 z-10 flex w-10 items-center justify-start bg-linear-to-r from-surface via-surface to-transparent pl-1 text-muted hover:text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500 sm:hidden"
           onClick={() => scrollTabs(-1)}
           aria-label={`${local.ariaLabel}: scroll left`}
         >
-          <span class="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface shadow-sm">
+          <span class="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface shadow-xs">
             <ChevronLeftIcon class="h-4 w-4" aria-hidden="true" />
           </span>
         </button>
@@ -198,11 +198,11 @@ export const Subtabs: Component<SubtabsProps> = (props) => {
       <Show when={canScrollRight()}>
         <button
           type="button"
-          class="absolute inset-y-0 right-0 z-10 flex w-10 items-center justify-end bg-gradient-to-l from-surface via-surface to-transparent pr-1 text-muted hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500 sm:hidden"
+          class="absolute inset-y-0 right-0 z-10 flex w-10 items-center justify-end bg-linear-to-l from-surface via-surface to-transparent pr-1 text-muted hover:text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500 sm:hidden"
           onClick={() => scrollTabs(1)}
           aria-label={`${local.ariaLabel}: scroll right`}
         >
-          <span class="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface shadow-sm">
+          <span class="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface shadow-xs">
             <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
           </span>
         </button>

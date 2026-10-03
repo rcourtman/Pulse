@@ -92,36 +92,36 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
                       : '';
 
                   return (
-                    <div class="rounded bg-surface px-2 py-1">
+                    <div class="rounded-sm bg-surface px-2 py-1">
                       <div class="flex flex-wrap items-center gap-1 text-[10px] text-base-content">
                         {sourceHref ? (
                           <a
-                            class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
+                            class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
                             href={sourceHref}
                             aria-label={`Open source resource ${sourceLabel} in Infrastructure`}
                           >
                             {sourceLabel}
                           </a>
                         ) : (
-                          <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
+                          <span class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px]">
                             {sourceLabel}
                           </span>
                         )}
                         <span class="text-muted">→</span>
                         {targetHref ? (
                           <a
-                            class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
+                            class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
                             href={targetHref}
                             aria-label={`Open target resource ${targetLabel} in Infrastructure`}
                           >
                             {targetLabel}
                           </a>
                         ) : (
-                          <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
+                          <span class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px]">
                             {targetLabel}
                           </span>
                         )}
-                        <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[9px] text-muted">
+                        <span class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[9px] text-muted">
                           {typeLabel}
                         </span>
                       </div>
@@ -153,14 +153,14 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
                   const href = buildResourceHref(dependency);
                   return href ? (
                     <a
-                      class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
+                      class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
                       href={href}
                       aria-label={`Open dependency resource ${label} in Infrastructure`}
                     >
                       {label}
                     </a>
                   ) : (
-                    <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
+                    <span class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px]">
                       {label}
                     </span>
                   );
@@ -180,14 +180,14 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
                   const href = buildResourceHref(dependent);
                   return href ? (
                     <a
-                      class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
+                      class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
                       href={href}
                       aria-label={`Open dependent resource ${label} in Infrastructure`}
                     >
                       {label}
                     </a>
                   ) : (
-                    <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
+                    <span class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px]">
                       {label}
                     </span>
                   );
@@ -218,36 +218,36 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
                         })
                       : '';
                   return (
-                    <div class="rounded bg-surface px-2 py-1" title={headline}>
+                    <div class="rounded-sm bg-surface px-2 py-1" title={headline}>
                       <div class="flex flex-wrap items-center gap-1 text-[10px] text-base-content">
                         {sourceHref ? (
                           <a
-                            class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
+                            class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
                             href={sourceHref}
                             aria-label={`Open source resource ${sourceLabel} in Infrastructure`}
                           >
                             {sourceLabel}
                           </a>
                         ) : (
-                          <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
+                          <span class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px]">
                             {sourceLabel}
                           </span>
                         )}
                         <span class="text-muted">→</span>
                         {targetHref ? (
                           <a
-                            class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
+                            class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] text-blue-700 hover:underline dark:text-blue-300"
                             href={targetHref}
                             aria-label={`Open target resource ${targetLabel} in Infrastructure`}
                           >
                             {targetLabel}
                           </a>
                         ) : (
-                          <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
+                          <span class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px]">
                             {targetLabel}
                           </span>
                         )}
-                        <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[9px] text-muted">
+                        <span class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[9px] text-muted">
                           {patternLabel}
                         </span>
                       </div>

@@ -22,8 +22,8 @@ export const HistoryChartHeader: Component<HistoryChartHeaderProps> = (props) =>
           <span
             class={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${
               props.chart.source() === 'live'
-                ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                : 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
+                ? 'bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-300'
+                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300'
             }`}
             title={
               props.chart.source() === 'live'
@@ -60,7 +60,7 @@ export const HistoryChartHeader: Component<HistoryChartHeaderProps> = (props) =>
                 onClick={() => props.chart.updateRange(range)}
                 class={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
                   props.chart.range() === range
-                    ? 'bg-surface text-base-content shadow-sm'
+                    ? 'bg-surface text-base-content shadow-xs'
                     : 'text-muted hover:text-base-content'
                 }`}
               >

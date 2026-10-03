@@ -48,7 +48,7 @@ export const OrganizationOverviewDetailsSection: Component<
               value={props.state.displayNameDraft()}
               onInput={(event) => props.state.setDisplayNameDraft(event.currentTarget.value)}
               disabled={!props.state.canManageCurrentOrg() || props.state.saving()}
-              class="w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 "
+              class="w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 "
             />
             <Button
               variant="primary"

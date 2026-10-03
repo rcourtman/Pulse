@@ -135,7 +135,7 @@ export default function Docs() {
             // Inline code must be able to break, because a long unbreakable
             // URL in one otherwise pushes the whole page into horizontal
             // scrolling on a phone; code inside pre keeps its own scrollbar.
-            class="prose prose-sm max-w-none dark:prose-invert prose-headings:scroll-mt-20 prose-pre:overflow-x-auto prose-code:before:content-none prose-code:after:content-none [&_:not(pre)>code]:break-words"
+            class="prose prose-sm max-w-none dark:prose-invert prose-headings:scroll-mt-20 prose-pre:overflow-x-auto prose-code:before:content-none prose-code:after:content-none [&_:not(pre)>code]:wrap-break-word"
             onClick={handleClick}
             // eslint-disable-next-line solid/no-innerhtml -- renderDocMarkdown sanitises with DOMPurify
             innerHTML={html()}

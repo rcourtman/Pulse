@@ -93,8 +93,8 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
       <div
         class={`rounded-md border transition-colors ${
           hasError()
-            ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900'
-            : 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900'
+            ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/25'
+            : 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/25'
         }`}
       >
         <div class="px-3 py-2">
@@ -177,7 +177,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
     <div
       class={`rounded-md border transition-colors ${
         props.selected
-          ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900'
+          ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/25'
           : 'border-border'
       }`}
     >
@@ -209,7 +209,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           {/* Section 1: Narrative Summary */}
           <div class="mt-3 flex flex-wrap items-start justify-between gap-3">
             <div class="flex min-w-0 flex-1 items-start gap-2 text-sm text-base-content">
-              <SparklesIcon class="w-4 h-4 text-blue-500 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <SparklesIcon class="w-4 h-4 text-blue-500 dark:text-blue-400 mt-0.5 shrink-0" />
               <p>
                 <strong>{operatorRecord.headline}.</strong> {operatorRecord.detail}
               </p>
@@ -218,7 +218,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
               type="button"
               data-testid="patrol-run-assistant-button"
               onClick={handleDiscussRun}
-              class="inline-flex flex-shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-base-content shadow-sm transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              class="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-base-content shadow-xs transition-colors hover:bg-surface-hover focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40"
               title="Discuss this Patrol run with Assistant"
             >
               <MessageSquareIcon class="h-3.5 w-3.5" aria-hidden="true" />
@@ -228,11 +228,11 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
 
           <Show when={hasRunErrorDetail}>
             <div class="mt-3 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
-              <AlertTriangleIcon class="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <AlertTriangleIcon class="mt-0.5 h-4 w-4 shrink-0" />
               <div class="min-w-0 space-y-1">
                 <p class="font-medium">{runErrorSummary || 'Patrol analysis did not complete'}</p>
                 <Show when={runErrorDetail && runErrorDetail !== runErrorSummary}>
-                  <p class="break-words text-xs leading-relaxed text-red-700 dark:text-red-300">
+                  <p class="wrap-break-word text-xs leading-relaxed text-red-700 dark:text-red-300">
                     {runErrorDetail}
                   </p>
                 </Show>
@@ -240,7 +240,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                   {(action) => (
                     <a
                       href={action().href}
-                      class="mt-2 inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-800 transition-colors hover:bg-red-100 dark:border-red-800 dark:bg-red-950 dark:text-red-100 dark:hover:bg-red-900"
+                      class="mt-2 inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-800 transition-colors hover:bg-red-100 dark:border-red-800 dark:bg-red-950/25 dark:text-red-100 dark:hover:bg-red-900/25"
                     >
                       <SettingsIcon class="h-3.5 w-3.5" aria-hidden="true" />
                       <span>{action().label}</span>
@@ -391,7 +391,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
               </div>
               <Show when={showRunAnalysis()}>
                 <div
-                  class="mt-2 p-3 rounded bg-surface text-sm leading-relaxed text-base-content max-h-64 overflow-auto prose prose-sm max-w-none dark:prose-invert prose-headings:text-sm prose-headings:mt-2 prose-headings:mb-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0"
+                  class="mt-2 p-3 rounded-sm bg-surface text-sm leading-relaxed text-base-content max-h-64 overflow-auto prose prose-sm max-w-none dark:prose-invert prose-headings:text-sm prose-headings:mt-2 prose-headings:mb-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0"
                   // eslint-disable-next-line solid/no-innerhtml
                   innerHTML={renderMarkdown(sanitizeAnalysis(run.ai_analysis))}
                 />

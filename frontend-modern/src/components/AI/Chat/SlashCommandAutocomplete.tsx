@@ -166,7 +166,7 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
   return (
     <Show when={props.visible}>
       <div
-        class="absolute z-50 w-[calc(100vw-36px)] min-w-[280px] max-w-[420px] overflow-hidden rounded-md border border-border bg-surface shadow-sm"
+        class="absolute z-50 w-[calc(100vw-36px)] min-w-[280px] max-w-[420px] overflow-hidden rounded-md border border-border bg-surface shadow-xs"
         style={{
           bottom: `${props.position.top}px`,
           left: `${props.position.left}px`,

@@ -136,7 +136,7 @@ export const connectionAgentVersionPresentation = (
   if (connection.agentUpdateAvailable && currentVersion && expectedVersion) {
     return {
       badgeClassName:
-        'inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+        'inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900/25 dark:text-amber-200',
       badgeLabel: 'Update available',
       detail: `${currentVersion} -> ${expectedVersion}`,
       title: `Pulse Agent update available: ${currentVersion} -> ${expectedVersion}`,
@@ -356,12 +356,12 @@ const commandPolicyFromFleet = (fleet: ConnectionFleetGovernance): ConnectionFle
 };
 
 const fleetSignalClassNameByTone: Record<FleetGovernanceSignalTone, string> = {
-  ok: 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200',
-  info: 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200',
+  ok: 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/25 dark:bg-emerald-950/30 dark:text-emerald-200',
+  info: 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900/25 dark:bg-blue-950/30 dark:text-blue-200',
   warning:
-    'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200',
+    'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/25 dark:bg-amber-950/30 dark:text-amber-200',
   critical:
-    'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200',
+    'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/30 dark:text-rose-200',
   muted: 'border-border bg-surface-alt text-muted',
 };
 

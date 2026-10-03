@@ -69,7 +69,7 @@ export const TagBadges: Component<TagBadgesProps> = (props) => {
     );
 
     const sharedClass =
-      'group/tag relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface';
+      'group/tag relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface';
 
     return (
       <Show
@@ -132,7 +132,7 @@ export const TagBadges: Component<TagBadgesProps> = (props) => {
         {/* Show +X more indicator if there are multiple hidden tags */}
         <Show when={hiddenTags().length > 1}>
           <span
-            class="relative inline-flex h-5 min-w-5 cursor-help items-center justify-center rounded px-1 text-[10px] leading-none text-muted transition-colors hover:text-base-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+            class="relative inline-flex h-5 min-w-5 cursor-help items-center justify-center rounded-sm px-1 text-[10px] leading-none text-muted transition-colors hover:text-base-content focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
             role="img"
             aria-label={`${hiddenTags().length} more tags: ${hiddenTags().join(', ')}`}
             tabIndex={0}

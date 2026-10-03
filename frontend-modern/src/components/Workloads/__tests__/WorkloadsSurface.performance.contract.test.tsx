@@ -934,7 +934,7 @@ describe('Workloads performance contract', () => {
       expect(groupedTableWindowingSource).toContain('targetRunway');
       expect(groupedTableWindowingSource).toContain('trailingRunway');
       expect(workloadPanelSource).toContain('groupGuests()[0] === fullGroupGuests()[0]');
-      expect(workloadPanelSource).toContain('class="h-0 !p-0 !border-0 leading-[0]"');
+      expect(workloadPanelSource).toContain('class="h-0 p-0! border-0! leading-0"');
       expect(workloadPanelSource).toContain('<For each={props.visibleGroupKeys()}');
       expect(workloadPanelSource).toContain('<For each={groupGuestIds()}');
       expect(workloadPanelSource).toContain('groupGuests().map(getCanonicalWorkloadId)');
@@ -1666,8 +1666,8 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerOverviewSource).toContain('TechnicalDetailsSection');
       expect(nodeDrawerOverviewSource).toContain('TechnicalDetailsSection');
       const retiredInfoCardFrameClass = [
-        'rounded border border-border',
-        'bg-surface p-3 shadow-sm',
+        'rounded-sm border border-border',
+        'bg-surface p-3 shadow-xs',
       ].join(' ');
       expect(guestDrawerOverviewSource).not.toContain(retiredInfoCardFrameClass);
       expect(nodeDrawerOverviewSource).not.toContain(retiredInfoCardFrameClass);
@@ -1687,7 +1687,7 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadTableSource).not.toContain('style={{');
       expect(workloadsWorkloadTableSource).toContain('style={getGuestColumnWidthStyle(');
       expect(workloadsWorkloadTableSource).toContain(
-        "WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS = 'min-w-[0px]'",
+        "WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS = 'min-w-0'",
       );
       expect(workloadsWorkloadTableSource).toContain('workload-table--mobile');
       expect(workloadsWorkloadTableSource).toContain('WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS');

@@ -168,7 +168,7 @@ export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) =>
       >
         <div class="grid gap-3 text-sm sm:grid-cols-3">
           <div class="flex items-start gap-2">
-            <span class="mt-0.5 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
+            <span class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
               1
             </span>
             <div>
@@ -177,7 +177,7 @@ export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) =>
             </div>
           </div>
           <div class="flex items-start gap-2">
-            <span class="mt-0.5 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
+            <span class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
               2
             </span>
             <div>
@@ -186,7 +186,7 @@ export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) =>
             </div>
           </div>
           <div class="flex items-start gap-2">
-            <span class="mt-0.5 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
+            <span class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
               3
             </span>
             <div>

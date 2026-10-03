@@ -26,7 +26,7 @@ const TechnicalDetailsContent: Component<
     {(sections) => (
       <DetailSectionTable
         sections={sections()}
-        class={props.contentClass ?? 'overflow-hidden rounded border border-border bg-surface'}
+        class={props.contentClass ?? 'overflow-hidden rounded-sm border border-border bg-surface'}
       />
     )}
   </Show>
@@ -48,7 +48,7 @@ export const TechnicalDetailsDisclosure: Component<TechnicalDetailsDisclosurePro
   return (
     <details
       data-testid={props.dataTestId}
-      class={props.class ?? 'rounded border border-border bg-surface px-2 py-1.5'}
+      class={props.class ?? 'rounded-sm border border-border bg-surface px-2 py-1.5'}
       onToggle={(event) => setExpanded(event.currentTarget.open)}
     >
       <summary class="cursor-pointer list-none text-[11px] font-medium text-base-content">

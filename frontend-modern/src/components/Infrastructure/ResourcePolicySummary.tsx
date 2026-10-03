@@ -62,7 +62,7 @@ export const ResourcePolicySummary: Component<ResourcePolicySummaryProps> = (pro
             <div class="mt-2 flex flex-wrap gap-1">
               <For each={redactionSummaries()}>
                 {(item) => (
-                  <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[10px]">
+                  <span class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px]">
                     {item.label} {item.count}
                   </span>
                 )}

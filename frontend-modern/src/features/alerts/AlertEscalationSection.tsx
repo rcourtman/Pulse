@@ -137,7 +137,7 @@ export function AlertEscalationSection(props: AlertEscalationSectionProps) {
                                         );
                                     props.setEscalationDestinationIds(index(), next);
                                   }}
-                                  class="h-4 w-4 rounded border-border"
+                                  class="h-4 w-4 rounded-sm border-border"
                                 />
                                 <span class="min-w-0 truncate">{destination.label}</span>
                                 <Show when={!destination.enabled}>
@@ -156,7 +156,7 @@ export function AlertEscalationSection(props: AlertEscalationSectionProps) {
                   <button
                     type="button"
                     onClick={() => props.removeEscalationLevel(index())}
-                    class="rounded-md p-1.5 text-red-600 transition-colors hover:bg-red-100 dark:hover:bg-red-900"
+                    class="rounded-md p-1.5 text-red-600 transition-colors hover:bg-red-100 dark:hover:bg-red-900/25"
                     title={ALERT_CONFIG_ESCALATION_REMOVE_TITLE}
                     aria-label={ALERT_CONFIG_ESCALATION_REMOVE_TITLE}
                   >

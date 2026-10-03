@@ -1592,7 +1592,7 @@ describe('frontend resource type boundaries', () => {
     expect(storagePageSource).not.toContain('useStoragePageResources()');
     expect(storagePageSource).not.toContain('fields: {');
     expect(storagePageSource).not.toContain(
-      'rounded border border-amber-300 bg-amber-100 px-2 py-1',
+      'rounded-sm border border-amber-300 bg-amber-100 px-2 py-1',
     );
     expect(storagePageSource).not.toContain('flex flex-wrap items-center justify-between gap-3');
     expect(storagePageSource).not.toContain('<Table class="w-full text-xs">');
@@ -2014,14 +2014,14 @@ describe('frontend resource type boundaries', () => {
     expect(securityPostureSummarySource).not.toContain('const scoreTone =');
     expect(securityPostureSummarySource).not.toContain('const ScoreIcon =');
     expect(securityPostureSummarySource).not.toContain(
-      "item.enabled\n                    ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950'",
+      "item.enabled\n                    ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/25'",
     );
     expect(securityWarningSource).toContain('getSecurityWarningPresentation');
     expect(securityWarningSource).toContain('getSecurityFeatureStatePresentation');
     expect(securityWarningSource).toContain('getSecurityScorePresentation');
     expect(securityWarningSource).toContain('warningPresentation().background');
     expect(securityWarningSource).toContain('warningPresentation().border');
-    expect(securityWarningSource).not.toContain('bg-yellow-50 dark:bg-yellow-900');
+    expect(securityWarningSource).not.toContain('bg-yellow-50 dark:bg-yellow-900/25');
     expect(securityWarningSource).not.toContain(
       "status()!.credentialsEncrypted ? 'text-green-600' : 'text-red-600'",
     );
@@ -2043,7 +2043,7 @@ describe('frontend resource type boundaries', () => {
     expect(findingsPanelSource).not.toContain('switch (alertType) {');
     expect(findingsPanelSource).not.toContain('switch (finding.investigationOutcome) {');
     expect(findingsPanelSource).not.toContain(
-      "filter() === 'attention'\n                    ? 'bg-amber-50 dark:bg-amber-900 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-sm'",
+      "filter() === 'attention'\n                    ? 'bg-amber-50 dark:bg-amber-900/25 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-xs'",
     );
     expect(findingsPanelSource).not.toContain('No active findings');
     expect(findingsPanelSource).not.toContain('No pending approvals.');
@@ -2080,7 +2080,7 @@ describe('frontend resource type boundaries', () => {
     expect(approvalSectionSource).toContain('BADGE_PROPS');
     expect(approvalSectionSource).not.toContain('approvalRisk.badgeClass');
     expect(approvalSectionSource).not.toContain('fixRisk.badgeClass');
-    expect(securityWarningSource).not.toContain('bg-red-50 dark:bg-red-900');
+    expect(securityWarningSource).not.toContain('bg-red-50 dark:bg-red-900/25');
     expect(securityScorePresentationSource).toContain(
       'export function getSecurityScorePresentation',
     );
@@ -2118,13 +2118,13 @@ describe('frontend resource type boundaries', () => {
     );
     expect(generalSettingsPanelSource).toContain('EnvironmentLockBadge');
     expect(generalSettingsPanelSource).not.toContain(
-      'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+      'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
     );
     expect(dockerRuntimeSettingsCardSource).toContain('EnvironmentLockBadge');
     expect(dockerRuntimeSettingsCardSource).toContain('ENVIRONMENT_LOCK_BUTTON_TITLE');
     expect(dockerRuntimeSettingsCardSource).not.toContain('>ENV<');
     expect(dockerRuntimeSettingsCardSource).not.toContain(
-      'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+      'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
     );
     expect(environmentLockBadgeSource).toContain('getEnvironmentLockTitle');
     expect(environmentLockPresentationSource).toContain(
@@ -3162,16 +3162,16 @@ describe('frontend resource type boundaries', () => {
       "areAlertsDisabled()\n                                  ? 'cursor-not-allowed text-muted bg-surface-alt'",
     );
     expect(alertsPageSource).not.toContain(
-      "activeTab() === item.id\n                                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-200'",
+      "activeTab() === item.id\n                                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/25 dark:text-blue-200'",
     );
     expect(alertsPageSource).not.toContain(
-      "activeTab() === tab.id\n                                ? 'bg-surface text-base-content shadow-sm'",
+      "activeTab() === tab.id\n                                ? 'bg-surface text-base-content shadow-xs'",
     );
     expect(alertsPageSource).not.toContain(
-      "grouping().byNode\n                        ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900'",
+      "grouping().byNode\n                        ? 'border-blue-500 bg-blue-50 shadow-xs dark:bg-blue-900/25'",
     );
     expect(alertsPageSource).not.toContain(
-      "grouping().byGuest\n                        ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900'",
+      "grouping().byGuest\n                        ? 'border-blue-500 bg-blue-50 shadow-xs dark:bg-blue-900/25'",
     );
     expect(alertsPageSource).not.toContain(
       "grouping().byNode ? 'border-blue-500 bg-blue-500' : 'border-border'",
@@ -3180,7 +3180,7 @@ describe('frontend resource type boundaries', () => {
       "grouping().byGuest ? 'border-blue-500 bg-blue-500' : 'border-border'",
     );
     expect(alertsPageSource).not.toContain(
-      "quietHours().days[day.id] ? 'rounded-md bg-blue-500 text-white shadow-sm' : 'rounded-md text-muted hover:bg-surface-hover '",
+      "quietHours().days[day.id] ? 'rounded-md bg-blue-500 text-white shadow-xs' : 'rounded-md text-muted hover:bg-surface-hover '",
     );
     expect(alertsPageSource).not.toContain(
       "quietHours().suppress[option.key]\n                            ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-500'",
@@ -3471,10 +3471,10 @@ describe('frontend resource type boundaries', () => {
     expect(diagnosticsPanelSource).not.toContain("apiFetchJSON('/api/diagnostics')");
     expect(diagnosticsPanelSource).not.toContain('URL.createObjectURL');
     expect(diagnosticsPanelSource).not.toContain(
-      "'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'",
+      "'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300'",
     );
     expect(diagnosticsPanelSource).not.toContain(
-      "'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'",
+      "'bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300'",
     );
     expect(diagnosticsResultsPanelSource).toContain('StatusIndicatorBadge');
     expect(diagnosticsResultsPanelSource).not.toContain('getStatusIndicatorBadgeToneClasses(');
@@ -3693,19 +3693,19 @@ describe('frontend resource type boundaries', () => {
     );
     expect(patrolIntelligenceBannersSource).not.toContain('trackUpgradeClicked');
     expect(patrolIntelligenceSurfaceSource).not.toContain(
-      "summaryStats().criticalFindings > 0\n                        ? 'bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800'",
+      "summaryStats().criticalFindings > 0\n                        ? 'bg-red-50 dark:bg-red-900/25 border-red-200 dark:border-red-800'",
     );
     expect(patrolIntelligenceSurfaceSource).not.toContain(
-      "summaryStats().warningFindings > 0\n                        ? 'bg-amber-50 dark:bg-amber-900 border-amber-200 dark:border-amber-800'",
+      "summaryStats().warningFindings > 0\n                        ? 'bg-amber-50 dark:bg-amber-900/25 border-amber-200 dark:border-amber-800'",
     );
     expect(patrolIntelligenceSurfaceSource).not.toContain(
-      "summaryStats().fixedCount > 0\n                        ? 'bg-green-50 dark:bg-green-900 border-green-200 dark:border-green-800'",
+      "summaryStats().fixedCount > 0\n                        ? 'bg-green-50 dark:bg-green-900/25 border-green-200 dark:border-green-800'",
     );
     expect(patrolSummaryPresentationSource).toContain(
       'export function getPatrolSummaryPresentation',
     );
     expect(patrolIntelligenceSurfaceSource).not.toContain(
-      "(patrolStatus()?.quickstart_credits_remaining ?? 0) > 0\n                  ? 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'",
+      "(patrolStatus()?.quickstart_credits_remaining ?? 0) > 0\n                  ? 'bg-blue-50 dark:bg-blue-950/25 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'",
     );
     expect(investigationMessagesSource).toContain('getInvestigationMessagesState');
     expect(investigationMessagesSource).not.toContain('Loading messages...');
@@ -3759,7 +3759,7 @@ describe('frontend resource type boundaries', () => {
     expect(systemLogsPanelSource).not.toContain("isPaused() ? 'Stream Paused' : 'Live'");
     expect(systemLogsPanelSource).not.toContain('Waiting for logs...');
     expect(systemLogsPanelSource).not.toContain(
-      "'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400'",
+      "'bg-amber-100 text-amber-600 dark:bg-amber-900/25 dark:text-amber-400'",
     );
     expect(systemLogsPanelStateSource).toContain("window.location.href = '/api/logs/download'");
     expect(systemLogsPanelStateSource).toContain('notificationStore.success');
@@ -3798,7 +3798,7 @@ describe('frontend resource type boundaries', () => {
     expect(aiCostDashboardSource).not.toContain('No daily token trend yet.');
     expect(aiCostDashboardSource).not.toContain('Loading usage…');
     expect(aiCostDashboardSource).not.toContain(
-      "'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'",
+      "'bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'",
     );
     expect(aiCostPresentationSource).toContain('export const AI_COST_EMPTY_STATE');
     expect(aiCostPresentationSource).toContain('export function getAICostLoadingState');
@@ -3831,10 +3831,10 @@ describe('frontend resource type boundaries', () => {
     expect(aiChatPresentationSource).not.toContain('getAIChatEmptyStateSuggestions');
     expect(remediationStatusSource).toContain('getRemediationPresentation');
     expect(remediationStatusSource).not.toContain(
-      "'bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800'",
+      "'bg-green-50 dark:bg-green-900/25 border border-green-200 dark:border-green-800'",
     );
     expect(remediationStatusSource).not.toContain(
-      "'bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800'",
+      "'bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800'",
     );
     expect(remediationStatusSource).not.toContain("'Fix executed successfully'");
     expect(remediationStatusSource).not.toContain("'Fix failed'");

@@ -32,8 +32,8 @@ describe('SearchTipsPopover', () => {
       "window.addEventListener('scroll', updatePopoverPosition, true)",
     );
     expect(searchTipsPopoverSource).toContain('style={state.popoverStyle()}');
-    expect(searchTipsPopoverSource).toContain('!fixed ${positionClass()}');
-    expect(searchTipsPopoverSource).toContain('xl:!absolute xl:mt-2 xl:w-72');
+    expect(searchTipsPopoverSource).toContain('fixed! ${positionClass()}');
+    expect(searchTipsPopoverSource).toContain('xl:absolute! xl:mt-2 xl:w-72');
 
     expect(searchTipsPopoverModelSource).toContain('getSearchTipsPopoverTriggerClass');
     expect(searchTipsPopoverModelSource).toContain('getSearchTipsPopoverPositionClass');
