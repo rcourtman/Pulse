@@ -25,6 +25,14 @@ and `browser-tests/guest-disk-deferral.cjs` verify same-row ownership in bar and
 sparkline modes with desktop and phone CSS. This is client behaviour proof, not
 native backup coordination, new History samples or a fleet performance result.
 
+Completed backup presentation follows the existing same-guest snapshot owner.
+Running activity and completed protection are independent derived detail rows;
+neither starts a command, adds a read/timer nor remounts the drawer. Stopping
+activity cannot synthesize a completed timestamp. `GuestDrawer.test.tsx` and
+`browser-tests/guest-backup-protection.cjs` verify in-place missing/old/new
+completion transitions through the actual drawer. This is ownership/presentation
+proof, not an allocation benchmark, native backup or fleet performance claim.
+
 ### Phone workload identity weights
 
 The existing phone guest projection allocates 38 percent to the name cell,

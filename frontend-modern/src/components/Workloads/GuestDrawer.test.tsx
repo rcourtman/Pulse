@@ -7,7 +7,7 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import { Suspense } from 'solid-js';
+import { createSignal, Suspense } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Memory, Disk, GuestNetworkInterface } from '@/types/api';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
@@ -922,7 +922,7 @@ describe('GuestDrawer', () => {
     it('shows "Today" for a backup from today', () => {
       const now = new Date('2026-03-02T10:00:00Z').getTime();
       render(() => <GuestDrawer guest={makeGuest({ lastBackup: now })} onClose={vi.fn()} />);
-      expect(screen.getByText('Protection')).toBeInTheDocument();
+      expect(screen.getByText('Last completed backup')).toBeInTheDocument();
       expect(technicalDetails().getByText('Today')).toBeInTheDocument();
     });
 
@@ -966,9 +966,64 @@ describe('GuestDrawer', () => {
       expect(ageCell).toHaveClass('text-emerald-700');
     });
 
-    it('hides Backup card when lastBackup is 0 (falsy)', () => {
-      render(() => <GuestDrawer guest={makeGuest({ lastBackup: 0 })} onClose={vi.fn()} />);
-      expect(screen.queryByText('Backup')).not.toBeInTheDocument();
+    it.each(['qemu', 'lxc'] as const)(
+      'keeps absent completed protection visible while a %s backup runs',
+      (type) => {
+        solidRender(() => (
+          <GuestDrawer
+            guest={makeGuest({ type, lastBackup: 0, backupInProgress: true })}
+            onClose={vi.fn()}
+          />
+        ));
+        expect(technicalDetails().getByText('Last completed backup')).toBeInTheDocument();
+        expect(technicalDetails().getByText('No completed backup found').closest('td')).toHaveClass(
+          'text-rose-700',
+        );
+        expect(technicalDetails().getByText('Backup activity')).toBeInTheDocument();
+        expect(
+          technicalDetails().getByText('Running · not completed yet').closest('td'),
+        ).toHaveClass('text-amber-700');
+      },
+    );
+
+    it.each([
+      ['2026-02-20T12:00:00Z', '10d ago', 'text-amber-700'],
+      ['2026-03-02T10:00:00Z', 'Today', 'text-emerald-700'],
+    ])('preserves completed backup age and tone during a new backup (%s)', (date, age, tone) => {
+      solidRender(() => (
+        <GuestDrawer
+          guest={makeGuest({ lastBackup: new Date(date).getTime(), backupInProgress: true })}
+          onClose={vi.fn()}
+        />
+      ));
+      expect(technicalDetails().getByText(age).closest('td')).toHaveClass(tone);
+      expect(technicalDetails().getByText('Running · not completed yet').closest('td')).toHaveClass(
+        'text-amber-700',
+      );
+    });
+
+    it('never treats activity stopping as a completed backup and updates only on completion evidence', () => {
+      const [guest, setGuest] = createSignal(makeGuest({ lastBackup: 0 }));
+      const { container } = solidRender(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+      const drawer = container.querySelector('[data-testid="guest-technical-details"]');
+      expect(drawer).not.toBeNull();
+      expect(technicalDetails().queryByText('Backup activity')).not.toBeInTheDocument();
+      setGuest({ ...guest(), backupInProgress: true });
+      expect(technicalDetails().getByText('Running · not completed yet')).toBeInTheDocument();
+      expect(technicalDetails().getByText('No completed backup found')).toBeInTheDocument();
+      setGuest({ ...guest(), backupInProgress: false });
+      expect(technicalDetails().queryByText('Backup activity')).not.toBeInTheDocument();
+      expect(technicalDetails().getByText('No completed backup found')).toBeInTheDocument();
+      setGuest({ ...guest(), lastBackup: new Date('2026-03-02T10:00:00Z').getTime() });
+      expect(technicalDetails().queryByText('No completed backup found')).not.toBeInTheDocument();
+      expect(technicalDetails().getByText('Today').closest('td')).toHaveClass('text-emerald-700');
+      expect(container.querySelector('[data-testid="guest-technical-details"]')).toBe(drawer);
+    });
+
+    it('reports missing completed protection rather than hiding it when lastBackup is 0', () => {
+      solidRender(() => <GuestDrawer guest={makeGuest({ lastBackup: 0 })} onClose={vi.fn()} />);
+      expect(technicalDetails().getByText('No completed backup found')).toBeInTheDocument();
+      expect(technicalDetails().queryByText('Backup activity')).not.toBeInTheDocument();
     });
   });
 
