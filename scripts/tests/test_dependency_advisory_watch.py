@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -201,6 +202,38 @@ class WorkflowContractTest(unittest.TestCase):
         self.assertNotIn("continue-on-error", step(audit, "Audit complete frontend dependency graph"))
         self.assertEqual(step(audit, "Audit complete frontend dependency graph")["env"]["NPM_AUDIT_REQUIRE_RESULT"],
                          "true")
+
+    def test_watch_fails_on_an_advisory_pull_requests_only_warn_on(self) -> None:
+        # A pull request that leaves the lockfile alone only warns on an
+        # advisory its base already has; this watch is where that advisory
+        # must fail. Run the real runner with the watch's own environment.
+        audit_step = next(
+            item for item in self.workflow["jobs"]["audit"]["steps"]
+            if item.get("name") == "Audit complete frontend dependency graph"
+        )
+        vulnerable = json.dumps({
+            "metadata": {"vulnerabilities": {
+                "info": 0, "low": 0, "moderate": 0, "high": 1, "critical": 0, "total": 1,
+            }},
+            "vulnerabilities": {"braces": {"name": "braces", "severity": "high"}},
+        })
+        with tempfile.TemporaryDirectory() as directory:
+            fake_npm = Path(directory) / "npm"
+            fake_npm.write_text(f"#!/bin/sh\nprintf '%s\\n' '{vulnerable}'\nexit 1\n", encoding="utf-8")
+            fake_npm.chmod(0o755)
+            outcomes = {}
+            for mode in (audit_step["env"]["NPM_AUDIT_REQUIRE_RESULT"], "false"):
+                result = subprocess.run(
+                    ["bash", str(ROOT / "scripts" / "npm-audit-retry.sh"), "all"],
+                    env={**os.environ, "NPM_AUDIT_CMD": str(fake_npm),
+                         "NPM_AUDIT_REQUIRE_RESULT": mode, "NPM_AUDIT_RETRY_DELAY": "0"},
+                    text=True, capture_output=True, check=False,
+                )
+                outcomes[mode] = result
+        self.assertEqual(1, outcomes["true"].returncode, outcomes["true"].stdout)
+        self.assertIn("::error::", outcomes["true"].stdout)
+        self.assertEqual(0, outcomes["false"].returncode, outcomes["false"].stdout)
+        self.assertIn("::warning::", outcomes["false"].stdout)
 
     def test_checkout_pins_match_build_and_test(self) -> None:
         pins = set(re.findall(r"uses: (\S+@[0-9a-f]{40})", BUILD_AND_TEST.read_text(encoding="utf-8")))
