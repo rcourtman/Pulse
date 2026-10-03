@@ -15,6 +15,16 @@
 
 ## Purpose
 
+### Guest disk status updates retain row ownership
+
+Disk deferral copy follows reactive same-VM props in the existing row and drawer,
+without new guest commands, client polling, History writes or row remounts. Retained
+values are labelled rather than replaced with invented fresh percentages; fresh
+observations update values and remove the status. Mounted row/list/drawer controls
+and `browser-tests/guest-disk-deferral.cjs` verify same-row ownership in bar and
+sparkline modes with desktop and phone CSS. This is client behaviour proof, not
+native backup coordination, new History samples or a fleet performance result.
+
 ### Phone workload identity weights
 
 The existing phone guest projection allocates 38 percent to the name cell,

@@ -23,6 +23,19 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Guest disk freshness presentation
+
+Existing workload disk evidence retains its source reason through the row,
+breakdown and Overview. `prev-` values are explicitly last-known, while a
+deferral with no previous disks explains the missing observation without a
+measured percentage. Lock/uncertain-completion deferrals must not become an
+install/restart recommendation. Human-readable Overview status remains visible
+without filesystem rows and is cleared by a same-identity fresh observation.
+The shared presentation and mounted regressions plus the production-component
+`browser-tests/guest-disk-deferral.cjs` fixture verify this client behaviour;
+they do not prove native QGA coordination, History freshness or delivery.
+
+
 ### Narrow controller and backup summaries retain their source facts
 
 Kubernetes controller row expansions expose supplied kind-specific targets,

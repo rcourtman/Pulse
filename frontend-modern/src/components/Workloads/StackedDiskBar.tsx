@@ -255,6 +255,9 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
           <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
             {presentation().tooltipTitle}
           </div>
+          <Show when={props.statusMessage}>
+            <p class="mb-1 text-xs text-muted">{props.statusMessage}</p>
+          </Show>
           <For each={presentation().tooltipContent}>
             {(item, idx) => (
               <div

@@ -1,7 +1,8 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import type { ComponentProps } from 'solid-js';
+import { createSignal, type ComponentProps } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { GuestDrawerOverview } from '../GuestDrawerOverview';
+import { guestDiskDeferrals } from '../__fixtures__/guestDiskDeferrals';
 
 const paths = ['/mnt/Plex/Media/Animation/Films', '/mnt/Plex/Media/Animation/Series'];
 const props: ComponentProps<typeof GuestDrawerOverview> = {
@@ -54,6 +55,47 @@ const props: ComponentProps<typeof GuestDrawerOverview> = {
 
 describe('GuestDrawerOverview filesystem labels', () => {
   afterEach(cleanup);
+
+  it.each(guestDiskDeferrals)(
+    'explains %s in the existing drawer even before any disk sample',
+    (reason, message) => {
+      render(() => (
+        <GuestDrawerOverview
+          {...props}
+          hasFilesystemDetails={false}
+          guest={{ ...props.guest, type: 'qemu', disks: [], diskStatusReason: reason }}
+        />
+      ));
+      expect(screen.getByText('Filesystems')).toBeInTheDocument();
+      expect(screen.getByText(message)).toBeInTheDocument();
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Using last known/)).not.toBeInTheDocument();
+    },
+  );
+
+  it('retains disk rows with readable status, then withdraws the notice on fresh resumption', () => {
+    const [guest, setGuest] = createSignal({
+      ...props.guest,
+      type: 'qemu' as const,
+      diskStatusReason: 'prev-vm-locked',
+    });
+    render(() => <GuestDrawerOverview {...props} guest={guest()} />);
+    expect(
+      screen.getByText(/^Using last known disk stats\. Guest reads paused/).closest('td'),
+    ).toHaveAttribute('colspan', '2');
+    expect(screen.queryByText('prev-vm-locked')).not.toBeInTheDocument();
+    for (const path of paths) expect(screen.getByText(path)).toBeInTheDocument();
+    setGuest({
+      ...guest(),
+      diskStatusReason: '',
+      disks: guest().disks!.map((disk) => ({ ...disk, usage: 75 })),
+    });
+    expect(screen.queryByText(/Using last known/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Status')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('progressbar', { name: `Filesystem ${paths[0]} utilization` }),
+    ).toHaveAttribute('aria-valuenow', '75');
+  });
 
   it('shows linked-agent RAID arrays beside the guest storage evidence', () => {
     render(() => (

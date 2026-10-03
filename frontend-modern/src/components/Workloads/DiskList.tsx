@@ -15,6 +15,9 @@ export function DiskList(props: DiskListProps) {
       }
     >
       <div class="flex flex-col gap-1.5">
+        <Show when={props.diskStatusReason}>
+          <p class="text-xs text-muted">{diskStatusTooltip()}</p>
+        </Show>
         <For each={diskPresentation()}>
           {(disk) => {
             return (

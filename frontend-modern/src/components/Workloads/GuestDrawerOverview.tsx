@@ -13,7 +13,10 @@ import { AvailabilityProbeStatusCards } from '@/components/Infrastructure/Availa
 import type { DiscoveryIdentifiedSummary } from '@/utils/discoveryPresentation';
 import { formatBytes } from '@/utils/format';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
-import { getWorkloadsGuestProtectionPresentation } from '@/utils/workloadGuestPresentation';
+import {
+  getWorkloadGuestDiskStatusMessage,
+  getWorkloadsGuestProtectionPresentation,
+} from '@/utils/workloadGuestPresentation';
 
 import { AvailabilityProbeSuggestionCard } from './AvailabilityProbeSuggestionCard';
 import { buildWorkloadsDiskPresentation } from './diskListModel';
@@ -119,6 +122,10 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
     const diskRows = (props.guest.disks ?? []).map((disk, index) =>
       buildWorkloadsDiskPresentation(disk, index, props.diskThresholds),
     );
+    const diskStatusMessage =
+      isGuestDrawerVM(props.guest) && props.guest.diskStatusReason
+        ? getWorkloadGuestDiskStatusMessage(props.guest.diskStatusReason)
+        : null;
 
     return compactDetailSections([
       discovery
@@ -187,7 +194,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
             .map((row) => makeDetailRow(row.label, row.value)),
         ),
       },
-      props.hasFilesystemDetails && diskRows.length > 0
+      (props.hasFilesystemDetails && diskRows.length > 0) || diskStatusMessage
         ? {
             label: 'Filesystems',
             rows: compactDetailRows([
@@ -212,11 +219,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                   },
                 ),
               ),
-              makeDetailRow(
-                'Status',
-                isGuestDrawerVM(props.guest) ? props.guest.diskStatusReason : null,
-                { wrap: true },
-              ),
+              makeDetailRow('Status', diskStatusMessage, { layout: 'stacked', wrap: true }),
             ]),
           }
         : null,

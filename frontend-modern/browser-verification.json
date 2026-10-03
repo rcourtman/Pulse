@@ -1,24 +1,136 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "2d6a10ab59d327b461ef762ec69a9c5d0440929a",
-  "verified_at": "2026-10-03T11:37:53.905511Z",
-  "changed_paths": [
-    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx",
-    "frontend-modern/src/features/alerts/useNotificationDeliveryLog.ts",
-    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts",
-    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
-    "frontend-modern/src/utils/alertDestinationsPresentation.ts"
-  ],
+  "verified_at": "2026-10-03T14:13:34.794Z",
   "content_sha256": {
-    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx": "cac90b57e94b42360989262b550c9b0beaca8dd6eecdd7f7882911bb49de9fc2",
-    "frontend-modern/src/features/alerts/useNotificationDeliveryLog.ts": "e8ce66a9ca6ae82861a9d03a7d565f6c246f9b5fc547e7c2e64f0a3e6bd12014",
-    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts": "eaf519a7f205be0b0e88ea17b19552f30afef025251262a1ea1b8896442e2673",
-    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "9278ab7cf249eea451040b722b244d1447b05c07557d641187fa51f3bc88a225",
-    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "5afa5dbce8eb1602377b7b27f6298438da76e3ebf2f80986677c9988bf36c96c"
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "bd8ca98831f1da1dfb1b9fd38019940a86626be38e52977d06af8c9a5d611a71",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "5b48d53997488fc88c8735f959a325fc242992acba8d4bc7f1f51169ef8398b5",
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts": "f68f8843a64b120d535f6557ef039a246dd65eb2a30d6e4abef223d5dd086de2",
+    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx": "f6bb9a340a77fe749b4a5d0921055397815068008259f5ab9bded7172d750235",
+    "frontend-modern/src/components/Workloads/DiskList.tsx": "b80ffe047b61760061f95a9adc85c3cd3e0cf68674214a64d1d911681f81b240",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "8f5d8ff247f1f9ed3077e20b55d0dca47994ff7f571d90463fc8b7ee68237bcc"
   },
+  "playwright_version": "1.56.1",
+  "results": [
+    {
+      "name": "desktop",
+      "browser_version": "141.0.7390.37",
+      "viewport": {
+        "width": 1365,
+        "height": 900
+      },
+      "checks": [
+        "vm-locked: retained row, tooltip, drawer, list and identity",
+        "vm-locked: no previous disk values and no fresh percentage",
+        "lock-unverified: retained row, tooltip, drawer, list and identity",
+        "lock-unverified: no previous disk values and no fresh percentage",
+        "agent-busy: retained row, tooltip, drawer, list and identity",
+        "agent-busy: no previous disk values and no fresh percentage",
+        "agent-cooldown: retained row, tooltip, drawer, list and identity",
+        "agent-cooldown: no previous disk values and no fresh percentage",
+        "agent-response-incomplete: retained row, tooltip, drawer, list and identity",
+        "agent-response-incomplete: no previous disk values and no fresh percentage",
+        "agent-capacity: retained row, tooltip, drawer, list and identity",
+        "agent-capacity: no previous disk values and no fresh percentage",
+        "invalid-guest-key: retained row, tooltip, drawer, list and identity",
+        "invalid-guest-key: no previous disk values and no fresh percentage",
+        "agent-timeout: retained row, tooltip, drawer, list and identity",
+        "agent-timeout: no previous disk values and no fresh percentage",
+        "permission-denied: existing unavailable case remains distinct",
+        "agent-disabled: existing unavailable case remains distinct",
+        "agent-not-running: existing unavailable case remains distinct",
+        "no-data: existing unavailable case remains distinct",
+        "vm-stopped: existing unavailable case remains distinct",
+        "no-status: existing unavailable case remains distinct",
+        "agent-error: existing unavailable case remains distinct",
+        "same-VM fresh resumption removes notice and updates values in both row modes without remount"
+      ],
+      "page_errors": []
+    },
+    {
+      "name": "phone",
+      "browser_version": "26.0",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "checks": [
+        "vm-locked: retained row, tooltip, drawer, list and identity",
+        "vm-locked: no previous disk values and no fresh percentage",
+        "lock-unverified: retained row, tooltip, drawer, list and identity",
+        "lock-unverified: no previous disk values and no fresh percentage",
+        "agent-busy: retained row, tooltip, drawer, list and identity",
+        "agent-busy: no previous disk values and no fresh percentage",
+        "agent-cooldown: retained row, tooltip, drawer, list and identity",
+        "agent-cooldown: no previous disk values and no fresh percentage",
+        "agent-response-incomplete: retained row, tooltip, drawer, list and identity",
+        "agent-response-incomplete: no previous disk values and no fresh percentage",
+        "agent-capacity: retained row, tooltip, drawer, list and identity",
+        "agent-capacity: no previous disk values and no fresh percentage",
+        "invalid-guest-key: retained row, tooltip, drawer, list and identity",
+        "invalid-guest-key: no previous disk values and no fresh percentage",
+        "agent-timeout: retained row, tooltip, drawer, list and identity",
+        "agent-timeout: no previous disk values and no fresh percentage",
+        "permission-denied: existing unavailable case remains distinct",
+        "agent-disabled: existing unavailable case remains distinct",
+        "agent-not-running: existing unavailable case remains distinct",
+        "no-data: existing unavailable case remains distinct",
+        "vm-stopped: existing unavailable case remains distinct",
+        "no-status: existing unavailable case remains distinct",
+        "agent-error: existing unavailable case remains distinct",
+        "same-VM fresh resumption removes notice and updates values in both row modes without remount"
+      ],
+      "page_errors": []
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "tmp/guest-disk-deferral-proof/desktop-retained-backup.png",
+      "sha256": "6c10970b4c64a784e088067e08fec003a0cf7ca5ef8617b9d91c5a2196bac7ba"
+    },
+    {
+      "path": "tmp/guest-disk-deferral-proof/desktop-uncertain-timeout.png",
+      "sha256": "f57806ae4c631f1acdb12d466457876ab3e0c94d706bf34fb685ab1254786d1c"
+    },
+    {
+      "path": "tmp/guest-disk-deferral-proof/desktop-fresh-resumption.png",
+      "sha256": "770cd0c083a92263ff834befc594ea4caf7c1a0849534655f3d2853b7ccd1bb6"
+    },
+    {
+      "path": "tmp/guest-disk-deferral-proof/phone-retained-backup.png",
+      "sha256": "c79fea8c81dd71f32fcb578725e5bf9ee5ef75e9a8ca4117ab39f67f3b0a753b"
+    },
+    {
+      "path": "tmp/guest-disk-deferral-proof/phone-uncertain-timeout.png",
+      "sha256": "b77012b0d47357f602e5ecd770437b75359944e79ac0c5fcb6930a350293de68"
+    },
+    {
+      "path": "tmp/guest-disk-deferral-proof/phone-fresh-resumption.png",
+      "sha256": "6bc91549730fb30f64f2ff2f2a0f5d5e3fd8a29147fa50081907da78bc4fa339"
+    }
+  ],
+  "limitation": "Synthetic same-VM observations through production components and CSS; no native QGA/backup, History sample, installation or release acceptance.",
+  "base_sha": "d4da7ffefdf91db52043aa2a5b5d1c3e16d13ca9",
+  "changed_paths": [
+    "frontend-modern/src/utils/workloadGuestPresentation.ts",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts",
+    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx",
+    "frontend-modern/src/components/Workloads/DiskList.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx"
+  ],
   "routes": [
-    "Existing Alerts Notifications tab through production DestinationsTab, destination state, notification/alert API adapters and activity card, under synthetic read-only responses"
+    "Existing workload row and guest Overview filesystem evidence, shared disk breakdown tooltip/list; synthetic same-VM props through production components, not a new product route"
+  ],
+  "states": [
+    "Eight fixed lock/uncertain/request/capacity/identity deferral reasons with retained and no previous disk data",
+    "Seven distinct permission/disabled/unavailable cases",
+    "Same-VM fresh 75 percent resumption removes notices without row remount"
+  ],
+  "interactions": [
+    "Real desktop hover breakdown with readable freshness context",
+    "Desktop click and phone touch open the existing row disclosure into production Overview",
+    "Same-VM observation replacement, bars/sparklines and fresh resumption with no guest commands"
   ],
   "viewports": [
     {
@@ -29,61 +141,5 @@
       "width": 390,
       "height": 844
     }
-  ],
-  "states": [
-    "Initial attempt and held-event reads pending without an empty claim",
-    "Successful attempts do not wait for held events; refresh remains usable",
-    "Both completed empty reads establish the empty window",
-    "Independent readable attempts and held-event rows",
-    "Held-event HTTP403 clears its rows and warns, without hiding attempt evidence",
-    "Pending held retry retains the warning until success",
-    "Attempt HTTP503 clears only attempt evidence, preserving readable held rows",
-    "Both failures warn without empty claims; successful reads clear warnings"
-  ],
-  "interactions": [
-    "Desktop keyboard Enter and phone touch refresh through the real existing Notifications tab",
-    "Partial failure, pending retry and recovery via synthetic API replies; no mutation"
-  ],
-  "browsers": [
-    {
-      "engine": "desktop",
-      "version": "141.0.7390.37"
-    },
-    {
-      "engine": "phone",
-      "version": "26.0"
-    }
-  ],
-  "playwright_version": "1.56.1",
-  "checks": 20,
-  "screenshots": [
-    {
-      "path": "tmp/notification-evidence-proof/desktop-held-pending.png",
-      "sha256": "58ddaf1dae1e797e6f938c3e74b705fe75276eaf560de307fe7bfe1644c2df21"
-    },
-    {
-      "path": "tmp/notification-evidence-proof/desktop-held-unavailable.png",
-      "sha256": "fe343a2b7eb67ae1283e4eb411462073e3db26d36d226ef62d9fd49cf9a095c7"
-    },
-    {
-      "path": "tmp/notification-evidence-proof/desktop-attempts-unavailable.png",
-      "sha256": "a4ae26cc87b0bbf91b4dc3150f375a10c6701201deed4eaa3bdfbfce08ade4de"
-    },
-    {
-      "path": "tmp/notification-evidence-proof/phone-held-pending.png",
-      "sha256": "66262c32b745e68f32aba48db19dee2a03c7c62d763efd765ed4da154ec9e00f"
-    },
-    {
-      "path": "tmp/notification-evidence-proof/phone-held-unavailable.png",
-      "sha256": "534cd02e8b5392bd5e73d7f4a7a3d8e2a78596a230d055daef4479ecf0d1fdbc"
-    },
-    {
-      "path": "tmp/notification-evidence-proof/phone-attempts-unavailable.png",
-      "sha256": "09652b8023be5e527712d42384e9fee8e114575026aefaf703e62cfa30bc0884"
-    }
-  ],
-  "proof_script": "frontend-modern/browser-tests/notification-evidence.cjs",
-  "limits": [
-    "Synthetic source/UI evidence only, not notification receipt, native provider delivery, release availability or dependency advisory clearance"
   ]
 }

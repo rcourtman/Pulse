@@ -20,6 +20,31 @@
 
 ## Purpose
 
+### Guest disk deferral and retained observations
+
+The existing workload row, disk breakdown tooltip/list and guest Overview use
+one presentation for the fixed guest-read reason vocabulary. Operation locks,
+unverified lock clearance, an in-flight request, cooldown, incomplete response
+and capacity deferrals are not evidence that QGA is missing. Invalid VM identity
+remains distinct. A timeout describes uncertain completion and must not recommend
+restarting QGA during a backup or changing freeze settings.
+
+`prev-` marks last-known disk values, not a fresh sample. Keep those values and
+their identity visible, with the explanation beside the disk evidence, including
+the breakdown tooltip and the phone-readable Overview. Show readable status even
+before the first filesystem sample; do not hide it behind an empty disk list or
+expose only a raw reason. A same-VM fresh observation withdraws the notice and
+updates values without remounting the row. Permission, disabled-agent and actual
+unavailable cases retain their own explanations.
+
+Verification: `workloadGuestPresentation.test.ts`, the mounted `GuestRow`,
+`DiskList`, `StackedDiskBar` and `GuestDrawerOverview.filesystems` regressions,
+and `browser-tests/guest-disk-deferral.cjs` cover the fixed reasons, retained/no
+previous data and fresh resumption with production components and CSS on desktop
+Chromium and touch WebKit. Synthetic observations do not establish the native
+command-ID cause, guest thaw, fresh History collection or containing release.
+
+
 ### Composed operator tables and conservative rollback consent
 
 Phone storage tables use the canonical weighted-width helper and matching

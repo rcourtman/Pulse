@@ -343,6 +343,17 @@ describe('StackedDiskBar', () => {
   // ── Tooltip ──────────────────────────────────────────────────────────────
 
   describe('tooltip', () => {
+    it('includes caller-owned freshness context beside unchanged disk evidence', async () => {
+      const message = 'Using last known disk stats. Guest reads paused while a backup is running.';
+      const { container } = render(() => (
+        <StackedDiskBar disks={[makeDisk()]} statusMessage={message} />
+      ));
+      await fireEvent.mouseEnter(getBarTrigger(container));
+      expect(screen.getByText(message)).toBeInTheDocument();
+      expect(screen.getByText('/')).toBeInTheDocument();
+      expect(screen.getByText('Disk Usage')).toBeInTheDocument();
+    });
+
     it('shows tooltip on mouse enter with disk details', async () => {
       const disk = makeDisk({
         used: 53687091200,
