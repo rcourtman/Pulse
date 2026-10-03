@@ -37,11 +37,17 @@ func TestConfigurationMigrationArchiveScope(t *testing.T) {
 	// Excluded state exists at both ends. Import must not pretend to transfer it
 	// or overwrite the destination's excluded files. These are inert sentinels,
 	// not live databases, credentials or operational agent records.
-	excluded := []string{".env", "metrics.db", "audit.db", "host_agents.json", "agent_profiles.json", "rbac_roles.json", "license.enc"}
+	excluded := []string{"metrics.db", "audit.db", "host_agents.json", "agent_profiles.json", "rbac_roles.json", "license.enc"}
 	for _, name := range excluded {
 		require.NoError(t, os.WriteFile(filepath.Join(sourceDir, name), []byte("synthetic-source-only"), 0600))
 		require.NoError(t, os.WriteFile(filepath.Join(targetDir, name), []byte("synthetic-destination-only"), 0600))
 	}
+	// Saving imported system settings can normalise .env whitespace. Use a
+	// well-formed local login override and verify its value is not transferred.
+	const sourceEnv = "PULSE_AUTH_USER=synthetic-source-admin\n"
+	const targetEnv = "PULSE_AUTH_USER=synthetic-destination-admin\n"
+	require.NoError(t, os.WriteFile(filepath.Join(sourceDir, ".env"), []byte(sourceEnv), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(targetDir, ".env"), []byte(targetEnv), 0600))
 	sourceKey, err := os.ReadFile(filepath.Join(sourceDir, ".encryption.key"))
 	require.NoError(t, err)
 	targetKey, err := os.ReadFile(filepath.Join(targetDir, ".encryption.key"))
@@ -63,6 +69,7 @@ func TestConfigurationMigrationArchiveScope(t *testing.T) {
 	require.ElementsMatch(t, []string{"version", "exportedAt", "nodes", "alerts", "alertIntentPolicies", "email", "webhooks", "apprise", "deadMan", "system", "sso", "apiTokens"}, rawKeys(payload))
 	require.NotContains(t, string(plaintext), "synthetic-nas-secret")
 	require.NotContains(t, string(plaintext), "synthetic-source-only")
+	require.NotContains(t, string(plaintext), "synthetic-source-admin")
 	require.Contains(t, string(plaintext), "synthetic-sso-secret")
 
 	baseline := []PVEInstance{{Name: "destination-before", Host: "https://before.example:8006"}}
@@ -97,6 +104,9 @@ func TestConfigurationMigrationArchiveScope(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "synthetic-destination-only", string(data), name)
 	}
+	localLogin, err := os.ReadFile(filepath.Join(targetDir, ".env"))
+	require.NoError(t, err)
+	require.Equal(t, targetEnv, string(localLogin))
 	keyAfter, err := os.ReadFile(filepath.Join(targetDir, ".encryption.key"))
 	require.NoError(t, err)
 	require.True(t, bytes.Equal(targetKey, keyAfter), "configuration import keeps the destination key")

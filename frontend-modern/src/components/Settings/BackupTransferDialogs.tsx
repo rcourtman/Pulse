@@ -295,7 +295,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                   <p>
                     <strong>Warning:</strong> Import replaces the included settings and API-token
                     records, not the whole installation. Back up the destination first. History and
-                    excluded settings are not restored; check the{' '}
+                    excluded settings are not restored. Check the{' '}
                     <a
                       href={getShippedDocUrl('MIGRATION.md')}
                       target="_blank"

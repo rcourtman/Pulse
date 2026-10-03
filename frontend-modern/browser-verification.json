@@ -1,13 +1,13 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "b62042798c7c9b326408dd5532d7fa330d6bb089",
-  "verified_at": "2026-10-03T14:52:51.979841Z",
+  "base_sha": "73d2c64e0f5bce57f3a1dc6f9e055b4784e079bd",
+  "verified_at": "2026-10-03T15:12:03.997980Z",
   "changed_paths": [
     "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx": "f07fb69d5bd6b185d0e156d7affcf7d5f5fa78418b3f82dd776d49afbceb9341"
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx": "668a53d0741316c9353848ce0b1d5fae917db9ce5053ea43c6fb100d76e32cc4"
   },
   "routes": [
     "/settings/system/recovery (real transfer dialog/flow harness)",
@@ -64,7 +64,7 @@
   ],
   "playwright_version": "1.56.1",
   "shipped_asset_sha256": {
-    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx": "f07fb69d5bd6b185d0e156d7affcf7d5f5fa78418b3f82dd776d49afbceb9341",
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx": "668a53d0741316c9353848ce0b1d5fae917db9ce5053ea43c6fb100d76e32cc4",
     "frontend-modern/public/docs/MIGRATION.md": "ad4b5a4b07af44e1657f9512ef468a578b8b5957b9b115a30816824bbd8300e9",
     "frontend-modern/public/docs/UNIFIED_AGENT.md": "61a15c9651223ac26f4ca900f5731534f03abf96abfd233c47bf034c2796fc05"
   },

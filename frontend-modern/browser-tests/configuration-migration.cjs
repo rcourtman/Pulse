@@ -127,7 +127,7 @@ const { chromium, webkit } = require('playwright');
     const files = ['frontend-modern/src/components/Settings/BackupTransferDialogs.tsx',
       'frontend-modern/public/docs/MIGRATION.md', 'frontend-modern/public/docs/UNIFIED_AGENT.md'];
     const result = { result: 'passed', playwrightVersion: require('playwright/package.json').version,
-      baseSha: 'b62042798c7c9b326408dd5532d7fa330d6bb089',
+      baseSha: '73d2c64e0f5bce57f3a1dc6f9e055b4784e079bd',
       scope: 'Real dialog/flow/production Docs rendering with synthetic API; no native migration or shipment',
       contentSha256: Object.fromEntries(files.map((file) => [file,
         createHash('sha256').update(fs.readFileSync(path.join(workspace, file))).digest('hex')])), observations };
