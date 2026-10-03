@@ -17,7 +17,7 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
   return (
     <div class="metric-text w-full h-4 flex items-center justify-center">
       <div
-        class="relative w-full h-full overflow-hidden bg-surface-hover rounded"
+        class="relative w-full h-full overflow-hidden bg-surface-hover rounded-sm"
         onMouseEnter={state.handleMouseEnter}
         onMouseLeave={state.handleMouseLeave}
       >

@@ -37,7 +37,7 @@ export const PulseBrandMark: Component<PulseBrandMarkProps> = (props) => {
       </Show>
       <circle class="pulse-bg fill-blue-600 dark:fill-blue-500" cx="128" cy="128" r="122" />
       <circle
-        class="pulse-ring fill-none stroke-white dark:stroke-[#dbeafe] stroke-[14] opacity-[0.92]"
+        class="pulse-ring fill-none stroke-white dark:stroke-[#dbeafe] stroke-14 opacity-[0.92]"
         cx="128"
         cy="128"
         r="84"

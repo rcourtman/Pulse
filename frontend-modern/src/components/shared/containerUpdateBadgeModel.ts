@@ -102,16 +102,16 @@ export function getUpdateButtonClass(state: UpdateState, unavailable = false): s
   }
   switch (state) {
     case 'updating':
-      return `${UPDATE_BUTTON_BASE_CLASS} bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-wait`;
+      return `${UPDATE_BUTTON_BASE_CLASS} bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300 cursor-wait`;
     case 'queued':
     case 'inconclusive':
-      return `${UPDATE_BUTTON_BASE_CLASS} bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 cursor-pointer hover:bg-amber-200 dark:hover:bg-amber-800`;
+      return `${UPDATE_BUTTON_BASE_CLASS} bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-200 cursor-pointer hover:bg-amber-200 dark:hover:bg-amber-800`;
     case 'success':
-      return `${UPDATE_BUTTON_BASE_CLASS} bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300`;
+      return `${UPDATE_BUTTON_BASE_CLASS} bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300`;
     case 'error':
-      return `${UPDATE_BUTTON_BASE_CLASS} bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 cursor-help`;
+      return `${UPDATE_BUTTON_BASE_CLASS} bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-300 cursor-help`;
     default:
-      return `${UPDATE_BUTTON_BASE_CLASS} bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900`;
+      return `${UPDATE_BUTTON_BASE_CLASS} bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900/25`;
   }
 }
 

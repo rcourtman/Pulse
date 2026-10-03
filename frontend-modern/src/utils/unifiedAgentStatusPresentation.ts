@@ -20,14 +20,14 @@ export function getUnifiedAgentStatusPresentation(
 ): UnifiedAgentStatusPresentation {
   if (state === 'removed') {
     return {
-      badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+      badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-200',
       label: MONITORING_STOPPED_STATUS_LABEL,
     };
   }
 
   if (isConnectedHealthStatus(healthStatus)) {
     return {
-      badgeClass: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+      badgeClass: 'bg-green-100 text-green-800 dark:bg-green-900/25 dark:text-green-300',
       label: healthStatus || 'unknown',
     };
   }
@@ -43,13 +43,13 @@ export function getUnifiedAgentLookupStatusPresentation(
 ): UnifiedAgentLookupStatusPresentation {
   if (connected) {
     return {
-      badgeClass: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+      badgeClass: 'bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300',
       label: 'Connected',
     };
   }
 
   return {
-    badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+    badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-200',
     label: 'Not reporting yet',
   };
 }

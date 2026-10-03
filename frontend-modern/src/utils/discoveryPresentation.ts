@@ -193,11 +193,11 @@ export function getDiscoveryProvenanceTitle(): string {
 }
 
 export function getDiscoveryProvenanceBadgeClass(): string {
-  return 'inline-flex h-5 shrink-0 items-center gap-1 rounded border border-cyan-200 bg-cyan-50 px-1.5 text-[10px] font-medium leading-none text-cyan-700 dark:border-cyan-800 dark:bg-cyan-950 dark:text-cyan-200';
+  return 'inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border border-cyan-200 bg-cyan-50 px-1.5 text-[10px] font-medium leading-none text-cyan-700 dark:border-cyan-800 dark:bg-cyan-950/25 dark:text-cyan-200';
 }
 
 export function getDiscoveryProvenanceIconClass(): string {
-  return 'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-950 dark:text-cyan-200';
+  return 'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-950/25 dark:text-cyan-200';
 }
 
 export function normalizeDiscoverySuggestedUrl(value?: string | null): string | undefined {
@@ -250,16 +250,16 @@ export function getDiscoverySuggestedURLReason(
 
 export function getDiscoveryAnalysisProviderBadgeClass(isLocal?: boolean | null): string {
   return isLocal
-    ? 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-    : 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
+    ? 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300'
+    : 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300';
 }
 
 export function getDiscoveryCategoryBadgeClass(): string {
-  return 'inline-block rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-200';
+  return 'inline-block rounded-sm bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/25 dark:text-blue-200';
 }
 
 export function getDiscoverySuggestedURLCardClass(): string {
-  return 'rounded border border-blue-200 bg-blue-50 p-3 shadow-sm dark:border-blue-800 dark:bg-blue-900';
+  return 'rounded-sm border border-blue-200 bg-blue-50 p-3 shadow-xs dark:border-blue-800 dark:bg-blue-900/25';
 }
 
 export function getDiscoverySuggestedURLHeadingClass(): string {
@@ -271,11 +271,11 @@ export function getDiscoverySuggestedURLTextClass(): string {
 }
 
 export function getDiscoverySuggestedURLCodeClass(): string {
-  return 'min-w-0 flex-1 rounded bg-blue-100 px-2 py-1.5 text-xs text-blue-800 dark:bg-blue-950 dark:text-blue-100 font-mono break-all';
+  return 'min-w-0 flex-1 rounded-sm bg-blue-100 px-2 py-1.5 text-xs text-blue-800 dark:bg-blue-950/25 dark:text-blue-100 font-mono break-all';
 }
 
 export function getDiscoverySuggestedURLActionClass(): string {
-  return 'inline-flex min-h-8 min-w-8 shrink-0 items-center justify-center rounded border border-blue-200 bg-blue-100 text-blue-700 transition-colors hover:bg-blue-200 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-200 dark:hover:bg-blue-900';
+  return 'inline-flex min-h-8 min-w-8 shrink-0 items-center justify-center rounded-sm border border-blue-200 bg-blue-100 text-blue-700 transition-colors hover:bg-blue-200 dark:border-blue-700 dark:bg-blue-950/25 dark:text-blue-200 dark:hover:bg-blue-900/25';
 }
 
 export function getDiscoveryInitialEmptyState(loading: boolean) {

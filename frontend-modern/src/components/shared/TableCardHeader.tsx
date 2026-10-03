@@ -13,8 +13,8 @@ export const TABLE_CARD_HEADER_CLASS =
   'flex items-center gap-3 border-b border-border bg-surface-hover px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted';
 
 export const TABLE_CARD_HEADER_CLEAR_BUTTON_CLASS = [
-  'ml-auto inline-flex items-center rounded-sm text-[11px] font-medium normal-case tracking-normal text-muted transition-colors',
-  'hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1',
+  'ml-auto inline-flex items-center rounded-xs text-[11px] font-medium normal-case tracking-normal text-muted transition-colors',
+  'hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1',
 ].join(' ');
 
 const TABLE_CARD_HEADER_ACTIONS_CLEAR_BUTTON_CLASS = TABLE_CARD_HEADER_CLEAR_BUTTON_CLASS.replace(

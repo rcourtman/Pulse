@@ -87,7 +87,7 @@ export const AgentProfilesPanel: Component = () => {
           <Show when={showUpgradePrompts()}>
             <Card padding="lg" class="space-y-4">
               <div class="flex items-center gap-3">
-                <div class="flex items-center justify-center w-10 h-10 rounded-md bg-amber-100 dark:bg-amber-900">
+                <div class="flex items-center justify-center w-10 h-10 rounded-md bg-amber-100 dark:bg-amber-900/25">
                   <Crown class="w-5 h-5 text-amber-600 dark:text-amber-400" />
                 </div>
                 <div>
@@ -198,7 +198,7 @@ export const AgentProfilesPanel: Component = () => {
                         <button
                           type="button"
                           onClick={() => handleEdit(profile)}
-                          class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md p-1.5 hover:text-blue-600 hover:bg-blue-50 sm:min-h-0 sm:min-w-0 dark:hover:text-blue-400 dark:hover:bg-blue-900"
+                          class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md p-1.5 hover:text-blue-600 hover:bg-blue-50 sm:min-h-0 sm:min-w-0 dark:hover:text-blue-400 dark:hover:bg-blue-900/25"
                           title="Edit profile"
                         >
                           <Pencil class="w-4 h-4" />
@@ -206,7 +206,7 @@ export const AgentProfilesPanel: Component = () => {
                         <button
                           type="button"
                           onClick={() => handleDelete(profile)}
-                          class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md p-1.5 hover:text-red-600 hover:bg-red-50 sm:min-h-0 sm:min-w-0 dark:hover:text-red-400 dark:hover:bg-red-900"
+                          class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md p-1.5 hover:text-red-600 hover:bg-red-50 sm:min-h-0 sm:min-w-0 dark:hover:text-red-400 dark:hover:bg-red-900/25"
                           title="Delete profile"
                         >
                           <Trash2 class="w-4 h-4" />
@@ -268,7 +268,7 @@ export const AgentProfilesPanel: Component = () => {
                           fieldBaseClass="contents"
                           value={assignment()?.profile_id || ''}
                           onChange={(e) => handleAssign(agent.assignmentId, e.currentTarget.value)}
-                          selectBaseClass="min-h-10 sm:min-h-9 w-full sm:max-w-xs rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          selectBaseClass="min-h-10 sm:min-h-9 w-full sm:max-w-xs rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
                         >
                           <option value="">No profile</option>
                           <Show
@@ -369,7 +369,7 @@ export const AgentProfilesPanel: Component = () => {
                       value={formName()}
                       onInput={(e) => setFormName(e.currentTarget.value)}
                       placeholder="e.g., Production Servers"
-                      class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                      class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-800"
                     />
                   </div>
 
@@ -386,7 +386,7 @@ export const AgentProfilesPanel: Component = () => {
                     onInput={(e) => setFormDescription(e.currentTarget.value)}
                     placeholder="What is this profile for?"
                     rows={2}
-                    textareaBaseClass="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-800 resize-none"
+                    textareaBaseClass="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-800 resize-none"
                   />
 
                   {/* Settings */}
@@ -447,7 +447,7 @@ export const AgentProfilesPanel: Component = () => {
                                 onChange={(e) =>
                                   updateSetting(setting.key, e.currentTarget.value || undefined)
                                 }
-                                selectBaseClass="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                selectBaseClass="min-h-10 sm:min-h-9 rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
                               >
                                 <option value="">Default</option>
                                 <For each={(setting as SelectSetting).options}>
@@ -464,7 +464,7 @@ export const AgentProfilesPanel: Component = () => {
                                   updateSetting(setting.key, e.currentTarget.value || undefined)
                                 }
                                 placeholder="30s"
-                                class="min-h-10 sm:min-h-9 w-24 rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                class="min-h-10 sm:min-h-9 w-24 rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
                               />
                             </Show>
                             <Show when={setting.type === 'string'}>
@@ -476,7 +476,7 @@ export const AgentProfilesPanel: Component = () => {
                                   updateSetting(setting.key, e.currentTarget.value || undefined)
                                 }
                                 placeholder={(setting as StringSetting).placeholder || ''}
-                                class="min-h-10 sm:min-h-9 w-40 rounded-md border bg-surface px-2.5 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                class="min-h-10 sm:min-h-9 w-40 rounded-md border bg-surface px-2.5 py-1.5 text-sm shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
                               />
                             </Show>
                           </div>
@@ -493,7 +493,7 @@ export const AgentProfilesPanel: Component = () => {
                         </p>
                         <For each={unknownKeys()}>
                           {(key) => (
-                            <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 mb-2">
+                            <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 p-3 mb-2">
                               <div class="flex items-center justify-between">
                                 <span class="text-sm font-medium text-base-content font-mono">
                                   {key}
@@ -512,12 +512,12 @@ export const AgentProfilesPanel: Component = () => {
                                         updateSetting(key, val || undefined);
                                       }
                                     }}
-                                    class="min-h-10 sm:min-h-9 w-32 rounded-md border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    class="min-h-10 sm:min-h-9 w-32 rounded-md border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
                                   />
                                   <button
                                     type="button"
                                     onClick={() => updateSetting(key, undefined)}
-                                    class="inline-flex min-h-10 min-w-10 sm:min-h-9 sm:min-w-9 items-center justify-center rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900"
+                                    class="inline-flex min-h-10 min-w-10 sm:min-h-9 sm:min-w-9 items-center justify-center rounded-sm text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/25"
                                     title="Remove this setting"
                                   >
                                     <svg

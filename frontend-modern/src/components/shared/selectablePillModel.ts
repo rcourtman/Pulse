@@ -1,14 +1,14 @@
 export type SelectablePillButtonSize = 'md';
 
 export const SELECTABLE_PILL_BUTTON_BASE_CLASS =
-  'inline-flex max-w-full items-center justify-center rounded-full border text-center font-semibold transition whitespace-normal outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60';
+  'inline-flex max-w-full items-center justify-center rounded-full border text-center font-semibold transition whitespace-normal outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60';
 
 export const SELECTABLE_PILL_BUTTON_SIZE_CLASSES: Record<SelectablePillButtonSize, string> = {
   md: 'min-h-10 px-3 py-2 text-sm sm:min-h-10',
 };
 
 export const SELECTABLE_PILL_BUTTON_ACTIVE_CLASS =
-  'border-blue-500 bg-blue-600 text-white shadow-sm';
+  'border-blue-500 bg-blue-600 text-white shadow-xs';
 
 export const SELECTABLE_PILL_BUTTON_INACTIVE_CLASS =
   'border-border bg-surface text-base-content hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-200';

@@ -23,9 +23,9 @@ export const RELAY_INLINE_ACTION_CLASS =
 export const RELAY_INFO_TITLE_CLASS = 'text-sm font-medium text-base-content';
 export const RELAY_INFO_MESSAGE_CLASS = 'text-xs text-muted mt-1';
 export const RELAY_LAST_ERROR_CLASS =
-  'mt-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900 rounded px-2 py-1';
+  'mt-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/25 rounded-sm px-2 py-1';
 export const RELAY_CODE_BLOCK_CLASS =
-  'block text-xs font-mono text-base-content bg-surface-alt rounded px-3 py-2 select-all break-all';
+  'block text-xs font-mono text-base-content bg-surface-alt rounded-sm px-3 py-2 select-all break-all';
 export const RELAY_QR_IMAGE_CLASS = 'rounded-md border border-border p-2';
 export const RELAY_DIAGNOSTICS_WRAP_CLASS = 'space-y-2';
 export const RELAY_DIAGNOSTICS_TITLE_CLASS = 'text-xs font-semibold text-base-content';
@@ -47,8 +47,8 @@ export const RELAY_PAIRING_APP_DOWNLOAD_LINK_LABEL = 'your download page';
 
 export function getRelayDiagnosticClass(severity: 'warning' | 'error'): string {
   return severity === 'error'
-    ? 'rounded px-2 py-1 text-xs bg-red-50 dark:bg-red-900 text-red-700 dark:text-red-300'
-    : 'rounded px-2 py-1 text-xs bg-amber-50 dark:bg-amber-900 text-amber-700 dark:text-amber-300';
+    ? 'rounded-sm px-2 py-1 text-xs bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300'
+    : 'rounded-sm px-2 py-1 text-xs bg-amber-50 dark:bg-amber-900/25 text-amber-700 dark:text-amber-300';
 }
 
 export function getRelayConnectionPresentation(

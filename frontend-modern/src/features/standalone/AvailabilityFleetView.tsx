@@ -106,7 +106,7 @@ const AvailabilityStateStrip: Component<{ buckets: readonly AvailabilityHistoryB
   });
   return (
     <div
-      class="flex h-3 w-full overflow-hidden rounded-sm bg-slate-200 dark:bg-slate-700"
+      class="flex h-3 w-full overflow-hidden rounded-xs bg-slate-200 dark:bg-slate-700"
       role="img"
       aria-label={`24-hour state history: ${description() || 'no observations'}`}
       data-testid="availability-state-strip"
@@ -173,13 +173,13 @@ export const AvailabilityFleetView: Component<{
 
   return (
     <section aria-label="Availability fleet" class="space-y-3">
-      <div class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface-alt/40 px-3 py-2 text-xs text-muted">
+      <div class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-xs text-muted">
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1" aria-label="State history legend">
           <For each={Object.values(statePresentation)}>
             {(presentation) => (
               <span class="inline-flex items-center gap-1.5">
                 <span
-                  class={`h-2.5 w-2.5 rounded-sm ${presentation.className}`}
+                  class={`h-2.5 w-2.5 rounded-xs ${presentation.className}`}
                   aria-hidden="true"
                 />
                 {presentation.label}
@@ -239,7 +239,7 @@ export const AvailabilityFleetView: Component<{
             return (
               <button
                 type="button"
-                class="group min-w-0 rounded-md border border-border bg-surface p-3 text-left shadow-sm transition hover:border-blue-400/60 hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                class="group min-w-0 rounded-md border border-border bg-surface p-3 text-left shadow-xs transition hover:border-blue-400/60 hover:bg-surface-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
                 aria-label={`Open details for ${resource.name}`}
                 data-availability-fleet-tile={resource.id}
                 onClick={() => setSelectedResource(resource)}
@@ -285,7 +285,7 @@ export const AvailabilityFleetView: Component<{
                     when={!props.historyLoading}
                     fallback={
                       <div
-                        class="h-3 animate-pulse rounded-sm bg-surface-hover"
+                        class="h-3 animate-pulse rounded-xs bg-surface-hover"
                         aria-label="Loading history"
                       />
                     }

@@ -57,7 +57,7 @@ describe('aiSettingsPresentation', () => {
         modelCount: 5,
       }),
     ).toEqual({
-      containerClassName: 'bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-200',
+      containerClassName: 'bg-green-50 dark:bg-green-900/25 text-green-800 dark:text-green-200',
       dotClassName: 'bg-emerald-400',
       summary: 'Ready • 2 providers • 5 models',
     });
@@ -71,7 +71,7 @@ describe('aiSettingsPresentation', () => {
         modelCount: 0,
       }),
     ).toEqual({
-      containerClassName: 'bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200',
+      containerClassName: 'bg-amber-50 dark:bg-amber-900/25 text-amber-800 dark:text-amber-200',
       dotClassName: 'bg-amber-400',
       summary: 'Configure at least one provider above to enable Pulse Assistant and Patrol.',
     });

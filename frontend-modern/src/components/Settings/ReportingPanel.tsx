@@ -452,7 +452,7 @@ export function ReportingPanel() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    class="min-h-11 w-full justify-start gap-2 px-2"
+                                    class="min-h-11 w-full gap-2 px-2"
                                     aria-label={`Run ${schedule.name} now`}
                                     isLoading={runningScheduleID() === schedule.id}
                                     disabled={runningScheduleID() !== ''}
@@ -466,7 +466,7 @@ export function ReportingPanel() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    class="min-h-11 w-full justify-start gap-2 px-2"
+                                    class="min-h-11 w-full gap-2 px-2"
                                     aria-label={`Edit ${schedule.name}`}
                                     onClick={() => startEditSchedule(schedule)}
                                   >
@@ -476,7 +476,7 @@ export function ReportingPanel() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    class="min-h-11 w-full justify-start gap-2 px-2"
+                                    class="min-h-11 w-full gap-2 px-2"
                                     aria-label={`Delete ${schedule.name}`}
                                     isLoading={deletingScheduleID() === schedule.id}
                                     disabled={deletingScheduleID() !== ''}
@@ -797,7 +797,7 @@ export function ReportingPanel() {
                     <For each={inventoryDefinition()?.columns ?? []}>
                       {(column) => (
                         <div class="space-y-1 rounded-lg border border-base-300/70 bg-base-100/70 p-3">
-                          <div class="text-xs font-semibold uppercase tracking-wide text-base-content/80">
+                          <div class="text-xs font-semibold uppercase tracking-wide">
                             {column.label}
                           </div>
                           <p class="text-xs leading-relaxed text-muted">{column.description}</p>

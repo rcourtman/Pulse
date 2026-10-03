@@ -196,7 +196,7 @@ export function Actions() {
       />
 
       <Show when={readOnly()}>
-        <div class="flex items-center gap-2 rounded-md border border-border-subtle bg-surface-alt/50 px-3 py-2 text-xs text-muted">
+        <div class="flex items-center gap-2 rounded-md border border-border-subtle px-3 py-2 text-xs text-muted">
           <EyeIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
           <span>
             <strong class="font-medium text-base-content">Read-only demo data.</strong> You can
@@ -208,7 +208,7 @@ export function Actions() {
       <Show when={detailError()}>
         <div
           role="alert"
-          class="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+          class="rounded-sm border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
         >
           {detailError()}
         </div>
@@ -294,7 +294,7 @@ export function Actions() {
                     <button
                       type="button"
                       aria-label={`Review ${title()} on ${action.request.resourceId}, ${state().label}`}
-                      class={`group w-full border-l-2 px-3 py-3 text-left transition-colors hover:bg-surface-hover/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 sm:px-4 ${state().accentClass}`}
+                      class={`group w-full border-l-2 px-3 py-3 text-left transition-colors hover:bg-surface-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-blue-500 sm:px-4 ${state().accentClass}`}
                       onClick={() => openAction(action)}
                     >
                       <div class="flex items-center gap-3">
@@ -335,7 +335,7 @@ export function Actions() {
                           </div>
                           <p class="mt-1.5 truncate text-sm text-muted">{action.request.reason}</p>
                         </div>
-                        <span class="inline-flex shrink-0 items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium text-muted transition-colors group-hover:bg-surface group-hover:text-base-content">
+                        <span class="inline-flex shrink-0 items-center gap-1 rounded-sm border border-border px-2 py-1 text-xs font-medium text-muted transition-colors group-hover:bg-surface group-hover:text-base-content">
                           Review
                           <ChevronRightIcon class="h-3.5 w-3.5" aria-hidden="true" />
                         </span>

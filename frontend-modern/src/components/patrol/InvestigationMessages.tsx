@@ -15,7 +15,7 @@ import { ToolExecutionBlock } from '@/components/AI/Chat/ToolExecutionBlock';
 // Compact variant of the Assistant chat's markdown styling, scaled for the
 // investigation thread's text-xs bubbles.
 const investigationMarkdownClass =
-  'text-xs prose prose-slate prose-sm dark:prose-invert max-w-none break-words prose-p:leading-relaxed prose-p:my-1.5 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-md prose-pre:text-[10px] prose-pre:border prose-pre:border-slate-800 prose-code:text-blue-700 dark:prose-code:text-blue-300 prose-code:bg-blue-50 dark:prose-code:bg-blue-900 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:text-[0.9em] prose-code:before:content-none prose-code:after:content-none prose-headings:font-semibold prose-headings:my-2 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5';
+  'text-xs prose prose-slate prose-sm dark:prose-invert max-w-none wrap-break-word prose-p:leading-relaxed prose-p:my-1.5 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-md prose-pre:text-[10px] prose-pre:border prose-pre:border-slate-800 prose-code:text-blue-700 dark:prose-code:text-blue-300 prose-code:bg-blue-50 dark:prose-code:bg-blue-900/25 prose-code:px-1 prose-code:py-0.5 prose-code:rounded-sm prose-code:font-mono prose-code:text-[0.9em] prose-code:before:content-none prose-code:after:content-none prose-headings:font-semibold prose-headings:my-2 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5';
 
 interface InvestigationMessagesProps {
   findingId: string;
@@ -60,7 +60,7 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
       </Show>
 
       <Show when={!messages.loading && messages() && messages()!.length > 0}>
-        <div class="space-y-2 max-h-80 overflow-y-auto rounded border border-border p-2 bg-surface-alt">
+        <div class="space-y-2 max-h-80 overflow-y-auto rounded-sm border border-border p-2 bg-surface-alt">
           <For each={messages()}>
             {(msg: ChatMessage) => {
               if (isEmptyMessage(msg)) return null;
@@ -70,7 +70,7 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                   <div
                     class={`max-w-[85%] rounded-md px-3 py-2 ${
                       msg.role === 'user'
-                        ? 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100'
+                        ? 'bg-blue-100 dark:bg-blue-900/25 text-blue-900/25 dark:text-blue-100'
                         : msg.role === 'system'
                           ? 'bg-surface-alt text-muted text-xs'
                           : 'bg-surface text-base-content'
@@ -82,7 +82,7 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                         <summary class="text-[10px] text-muted cursor-pointer hover:text-base-content hover:underline">
                           Show reasoning
                         </summary>
-                        <div class="mt-1 text-[10px] text-muted whitespace-pre-wrap break-words border-l-2 border-border pl-2">
+                        <div class="mt-1 text-[10px] text-muted whitespace-pre-wrap wrap-break-word border-l-2 border-border pl-2">
                           {msg.reasoning_content}
                         </div>
                       </details>
@@ -95,7 +95,9 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                       <Show
                         when={msg.role === 'assistant'}
                         fallback={
-                          <div class="text-xs whitespace-pre-wrap break-words">{msg.content}</div>
+                          <div class="text-xs whitespace-pre-wrap wrap-break-word">
+                            {msg.content}
+                          </div>
                         }
                       >
                         <div
@@ -114,7 +116,7 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                             <Show
                               when={typeof tc.success === 'boolean'}
                               fallback={
-                                <div class="text-xs rounded border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900 px-2 py-1">
+                                <div class="text-xs rounded-sm border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/25 px-2 py-1">
                                   <span class="font-semibold text-indigo-700 dark:text-indigo-300">
                                     {tc.name}
                                   </span>
@@ -124,7 +126,7 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                                     </pre>
                                   </Show>
                                   <Show when={tc.output}>
-                                    <pre class="mt-1 text-[10px] text-muted overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap break-words">
+                                    <pre class="mt-1 text-[10px] text-muted overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap wrap-break-word">
                                       {tc.output}
                                     </pre>
                                   </Show>
@@ -150,8 +152,8 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                       <div
                         class={`text-xs rounded border px-2 py-1 ${
                           msg.tool_result!.is_error
-                            ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900'
-                            : 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900'
+                            ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/25'
+                            : 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/25'
                         }`}
                       >
                         <span
@@ -163,7 +165,7 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                         >
                           {msg.tool_result!.is_error ? 'Error' : 'Result'}
                         </span>
-                        <pre class="mt-1 text-[10px] text-muted overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap break-words">
+                        <pre class="mt-1 text-[10px] text-muted overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap wrap-break-word">
                           {msg.tool_result!.content}
                         </pre>
                       </div>

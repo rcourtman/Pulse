@@ -273,14 +273,14 @@ export const KubernetesAutoscalingTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
-                            <span class="inline-block max-w-[12rem] truncate" title={scope()}>
+                            <span class="inline-block max-w-48 truncate" title={scope()}>
                               {scope()}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-[14rem] truncate" title={target()}>
+                            <span class="inline-block max-w-56 truncate" title={target()}>
                               {target()}
                             </span>
                           </TableCell>
@@ -306,17 +306,14 @@ export const KubernetesAutoscalingTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
-                            <span
-                              class="inline-block max-w-[10rem] truncate"
-                              title={metrics().title}
-                            >
+                            <span class="inline-block max-w-40 truncate" title={metrics().title}>
                               {metrics().label}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
-                            <span class="inline-block max-w-[8rem] truncate" title={labels().title}>
+                            <span class="inline-block max-w-32 truncate" title={labels().title}>
                               {labels().label}
                             </span>
                           </TableCell>

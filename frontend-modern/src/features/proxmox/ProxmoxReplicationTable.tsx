@@ -339,9 +339,9 @@ export const ProxmoxReplicationTable: Component<{
     getPlatformTableContainerLayout(observedWidth.width() ?? 1920, [520, 720, 960, 1200]),
   );
   const isCompact = createMemo(() => layout() === 'compact');
-  const mobilePaddingClass = () => (isCompact() ? '!px-1' : '');
-  const mobileHeadClass = () => (isCompact() ? '!px-1 !text-[9px]' : '');
-  const mobileLastSyncClass = () => (isCompact() ? '![padding-inline:2px] !tracking-normal' : '');
+  const mobilePaddingClass = () => (isCompact() ? 'px-1!' : '');
+  const mobileHeadClass = () => (isCompact() ? 'px-1! text-[9px]!' : '');
+  const mobileLastSyncClass = () => (isCompact() ? 'px-[2px]! tracking-normal!' : '');
   const showJob = createMemo(() => !isCompact());
   const showNext = createMemo(() => true);
   const showOperational = createMemo(() => ['operational', 'expanded', 'full'].includes(layout()));
@@ -416,7 +416,7 @@ export const ProxmoxReplicationTable: Component<{
               }
             >
               <PlatformTableShell
-                tableClass="min-w-[0px] table-fixed text-xs"
+                tableClass="min-w-0 table-fixed text-xs"
                 colgroup={
                   <Show when={layout() === 'compact'}>
                     <colgroup>
@@ -670,8 +670,8 @@ export const ProxmoxReplicationTable: Component<{
                               <InlineDetailTableRow
                                 cellId={detailRowId}
                                 colspan={visibleColumnCount()}
-                                class="bg-surface-alt/60 hover:bg-surface-alt/60"
-                                cellClass="!whitespace-normal"
+                                class=""
+                                cellClass="whitespace-normal!"
                                 contentClass="px-2 py-2 sm:px-4 sm:py-3"
                               >
                                 {/* The row truncates and narrower layouts drop columns, so
@@ -681,7 +681,7 @@ export const ProxmoxReplicationTable: Component<{
                                   <Show when={errorText}>
                                     <dt class="font-semibold text-muted">Error</dt>
                                     <dd
-                                      class="break-words text-red-600 dark:text-red-300"
+                                      class="wrap-break-word text-red-600 dark:text-red-300"
                                       data-replication-job-error
                                     >
                                       {errorText}
@@ -722,7 +722,7 @@ export const ProxmoxReplicationTable: Component<{
                                   </dd>
                                   <Show when={comment}>
                                     <dt class="font-semibold text-muted">Comment</dt>
-                                    <dd class="break-words text-base-content">{comment}</dd>
+                                    <dd class="wrap-break-word text-base-content">{comment}</dd>
                                   </Show>
                                 </dl>
                               </InlineDetailTableRow>

@@ -15,12 +15,12 @@ import { getAlertHistoryResourceTypeBadgeClass } from '@/utils/alertHistoryPrese
 // variants the sibling suite never checked) rather than echoing a partial
 // substring.
 const VM_NODE_BADGE =
-  'text-xs px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300';
+  'text-xs px-1 py-0.5 rounded-sm bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300';
 const CONTAINER_BADGE =
-  'text-xs px-1 py-0.5 rounded bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300';
+  'text-xs px-1 py-0.5 rounded-sm bg-green-100 dark:bg-green-900/25 text-green-700 dark:text-green-300';
 const STORAGE_BADGE =
-  'text-xs px-1 py-0.5 rounded bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300';
-const DEFAULT_BADGE = 'text-xs px-1 py-0.5 rounded bg-surface-hover text-base-content';
+  'text-xs px-1 py-0.5 rounded-sm bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300';
+const DEFAULT_BADGE = 'text-xs px-1 py-0.5 rounded-sm bg-surface-hover text-base-content';
 
 describe('getAlertHistoryResourceTypeBadgeClass — vm/node arm (first if)', () => {
   it('returns the exact blue badge for lowercase "vm" (full dark: variants)', () => {

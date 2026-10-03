@@ -36,7 +36,7 @@ export const FeatureGateSection: Component<FeatureGateSectionProps> = (props) =>
   <div class="flex items-center gap-2.5 sm:gap-4">
     <div class="flex min-w-0 flex-1 items-start gap-2 text-left sm:gap-3">
       <Show when={props.icon}>
-        <span class="mt-0.5 flex-shrink-0 text-blue-500">{props.icon}</span>
+        <span class="mt-0.5 shrink-0 text-blue-500">{props.icon}</span>
       </Show>
       <div class="min-w-0 flex-1">
         <h4 class="text-sm font-semibold text-base-content sm:text-base">{props.title}</h4>

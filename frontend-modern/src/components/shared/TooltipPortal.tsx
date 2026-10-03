@@ -24,7 +24,7 @@ export function TooltipPortal(props: TooltipPortalProps) {
     <Show when={props.when && supportsHoverTooltips()}>
       <Portal mount={document.body}>
         <svg
-          class="fixed inset-0 z-[9999] h-screen w-screen overflow-visible pointer-events-none"
+          class="fixed inset-0 z-9999 h-screen w-screen overflow-visible pointer-events-none"
           viewBox={`0 0 ${state.viewport().width} ${state.viewport().height}`}
           preserveAspectRatio="none"
           aria-hidden="true"

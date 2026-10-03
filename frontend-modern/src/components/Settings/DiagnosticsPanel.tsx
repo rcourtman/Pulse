@@ -66,7 +66,7 @@ export const DiagnosticsPanel: Component = () => {
                 type="button"
                 onClick={() => exportDiagnostics(true)}
                 disabled={exportLoading()}
-                class="flex min-h-11 sm:min-h-9 items-center gap-1.5 px-3 py-2 text-sm font-medium text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 rounded-md hover:bg-green-100 dark:hover:bg-green-900 transition-colors"
+                class="flex min-h-11 sm:min-h-9 items-center gap-1.5 px-3 py-2 text-sm font-medium text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/25 border border-green-200 dark:border-green-800 rounded-md hover:bg-green-100 dark:hover:bg-green-900/25 transition-colors"
               >
                 <Download class="w-3.5 h-3.5" />
                 {DIAGNOSTICS_PANEL_COPY.exportGithubLabel}

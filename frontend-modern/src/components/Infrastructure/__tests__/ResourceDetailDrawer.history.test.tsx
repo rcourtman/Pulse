@@ -610,7 +610,7 @@ describe('ResourceDetailDrawer change history section', () => {
     await within(contextSection).findByText('Analysis');
     expect(contextSection.querySelector('table')).toBeTruthy();
     expect(contextSection.querySelector('tbody')).toBeTruthy();
-    expect(contextSection.querySelectorAll('tbody[class*="shadow-sm"]')).toHaveLength(1);
+    expect(contextSection.querySelectorAll('tbody[class*="shadow-xs"]')).toHaveLength(1);
     expect(screen.getByText('Health')).toBeInTheDocument();
     expect(screen.getByText('A · 92/100')).toBeInTheDocument();
     expect(screen.getByText('Trend')).toBeInTheDocument();

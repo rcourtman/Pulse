@@ -1,7 +1,7 @@
 import type { JSX } from 'solid-js';
 
 export const SUMMARY_ROW_ACTION_BUTTON_FOCUS_CLASS =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70';
+  'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sky-400/70';
 
 const isFinePointerEvent = (event: PointerEvent): boolean => {
   const pointerType = typeof event.pointerType === 'string' ? event.pointerType : '';

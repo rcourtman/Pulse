@@ -330,14 +330,14 @@ export const KubernetesPolicyTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-[13rem] truncate" title={scope()}>
+                            <span class="inline-block max-w-52 truncate" title={scope()}>
                               {scope()}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-[13rem] truncate" title={shape().title}>
+                            <span class="inline-block max-w-52 truncate" title={shape().title}>
                               {shape().label}
                             </span>
                           </TableCell>
@@ -351,14 +351,14 @@ export const KubernetesPolicyTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
-                            <span class="inline-block max-w-[14rem] truncate" title={state().title}>
+                            <span class="inline-block max-w-56 truncate" title={state().title}>
                               {state().label}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
-                            <span class="inline-block max-w-[8rem] truncate" title={labels().title}>
+                            <span class="inline-block max-w-32 truncate" title={labels().title}>
                               {labels().label}
                             </span>
                           </TableCell>

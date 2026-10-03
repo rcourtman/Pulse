@@ -34,7 +34,7 @@ export function OrgSwitcher(props: OrgSwitcherProps) {
           label="Organization"
           labelClass="sr-only"
           fieldBaseClass="contents"
-          selectBaseClass="h-7 max-w-44 rounded-md border border-border bg-surface px-2 text-xs text-base-content shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+          selectBaseClass="h-7 max-w-44 rounded-md border border-border bg-surface px-2 text-xs text-base-content shadow-xs transition-colors focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
           aria-label="Organization"
           value={props.selectedOrgId}
           disabled={Boolean(props.loading)}

@@ -384,7 +384,7 @@ export function PatrolAttentionWorkbench(
   return (
     <section
       aria-label="Patrol decision inbox"
-      class="overflow-hidden rounded-xl border border-border bg-surface shadow-sm"
+      class="overflow-hidden rounded-xl border border-border bg-surface shadow-xs"
     >
       <div class="border-b border-border px-4 py-4 sm:px-6">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -472,14 +472,14 @@ export function PatrolAttentionWorkbench(
         {(notice) => (
           <div
             role="status"
-            class="flex items-center gap-2 border-b border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200 sm:px-6"
+            class="flex items-center gap-2 border-b border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 dark:border-emerald-900/25 dark:bg-emerald-950/30 dark:text-emerald-200 sm:px-6"
           >
             <CheckCircleIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
             <span>{notice()}</span>
             <Show when={attentionView() === 'inbox' && handledCount() > 0}>
               <button
                 type="button"
-                class="ml-auto shrink-0 underline underline-offset-2 hover:no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+                class="ml-auto shrink-0 underline underline-offset-2 hover:no-underline focus:outline-hidden focus-visible:ring-2 focus-visible:ring-emerald-600"
                 onClick={() => switchAttentionView('handled')}
               >
                 Review handled issues
@@ -493,7 +493,7 @@ export function PatrolAttentionWorkbench(
         class={`grid min-w-0 ${selectedItemId() ? 'lg:grid-cols-[minmax(20rem,0.78fr)_minmax(0,1.22fr)]' : ''}`}
       >
         <div
-          class={`min-w-0 ${selectedItemId() ? 'hidden lg:block lg:max-h-[52rem] lg:overflow-y-auto lg:border-r lg:border-border' : ''}`}
+          class={`min-w-0 ${selectedItemId() ? 'hidden lg:block lg:max-h-208 lg:overflow-y-auto lg:border-r lg:border-border' : ''}`}
         >
           <AttentionList
             decisions={visibleDecisions()}
@@ -520,7 +520,7 @@ export function PatrolAttentionWorkbench(
           <div
             ref={detailPanel}
             tabindex="-1"
-            class="order-first min-w-0 scroll-mt-4 lg:order-none lg:max-h-[52rem] lg:overflow-y-auto"
+            class="order-first min-w-0 scroll-mt-4 lg:order-0 lg:max-h-208 lg:overflow-y-auto"
           >
             <AttentionDetail
               detail={selectedDetail()}
@@ -610,7 +610,7 @@ function AttentionList(props: {
         {(message) => (
           <div
             role="alert"
-            class="m-4 flex items-start gap-3 rounded-md border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200"
+            class="m-4 flex items-start gap-3 rounded-md border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-900/25 dark:bg-red-950/30 dark:text-red-200"
           >
             <AlertTriangleIcon class="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
             <div>
@@ -676,7 +676,7 @@ function AttentionList(props: {
                     <button
                       ref={(element) => props.itemButtons.set(item.id, element)}
                       type="button"
-                      class={`w-full px-4 py-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:px-5 ${
+                      class={`w-full px-4 py-3 text-left focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:px-5 ${
                         props.selectedItemId === item.id
                           ? 'bg-blue-50/80 dark:bg-blue-950/30'
                           : 'hover:bg-surface-hover'
@@ -877,11 +877,11 @@ function AttentionDetail(props: {
       aria-labelledby="attention-detail-title"
       aria-busy={props.loading}
     >
-      <div class="sticky top-0 z-20 border-b border-border bg-surface/95 px-4 py-3 backdrop-blur sm:px-5">
+      <div class="sticky top-0 z-20 border-b border-border px-4 py-3 backdrop-blur-sm sm:px-5">
         <div class="flex items-center justify-between gap-3">
           <button
             type="button"
-            class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded px-2 text-sm font-medium text-muted hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 lg:hidden"
+            class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-sm px-2 text-sm font-medium text-muted hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 lg:hidden"
             aria-label={
               props.queueLabel === 'Handled issue'
                 ? 'Back to handled issues'
@@ -900,7 +900,7 @@ function AttentionDetail(props: {
           <div class="hidden items-center gap-1 lg:flex">
             <button
               type="button"
-              class="inline-flex h-8 w-8 items-center justify-center rounded text-muted hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-35"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-sm text-muted hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-35"
               aria-label={`Previous ${props.queueLabel.toLocaleLowerCase()}`}
               title={`Previous ${props.queueLabel.toLocaleLowerCase()}`}
               disabled={!props.canPrevious()}
@@ -910,7 +910,7 @@ function AttentionDetail(props: {
             </button>
             <button
               type="button"
-              class="inline-flex h-8 w-8 items-center justify-center rounded text-muted hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-35"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-sm text-muted hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-35"
               aria-label={`Next ${props.queueLabel.toLocaleLowerCase()}`}
               title={`Next ${props.queueLabel.toLocaleLowerCase()}`}
               disabled={!props.canNext()}
@@ -921,7 +921,7 @@ function AttentionDetail(props: {
             <span class="mx-1 h-4 w-px bg-border" aria-hidden="true" />
             <button
               type="button"
-              class="inline-flex h-8 w-8 items-center justify-center rounded text-muted hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-sm text-muted hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
               aria-label="Close attention detail"
               onClick={props.onClose}
             >
@@ -986,7 +986,7 @@ function AttentionDetail(props: {
               </p>
               <Show when={getAttentionFlappingPresentation(loaded().item.flapping)}>
                 {(flapping) => (
-                  <p class="mt-2 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs leading-5 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                  <p class="mt-2 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs leading-5 text-amber-900/25 dark:border-amber-900/25 dark:bg-amber-950/30 dark:text-amber-200">
                     <RepeatIcon class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                     <span>{flapping().detail}</span>
                   </p>
@@ -1058,7 +1058,7 @@ function AttentionDetail(props: {
             <Show when={loaded().item.availableActions[0]}>
               {(offer) => (
                 <DetailSection title="Safe action">
-                  <div class="rounded-md border border-blue-200 bg-blue-50/70 p-3 dark:border-blue-900 dark:bg-blue-950/30">
+                  <div class="rounded-md border border-blue-200 bg-blue-50/70 p-3 dark:border-blue-900/25 dark:bg-blue-950/30">
                     <div class="flex items-start gap-2">
                       <RotateCwIcon
                         class="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-300"
@@ -1115,8 +1115,8 @@ function AttentionDetail(props: {
               onOpenFindings={props.onOpenFindings}
             />
 
-            <details class="rounded-lg border border-border-subtle bg-surface-alt/20">
-              <summary class="flex min-h-11 cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm font-medium text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500">
+            <details class="rounded-lg border border-border-subtle">
+              <summary class="flex min-h-11 cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm font-medium text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500">
                 <span>Evidence and history</span>
                 <span class="text-xs font-normal text-muted">
                   {orderedEvidence().length}{' '}
@@ -1139,8 +1139,8 @@ function AttentionDetail(props: {
                       </For>
                     </ul>
                     <Show when={olderEvidence().length > 0}>
-                      <details class="mt-2 rounded-md border border-border-subtle bg-surface-alt/30">
-                        <summary class="flex min-h-11 cursor-pointer items-center px-3 py-2 text-xs font-medium text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:min-h-0">
+                      <details class="mt-2 rounded-md border border-border-subtle">
+                        <summary class="flex min-h-11 cursor-pointer items-center px-3 py-2 text-xs font-medium text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:min-h-0">
                           Show {olderEvidence().length} older{' '}
                           {olderEvidence().length === 1 ? 'observation' : 'observations'}
                         </summary>
@@ -1212,8 +1212,8 @@ function AttentionDetail(props: {
                             The transitions are collapsed here so one noisy issue reads as one
                             issue.
                           </p>
-                          <details class="mt-2 rounded-md border border-border-subtle bg-surface-alt/30">
-                            <summary class="flex min-h-11 cursor-pointer items-center px-3 py-2 text-xs font-medium text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:min-h-0">
+                          <details class="mt-2 rounded-md border border-border-subtle">
+                            <summary class="flex min-h-11 cursor-pointer items-center px-3 py-2 text-xs font-medium text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:min-h-0">
                               Show all {loaded().timeline.length} transitions
                             </summary>
                             <div class="border-t border-border-subtle p-3">
@@ -1271,7 +1271,7 @@ function AttentionLifecycleControls(props: {
 
   return (
     <DetailSection title="Lifecycle">
-      <div class="rounded-md border border-border-subtle bg-surface-alt/40 p-3">
+      <div class="rounded-md border border-border-subtle p-3">
         <Show when={props.detail.operationalRecord.acknowledgement}>
           {(acknowledgement) => (
             <p class="mb-2 text-xs leading-5 text-muted">
@@ -1526,7 +1526,7 @@ function AttentionLastingDecisions(props: {
 
   return (
     <DetailSection title="Lasting decisions">
-      <div class="rounded-md border border-border-subtle bg-surface-alt/40 p-3">
+      <div class="rounded-md border border-border-subtle p-3">
         <Show when={notice()}>
           {(message) => (
             <p
@@ -1592,7 +1592,7 @@ function AttentionLastingDecisions(props: {
                       <Button
                         variant={decision.kind === 'expected_behavior' ? 'primary' : 'secondary'}
                         size="sm"
-                        class="min-h-11 shrink-0 justify-start sm:min-h-0 sm:w-48"
+                        class="min-h-11 shrink-0 sm:min-h-0 sm:w-48"
                         disabled={busy()}
                         aria-pressed={pending()?.kind === decision.kind}
                         onClick={() => choose(decision)}
@@ -1749,7 +1749,7 @@ function DetailSection(props: { title: string; children: import('solid-js').JSX.
 
 function EvidenceObservation(props: { evidence: EvidenceEnvelope }) {
   return (
-    <li class="rounded-md border border-border-subtle bg-surface-alt/60 p-3">
+    <li class="rounded-md border border-border-subtle p-3">
       <div class="flex flex-wrap items-center gap-2">
         <span class="text-xs font-semibold text-base-content">
           {formatProvider(props.evidence.source.provider)}

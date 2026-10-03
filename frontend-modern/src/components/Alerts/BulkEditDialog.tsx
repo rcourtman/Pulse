@@ -96,7 +96,7 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
 
   return (
     <Dialog isOpen={props.isOpen} onClose={props.onClose} ariaLabel={getAlertBulkEditOpenLabel()}>
-      <div class="fixed inset-0 min-h-screen z-[100] flex items-center justify-center pointer-events-none">
+      <div class="fixed inset-0 min-h-screen z-100 flex items-center justify-center pointer-events-none">
         <div class="bg-surface rounded-xl shadow-2xl ring-1 ring-border max-w-lg w-full p-6 max-h-[90vh] flex flex-col pointer-events-auto">
           <h2 class="text-xl font-semibold text-base-content mb-2">
             {ALERT_BULK_EDIT_DIALOG_TITLE}
@@ -163,7 +163,7 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
                           <input
                             type="number"
                             aria-label={`${column} threshold`}
-                            class="w-full h-9 rounded-md border border-border bg-surface px-3 py-1 text-sm shadow-sm transition-colors focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            class="w-full h-9 rounded-md border border-border bg-surface px-3 py-1 text-sm shadow-xs transition-colors focus:border-sky-500 focus:outline-hidden focus:ring-1 focus:ring-sky-500"
                             min={bounds.min}
                             max={bounds.max}
                             step={bounds.step}
@@ -209,14 +209,14 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
           <div class="mt-4 flex justify-end gap-3 pt-4 border-t border-border shrink-0">
             <button
               type="button"
-              class="px-5 py-2 text-sm font-medium text-base-content bg-surface border border-border hover:bg-surface-hover rounded-md transition-colors shadow-sm"
+              class="px-5 py-2 text-sm font-medium text-base-content bg-surface border border-border hover:bg-surface-hover rounded-md transition-colors shadow-xs"
               onClick={props.onClose}
             >
               {ALERT_BULK_EDIT_CANCEL_LABEL}
             </button>
             <button
               type="button"
-              class="px-5 py-2 text-sm font-medium text-white bg-sky-600 hover:bg-sky-500 rounded-md shadow-sm transition-colors"
+              class="px-5 py-2 text-sm font-medium text-white bg-sky-600 hover:bg-sky-500 rounded-md shadow-xs transition-colors"
               onClick={handleSave}
             >
               {getAlertBulkEditApplyLabel(props.selectedIds.length)}

@@ -71,11 +71,11 @@ function InstallStep(props: { step: UpdateInstallStep; index: number }) {
 function readinessTone(status: UpdateReadiness['status']) {
   switch (status) {
     case 'blocked':
-      return 'border-red-200 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100';
+      return 'border-red-200 bg-red-50 text-red-900/25 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100';
     case 'attention':
-      return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100';
+      return 'border-amber-200 bg-amber-50 text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100';
     default:
-      return 'border-green-200 bg-green-50 text-green-900 dark:border-green-800 dark:bg-green-950/40 dark:text-green-100';
+      return 'border-green-200 bg-green-50 text-green-900/25 dark:border-green-800 dark:bg-green-950/40 dark:text-green-100';
   }
 }
 
@@ -112,7 +112,7 @@ function UpdateReadinessPanel(props: { readiness: UpdateReadiness }) {
           {(check) => (
             <div class="py-3 first:pt-0 last:pb-0">
               <div class={`flex items-start gap-2 ${readinessCheckTone(check.status)}`}>
-                <span class="mt-0.5 flex-shrink-0">
+                <span class="mt-0.5 shrink-0">
                   <ReadinessCheckIcon status={check.status} />
                 </span>
                 <div class="min-w-0 flex-1">
@@ -158,10 +158,10 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
           !props.updateInfo?.available
         }
       >
-        <div class="space-y-3 rounded-md border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900">
+        <div class="space-y-3 rounded-md border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/25">
           <div class="flex items-center gap-2">
             <svg
-              class="h-5 w-5 flex-shrink-0 text-blue-600 dark:text-blue-400"
+              class="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400"
               viewBox="0 0 24 24"
               fill="currentColor"
             >
@@ -185,7 +185,7 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
               />
               <p class="text-[10px] text-blue-600 dark:text-blue-400">
                 Not using Compose?{' '}
-                <code class="rounded bg-blue-100 px-1 py-0.5 text-[10px] dark:bg-blue-800">
+                <code class="rounded-sm bg-blue-100 px-1 py-0.5 text-[10px] dark:bg-blue-800">
                   {buildIdleDockerUpdateCommand()}
                 </code>{' '}
                 then re-run your original docker run command. A plain docker restart keeps the old
@@ -197,7 +197,7 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
       </Show>
 
       <Show when={props.versionInfo?.isSourceBuild}>
-        <div class="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900">
+        <div class="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/25">
           <p class="text-xs text-blue-800 dark:text-blue-200">
             <strong>Built from source:</strong>{' '}
             <Show
@@ -211,17 +211,17 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
       </Show>
 
       <Show when={props.updateInfo?.warning}>
-        <div class="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900">
+        <div class="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900/25">
           <p class="text-xs text-amber-800 dark:text-amber-200">{props.updateInfo?.warning}</p>
         </div>
       </Show>
 
       <Show when={!props.versionInfo?.isSourceBuild && props.updateInfo?.available && guide()}>
-        <div class="overflow-hidden rounded-md border border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900">
+        <div class="overflow-hidden rounded-md border border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-900/25">
           <div class="border-b border-green-200 bg-green-100 px-5 py-4 dark:border-green-800 dark:bg-green-800">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div class="flex items-center gap-3">
-                <div class="rounded-md bg-green-100 p-2 dark:bg-green-900">
+                <div class="rounded-md bg-green-100 p-2 dark:bg-green-900/25">
                   <svg
                     class="h-5 w-5 text-green-700 dark:text-green-300"
                     fill="none"
@@ -237,7 +237,7 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
                   </svg>
                 </div>
                 <div>
-                  <h4 class="text-base font-semibold text-green-900 dark:text-green-100">
+                  <h4 class="text-base font-semibold text-green-900/25 dark:text-green-100">
                     {guide()!.headerTitle}
                   </h4>
                   <p class="text-xs text-green-700 dark:text-green-300">{guide()!.headerSummary}</p>
@@ -253,7 +253,7 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
                     props.isInstalling
                       ? 'cursor-not-allowed bg-green-400 text-white dark:bg-green-600'
                       : readinessBlocked()
-                        ? 'cursor-not-allowed bg-red-200 text-red-800 dark:bg-red-900 dark:text-red-200'
+                        ? 'cursor-not-allowed bg-red-200 text-red-800 dark:bg-red-900/25 dark:text-red-200'
                         : 'bg-green-600 text-white hover:bg-green-700'
                   }`}
                 >
