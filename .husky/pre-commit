@@ -68,8 +68,9 @@ staged_files_match() {
 }
 
 # Normalize staged source before any guard hashes or audits it. The browser
-# verification receipt binds to exact frontend bytes, so formatting after its
-# guard can produce a commit that passed locally but correctly fails in CI.
+# verification receipt binds to exact frontend bytes and is named by their
+# fingerprint, so formatting after its guard can produce a commit that passed
+# locally but correctly fails in CI.
 python3 scripts/release_control/format_staged_go.py
 python3 scripts/release_control/format_staged_frontend.py
 
