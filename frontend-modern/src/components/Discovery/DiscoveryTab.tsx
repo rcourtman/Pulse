@@ -148,9 +148,9 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
   return (
     <div class="space-y-4 whitespace-normal">
       <Show when={discoveryFeatureKnownDisabled()}>
-        <div class="rounded border border-amber-200 bg-amber-50/80 p-3 shadow-sm dark:border-amber-800/50 dark:bg-amber-900/20">
+        <div class="rounded-sm border border-amber-200 bg-amber-50/80 p-3 shadow-xs dark:border-amber-800/50 dark:bg-amber-900/20">
           <div class="flex items-start gap-2.5">
-            <TriangleAlertIcon class="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+            <TriangleAlertIcon class="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
             <div class="text-xs text-amber-800 dark:text-amber-200">
               <p class="mb-1 font-medium">Service identification is off</p>
               <p class="text-amber-700 dark:text-amber-300">
@@ -211,9 +211,9 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             Surfaces the "enabled but no provider" dead end that previously only
             showed for agents, so Discovery is never silently on-but-useless. */}
         <Show when={!discoveryInfo.loading && discoveryReadiness().status === 'needs_ai_provider'}>
-          <div class="rounded border border-amber-200 bg-amber-50/80 p-3 shadow-sm dark:border-amber-800/50 dark:bg-amber-900/20">
+          <div class="rounded-sm border border-amber-200 bg-amber-50/80 p-3 shadow-xs dark:border-amber-800/50 dark:bg-amber-900/20">
             <div class="flex items-start gap-2.5">
-              <TriangleAlertIcon class="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+              <TriangleAlertIcon class="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
               <div class="text-xs text-amber-800 dark:text-amber-200">
                 <p class="mb-1 font-medium">AI provider not configured</p>
                 <p class="text-amber-700 dark:text-amber-300">
@@ -236,7 +236,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 type="button"
                 onClick={() => handleTriggerDiscovery(true)}
                 disabled={isScanning() || !canTriggerDiscovery()}
-                class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+                class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-sm border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Show
                   when={isScanning()}
@@ -269,11 +269,11 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
         {/* "What Discovery Does" explanation - shown when no discovery exists yet */}
         <Show when={!discovery() && !isScanning() && !showLoadingSpinner() && showExplanation()}>
-          <div class="rounded border border-amber-200 bg-amber-50 p-3 shadow-sm dark:border-amber-800 dark:bg-amber-900">
+          <div class="rounded-sm border border-amber-200 bg-amber-50 p-3 shadow-xs dark:border-amber-800 dark:bg-amber-900/25">
             <div class="flex items-start justify-between gap-3">
               <div class="flex items-start gap-2.5">
                 <svg
-                  class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
+                  class="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -292,7 +292,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
               </div>
               <button
                 onClick={() => setShowExplanation(false)}
-                class="text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 flex-shrink-0"
+                class="text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 shrink-0"
                 title="Dismiss"
               >
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -320,7 +320,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
           }
         >
           <details
-            class="rounded border border-border bg-surface shadow-sm"
+            class="rounded-sm border border-border bg-surface shadow-xs"
             open={showCommandsPreview()}
           >
             <summary
@@ -351,7 +351,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                   {(cmd) => (
                     <div class="text-xs">
                       <div class="flex items-start gap-2">
-                        <code class="text-[10px] px-1.5 py-0.5 rounded bg-surface-hover text-base-content font-mono break-all">
+                        <code class="text-[10px] px-1.5 py-0.5 rounded-sm bg-surface-hover text-base-content font-mono break-all">
                           {cmd.command}
                         </code>
                       </div>
@@ -374,7 +374,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
         {/* Scan Progress Bar */}
         <Show when={scanProgress() && isScanning()}>
-          <div class="rounded border border-blue-200 bg-blue-50 p-3 shadow-sm dark:border-blue-800 dark:bg-blue-900">
+          <div class="rounded-sm border border-blue-200 bg-blue-50 p-3 shadow-xs dark:border-blue-800 dark:bg-blue-900/25">
             <div class="flex items-center justify-between mb-2">
               <div class="flex items-center gap-2">
                 <div class="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
@@ -409,7 +409,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
         {/* Scanning state without WebSocket progress - show live timer */}
         <Show when={isScanning() && !scanProgress()}>
-          <div class="rounded border border-blue-200 bg-blue-50 p-3 shadow-sm dark:border-blue-800 dark:bg-blue-900">
+          <div class="rounded-sm border border-blue-200 bg-blue-50 p-3 shadow-xs dark:border-blue-800 dark:bg-blue-900/25">
             <div class="flex items-center gap-2 mb-2">
               <div class="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
               <span class="text-sm font-medium text-blue-700 dark:text-blue-300">
@@ -430,7 +430,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
           <div
             role="status"
             aria-live="polite"
-            class="mb-4 rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900"
+            class="mb-4 rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/25"
           >
             <div class="flex items-center gap-2">
               <svg
@@ -455,10 +455,10 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
         {/* Scan Error */}
         <Show when={scanError()}>
-          <div class="mb-4 rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900">
+          <div class="mb-4 rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/25">
             <div class="flex items-start gap-3">
               <svg
-                class="w-5 h-5 text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5"
+                class="w-5 h-5 text-red-500 dark:text-red-400 shrink-0 mt-0.5"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -535,10 +535,10 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
               }
             >
               <Show when={discoveryReadiness().status === 'needs_commands'}>
-                <div class="mb-4 mx-auto max-w-md rounded-md border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800 dark:bg-amber-900">
+                <div class="mb-4 mx-auto max-w-md rounded-md border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800 dark:bg-amber-900/25">
                   <div class="flex items-start gap-2">
                     <svg
-                      class="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5"
+                      class="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0 mt-0.5"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -566,10 +566,10 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 </div>
               </Show>
               <Show when={discoveryReadiness().status === 'needs_connected_agent'}>
-                <div class="mb-4 mx-auto max-w-md rounded-md border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800 dark:bg-amber-900">
+                <div class="mb-4 mx-auto max-w-md rounded-md border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800 dark:bg-amber-900/25">
                   <div class="flex items-start gap-2">
                     <svg
-                      class="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5"
+                      class="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0 mt-0.5"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -588,7 +588,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                       <p class="text-amber-700 dark:text-amber-300 mt-0.5">
                         Commands are enabled, but the agent isn't connected via WebSocket. Check
                         that the API token has the{' '}
-                        <code class="px-1 py-0.5 bg-amber-100 dark:bg-amber-800 rounded">
+                        <code class="px-1 py-0.5 bg-amber-100 dark:bg-amber-800 rounded-sm">
                           agent:exec
                         </code>{' '}
                         scope in{' '}
@@ -606,10 +606,10 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                   green "connected" claim must require a genuinely connected
                   agent with commands explicitly enabled. */}
               <Show when={props.commandsEnabled === true && hasConnectedAgent()}>
-                <div class="mb-4 mx-auto max-w-md rounded-md border border-green-200 bg-green-50 p-3 text-left dark:border-green-800 dark:bg-green-900">
+                <div class="mb-4 mx-auto max-w-md rounded-md border border-green-200 bg-green-50 p-3 text-left dark:border-green-800 dark:bg-green-900/25">
                   <div class="flex items-center gap-2">
                     <svg
-                      class="w-4 h-4 text-green-500 dark:text-green-400 flex-shrink-0"
+                      class="w-4 h-4 text-green-500 dark:text-green-400 shrink-0"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -728,9 +728,9 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
           {(d) => (
             <div class="space-y-4">
               <Show when={isStaleDiscovery()}>
-                <div class="rounded border border-amber-200 bg-amber-50/80 p-3 shadow-sm dark:border-amber-800/50 dark:bg-amber-900/20">
+                <div class="rounded-sm border border-amber-200 bg-amber-50/80 p-3 shadow-xs dark:border-amber-800/50 dark:bg-amber-900/20">
                   <div class="flex items-start gap-2">
-                    <TriangleAlertIcon class="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+                    <TriangleAlertIcon class="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
                     <p class="text-xs text-amber-800 dark:text-amber-200">
                       This was discovered by an earlier version of Pulse. Re-run discovery for
                       improved identification and access details.
@@ -781,11 +781,11 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                       ("Last run: X ago") whenever it's rendered; only repeat it
                       here when that block is absent. */}
                   <Show when={d().updated_at && !showManualRunAction()}>
-                    <span class="rounded border border-border bg-surface-alt px-2 py-0.5">
+                    <span class="rounded-sm border border-border bg-surface-alt px-2 py-0.5">
                       Last observed {formatDiscoveryAge(d().updated_at)}
                     </span>
                   </Show>
-                  <span class="rounded border border-border bg-surface-alt px-2 py-0.5">
+                  <span class="rounded-sm border border-border bg-surface-alt px-2 py-0.5">
                     Available to Pulse Assistant
                   </span>
                 </div>
@@ -863,7 +863,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
               {/* CLI Access */}
               <Show when={d().cli_access}>
-                <div class="rounded border border-border p-3 shadow-sm">
+                <div class="rounded-sm border border-border p-3 shadow-xs">
                   <div class="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-base-content">
                     <span>CLI Access</span>
                     <DiscoveryProvenanceMarker showLabel={false} />
@@ -899,7 +899,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                   d().log_paths?.length > 0
                 }
               >
-                <div class="rounded border border-border p-3 shadow-sm">
+                <div class="rounded-sm border border-border p-3 shadow-xs">
                   <Show when={d().config_paths?.length > 0}>
                     <div class="mb-3">
                       <div class="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-base-content">
@@ -967,7 +967,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                   Docker resources. The host source is where to actually edit or
                   back up files; the container destination is what the app sees. */}
               <Show when={(d().docker_mounts?.length ?? 0) > 0}>
-                <div class="rounded border border-border p-3 shadow-sm">
+                <div class="rounded-sm border border-border p-3 shadow-xs">
                   <div class="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-base-content">
                     <span>Bind Mounts</span>
                     <DiscoveryProvenanceMarker showLabel={false} />
@@ -997,7 +997,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
               {/* Ports */}
               <Show when={d().ports?.length > 0}>
-                <div class="rounded border border-border p-3 shadow-sm">
+                <div class="rounded-sm border border-border p-3 shadow-xs">
                   <div class="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-base-content">
                     <span>Listening Ports</span>
                     <DiscoveryProvenanceMarker showLabel={false} />
@@ -1028,7 +1028,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
               {/* Key Facts */}
               <Show when={d().facts?.length > 0}>
-                <div class="rounded border border-border p-3 shadow-sm">
+                <div class="rounded-sm border border-border p-3 shadow-xs">
                   <div class="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-base-content">
                     <span>Discovered Facts</span>
                     <DiscoveryProvenanceMarker showLabel={false} />
@@ -1069,7 +1069,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
               </Show>
 
               {/* User Notes */}
-              <div class="rounded border border-border p-3 shadow-sm">
+              <div class="rounded-sm border border-border p-3 shadow-xs">
                 <div class="flex items-center justify-between mb-2">
                   <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
                     Your Notes
@@ -1104,7 +1104,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                       value={notesText()}
                       onInput={(e) => setNotesText(e.currentTarget.value)}
                       placeholder="Add notes about this resource (API tokens, passwords, important info)..."
-                      class="w-full h-24 px-2 py-1.5 text-xs border border-border rounded bg-surface text-base-content focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      class="w-full h-24 px-2 py-1.5 text-xs border border-border rounded-sm bg-surface text-base-content focus:outline-hidden focus:ring-1 focus:ring-blue-500"
                     />
                     <Show when={saveError()}>
                       <p
@@ -1118,13 +1118,13 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                     <div class="flex gap-2">
                       <button
                         onClick={handleSaveNotes}
-                        class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+                        class="px-3 py-1 bg-blue-600 text-white text-xs rounded-sm hover:bg-blue-700 transition-colors"
                       >
                         Save
                       </button>
                       <button
                         onClick={() => setEditingNotes(false)}
-                        class="px-3 py-1 bg-surface-hover text-base-content text-xs rounded hover:bg-slate-300 transition-colors"
+                        class="px-3 py-1 bg-surface-hover text-base-content text-xs rounded-sm hover:bg-slate-300 transition-colors"
                       >
                         Cancel
                       </button>
@@ -1135,7 +1135,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
               {/* Analysis reasoning (collapsible) */}
               <Show when={d().ai_reasoning}>
-                <details class="rounded border shadow-sm">
+                <details class="rounded-sm border shadow-xs">
                   <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-base-content cursor-pointer hover:bg-surface-hover">
                     {DISCOVERY_ANALYSIS_REASONING_LABEL}
                   </summary>
@@ -1149,7 +1149,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
               <Show
                 when={d().raw_command_output && Object.keys(d().raw_command_output!).length > 0}
               >
-                <details class="rounded border shadow-sm">
+                <details class="rounded-sm border shadow-xs">
                   <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-base-content cursor-pointer hover:bg-surface-hover">
                     Scan Details ({Object.keys(d().raw_command_output!).length} commands)
                   </summary>
@@ -1158,7 +1158,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                       {([cmdName, output]) => (
                         <div>
                           <div class="text-xs font-medium text-base-content mb-1">{cmdName}</div>
-                          <pre class="text-[10px] bg-surface-alt rounded p-2 overflow-x-auto text-muted max-h-32 overflow-y-auto">
+                          <pre class="text-[10px] bg-surface-alt rounded-sm p-2 overflow-x-auto text-muted max-h-32 overflow-y-auto">
                             {output || '(no output)'}
                           </pre>
                         </div>
@@ -1192,7 +1192,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                   <button
                     onClick={() => handleTriggerDiscovery(true)}
                     disabled={isScanning() || !canTriggerDiscovery()}
-                    class="px-3 py-1.5 bg-surface-hover text-base-content text-xs rounded hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                    class="px-3 py-1.5 bg-surface-hover text-base-content text-xs rounded-sm hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
                   >
                     <Show
                       when={isScanning()}

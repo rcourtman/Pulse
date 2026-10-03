@@ -108,7 +108,7 @@ export function GitHubStarBanner() {
   return (
     <Show when={showPrompt()}>
       <section
-        class="fixed left-4 right-20 bottom-[var(--pulse-mobile-nav-height)] z-30 max-w-sm overflow-hidden rounded-lg border border-border bg-surface text-base-content shadow-lg md:right-auto md:bottom-4"
+        class="fixed left-4 right-20 bottom-(--pulse-mobile-nav-height) z-30 max-w-sm overflow-hidden rounded-lg border border-border bg-surface text-base-content shadow-lg md:right-auto md:bottom-4"
         aria-labelledby="github-star-title"
         aria-live="polite"
       >

@@ -12,13 +12,13 @@ import {
 } from '@/features/storageBackups/storageDomain';
 
 const CEPH_HEALTH_OK_STYLES =
-  'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 border border-green-200 dark:border-green-800';
+  'bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300 border border-green-200 dark:border-green-800';
 const CEPH_HEALTH_WARNING_STYLES =
-  'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-200 border border-yellow-300 dark:border-yellow-800';
+  'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/25 dark:text-yellow-200 border border-yellow-300 dark:border-yellow-800';
 const CEPH_HEALTH_CRITICAL_STYLES =
-  'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200 border border-red-300 dark:border-red-800';
+  'bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-200 border border-red-300 dark:border-red-800';
 const CEPH_HEALTH_DEFAULT_STYLES =
-  'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 border border-blue-200 dark:border-blue-700';
+  'bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-200 border border-blue-200 dark:border-blue-700';
 const CEPH_SERVICE_OK_TEXT = 'text-green-600 dark:text-green-400';
 const CEPH_SERVICE_WARNING_TEXT = 'text-yellow-600 dark:text-yellow-400';
 const CEPH_SERVICE_CRITICAL_TEXT = 'text-red-600 dark:text-red-400';

@@ -3,14 +3,14 @@ const baseLabel = 'text-sm font-medium text-base-content';
 const baseHelp = 'text-xs text-muted';
 const baseControl = [
   'w-full min-h-11 sm:min-h-9 rounded-md border border-border bg-surface px-3 py-2.5 text-sm text-base-content',
-  'focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors',
+  'focus:outline-hidden focus:ring-0 focus:border-blue-500 transition-colors',
 ].join(' ');
 const compactControl = [
-  'w-full min-h-11 sm:min-h-8 rounded border border-border bg-surface px-2 py-1.5 text-xs text-base-content',
-  'focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors',
+  'w-full min-h-11 sm:min-h-8 rounded-sm border border-border bg-surface px-2 py-1.5 text-xs text-base-content',
+  'focus:outline-hidden focus:ring-0 focus:border-blue-500 transition-colors',
 ].join(' ');
 const baseCheckbox =
-  'h-4 w-4 rounded border-border text-blue-600 focus:ring-0 focus:ring-offset-0 transition-colors';
+  'h-4 w-4 rounded-sm border-border text-blue-600 focus:ring-0 focus:ring-offset-0 transition-colors';
 
 const join = (base: string, extra?: string) => (extra ? `${base} ${extra}`.trim() : base);
 

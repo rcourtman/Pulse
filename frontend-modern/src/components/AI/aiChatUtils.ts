@@ -142,7 +142,7 @@ export const renderMarkdown = (content: unknown): string => {
     for (const table of template.content.querySelectorAll('table')) {
       const region = document.createElement('div');
       region.className =
-        'max-w-full overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500';
+        'max-w-full overflow-x-auto focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-blue-500';
       region.tabIndex = 0;
       region.setAttribute('role', 'region');
       region.setAttribute('aria-label', 'Scrollable table');

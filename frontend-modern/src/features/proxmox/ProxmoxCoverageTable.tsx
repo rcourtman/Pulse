@@ -46,6 +46,15 @@ import {
 } from './proxmoxBackupsTablePresentation';
 import { useProxmoxBackupTableWindowing } from './useProxmoxBackupTableWindowing';
 
+// Each evidence column is already named by its header, so an empty cell says
+// "None" instead of restating the source ("No PVE backup file"). The long form
+// truncated at most widths and stays available as the hover title.
+const COVERAGE_EMPTY_LABEL = 'None';
+const COVERAGE_NO_BACKUP_TITLE = 'No PBS snapshot or PVE backup file';
+// Matches the posture engine's own wording for a snapshot-only subject.
+const COVERAGE_SNAPSHOT_ONLY_TITLE =
+  'No PBS snapshot or PVE backup file. Guest snapshots alone do not prove independent recovery.';
+
 const coveragePostureVariant = (
   posture: WorkloadCoverageRow['posture'],
 ): StatusIndicatorVariant => {
@@ -190,7 +199,7 @@ export function ProxmoxCoverageTable(props: {
         data-proxmox-backups-windowed={tableWindow.isWindowed()}
       >
         <PlatformTableShell
-          tableClass="min-w-[0px] table-fixed text-xs"
+          tableClass="min-w-0 table-fixed text-xs"
           colgroup={
             <colgroup>
               <For each={visibleColumns()}>
@@ -235,7 +244,13 @@ export function ProxmoxCoverageTable(props: {
                 headClass={getPlatformTableHeadClassForKind('text')}
               />
               <SortableHead
-                label={layoutMode() === 'compact' ? 'Age' : 'Restore'}
+                label={
+                  layoutMode() === 'compact'
+                    ? 'Age'
+                    : layoutMode() === 'basic'
+                      ? 'Backup'
+                      : 'Last backup'
+                }
                 sortKey="latest"
                 currentSort={props.sortKey}
                 direction={props.sortDirection}
@@ -402,10 +417,26 @@ export function ProxmoxCoverageTable(props: {
                           class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                         >
                           <Show
-                            when={row.latestRecovery}
-                            fallback={<span class="text-muted">No restore point</span>}
+                            when={row.latestBackup}
+                            fallback={
+                              <span
+                                class="text-muted"
+                                title={
+                                  row.latestSnapshot
+                                    ? COVERAGE_SNAPSHOT_ONLY_TITLE
+                                    : COVERAGE_NO_BACKUP_TITLE
+                                }
+                              >
+                                {COVERAGE_EMPTY_LABEL}
+                              </span>
+                            }
                           >
-                            {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
+                            {(artifact) => (
+                              <ProxmoxBackupAgeText
+                                artifact={artifact()}
+                                compact={layoutMode() === 'compact'}
+                              />
+                            )}
                           </Show>
                         </TableCell>
                         <Show when={columnVisible('pbs')}>
@@ -415,10 +446,17 @@ export function ProxmoxCoverageTable(props: {
                             <Show
                               when={row.latestPBS}
                               fallback={
-                                <span class="text-muted">{pbsSource.coverageFallbackLabel}</span>
+                                <span class="text-muted" title={pbsSource.coverageFallbackLabel}>
+                                  {COVERAGE_EMPTY_LABEL}
+                                </span>
                               }
                             >
-                              {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
+                              {(artifact) => (
+                                <ProxmoxBackupAgeText
+                                  artifact={artifact()}
+                                  compact={layoutMode() === 'compact'}
+                                />
+                              )}
                             </Show>
                           </TableCell>
                         </Show>
@@ -429,8 +467,11 @@ export function ProxmoxCoverageTable(props: {
                             <Show
                               when={row.latestArchive}
                               fallback={
-                                <span class="text-muted">
-                                  {archiveSource.coverageFallbackLabel}
+                                <span
+                                  class="text-muted"
+                                  title={archiveSource.coverageFallbackLabel}
+                                >
+                                  {COVERAGE_EMPTY_LABEL}
                                 </span>
                               }
                             >
@@ -445,8 +486,11 @@ export function ProxmoxCoverageTable(props: {
                             <Show
                               when={row.latestSnapshot}
                               fallback={
-                                <span class="text-muted">
-                                  {snapshotSource.coverageFallbackLabel}
+                                <span
+                                  class="text-muted"
+                                  title={snapshotSource.coverageFallbackLabel}
+                                >
+                                  {COVERAGE_EMPTY_LABEL}
                                 </span>
                               }
                             >
@@ -465,7 +509,9 @@ export function ProxmoxCoverageTable(props: {
                                   when={layoutMode() !== 'compact'}
                                   fallback={<span class="block text-center text-muted">—</span>}
                                 >
-                                  <span class="text-muted">No recent task</span>
+                                  <span class="text-muted" title="No recent task">
+                                    {COVERAGE_EMPTY_LABEL}
+                                  </span>
                                 </Show>
                               }
                             >
@@ -508,7 +554,7 @@ export function ProxmoxCoverageTable(props: {
                       <Show when={isExpanded()}>
                         <InlineDetailTableRow
                           cellId={detailRowId()}
-                          class="bg-surface-alt/40"
+                          class=""
                           cellClass="px-3 py-2 whitespace-normal"
                           contentClass="min-w-0 whitespace-normal"
                           colspan={columnCount()}
@@ -684,7 +730,7 @@ export function ProxmoxCoverageTable(props: {
                                           >
                                             <span
                                               class="inline-block max-w-[24rem] truncate"
-                                              title={artifact.detail}
+                                              title={artifact.detailTitle ?? artifact.detail}
                                             >
                                               {artifact.detail || '—'}
                                             </span>

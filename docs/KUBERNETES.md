@@ -61,36 +61,84 @@ By default, this workload runs in container-monitoring mode (`--enable-docker --
 
 For Kubernetes monitoring, use a custom DaemonSet as shown below.
 
+### Prepare an agent Secret
+
+Complete setup on the running Pulse server, then create a token in **API Access**
+with `kubernetes:report`. Add `agent:report` only if you also enable host metrics.
+Do not reuse an administrator token. Pulse v6 does not provision API tokens from
+the legacy `API_TOKENS` server environment variable.
+
+On your kubectl workstation, save only the token in a private, regular file
+outside your GitOps repository. Do not paste it into a shell assignment, a
+`--from-literal` argument, a Helm value or the DaemonSet YAML:
+
+```bash
+umask 077
+mkdir -p "$HOME/.config/pulse"
+chmod 700 "$HOME/.config/pulse"
+touch "$HOME/.config/pulse/kubernetes-agent-token"
+chmod 600 "$HOME/.config/pulse/kubernetes-agent-token"
+vi "$HOME/.config/pulse/kubernetes-agent-token"
+```
+
+After saving the token in the editor, create the Secret in the same namespace
+as the agent. The generated Secret goes directly to kubectl, not to your
+terminal or a checked-in manifest. The subshell stops on either pipeline's
+failure; do not continue to the agent deployment if it fails:
+
+```bash
+(
+  set -euo pipefail
+  test -s "$HOME/.config/pulse/kubernetes-agent-token"
+  kubectl create namespace pulse --dry-run=client -o yaml | \
+    kubectl apply --server-side --field-manager=pulse-agent-setup -f -
+  kubectl -n pulse create secret generic pulse-agent-env \
+    --from-file=PULSE_TOKEN="$HOME/.config/pulse/kubernetes-agent-token" \
+    --dry-run=client -o yaml | \
+    kubectl apply --server-side --field-manager=pulse-agent-setup -f -
+)
+```
+
+Server-side apply avoids copying the token into a last-applied annotation. If
+another manager owns the Secret fields, reconcile that ownership instead of
+forcing the conflict. Kubernetes Secrets are base64-encoded, **not inherently
+encrypted**: restrict Secret access with RBAC and configure cluster encryption
+at rest. Never share Secret YAML, Helm secret values or the local token file in
+diagnostics. Keep the file private or remove it after provisioning; revoke a
+token in Pulse when it is no longer needed. Secret rotation requires restarting
+the agent pods because these examples read it into the environment at startup.
+
 ### OpenShift profile (Helm)
 
 The chart has an SCC-compatible OpenShift profile for the Pulse server and an
 optional cluster-level Kubernetes collector:
 
+For a new server, deploy the server first and complete its browser setup before
+creating the scoped agent token:
+
 ```bash
-export PULSE_TOKEN='replace-with-a-kubernetes-report-token'
+helm upgrade --install pulse pulse/pulse \
+  --namespace pulse --create-namespace \
+  --set openShift.enabled=true
+```
 
-kubectl create namespace pulse --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n pulse create secret generic pulse-server-env \
-  --from-literal=API_TOKENS="${PULSE_TOKEN}" \
-  --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n pulse create secret generic pulse-agent-env \
-  --from-literal=PULSE_TOKEN="${PULSE_TOKEN}" \
-  --dry-run=client -o yaml | kubectl apply -f -
+Create `pulse-agent-env` using the private-file steps above, then enable the
+collector:
 
+```bash
 helm upgrade --install pulse pulse/pulse \
   --namespace pulse \
   --set openShift.enabled=true \
   --set openShift.kubernetesAgent.enabled=true \
   --set openShift.kubernetesAgent.clusterID=my-openshift-cluster \
-  --set server.secretEnv.name=pulse-server-env \
-  --set 'server.secretEnv.keys[0]=API_TOKENS' \
   --set agent.secretEnv.name=pulse-agent-env \
   --set 'agent.secretEnv.keys[0]=PULSE_TOKEN'
 ```
 
-Using pre-created Secrets keeps the token out of Helm release values. For an
-agent reporting to an existing external Pulse server, omit the server Secret
-and override `agent.env[0].value` with that server's reachable `PULSE_URL`.
+Using a pre-created Secret keeps the token out of Helm release values. For an
+agent reporting to an existing external Pulse server, create the token there
+and override `agent.env[0].value` with that server's reachable HTTPS `PULSE_URL`.
+Keep certificate verification enabled.
 
 The profile deliberately:
 
@@ -127,6 +175,8 @@ To monitor Kubernetes resources, run the unified agent as a DaemonSet and enable
 #### Minimal DaemonSet Example
 
 This uses the main `rcourtman/pulse` image but runs the `pulse-agent` binary directly.
+Create the `pulse-agent-env` Secret above and the RBAC resources below before
+applying the DaemonSet. The YAML contains only the Secret reference, not the token.
 
 ```yaml
 apiVersion: apps/v1
@@ -157,7 +207,10 @@ spec:
             - name: PULSE_URL
               value: "http://pulse-server.pulse.svc.cluster.local:7655"
             - name: PULSE_TOKEN
-              value: "YOUR_API_TOKEN_HERE"
+              valueFrom:
+                secretKeyRef:
+                  name: pulse-agent-env
+                  key: PULSE_TOKEN
             - name: PULSE_AGENT_ID
               value: "my-k8s-cluster"
             - name: PULSE_ENABLE_HOST

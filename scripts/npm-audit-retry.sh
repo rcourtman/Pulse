@@ -10,15 +10,18 @@
 # returned 503s and timeouts for over an hour and no pull request could land,
 # including Go-only ones. Four consecutive failures, zero advisories.
 #
-# This keeps the gate exactly as strict about advisories — any vulnerability at
-# any severity still fails, and suppression is never a valid closure — and
-# changes only what happens when npm cannot answer:
+# Any vulnerability at any severity is still reported, no severity threshold
+# exists, and suppression is never a valid closure. What depends on the change
+# is only whether the verdict blocks it:
 #
-#   * a conclusive answer is acted on immediately, pass or fail;
+#   * a conclusive answer is acted on immediately;
 #   * an unreachable endpoint is retried with backoff;
-#   * if it is still unreachable after every attempt, the run fails when this
-#     change touches the dependency graph (NPM_AUDIT_REQUIRE_RESULT=true) and
-#     warns without failing when it does not.
+#   * a change that moves the dependency graph (NPM_AUDIT_REQUIRE_RESULT=true,
+#     or any value other than exactly "false") fails on any finding and on an
+#     endpoint that never answers;
+#   * a change that leaves the graph identical to its base
+#     (NPM_AUDIT_REQUIRE_RESULT=false) warns on both instead, naming every
+#     finding, because any finding it sees is one the base commit already has.
 #
 # The retry budget is wall-clock, not just an attempt count, because attempt
 # count alone does not bound anything: npm's own `fetch-timeout` defaults to
@@ -30,13 +33,19 @@
 # attempt is bounded, npm's internal retry loop is disabled in favour of this
 # one, and the whole sequence stops at a deadline.
 #
-# That last split is the whole safety argument. When package.json and
+# That split is the whole safety argument. When package.json and
 # package-lock.json are untouched, the audit answer for this change is the one
-# the base commit already produced, so skipping it adds no risk from this
-# change; advisories published later against unchanged dependencies are caught
-# by Dependabot security updates, not by a per-pull-request audit. When the
-# dependency graph does move, the answer is unknown and only then does an
-# unreachable endpoint have to block.
+# the base commit would produce, so this change can neither add a finding nor
+# remove one. Failing it on an advisory the base already has blocks unrelated
+# work without making anything safer: on 2026-10-03 GHSA-vfj7-8cjw-p6xm
+# (braces, reached only through dev-only tailwindcss and jscpd, with no patched
+# release) failed the required Frontend check on every open pull request,
+# Go-only ones included. Advisories against unchanged dependencies are owned by
+# the jobs that audit the graph as it stands: the scheduled npm-audit scan and
+# the dependency advisory watch, which keep the strict default and fail, and
+# Dependabot security updates. When the dependency graph does move, the
+# change is answerable for the result, so any finding and any missing answer
+# block it.
 #
 # Env:
 #   NPM_AUDIT_ATTEMPTS        attempts before giving up (default 3)
@@ -45,8 +54,11 @@
 #   NPM_AUDIT_ATTEMPT_TIMEOUT seconds one npm invocation may run (default 60)
 #   NPM_AUDIT_MAX_SECONDS     total wall-clock budget for all attempts
 #                             (default 240)
-#   NPM_AUDIT_REQUIRE_RESULT  "true" to fail when no answer was obtained
-#                             (default true — the safe default)
+#   NPM_AUDIT_REQUIRE_RESULT  "false" only when this change leaves
+#                             package.json and package-lock.json identical to
+#                             its base; findings and a missing answer then
+#                             warn. Any other value fails on both (default
+#                             true — the safe default)
 #   NPM_AUDIT_CMD             npm executable to invoke (test seam)
 
 set -uo pipefail
@@ -69,6 +81,13 @@ ATTEMPT_TIMEOUT="${NPM_AUDIT_ATTEMPT_TIMEOUT:-60}"
 MAX_SECONDS="${NPM_AUDIT_MAX_SECONDS:-240}"
 REQUIRE_RESULT="${NPM_AUDIT_REQUIRE_RESULT:-true}"
 NPM_BIN="${NPM_AUDIT_CMD:-npm}"
+
+# Only an explicit "false" may relax anything. An empty or misspelled value,
+# for instance from a missing workflow output, keeps the strict verdict.
+graph_unchanged=false
+if [ "${REQUIRE_RESULT}" = "false" ]; then
+  graph_unchanged=true
+fi
 
 # This script is the retry layer. npm's own fetch retry loop would multiply
 # every attempt by an unbounded amount of hidden waiting, which is exactly
@@ -111,7 +130,8 @@ run_audit() {
   return 0
 }
 
-# Classify one audit run. Prints a verdict word on stdout:
+# Classify one audit run. Prints a verdict word, summary and (for a finding)
+# allowlisted, JSON-escaped package/advisory details from that same response:
 #   clean          — audit completed, no vulnerabilities
 #   vulnerable     — audit completed, vulnerabilities present
 #   unreachable    — npm could not get an answer from the advisory endpoint
@@ -131,29 +151,75 @@ except ValueError:
 
 meta = report.get("metadata") if isinstance(report, dict) else None
 vulns = meta.get("vulnerabilities") if isinstance(meta, dict) else None
-if isinstance(vulns, dict) and "total" in vulns:
-    # A usable advisory verdict takes precedence even if npm also includes a
-    # transport error. Never turn a real finding into a retryable outage.
-    total = vulns.get("total", 0)
+findings = report.get("vulnerabilities") if isinstance(report, dict) else None
+count_names = ("total", "critical", "high", "moderate", "low", "info")
+# Counts are numbers, not arbitrary registry strings. In particular, Python
+# bools are ints too, but neither false nor null is evidence of zero findings.
+counts = {}
+if isinstance(vulns, dict):
+    for name in count_names:
+        value = vulns.get(name)
+        if type(value) is int and value >= 0:
+            counts[name] = value
+has_findings = isinstance(findings, dict) and bool(findings)
+if has_findings or any(count > 0 for count in counts.values()):
+    # Any positive package or severity evidence wins, even if the summary is
+    # missing/inconsistent or npm also reports a transport error. Retrying must
+    # never replace an already observed finding with a later clean response.
     detail = " ".join(
-        f"{name}={vulns.get(name, 0)}"
-        for name in ("critical", "high", "moderate", "low", "info")
+        "{}={}".format(name, counts.get(name, "unknown")) for name in count_names
     )
-    print("vulnerable" if total else "clean")
-    print(f"total={total} {detail}")
+    if has_findings:
+        detail += f" package_records={len(findings)}"
+    print("vulnerable")
+    print(detail)
+    # Do not query npm again for human-readable detail. A second request
+    # can hang outside the watchdog or return different advisory evidence.
+    # JSON encoding keeps registry text from becoming terminal escapes or
+    # GitHub workflow commands; transport errors and unknown fields stay out.
+    emitted = False
+    if isinstance(findings, dict):
+        for name, finding in sorted(findings.items()):
+            if not isinstance(finding, dict):
+                continue
+            projected = {"name": name}
+            for key in ("name", "severity", "isDirect", "range", "nodes"):
+                if key in finding:
+                    projected[key] = finding[key]
+            via = finding.get("via")
+            if isinstance(via, list):
+                projected["via"] = [
+                    {key: advisory[key] for key in
+                     ("source", "name", "dependency", "title", "url", "severity", "range")
+                     if key in advisory}
+                    if isinstance(advisory, dict) else advisory
+                    for advisory in via if isinstance(advisory, (dict, str))
+                ]
+            fix = finding.get("fixAvailable")
+            if isinstance(fix, bool):
+                projected["fixAvailable"] = fix
+            elif isinstance(fix, dict):
+                projected["fixAvailable"] = {
+                    key: fix[key] for key in ("name", "version", "isSemVerMajor")
+                    if key in fix
+                }
+            print("audit finding " + json.dumps(projected, ensure_ascii=True, sort_keys=True))
+            emitted = True
+    if not emitted:
+        print("npm audit: package-level detail unavailable in captured verdict")
     sys.exit(0)
 
-if isinstance(report, dict) and report.get("error"):
-    # npm reports an unusable endpoint as an error object, ENOAUDIT being the
-    # code it uses for 5xx, timeouts and offline runs alike.
+if (
+    isinstance(report, dict) and not report.get("error")
+    and len(counts) == len(count_names) and all(count == 0 for count in counts.values())
+    and ("vulnerabilities" not in report or isinstance(findings, dict))
+):
+    print("clean")
+    print(" ".join(f"{name}=0" for name in count_names))
+else:
+    # A malformed/partial zero summary or endpoint error is not a clean verdict.
+    # With no positive finding, retain the existing bounded outage policy.
     print("unreachable")
-    sys.exit(0)
-
-if not isinstance(vulns, dict) or "total" not in vulns:
-    # No usable verdict in the payload: treat as unreachable rather than
-    # silently passing on a shape we do not understand.
-    print("unreachable")
-    sys.exit(0)
 
 '
 }
@@ -193,10 +259,14 @@ while [ "${attempt}" -le "${ATTEMPTS}" ]; do
       ;;
     vulnerable)
       echo "npm audit (${SCOPE}): vulnerabilities present (${summary})"
+      # Keep diagnostics bound to the conclusive response, with no extra
+      # registry request outside the attempt/total wall-clock limits.
+      printf '%s\n' "${verdict_output}" | tail -n +3
+      if [ "${graph_unchanged}" = "true" ]; then
+        echo "::warning::npm audit (${SCOPE}) found vulnerabilities the base commit already has: ${summary}. This change does not touch package.json or package-lock.json, so it neither introduced them nor can remove them; the scheduled audit and the dependency advisory watch keep failing until the dependency graph is fixed."
+        exit 0
+      fi
       echo "::error::npm audit (${SCOPE}) found vulnerabilities: ${summary}"
-      # Re-run without --json so the log carries the human-readable advisory
-      # detail a maintainer needs to act on.
-      "${NPM_BIN}" audit "${AUDIT_ARGS[@]}" "${SCOPE_ARGS[@]}" || true
       exit 1
       ;;
     *)
@@ -224,10 +294,10 @@ else
   gave_up="after ${ATTEMPTS} attempts"
 fi
 
-if [ "${REQUIRE_RESULT}" = "true" ]; then
+if [ "${graph_unchanged}" != "true" ]; then
   echo "::error::npm audit (${SCOPE}) could not reach the advisory endpoint ${gave_up}, and this change touches the dependency graph, so the result cannot be assumed."
   exit 1
 fi
 
-echo "::warning::npm audit (${SCOPE}) could not reach the advisory endpoint ${gave_up}. This change does not touch package.json or package-lock.json, so the dependency graph is identical to the base commit that already passed; continuing without a fresh result."
+echo "::warning::npm audit (${SCOPE}) could not reach the advisory endpoint ${gave_up}. This change does not touch package.json or package-lock.json, so the dependency graph is identical to its base commit; continuing without a fresh result."
 exit 0

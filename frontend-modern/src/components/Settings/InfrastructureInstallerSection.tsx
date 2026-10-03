@@ -155,7 +155,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
     >
       <Show when={state.setupHandoff()}>
         {(handoff) => (
-          <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-950 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-50">
+          <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-950/25 dark:border-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-50">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div class="space-y-2">
                 <p class="font-semibold">
@@ -191,13 +191,13 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                   </Show>
                 </p>
                 <div class="grid gap-3 sm:grid-cols-2">
-                  <div class="rounded-md border border-emerald-200 bg-white px-3 py-2 dark:border-emerald-800 dark:bg-emerald-950">
+                  <div class="rounded-md border border-emerald-200 bg-white px-3 py-2 dark:border-emerald-800 dark:bg-emerald-950/25">
                     <div class="text-[11px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
                       Username
                     </div>
                     <div class="mt-1 font-mono text-sm text-base-content">{handoff().username}</div>
                   </div>
-                  <div class="rounded-md border border-emerald-200 bg-white px-3 py-2 dark:border-emerald-800 dark:bg-emerald-950">
+                  <div class="rounded-md border border-emerald-200 bg-white px-3 py-2 dark:border-emerald-800 dark:bg-emerald-950/25">
                     <div class="text-[11px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
                       Admin API Token
                     </div>
@@ -241,7 +241,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
       </Show>
 
       <div class="space-y-5">
-        <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-50">
+        <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950/25 dark:border-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-50">
           <p class="font-semibold">{presentation().recommendationTitle}</p>
           <p class="mt-1 text-xs text-emerald-800 dark:text-emerald-200">
             {presentation().recommendationDetail}
@@ -251,7 +251,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
         <Show when={focus() === 'agent'}>
           <div
             data-testid="proxmox-api-first-guidance"
-            class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-50"
+            class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950/25 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-50"
           >
             <p class="font-semibold">Adding Proxmox? Start with the API connection.</p>
             <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
@@ -263,19 +263,19 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
             <div class="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium">
               <a
                 href={buildInfrastructureOnboardingPath('pve')}
-                class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 dark:text-blue-200 dark:hover:text-white"
+                class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900/25 dark:text-blue-200 dark:hover:text-white"
               >
                 Connect Proxmox VE through the API
               </a>
               <a
                 href={buildInfrastructureOnboardingPath('pbs')}
-                class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 dark:text-blue-200 dark:hover:text-white"
+                class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900/25 dark:text-blue-200 dark:hover:text-white"
               >
                 Connect PBS through the API
               </a>
               <a
                 href="/docs/PRODUCTION_SECURITY"
-                class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 dark:text-blue-200 dark:hover:text-white"
+                class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900/25 dark:text-blue-200 dark:hover:text-white"
               >
                 Review the production security model
               </a>
@@ -284,7 +284,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
         </Show>
 
         <Show when={focus() === 'docker'}>
-          <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-50">
+          <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950/25 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-50">
             <p class="font-semibold">Docker inside Proxmox LXCs</p>
             <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
               Install the agent on the Proxmox node, not inside every LXC. In advanced options,
@@ -324,7 +324,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
             </p>
           </div>
 
-          <div class="ml-6 rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900">
+          <div class="ml-6 rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/25">
             <p class="mb-2 text-sm font-semibold text-blue-800 dark:text-blue-200">
               What this token authorizes:
             </p>
@@ -364,7 +364,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                 }
               }}
               placeholder="Token name (optional label for your audit log)"
-              class="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900"
+              class="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900/25"
             />
             <button
               type="button"
@@ -381,7 +381,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
           </div>
 
           <Show when={state.latestRecord()}>
-            <div class="flex flex-col gap-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex flex-col gap-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-200 sm:flex-row sm:items-center sm:justify-between">
               <div class="flex items-center gap-2">
                 <svg
                   class="h-4 w-4 shrink-0"
@@ -396,12 +396,13 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                   {state.latestTokenSource() === 'setup_handoff' ? (
                     <>
                       First-host install token <strong>{state.latestRecord()?.name}</strong>{' '}
-                      prepared automatically. Commands below already include this credential.
+                      prepared automatically. Unix commands request it separately at a silent
+                      prompt.
                     </>
                   ) : (
                     <>
-                      Install token <strong>{state.latestRecord()?.name}</strong> created. Commands
-                      below now include this credential.
+                      Install token <strong>{state.latestRecord()?.name}</strong> created. Unix
+                      commands keep it separate: copy the command first, then use Show token only.
                     </>
                   )}
                 </span>
@@ -420,9 +421,9 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
 
         <Show when={!state.requiresToken()}>
           <div class="space-y-3">
-            <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
-              Tokens are optional on this Pulse instance. Confirm to generate commands without
-              embedding a token.
+            <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/25 dark:text-amber-200">
+              Tokens are optional on this Pulse instance. Confirm to generate commands without a
+              token.
             </div>
             <button
               type="button"
@@ -449,8 +450,8 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                 Installation commands
               </h4>
               <p class="ml-6 text-xs text-muted">
-                Generate an install token first. Pulse will then build copy-ready commands with the
-                credential inserted for the target host.
+                Generate an install token first. Then copy the command for the target host and
+                follow its credential-entry instructions.
               </p>
             </div>
             <div class="grid gap-3 lg:grid-cols-2">
@@ -496,9 +497,9 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                   </h4>
                   <p class={`mt-0.5 text-xs text-muted ${state.requiresToken() ? 'ml-6' : ''}`}>
                     Copy the default command for the first host first. It checks this Pulse URL and
-                    the matching agent binary before asking for administrator privileges, then
-                    installs Pulse Agent as a background service on each machine where you want full
-                    node-local telemetry.
+                    the matching agent binary before reading a Unix token, then installs Pulse Agent
+                    as a background service on each machine where you want full node-local
+                    telemetry.
                   </p>
                 </div>
               </div>
@@ -544,7 +545,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                         value={state.customAgentUrl()}
                         onInput={(event) => state.setCustomAgentUrl(event.currentTarget.value)}
                         placeholder={state.agentUrl()}
-                        class="flex-1 rounded-md border bg-surface px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                        class="flex-1 rounded-md border bg-surface px-3 py-1.5 text-sm shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
                       />
                     </div>
                     <p class="mt-1.5 text-xs text-muted">
@@ -576,7 +577,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                             ? 'Not needed for plain HTTP'
                             : 'Examples: /etc/pulse/ca.pem or C:\\Pulse\\ca.cer'
                         }
-                        class="flex-1 rounded-md border bg-surface px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                        class="flex-1 rounded-md border bg-surface px-3 py-1.5 text-sm shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
                       />
                     </div>
                     <p class="mt-1.5 text-xs text-muted">
@@ -588,7 +589,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                   </div>
 
                   <Show when={state.insecureMode()}>
-                    <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
+                    <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/25 dark:text-amber-200">
                       <span class="font-medium">TLS verification disabled</span> — skip cert checks
                       for self-signed setups. Not recommended for production.
                     </div>
@@ -602,7 +603,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                       type="checkbox"
                       checked={state.insecureMode()}
                       onChange={(event) => state.setInsecureMode(event.currentTarget.checked)}
-                      class="rounded text-blue-600 focus:ring-blue-500"
+                      class="rounded-sm text-blue-600 focus:ring-blue-500"
                     />
                     Skip TLS certificate verification (self-signed certs, not recommended)
                   </label>
@@ -618,13 +619,13 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                       onChange={(event) =>
                         void state.setEnableCommands(event.currentTarget.checked)
                       }
-                      class="rounded text-blue-600 focus:ring-blue-500"
+                      class="rounded-sm text-blue-600 focus:ring-blue-500"
                     />
                     Enable legacy combined command profile
                   </label>
 
                   <Show when={state.enableCommands()}>
-                    <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200">
+                    <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-200">
                       <span class="font-medium">Legacy combined trust enabled</span>: The root
                       monitoring service will also accept server command requests. On Proxmox nodes,
                       this remains necessary for opted-in Docker-in-LXC inventory until the scoped
@@ -632,7 +633,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                     </div>
                   </Show>
 
-                  <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-100">
+                  <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900/25 dark:border-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-100">
                     <span class="font-medium">Config signing (optional)</span> — Require signed
                     remote config payloads with{' '}
                     <code>PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>. Provide keys via{' '}
@@ -651,7 +652,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                           event.currentTarget.value as InstallProfile,
                         )
                       }
-                      selectBaseClass="w-full rounded-md border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                      selectBaseClass="w-full rounded-md border bg-surface px-3 py-2 text-sm shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
                     >
                       <For each={INSTALL_PROFILE_OPTIONS}>
                         {(option) => <option value={option.value}>{option.label}</option>}
@@ -731,7 +732,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
               </For>
             </div>
 
-            <div class="space-y-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-100">
+            <div class="space-y-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900/25 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-100">
               <div class="flex items-center justify-between gap-3">
                 <h5 class="text-sm font-semibold">Check installation status</h5>
                 <button
@@ -763,7 +764,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                     }
                   }}
                   placeholder="Hostname or agent ID"
-                  class="flex-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-sm text-blue-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100 dark:focus:border-blue-300 dark:focus:ring-blue-800"
+                  class="flex-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-sm text-blue-900/25 shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-100 dark:focus:border-blue-300 dark:focus:ring-blue-800"
                 />
               </div>
               <Show when={state.lookupError()}>
@@ -782,8 +783,8 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                     <div
                       class={`space-y-3 rounded-md border px-3 py-3 text-xs ${
                         isConnected()
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-50'
-                          : 'border-blue-200 bg-surface text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100'
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-950/25 dark:border-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-50'
+                          : 'border-blue-200 bg-surface text-blue-900/25 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-100'
                       }`}
                     >
                       <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -813,7 +814,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                           >
                             {lookupStatusPresentation().label}
                           </span>
-                          <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-200">
+                          <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900/25 dark:text-blue-200">
                             {agent().status || 'unknown'}
                           </span>
                         </div>
@@ -874,23 +875,23 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                   </p>
                   <ul class="mt-2 list-inside list-disc space-y-1 text-xs text-muted">
                     <li>
-                      <code class="rounded bg-surface-hover px-1">--enable-docker</code> — Force
+                      <code class="rounded-sm bg-surface-hover px-1">--enable-docker</code> — Force
                       enable Docker/Podman monitoring
                     </li>
                     <li>
-                      <code class="rounded bg-surface-hover px-1">--enable-kubernetes</code> — Force
-                      enable Kubernetes monitoring
+                      <code class="rounded-sm bg-surface-hover px-1">--enable-kubernetes</code> —
+                      Force enable Kubernetes monitoring
                     </li>
                     <li>
-                      <code class="rounded bg-surface-hover px-1">--enable-proxmox</code> — Force
+                      <code class="rounded-sm bg-surface-hover px-1">--enable-proxmox</code> — Force
                       enable Proxmox integration (creates API token)
                     </li>
                     <li>
-                      <code class="rounded bg-surface-hover px-1">--proxmox-type pve|pbs</code> —
+                      <code class="rounded-sm bg-surface-hover px-1">--proxmox-type pve|pbs</code> —
                       Set Proxmox node mode explicitly
                     </li>
                     <li>
-                      <code class="rounded bg-surface-hover px-1">--disable-docker</code> — Skip
+                      <code class="rounded-sm bg-surface-hover px-1">--disable-docker</code> — Skip
                       Docker even if detected
                     </li>
                   </ul>
@@ -930,15 +931,15 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
             </div>
             <p class="text-xs italic text-muted">
               If the agent can't reach this server, run directly on the machine:{' '}
-              <code class="rounded bg-surface-hover px-1 not-italic">
+              <code class="rounded-sm bg-surface-hover px-1 not-italic">
                 sudo bash /var/lib/pulse-agent/install.sh --uninstall
               </code>{' '}
               (TrueNAS:{' '}
-              <code class="rounded bg-surface-hover px-1 not-italic">
+              <code class="rounded-sm bg-surface-hover px-1 not-italic">
                 /data/pulse-agent/install.sh
               </code>
               , Unraid:{' '}
-              <code class="rounded bg-surface-hover px-1 not-italic">
+              <code class="rounded-sm bg-surface-hover px-1 not-italic">
                 /boot/config/plugins/pulse-agent/install.sh
               </code>
               )

@@ -130,6 +130,10 @@ export function renderDocMarkdown(markdown: string, currentDocPath: string): str
  */
 export function wrapTables(container: HTMLElement): void {
   container.querySelectorAll('table').forEach((table) => {
+    // Sanitised Markdown has no author-controlled roles/scope. Assign trusted
+    // column semantics to header cells: browsers otherwise expose these THs
+    // as ordinary cells, leaving readers without table header associations.
+    table.querySelectorAll('thead th').forEach((header) => header.setAttribute('scope', 'col'));
     const parent = table.parentElement;
     if (parent?.dataset?.docTableScroll !== undefined) return;
     const wrapper = window.document.createElement('div');

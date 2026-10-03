@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# Smoke tests for scripts/npm-audit-retry.sh — the gate must stay exactly as
-# strict about advisories and only tolerate an unreachable endpoint.
+# Smoke tests for scripts/npm-audit-retry.sh — a change that moves the
+# dependency graph must fail on any advisory and on an unreachable endpoint;
+# only a change whose graph is the base commit's may warn instead.
 
 set -euo pipefail
 
@@ -79,10 +80,28 @@ run_case() {
 run_case "clean audit passes" 0 "$(make_fake_npm npm-clean "${CLEAN}")" true \
   "no vulnerabilities"
 
-# A vulnerability fails, and must fail even when the dependency graph is
-# untouched — the outage tolerance must never soften a real finding.
-run_case "vulnerability fails" 1 "$(make_fake_npm npm-vuln "${VULN}")" false \
-  "vulnerabilities present"
+# A vulnerability fails a change that moves the dependency graph.
+run_case "vulnerability fails when dependencies changed" 1 \
+  "$(make_fake_npm npm-vuln "${VULN}")" true \
+  "vulnerabilities present" "::error::"
+
+# A change whose graph is the base commit's cannot have introduced the
+# finding, so it warns and still names it rather than reading it as clean.
+run_case "inherited vulnerability warns when dependencies unchanged" 0 \
+  "$(make_fake_npm npm-vuln-inherited "${VULN}")" false \
+  "vulnerabilities present" "::warning::" "base commit already has"
+
+# Only an explicit "false" relaxes the verdict. An empty or misspelled value,
+# as a missing workflow output would produce, keeps it strict.
+run_case "empty mode value keeps a vulnerability failing" 1 \
+  "$(make_fake_npm npm-vuln-empty "${VULN}")" "" \
+  "vulnerabilities present" "::error::"
+run_case "unrecognised mode value keeps a vulnerability failing" 1 \
+  "$(make_fake_npm npm-vuln-typo "${VULN}")" False \
+  "vulnerabilities present" "::error::"
+run_case "empty mode value keeps an outage failing" 1 \
+  "$(make_fake_npm npm-out-empty "${ENOAUDIT}")" "" \
+  "could not reach the advisory endpoint"
 
 # A transient endpoint failure that clears on retry passes.
 run_case "retry recovers from a transient outage" 0 \
@@ -164,7 +183,7 @@ NPM_AUDIT_ATTEMPTS=50 NPM_AUDIT_ATTEMPT_TIMEOUT=1 NPM_AUDIT_MAX_SECONDS=3 \
 # only ever change what happens to an unreachable endpoint.
 NPM_AUDIT_ATTEMPT_TIMEOUT=1 NPM_AUDIT_MAX_SECONDS=3 \
   run_case "a vulnerability still fails under a tight budget" 1 \
-  "$(make_fake_npm npm-vuln-budget "${VULN}")" false \
+  "$(make_fake_npm npm-vuln-budget "${VULN}")" true \
   "vulnerabilities present"
 
 if [ "${failures}" -ne 0 ]; then

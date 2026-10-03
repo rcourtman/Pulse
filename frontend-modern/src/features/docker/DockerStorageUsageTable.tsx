@@ -217,25 +217,25 @@ export const DockerStorageUsageTable: Component<{
                               </div>
                               <div>
                                 <span class="text-muted">Images</span>
-                                <div class="break-words font-mono text-base-content">
+                                <div class="wrap-break-word font-mono text-base-content">
                                   {bucketDetail(host.docker?.imagesUsage)}
                                 </div>
                               </div>
                               <div>
                                 <span class="text-muted">Containers</span>
-                                <div class="break-words font-mono text-base-content">
+                                <div class="wrap-break-word font-mono text-base-content">
                                   {bucketDetail(host.docker?.containersUsage)}
                                 </div>
                               </div>
                               <div>
                                 <span class="text-muted">Volumes</span>
-                                <div class="break-words font-mono text-base-content">
+                                <div class="wrap-break-word font-mono text-base-content">
                                   {bucketDetail(host.docker?.volumesUsage)}
                                 </div>
                               </div>
                               <div>
                                 <span class="text-muted">Build cache</span>
-                                <div class="break-words font-mono text-base-content">
+                                <div class="wrap-break-word font-mono text-base-content">
                                   {bucketDetail(host.docker?.buildCacheUsage)}
                                 </div>
                               </div>

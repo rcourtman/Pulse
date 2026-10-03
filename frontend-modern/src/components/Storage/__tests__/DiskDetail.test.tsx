@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { DiskDetail } from '@/components/Storage/DiskDetail';
@@ -133,6 +133,30 @@ describe('DiskDetail', () => {
     expect(screen.getByText('42°C')).toBeInTheDocument();
     expect(screen.getByText('Power-On Time')).toBeInTheDocument();
     expect(screen.getByText('Reallocated Sectors')).toBeInTheDocument();
+  });
+
+  it('shows the health verdict and its reason in the drawer header', () => {
+    const disk = buildDisk();
+    disk.physicalDisk!.health = 'FAILED';
+
+    render(() => <DiskDetail disk={disk} nodes={[]} />);
+
+    const health = screen.getByTestId('disk-detail-health');
+    expect(within(health).getByText('Replace Now')).toHaveClass('text-red-700');
+    expect(
+      within(health).getByText('Disk health has degraded to a critical state.'),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the drawer header to the verdict alone when the disk is healthy', () => {
+    const disk = buildDisk();
+    disk.physicalDisk!.health = 'PASSED';
+
+    render(() => <DiskDetail disk={disk} nodes={[]} />);
+
+    const health = screen.getByTestId('disk-detail-health');
+    expect(within(health).getByText('Healthy')).toBeInTheDocument();
+    expect(within(health).queryByText('No active disk-health issues.')).not.toBeInTheDocument();
   });
 
   it('shows an explicit overview fallback when no detail readings are available', () => {

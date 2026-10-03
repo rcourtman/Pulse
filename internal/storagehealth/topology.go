@@ -30,7 +30,23 @@ func AssessHostRAIDArray(array models.HostRAIDArray) Assessment {
 		(operation == "" && (strings.Contains(stateLower, "recover") ||
 			(array.RebuildPercent > 0 && !strings.Contains(stateLower, "clean") && !strings.Contains(stateLower, "check")))))
 
-	if strings.Contains(stateLower, "degraded") || array.FailedDevices > 0 || (array.TotalDevices > 0 && array.ActiveDevices > 0 && array.ActiveDevices < array.TotalDevices) {
+	requiredDevices := array.RequiredDevices
+	if requiredDevices <= 0 {
+		requiredDevices = array.TotalDevices
+		// Older mdadm reports include spares in TotalDevices, unlike mdstat's
+		// required/active bitmap. Accept only a corroborated healthy tuple;
+		// subtracting spares from every legacy total would hide missing members.
+		if (stateLower == "clean" || stateLower == "active") && array.FailedDevices == 0 &&
+			array.SpareDevices > 0 && array.ActiveDevices > 0 &&
+			array.TotalDevices > array.ActiveDevices &&
+			array.TotalDevices-array.ActiveDevices == array.SpareDevices &&
+			array.WorkingDevices == array.TotalDevices {
+			requiredDevices = array.ActiveDevices
+		}
+	}
+	memberDeficit := requiredDevices > 0 && array.ActiveDevices >= 0 && array.ActiveDevices < requiredDevices &&
+		(array.ActiveDevices > 0 || array.RequiredDevices > 0)
+	if strings.Contains(stateLower, "degraded") || array.FailedDevices > 0 || memberDeficit {
 		summary := fmt.Sprintf("RAID array %s is degraded", array.Device)
 		if array.FailedDevices > 0 {
 			summary = fmt.Sprintf("RAID array %s has %d failed device(s)", array.Device, array.FailedDevices)

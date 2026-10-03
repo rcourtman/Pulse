@@ -69,7 +69,7 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
           class={
             props.node.isClusterMember
               ? GROUPED_TABLE_ROW_BADGE_CLASS
-              : 'rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-muted'
+              : 'rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-muted'
           }
         >
           {props.node.isClusterMember ? props.node.clusterName : 'Standalone'}
@@ -78,7 +78,7 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
 
       <Show when={props.node.linkedAgentId}>
         <span
-          class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-400"
+          class="inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-400"
           title="Pulse agent is installed on this node for enhanced metrics (temperatures, detailed disks, RAID status)"
         >
           Agent

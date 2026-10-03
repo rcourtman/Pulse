@@ -73,7 +73,7 @@ interface MessageItemProps {
 }
 
 const markdownClass =
-  'text-sm prose prose-slate prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-md prose-pre:text-xs prose-pre:border prose-pre:border-slate-800 prose-code:[overflow-wrap:anywhere] prose-code:text-blue-700 dark:prose-code:text-blue-300 prose-code:bg-blue-50 dark:prose-code:bg-blue-900 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-[0.9em] prose-code:border prose-code:border-blue-100 dark:prose-code:border-blue-800 prose-code:before:content-none prose-code:after:content-none prose-headings:font-semibold prose-hr:border-slate-200 dark:prose-hr:border-slate-700 prose-ul:my-2 prose-ol:my-2 prose-li:my-1';
+  'text-sm prose prose-slate prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-md prose-pre:text-xs prose-pre:border prose-pre:border-slate-800 prose-code:wrap-anywhere prose-code:text-blue-700 dark:prose-code:text-blue-300 prose-code:bg-blue-50 dark:prose-code:bg-blue-900/25 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-[0.9em] prose-code:border prose-code:border-blue-100 dark:prose-code:border-blue-800 prose-code:before:content-none prose-code:after:content-none prose-headings:font-semibold prose-hr:border-slate-200 dark:prose-hr:border-slate-700 prose-ul:my-2 prose-ol:my-2 prose-li:my-1';
 
 const TEXT_RENDER_PACE_MS = 24;
 const TEXT_RENDER_SNAP = /[\s.,!?;:)\]]/;
@@ -547,7 +547,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               title="Edit and resend"
               tone="outline"
               size="sm"
-              class="mt-1 opacity-0 shadow-sm transition-opacity focus:opacity-100 group-hover:opacity-100"
+              class="mt-1 opacity-0 shadow-xs transition-opacity focus:opacity-100 group-hover:opacity-100"
             >
               <PencilIcon class="h-3.5 w-3.5" aria-hidden="true" />
             </ActionIconButton>
@@ -560,13 +560,13 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               label={copyButtonLabel()}
               size="md"
               stopPropagation
-              class="mt-1 opacity-0 shadow-sm transition-opacity focus:opacity-100 group-hover:opacity-100"
+              class="mt-1 opacity-0 shadow-xs transition-opacity focus:opacity-100 group-hover:opacity-100"
             />
           </Show>
           <div
-            class={`min-w-0 px-4 py-2.5 rounded-md rounded-br-sm shadow-sm ${
+            class={`min-w-0 px-4 py-2.5 rounded-md rounded-br-sm shadow-xs ${
               isQueuedUserMessage()
-                ? 'border border-blue-200 bg-blue-50 text-blue-950 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100'
+                ? 'border border-blue-200 bg-blue-50 text-blue-950/25 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100'
                 : 'bg-blue-600 text-white'
             }`}
           >
@@ -581,7 +581,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                 <Show when={queuedModelRouteLabel()}>
                   {(label) => (
                     <span
-                      class="inline-flex max-w-[12rem] items-center rounded border border-blue-200 bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
+                      class="inline-flex max-w-48 items-center rounded-sm border border-blue-200 bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
                       title={props.message.request?.model}
                     >
                       <span class="truncate">{label()}</span>
@@ -617,7 +617,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
       {/* Assistant message */}
       <Show when={!isUser()}>
         <div class="group flex w-full min-w-0 gap-3 px-1 py-2">
-          <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface-alt text-blue-600 shadow-sm dark:text-blue-400">
+          <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface-alt text-blue-600 shadow-xs dark:text-blue-400">
             <SparklesIcon class="h-3.5 w-3.5" />
           </div>
 
@@ -628,7 +628,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               </span>
               <Show when={messageModelLabel()}>
                 <span
-                  class="max-w-[12rem] truncate rounded border border-border-subtle bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted"
+                  class="max-w-48 truncate rounded-sm border border-border-subtle bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted"
                   title={props.message.model}
                 >
                   {messageModelLabel()}
@@ -636,7 +636,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               </Show>
               <Show when={messageDurationLabel()}>
                 <span
-                  class="inline-flex shrink-0 items-center gap-1 rounded border border-border-subtle bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted"
+                  class="inline-flex shrink-0 items-center gap-1 rounded-sm border border-border-subtle bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted"
                   title="Turn duration"
                   aria-label={`Turn duration ${messageDurationLabel()}`}
                 >
@@ -669,7 +669,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                   label={copyButtonLabel()}
                   size="md"
                   stopPropagation
-                  class="ml-auto opacity-0 shadow-sm transition-opacity focus:opacity-100 group-hover:opacity-100"
+                  class="ml-auto opacity-0 shadow-xs transition-opacity focus:opacity-100 group-hover:opacity-100"
                 />
               </Show>
               <Show when={props.onRegenerate}>
@@ -679,7 +679,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                   title="Regenerate response"
                   tone="outline"
                   size="sm"
-                  class={`${canCopy() ? '' : 'ml-auto '}opacity-0 shadow-sm transition-opacity focus:opacity-100 group-hover:opacity-100`}
+                  class={`${canCopy() ? '' : 'ml-auto '}opacity-0 shadow-xs transition-opacity focus:opacity-100 group-hover:opacity-100`}
                 >
                   <RotateCcwIcon class="h-3.5 w-3.5" aria-hidden="true" />
                 </ActionIconButton>
@@ -931,7 +931,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                             }
                             aria-label={modelRouteRecoveryButtonLabel()}
                             title={alternative().label}
-                            class="inline-flex max-w-[14rem] items-center gap-1.5 rounded-md border border-red-300 bg-white/80 px-2 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:border-red-800 dark:bg-red-950/20 dark:text-red-300 dark:hover:bg-red-900/40"
+                            class="inline-flex max-w-56 items-center gap-1.5 rounded-md border border-red-300 bg-white/80 px-2 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:border-red-800 dark:bg-red-950/20 dark:text-red-300 dark:hover:bg-red-900/40"
                           >
                             <CpuIcon class="h-3.5 w-3.5" />
                             <span class="truncate">{modelRouteRecoveryButtonLabel()}</span>

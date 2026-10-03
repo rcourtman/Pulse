@@ -1,4 +1,4 @@
-import type { Accessor } from 'solid-js';
+import { Show, type Accessor } from 'solid-js';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
@@ -6,7 +6,10 @@ import { ProgressBar } from '@/components/shared/ProgressBar';
 import { TableHead } from '@/components/shared/Table';
 import { getTableSortIndicator } from '@/components/shared/tableSortPresentation';
 import { WorkloadTypeBadge as SharedWorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
-import { PlatformTableRelativeTimeValue } from '@/features/platformPage/sharedPlatformPage';
+import {
+  PlatformTableRelativeTimeValue,
+  formatPlatformTableRelativeTimeValue,
+} from '@/features/platformPage/sharedPlatformPage';
 
 import {
   getRecoveryAgeBand,
@@ -202,7 +205,7 @@ export function RowMetricBar(props: {
 }) {
   return (
     <div
-      class="metric-text relative h-4 w-full min-w-[5rem] overflow-hidden"
+      class="metric-text relative h-4 w-full min-w-20 overflow-hidden"
       title={props.tooltip ?? props.label}
     >
       <ProgressBar
@@ -219,7 +222,15 @@ export function RowMetricBar(props: {
   );
 }
 
-export function ProxmoxBackupAgeText(props: { artifact: RecoverableArtifact }) {
+// Phone columns are too narrow for "18h ago", so the compact form drops the
+// suffix ("18h", "now") and keeps the full age band and timestamp on hover.
+export function formatCompactBackupAge(createdAt: string): string {
+  const relative = formatPlatformTableRelativeTimeValue(createdAt);
+  if (relative === 'just now') return 'now';
+  return relative.replace(/ ago$/, '');
+}
+
+export function ProxmoxBackupAgeText(props: { artifact: RecoverableArtifact; compact?: boolean }) {
   const band = () => getRecoveryAgeBand(props.artifact.createdMs);
   const title = () => {
     const parts = [recoveryAgeTitleByBand[band()], props.artifact.createdAt].filter(Boolean);
@@ -228,7 +239,12 @@ export function ProxmoxBackupAgeText(props: { artifact: RecoverableArtifact }) {
 
   return (
     <span class={`font-semibold tabular-nums ${recoveryAgeClassByBand[band()]}`} title={title()}>
-      <PlatformTableRelativeTimeValue value={props.artifact.createdAt} />
+      <Show
+        when={props.compact}
+        fallback={<PlatformTableRelativeTimeValue value={props.artifact.createdAt} />}
+      >
+        {formatCompactBackupAge(props.artifact.createdAt)}
+      </Show>
     </span>
   );
 }
@@ -342,8 +358,11 @@ export function ProxmoxBackupWorkloadTypeBadge(props: {
 // Sortable column header — matches the shared active-only table pattern.
 // Clicking an inactive column sorts it with the supplied default direction;
 // clicking the active column flips direction.
+// Buttons reset text-transform and letter-spacing, so a sortable header has to
+// restate the header casing or it renders in sentence case beside its
+// uppercase non-sortable neighbours.
 const SORT_BUTTON_CLASS =
-  'inline-flex min-w-0 max-w-full items-center gap-1 rounded-sm outline-none transition-colors hover:text-base-content focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface';
+  'inline-flex min-w-0 max-w-full items-center gap-1 rounded-xs uppercase tracking-[inherit] outline-hidden transition-colors hover:text-base-content focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface';
 
 export function SortableHead<K extends string>(props: {
   label: string;

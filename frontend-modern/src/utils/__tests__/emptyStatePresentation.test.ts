@@ -4,7 +4,7 @@ import { getEmptyStatePresentation } from '@/utils/emptyStatePresentation';
 describe('emptyStatePresentation', () => {
   it('returns canonical danger presentation', () => {
     expect(getEmptyStatePresentation('danger')).toEqual({
-      iconClass: 'bg-red-50 dark:bg-red-900 text-red-500',
+      iconClass: 'bg-red-50 dark:bg-red-900/25 text-red-500',
       titleClass: 'text-red-700 dark:text-red-300',
       descriptionClass: 'text-red-600 dark:text-red-300',
     });

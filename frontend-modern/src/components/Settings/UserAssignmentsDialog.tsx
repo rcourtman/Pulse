@@ -69,15 +69,15 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
               <For each={props.roles}>
                 {(role) => (
                   <label
-                    class={`flex flex-col p-3 rounded-md border transition-all cursor-pointer ${props.formRoleIds.includes(role.id) ? 'bg-blue-50 border-blue-200 dark:bg-blue-900 dark:border-blue-800' : 'bg-surface border-border hover:border-blue-100 dark:hover:border-blue-900'}`}
+                    class={`flex flex-col p-3 rounded-md border transition-all cursor-pointer ${props.formRoleIds.includes(role.id) ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/25 dark:border-blue-800' : 'bg-surface border-border hover:border-blue-100 dark:hover:border-blue-900/25'}`}
                   >
                     <div class="flex items-start justify-between gap-2 mb-1">
-                      <div class="flex items-center gap-2 shadow-sm">
+                      <div class="flex items-center gap-2 shadow-xs">
                         <input
                           type="checkbox"
                           checked={props.formRoleIds.includes(role.id)}
                           onChange={() => props.onToggleRole(role.id)}
-                          class="w-4 h-4 text-blue-600 rounded border-border focus:ring-blue-500"
+                          class="w-4 h-4 text-blue-600 rounded-sm border-border focus:ring-blue-500"
                         />
                         <span class="text-sm font-semibold text-base-content">{role.name}</span>
                       </div>
@@ -113,7 +113,7 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
               <div class="flex flex-wrap gap-2">
                 <For each={props.userPermissions}>
                   {(permission) => (
-                    <span class="inline-flex items-center rounded-md bg-surface px-2.5 py-1 text-xs font-semibold text-base-content border border-border shadow-sm">
+                    <span class="inline-flex items-center rounded-md bg-surface px-2.5 py-1 text-xs font-semibold text-base-content border border-border shadow-xs">
                       <span class="text-blue-600 dark:text-blue-400">{permission.action}</span>
                       <span class="mx-1 text-slate-400">:</span>
                       <span class="text-blue-600 dark:text-blue-400">{permission.resource}</span>

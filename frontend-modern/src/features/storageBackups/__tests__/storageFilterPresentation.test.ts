@@ -16,7 +16,7 @@ describe('storage filter presentation', () => {
   it('centralizes storage sort-direction semantics', () => {
     expect(STORAGE_FILTER_SORT_SELECT_CLASS).toContain('focus:ring-blue-500');
     expect(STORAGE_FILTER_SORT_DIRECTION_BUTTON_CLASS).toContain('hover:bg-surface-hover');
-    expect(STORAGE_FILTER_COMPACT_SELECT_CLASS).toBe('min-w-[8rem]');
+    expect(STORAGE_FILTER_COMPACT_SELECT_CLASS).toBe('min-w-32');
     expect(STORAGE_FILTER_SEGMENTED_WRAP_CLASS).toContain('overflow-x-auto');
     expect(STORAGE_FILTER_SORT_WRAP_CLASS).toContain('gap-1.5');
     expect(STORAGE_FILTER_SORT_ICON_CLASS).toContain('transition-transform');

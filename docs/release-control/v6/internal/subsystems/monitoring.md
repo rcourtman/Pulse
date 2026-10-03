@@ -17,48 +17,110 @@
 
 ## Purpose
 
-### No-op identity lists do not create change history — issue #2319 companion
+### Exact TrueNAS subscription termination — issue #2396
 
-Resource change emission compares hostname/IP/MAC lists order-independently,
-including equivalent nil/empty lists, while scalar machine/DMI/cluster/guest
-identifiers and actual list-member changes remain exact change evidence.
-This carries reviewed main `a5aa881ac530` through this line's existing
-`recordRegistryChanges` List boundary; it does not import main's newer locked-
-generation/clone optimization or change canonical matching, wire fields,
-source authority, collection timing or existing persisted rows.
-`TestResourceChangeIdentityIgnoresSetOrderAndEmptySlices` and
-`TestRegistryListComparisonTreatsIdentityListsAsSets` pin no-op order/nil cases
-and one real new-address row. The serial-bearing SMART guard-removal fixture
-then reports one tags-only row; final guarded full/skip cycles add no rows.
-These are synthetic in-memory journal controls, not installed writes or CPU.
+JSON-RPC stream readers and the subscription-acknowledgement wait recognise
+`notify_unsubscribed` only for the exact requested collection, including its
+arguments. An unrelated interval or event source cannot reject the current
+subscription. A matching rejection ends the operation promptly, discards the
+stream session and is not retried or downgraded to REST. A subsequent ordinary
+read may authenticate a fresh session within the existing operation budget.
+The notification uses middleware errno fields, not a JSON-RPC response error;
+only its numeric errno and a fixed message survive, never provider reason,
+trace, extra fields or private collection arguments. Malformed termination
+cannot leave a stream reusable. A clean end without telemetry remains
+unavailable, not a zero sample; a clean log end returns the bounded collected
+tail and retains the socket without cancelling an already-ended subscription.
 
+`TestJSONRPCSubscriptionTerminationRejectsWithoutWaitingOrRetry` covers all
+three readers before/after acknowledgement, cleanup, confidentiality and fresh
+read recovery. The adjacent termination controls pin exact-collection
+isolation, malformed events, absent samples and clean log completion.
+`TestTrueNASPollerSubscriptionRejectionKeepsPollingAndRecovers` exercises
+three connected protocol/poller snapshots: usable inventory and poll-ledger
+progress during rejected nonempty Apps enrichment, native alert disappearance,
+then ordinary stats recovery with stable identity. These are source controls
+using the reporter's source-derived envelope, not a retained wire capture,
+native appliance/incident acceptance or release availability.
 
-### Agent-only SMART readback provenance — issue #2319
+### RAID count provenance across ingestion — issue #2369
 
-A linked Agent SMART disk may inherit its PVE node's instance for presentation.
-That scope must not invent a Proxmox source during a skipped physical-disk poll.
-`physicalDisksForInstanceFromReadState` admits only actual Proxmox observations;
-Agent-only disks remain visible through their Agent source. Explicit failed-
-query Agent fallback still supplies PVE inventory, while permission failures
-retain prior inventory and genuine PVE disks preserve identity and readings.
-No historical rows are deleted and no collection interval is changed.
-`TestPhysicalDiskSkippedPollDoesNotPromoteAgentOnlySMARTToPVEInventory` pins
-three empty-inventory/full-skip cycles with no new journal rows, and the
-existing source-identity, SMART-enrichment and failed-query controls retain
-provider continuity. Synthetic proof is not the reporter's installed row rate.
+Agent ingestion, host snapshots and canonical read-state projection retain
+`requiredDevices` separately from source-native `totalDevices` and spare counts.
+Health compares active members with a known configured requirement, including
+explicit zero-active deficits; a spare cannot fill a missing active role.
+Collector fallback preserves an explicit zero active count under a known
+requirement rather than substituting members from another probe.
+Legacy reports retain conservative total-based detection except for an exact
+clean/active, zero-failure tuple where total equals working and active plus
+spares. That corroborated mdadm tuple is healthy; arbitrary subtraction from
+mdstat totals is forbidden. Missing or unreconciled evidence does not gain
+that exception. Explicit degradation/failures remain critical and scrub/resync
+never hide a member deficit. `TestRAIDRequiredMembersReportAndReadState` pins
+the wire/ingestion/snapshot/readback and canonical alert/risk paths; storage
+health tests pin legacy compatibility and reconstruction/maintenance boundaries.
 
+### Single-pass live broadcast projection — issue #2199
 
-### Restored disk alerts and persisted operator policy — issues #2237/#2112
+A frontend broadcast lists the continuity-aware read store once, coalesces host
+presentation once, and decorates its owned outer resource slice with current
+persisted URLs and freshly evaluated health. Generic conversion callers still
+coalesce their own input; an already-coalesced broadcast uses the prepared
+projection converter. Conversion sorts final frontend rows beside precomputed
+keys instead of retaining an estate-sized array of conversion inputs. This
+must preserve canonical identity, parent/action targets, catalogs, ordering,
+ignore surfaces and source isolation. No timestamp/generation cache is added:
+metrics, tags, alert state, metadata clears and time-sensitive health continue
+to be evaluated on each requested broadcast.
 
-Alerts can restore before the resource registry and persisted operator state
-are attached. Once monitoring installs the alert-intent resolver, it must
-reconcile already-active alerts against that state and publish the changed
-alert snapshot when suppression clears any occurrence. This closes the
-startup gap for a muted PVE disk's existing wearout alert without turning a
-mute into a recovery notification or suppressing other disks. The resolver
-uses this release line's `MonitorAdapter.ResolveCanonicalResourceID` bridge;
-`TestProxmoxPhysicalDiskMuteResolvesAndSuppressesWearoutAlert` covers the
-active-alert reconciliation, subsequent suppression and unaffected peer.
+`TestBroadcastProjectionMatchesPreviousPipeline` compares full JSON with the
+pre-repair conversion/sort/coalesce pipeline on split hosts and mixed workloads.
+`TestBroadcastProjectionListsRegistryOnceAndKeepsLiveChanges` pins one registry
+list and verifies same-freshness metric/tag changes, live alerts, ignored
+hosts and immutable prior projections. The 1,000-resource broadcast benchmark
+includes real registry cloning, projection, encoding, per-client deltas and
+queues with zero/one/four viewers, not persistence, transport or installed CPU.
+
+### Synthetic machine identity survives restart
+
+Linked mock hosts and Docker hosts derive their machine ID from their stable
+fixture host ID. Docker agent IDs are stable as well.
+Changing metric samples or rebuilding the graph must not give the same fixture
+machine a new canonical agent ID, orphaning saved operator policy. The existing
+`TestFixtureIdentityStableAcrossBoots` compares machine IDs per host and the
+unified canonical agent IDs, in addition to source IDs and names. This is a
+fixture guarantee. Production identity matching must still reject a conflicting
+nonempty machine ID rather than transfer policy to a different real machine.
+
+### Canonical registry publication during accepted ingest — issue #2199
+
+The monitor adapter builds a replacement resource generation away from readers.
+The previous generation remains readable while change records are classified
+and persisted; classification releases registry read locks before any backing
+store write can block. Writer ordering, journal classification, active-alert
+copying and publication of the replacement generation remain intact. A repeat
+of an unchanged snapshot must not append duplicate change records.
+`TestMonitorAdapterPopulateFromSnapshotDoesNotRepeatChangeJournal` and
+`TestMonitorAdapterSerializesSupplementalMutationAfterSnapshotPublication`
+cover the publish and blocked-persistence boundaries. Synthetic performance
+improvement alone does not establish field CPU relief.
+
+### One registry snapshot per store refresh pass — issue #2199
+
+Each store refresh pass (`updateResourceStore`, its read-path twin, and so
+every accepted agent report) ran five metric syncs and the alert sync, and each
+cloned the whole registry through `GetAll`. A pass now wraps the store in
+`resourceSnapshotStore`, which clones once and forwards metrics-target
+resolution, so every consumer of the pass reads one generation. Stores without
+metrics-target resolution pass through unwrapped, keeping the syncs' capability
+checks unchanged. `TestAgentReportRefreshClonesRegistryOnce` requires one clone
+per agent-report refresh and `TestResourceSnapshotStoreClonesOncePerPass` pins
+the wrapper. With node-indexed guest parents, a synthetic agent-report refresh
+at 2,080 resources moved from 188 to 82 ms; the pass still covers the whole
+estate, and report-driven passes run at most once per 2-second window (see
+the agent-lifecycle contract).
+
+### Linked Pulse agent memory for Proxmox LXC — issue #2148 (22 September 2026)
 
 ### Linked Pulse agent memory for Proxmox LXC — issue #2148 (22 September 2026)
 
@@ -159,6 +221,47 @@ server, opening-context cancellation, concurrent controls/RPCs and sender dispos
 `internal/monitoring/truenas_poller_test.go` verifies due boundaries, short/slow
 cycles, completion timestamps and unchanged failure backoff. These are synthetic
 runtime proofs, not native firmware timeout or reporter-resolution evidence.
+
+### TrueNAS empty app inventories and session-disposal evidence
+
+An empty or null `app.query`/legacy `/app` result remains a successful empty
+app inventory. It must not request `app.stats`: there is no workload to enrich,
+and a stopped Apps service must not consume the operation budget or dispose of
+an otherwise usable monitoring session just to enrich no rows. Nonempty app
+inventories retain best-effort stats enrichment. This removes a needless
+subscription path reported in #2396; it does not establish the exact
+`notify_unsubscribed` envelope or resolve rejection with nonempty inventories.
+Unrecognised stream notifications remain bounded by the existing operation
+timeout, not classified as a known subscription's rejection without evidence.
+
+The one permitted stream transport retry uses the same disposal rules as the
+initial exchange. Malformed events, empty subscription IDs and failed
+unsubscribe cleanup discard the second session and report disconnected status;
+normal app-log idle completion returns the collected tail and discards its
+timed-out socket rather than surfacing an internal consumed-session sentinel.
+No extra retry, action replay or REST downgrade is introduced.
+
+Each authenticated socket's first local disposal records an INFO event with
+`component=truenas_rpc`, `action=close_session`, a fixed `reason`, authenticated
+`session_age`, and optional request-method/error-category classifications. Causes
+distinguish client closure, stream completion/error, transport error and failed
+keepalive writes. Error categories distinguish timeout, cancellation, method,
+transport and protocol errors. No error text, params, subscription ID, endpoint,
+username or credential is logged. Keepalive failure may precede a subsequent
+poll's disposal, so that first cause must be preserved and logged only once.
+These are local close-path observations, not appliance/proxy diagnoses or
+evidence that #2400's minute-by-minute reauthentication has been resolved. There
+is still no fixed session-age or per-poll closure policy.
+
+Verification in `internal/truenas/transport_test.go`:
+`TestJSONRPCEmptyAppsDoNotSubscribeToStats`,
+`TestLegacyRESTEmptyAppsDoNotNegotiateStats`, the snapshot inventory contract,
+`TestJSONRPCStreamRetryDiscardsUnusableSecondSession`,
+`TestJSONRPCStreamRetryReturnsCompletedLogTail`, `TestRPCSessionCloseDetails`,
+`TestRPCSessionCloseLogIsBoundedAndSecretFree` and
+`TestRPCSessionCloseLogKeepsFirstKeepaliveCause`. These controlled runtime tests
+preserve inventory, retry limits, fresh-session recovery and log confidentiality;
+native SCALE behaviour, published delivery and field acceptance remain separate.
 
 
 ### TrueNAS reporting summaries preserve raw History — issue #2346
@@ -974,7 +1077,20 @@ Proxmox physical-disk polling is also a continuity boundary. A failed or
 permission-denied `disks/list` call must remain an error so the monitor can use
 linked host-agent inventory or retain same-instance, same-node prior evidence;
 it must never become a successful empty inventory that removes valid boot or
-data disks. SMART enrichment matches serial, WWN, device path, and controller
+data disks. Between PVE disk polls, readback into `State.PhysicalDisks` accepts
+only a disk with an actual Proxmox source observation. A linked Agent-only
+SMART disk may inherit the PVE instance for presentation, but must not be
+written back as PVE inventory; doing so adds and removes a false source and
+change-journal rows when the PVE inventory is empty. Agent-only disks remain
+visible through their Agent source, and an explicit failed-query Agent fallback
+still supplies PVE inventory. `TestPhysicalDiskSkippedPollDoesNotPromoteAgentOnlySMARTToPVEInventory`
+checks repeated empty-inventory/skipped-poll cycles and journal row counts;
+its serial-bearing fixture yields a tags-only row if the source guard is
+removed, matching the reported history shape without claiming the reporter's
+topology or installed write rate. With the guard, all three cycles add no rows.
+`TestPhysicalDiskSkippedPollPreservesSourceIdentity` checks genuine PVE disk
+continuity. These fixtures do not establish the reporter's installed cause.
+SMART enrichment matches serial, WWN, device path, and controller
 member topology uniquely and fail-closed. Serial and WWN are interchangeable
 hardware-identity carriers across reporters: comparison may case-fold and
 remove only `naa.`, `eui.`, `wwn-`, and `0x` framing, but must reject
@@ -1231,9 +1347,16 @@ clears it. A denied or failed node-status endpoint does not invalidate successfu
 connectivity or independently accessible datastore inventory. In-process state
 copies preserve this evidence; JSON deliberately does not carry it. The
 zero-value compatibility default is not persisted availability evidence.
+Only that successful node-status observation writes CPU and memory percentages
+to the PBS service's `agent:<PBS source ID>` history target. Missing or invalid
+node measurements append no sample, rather than a false zero; measured zero is
+valid. The service series is separate from a correlated Pulse Agent's host
+series and contains no inferred disk, network, or I/O measurements.
 Proof: `internal/models/metrics_types_test.go` and
-`internal/monitoring/monitor_pbs_coverage_test.go`. The latter exercises real
+`internal/monitoring/monitor_pbs_coverage_test.go`; the latter exercises real
 HTTP polling through normal alert-manager publication, not destination delivery.
+`TestPollPBSNodeStatusRecordsServiceHistory` verifies volatile and persisted
+service-history reads plus denial/recovery without fabricated samples.
 
 
 1. `internal/config/host_continuity.go` shared with `agent-lifecycle`: the durable host identity, report-order watermark, and removal tombstone journal is jointly owned by agent lifecycle admission and monitoring report continuity.
@@ -1427,6 +1550,20 @@ HTTP polling through normal alert-manager publication, not destination delivery.
    resource timestamps between cohorts, cover every node within twenty seconds,
    and refresh provider-backed fixtures only once per full rotation so one demo
    tick cannot manufacture an estate-wide WebSocket delta.
+   Mock replication timing follows that same refresh instead of staying at its
+   startup stamp: each job keeps a stable phase inside its schedule window and
+   is rewritten only when that phase passes, so a healthy job always last
+   synced less than one interval ago with its next sync in the future, a
+   failing job's last good sync falls behind by its failure count, and a
+   long-running demo never reports healthy jobs as overdue. A mock job never
+   targets its own source node, and an estate without a second node has none.
+   The mock estate carries shared storage in the shape the poller produces,
+   not the per-node shape the PVE API returns: a shared PBS storage is one
+   cluster-scoped row listing its reporting nodes (issue 1049), never one row
+   per node with a different usage figure on each.
+   Demo Docker container names are unique per host, as Docker itself enforces:
+   a container profile reused for a second round on one host takes a numbered
+   suffix instead of producing two rows with one name.
    Mock metrics history must also stay bounded independently of estate size:
    eager multi-day PVE guest history is limited to a deterministic sample spread
    across the estate, while every omitted guest continues to receive the same
@@ -2616,6 +2753,14 @@ must apply the same continuity overlay when `HostsSnapshot()` resolves its
 canonical read state, so settings and other host-list consumers do not blank
 previously admitted Pulse Agent rows during a config-driven monitor swap while
 fresh reports are still in flight.
+Continuity lookups must stay cheap because every canonical read-state lookup
+makes one. `readStateWithStandaloneHostContinuity` takes the live host list
+once per call, and `GetLiveHostsSnapshot` copies only hosts through
+`State.GetHosts` rather than deep-copying every guest through `GetSnapshot`;
+agent reports and config fetches share that accessor. With one offline
+standalone agent, a lookup at 2,080 synthetic resources moved from 136 ms to
+74 microseconds. `TestStandaloneHostContinuityReadStateReusedAcrossLookups` and
+`TestGetLiveHostsSnapshotCopiesOnlyHosts` pin both.
 That same mock-runtime boundary also owns freshness while demos are running.
 The mock update loop must keep provider-backed TrueNAS and VMware records plus
 legacy PBS and PMG summaries on current `LastSeen` and health state each tick,
@@ -4098,6 +4243,24 @@ errored identity lookup. Monitoring does not reinterpret provider ownership or
 invent lifecycle state; Alerts owns signal suppression and unified resources
 owns persistence. `internal/monitoring/monitor_alert_intent_test.go` and the
 alerts intent-policy proof pin this adapter boundary.
+
+The monitor adapter asks the registry for only the canonical resource ID when
+resolving an alert reference. Exact IDs, superseded IDs, source IDs and
+canonical aliases retain their precedence and ambiguous aliases remain
+unresolved. This avoids cloning a full resource for every policy lookup while
+keeping alert intent tied to the same identity rules as resource reads.
+
+Alert restore precedes resource-store attachment during startup. Once the
+adapter attaches the persisted operator-policy resolver, monitoring asks Alerts
+to reconcile the restored set and refreshes shared alert state if it changed.
+Resource publication repeats reconciliation before evaluation and shared-state
+export, because native aliases may only become resolvable after the first
+observation populates the canonical registry. Persisted agent policy applies
+to those restored native-ID alerts even when the initial registry was empty.
+Muted or retired resources cannot retain active alerts merely because policy
+was unavailable during restore. The resolution survives a subsequent restart
+and preserves unaffected alerts. This ordering is pinned by
+`internal/monitoring/monitor_alert_restore_test.go`.
 
 `internal/maintenancesentinel/` is monitoring-owned post-maintenance assurance.
 Its bounded sweep derives every concrete one-shot or recurring occurrence that

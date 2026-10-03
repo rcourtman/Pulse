@@ -15,11 +15,11 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
       style={{ 'touch-action': state.isDragging() ? 'none' : 'auto' }}
     >
       {/* Track background */}
-      <div class="absolute inset-0 h-3.5 rounded bg-surface-hover"></div>
+      <div class="absolute inset-0 h-3.5 rounded-sm bg-surface-hover"></div>
 
       {/* Colored fill */}
       <div
-        class={`absolute left-0 h-3.5 rounded ${getThresholdSliderFillClass(props.type)}`}
+        class={`absolute left-0 h-3.5 rounded-sm ${getThresholdSliderFillClass(props.type)}`}
         style={{ width: `${state.thumbPosition()}%` }}
       ></div>
 
@@ -48,7 +48,7 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
         }}
       >
         <div class="relative">
-          <div class="w-9 h-4 bg-surface rounded-full shadow-sm border-2 border-current flex items-center justify-center">
+          <div class="w-9 h-4 bg-surface rounded-full shadow-xs border-2 border-current flex items-center justify-center">
             <span class="text-[9px] font-semibold">{state.sliderLabel()}</span>
           </div>
         </div>

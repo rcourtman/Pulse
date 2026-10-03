@@ -439,3 +439,85 @@ func TestRegisterRoutes_PortalPageSessionModes(t *testing.T) {
 		}
 	}
 }
+
+// On a provider-hosted platform any member may see the plan, but buying,
+// opening billing and refreshing the licence are owner or admin actions.
+func TestRegisterRoutes_ProviderMSPPurchaseRoutesRequireOwnerOrAdmin(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := registry.NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatalf("GenerateAccountID: %v", err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Acme MSP"}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+	magicSvc, err := cpauth.NewService(dir)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	t.Cleanup(magicSvc.Close)
+	sessionFor := func(email string, role registry.MemberRole) string {
+		userID, err := registry.GenerateUserID()
+		if err != nil {
+			t.Fatalf("GenerateUserID: %v", err)
+		}
+		if err := reg.CreateUser(&registry.User{ID: userID, Email: email}); err != nil {
+			t.Fatalf("CreateUser: %v", err)
+		}
+		if err := reg.CreateMembership(&registry.AccountMembership{AccountID: accountID, UserID: userID, Role: role}); err != nil {
+			t.Fatalf("CreateMembership: %v", err)
+		}
+		token, err := magicSvc.GenerateSessionToken(userID, email, cpauth.SessionTTL)
+		if err != nil {
+			t.Fatalf("GenerateSessionToken: %v", err)
+		}
+		return token
+	}
+	owner := sessionFor("owner@example.com", registry.MemberRoleOwner)
+	readOnly := sessionFor("viewer@example.com", registry.MemberRoleReadOnly)
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, &Deps{
+		Config: &CPConfig{
+			DataDir:                dir,
+			AdminKey:               "test-admin-key",
+			BaseURL:                "https://msp.example.com",
+			ControlPlaneMode:       ControlPlaneModeProviderHostedMSP,
+			ProviderMSPPlanVersion: "msp_eval",
+		},
+		Registry:   reg,
+		MagicLinks: magicSvc,
+		Version:    "test",
+	})
+	call := func(method, path, token string) int {
+		req := httptest.NewRequest(method, "/api/accounts/"+accountID+"/provider-msp/"+path, strings.NewReader(`{"plan_version":"msp_solo","billing_cycle":"monthly"}`))
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	if got := call(http.MethodGet, "plan", ""); got != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated plan status = %d", got)
+	}
+	if got := call(http.MethodGet, "plan", readOnly); got != http.StatusOK {
+		t.Fatalf("read-only member plan status = %d", got)
+	}
+	for _, path := range []string{"checkout", "billing-portal", "license/refresh"} {
+		if got := call(http.MethodPost, path, readOnly); got != http.StatusForbidden {
+			t.Errorf("read-only member %s status = %d, want 403", path, got)
+		}
+		// The owner reaches the handler, which answers unavailable because
+		// this platform has no licence server to relay to.
+		if got := call(http.MethodPost, path, owner); got != http.StatusServiceUnavailable {
+			t.Errorf("owner %s status = %d, want 503 from the handler", path, got)
+		}
+	}
+}

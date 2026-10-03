@@ -9,12 +9,21 @@ If you are upgrading from older releases that used `pulse-sensor-proxy`, see the
 
 ## Recommended: Pulse Agent (Proxmox)
 
-The unified agent runs on each Proxmox host and reports temperatures locally with no SSH keys needed.
+The unified agent runs on each Proxmox host and reports temperatures locally
+with no SSH keys needed. First complete the
+[private-file preparation](UNIFIED_AGENT.md#private-file-installation-linux-macos-and-nas)
+on that host: protect the Pulse agent token, download the installer from your
+Pulse server over verified HTTPS, and inspect it. Then use the same Pulse
+address and add the Proxmox collector flag:
 
 ```bash
-curl -fsSL http://<pulse-ip>:7655/install.sh | \
-  bash -s -- --url http://<pulse-ip>:7655 --token <api-token> --enable-proxmox
+bash "$HOME/.config/pulse/agent-install.sh" \
+  --url https://pulse.example.com \
+  --token-file "$HOME/.config/pulse/agent-token" --enable-proxmox
 ```
+
+The Pulse agent token is not a Proxmox API token. Keep the secret out of
+command arguments and leave command execution disabled for monitoring.
 
 Notes:
 - Install `lm-sensors` on each host (`apt install lm-sensors && sensors-detect --auto`).
@@ -104,11 +113,25 @@ ssh -i /path/to/key root@node "cat /sys/class/thermal/thermal_zone0/temp"
 
 ## Legacy Cleanup (If Upgrading)
 
-If you still have the old sensor proxy installed from prior releases, remove it from each **Proxmox host** (not the Pulse container) with the supported cleanup helper:
+If you still have the old sensor proxy installed from prior releases, remove it
+from each **Proxmox host** (not the Pulse container) with the supported cleanup
+helper. In that host's administrative shell, download it to a private directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/uninstall-sensor-proxy.sh | \
-  sudo bash -s -- --uninstall --purge --local-only
+umask 077
+mkdir -p "$HOME/.config/pulse"
+chmod 700 "$HOME/.config/pulse"
+curl --fail --silent --show-error --connect-timeout 10 --max-time 60 \
+  --output "$HOME/.config/pulse/sensor-proxy-uninstall.sh" \
+  https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/uninstall-sensor-proxy.sh
+```
+
+Stop if the download fails and inspect the saved script before running it.
+Do not pipe a web response into a privileged shell:
+
+```bash
+bash "$HOME/.config/pulse/sensor-proxy-uninstall.sh" \
+  --uninstall --purge --local-only
 ```
 
 `--local-only` avoids cluster SSH entirely; run the command once on every
@@ -122,8 +145,8 @@ remote portion fail after local cleanup completes.
 If you also want to remove the old `pulse-monitor@pam` API user and tokens before re-adding the node, include `--remove-proxmox-access`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/uninstall-sensor-proxy.sh | \
-  sudo bash -s -- --uninstall --purge --remove-proxmox-access --local-only
+bash "$HOME/.config/pulse/sensor-proxy-uninstall.sh" \
+  --uninstall --purge --remove-proxmox-access --local-only
 ```
 
 Reinstalling or upgrading the Pulse container does **not** remove the sensor proxy from the host — they are separate installations. If you skip this cleanup, the selfheal timer will keep running and may generate recurring `TASK ERROR` entries in the Proxmox task log.

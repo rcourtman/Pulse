@@ -1013,12 +1013,14 @@ func TestExecuteGetHostRAIDStatus(t *testing.T) {
 			nil,
 			[]unifiedresources.HostRAIDMeta{
 				{
-					Device:         "/dev/md0",
-					Level:          "raid1",
-					State:          "clean",
-					TotalDevices:   2,
-					ActiveDevices:  2,
-					WorkingDevices: 2,
+					Device:          "/dev/md0",
+					Level:           "raid1",
+					State:           "clean",
+					RequiredDevices: 2,
+					TotalDevices:    3,
+					ActiveDevices:   2,
+					WorkingDevices:  3,
+					SpareDevices:    1,
 					Devices: []unifiedresources.HostRAIDDeviceMeta{
 						{Device: "/dev/sda", State: "active", Slot: 0},
 					},
@@ -1042,6 +1044,11 @@ func TestExecuteGetHostRAIDStatus(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
 	require.Len(t, resp.Hosts, 1)
 	assert.Equal(t, "node1", resp.Hosts[0].Hostname)
+	require.Len(t, resp.Hosts[0].Arrays, 1)
+	assert.Equal(t, 2, resp.Hosts[0].Arrays[0].RequiredDevices)
+	assert.Equal(t, 3, resp.Hosts[0].Arrays[0].TotalDevices)
+	assert.Equal(t, 1, resp.Hosts[0].Arrays[0].SpareDevices)
+	assert.Contains(t, result.Content[0].Text, `"required_devices":2`)
 }
 
 func TestExecuteGetHostCephDetails(t *testing.T) {

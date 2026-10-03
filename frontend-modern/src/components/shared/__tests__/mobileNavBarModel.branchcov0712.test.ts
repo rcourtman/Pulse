@@ -302,7 +302,7 @@ describe('mobileNavBarModel.branchcov2', () => {
   describe('getMobileNavTabButtonClass', () => {
     const BASE =
       'relative flex min-h-10 min-w-0 flex-1 select-none flex-col items-center justify-center gap-0 rounded-md px-1 py-0.5 text-[9px] font-medium transition-colors';
-    const ACTIVE = 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
+    const ACTIVE = 'bg-blue-50 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300';
     const MUTED = 'text-muted';
 
     it('emits the active palette when active, with no opacity when enabled is omitted', () => {

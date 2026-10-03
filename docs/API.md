@@ -9,18 +9,66 @@ Pulse provides a comprehensive REST API for automation and integration.
 Most API requests require authentication via one of the following methods:
 
 ### API Token (Recommended)
-Pass the token in the `X-API-Token` header.
+
+Create an API token in Pulse's **API Access** settings with only the scopes
+needed for your task. The read-only example below requires `monitoring:read`.
+Pass the token in the `X-API-Token` header, using a private header file so the
+secret does not appear in shell history or process arguments.
+
+On the machine running curl, prepare the file and open it in an editor:
+
 ```bash
-curl -H "X-API-Token: your-token" http://localhost:7655/api/health
+umask 077
+mkdir -p "$HOME/.config/pulse"
+touch "$HOME/.config/pulse/api-header"
+chmod 600 "$HOME/.config/pulse/api-header"
+vi "$HOME/.config/pulse/api-header"
 ```
 
-### Bearer Token
+In the editor, save just this line, replacing `<token>` with the API token:
+
+```text
+X-API-Token: <token>
+```
+
+Then make a read-only request (curl 7.76 or later):
+
 ```bash
-curl -H "Authorization: Bearer your-token" http://localhost:7655/api/health
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  http://127.0.0.1:7655/api/state/summary
+```
+
+This loopback URL applies only when curl runs on the Pulse host. For remote
+access, use your Pulse HTTPS URL and keep certificate verification enabled;
+do not use `--insecure`. On an authentication-enabled instance, the protected
+summary checks token access; `/api/health` is public and does not verify authentication.
+`--fail-with-body` returns a non-zero exit on HTTP errors, including 401 and
+403, while retaining the error response. Keep `--disable` first: it ignores
+local curl configuration that could otherwise enable credential-bearing trace output.
+
+Do not paste tokens into command lines, URLs or issue reports. Keep the header
+file private and outside shared repositories and diagnostics; do not use curl
+verbose/trace output when sharing a result. Share only the relevant redacted
+error, not the whole infrastructure response. Revoke tokens that are no longer
+needed in Pulse's API Access settings.
+
+### Bearer Token
+
+The same API token can use a Bearer header instead. Replace the header file's
+line in the editor with the following, then use the same curl command above;
+do not send both authentication headers:
+
+```text
+Authorization: Bearer <token>
 ```
 
 ### Session Cookie
-Standard browser session cookie (used by the UI).
+
+For one-off read-only diagnostics, use your signed-in Pulse browser to open
+the API path on that same instance. Do not extract or paste its session cookie
+into a command or report; use the scoped token-file method above for automation.
+State-changing session requests also require Pulse's CSRF protection, which
+the UI handles.
 
 Session endpoints:
 - `POST /api/login` (sets `pulse_session` + `pulse_csrf`)
@@ -46,6 +94,8 @@ Some endpoints require admin privileges and/or scopes. Common scopes include:
 - `settings:write`
 - `agent:config:read`
 - `agent:manage`
+- `actions:plan`, `actions:approve`, `actions:execute`
+- `audit:read`
 
 Endpoints that require admin access are noted below.
 
@@ -264,77 +314,129 @@ Returns the canonical fleet connections ledger with per-row fleet-governance sta
 
 The payload is the source of truth for enrollment, liveness, version drift, adapter health, config rollout, credential posture, update posture, and remote-control posture. Consumers must not rebuild those states from provider-specific config stores or display labels.
 
-CLI adapter:
+Use the private header file prepared in [Authentication](#-authentication),
+with `settings:read` on the token:
+
 ```bash
-PULSE_API_TOKEN=your-token pulse fleet connections \
-  --api-url http://localhost:7655
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  http://127.0.0.1:7655/api/connections
 ```
 
 ### Unified Action Planning
-`POST /api/actions/plan`
-Returns the deterministic pre-execution plan for a capability advertised on a unified resource. Requires `ai:execute`.
 
-This endpoint is API-first and plan-only: it resolves the resource from the unified registry, verifies the requested capability and parameter schema, returns approval policy, blast radius, stale-plan hashes, and preflight checks, and does not approve or execute anything.
+The existing action API separates planning, approval and execution. Run these
+steps separately, inspecting each response before moving on; do not paste the
+whole sequence as an unattended recovery script. Use the private header file
+from [Authentication](#-authentication), not a token in a command or environment
+assignment. For remote access, replace the loopback origin with your Pulse HTTPS
+URL and keep certificate verification enabled.
 
-`POST /api/actions/{id}/decision`
-Records an explicit `approved` or `rejected` decision for a persisted `pending_approval` action. It does not execute the action.
+| Endpoint | Token scope and access |
+| --- | --- |
+| `GET /api/agent/resource-capabilities/{id}` | `monitoring:read`; lists the resource's advertised capabilities and parameter schemas. |
+| `POST /api/actions/plan` | `actions:plan` and permission to plan actions; creates a plan but does not approve or execute it. |
+| `POST /api/actions/{id}/decision` | `actions:approve` and permission to approve actions; records an explicit `approved` or `rejected` decision for a pending action, without executing it. |
+| `POST /api/actions/{id}/execute` | `actions:execute` and permission to execute actions; dispatches only an approved action or an approval-free executable plan. Dry-run-only plans cannot execute. |
+| `GET /api/audit/actions` | `audit:read`, audit-log read permission and licensed audit logging. |
+| `GET /api/audit/actions/{id}/events` | The same audit access; returns the action's lifecycle evidence. |
 
-`POST /api/actions/{id}/execute`
-Starts execution only for an approved action or an approval-free executable plan, records `executing` before dispatch, and records the terminal result afterward. Dry-run-only plans are rejected and cannot be executed through this endpoint.
+The legacy `ai:execute` scope also permits planning, approval and execution,
+but use the narrower action scopes when possible. Approval and execution tokens
+must be bound to an authorised user; a scope alone does not bypass approval
+policy, separation of duties or step-up requirements. Audit reads through a
+browser session additionally require admin access. A `monitoring:read` token is
+not an action-control or audit token.
 
-CLI adapter:
+1. **Inspect capabilities.** Choose the canonical resource `id` from
+   `GET /api/resources`, not a display name or a VM number. Replace `vm:42`
+   throughout these examples and URL-encode it in request paths (`vm%3A42` here).
+   An empty capabilities list means there is nothing to plan for that resource.
+
 ```bash
-PULSE_API_TOKEN=your-token pulse actions capabilities \
-  --api-url http://localhost:7655 \
-  --resource-id vm:42
-
-PULSE_API_TOKEN=your-token pulse actions plan \
-  --api-url http://localhost:7655 \
-  --request-id agent-run-123 \
-  --resource-id vm:42 \
-  --capability restart \
-  --param mode=graceful \
-  --reason "Recover after confirmed outage" \
-  --requested-by agent:oncall-helper
-
-PULSE_API_TOKEN=your-token pulse actions decide \
-  --api-url http://localhost:7655 \
-  --action-id act_... \
-  --outcome approved \
-  --reason "Inside maintenance window"
-
-PULSE_API_TOKEN=your-token pulse actions execute \
-  --api-url http://localhost:7655 \
-  --action-id act_... \
-  --reason "Execute approved recovery"
-
-PULSE_API_TOKEN=your-token pulse actions audit \
-  --api-url http://localhost:7655 \
-  --resource-id vm:42 \
-  --limit 10
-
-PULSE_API_TOKEN=your-token pulse actions events \
-  --api-url http://localhost:7655 \
-  --action-id act_...
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  http://127.0.0.1:7655/api/agent/resource-capabilities/vm%3A42
 ```
 
-Request:
-```json
+2. **Plan only.** Use an advertised capability and its actual parameter schema;
+   `restart` and `mode=graceful` are examples, not universal capabilities. Choose
+   a request ID for this specific intent. Pulse derives the actor from the
+   authenticated credential, not a caller-supplied `requestedBy` value.
+
+```bash
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  --header 'Content-Type: application/json' --request POST --data-binary @- \
+  http://127.0.0.1:7655/api/actions/plan <<'JSON'
 {
-  "requestId": "agent-run-123",
+  "requestId": "manual-recovery-123",
   "resourceId": "vm:42",
   "capabilityName": "restart",
   "params": { "mode": "graceful" },
-  "reason": "Recover after confirmed outage",
-  "requestedBy": "agent:oncall-helper"
+  "reason": "Recover after confirmed outage"
 }
+JSON
 ```
+
+Inspect the returned approval policy, blast radius, expiry and preflight checks.
+Keep its `actionId` and reviewed `planHash`; replace `act_...` and `sha256:...`
+below with those returned values. Planning is not proof that execution is safe
+or currently available.
+
+3. **Decide only if approval is required.** Use an authorised approver's private
+   header file. Approve only the reviewed plan; stop on a refusal or stale-plan
+   response rather than weakening the policy or creating another recovery action.
+
+```bash
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  --header 'Content-Type: application/json' --request POST --data-binary @- \
+  http://127.0.0.1:7655/api/actions/act_.../decision <<'JSON'
+{
+  "outcome": "approved",
+  "reason": "Inside maintenance window",
+  "planHash": "sha256:..."
+}
+JSON
+```
+
+4. **Execute separately.** Only after reviewing a successful decision, or an
+   approval-free executable plan, use the executor's authorised header file:
+
+```bash
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  --header 'Content-Type: application/json' --request POST --data-binary @- \
+  http://127.0.0.1:7655/api/actions/act_.../execute <<'JSON'
+{
+  "reason": "Execute approved recovery",
+  "planHash": "sha256:..."
+}
+JSON
+```
+
+If the response is lost or times out, inspect the existing action and target
+before retrying: losing the connection does not prove that execution stopped.
+An HTTP success is not a substitute for checking the terminal result and the
+resource's observed state.
+
+5. **Read the audit and events**, using a private header file with audit access:
+
+```bash
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  'http://127.0.0.1:7655/api/audit/actions?resourceId=vm%3A42&limit=10'
+```
+
+```bash
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  http://127.0.0.1:7655/api/audit/actions/act_.../events
+```
+
+When audit logging is unavailable, use Pulse's action detail in the signed-in
+UI to inspect the existing action; do not infer success or repeat execution
+from an unavailable audit response.
 
 Response:
 ```json
 {
   "actionId": "act_...",
-  "requestId": "agent-run-123",
+  "requestId": "manual-recovery-123",
   "allowed": true,
   "requiresApproval": true,
   "approvalPolicy": "admin",
@@ -478,9 +580,11 @@ Request body:
 ### Setup Script (Public)
 `GET /api/setup-script`
 Returns the Proxmox/PBS setup script as a shell-script download. Accepts an
-optional temporary setup token in the `setup_token` query for embedded
-non-interactive bootstrap; otherwise the script prompts for the one-time setup
-token at runtime. Canonical callers must send a supported `type` of `pve` or
+optional legacy `setup_token` query for compatibility. Current downloads
+contain no token: paste the separately revealed token only at the silent
+terminal prompt, or supply `PULSE_SETUP_TOKEN_FILE` pointing to a mode-0600
+regular file in a mode-0700 directory owned by the script's user. Never put a
+token in a copied command or URL. Canonical callers must send a supported `type` of `pve` or
 `pbs` plus non-empty `host` and `pulse_url`; the route no longer generates
 placeholder-host scripts for later repair or reconstructs Pulse identity from
 the request origin. The route now shares the same canonical type boundary as
@@ -510,20 +614,23 @@ authorize the request itself. Pulse-managed Proxmox monitor-token names on the
 setup/bootstrap path derive from the canonical Pulse endpoint, not request-local
 host fallbacks, so setup-script and turnkey node-add flows stay on one
 deterministic `pulse-<canonical-scope-slug>` identity per Pulse instance.
-`setupToken` remains bootstrap transport data for `/api/setup-script` and
-`/api/auto-register`, while `tokenHint` is the operator-facing display field
-for quick-setup surfaces and must stay masked instead of exposing the full
-one-time token in UI copy. Shared frontend consumers may validate
-`setupToken`, but they should not retain or display it once the returned
-bootstrap artifact and `tokenHint` are available; visible quick-setup previews
-should use the non-secret `commandWithoutEnv` form while copy actions keep
-using the token-bearing `commandWithEnv` artifact, and manual download flows
-should use the token-bearing `downloadURL` artifact instead of rebuilding a
-plain setup-script URL from non-secret preview state. Non-frontend bootstrap
-consumers such as the runtime-side Unified Agent bootstrap flow and shell installer must fail closed on that
-same full artifact contract too, rejecting missing or mismatched
-`downloadURL`, `tokenHint`, or expired `expires` values instead of accepting a
-reduced setup-token-only response shape.
+The `command`, `commandWithEnv`, and `commandWithoutEnv` fields now contain
+identical credential-free commands. They download the complete script before
+running it and prompt silently in the root-or-sudo process. The token crosses
+the installer boundary through a private file, not process arguments or an
+exported secret. `downloadURL` equals the tokenless `url`, so a manual download
+also needs the separately revealed token at runtime. `setupToken` is used for
+`/api/auto-register`; `tokenHint` remains masked on the setup page. Settings
+reveals the token in a separate dialog: run the command first, then copy and
+paste the token only at its prompt. The artifact is reused only for the same
+host and options while its five-minute expiry is live, and discarded when the
+setup modal closes.
+Non-frontend consumers must validate the complete artifact, including the
+canonical host, type, URLs, filename, masked hint and live expiry. Current
+Unified Agents and the shell installer also accept the coherent older-server
+artifact during upgrades, but never execute its command text. For new
+Proxmox agent enrolment against a newer server, use its current installer;
+already enrolled agents keep reporting normally.
 
 ### Auto-Register (Public)
 `POST /api/auto-register`
@@ -1076,7 +1183,7 @@ Returns organizations accessible to the authenticated user.
 ```json
 { "id": "acme-corp", "displayName": "Acme Corporation" }
 ```
-The creator becomes the owner and first member. Organization IDs must be lowercase alphanumeric with hyphens, 3-64 characters.
+The creator becomes the owner and first member. Organization IDs use letters, digits, periods, underscores or hyphens, 1–64 characters, but cannot be `.` or `..`. Prefer a simple lowercase/hyphen ID such as the example.
 
 ### Get Organization
 `GET /api/orgs/{id}` (requires `settings:read`)
@@ -1102,7 +1209,7 @@ Returns all members with their roles. User must be a member of the org.
 ```json
 { "userId": "jane", "role": "editor" }
 ```
-Roles: `owner`, `admin`, `editor`, `viewer`. Admin or owner role required. Setting role to `owner` transfers ownership (only current owner can do this). Default org members cannot be managed.
+Roles: `owner`, `admin`, `editor`, `viewer`. Admin or owner role required. A new user receives a pending invitation (`202`) and must accept it in Pulse before gaining membership. Posting an existing member's `userId` updates their role; there is no member PATCH endpoint. Setting role to `owner` transfers ownership only to an existing member, by the current owner after fresh sign-in. Default org members cannot be managed.
 
 ### Remove Member
 `DELETE /api/orgs/{id}/members/{userId}` (requires `settings:write`, session auth only)
@@ -1127,7 +1234,7 @@ Returns resources shared inbound to this organization from other organizations.
   "accessRole": "viewer"
 }
 ```
-Share a resource with another organization. Valid resource types: `vm`, `container`, `agent`, `storage`, `pbs`, `pmg`. Access roles: `viewer`, `editor`, `admin`. Admin or owner role required on the source org.
+Share a resource with another organization, using the resource type and ID returned by Pulse. Supported types include `vm`, `system-container`, `agent`, `node`, `docker-host`, `storage`, `pbs` and `pmg`; generic `host` and `container` types are not supported. Access roles: `viewer`, `editor`, `admin`. Admin or owner role required on the source org. The share is pending until a target-org admin or owner accepts it in Pulse; changing its access role requires acceptance again.
 
 ### Delete Share
 `DELETE /api/orgs/{id}/shares/{shareId}` (requires `settings:write`, session auth only)
@@ -1586,7 +1693,7 @@ TrueNAS resources (pools, datasets, disks, ZFS snapshots, replication tasks, ale
 
 ---
 
-## 📱 Relay / Mobile Remote Access (Relay and Above)
+## 📱 Relay / Pulse Mobile (retiring 31 March 2027)
 
 End-to-end encrypted relay protocol for mobile connectivity.
 

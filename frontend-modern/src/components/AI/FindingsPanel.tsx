@@ -1037,7 +1037,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         class={`p-3 transition-colors ${
           isPatrolFindingsSource()
             ? `border-l-2 ${patrolSeverityAccentClass(finding.severity)} ${
-                expandedId() === finding.id ? 'bg-surface-alt/80' : 'hover:bg-surface-hover'
+                expandedId() === finding.id ? '' : 'hover:bg-surface-hover'
               }`
             : ''
         } ${
@@ -1065,7 +1065,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 toggleExpanded();
               }
             }}
-            class="min-w-0 flex-1 cursor-pointer rounded text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            class="min-w-0 flex-1 cursor-pointer rounded-sm text-left focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40"
           >
             <div class="flex items-center gap-2 flex-wrap">
               {/* Status badge for non-active findings */}
@@ -1318,7 +1318,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 <button
                   type="button"
                   onClick={toggleExpanded}
-                  class="rounded bg-amber-600 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-amber-700"
+                  class="rounded-sm bg-amber-600 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-amber-700"
                   title={action().detail}
                 >
                   {action().label}
@@ -1330,7 +1330,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 <a
                   href={action().href}
                   onClick={(e) => e.stopPropagation()}
-                  class="inline-flex items-center rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
+                  class="inline-flex items-center rounded-sm bg-blue-600 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
                 >
                   {action().label}
                 </a>
@@ -1406,7 +1406,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 aria-expanded={manageOpenId() === finding.id}
                 aria-controls={`finding-${finding.id}-manage`}
                 onClick={toggleFindingOptions}
-                class="inline-flex min-h-11 items-center rounded border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:min-h-0"
+                class="inline-flex min-h-11 items-center rounded-sm border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40 sm:min-h-0"
                 title="Resolve, dismiss, remember as expected, or create a rule"
               >
                 Finding options
@@ -1422,7 +1422,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               aria-expanded={expandedId() === finding.id}
               aria-controls={`finding-${finding.id}-details`}
               onClick={toggleExpanded}
-              class="inline-flex min-h-11 items-center gap-1 rounded border border-border bg-surface px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:min-h-0"
+              class="inline-flex min-h-11 items-center gap-1 rounded-sm border border-border bg-surface px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40 sm:min-h-0"
               title={
                 isPatrolFindingsSource()
                   ? expandedId() === finding.id
@@ -1536,7 +1536,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           </p>
         </Show>
         <Show when={finding.previousResolvedFixSummary}>
-          <p class="text-sm text-base-content mt-2 px-2 py-1 rounded border border-emerald-200 bg-emerald-50/40 dark:border-emerald-800 dark:bg-emerald-950/30">
+          <p class="text-sm text-base-content mt-2 px-2 py-1 rounded-sm border border-emerald-200 bg-emerald-50/40 dark:border-emerald-800 dark:bg-emerald-950/30">
             <span class="font-medium text-emerald-800 dark:text-emerald-300">
               Last time this resolved:
             </span>{' '}
@@ -1554,7 +1554,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         </Show>
 
         <Show when={relatedFindings.length > 0}>
-          <div class="mt-3 rounded border border-border bg-surface-alt p-2">
+          <div class="mt-3 rounded-sm border border-border bg-surface-alt p-2">
             <div class="text-xs font-medium text-base-content">Related issues</div>
             <div class="mt-2 space-y-1">
               <For each={relatedFindings}>
@@ -1584,7 +1584,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         </Show>
 
         <Show when={shouldShowFindingLifecycle(finding)}>
-          <div class="mt-3 p-2 rounded border border-border bg-surface-alt">
+          <div class="mt-3 p-2 rounded-sm border border-border bg-surface-alt">
             <div class="text-xs font-medium text-base-content mb-2">Lifecycle</div>
             <div class="space-y-1">
               <For each={[...(finding.lifecycle || [])].slice(-6).reverse()}>
@@ -1630,11 +1630,11 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         {/* User note display / editor */}
         <Show when={editingNoteId() === finding.id}>
           <div
-            class="mt-3 p-2 rounded border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900"
+            class="mt-3 p-2 rounded-sm border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/25"
             onClick={(e) => e.stopPropagation()}
           >
             <textarea
-              class="w-full text-sm rounded border border-border bg-surface text-base-content px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+              class="w-full text-sm rounded-sm border border-border bg-surface text-base-content px-2 py-1.5 resize-none focus:outline-hidden focus:ring-1 focus:ring-blue-500"
               rows={3}
               value={noteText()}
               onInput={(e) => setNoteText(e.currentTarget.value)}
@@ -1644,7 +1644,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               <button
                 type="button"
                 onClick={(e) => handleSaveNote(finding, e)}
-                class="px-3 py-1 text-xs font-medium rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                class="px-3 py-1 text-xs font-medium rounded-sm bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
                 disabled={actionLoading() === finding.id}
               >
                 Save
@@ -1652,7 +1652,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               <button
                 type="button"
                 onClick={handleCancelNote}
-                class="px-3 py-1 text-xs font-medium rounded border border-border hover:bg-surface-hover"
+                class="px-3 py-1 text-xs font-medium rounded-sm border border-border hover:bg-surface-hover"
               >
                 Cancel
               </button>
@@ -1660,9 +1660,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           </div>
         </Show>
         <Show when={editingNoteId() !== finding.id && finding.userNote}>
-          <div class="mt-3 p-2 rounded border border-border bg-surface-alt flex items-start gap-2">
+          <div class="mt-3 p-2 rounded-sm border border-border bg-surface-alt flex items-start gap-2">
             <svg
-              class="w-4 h-4 text-muted mt-0.5 flex-shrink-0"
+              class="w-4 h-4 text-muted mt-0.5 shrink-0"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -1678,7 +1678,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <button
               type="button"
               onClick={(e) => handleStartEditNote(finding, e)}
-              class="p-1 hover:text-base-content flex-shrink-0"
+              class="p-1 hover:text-base-content shrink-0"
               title="Edit note"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1702,7 +1702,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               <a
                 href={action().href}
                 onClick={(e) => e.stopPropagation()}
-                class="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-blue-700"
+                class="inline-flex items-center gap-1 rounded-sm bg-blue-600 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-blue-700"
               >
                 {action().label}
               </a>
@@ -1715,7 +1715,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 e.stopPropagation();
                 void openFindingInAssistant(finding);
               }}
-              class="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-blue-700"
+              class="inline-flex items-center gap-1 rounded-sm bg-blue-600 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-blue-700"
               title={getPrimaryAssistantFindingAction(finding).title}
             >
               <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1745,7 +1745,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               type="button"
               onClick={(e) => handleInvestigate(finding, e)}
               disabled={actionLoading() === finding.id}
-              class="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+              class="inline-flex items-center gap-1 rounded-sm bg-blue-600 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
               title="Have Patrol investigate this finding"
             >
               {actionLoading() === finding.id ? 'Investigating…' : 'Investigate'}
@@ -1773,7 +1773,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   props.onPatrolModeNudgeAction?.();
                 }}
                 disabled={props.patrolModeNudgeBusy}
-                class="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                class="inline-flex items-center gap-1 rounded-sm bg-blue-600 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
                 title="Switch Patrol to Ask first so it can investigate and prepare fixes for your approval"
               >
                 {props.patrolModeNudgeBusy ? 'Switching…' : modeNudge!.actionLabel}
@@ -1788,10 +1788,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               onClick={(e) => e.stopPropagation()}
               onToggle={(event) => setManageOpenId(event.currentTarget.open ? finding.id : null)}
             >
-              <summary class="list-none cursor-pointer rounded border border-border bg-surface px-3 py-1.5 font-medium text-base-content hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+              <summary class="list-none cursor-pointer rounded-sm border border-border bg-surface px-3 py-1.5 font-medium text-base-content hover:bg-surface-hover focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40">
                 Resolve or dismiss
               </summary>
-              <div class="mt-1 flex min-w-48 flex-col gap-1 rounded border border-border bg-surface p-1 shadow-sm">
+              <div class="mt-1 flex min-w-48 flex-col gap-1 rounded-sm border border-border bg-surface p-1 shadow-xs">
                 <Show when={shouldShowAssistantManageAction}>
                   <button
                     type="button"
@@ -1799,7 +1799,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                       e.stopPropagation();
                       void openFindingInAssistant(finding);
                     }}
-                    class="rounded px-2 py-1 text-left hover:bg-surface-hover"
+                    class="rounded-sm px-2 py-1 text-left hover:bg-surface-hover"
                     title={getPrimaryAssistantFindingAction(finding).title}
                   >
                     {getPrimaryAssistantFindingAction(finding).label}
@@ -1809,7 +1809,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   <button
                     type="button"
                     onClick={(e) => handleStartEditNote(finding, e)}
-                    class="rounded px-2 py-1 text-left hover:bg-surface-hover"
+                    class="rounded-sm px-2 py-1 text-left hover:bg-surface-hover"
                   >
                     Add Note
                   </button>
@@ -1817,7 +1817,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 <button
                   type="button"
                   onClick={(e) => handleCopyFindingSummary(finding, e)}
-                  class="rounded px-2 py-1 text-left hover:bg-surface-hover"
+                  class="rounded-sm px-2 py-1 text-left hover:bg-surface-hover"
                 >
                   Copy summary
                 </button>
@@ -1826,7 +1826,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                     <button
                       type="button"
                       onClick={(e) => handleAcknowledge(finding, e)}
-                      class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                      class="rounded-sm px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
                       disabled={actionLoading() === finding.id}
                     >
                       Acknowledge
@@ -1836,7 +1836,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                     <button
                       type="button"
                       onClick={(e) => handleResolve(finding, e)}
-                      class="rounded px-2 py-1 text-left text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-900"
+                      class="rounded-sm px-2 py-1 text-left text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-900/25"
                       disabled={actionLoading() === finding.id}
                     >
                       Mark resolved
@@ -1846,7 +1846,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                     <button
                       type="button"
                       onClick={(e) => handleSnooze(finding, 1, e)}
-                      class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                      class="rounded-sm px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
                       disabled={actionLoading() === finding.id}
                     >
                       Snooze 1h
@@ -1854,7 +1854,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                     <button
                       type="button"
                       onClick={(e) => handleSnooze(finding, 24, e)}
-                      class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                      class="rounded-sm px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
                       disabled={actionLoading() === finding.id}
                     >
                       Snooze 24h
@@ -1862,7 +1862,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                     <button
                       type="button"
                       onClick={(e) => handleSnooze(finding, 168, e)}
-                      class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                      class="rounded-sm px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
                       disabled={actionLoading() === finding.id}
                     >
                       Snooze 7d
@@ -1872,7 +1872,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                     <button
                       type="button"
                       onClick={(e) => handleStartDismiss(finding, 'not_an_issue', e)}
-                      class="rounded px-2 py-1 text-left text-red-600 hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900"
+                      class="rounded-sm px-2 py-1 text-left text-red-600 hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/25"
                       disabled={actionLoading() === finding.id}
                     >
                       Dismiss: Not an issue
@@ -1880,7 +1880,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                     <button
                       type="button"
                       onClick={(e) => handleStartDismiss(finding, 'expected_behavior', e)}
-                      class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                      class="rounded-sm px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
                       disabled={actionLoading() === finding.id}
                     >
                       Remember as expected
@@ -1888,7 +1888,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                     <button
                       type="button"
                       onClick={(e) => handleStartDismiss(finding, 'will_fix_later', e)}
-                      class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                      class="rounded-sm px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
                       disabled={actionLoading() === finding.id}
                     >
                       Dismiss: Later
@@ -1896,7 +1896,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                     <button
                       type="button"
                       onClick={(e) => handleStartCreateRule(finding, e)}
-                      class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                      class="rounded-sm px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
                       disabled={
                         actionLoading() === finding.id ||
                         !getFindingSuppressionRuleScope(finding).canCreate
@@ -1915,7 +1915,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   <button
                     type="button"
                     onClick={(e) => handleReopen(finding, e)}
-                    class="rounded px-2 py-1 text-left text-blue-700 hover:bg-blue-50 disabled:opacity-50 dark:text-blue-300 dark:hover:bg-blue-900"
+                    class="rounded-sm px-2 py-1 text-left text-blue-700 hover:bg-blue-50 disabled:opacity-50 dark:text-blue-300 dark:hover:bg-blue-900/25"
                     disabled={actionLoading() === finding.id}
                   >
                     Reopen finding
@@ -1931,7 +1931,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             visually but uses neutral surface styling — this isn't a
             dismissal, it's a permanent commitment. */}
         <Show when={creatingRuleForId() === finding.id}>
-          <div class="mt-2 p-2 rounded border border-border bg-surface-alt">
+          <div class="mt-2 p-2 rounded-sm border border-border bg-surface-alt">
             <div class="flex items-center gap-2 mb-1.5">
               <span class="text-xs font-medium text-base-content">
                 Create suppression rule for{' '}
@@ -1947,7 +1947,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               suppressions management surface.
             </p>
             <textarea
-              class="w-full text-xs px-2 py-1.5 rounded border border-border bg-surface text-base-content resize-none focus:outline-none focus:ring-1 focus:ring-blue-400"
+              class="w-full text-xs px-2 py-1.5 rounded-sm border border-border bg-surface text-base-content resize-none focus:outline-hidden focus:ring-1 focus:ring-blue-400"
               rows={2}
               value={createRuleDescription()}
               onInput={(e) => setCreateRuleDescription(e.currentTarget.value)}
@@ -1958,7 +1958,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               <button
                 type="button"
                 onClick={(e) => handleConfirmCreateRule(finding, e)}
-                class="px-3 py-1 text-xs font-medium rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                class="px-3 py-1 text-xs font-medium rounded-sm bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
                 disabled={actionLoading() === finding.id || !createRuleDescription().trim()}
               >
                 Create rule
@@ -1966,7 +1966,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               <button
                 type="button"
                 onClick={handleCancelCreateRule}
-                class="px-3 py-1 text-xs font-medium rounded border border-border hover:bg-surface-hover"
+                class="px-3 py-1 text-xs font-medium rounded-sm border border-border hover:bg-surface-hover"
               >
                 Cancel
               </button>
@@ -1978,7 +1978,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             "Pulse should know this is expected"), "Dismiss as" for the
             other reasons (past-looking, "make this go away"). */}
         <Show when={dismissingId() === finding.id}>
-          <div class="mt-2 p-2 rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900">
+          <div class="mt-2 p-2 rounded-sm border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/25">
             <div class="flex items-center gap-2 mb-1.5">
               <span class="text-xs font-medium text-red-700 dark:text-red-300">
                 {dismissReason() === 'expected_behavior'
@@ -2024,7 +2024,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </p>
             </Show>
             <textarea
-              class="w-full text-xs px-2 py-1.5 rounded border border-border bg-surface text-base-content resize-none focus:outline-none focus:ring-1 focus:ring-red-400"
+              class="w-full text-xs px-2 py-1.5 rounded-sm border border-border bg-surface text-base-content resize-none focus:outline-hidden focus:ring-1 focus:ring-red-400"
               rows={2}
               placeholder="Optional note (for learning context)..."
               value={dismissNote()}
@@ -2036,14 +2036,14 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 type="button"
                 onClick={(e) => handleConfirmDismiss(finding.id, e)}
                 disabled={actionLoading() === finding.id}
-                class="px-2.5 py-1 text-xs font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-red-400 rounded transition-colors"
+                class="px-2.5 py-1 text-xs font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-red-400 rounded-sm transition-colors"
               >
                 Confirm Dismiss
               </button>
               <button
                 type="button"
                 onClick={handleCancelDismiss}
-                class="px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-hover rounded transition-colors"
+                class="px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-hover rounded-sm transition-colors"
               >
                 Cancel
               </button>
@@ -2099,21 +2099,21 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               <div class="mt-3 pt-3 border-t border-border-subtle">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                   <div class="flex min-w-0 items-center gap-2">
-                    <AlertCircleIcon class="h-4 w-4 flex-shrink-0 text-muted" />
+                    <AlertCircleIcon class="h-4 w-4 shrink-0 text-muted" />
                     <span class="text-sm font-medium text-base-content">Assistant context</span>
                   </div>
                   <div class="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={(e) => handleOpenPlanInAssistant(finding, plan(), e)}
-                      class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
+                      class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-sm flex items-center justify-center gap-1.5"
                     >
                       Ask Assistant
                     </button>
                     <button
                       type="button"
                       onClick={(e) => handleDismissPlan(plan(), e)}
-                      class="px-3 py-1.5 hover:bg-surface-hover text-muted text-xs font-medium rounded"
+                      class="px-3 py-1.5 hover:bg-surface-hover text-muted text-xs font-medium rounded-sm"
                     >
                       Dismiss
                     </button>
@@ -2145,7 +2145,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               fieldBaseClass="contents"
               value={sortBy()}
               onChange={(e) => setSortBy(e.currentTarget.value as 'severity' | 'time')}
-              selectBaseClass="min-h-11 rounded border border-border bg-surface px-2 py-1 text-xs sm:min-h-0"
+              selectBaseClass="min-h-11 rounded-sm border border-border bg-surface px-2 py-1 text-xs sm:min-h-0"
             >
               <option value="severity">By Severity</option>
               <option value="time">By Time</option>
@@ -2243,7 +2243,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                       class="divide-y divide-border-subtle"
                       aria-label={`${group.label}: ${getPatrolFindingIssueCountLabel(group.findings.length)}`}
                     >
-                      <div class="flex flex-wrap items-center justify-between gap-2 bg-surface-alt/60 px-3 py-2 text-xs">
+                      <div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs">
                         <span class="font-semibold text-base-content">{group.label}</span>
                         <span class="text-muted">
                           {getPatrolFindingIssueCountLabel(group.findings.length)}
@@ -2261,8 +2261,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 )}
               </For>
               <Show when={alertMirroredFindings().length > 0}>
-                <details class="bg-surface-alt/40">
-                  <summary class="flex min-h-11 cursor-pointer flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500">
+                <details class="">
+                  <summary class="flex min-h-11 cursor-pointer flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500">
                     <span class="font-semibold text-base-content">
                       {alertMirroredFindings().length}{' '}
                       {alertMirroredFindings().length === 1 ? 'finding mirrors' : 'findings mirror'}{' '}
@@ -2293,9 +2293,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 <aside
                   id={`finding-${finding().id}-details`}
                   aria-label={`Review ${title().label}`}
-                  class="overflow-hidden rounded-md border border-border bg-surface shadow-sm xl:sticky xl:top-4"
+                  class="overflow-hidden rounded-md border border-border bg-surface shadow-xs xl:sticky xl:top-4"
                 >
-                  <div class="flex items-start justify-between gap-3 border-b border-border-subtle bg-surface-alt/60 px-4 py-3">
+                  <div class="flex items-start justify-between gap-3 border-b border-border-subtle px-4 py-3">
                     <div class="min-w-0">
                       <div class="flex flex-wrap items-center gap-2">
                         <MetadataBadge
@@ -2319,7 +2319,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                       type="button"
                       aria-label={`Close review panel for ${title().label}`}
                       onClick={closeReviewPanel}
-                      class="rounded p-1.5 text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                      class="rounded-sm p-1.5 text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40"
                     >
                       <XIcon class="h-4 w-4" />
                     </button>

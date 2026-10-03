@@ -68,14 +68,14 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
           aria-label={title()}
           style={state.popoverStyle()}
           onFocusOut={state.handlePopoverBlur}
-          class={`!fixed ${positionClass()} z-50 w-auto overflow-y-auto rounded-md border bg-surface text-left shadow-sm xl:!absolute xl:mt-2 xl:w-72`}
+          class={`fixed! ${positionClass()} z-50 w-auto overflow-y-auto rounded-md border bg-surface text-left shadow-xs xl:absolute! xl:mt-2 xl:w-72`}
         >
           <div class="flex items-center justify-between border-b border-border-subtle px-3 py-2">
             <span class="text-sm font-semibold text-base-content">{title()}</span>
             <button
               ref={state.setCloseButtonRef}
               type="button"
-              class="inline-flex min-h-11 min-w-11 items-center justify-center rounded transition-colors hover:text-muted sm:min-h-8 sm:min-w-8"
+              class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm transition-colors hover:text-muted sm:min-h-8 sm:min-w-8"
               onClick={state.closeAndRestoreFocus}
               aria-label="Close search tips"
             >
@@ -97,7 +97,7 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
               <For each={props.tips}>
                 {(tip) => (
                   <div class="flex items-start gap-2">
-                    <code class="whitespace-nowrap rounded bg-surface-alt px-2 py-0.5 font-mono text-[11px] text-base-content">
+                    <code class="whitespace-nowrap rounded-sm bg-surface-alt px-2 py-0.5 font-mono text-[11px] text-base-content">
                       {tip.code}
                     </code>
                     <span class="text-[12px] leading-snug text-muted">{tip.description}</span>
@@ -106,9 +106,9 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
               </For>
             </div>
             <Show when={props.footerText || props.footerHighlight}>
-              <div class="mt-3 rounded-md bg-blue-50 px-3 py-2 text-[11px] text-blue-700 dark:bg-blue-900 dark:text-blue-200">
+              <div class="mt-3 rounded-md bg-blue-50 px-3 py-2 text-[11px] text-blue-700 dark:bg-blue-900/25 dark:text-blue-200">
                 <Show when={props.footerHighlight}>
-                  <code class="mr-1 rounded bg-blue-100 px-1 py-0.5 font-mono text-[11px] text-blue-700 dark:bg-blue-800 dark:text-blue-100">
+                  <code class="mr-1 rounded-sm bg-blue-100 px-1 py-0.5 font-mono text-[11px] text-blue-700 dark:bg-blue-800 dark:text-blue-100">
                     {props.footerHighlight}
                   </code>
                 </Show>

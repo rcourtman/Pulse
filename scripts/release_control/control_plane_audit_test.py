@@ -248,10 +248,11 @@ class ControlPlaneAuditTest(unittest.TestCase):
         for version in ("6.4.4-beta.1", "v6.4.4-beta.2", "6.4.4-rc.1",
                         "6.4.4", "v6.4.4+build.1", "6.4.3-rc.1", "6.4.3",
                         "6.4.5-beta.1", "v6.4.5-beta.2", "6.4.5-rc.1",
-                        "6.4.5", "v6.4.5+build.1"):
+                        "6.4.5", "v6.4.5+build.1", "6.4.6-beta.1",
+                        "v6.4.6-rc.1", "6.4.6", "v6.4.6+build.1"):
             with self.subTest(version=version):
                 self.assertEqual(release_branch_for_version(version), "release/v6.4")
-        for version in ("6.4.1", "6.4.2", "6.4.6-beta.1", "6.4.50-beta.1", "6.4.40-beta.1",
+        for version in ("6.4.1", "6.4.2", "6.4.7-rc.1", "6.4.60-rc.1", "6.4.50-beta.1", "6.4.40-beta.1",
                         "6.4.30", "6.3.20", "6.6.0-beta.1"):
             with self.subTest(version=version):
                 self.assertEqual(release_branch_for_version(version), "main")
@@ -267,7 +268,8 @@ class ControlPlaneAuditTest(unittest.TestCase):
             )
             self.assertIsNotNone(match)
             script = textwrap.dedent(match.group(1))
-            for version in ("6.4.4-beta.1", "6.4.5-beta.1", "6.4.5-rc.1", "6.4.5"):
+            for version in ("6.4.4-beta.1", "6.4.5-beta.1", "6.4.5-rc.1", "6.4.5",
+                            "6.4.6-rc.1", "6.4.6"):
                 for branch in ("main", "release/v6.4"):
                     with self.subTest(workflow=workflow, branch=branch, version=version), tempfile.TemporaryDirectory() as tmp:
                         output = os.path.join(tmp, "output")

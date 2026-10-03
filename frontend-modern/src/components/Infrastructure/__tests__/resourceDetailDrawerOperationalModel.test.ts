@@ -40,31 +40,31 @@ describe('resourceDetailDrawerOperationalModel', () => {
       {
         label: 'K8s Node CPU/Memory',
         classes:
-          'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-400',
+          'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-cyan-100 text-cyan-700 dark:bg-cyan-900/25 dark:text-cyan-400',
         title: 'Node CPU and memory metrics are available.',
       },
       {
         label: 'Node Telemetry (Agent)',
         classes:
-          'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-400',
+          'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-cyan-100 text-cyan-700 dark:bg-cyan-900/25 dark:text-cyan-400',
         title: 'Linked Pulse agent provides node uptime, temperature, disk, network, and disk I/O.',
       },
       {
         label: 'Pod CPU/Memory',
         classes:
-          'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-400',
+          'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-cyan-100 text-cyan-700 dark:bg-cyan-900/25 dark:text-cyan-400',
         title: 'Pod CPU and memory metrics are available.',
       },
       {
         label: 'Pod Ephemeral Disk',
         classes:
-          'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-400',
+          'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-cyan-100 text-cyan-700 dark:bg-cyan-900/25 dark:text-cyan-400',
         title: 'Pod ephemeral storage usage is available.',
       },
       {
         label: 'Pod Disk I/O Unsupported',
         classes:
-          'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-muted',
+          'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-muted',
         title:
           'Pod disk read/write throughput is not collected by the Kubernetes integration path today.',
       },

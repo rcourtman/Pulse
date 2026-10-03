@@ -460,6 +460,7 @@ function App() {
     useKeyboardShortcuts({
       enabled: () => !runtime.needsAuth(),
       platformVisibility: platformNavigationVisibility,
+      patrolVisible: () => aiChatStore.enabled === true,
       isShortcutsOpen: shortcutsOpen,
       isCommandPaletteOpen: commandPaletteOpen,
       onToggleShortcuts: () => {
@@ -592,6 +593,7 @@ function App() {
                           isOpen={shortcutsOpen()}
                           onClose={() => setShortcutsOpen(false)}
                           platformVisibility={platformNavigationVisibility}
+                          patrolVisible={() => aiChatStore.enabled === true}
                         />
                       </Show>
                       <Show when={commandPaletteOpen()}>

@@ -74,7 +74,12 @@ const formatServiceUpdate = (
     return { label: 'Stable', title: 'No active service update reported' };
   }
 
-  const label = state || 'Updating';
+  // Docker reports the rollout state as a snake_case token
+  // ("rollback_started"); read it as words in the cell and keep the raw
+  // token, message and completion time in the title.
+  const label = state
+    ? state.replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase())
+    : 'Updating';
   const title = [state, message, completedAt].filter(Boolean).join(' | ') || label;
   return { label, title };
 };
@@ -325,7 +330,7 @@ export const DockerServicesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-narrow-hidden hidden text-base-content md:table-cell`}
                           >
-                            <span class="truncate inline-block max-w-[8rem]" title={stack()}>
+                            <span class="truncate inline-block max-w-32" title={stack()}>
                               {stack()}
                             </span>
                           </TableCell>
@@ -354,10 +359,7 @@ export const DockerServicesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span
-                              class="truncate inline-block max-w-[10rem]"
-                              title={update().title}
-                            >
+                            <span class="truncate inline-block max-w-40" title={update().title}>
                               {update().label}
                             </span>
                           </TableCell>

@@ -278,6 +278,38 @@ describe('shell view', function() {
     expect(html).not.toContain('data-shell-section="overview"');
   });
 
+  it('gives a provider-hosted platform a Plan section instead of hosted or self-hosted billing', function() {
+    var html = renderAuthenticatedPortalHTML(
+      createContext({
+        bootstrap: createBootstrap({
+          provider_hosted_mode: true,
+          accounts: [
+            {
+              id: 'acct_provider',
+              name: 'Provider MSP',
+              kind: 'msp',
+              kind_label: 'MSP',
+              role: 'owner',
+              can_manage: true,
+              has_billing: false,
+              members: [],
+              workspaces: [],
+            },
+          ],
+        }),
+      })
+    );
+
+    expect(html).toContain('data-shell-section="billing">Plan</button>');
+    expect(html).toContain('id="provider-plan-root"');
+    expect(html).not.toContain('Self-hosted billing');
+    expect(html).not.toContain('hosted billing');
+    var tabs = ['workspaces', 'access', 'billing', 'support'].map(function(section) {
+      return html.indexOf('data-shell-action="activate-section" data-shell-section="' + section + '"');
+    });
+    expect(tabs.every(function(index, i) { return index > 0 && (i === 0 || index > tabs[i - 1]); })).toBe(true);
+  });
+
   it('omits hosted billing surfaces for provider-hosted MSP accounts without billing records', function() {
     var html = renderAuthenticatedPortalHTML(
       createContext({

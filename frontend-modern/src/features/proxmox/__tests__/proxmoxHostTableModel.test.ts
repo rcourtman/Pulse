@@ -13,22 +13,22 @@ describe('proxmoxHostTableModel', () => {
     const ids = columns.map((column) => column.id);
 
     expect(ids).toEqual(['node', 'cpu', 'memory', 'disk', 'uptime']);
-    expect(getProxmoxHostTableMinWidthClass('narrow')).toBe('min-w-[0px]');
+    expect(getProxmoxHostTableMinWidthClass('narrow')).toBe('min-w-0');
     expect(getProxmoxHostColumnWidthStyle('node', 'narrow', ids)).toEqual({ width: '40%' });
     expect(getProxmoxHostColumnWidthStyle('cpu', 'narrow', ids)).toEqual({ width: '15%' });
     expect(getProxmoxHostColumnWidthStyle('uptime', 'narrow', ids)).toEqual({ width: '15%' });
   });
 
-  it('shows the full operational metric track at phone width', () => {
+  it('matches the guest table columns and keeps node names whole at phone width', () => {
     const columns = getProxmoxHostVisibleColumnsForLayout('phone');
     const ids = columns.map((column) => column.id);
 
-    expect(ids).toEqual(['node', 'cpu', 'memory', 'disk', 'temp', 'uptime']);
-    expect(getProxmoxHostTableMinWidthClass('phone')).toBe('min-w-[0px]');
-    expect(getProxmoxHostColumnWidthStyle('node', 'phone', ids)).toEqual({ width: '30%' });
-    expect(getProxmoxHostColumnWidthStyle('disk', 'phone', ids)).toEqual({ width: '13.3824%' });
-    expect(getProxmoxHostColumnWidthStyle('temp', 'phone', ids)).toEqual({ width: '15.4412%' });
-    expect(getProxmoxHostColumnWidthStyle('uptime', 'phone', ids)).toEqual({ width: '14.4118%' });
+    expect(ids).toEqual(['node', 'cpu', 'memory', 'disk', 'uptime']);
+    expect(getProxmoxHostTableMinWidthClass('phone')).toBe('min-w-0');
+    expect(getProxmoxHostColumnWidthStyle('node', 'phone', ids)).toEqual({ width: '38%' });
+    expect(getProxmoxHostColumnWidthStyle('cpu', 'phone', ids)).toEqual({ width: '15.5%' });
+    expect(getProxmoxHostColumnWidthStyle('disk', 'phone', ids)).toEqual({ width: '15.5%' });
+    expect(getProxmoxHostColumnWidthStyle('uptime', 'phone', ids)).toEqual({ width: '15.5%' });
   });
 
   it('prioritizes live utilization columns in the mobile host table', () => {
@@ -36,7 +36,7 @@ describe('proxmoxHostTableModel', () => {
     const ids = columns.map((column) => column.id);
 
     expect(ids).toEqual(['node', 'cpu', 'memory', 'disk', 'temp', 'uptime']);
-    expect(getProxmoxHostTableMinWidthClass('mobile')).toBe('min-w-[0px]');
+    expect(getProxmoxHostTableMinWidthClass('mobile')).toBe('min-w-0');
     expect(getProxmoxHostColumnWidthStyle('node', 'mobile', ids)).toEqual({ width: '30%' });
     expect(getProxmoxHostColumnWidthStyle('cpu', 'mobile', ids)).toEqual({ width: '13.3824%' });
     expect(getProxmoxHostColumnWidthStyle('memory', 'mobile', ids)).toEqual({
@@ -59,7 +59,7 @@ describe('proxmoxHostTableModel', () => {
       'uptime',
       'cluster',
     ]);
-    expect(getProxmoxHostTableMinWidthClass('tablet')).toBe('min-w-[50rem]');
+    expect(getProxmoxHostTableMinWidthClass('tablet')).toBe('min-w-200');
   });
 
   it('adds guest counts on compact and reserves version for wide layouts', () => {
@@ -110,7 +110,7 @@ describe('proxmoxHostTableModel', () => {
     // The compact band covers most laptops. Forcing a 1240px floor
     // there pushed the rightmost column behind a horizontal scroll, so compact
     // now fits its container; only wide keeps the fixed-width floor.
-    expect(getProxmoxHostTableMinWidthClass('compact')).toBe('min-w-[64rem]');
+    expect(getProxmoxHostTableMinWidthClass('compact')).toBe('min-w-5xl');
     expect(getProxmoxHostTableMinWidthClass('wide')).toBe('min-w-[1240px]');
   });
 });

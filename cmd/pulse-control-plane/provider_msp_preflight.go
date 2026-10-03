@@ -106,7 +106,7 @@ func runProviderMSPPreflightWithDependencies(ctx context.Context, cfg *cloudcp.C
 	} else {
 		report.WorkspaceLimit = workspaceLimit
 	}
-	if !opts.AllowEnvPlan && strings.TrimSpace(cfg.ProviderMSPPlanSource) != cloudcp.ProviderMSPPlanSourceLicenseFile {
+	if !opts.AllowEnvPlan && !cloudcp.ProviderMSPPlanSourceIsSignedLicense(cfg.ProviderMSPPlanSource) {
 		addFailure("provider MSP preflight requires %s plan source; rerun with --allow-env-plan only for local development", cloudcp.ProviderMSPPlanSourceLicenseFile)
 	}
 

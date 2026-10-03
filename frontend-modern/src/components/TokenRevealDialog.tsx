@@ -78,7 +78,7 @@ export const TokenRevealDialog: Component = () => {
             ariaLabel="API token ready"
           >
             <div class="w-full">
-              <Card padding="lg" class="shadow-sm relative">
+              <Card padding="lg" class="shadow-xs relative">
                 <button
                   type="button"
                   class="absolute top-3 right-3 rounded-md px-2 py-1 text-xs font-medium hover:text-base-content transition-colors"
@@ -89,7 +89,7 @@ export const TokenRevealDialog: Component = () => {
                 </button>
 
                 <div class="flex items-start gap-3">
-                  <div class="flex-shrink-0 rounded-full bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 p-2">
+                  <div class="shrink-0 rounded-full bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300 p-2">
                     <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                       <path
                         stroke-linecap="round"
@@ -106,7 +106,7 @@ export const TokenRevealDialog: Component = () => {
                         <span
                           class={
                             sourceBadge?.classes ||
-                            'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-base-content'
+                            'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-base-content'
                           }
                         >
                           {sourceLabel}
@@ -128,7 +128,7 @@ export const TokenRevealDialog: Component = () => {
                     <button
                       type="button"
                       onClick={() => handleCopy(info.token)}
-                      class="inline-flex items-center justify-center rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 transition-colors shadow-sm"
+                      class="inline-flex items-center justify-center rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 transition-colors shadow-xs"
                     >
                       {copied() ? 'Copied!' : 'Copy token'}
                     </button>
@@ -139,7 +139,7 @@ export const TokenRevealDialog: Component = () => {
                       <span>
                         {' '}
                         · Hint:{' '}
-                        <code class="rounded bg-surface-alt px-1.5 py-0.5 font-mono text-[11px] text-muted">
+                        <code class="rounded-sm bg-surface-alt px-1.5 py-0.5 font-mono text-[11px] text-muted">
                           {tokenHint as string}
                         </code>
                       </span>

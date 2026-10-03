@@ -699,6 +699,38 @@ safe_read_with_default() {
     return 0
 }
 
+# A version change is not consent to unattended updates. Keep the existing
+# choice (including a disabled timer) and require an affirmative answer when
+# offering updates on an installation without an enabled configuration.
+offer_existing_auto_updates() {
+    if [[ "$AUTO_UPDATE_CHOICE_EXPLICIT" == "true" ]] || [[ "$ENABLE_AUTO_UPDATES" == "true" ]] || [[ "$IN_DOCKER" == "true" ]]; then
+        return 0
+    fi
+
+    local prompt_reason=""
+    if ! update_timer_exists; then
+        prompt_reason="missing"
+    elif [[ -f "$CONFIG_DIR/system.json" ]] && grep -Eq '"autoUpdateEnabled"[[:space:]]*:[[:space:]]*false' "$CONFIG_DIR/system.json"; then
+        prompt_reason="disabled"
+    fi
+    [[ -n "$prompt_reason" ]] || return 0
+
+    echo
+    if [[ "$prompt_reason" == "disabled" ]]; then
+        echo -e "${YELLOW}Auto-updates are currently disabled.${NC}"
+    else
+        echo "Automatic updates are not configured."
+    fi
+    echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
+    echo "Leave this disabled to keep control of version changes and rollbacks."
+    local enable_updates=""
+    safe_read_with_default "Enable auto-updates? [y/N]: " enable_updates "n"
+    if [[ "$enable_updates" =~ ^([Yy]|[Yy][Ee][Ss])$ ]]; then
+        ENABLE_AUTO_UPDATES=true
+    fi
+    return 0
+}
+
 wait_for_pulse_ready() {
     local pulse_url="$1"
     local retries="${2:-60}"
@@ -2150,7 +2182,7 @@ smoke_test_pve_auto_register_token() {
     local smoke_status=0
 
     set +e
-    smoke_output=$(curl --retry 2 --retry-delay 1 -kfsS -H "Authorization: PVEAPIToken=${token_id}=${token_value}" "${host_url%/}/api2/json/nodes" 2>&1)
+    smoke_output=$(printf 'Authorization: PVEAPIToken=%s=%s\n' "$token_id" "$token_value" | curl --retry 2 --retry-delay 1 -kfsS -H @- "${host_url%/}/api2/json/nodes" 2>&1)
     smoke_status=$?
     set -e
 
@@ -2252,9 +2284,11 @@ print(json.dumps({"type": "pve", "host": host, "backupPerms": backup}))
 PY
 )
 
-    echo "$setup_payload" > /tmp/pulse-auto-register-request.json 2>/dev/null || true
+    # Bootstrap request/response are not retained in shared /tmp diagnostics.
 
     local pulse_url="http://${pulse_ip}:${pulse_port}"
+
+    set +xv
 
     local setup_response
     if ! setup_response=$(curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/setup-script-url" -H "Content-Type: application/json" -d "$setup_payload"); then
@@ -2263,8 +2297,7 @@ PY
         return
     fi
 
-    # Persist for debugging when running interactively
-    echo "$setup_response" > /tmp/pulse-auto-register-response.json 2>/dev/null || true
+    # The response contains a one-time credential; do not persist it as a diagnostic.
 
     local setup_token
     local setup_type
@@ -2278,17 +2311,18 @@ PY
     local setup_token_hint
     local setup_expires
     local setup_expiry_state
-    IFS=$'\t' read -r setup_token setup_type setup_host setup_url setup_download_url setup_script_name setup_command setup_command_with_env setup_command_without_env setup_token_hint setup_expires setup_expiry_state <<<"$(python3 - "$setup_response" "$pulse_url" "$normalized_host_url" <<'PY'
+    IFS=$'\t' read -r setup_token setup_type setup_host setup_url setup_download_url setup_script_name setup_command setup_command_with_env setup_command_without_env setup_token_hint setup_expires setup_expiry_state <<<"$(python3 - "$pulse_url" "$normalized_host_url" "$backup_perms" 3<<<"$setup_response" <<'PY'
 import json, sys
 import time
 from urllib.parse import quote
 try:
-    data = json.loads(sys.argv[1])
+    data = json.load(__import__("os").fdopen(3))
 except Exception:
     print("\t\t\t\t\t\t\t\t\t\t")
     sys.exit(0)
-pulse_url = sys.argv[2]
-host = sys.argv[3]
+pulse_url = sys.argv[1]
+host = sys.argv[2]
+backup_query = "backup_perms=true&" if sys.argv[3] == "true" else ""
 expires_raw = data.get("expires", "")
 expiry_state = ""
 try:
@@ -2305,15 +2339,14 @@ setup_script_name = str(data.get("scriptFileName", ""))
 setup_command = str(data.get("command", ""))
 setup_command_with_env = str(data.get("commandWithEnv", ""))
 setup_command_without_env = str(data.get("commandWithoutEnv", ""))
-expected_setup_url = f"{pulse_url}/api/setup-script?host={quote(host, safe='')}&pulse_url={quote(pulse_url, safe='')}&type=pve"
-if setup_token:
-    expected_download_url = f"{pulse_url}/api/setup-script?host={quote(host, safe='')}&pulse_url={quote(pulse_url, safe='')}&setup_token={quote(setup_token, safe='')}&type=pve"
-else:
-    expected_download_url = ""
+expected_setup_url = f"{pulse_url}/api/setup-script?{backup_query}host={quote(host, safe='')}&pulse_url={quote(pulse_url, safe='')}&type=pve"
+expected_download_url = expected_setup_url
+legacy_download_url = f"{pulse_url}/api/setup-script?{backup_query}host={quote(host, safe='')}&pulse_url={quote(pulse_url, safe='')}&setup_token={quote(setup_token, safe='')}&type=pve" if setup_token else ""
+modern = setup_download_url == expected_download_url
 expected_script_name = "pulse-setup-pve.sh"
 if setup_url != expected_setup_url:
     setup_url = ""
-if setup_download_url != expected_download_url:
+if setup_download_url not in (expected_download_url, legacy_download_url):
     setup_download_url = ""
 if setup_script_name != expected_script_name:
     setup_script_name = ""
@@ -2345,15 +2378,17 @@ for _field_name, _value, _requires_token in command_fields:
         else:
             setup_command_without_env = ""
         continue
-    if _requires_token:
-        if "PULSE_SETUP_TOKEN=" not in _value or setup_token not in _value:
-            if _field_name == "command":
-                setup_command = ""
-            else:
-                setup_command_with_env = ""
-            continue
-    elif "PULSE_SETUP_TOKEN=" in _value or setup_token in _value:
-        setup_command_without_env = ""
+    if modern:
+        valid = "PULSE_SETUP_TOKEN_FILE=" in _value and "PULSE_SETUP_TOKEN=" not in _value and setup_token not in _value
+    else:
+        valid = "PULSE_SETUP_TOKEN_FILE=" not in _value and (("PULSE_SETUP_TOKEN=" in _value and setup_token in _value) if _requires_token else ("PULSE_SETUP_TOKEN=" not in _value and setup_token not in _value))
+    if not valid:
+        if _field_name == "command":
+            setup_command = ""
+        elif _field_name == "commandWithEnv":
+            setup_command_with_env = ""
+        else:
+            setup_command_without_env = ""
 if not token_hint or token_hint == setup_token:
     token_hint = ""
 print("\t".join([
@@ -2373,7 +2408,9 @@ print("\t".join([
 PY
 )" || setup_token=""
 
-    local expected_setup_url="${pulse_url}/api/setup-script?host=$(python3 - <<'PY' "$normalized_host_url"
+    local backup_query=""
+    [[ "$backup_perms" == "true" ]] && backup_query="backup_perms=true&"
+    local expected_setup_url="${pulse_url}/api/setup-script?${backup_query}host=$(python3 - <<'PY' "$normalized_host_url"
 from urllib.parse import quote
 import sys
 print(quote(sys.argv[1], safe=''))
@@ -2384,16 +2421,18 @@ import sys
 print(quote(sys.argv[1], safe=''))
 PY
 )&type=pve"
-    local expected_download_url="$(python3 - <<'PY' "$normalized_host_url" "$pulse_url" "$setup_token"
+    local expected_download_url="$(python3 - <<'PY' "$normalized_host_url" "$pulse_url" "$backup_perms" 3<<<"$setup_token"
 from urllib.parse import quote
 import sys
-host, pulse_url, setup_token = sys.argv[1:]
-print(f"{pulse_url}/api/setup-script?host={quote(host, safe='')}&pulse_url={quote(pulse_url, safe='')}&setup_token={quote(setup_token, safe='')}&type=pve")
+host, pulse_url, backup_perms = sys.argv[1:]
+backup_query = "backup_perms=true&" if backup_perms == "true" else ""
+setup_token = __import__("os").fdopen(3).read().strip()
+print(f"{pulse_url}/api/setup-script?{backup_query}host={quote(host, safe='')}&pulse_url={quote(pulse_url, safe='')}&setup_token={quote(setup_token, safe='')}&type=pve")
 PY
 )"
     local expected_script_name="pulse-setup-pve.sh"
 
-    if [[ -z "$setup_token" ]] || [[ "$setup_type" != "pve" ]] || [[ "$setup_host" != "$normalized_host_url" ]] || [[ "$setup_url" != "$expected_setup_url" ]] || [[ "$setup_download_url" != "$expected_download_url" ]] || [[ "$setup_script_name" != "$expected_script_name" ]] || [[ -z "$setup_command" ]] || [[ -z "$setup_command_with_env" ]] || [[ -z "$setup_command_without_env" ]] || [[ -z "$setup_token_hint" ]] || [[ -z "$setup_expires" ]] || [[ "$setup_expiry_state" != "live" ]]; then
+    if [[ -z "$setup_token" ]] || [[ "$setup_type" != "pve" ]] || [[ "$setup_host" != "$normalized_host_url" ]] || [[ "$setup_url" != "$expected_setup_url" ]] || { [[ "$setup_download_url" != "$expected_download_url" ]] && [[ "$setup_download_url" != "$expected_setup_url" ]]; } || [[ "$setup_script_name" != "$expected_script_name" ]] || [[ -z "$setup_command" ]] || [[ -z "$setup_command_with_env" ]] || [[ -z "$setup_command_without_env" ]] || [[ -z "$setup_token_hint" ]] || [[ -z "$setup_expires" ]] || [[ "$setup_expiry_state" != "live" ]]; then
         AUTO_NODE_REGISTER_ERROR="missing setup token"
         print_warn "Pulse did not return a setup token; skipping automatic node registration"
         return
@@ -2512,9 +2551,10 @@ PY
     fi
 
     local register_payload
-    register_payload=$(python3 - <<'PY' "$normalized_host_url" "$token_id" "$token_value" "$server_name" "$setup_token"
+    register_payload=$(python3 - "$normalized_host_url" "$token_id" "$server_name" 3<<<"$(printf '%s\n%s\n' "$token_value" "$setup_token")" <<'PY'
 import json, sys
-host, token_id, token_value, server_name, setup_token = sys.argv[1:]
+host, token_id, server_name = sys.argv[1:]
+token_value, setup_token = __import__("os").fdopen(3).read().splitlines()
 print(json.dumps({
     "type": "pve",
     "host": host,
@@ -2528,7 +2568,7 @@ PY
 )
 
     local register_response
-    if ! register_response=$(curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d "$register_payload"); then
+    if ! register_response=$(printf %s "$register_payload" | curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-); then
         AUTO_NODE_REGISTER_ERROR="auto-register request failed"
         print_warn "Pulse auto-registration request failed; skipping automatic node registration"
         return
@@ -4862,42 +4902,8 @@ main() {
             print_info "${action_word} version ${FORCE_VERSION}..."
             LATEST_RELEASE="${FORCE_VERSION}"
             
-            # Check if auto-updates should be offered when using --version
-            # Same logic as update/reinstall paths
-            if [[ "$AUTO_UPDATE_CHOICE_EXPLICIT" != "true" ]] && [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
-                local should_ask_about_updates=false
-                local prompt_reason=""
-                
-                if ! update_timer_exists; then
-                    # Timer doesn't exist - new feature
-                    should_ask_about_updates=true
-                    prompt_reason="new"
-                elif [[ -f "$CONFIG_DIR/system.json" ]]; then
-                    # Timer exists, check if it's properly configured
-                    if grep -q '"autoUpdateEnabled":\s*false' "$CONFIG_DIR/system.json" 2>/dev/null; then
-                        should_ask_about_updates=true
-                        prompt_reason="disabled"
-                    fi
-                fi
-                
-                if [[ "$should_ask_about_updates" == "true" ]]; then
-                    echo
-                    if [[ "$prompt_reason" == "disabled" ]]; then
-                        echo -e "${YELLOW}Auto-updates are currently disabled.${NC}"
-                        echo "Would you like to enable automatic updates?"
-                    else
-                        echo -e "${YELLOW}New feature: Automatic updates!${NC}"
-                    fi
-                    echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
-                    echo "This keeps your installation secure and up-to-date."
-                    safe_read_with_default "Enable auto-updates? [Y/n]: " enable_updates "y"
-                    # Default to yes for this prompt since they're already updating
-                    if [[ ! "$enable_updates" =~ ^[Nn]$ ]]; then
-                        ENABLE_AUTO_UPDATES=true
-                    fi
-                fi
-            fi
-            
+            offer_existing_auto_updates
+
             # Detect the actual service name before trying to stop it
             SERVICE_NAME=$(detect_service_name)
 
@@ -5071,43 +5077,7 @@ main() {
                 print_info "${action_word} $target_version..."
                 LATEST_RELEASE="$target_version"
                 
-                # Check if auto-updates should be offered to the user
-                # Offer if: not already forced by flag, not in Docker, and either:
-                # 1. Timer doesn't exist (new feature), OR
-                # 2. Timer exists but autoUpdateEnabled is false (misconfigured)
-                if [[ "$AUTO_UPDATE_CHOICE_EXPLICIT" != "true" ]] && [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
-                    local should_ask_about_updates=false
-                    local prompt_reason=""
-                    
-                    if ! update_timer_exists; then
-                        # Timer doesn't exist - new feature
-                        should_ask_about_updates=true
-                        prompt_reason="new"
-                    elif [[ -f "$CONFIG_DIR/system.json" ]]; then
-                        # Timer exists, check if it's properly configured
-                        if grep -q '"autoUpdateEnabled":\s*false' "$CONFIG_DIR/system.json" 2>/dev/null; then
-                            should_ask_about_updates=true
-                            prompt_reason="disabled"
-                        fi
-                    fi
-                    
-                    if [[ "$should_ask_about_updates" == "true" ]]; then
-                        echo
-                        if [[ "$prompt_reason" == "disabled" ]]; then
-                            echo -e "${YELLOW}Auto-updates are currently disabled.${NC}"
-                            echo "Would you like to enable automatic updates?"
-                        else
-                            echo -e "${YELLOW}New feature: Automatic updates!${NC}"
-                        fi
-                        echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
-                        echo "This keeps your installation secure and up-to-date."
-                        safe_read_with_default "Enable auto-updates? [Y/n]: " enable_updates "y"
-                        # Default to yes for this prompt since they're already updating
-                        if [[ ! "$enable_updates" =~ ^[Nn]$ ]]; then
-                            ENABLE_AUTO_UPDATES=true
-                        fi
-                    fi
-                fi
+                offer_existing_auto_updates
 
                 if ! run_upgrade_readiness_preflight "$CURRENT_VERSION" "$LATEST_RELEASE"; then
                     exit 1
@@ -5139,44 +5109,8 @@ main() {
                 exit 0
                 ;;
             reinstall)
-                # Check if auto-updates should be offered to the user
-                # Offer if: not already forced by flag, not in Docker, and either:
-                # 1. Timer doesn't exist (new feature), OR
-                # 2. Timer exists but autoUpdateEnabled is false (misconfigured)
-                if [[ "$AUTO_UPDATE_CHOICE_EXPLICIT" != "true" ]] && [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
-                    local should_ask_about_updates=false
-                    local prompt_reason=""
-                    
-                    if ! update_timer_exists; then
-                        # Timer doesn't exist - new feature
-                        should_ask_about_updates=true
-                        prompt_reason="new"
-                    elif [[ -f "$CONFIG_DIR/system.json" ]]; then
-                        # Timer exists, check if it's properly configured
-                        if grep -q '"autoUpdateEnabled":\s*false' "$CONFIG_DIR/system.json" 2>/dev/null; then
-                            should_ask_about_updates=true
-                            prompt_reason="disabled"
-                        fi
-                    fi
-                    
-                    if [[ "$should_ask_about_updates" == "true" ]]; then
-                        echo
-                        if [[ "$prompt_reason" == "disabled" ]]; then
-                            echo -e "${YELLOW}Auto-updates are currently disabled.${NC}"
-                            echo "Would you like to enable automatic updates?"
-                        else
-                            echo -e "${YELLOW}New feature: Automatic updates!${NC}"
-                        fi
-                        echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
-                        echo "This keeps your installation secure and up-to-date."
-                        safe_read_with_default "Enable auto-updates? [Y/n]: " enable_updates "y"
-                        # Default to yes for this prompt
-                        if [[ ! "$enable_updates" =~ ^[Nn]$ ]]; then
-                            ENABLE_AUTO_UPDATES=true
-                        fi
-                    fi
-                fi
-                
+                offer_existing_auto_updates
+
                 backup_existing
                 stop_pulse_for_update
                 create_user

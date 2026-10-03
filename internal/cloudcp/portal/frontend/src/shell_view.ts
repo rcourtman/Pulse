@@ -8,6 +8,7 @@ import type {
 } from './types';
 import { portalRoleLabel } from './account_roles';
 import { preferredPortalShellSection } from './shell_section';
+import { PROVIDER_PLAN_ROOT_ID } from './provider_plan';
 import {
   workspaceActiveAlertLabel,
   workspaceActiveAlertsUpdatedLabel,
@@ -422,10 +423,19 @@ function primaryShellSections(bootstrap: PortalBootstrapData): ShellNavEntry[] {
     sections.push({ section: 'workspaces', title: accountsUseClientLanguage(accounts) ? 'Clients' : 'Workspaces' });
     sections.push({ section: 'access', title: 'Access' });
   }
-  if (hasHostedBilling || showSelfHostedCommercial) {
+  if (providerHostedPlanShown(bootstrap)) {
+    // A provider-hosted platform's billing surface is its own plan: the
+    // licence it runs on, what it can buy, and its Stripe billing portal.
+    sections.push({ section: 'billing', title: 'Plan' });
+  } else if (hasHostedBilling || showSelfHostedCommercial) {
     sections.push({ section: 'billing', title: 'Billing' });
   }
   return sections;
+}
+
+function providerHostedPlanShown(bootstrap: PortalBootstrapData): boolean {
+  var accounts = Array.isArray(bootstrap.accounts) ? bootstrap.accounts : [];
+  return bootstrap.provider_hosted_mode === true && accounts.length > 0;
 }
 
 function utilityShellSections(_bootstrap: PortalBootstrapData): ShellNavEntry[] {
@@ -1711,7 +1721,12 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
             '</section>'
           )
           : '') +
-        (showBillingPanel
+        (providerHostedPlanShown(context.bootstrap)
+          ? '<section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section">' +
+            '<div id="' + PROVIDER_PLAN_ROOT_ID + '"><p class="billing-action-meta">Loading your plan…</p></div>' +
+          '</section>'
+          : '') +
+        (showBillingPanel && !providerHostedPlanShown(context.bootstrap)
           ? '<section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section">' +
           (hosted && hasHostedBilling ? renderHostedBillingCards(accounts, showSelfHostedCommercial) : '') +
           (showSelfHostedBillingShell

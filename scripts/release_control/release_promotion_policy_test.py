@@ -45,14 +45,6 @@ def normalize_ws(text: str) -> str:
     return " ".join(text.split())
 
 
-def release_notes_title_matches(text: str, version: str) -> bool:
-    """Bind the first heading to the exact version without requiring prose style."""
-    lines = text.splitlines()
-    return bool(lines and re.fullmatch(
-        r"# Pulse v" + re.escape(version) + r"(?: Release Notes)?", lines[0].strip()
-    ))
-
-
 _MATERIAL_APPROVAL_RE = re.compile(
     r"(?i)(?:"
     r"\brichard[- ]approved\b|"
@@ -416,6 +408,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         dry_run = jobs["dry-run"]
         steps = dry_run["steps"]
         names = [step["name"] for step in steps]
+        self.assertLess(names.index("Validate release ref"), names.index("Checkout repository"))
         self.assertLess(names.index("Resolve required release branch"),
                         names.index("Select exact rehearsal source"))
         self.assertLess(names.index("Select exact rehearsal source"),
@@ -423,6 +416,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         source = next(step for step in steps if step.get("id") == "source")
         self.assertEqual(source["env"]["REQUIRED_BRANCH"],
                          "${{ steps.branch_policy.outputs.required_branch }}")
+        self.assertEqual(source["env"]["WATCHDOG_MODE"], "${{ steps.mode.outputs.watchdog }}")
         self.assertIn('git checkout --detach "${TESTED_SHA}"', source["run"])
         self.assertIn('"${TESTED_SHA}" != "${GITHUB_SHA}"', source["run"])
         metadata = next(step for step in steps if step.get("id") == "rehearsal")
@@ -432,9 +426,15 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                       metadata["run"])
         self.assertIn('if [ "$FILE_VERSION" != "$VERSION" ]; then', metadata["run"])
         self.assertIn(
-            'if [ "${EVENT_NAME}" = "schedule" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then',
+            'if [ "${WATCHDOG_MODE}" = "true" ]; then',
             metadata["run"],
         )
+        self.assertIn('metadata_mode=watchdog', metadata["run"])
+        self.assertIn('metadata_mode=promotion', metadata["run"])
+        self.assertEqual(metadata["env"]["WATCHDOG_MODE"], "${{ steps.mode.outputs.watchdog }}")
+        self.assertEqual(jobs["build_release_candidate"]["if"],
+                         "${{ inputs.watchdog != true && inputs.version != '' }}")
+        self.assertIn("Release Watchdog at {0}", yaml.safe_load(workflow)["run-name"])
         for key in ("tested_sha", "tested_branch"):
             self.assertEqual(dry_run["outputs"][key],
                              "${{ steps.source.outputs." + key + " }}")
@@ -495,7 +495,6 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         publication_preflight = workflow_job_block(
             workflow, "publication_trust_preflight"
         )
-        readiness = workflow_job_block(workflow, "release_readiness")
         dispatch = workflow_job_block(workflow, "dispatch_release_convergence")
         activation = workflow_job_block(workflow, "activate_release")
         commit_verdict = workflow_job_block(workflow, "release_commit_verdict")
@@ -523,10 +522,12 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 early_job = workflow_job_block(workflow, early_job_name)
                 self.assertIn("- publication_trust_preflight", early_job)
 
-        for dependency in (
-            "candidate_qualification", "publish_release_tag", "publish_docker", "publish_helm_chart",
-        ):
-            self.assertIn(f"- {dependency}", readiness)
+        # The echo-only joins are gone: activation joins the tag and registry
+        # publications directly.
+        self.assertNotRegex(workflow, r"(?m)^  (candidate_qualification|release_readiness):$")
+        for dependency in ("publish_release_tag", "publish_docker", "publish_helm_chart"):
+            self.assertIn(f"- {dependency}", activation)
+            self.assertIn(f"needs.{dependency}.result == 'success'", activation)
         for mutable_job in (
             "publish_helm_pages",
             "promote_floating_tags",
@@ -534,23 +535,21 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             "update_stable_demo",
         ):
             with self.subTest(mutable_job=mutable_job):
-                self.assertNotIn(f"- {mutable_job}", readiness)
                 self.assertNotIn(f"- {mutable_job}", activation)
                 self.assertNotRegex(workflow, rf"(?m)^  {mutable_job}:$")
                 mutable = workflow_job_block(convergence, mutable_job)
                 self.assertIn("needs: acquire_customer_promotion_lease", mutable)
 
-        self.assertIn("- release_readiness", activation)
         self.assertIn(
             "needs.publication_trust_preflight.result == 'success'",
-            workflow_job_block(workflow, "candidate_qualification")
+            workflow_job_block(workflow, "publish_release_tag")
         )
         self.assertIn("- publication_trust_preflight", commit_verdict)
         self.assertIn(
             'require_result "publication trust preflight"', commit_verdict
         )
         self.assertIn("- dispatch_release_convergence", activation)
-        self.assertNotIn("- release_readiness", dispatch)
+        self.assertNotIn("- publish_release_tag", dispatch)
         self.assertIn("- create_release", dispatch)
         self.assertIn("- stage_private_pro_runtime", dispatch)
         self.assertIn("github.event.inputs.draft_only != 'true'", dispatch)
@@ -650,6 +649,105 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertNotIn("release_id:", demo_workflow)
         self.assertNotIn("unpublished draft", demo_workflow)
 
+    def test_activation_recovery_accepts_runs_with_and_without_readiness_join(self) -> None:
+        # Execute the recovery's source-job qualification against job listings
+        # in both create-release shapes. Old-shape runs must recover exactly as
+        # before; joinless runs must prove the publication jobs the join used
+        # to require. Job names mirror a real v6.4 release run.
+        job = workflow_job_block(read(".github/workflows/recover-release-activation.yml"), "recover_activation")
+        start = job.index("immutable_join=release_readiness")
+        end = job.index('gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100"')
+        script = "set -euo pipefail\n" + job[start:end] + "echo QUALIFIED\n"
+        common = [
+            ("prepare", "success"), ("create_release", "success"),
+            ("dispatch_release_convergence", "success"), ("backend_tests", "success"),
+            ("integration_tests", "skipped"),
+            ("publish_release_tag", "success"),
+            ("publish_docker / Publish server image", "success"),
+            ("publish_docker / Publish control-plane image", "success"),
+            ("publish_docker / Verify exact image identities and provenance", "success"),
+            ("publish_helm_chart / Package and Push Helm Chart", "success"),
+            ("activate_release", "failure"),
+            ("Release Activation Commit Verdict", "failure"),
+        ]
+
+        def qualifies(jobs: list[tuple[str, str]]) -> bool:
+            with tempfile.TemporaryDirectory() as temp:
+                listing = Path(temp) / "jobs.json"
+                listing.write_text(json.dumps([
+                    {"name": name, "status": "completed", "conclusion": conclusion}
+                    for name, conclusion in jobs
+                ]))
+                result = subprocess.run(
+                    ["bash", "-c", script], env=os.environ | {"source_jobs": str(listing)},
+                    text=True, capture_output=True,
+                )
+            self.assertEqual(result.returncode == 0, "QUALIFIED" in result.stdout, result.stderr)
+            return result.returncode == 0
+
+        def without(jobs: list[tuple[str, str]], prefix: str) -> list[tuple[str, str]]:
+            return [item for item in jobs if not item[0].startswith(prefix)]
+
+        def replaced(jobs: list[tuple[str, str]], name: str, conclusion: str) -> list[tuple[str, str]]:
+            return [(item[0], conclusion if item[0] == name else item[1]) for item in jobs]
+
+        old_shape = [("candidate_qualification", "success"), ("release_readiness", "success"), *common]
+        self.assertTrue(qualifies(old_shape))
+        # The old shape trusts only its join, as before, so reusable display
+        # names are never consulted for it.
+        self.assertTrue(qualifies(without(without(old_shape, "publish_docker"), "publish_helm_chart")))
+        self.assertFalse(qualifies(replaced(old_shape, "release_readiness", "skipped")))
+        self.assertFalse(qualifies(replaced(old_shape, "dispatch_release_convergence", "skipped")))
+
+        new_shape = common
+        self.assertTrue(qualifies(new_shape))
+        for name in ("prepare", "create_release", "dispatch_release_convergence", "publish_release_tag",
+                     "publish_docker / Publish server image",
+                     "publish_helm_chart / Package and Push Helm Chart"):
+            with self.subTest(skipped=name):
+                self.assertFalse(qualifies(replaced(new_shape, name, "skipped")))
+        for prefix in ("publish_release_tag", "publish_docker", "publish_helm_chart"):
+            with self.subTest(missing=prefix):
+                self.assertFalse(qualifies(without(new_shape, prefix)))
+        # A skipped reusable caller is listed under its bare job ID.
+        for name in ("publish_docker", "publish_helm_chart"):
+            with self.subTest(skipped_caller=name):
+                self.assertFalse(qualifies([*without(new_shape, name), (name, "skipped")]))
+        # Failures outside the activation boundary still reject either shape.
+        self.assertFalse(qualifies(replaced(new_shape, "backend_tests", "failure")))
+        self.assertFalse(qualifies(replaced(old_shape, "backend_tests", "failure")))
+
+    def test_commit_verdict_restates_the_candidate_predicate(self) -> None:
+        # The verdict no longer reads a readiness join, so it must reject every
+        # candidate failure itself. Run its result checks with each outcome.
+        verdict = workflow_job_block(read(".github/workflows/create-release.yml"), "release_commit_verdict")
+        step = yaml.safe_load("jobs:\n" + verdict)["jobs"]["release_commit_verdict"]["steps"][-1]
+        script = step["run"]
+        script = script[:script.index("./scripts/verify-github-release-integrity.sh")] + "exit 0\nfi\n"
+        results = {
+            "PUBLICATION_TRUST_RESULT", "SMOKE_RESULT", "WINDOWS_INSTALL_COMMAND_RESULT",
+            "CREATE_RESULT", "VALIDATE_RESULT", "DOCKER_RESULT", "INSTALL_RESULT", "HELM_RESULT",
+            "BUILD_CANDIDATE_RESULT", "CONTAINER_QUALIFICATION_RESULT", "FRONTEND_BUNDLE_RESULT",
+            "FRONTEND_CHECKS_RESULT", "BACKEND_RESULT", "INTEGRATION_RESULT", "TAG_RESULT",
+            "CONVERGENCE_DISPATCH_RESULT", "PRIVATE_PRO_STAGE_RESULT",
+        }
+        self.assertTrue(results <= set(step["env"]))
+        self.assertNotIn("READINESS_RESULT", step["env"])
+        good = dict.fromkeys(results, "success") | {"DRAFT_ONLY": "false", "VERSION": "6.6.0"}
+
+        def passes(env: dict[str, str]) -> bool:
+            result = subprocess.run(["bash", "-c", script], env=os.environ | env, text=True, capture_output=True)
+            return result.returncode == 0
+
+        self.assertTrue(passes(good))
+        self.assertTrue(passes(good | {"INTEGRATION_RESULT": "skipped"}))
+        for name in sorted(results):
+            for state in ("failure", "cancelled", "skipped"):
+                if name == "INTEGRATION_RESULT" and state == "skipped":
+                    continue
+                with self.subTest(result=name, state=state):
+                    self.assertFalse(passes(good | {name: state}))
+
     def test_activation_recovery_reuses_the_qualified_candidate_without_rebuilding(self) -> None:
         release = read(".github/workflows/create-release.yml")
         recovery = read(".github/workflows/recover-release-activation.yml")
@@ -661,6 +759,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("release_readiness", job)
         self.assertIn("dispatch_release_convergence", job)
         self.assertIn("release_readiness is the canonical DAG join", job)
+        # Runs made without the echo-only join prove its publication jobs.
+        self.assertIn("immutable_join=publish_release_tag", job)
+        self.assertIn("for reusable_job in publish_docker publish_helm_chart", job)
         self.assertNotIn("docker_build", job)
         self.assertNotIn("helm_smoke", job)
         self.assertIn("failure outside the recoverable activation boundary", job)
@@ -1489,23 +1590,6 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         )
         self.assertNotIn("Limits are applied to canonical top-level monitored systems", changelog)
 
-    def test_release_note_title_keeps_exact_version_without_boilerplate(self) -> None:
-        for version in ("6.4.5", "6.4.6", "6.4.6-rc.1", "6.5.0"):
-            for suffix in ("", " Release Notes"):
-                with self.subTest(version=version, suffix=suffix):
-                    self.assertTrue(release_notes_title_matches(
-                        f"# Pulse v{version}{suffix}\n\nUser-facing changes.\n", version
-                    ))
-        for title in (
-            "# Pulse v6.4.50", "# Pulse v6.4.5-rc.1", "# Pulse v6.4.4",
-            "# Pulse v6x4x5", "# Pulse v6.4.5 Draft Release Notes",
-            "# Pulse v6.4.5 Release Notes Extra", "## Pulse v6.4.5",
-            "Summary mentions Pulse v6.4.5 Release Notes",
-            "\n# Pulse v6.4.5", "",
-        ):
-            with self.subTest(title=title):
-                self.assertFalse(release_notes_title_matches(title, "6.4.5"))
-
     def test_version_file_matches_current_rc_packet(self) -> None:
         current_version = read("VERSION").strip()
         release_index = read("docs/RELEASE_NOTES.md")
@@ -1516,9 +1600,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             changelog = read(changelog_path)
             self.assertIn(release_notes_path, release_index)
             self.assertIn(changelog_path, release_index)
-            # The exact first heading carries version identity. Authored notes
-            # need neither a mandatory suffix nor a repeated inline version.
-            self.assertTrue(release_notes_title_matches(release_notes, current_version))
+            self.assertIn(f"Pulse v{current_version} Release Notes", release_notes)
+            self.assertIn(f"`v{current_version}`", release_notes)
             self.assertIn(f"Pulse v{current_version}", changelog)
         else:
             packet_paths = rc_packet_paths_for_version(current_version)
@@ -1571,11 +1654,26 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         )
         self.assertIn("posture refresh removes obsolete rows", changelog)
 
+    def test_upgrade_guide_qualifies_pinned_server_updates(self) -> None:
+        upgrade_guide = read("docs/UPGRADE_v6.md")
+        server_updates = normalize_ws(
+            upgrade_guide.split("### systemd and Proxmox LXC installs", 1)[1].split("\n### ", 1)[0]
+        )
+        self.assertIn("sudo /bin/update --version vX.Y.Z", server_updates)
+        self.assertIn(
+            "only when `/bin/update` was installed by the Pulse server installer",
+            server_updates,
+        )
+        self.assertIn("community-scripts updater, which can ignore `--version`", server_updates)
+        self.assertIn("the helper is absent, or you cannot confirm its owner", server_updates)
+        self.assertIn("[signed server-installer flow](INSTALL.md#2-bare-metal--systemd)", server_updates)
+        self.assertIn("`PULSE_VERSION` to the exact target tag", server_updates)
+        self.assertIn("This also applies to rollback", server_updates)
+        self.assertIn("Verify the installed version with `GET /api/version`", server_updates)
+
     def test_upgrade_guide_points_at_current_rc_support_pack(self) -> None:
         upgrade_guide = read("docs/UPGRADE_v6.md")
         current_version = read("VERSION").strip()
-        self.assertIn("sudo /bin/update --version vX.Y.Z", upgrade_guide)
-        self.assertIn("follow the signed server-installer flow in [INSTALL.md](INSTALL.md)", upgrade_guide)
         self.assertIn("the historical Pulse update signer was not recovered", normalize_ws(upgrade_guide))
         self.assertIn("manual reinstall or other explicit trust migration", normalize_ws(upgrade_guide))
         self.assertIn("### License and Entitlements", upgrade_guide)
@@ -1626,8 +1724,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
     def test_prerelease_feedback_template_uses_generic_current_rc_wording(self) -> None:
         template = read(".github/ISSUE_TEMPLATE/v6_rc_feedback.yml")
         self.assertIn("placeholder: v6.0.0-rc.N", template)
-        self.assertIn("placeholder: rcourtman/pulse:v6.0.0-rc.N or pulse-linux-amd64", template)
-        self.assertIn("Upgrade to the current v6 RC build", template)
+        self.assertIn("placeholder: rcourtman/pulse:v6.0.0-rc.N or rcourtman/pulse@sha256:...", template)
+        self.assertIn("I upgraded to the current v6 RC build", template)
         self.assertNotIn("v6.0.0-rc.1", template)
 
     def test_demo_site_copy_points_at_current_release_packet_index(self) -> None:
@@ -1718,7 +1816,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn(promotion_metadata_envelope(), normalize_ws(template))
         self.assertIn("rc-to-ga-rehearsal-summary", workflow)
         self.assertIn("build_release_candidate:", workflow)
-        self.assertIn("if: ${{ inputs.version != '' }}", workflow)
+        self.assertIn("if: ${{ inputs.watchdog != true && inputs.version != '' }}", workflow)
         self.assertIn("require_macos_signing: true", workflow)
         self.assertIn(
             "require_windows_signing: false",
@@ -1778,7 +1876,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("release-dry-run.yml", dry_run_trigger)
         self.assertIn("gh workflow run release-dry-run.yml", dry_run_trigger)
         self.assertIn("Release Dry Run executes the selected remote ref", dry_run_trigger)
-        self.assertIn("Hotfix exception to bypass 72-hour prerelease soak? [y/N]", dry_run_trigger)
+        self.assertIn("Hotfix exception to bypass 24-hour prerelease soak? [y/N]", dry_run_trigger)
         self.assertIn("blank only for approved hotfix", dry_run_trigger)
         self.assertIn('if [ -z "$PROMOTED_FROM_TAG" ] && [ "$HOTFIX_EXCEPTION" != "true" ]; then', dry_run_trigger)
         self.assertNotIn("Continue anyway?", dry_run_trigger)
@@ -1874,7 +1972,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn(promotion_metadata_envelope(), normalize_ws(policy))
         self.assertIn("recorded rollback target plus exact", source_of_truth)
         self.assertIn("hours of prerelease soak", resolver)
-        self.assertIn("minimum is 72 hours unless hotfix_exception is true", resolver)
+        self.assertIn("minimum is {MIN_STABLE_SOAK_HOURS} hours unless hotfix_exception is true", resolver)
         self.assertIn("MIN_PRERELEASE_OBSERVATION_HOURS = 24", resolver)
         self.assertIn("cohort checkpoint, not a delivery vehicle", normalize_ws(policy))
         self.assertIn("at least 24 hours of public observation", normalize_ws(source_of_truth))
@@ -2205,15 +2303,24 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         dry_run_workflow = read(".github/workflows/release-dry-run.yml")
         self.assertIn("Required rollback stable version to rehearse", dry_run_workflow)
         self.assertIn("rollback_version:\n        description: 'Required rollback stable version to rehearse", dry_run_workflow)
-        self.assertIn("required: true", dry_run_workflow)
-        # Scheduled watchdog runs carry no dispatch inputs, so the rehearsal
-        # step must derive the rollback target; the derive flag stays gated on
-        # the schedule event so manual dispatches keep explicit rollback.
+        # The fixed watchdog has no rollback override, so its dispatch schema
+        # must permit omission. Ordinary manual rehearsals still require an
+        # explicit rollback in the pre-checkout admission shell.
+        dry_run = yaml.safe_load(dry_run_workflow)
+        inputs = dry_run.get("on", dry_run.get(True))["workflow_dispatch"]["inputs"]
+        self.assertIs(inputs["rollback_version"]["required"], False)
+        self.assertIn('workflow_dispatch:false)', dry_run_workflow)
+        self.assertIn('[ -z "${ROLLBACK_VERSION_INPUT:-}" ]', dry_run_workflow)
+        self.assertIn('Candidate rehearsal requires explicit rollback and no watchdog SHA.', dry_run_workflow)
+        # Both admitted watchdog modes observe the preceding stable reference,
+        # without manufacturing a new promotion envelope for an already-shipped
+        # VERSION. Candidate rehearsals still use the complete resolver.
         self.assertIn(
-            'if [ "${EVENT_NAME}" = "schedule" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then',
+            'if [ "${WATCHDOG_MODE}" = "true" ]; then',
             dry_run_workflow,
         )
-        self.assertIn("--derive-rollback-latest-stable", dry_run_workflow)
+        self.assertIn("derive_latest_stable_rollback_tag(version, list_stable_tags())", dry_run_workflow)
+        self.assertNotIn("--derive-rollback-latest-stable", dry_run_workflow)
         self.assertIn("--derive-rollback-latest-stable", resolver)
         self.assertIn("derive_latest_stable_rollback_tag", resolver)
         self.assertIn("Required: prior stable version to pin for rollback", content)
@@ -2954,25 +3061,37 @@ class CandidatePublicationBoundaryTest(unittest.TestCase):
         expression = re.sub(r"!(?!=)", "not ", expression)
         return bool(eval(expression, {"__builtins__": {}, "startsWith": lambda value, prefix: value.startswith(prefix)}))
 
+    CANDIDATE_CHECKS = frozenset({
+        "prepare", "publication_trust_preflight", "build_release_candidate",
+        "qualify_release_containers", "frontend_bundle", "frontend_checks",
+        "windows_install_command_smoke", "backend_tests", "integration_tests",
+        "release_smoke", "create_release", "validate_release_assets",
+        "install_sh_smoke", "stage_private_pro_runtime",
+    })
+    PUBLIC_WRITERS = ("publish_release_tag", "publish_docker", "publish_helm_chart", "activate_release")
+
     def test_qualified_beta_tag_survives_intentionally_skipped_ancestor(self) -> None:
         outcomes = dict.fromkeys(self.jobs, "success")
         outcomes["integration_tests"] = "skipped"
-        self.assertTrue(self.condition("candidate_qualification", outcomes))
         # Actions applies implicit success() when no status function is present.
-        # A skipped ancestor therefore prevents the writer despite the explicit
-        # qualification result. Model that status gate as well as its expression.
-        writer = self.jobs["publish_release_tag"]
-        has_status = bool(re.search(r"\b(always|success|failure|cancelled)\(", writer["if"]))
-        self.assertTrue(has_status and self.condition("publish_release_tag", outcomes))
-        for dependency in writer["needs"]:
-            for state in ("failure", "cancelled", "skipped"):
-                with self.subTest(dependency=dependency, state=state):
-                    self.assertFalse(self.condition("publish_release_tag", outcomes | {dependency: state}))
+        # A skipped ancestor would then prevent every writer despite the
+        # explicit candidate predicate. Model that status gate as well.
+        for name in self.PUBLIC_WRITERS:
+            writer = self.jobs[name]
+            has_status = bool(re.search(r"\b(always|success|failure|cancelled)\(", writer["if"]))
+            with self.subTest(writer=name):
+                self.assertTrue(has_status and self.condition(name, outcomes))
+            for dependency in writer["needs"]:
+                for state in ("failure", "cancelled", "skipped"):
+                    if dependency == "integration_tests" and state == "skipped":
+                        continue  # Already skipped above, by policy.
+                    with self.subTest(writer=name, dependency=dependency, state=state):
+                        self.assertFalse(self.condition(name, outcomes | {dependency: state}))
 
     def test_workflow_cancellation_blocks_completed_prerequisite_writers(self) -> None:
         good = dict.fromkeys(self.jobs, "success")
         for writer in ("publish_release_tag", "publish_docker", "publish_helm_chart",
-                       "release_readiness", "dispatch_release_convergence", "activate_release"):
+                       "dispatch_release_convergence", "activate_release"):
             with self.subTest(writer=writer):
                 self.assertTrue(self.condition(writer, good))
                 # Cancellation is workflow state, not a changed needs.result:
@@ -2982,29 +3101,39 @@ class CandidatePublicationBoundaryTest(unittest.TestCase):
         self.assertTrue(self.condition("release_commit_verdict", good, cancelled=True))
 
     def test_failed_candidate_cannot_reach_any_public_version_writer(self) -> None:
-        required = {
-            "prepare", "publication_trust_preflight", "build_release_candidate",
-            "qualify_release_containers", "frontend_bundle", "frontend_checks",
-            "windows_install_command_smoke", "backend_tests", "integration_tests",
-            "release_smoke", "create_release", "validate_release_assets",
-            "install_sh_smoke", "stage_private_pro_runtime",
-        }
-        self.assertEqual(set(self.jobs["candidate_qualification"]["needs"]), required)
+        required = set(self.CANDIDATE_CHECKS)
+        # The echo-only candidate and readiness joins were folded into the
+        # writers. Each writer depends on, and judges, every candidate check
+        # itself instead of trusting a join job's result.
+        self.assertNotIn("candidate_qualification", self.jobs)
+        self.assertNotIn("release_readiness", self.jobs)
+        tag_predicate = self.jobs["publish_release_tag"]["if"].removesuffix("}}").strip()
+        self.assertEqual(set(self.jobs["publish_release_tag"]["needs"]), required)
         good = dict.fromkeys(self.jobs, "success")
-        self.assertTrue(self.condition("candidate_qualification", good))
-        self.assertFalse(self.condition("candidate_qualification", good, draft=True))
-        for failed in required:
+        for writer in self.PUBLIC_WRITERS:
+            with self.subTest(writer=writer):
+                self.assertTrue(required <= set(self.jobs[writer]["needs"]))
+                # Every writer repeats the tag's exact candidate predicate.
+                self.assertTrue(self.jobs[writer]["if"].startswith(tag_predicate))
+                self.assertTrue(self.condition(writer, good))
+                self.assertFalse(self.condition(writer, good, draft=True))
+            for failed in required:
+                for state in ("failure", "cancelled", "skipped"):
+                    if failed == "integration_tests" and state == "skipped":
+                        continue  # Existing alpha/beta policy omits integration tests.
+                    with self.subTest(writer=writer, failed=failed, state=state):
+                        self.assertFalse(self.condition(writer, good | {failed: state}))
+        # Old shape: release_readiness also required the tag and both registry
+        # publications before activation. The new activation predicate must
+        # match the old readiness-gated one for every single-job outcome.
+        for writer in ("publish_docker", "publish_helm_chart", "activate_release"):
             for state in ("failure", "cancelled", "skipped"):
-                if failed == "integration_tests" and state == "skipped":
-                    continue  # Existing alpha/beta policy omits integration tests.
-                with self.subTest(failed=failed, state=state):
-                    outcomes = good | {failed: state}
-                    self.assertFalse(self.condition("candidate_qualification", outcomes))
-        for writer in ("publish_release_tag", "publish_docker", "publish_helm_chart"):
-            self.assertIn("candidate_qualification", self.jobs[writer]["needs"])
+                with self.subTest(writer=writer, tag=state):
+                    self.assertFalse(self.condition(writer, good | {"publish_release_tag": state}))
+        for dependency in ("publish_docker", "publish_helm_chart", "dispatch_release_convergence"):
             for state in ("failure", "cancelled", "skipped"):
-                with self.subTest(writer=writer, state=state):
-                    self.assertFalse(self.condition(writer, good | {"candidate_qualification": state}))
+                with self.subTest(activation_dependency=dependency, state=state):
+                    self.assertFalse(self.condition("activate_release", good | {dependency: state}))
         # Detect accidental dependency cycles, including moving publication into
         # the candidate join that publication itself must wait for.
         def visit(name: str, stack: tuple[str, ...] = ()) -> None:

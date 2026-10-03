@@ -143,7 +143,7 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
               type="password"
               value={currentPassword()}
               onInput={(e) => setCurrentPassword(e.currentTarget.value)}
-              class={controlClass('shadow-sm')}
+              class={controlClass('shadow-xs')}
               required
               disabled={loading()}
             />
@@ -158,7 +158,7 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
               type="password"
               value={newPassword()}
               onInput={(e) => setNewPassword(e.currentTarget.value)}
-              class={controlClass('shadow-sm')}
+              class={controlClass('shadow-xs')}
               required
               disabled={loading()}
               minLength={12}
@@ -175,7 +175,7 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
               type="password"
               value={confirmPassword()}
               onInput={(e) => setConfirmPassword(e.currentTarget.value)}
-              class={controlClass('shadow-sm')}
+              class={controlClass('shadow-xs')}
               required
               disabled={loading()}
             />
@@ -185,7 +185,7 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
             <div
               role="alert"
               aria-live="assertive"
-              class="p-3 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded-md"
+              class="p-3 bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800 rounded-md"
             >
               <p class="text-sm text-red-600 dark:text-red-400">{error()}</p>
             </div>

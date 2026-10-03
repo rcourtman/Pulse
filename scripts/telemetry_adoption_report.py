@@ -93,8 +93,11 @@ USER_BASE_CATEGORY_FIELDS = (
     ("time_to_first_monitored_resource_bucket", "Time to first monitored resource"),
     ("estate_size_bucket", "Estate size"),
     ("update_last_failure_category", "Last update failure category"),
+    ("update_channel", "Configured update channel (schema v18+)"),
+    ("update_check_outcome", "Last update check outcome (schema v18+)"),
 )
 USER_BASE_BOOL_FIELDS = (
+    ("update_available", "Last update check offered a newer release"),
     ("auth_configured", "Authentication configured"),
     ("monitoring_active", "Monitoring currently active"),
     ("outcome_observed_30d", "Operational outcome observed"),

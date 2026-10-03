@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -11,6 +12,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
@@ -18,6 +20,7 @@ import (
 
 const (
 	serviceHealthProbeTimeout = 5 * time.Second
+	serviceHealthRetryDelay   = time.Second
 	serviceHealthBodyLimit    = 2 << 20
 	serviceHealthAssetLimit   = 32
 )
@@ -25,21 +28,18 @@ const (
 var frontendAssetReferencePattern = regexp.MustCompile(`(?i)(?:src|href)\s*=\s*["'](/assets/[^"'#?]+(?:\?[^"'#]*)?)["']`)
 
 func newServiceHealthProbe(listener net.Listener, tlsEnabled bool) func() telemetry.ServiceHealthObservation {
-	baseURL, ok := localServiceHealthBaseURL(listener, tlsEnabled)
-	if !ok {
+	baseURLs := localServiceHealthBaseURLs(listener, tlsEnabled)
+	if len(baseURLs) == 0 {
 		return func() telemetry.ServiceHealthObservation {
-			return telemetry.ServiceHealthObservation{
-				Observed:        true,
-				FailureCategory: telemetry.ServiceHealthFailureAPIConnectivity,
-			}
+			return unhealthyServiceObservation(telemetry.ServiceHealthFailureAPIConnectivity)
 		}
 	}
 
 	transport := &http.Transport{}
 	if tlsEnabled {
-		// The probe stays inside this process and connects only to the address
-		// already bound by listener. Certificate trust is a client-facing concern,
-		// while this probe verifies that Pulse can serve its own HTTPS handler.
+		// The probe connects only to the address already bound by listener
+		// (or loopback for a wildcard). Certificate trust is a client-facing
+		// concern; this verifies Pulse can serve its own HTTPS handler.
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // #nosec G402
 	}
 	client := &http.Client{
@@ -50,66 +50,168 @@ func newServiceHealthProbe(listener net.Listener, tlsEnabled bool) func() teleme
 		},
 	}
 
+	return serviceHealthProbe(baseURLs, client, serviceHealthProbeTimeout, serviceHealthRetryDelay)
+}
+
+// Each observation gets at most two five-second attempts with one second for
+// startup to settle between them. Telemetry invokes this in its background
+// runner, never on the monitoring or HTTP serving path.
+func serviceHealthProbe(baseURLs []string, client *http.Client, timeout, retryDelay time.Duration) func() telemetry.ServiceHealthObservation {
 	return func() telemetry.ServiceHealthObservation {
-		ctx, cancel := context.WithTimeout(context.Background(), serviceHealthProbeTimeout)
-		defer cancel()
-
-		apiBody, status, err := serviceHealthGET(ctx, client, baseURL+"/api/health")
-		if err != nil {
-			return unhealthyServiceObservation(telemetry.ServiceHealthFailureAPIConnectivity)
-		}
-		if status < http.StatusOK || status >= http.StatusMultipleChoices {
-			return unhealthyServiceObservation(telemetry.ServiceHealthFailureAPIStatus)
-		}
-		var health struct {
-			Status string `json:"status"`
-		}
-		if json.Unmarshal(apiBody, &health) != nil || health.Status != "healthy" {
-			return unhealthyServiceObservation(telemetry.ServiceHealthFailureAPIStatus)
-		}
-
-		indexBody, status, err := serviceHealthGET(ctx, client, baseURL+"/")
-		if err != nil || status < http.StatusOK || status >= http.StatusMultipleChoices ||
-			!strings.Contains(strings.ToLower(string(indexBody)), "<html") {
-			return unhealthyServiceObservation(telemetry.ServiceHealthFailureUIStatus)
-		}
-
-		assetPaths := frontendAssetPaths(indexBody)
-		if len(assetPaths) == 0 {
-			return unhealthyServiceObservation(telemetry.ServiceHealthFailureFrontendAssets)
-		}
-		for _, assetPath := range assetPaths {
-			body, assetStatus, assetErr := serviceHealthGET(ctx, client, baseURL+assetPath)
-			if assetErr != nil || assetStatus < http.StatusOK || assetStatus >= http.StatusMultipleChoices || len(body) == 0 {
-				return unhealthyServiceObservation(telemetry.ServiceHealthFailureFrontendAssets)
+		defer client.CloseIdleConnections()
+		var observation telemetry.ServiceHealthObservation
+		for attempt := 0; attempt < 2; attempt++ {
+			if attempt > 0 {
+				timer := time.NewTimer(retryDelay)
+				<-timer.C
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			observation = observeServiceHealth(ctx, client, baseURLs)
+			cancel()
+			if observation.Healthy {
+				return observation
 			}
 		}
-
-		return telemetry.ServiceHealthObservation{Observed: true, Healthy: true}
+		return observation
 	}
 }
 
-func localServiceHealthBaseURL(listener net.Listener, tlsEnabled bool) (string, bool) {
+func observeServiceHealth(ctx context.Context, client *http.Client, baseURLs []string) telemetry.ServiceHealthObservation {
+	baseURL, apiBody, status, err := serviceHealthAPI(ctx, client, baseURLs)
+	if err != nil {
+		category := telemetry.ServiceHealthFailureAPIConnectivity
+		if status != 0 {
+			category = telemetry.ServiceHealthFailureAPIStatus
+		}
+		return unhealthyServiceObservation(serviceHealthErrorCategory(err, category))
+	}
+	if status < http.StatusOK || status >= http.StatusMultipleChoices {
+		return unhealthyServiceObservation(telemetry.ServiceHealthFailureAPIStatus)
+	}
+	var health struct {
+		Status string `json:"status"`
+	}
+	if json.Unmarshal(apiBody, &health) != nil || health.Status != "healthy" {
+		return unhealthyServiceObservation(telemetry.ServiceHealthFailureAPIStatus)
+	}
+
+	indexBody, status, err := serviceHealthGET(ctx, client, baseURL+"/")
+	if err != nil {
+		return unhealthyServiceObservation(serviceHealthErrorCategory(err, telemetry.ServiceHealthFailureUIStatus))
+	}
+	if status < http.StatusOK || status >= http.StatusMultipleChoices ||
+		!strings.Contains(strings.ToLower(string(indexBody)), "<html") {
+		return unhealthyServiceObservation(telemetry.ServiceHealthFailureUIStatus)
+	}
+
+	assetPaths := frontendAssetPaths(indexBody)
+	if len(assetPaths) == 0 {
+		return unhealthyServiceObservation(telemetry.ServiceHealthFailureFrontendAssets)
+	}
+	for _, assetPath := range assetPaths {
+		body, assetStatus, assetErr := serviceHealthGET(ctx, client, baseURL+assetPath)
+		if assetErr != nil {
+			return unhealthyServiceObservation(serviceHealthErrorCategory(assetErr, telemetry.ServiceHealthFailureFrontendAssets))
+		}
+		if assetStatus < http.StatusOK || assetStatus >= http.StatusMultipleChoices || len(body) == 0 {
+			return unhealthyServiceObservation(telemetry.ServiceHealthFailureFrontendAssets)
+		}
+	}
+
+	return telemetry.ServiceHealthObservation{Observed: true, Healthy: true}
+}
+
+// Only a transport failure tries the other loopback family. A response pins
+// the entire API/UI/asset observation to that address, even when it is unhealthy.
+// Divide the remaining API budget so a stalled family cannot starve the other.
+func serviceHealthAPI(ctx context.Context, client *http.Client, baseURLs []string) (string, []byte, int, error) {
+	var lastErr, timeoutErr error
+	for i, baseURL := range baseURLs {
+		deadline, _ := ctx.Deadline()
+		candidateCtx, cancel := context.WithTimeout(ctx, time.Until(deadline)/time.Duration(len(baseURLs)-i))
+		body, status, err := serviceHealthGET(candidateCtx, client, baseURL+"/api/health")
+		cancel()
+		if err == nil {
+			return baseURL, body, status, nil
+		}
+		if status != 0 {
+			// A response whose body fails or exceeds the limit is still an
+			// observation of this server, not an unavailable address family.
+			return baseURL, nil, status, err
+		}
+		lastErr = err
+		if serviceHealthErrorCategory(err, "") == telemetry.ServiceHealthFailureTimeout {
+			timeoutErr = err
+		}
+	}
+	if timeoutErr != nil {
+		return "", nil, 0, timeoutErr
+	}
+	return "", nil, 0, lastErr
+}
+
+func serviceHealthErrorCategory(err error, fallback string) string {
+	var netErr net.Error
+	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout()) {
+		return telemetry.ServiceHealthFailureTimeout
+	}
+	return fallback
+}
+
+func localServiceHealthBaseURLs(listener net.Listener, tlsEnabled bool) []string {
 	if listener == nil {
-		return "", false
+		return nil
 	}
 	tcpAddr, ok := listener.Addr().(*net.TCPAddr)
-	if !ok || tcpAddr.Port <= 0 {
-		return "", false
+	if !ok || tcpAddr.Port <= 0 || tcpAddr.Port > 65535 {
+		return nil
 	}
-	ip := tcpAddr.IP
-	if ip == nil || ip.IsUnspecified() {
-		if ip != nil && ip.To4() == nil {
-			ip = net.IPv6loopback
-		} else {
-			ip = net.IPv4(127, 0, 0, 1)
+	hosts := []string{tcpAddr.IP.String()}
+	if tcpAddr.IP == nil || tcpAddr.IP.IsUnspecified() {
+		hosts = []string{"127.0.0.1"}
+		if tcpAddr.IP != nil && tcpAddr.IP.To4() == nil {
+			// Only a proven dual-stack socket owns both loopback families.
+			// An IPv6-only socket may share its port with an unrelated IPv4
+			// server. Unknown socket modes stay conservatively IPv6-only.
+			hosts = []string{"::1"}
+			if serviceHealthListenerAcceptsIPv4(listener) {
+				hosts = []string{"127.0.0.1", "::1"}
+			}
 		}
+	} else if tcpAddr.Zone != "" && tcpAddr.IP.To4() == nil {
+		hosts[0] += "%" + tcpAddr.Zone
 	}
 	scheme := "http"
 	if tlsEnabled {
 		scheme = "https"
 	}
-	return fmt.Sprintf("%s://%s", scheme, net.JoinHostPort(ip.String(), fmt.Sprintf("%d", tcpAddr.Port))), true
+	baseURLs := make([]string, 0, len(hosts))
+	for _, host := range hosts {
+		baseURL := url.URL{Scheme: scheme, Host: net.JoinHostPort(host, fmt.Sprintf("%d", tcpAddr.Port))}
+		baseURLs = append(baseURLs, baseURL.String())
+	}
+	return baseURLs
+}
+
+// IPv4-first works when a dual-stack listener serves Pulse over IPv4 but IPv6
+// loopback is disabled. Inspect the bound socket rather than inferring its
+// mode from the wildcard address or from another server answering on its port.
+func serviceHealthListenerAcceptsIPv4(listener net.Listener) bool {
+	socket, ok := listener.(syscall.Conn)
+	if !ok {
+		return false
+	}
+	raw, err := socket.SyscallConn()
+	if err != nil {
+		return false
+	}
+	dualStack := false
+	if err := raw.Control(func(fd uintptr) {
+		dualStack = serviceHealthSocketIsDualStack(fd)
+	}); err != nil {
+		return false
+	}
+	return dualStack
 }
 
 func frontendAssetPaths(index []byte) []string {

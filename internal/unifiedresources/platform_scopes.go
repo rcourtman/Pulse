@@ -28,21 +28,35 @@ func RefreshPlatformScopes(resource *Resource) {
 		return
 	}
 
-	scopes := make(map[string]struct{}, len(resource.Sources)+2)
+	// Clones refresh scopes on registry reads as well as writes. These small
+	// membership sets do not need a map on every resource read.
+	scopes := make([]string, 0, 4)
+	add := func(scope string) {
+		scope = strings.ToLower(strings.TrimSpace(scope))
+		if scope == "" {
+			return
+		}
+		for _, existing := range scopes {
+			if existing == scope {
+				return
+			}
+		}
+		scopes = append(scopes, scope)
+	}
 	for _, source := range resource.Sources {
-		addPlatformScope(scopes, platformScopeForSource(source))
+		add(platformScopeForSource(source))
 	}
 
-	addPlatformScopesForFacets(scopes, *resource)
+	addPlatformScopesForFacets(add, *resource)
 	if shouldAddDockerPlatformScope(*resource) {
-		addPlatformScope(scopes, "docker")
+		add("docker")
 	}
 
 	if resource.Docker != nil {
 		hostSourceID := strings.TrimSpace(resource.Docker.HostSourceID)
 		if strings.HasPrefix(hostSourceID, proxmoxLXCDockerHostSourcePrefix) {
-			addPlatformScope(scopes, "proxmox-pve")
-			addPlatformScope(scopes, "docker")
+			add("proxmox-pve")
+			add("docker")
 		}
 	}
 
@@ -74,30 +88,30 @@ func platformScopeForSource(source DataSource) string {
 	}
 }
 
-func addPlatformScopesForFacets(scopes map[string]struct{}, resource Resource) {
+func addPlatformScopesForFacets(add func(string), resource Resource) {
 	if resource.Agent != nil {
-		addPlatformScope(scopes, "agent")
+		add("agent")
 	}
 	if resource.TrueNAS != nil {
-		addPlatformScope(scopes, "truenas")
+		add("truenas")
 	}
 	if resource.Proxmox != nil {
-		addPlatformScope(scopes, "proxmox-pve")
+		add("proxmox-pve")
 	}
 	if resource.PBS != nil {
-		addPlatformScope(scopes, "proxmox-pbs")
+		add("proxmox-pbs")
 	}
 	if resource.PMG != nil {
-		addPlatformScope(scopes, "proxmox-pmg")
+		add("proxmox-pmg")
 	}
 	if resource.Kubernetes != nil {
-		addPlatformScope(scopes, "kubernetes")
+		add("kubernetes")
 	}
 	if resource.VMware != nil {
-		addPlatformScope(scopes, "vmware-vsphere")
+		add("vmware-vsphere")
 	}
 	if len(AvailabilityChecksForResource(resource)) > 0 || CanonicalResourceType(resource.Type) == ResourceTypeNetworkEndpoint {
-		addPlatformScope(scopes, "availability")
+		add("availability")
 	}
 }
 
@@ -111,29 +125,22 @@ func shouldAddDockerPlatformScope(resource Resource) bool {
 	return true
 }
 
-func addPlatformScope(scopes map[string]struct{}, scope string) {
-	scope = strings.ToLower(strings.TrimSpace(scope))
-	if scope == "" {
-		return
-	}
-	scopes[scope] = struct{}{}
-}
-
-func orderPlatformScopes(scopes map[string]struct{}) []string {
+// orderPlatformScopes consumes the deduplicated slice, placing known scopes in
+// canonical order and sorting any remaining scopes alphabetically in place.
+func orderPlatformScopes(scopes []string) []string {
 	if len(scopes) == 0 {
 		return nil
 	}
-	out := make([]string, 0, len(scopes))
-	for _, scope := range canonicalPlatformScopeOrder {
-		if _, ok := scopes[scope]; ok {
-			out = append(out, scope)
-			delete(scopes, scope)
+	knownCount := 0
+	for _, canonical := range canonicalPlatformScopeOrder {
+		for i := knownCount; i < len(scopes); i++ {
+			if scopes[i] == canonical {
+				scopes[knownCount], scopes[i] = scopes[i], scopes[knownCount]
+				knownCount++
+				break
+			}
 		}
 	}
-	unknownStart := len(out)
-	for scope := range scopes {
-		out = append(out, scope)
-	}
-	sort.Strings(out[unknownStart:])
-	return out
+	sort.Strings(scopes[knownCount:])
+	return scopes
 }

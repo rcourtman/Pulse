@@ -4,8 +4,8 @@ import {
   MONITORING_STOPPED_STATUS_LABEL,
 } from '@/utils/unifiedAgentStatusPresentation';
 
-const REMOVED_BADGE = 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
-const CONNECTED_BADGE = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
+const REMOVED_BADGE = 'bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-200';
+const CONNECTED_BADGE = 'bg-green-100 text-green-800 dark:bg-green-900/25 dark:text-green-300';
 const DISCONNECTED_BADGE = 'bg-surface-alt text-base-content';
 
 describe('getUnifiedAgentStatusPresentation — branch coverage', () => {

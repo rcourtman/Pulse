@@ -18,8 +18,10 @@ import type {
   ResourceDockerMeta,
   ResourceHealth,
   ResourceMetricsTarget,
+  ResourceActionReadiness,
   ResourceAvailabilityMeta,
   ResourcePBSMeta,
+  ResourcePMGMeta,
   ResourcePolicyPostureSummary,
   ResourcePhysicalDiskMeta,
   ResourcePoolHealth,
@@ -210,6 +212,8 @@ type APIResource = {
   sources?: string[];
   platformScopes?: string[];
   sourceStatus?: Record<string, { status: string; lastSeen: string; error?: string }>;
+  actionReadiness?: ResourceActionReadiness[];
+  technology?: string;
   health?: ResourceHealth;
   identity?: {
     machineId?: string;
@@ -868,6 +872,17 @@ const toResource = (v2: APIResource): Resource => {
     truenas: v2.truenas as ResourceTrueNASMeta | undefined,
     vmware: v2.vmware as ResourceVMwareMeta | undefined,
     pbs: v2.pbs as ResourcePBSMeta | undefined,
+    // Mail Gateway rows read `resource.pmg` directly. Leaving it only under
+    // platformData meant a REST-first paint rendered every PMG column as a
+    // dash until a websocket row happened to replace it, and never did when
+    // the REST snapshot landed last.
+    pmg: v2.pmg as ResourcePMGMeta | undefined,
+    // Same race for the per-source status, action readiness, and technology
+    // facets: Docker lifecycle actions and storage freshness read them from
+    // the top level, and the websocket rows carry them there.
+    sourceStatus: v2.sourceStatus,
+    actionReadiness: v2.actionReadiness,
+    technology: v2.technology,
     availability: v2.availability as ResourceAvailabilityMeta | undefined,
     availabilityChecks: v2.availabilityChecks as ResourceAvailabilityMeta[] | undefined,
     physicalDisk: v2.physicalDisk,
@@ -1513,6 +1528,11 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const hasCachedResources = cacheEntry.hasSnapshot;
 
   const [resources, setResources] = createStore<Resource[]>(initialResources);
+  const [resourceSnapshotChange, setResourceSnapshotChange] = createSignal<{
+    version: number;
+    changedIds: ReadonlySet<string> | null;
+  }>({ version: 0, changedIds: null });
+  let resourceSnapshotVersion = 0;
   const [policyPosture, setPolicyPosture] = createSignal<ResourcePolicyPostureSummary | null>(
     initialPolicyPosture,
   );
@@ -1541,6 +1561,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       return;
     }
     setResources(reconcile(next, { key: 'id' }));
+    setResourceSnapshotChange({ version: ++resourceSnapshotVersion, changedIds: null });
     setPolicyPosture(targetEntry.policyPosture);
     setAggregations(targetEntry.aggregations);
     setFacets(targetEntry.facets);
@@ -1903,6 +1924,12 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       projectedFacetResources === null
         ? cacheEntry.facets
         : buildUnifiedResourceFacets(projectedFacetResources);
+    // The all-resources route shares this cache object. Keep its prior state
+    // before publishing the new generation so it can use the same bounded
+    // changed-ID path as source-scoped projections.
+    const previousProjectedResources = cacheEntry.resources;
+    const previousCacheRealtimeVersion = cacheEntry.realtimeVersion;
+    const previousCacheHasSnapshot = cacheEntry.hasSnapshot;
     const now = Date.now();
     clearInitialHydrationTimeout();
     setUnifiedResourcesCache(allResourcesEntry, mergedWsResources, now);
@@ -1935,10 +1962,10 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     }
 
     const cacheEntryCatchUp =
-      cacheEntry.hasSnapshot &&
-      cacheEntry.realtimeVersion > 0 &&
+      previousCacheHasSnapshot &&
+      previousCacheRealtimeVersion > 0 &&
       resolvedProjectedResources === projectedResources
-        ? resolveCatchUpMeta(cacheEntry.realtimeVersion)
+        ? resolveCatchUpMeta(previousCacheRealtimeVersion)
         : null;
     const canPatchProjectionIncrementally = cacheEntryCatchUp !== null;
     const changedResourceTouchesAgent =
@@ -1955,9 +1982,6 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
         )
       : null;
 
-    // Captured before the cache write below replaces it: the fast-commit
-    // eligibility check needs the row the instance store currently mirrors.
-    const previousProjectedResources = cacheEntry.resources;
     setUnifiedResourcesCache(
       cacheEntry,
       resolvedProjectedResources,
@@ -2008,6 +2032,10 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
           }
         });
       }
+      setResourceSnapshotChange({
+        version: ++resourceSnapshotVersion,
+        changedIds: incrementalPatchIndices === null ? null : cacheEntryCatchUp!.changedIds,
+      });
       setPolicyPosture(cacheEntry.policyPosture);
       setAggregations(cacheEntry.aggregations);
       setFacets(cacheEntry.facets);
@@ -2090,6 +2118,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     batch(() => {
       setError(undefined);
       setResources(reconcile(scopedResources, { key: 'id' }));
+      setResourceSnapshotChange({ version: ++resourceSnapshotVersion, changedIds: null });
       setPolicyPosture(scopedPolicyPosture);
       setAggregations(scopedAggregations);
       setFacets(scopedFacets);
@@ -2137,6 +2166,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
 
   return {
     resources: () => resources,
+    resourceSnapshotChange,
     policyPosture,
     aggregations,
     facets,

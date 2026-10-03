@@ -60,6 +60,28 @@ func TestNew_AllowsMissingAPITokenWhenEnrollmentDisabled(t *testing.T) {
 	}
 }
 
+func TestNew_PreservesDisableClusterPeerSensors(t *testing.T) {
+	mc := &mockCollector{
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{Hostname: "pve-host", HostID: "hid", KernelArch: runtime.GOARCH}, nil
+		},
+	}
+
+	agent, err := New(Config{
+		APIToken:                  "token",
+		EnableProxmox:             true,
+		DisableClusterPeerSensors: true,
+		LogLevel:                  zerolog.InfoLevel,
+		Collector:                 mc,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if !agent.cfg.DisableClusterPeerSensors {
+		t.Fatal("expected peer sensor collection opt-out to be preserved")
+	}
+}
+
 func TestNew_AllowsLocalNetworkHTTPPulseURL(t *testing.T) {
 	mc := &mockCollector{
 		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {

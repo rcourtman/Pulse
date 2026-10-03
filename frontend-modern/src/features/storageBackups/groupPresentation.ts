@@ -27,8 +27,8 @@ export const STORAGE_GROUP_ROW_CLASS = getInteractiveGroupedTableRowClass('borde
 export const STORAGE_GROUP_ROW_CELL_CLASS = getGroupedTableRowCellClass();
 export const STORAGE_GROUP_ROW_CONTENT_CLASS = 'flex items-center gap-3';
 export const STORAGE_GROUP_ROW_LABEL_CLASS =
-  'text-[11px] font-semibold text-base-content w-[140px] flex-shrink-0 truncate';
-export const STORAGE_GROUP_ROW_USAGE_WRAP_CLASS = 'w-48 flex-shrink-0 hidden sm:block';
+  'text-[11px] font-semibold text-base-content w-[140px] shrink-0 truncate';
+export const STORAGE_GROUP_ROW_USAGE_WRAP_CLASS = 'w-48 shrink-0 hidden sm:block';
 export const STORAGE_GROUP_ROW_USAGE_LABEL_CLASS =
   'text-xs font-medium text-muted hidden sm:inline';
 export const STORAGE_GROUP_ROW_POOL_COUNT_CLASS = 'text-xs text-muted whitespace-nowrap';
@@ -36,7 +36,7 @@ export const STORAGE_GROUP_ROW_HEALTH_WRAP_CLASS = 'flex items-center gap-1.5 ml
 export const STORAGE_GROUP_ROW_HEALTH_ITEM_CLASS = 'flex items-center gap-0.5';
 export const STORAGE_GROUP_ROW_HEALTH_COUNT_CLASS = 'text-[10px]';
 export const STORAGE_GROUP_ROW_CHEVRON_BASE_CLASS =
-  'w-3.5 h-3.5 text-muted transition-transform duration-150 flex-shrink-0';
+  'w-3.5 h-3.5 text-muted transition-transform duration-150 shrink-0';
 export const STORAGE_GROUP_ROW_HEALTH_DOT_CLASS = 'w-2 h-2 rounded-full';
 
 const STORAGE_GROUP_HEALTH_ORDER: NormalizedHealth[] = [

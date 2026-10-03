@@ -91,7 +91,7 @@ export function FilterButtonGroup<T extends string | number>(props: FilterButton
                 </Show>
                 <Show when={option.count !== undefined}>
                   <span
-                    class="inline-block text-[11px] font-semibold leading-4 tabular-nums text-base-content/70"
+                    class="inline-block text-[11px] font-semibold leading-4 tabular-nums"
                     aria-hidden="true"
                   >
                     {option.count!.toLocaleString()}

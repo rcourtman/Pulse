@@ -99,6 +99,10 @@ export interface WorkloadsSurfaceProps {
   // snapshot it already fetched. This avoids a second workload/infrastructure
   // request and keeps both surfaces on the same refresh generation.
   resourceSnapshot?: Accessor<Resource[] | undefined>;
+  resourceSnapshotChange?: Accessor<{
+    version: number;
+    changedIds: ReadonlySet<string> | null;
+  }>;
   resourceSnapshotRefetch?: () => Promise<unknown>;
   statusModeStorageScope?: string;
   // Platform pages that render their own hosts table above the embedded
@@ -165,6 +169,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   const workloadsEnabled = createMemo(() => props.useWorkloads === true);
   const workloads = useWorkloads(workloadsEnabled, {
     resourceSnapshot: props.resourceSnapshot,
+    resourceSnapshotChange: props.resourceSnapshotChange,
     refetchSnapshot: props.resourceSnapshotRefetch,
   });
   const infrastructureSources = useUnifiedResources({

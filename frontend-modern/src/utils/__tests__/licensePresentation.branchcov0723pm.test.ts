@@ -75,7 +75,7 @@ describe('patrol-control counts - fractional completed count truncated to 0', ()
         runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       },
       displayableCapabilities: [
-        'Pulse Relay (Remote Access)',
+        'Pulse Relay (Mobile Connection)',
         'Patrol Applies Safe Fixes and Verifies the Result',
       ],
       patrolOperatorStatus: {
@@ -105,7 +105,7 @@ describe('patrol-control counts - negative counts clamped to 0', () => {
         runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       },
       displayableCapabilities: [
-        'Pulse Relay (Remote Access)',
+        'Pulse Relay (Mobile Connection)',
         'Patrol Applies Safe Fixes and Verifies the Result',
       ],
       patrolOperatorStatus: {
@@ -139,7 +139,7 @@ describe('getFirstPartyPatrolControlCount - alias subtraction underflow', () => 
         runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       },
       displayableCapabilities: [
-        'Pulse Relay (Remote Access)',
+        'Pulse Relay (Mobile Connection)',
         'Patrol Applies Safe Fixes and Verifies the Result',
       ],
       patrolOperatorStatus: {
@@ -175,7 +175,7 @@ describe('hasVerifiedPatrolOperatorOutcome - resolved count without explicit val
         runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       },
       displayableCapabilities: [
-        'Pulse Relay (Remote Access)',
+        'Pulse Relay (Mobile Connection)',
         'Patrol Applies Safe Fixes and Verifies the Result',
       ],
       patrolOperatorStatus: {

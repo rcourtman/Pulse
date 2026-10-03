@@ -483,6 +483,10 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 		ToolCalls:    toolCalls,
 		InputTokens:  anthropicResp.Usage.InputTokens,
 		OutputTokens: anthropicResp.Usage.OutputTokens,
+		// Cache buckets are billed at their own rates and are not part of
+		// input_tokens, so they travel separately into cost accounting.
+		CacheCreationInputTokens: anthropicResp.Usage.CacheCreationInputTokens,
+		CacheReadInputTokens:     anthropicResp.Usage.CacheReadInputTokens,
 	}, nil
 }
 
@@ -622,6 +626,23 @@ type anthropicDelta struct {
 	StopReason  string `json:"stop_reason,omitempty"`
 }
 
+// captureAnthropicPromptUsage copies the prompt-side usage counters from a
+// stream event. Anthropic reports input_tokens, cache_creation_input_tokens
+// and cache_read_input_tokens as disjoint buckets and repeats them as
+// cumulative values in message_start and the final message_delta, so each is
+// assigned when present, never summed across events.
+func captureAnthropicPromptUsage(usage anthropicUsage, input, cacheCreation, cacheRead *int) {
+	if usage.InputTokens > 0 {
+		*input = usage.InputTokens
+	}
+	if usage.CacheCreationInputTokens > 0 {
+		*cacheCreation = usage.CacheCreationInputTokens
+	}
+	if usage.CacheReadInputTokens > 0 {
+		*cacheRead = usage.CacheReadInputTokens
+	}
+}
+
 // ChatStream sends a chat request and streams the response via callback
 func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callback StreamCallback) error {
 	// Convert messages to Anthropic format (same as Chat)
@@ -735,7 +756,7 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 	var currentToolID string
 	var currentToolName string
 	var currentToolInput strings.Builder
-	var inputTokens, outputTokens int
+	var inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens int
 
 	for {
 		n, err := reader.Read(buf)
@@ -769,8 +790,8 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 
 				switch event.Type {
 				case "message_start":
-					if event.Message != nil && event.Message.Usage.InputTokens > 0 {
-						inputTokens = event.Message.Usage.InputTokens
+					if event.Message != nil {
+						captureAnthropicPromptUsage(event.Message.Usage, &inputTokens, &cacheCreationTokens, &cacheReadTokens)
 					}
 
 				case "content_block_start":
@@ -838,8 +859,11 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 					}
 
 				case "message_delta":
-					if event.Delta != nil && event.Delta.StopReason != "" {
-						if event.Usage != nil {
+					if event.Usage != nil {
+						// The final message_delta repeats the prompt-side usage
+						// as cumulative values, so this assigns rather than adds.
+						captureAnthropicPromptUsage(*event.Usage, &inputTokens, &cacheCreationTokens, &cacheReadTokens)
+						if event.Delta != nil && event.Delta.StopReason != "" {
 							outputTokens = event.Usage.OutputTokens
 						}
 					}
@@ -852,10 +876,12 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 					callback(StreamEvent{
 						Type: "done",
 						Data: DoneEvent{
-							StopReason:   stopReason,
-							ToolCalls:    toolCalls,
-							InputTokens:  inputTokens,
-							OutputTokens: outputTokens,
+							StopReason:               stopReason,
+							ToolCalls:                toolCalls,
+							InputTokens:              inputTokens,
+							OutputTokens:             outputTokens,
+							CacheCreationInputTokens: cacheCreationTokens,
+							CacheReadInputTokens:     cacheReadTokens,
 						},
 					})
 

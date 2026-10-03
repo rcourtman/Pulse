@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  getStoragePoolColumnWidthPercent,
+  getStoragePoolCellPaddingClass,
+  getStoragePoolColumnWidthStyle,
   getStoragePoolTableColumns,
   getStoragePoolTableLayoutModeForContainer,
   getStorageTableHeading,
@@ -46,22 +47,44 @@ describe('storagePagePresentation', () => {
     expect(getStoragePoolTableLayoutModeForContainer(0)).toBe('compact');
     expect(getStoragePoolTableLayoutModeForContainer(359)).toBe('narrow');
     expect(getStoragePoolTableLayoutModeForContainer(360)).toBe('compact');
-    expect(getStoragePoolTableLayoutModeForContainer(559)).toBe('compact');
-    expect(getStoragePoolTableLayoutModeForContainer(560)).toBe('operational');
+    // The compact/operational boundary is the shared phone container query
+    // (34rem), so the usage bar label and the column set change together.
+    expect(getStoragePoolTableLayoutModeForContainer(543)).toBe('compact');
+    expect(getStoragePoolTableLayoutModeForContainer(544)).toBe('operational');
     expect(getStoragePoolTableLayoutModeForContainer(1_039)).toBe('operational');
     expect(getStoragePoolTableLayoutModeForContainer(1_040)).toBe('full');
     expect(isStoragePoolColumnVisible('operational', 'host')).toBe(true);
     expect(isStoragePoolColumnVisible('operational', 'growth')).toBe(false);
-    expect(getStoragePoolColumnWidthPercent('operational', 'usage')).toBe(21);
+    expect(getStoragePoolColumnWidthStyle('operational', 'usage')).toEqual({ width: '25%' });
+    expect(getStoragePoolColumnWidthStyle('operational', 'name')).toEqual({ width: '27%' });
     expect(isStoragePoolColumnVisible('compact', 'host')).toBe(true);
     expect(isStoragePoolColumnVisible('compact', 'type')).toBe(false);
     expect(isStoragePoolColumnVisible('compact', 'protection')).toBe(false);
-    expect(getStoragePoolColumnWidthPercent('compact', 'name')).toBe(35);
-    expect(getStoragePoolColumnWidthPercent('compact', 'usage')).toBe(25);
-    expect(getStoragePoolColumnWidthPercent('compact', 'growth')).toBe(0);
+    expect(getStoragePoolColumnWidthStyle('compact', 'name')).toEqual({ width: '37%' });
+    expect(getStoragePoolColumnWidthStyle('compact', 'host')).toEqual({ width: '31.5%' });
+    expect(getStoragePoolColumnWidthStyle('compact', 'usage')).toEqual({ width: '13%' });
+    expect(getStoragePoolColumnWidthStyle('compact', 'growth')).toEqual({ width: '0%' });
     expect(isStoragePoolColumnVisible('narrow', 'type')).toBe(false);
     expect(isStoragePoolColumnVisible('narrow', 'protection')).toBe(false);
-    expect(getStoragePoolColumnWidthPercent('narrow', 'name')).toBe(40);
-    expect(getStoragePoolColumnWidthPercent('narrow', 'usage')).toBe(20);
+    expect(getStoragePoolColumnWidthStyle('narrow', 'name')).toEqual({ width: '35%' });
+    expect(getStoragePoolColumnWidthStyle('narrow', 'usage')).toEqual({ width: '13%' });
+  });
+
+  it('sheds the desktop cell gutter only on the phone pool layouts', () => {
+    expect(getStoragePoolCellPaddingClass('narrow')).toBe('!px-1');
+    expect(getStoragePoolCellPaddingClass('compact')).toBe('!px-1');
+    expect(getStoragePoolCellPaddingClass('operational')).toBe('');
+    expect(getStoragePoolCellPaddingClass('full')).toBe('');
+  });
+
+  it('keeps the desktop pool column widths on the canonical weighted helper', () => {
+    const fullWidths = ['name', 'state', 'type', 'host', 'protection', 'usage', 'growth'].map(
+      (column) =>
+        getStoragePoolColumnWidthStyle(
+          'full',
+          column as 'name' | 'state' | 'type' | 'host' | 'protection' | 'usage' | 'growth',
+        ).width,
+    );
+    expect(fullWidths).toEqual(['20%', '14%', '10%', '12%', '13%', '20%', '11%']);
   });
 });

@@ -44,11 +44,15 @@ environment where `PULSE_DOCKER=true`/`/.dockerenv` is detected.
 Preferred option (no SSH keys, no proxy wiring):
 
 1. Install or upgrade the unified agent (`pulse-agent`) on each Proxmox host with Proxmox integration enabled.
-   - Use the UI to generate an install or upgrade command in **Settings → Infrastructure → Install on a host**, or run:
-     ```bash
-     curl -fsSL http://pulse.example.com:7655/install.sh | \
-       sudo bash -s -- --url http://pulse.example.com:7655 --token <api-token> --enable-proxmox
-     ```
+   - Use **Settings → Infrastructure → Install on a host**. Keep the separately
+     revealed credential out of the copied command; enter it only at the silent
+     prompt on that host, or use the private token-file route in the
+     [unified agent guide](docs/UNIFIED_AGENT.md#private-file-installation-linux-macos-and-nas).
+   - For manual setup, download and inspect the **agent installer served by your
+     Pulse instance**, using its verified HTTPS address, then install with
+     `--token-file` and `--enable-proxmox`. GitHub's top-level `install.sh`
+     installs the server, not the agent. Do not pipe an unchecked HTTP response
+     into a privileged shell or disable certificate verification.
 
 Legacy sensor proxy (removed):
 
@@ -59,13 +63,16 @@ Legacy sensor proxy (removed):
 
 If you previously generated SSH keys inside containers:
 
-```bash
-# On each Proxmox host
-sed -i '/# pulse-/d' /root/.ssh/authorized_keys
+First verify that agent-based temperature collection works and retain an
+independent administrative login to each host. Identify the old monitoring
+public key by its fingerprint, then remove **only that key's entry** from the
+host's `authorized_keys`. A comment containing `pulse` is not proof of ownership.
 
-# Inside the Pulse container (or rebuild the container)
-docker exec pulse rm -rf /home/pulse/.ssh/id_ed25519*
-```
+Remove only the corresponding private-key files from the container and any
+persistent mount that supplied them; do not use wildcard deletion or remove the
+whole SSH directory. Deleting a container file does not erase an old image
+layer or backup. Revoking the public key on every target host is the essential
+step; replace affected images and protect or retire old backups separately.
 
 #### Security Boundary
 
@@ -191,7 +198,8 @@ If you're comfortable with your security setup, you can dismiss warnings:
 
 ### Security Features
 - **Logs**: token values masked with `***` in all outputs
-- **API**: frontend receives only `hasToken: true`, never actual values
+- **API**: ordinary configuration reads redact stored credentials; newly issued
+  tokens are deliberately revealed for their owner to save securely
 - **Export**: requires authentication (session, proxy auth, or `X-API-Token`
   header) to extract credentials
 - **Migration**: use passphrase-protected export/import (see
@@ -201,28 +209,16 @@ If you're comfortable with your security setup, you can dismiss warnings:
 
 ## Export/Import Protection
 
-By default, configuration export/import is blocked. You have two options:
+Configuration transfer requires management authority and a passphrase. Export
+and import have different permissions; a successful public health check does
+not establish either. Prefer the signed-in UI and keep the encrypted export and
+its passphrase separate and private.
 
 ### Option 1: Create an API Token (Recommended)
-Create a token in **Settings → API Tokens**, then use it for exports.
-For automation-only environments, you can seed tokens via environment variables (legacy) and
-they will be persisted to `api_tokens.json` on startup.
-
-Legacy environment seeding:
-```bash
-# Using systemd (secure)
-sudo systemctl edit pulse
-# Add:
-[Service]
-Environment="API_TOKENS=ansible-token,agent-token"
-Environment="API_TOKEN=legacy-token"
-
-# Then restart:
-sudo systemctl restart pulse
-
-# Docker
-docker run -e API_TOKENS=ansible-token,agent-token rcourtman/pulse:latest
-```
+Create a dedicated token in **API Access** with `settings:read` for export, or
+`settings:write` for import. Use the [private-file export example](#usage) below;
+do not paste a token or export passphrase into a command. An organization-bound
+token can transfer only its selected organization, not the whole instance.
 
 ### Option 2: Allow Unprotected Export (Homelab)
 ```bash
@@ -232,8 +228,8 @@ sudo systemctl edit pulse
 [Service]
 Environment="ALLOW_UNPROTECTED_EXPORT=true"
 
-# Docker
-docker run -e ALLOW_UNPROTECTED_EXPORT=true rcourtman/pulse:latest
+# Docker: set ALLOW_UNPROTECTED_EXPORT=true in the existing deployment's
+# environment, without changing its image, data volumes or other settings.
 ```
 
 This exception applies only when Pulse has no configured authentication and
@@ -266,7 +262,8 @@ for sensitive data.
   - Tokens never stored in plain text
   - Stored in `api_tokens.json` and managed via the UI
   - API-only mode supported (no password auth required)
-- **CSRF protection**: all state-changing operations require CSRF tokens
+- **CSRF protection**: session-authenticated state changes require CSRF tokens;
+  API-token requests use their enforced scopes rather than a copied session cookie
 - **Rate limiting**
   - Auth endpoints: 10 attempts/minute per IP
   - Config changes: 30 requests/minute per IP
@@ -306,16 +303,11 @@ for sensitive data.
   - Security status reflects whether persistent audit logging is active (Pulse Pro)
 
 ### What's Encrypted in Exports
-- Node credentials (passwords, API tokens)
-- PBS credentials
-- Email settings passwords
-- Webhook URLs and authentication headers
-
-### What's **Not** Encrypted
-- Node hostnames and IPs
-- Threshold settings
-- General configuration
-- Alert rules and schedules
+The entire configuration bundle is passphrase-encrypted, including node and
+PBS credentials, email passwords, webhook authentication, hostnames, addresses,
+thresholds, alert rules and schedules. The response's `status` wrapper is not
+encrypted. Encryption is not redaction: anyone with the bundle and passphrase
+can recover the included credentials and infrastructure details.
 
 ## Authentication Workflows
 
@@ -345,7 +337,7 @@ See `docs/PROXY_AUTH.md` for proxy-based auth (Authentik, Authelia, Cloudflare).
 5. Security is enabled immediately (no restart needed).
 
 This automatically:
-- Generates a secure random password
+- Hashes the password you chose
 - Hashes it with bcrypt (cost factor 12)
 - Creates secure API token (SHA3-256 hashed, raw token shown once)
 - For systemd: Configures systemd with hashed credentials
@@ -353,21 +345,20 @@ This automatically:
 - Applies credentials immediately and persists them for future restarts
 
 #### Manual Setup (Advanced)
-```bash
-# Using systemd (plain text will be auto-hashed)
-sudo systemctl edit pulse
-# Add:
-[Service]
-Environment="PULSE_AUTH_USER=admin"
-Environment="PULSE_AUTH_PASS=$2a$12$..."  # Prefer bcrypt hash for production; plain text is auto-hashed.
+Prefer Quick Security Setup so Pulse hashes and persists the password without
+putting it in process arguments. For a deployment-managed headless instance,
+edit a private environment file locally: set `PULSE_AUTH_USER` and a bcrypt hash
+in `PULSE_AUTH_PASS`, using your deployment manager's file syntax. Keep the file
+mode `0600` in a directory mode `0700`, outside repositories and diagnostics.
 
-# Docker (credentials persist in volume via .env file)
-# IMPORTANT: Always quote bcrypt hashes to prevent shell expansion!
-docker run -e PULSE_AUTH_USER=admin -e PULSE_AUTH_PASS='$2a$12$...' rcourtman/pulse:latest
-# Or use Quick Security Setup and restart container
-```
-
-**Important**: Always use hashed passwords in configuration. Use the Quick Security Setup or generate bcrypt hashes manually.
+Have systemd read that file with `EnvironmentFile=`, or Docker Compose with
+`env_file`, preserving the deployment's existing data volumes. Do not use
+`docker run -e PULSE_AUTH_PASS=...` or a password-bearing shell assignment. An
+environment file keeps the hash out of shell history and command arguments,
+but does not hide it from the service or privileged inspection of its
+environment. Treat hashes as sensitive too. Deployment environment values
+override Pulse's generated authentication file; see
+[password recovery](docs/TROUBLESHOOTING.md#i-forgot-my-password) before changing them.
 
 #### Features
 - Web UI login required when authentication enabled
@@ -375,7 +366,7 @@ docker run -e PULSE_AUTH_USER=admin -e PULSE_AUTH_PASS='$2a$12$...' rcourtman/pu
 - Passwords ALWAYS hashed with bcrypt (cost 12)
 - Session-based authentication with secure HttpOnly cookies
 - 24-hour session expiry
-- CSRF protection for all state-changing operations
+- CSRF protection for session-authenticated state-changing operations
 - Session invalidation on password change
 
 ### API Token Authentication  
@@ -389,21 +380,12 @@ The Quick Security Setup automatically:
 - Adds the token to the managed token list
 
 #### Manual Token Setup (Legacy Seeding)
-```bash
-# Using systemd (plain text values are auto-hashed on startup)
-sudo systemctl edit pulse
-# Add:
-[Service]
-Environment="API_TOKENS=ansible-token,agent-token"
-
-# Docker
-docker run -e API_TOKENS=ansible-token,agent-token rcourtman/pulse:latest
-
-# To provide pre-hashed tokens instead, list the SHA3-256 hashes
-# Environment="API_TOKENS=83c8...,b1de..."
-```
-
-**Security Note**: Tokens defined via environment variables are hashed with SHA3-256 before being stored in `api_tokens.json`. Plain values never persist beyond startup.
+Manage scoped tokens through **API Access**, not shared startup credentials.
+Legacy `API_TOKEN` / `API_TOKENS` seeding is not the recommended setup route;
+entries in Pulse's generated `.env` are ignored at runtime in v6. Hashing a
+legacy token for `api_tokens.json` does not erase a raw value from a deployment
+file, shell history or process environment. Rotate exposed credentials rather
+than assuming a later hash removed those copies.
 
 #### Token Management (Settings → API Tokens)
 - Issue dedicated tokens for automation/agents without sharing a global credential
@@ -413,17 +395,71 @@ docker run -e API_TOKENS=ansible-token,agent-token rcourtman/pulse:latest
 - All tokens stored as SHA3-256 hashes
 
 #### Usage
-```bash
-# Include the ORIGINAL token (not hash) in X-API-Token header
-curl -H "X-API-Token: your-original-token" http://localhost:7655/api/health
 
-# Export config requires auth + passphrase (min 12 chars)
-curl -X POST \
-  -H "Content-Type: application/json" \
-  -H "X-API-Token: your-original-token" \
-  -d '{"passphrase":"use-a-strong-passphrase"}' \
-  http://localhost:7655/api/config/export
+For automation, first follow the
+[API guide's private header-file preparation](docs/API.md#-authentication) on
+the machine running curl. It supports either `X-API-Token` or Bearer
+authentication without putting the token in arguments. Keep `--disable` first
+to ignore local curl defaults that could enable credential-bearing trace
+output; do not add verbose/trace options or follow redirects with credentials.
+These requests need curl 7.76 or later.
+
+Check protected access with a `monitoring:read` token:
+
+```bash
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  http://127.0.0.1:7655/api/state/summary
 ```
+
+`/api/health` is public, so a successful response there does **not** validate a
+token. The loopback URLs here apply only on the Pulse host. For remote access,
+substitute your verified HTTPS address in each request; use a separately
+verified private CA where necessary, not `--insecure`. Do not share unredacted
+infrastructure responses, credential files or configuration exports.
+
+For an encrypted configuration export, use a separate `settings:read` token in
+the header file. Prepare the private request file without placing the
+passphrase in a command:
+
+```bash
+umask 077
+mkdir -p "$HOME/.config/pulse"
+chmod 700 "$HOME/.config/pulse"
+touch "$HOME/.config/pulse/export-request.json"
+chmod 600 "$HOME/.config/pulse/export-request.json"
+vi "$HOME/.config/pulse/export-request.json"
+```
+
+In the editor, save this JSON with a strong, unique passphrase of at least
+12 characters. The placeholder below is not a passphrase to reuse:
+
+```json
+{"passphrase":"replace-with-a-strong-unique-passphrase"}
+```
+
+Then send the private file and save the response in a new private directory:
+
+```bash
+umask 077
+export_dir=$(mktemp -d "$HOME/pulse-export.XXXXXX")
+if curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  --request POST --header "Content-Type: application/json" \
+  --data-binary "@$HOME/.config/pulse/export-request.json" \
+  --output "$export_dir/config-export.json" \
+  http://127.0.0.1:7655/api/config/export; then
+  printf 'Export response saved to %s\n' "$export_dir/config-export.json"
+else
+  status=$?
+  printf 'Export failed; do not import the response in %s\n' "$export_dir" >&2
+  exit "$status"
+fi
+```
+
+The successful response contains the encrypted bundle in `data`; it is not a
+plain configuration file. A failed response may contain an error instead of a
+bundle: never import it or treat file creation as success. Keep the passphrase
+separate from the export. Remove the temporary request file when no longer
+needed; do not include it in a diagnostics archive.
 
 Configuration export accepts a token with `settings:read`; import accepts a
 token with `settings:write`. Both `X-API-Token` and `Authorization: Bearer`
@@ -537,8 +573,13 @@ Notes:
 
 #### Endpoint
 ```bash
-curl -s http://localhost:7655/api/monitoring/scheduler/health | jq
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  http://127.0.0.1:7655/api/monitoring/scheduler/health
 ```
+
+Use the [private header-file preparation](#usage) and a `monitoring:read`
+token. The non-zero HTTP-error exit matters; piping an unauthenticated error
+straight to `jq` can make a failed request look successful.
 
 #### Security Use Cases
 1. **Anomaly Detection**
@@ -564,15 +605,19 @@ curl -s http://localhost:7655/api/monitoring/scheduler/health | jq
 
 Use the API endpoint above or export diagnostics from **Settings → Diagnostics** when troubleshooting.
 
-### Relay Security (Relay and Above)
+### Existing Mobile Pairings (Retirement)
 
-The relay protocol provides mobile remote access with end-to-end encryption:
+Pulse Mobile and Relay retire on **31 March 2027**. Existing paired phones keep
+working until then; Relay is no longer sold, and existing Relay subscribers
+receive Pro features at their current price. Relay connects the app, not the
+web UI. For alerts afterwards, use an ntfy, Gotify or Pushover destination and
+open Pulse in the phone's browser.
 
-- **ECDH key exchange**: Per-channel encryption keys are derived via Elliptic Curve Diffie-Hellman, meaning the relay server never sees plaintext data.
+- **ECDH key exchange**: Existing app channels derive end-to-end encryption keys;
+  the relay server does not see plaintext payloads.
 - **Per-channel authentication**: Each mobile session authenticates independently.
 - **Back-pressure**: Data limiters prevent channel flooding.
-- **License-gated**: Relay functionality requires a Relay, Pro, legacy Pro+, or Cloud license.
-- **Configurable**: Enable/disable via **Settings → Relay** (admin only).
+- **Existing access**: Paired-app access remains license-gated until retirement.
 
 ### Agent Command Security
 
@@ -589,9 +634,10 @@ The relay protocol provides mobile remote access with end-to-end encryption:
 - ✅ **DO**: Use Quick Security Setup for automatic hashing
 - ✅ **DO**: Store only bcrypt hashes for passwords
 - ✅ **DO**: Store only SHA3-256 hashes for API tokens
-- ❌ **DON'T**: Store plain text passwords in config files
-- ❌ **DON'T**: Store plain text API tokens in config files
-- ❌ **DON'T**: Log credentials or include them in backups
+- ❌ **DON'T**: Put raw passwords or tokens in command arguments, URLs, logs or
+  shared configuration files
+- ✅ **DO**: Keep an agent's required raw credential and temporary API request
+  files private; protect encrypted backups and keep their passphrases separate
 
 ### Authentication Setup
 - ✅ **DO**: Use strong, unique passwords (16+ characters)
@@ -605,7 +651,8 @@ Manually verify your deployment follows security best practices:
 - No hardcoded credentials in environment files
 - No credentials exposed in logs (check `docker logs pulse`)
 - All passwords stored as bcrypt hashes (60 characters, starting with `$2a$` or `$2b$`)
-- All API tokens stored as SHA3-256 hashes (64 characters)
+- Server-side API token records stored as SHA3-256 hashes (64 characters);
+  agents still need a private raw credential to authenticate
 - Secure file permissions on `/etc/pulse/.env` (600)
 - No credential leaks in API responses (test with `curl`)
 
@@ -623,20 +670,25 @@ Manually verify your deployment follows security best practices:
 - Successful login clears all failed attempt counters
 
 ### Manual Recovery (Admin)
-Administrators with API access can manually reset lockouts:
+Administrators with API access can manually reset a temporary lockout; this does
+not reset a password or bypass SSO. Use the [private header file](#usage) with a
+`settings:write` token. Session-authenticated API requests also require CSRF
+protection; do not copy a session cookie into a command.
 
 ```bash
 # Reset lockout for a specific username
-curl -X POST http://localhost:7655/api/security/reset-lockout \
-  -H "X-API-Token: your-api-token" \
-  -H "Content-Type: application/json" \
-  -d '{"identifier":"username"}'
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  --request POST --header "Content-Type: application/json" --data-binary @- \
+  http://127.0.0.1:7655/api/security/reset-lockout <<'JSON'
+{"identifier":"username"}
+JSON
 
 # Reset lockout for an IP address
-curl -X POST http://localhost:7655/api/security/reset-lockout \
-  -H "X-API-Token: your-api-token" \
-  -H "Content-Type: application/json" \
-  -d '{"identifier":"198.51.100.100"}'
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  --request POST --header "Content-Type: application/json" --data-binary @- \
+  http://127.0.0.1:7655/api/security/reset-lockout <<'JSON'
+{"identifier":"198.51.100.100"}
+JSON
 ```
 
 ## Troubleshooting
@@ -647,6 +699,6 @@ curl -X POST http://localhost:7655/api/security/reset-lockout \
 **Can't login?** Check `PULSE_AUTH_USER` and `PULSE_AUTH_PASS` environment variables  
 **API access denied?** Verify the token you supplied matches one of the values created in *Settings → API Tokens* (use the original token, not the hash)  
 **CORS errors?** Configure Allowed Origins in the UI or set `ALLOWED_ORIGINS` for your domain  
-**Forgot password?** Remove `.env` and restart Pulse, then use the bootstrap token to set new credentials
+**Forgot password?** Follow the [deployment-specific recovery guide](docs/TROUBLESHOOTING.md#i-forgot-my-password). Deployment-managed credentials and identity-provider accounts need their own recovery path; deleting `.env` is not a universal reset.
 
 ---

@@ -1,6 +1,6 @@
 export function getAlertQuietDayButtonClass(selected: boolean): string {
   return `rounded-md px-2 py-2 text-xs font-medium transition-all duration-200 ${
-    selected ? 'bg-blue-500 text-white shadow-sm' : 'text-muted hover:bg-surface-hover'
+    selected ? 'bg-blue-500 text-white shadow-xs' : 'text-muted hover:bg-surface-hover'
   }`;
 }
 
@@ -13,7 +13,7 @@ export function getAlertQuietSuppressCardClass(selected: boolean): string {
 }
 
 export function getAlertQuietSuppressCheckboxClass(selected: boolean): string {
-  return `mt-1 flex h-4 w-4 items-center justify-center rounded border-2 ${
+  return `mt-1 flex h-4 w-4 items-center justify-center rounded-sm border-2 ${
     selected ? 'border-blue-500 bg-blue-500' : 'border-border'
   }`;
 }

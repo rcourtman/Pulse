@@ -1777,7 +1777,6 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 			nq.notifyDeliveryHealthChanged()
 		}
 	}()
-
 	if quietHoursPolicy != nil {
 		ready, err := nq.prepareQuietHoursDelivery(notif, quietHoursPolicy)
 		if err != nil {

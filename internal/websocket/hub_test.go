@@ -1245,3 +1245,126 @@ func TestBroadcastCurrentStateToTenantResolvesTenantState(t *testing.T) {
 		t.Fatalf("lazy tenant state org = %v, want org-123", payload["org"])
 	}
 }
+
+// startStateBroadcastHarness runs the sequencer and state worker for hub and
+// registers one client, optionally in a tenant.
+func startStateBroadcastHarness(t *testing.T, hub *Hub, orgID string) *Client {
+	t.Helper()
+	client := &Client{hub: hub, send: make(chan []byte, 16), id: "state-rate-client", orgID: orgID}
+	hub.mu.Lock()
+	hub.clients[client] = true
+	if orgID != "" {
+		if hub.clientsByTenant[orgID] == nil {
+			hub.clientsByTenant[orgID] = make(map[*Client]bool)
+		}
+		hub.clientsByTenant[orgID][client] = true
+	}
+	hub.mu.Unlock()
+	sequencerDone := make(chan struct{})
+	go func() {
+		hub.runBroadcastSequencer()
+		close(sequencerDone)
+	}()
+	go hub.runStateBroadcastWorker()
+	t.Cleanup(func() {
+		close(hub.stopChan)
+		<-sequencerDone
+		<-hub.stateBroadcastDone
+	})
+	return client
+}
+
+func receiveStateValue(t *testing.T, client *Client, within time.Duration) (string, bool) {
+	t.Helper()
+	select {
+	case data := <-client.send:
+		var msg Message
+		if err := json.Unmarshal(data, &msg); err != nil {
+			t.Fatalf("unmarshal message: %v", err)
+		}
+		payload, _ := msg.Data.(map[string]interface{})
+		value, _ := payload["value"].(string)
+		return value, true
+	case <-time.After(within):
+		return "", false
+	}
+}
+
+// Every accepted agent report requests a state broadcast, and each broadcast
+// rebuilds the full frontend state. Broadcasts to one audience are spaced by
+// stateBroadcastInterval and carry the latest state (#2199).
+func TestStateBroadcastsSpacedByInterval(t *testing.T) {
+	hub := NewHub(nil)
+	hub.coalesceWindow = 5 * time.Millisecond
+	hub.stateBroadcastInterval = 300 * time.Millisecond
+	client := startStateBroadcastHarness(t, hub, "")
+
+	hub.broadcastSeq <- Message{Type: "rawData", Data: map[string]string{"value": "first"}}
+	if value, ok := receiveStateValue(t, client, time.Second); !ok || value != "first" {
+		t.Fatalf("first broadcast = %q (received %v), want an immediate first broadcast", value, ok)
+	}
+	start := time.Now()
+	for _, value := range []string{"second", "third", "fourth"} {
+		hub.broadcastSeq <- Message{Type: "rawData", Data: map[string]string{"value": value}}
+	}
+	if value, ok := receiveStateValue(t, client, 150*time.Millisecond); ok {
+		t.Fatalf("broadcast %q arrived %v after the previous one, inside the interval", value, time.Since(start))
+	}
+	if value, ok := receiveStateValue(t, client, 2*time.Second); !ok || value != "fourth" {
+		t.Fatalf("spaced broadcast = %q (received %v), want the latest state", value, ok)
+	}
+	if value, ok := receiveStateValue(t, client, 100*time.Millisecond); ok {
+		t.Fatalf("burst produced a second spaced broadcast %q", value)
+	}
+}
+
+// A signal arriving while a broadcast is due must not push it back. With the
+// earlier restart-on-signal debounce, signals closer together than the window
+// postponed every broadcast until they stopped.
+func TestStateBroadcastNotStarvedBySteadySignals(t *testing.T) {
+	hub := NewHub(nil)
+	hub.coalesceWindow = 60 * time.Millisecond
+	hub.stateBroadcastInterval = 0
+	client := startStateBroadcastHarness(t, hub, "")
+
+	stop := time.After(600 * time.Millisecond)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	received := 0
+	for streaming := true; streaming; {
+		select {
+		case <-ticker.C:
+			hub.broadcastSeq <- Message{Type: "rawData", Data: map[string]string{"value": "tick"}}
+		case <-client.send:
+			received++
+		case <-stop:
+			streaming = false
+		}
+	}
+	if received == 0 {
+		t.Fatal("no state broadcast while signals kept arriving every 10 ms")
+	}
+}
+
+func TestTenantStateBroadcastsSpacedByInterval(t *testing.T) {
+	hub := NewHub(nil)
+	hub.coalesceWindow = 5 * time.Millisecond
+	hub.stateBroadcastInterval = 300 * time.Millisecond
+	client := startStateBroadcastHarness(t, hub, "acme")
+
+	send := func(value string) {
+		hub.tenantBroadcast <- TenantBroadcast{OrgID: "acme", Message: Message{Type: "rawData", Data: map[string]string{"value": value}}}
+	}
+	send("first")
+	if value, ok := receiveStateValue(t, client, time.Second); !ok || value != "first" {
+		t.Fatalf("first tenant broadcast = %q (received %v)", value, ok)
+	}
+	send("second")
+	send("third")
+	if value, ok := receiveStateValue(t, client, 150*time.Millisecond); ok {
+		t.Fatalf("tenant broadcast %q arrived inside the interval", value)
+	}
+	if value, ok := receiveStateValue(t, client, 2*time.Second); !ok || value != "third" {
+		t.Fatalf("spaced tenant broadcast = %q (received %v), want the latest state", value, ok)
+	}
+}

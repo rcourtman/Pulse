@@ -111,7 +111,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
               {/* Current Version */}
               <div class="bg-surface-alt p-4">
                 <div class="flex items-start gap-3">
-                  <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
+                  <div class="p-2 bg-blue-100 dark:bg-blue-900/25 rounded-md">
                     <Package class="w-5 h-5 text-blue-600 dark:text-blue-400" />
                   </div>
                   <div class="flex-1 min-w-0">
@@ -150,7 +150,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
 
               {/* Update Status / Arrow */}
               <Show when={props.updateInfo()?.available}>
-                <div class="bg-green-50 dark:bg-green-900 p-4 flex items-center justify-center">
+                <div class="bg-green-50 dark:bg-green-900/25 p-4 flex items-center justify-center">
                   <div class="flex flex-col items-center gap-1.5">
                     <div class="flex items-center gap-2 text-green-600 dark:text-green-400">
                       <ArrowRight class="w-5 h-5" />
@@ -165,7 +165,9 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
               {/* Latest Version / Status */}
               <div
                 class={`p-4 ${
-                  props.updateInfo()?.available ? 'bg-green-50 dark:bg-green-900' : 'bg-surface-alt'
+                  props.updateInfo()?.available
+                    ? 'bg-green-50 dark:bg-green-900/25'
+                    : 'bg-surface-alt'
                 }`}
               >
                 <div class="flex items-start gap-3">
@@ -310,7 +312,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
           />
 
           <Show when={isPreviewChannel()}>
-            <div class="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+            <div class="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
               <p class="font-medium">{UPDATES_PANEL_COPY.previewChannelTitle}</p>
               <p class="mt-1 text-xs text-amber-800 dark:text-amber-200">
                 {UPDATES_PANEL_COPY.previewChannelDescription}
@@ -322,7 +324,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
           <div class="p-4 rounded-md border border-border bg-surface-alt">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div class="flex items-center gap-3">
-                <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
+                <div class="p-2 bg-blue-100 dark:bg-blue-900/25 rounded-md">
                   <svg
                     class="w-5 h-5 text-blue-600 dark:text-blue-400"
                     fill="none"
@@ -357,7 +359,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                   aria-labelledby={autoUpdateTitleId}
                   class="sr-only peer"
                 />
-                <div class="w-11 h-6 bg-surface-alt peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
+                <div class="w-11 h-6 bg-surface-alt peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
               </label>
             </div>
 

@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -8,6 +9,55 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
+
+func TestCloneResourceRefreshesScopeAndPolicyMetadata(t *testing.T) {
+	// Registry mutation paths can leave derived metadata stale until the next
+	// read. Keep refresh on every clone, including after source/tag edits.
+	original := &Resource{
+		ID: "app-container:lab", Type: ResourceTypeAppContainer,
+		Sources:        []DataSource{SourceDocker, SourceAgent, SourceDocker},
+		PlatformScopes: []string{"stale"},
+		Agent:          &AgentData{Hostname: "lab"},
+		Docker:         &DockerData{HostSourceID: "proxmox-lxc-docker:lab:node:100"},
+		Policy:         &ResourcePolicy{Sensitivity: ResourceSensitivityRestricted},
+		AISafeSummary:  "stale",
+	}
+	for _, test := range []struct {
+		name        string
+		tags        []string
+		sensitivity ResourceSensitivity
+		routing     ResourceRoutingScope
+	}{
+		{"public-last", []string{"backup", "PII", " PUBLIC "}, ResourceSensitivityPublic, ResourceRoutingScopeCloudSummary},
+		{"public-first", []string{"public", "restricted", "database"}, ResourceSensitivityPublic, ResourceRoutingScopeCloudSummary},
+		{"restricted-last", []string{"backup", " Customer_Data "}, ResourceSensitivityRestricted, ResourceRoutingScopeLocalOnly},
+		{"restricted-first", []string{" SECRETS ", "storage"}, ResourceSensitivityRestricted, ResourceRoutingScopeLocalOnly},
+		{"sensitive", []string{"", "unrecognised", " DaTaBaSe ", "database"}, ResourceSensitivitySensitive, ResourceRoutingScopeLocalFirst},
+		{"internal", []string{"prod", ""}, ResourceSensitivityInternal, ResourceRoutingScopeCloudSummary},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			original.Tags = test.tags
+			cloned := cloneResource(original)
+			assertStringSliceEqual(t, cloned.PlatformScopes, []string{"agent", "proxmox-pve", "docker"})
+			if cloned.Policy.Sensitivity != test.sensitivity || cloned.Policy.Routing.Scope != test.routing || cloned.AISafeSummary == "stale" {
+				t.Fatalf("clone retained stale policy: %#v, summary=%q", cloned.Policy, cloned.AISafeSummary)
+			}
+			cloned.PlatformScopes[0] = "mutated"
+			cloned.Policy.Sensitivity = ResourceSensitivityPublic
+			if !reflect.DeepEqual(original.PlatformScopes, []string{"stale"}) || original.Policy.Sensitivity != ResourceSensitivityRestricted || original.AISafeSummary != "stale" {
+				t.Fatal("clone modified the original derived metadata")
+			}
+		})
+	}
+	original.Sources = []DataSource{SourceTrueNAS, SourceAgent}
+	original.TrueNAS = &TrueNASData{Hostname: "lab"}
+	original.Docker = nil
+	cloned := cloneResource(original)
+	assertStringSliceEqual(t, cloned.PlatformScopes, []string{"agent", "truenas"})
+	if cloned.Policy.Sensitivity != ResourceSensitivitySensitive {
+		t.Fatalf("edited provider facet lost its default sensitivity: %#v", cloned.Policy)
+	}
+}
 
 // --- cloneResource: top-level isolation ---
 
@@ -563,7 +613,7 @@ func TestCloneAgentData_DeepIsolation(t *testing.T) {
 		LoadAverage: []float64{0.5, 1.0, 1.5},
 		DiskExclude: []string{"/dev/sda"},
 		RAID: []HostRAIDMeta{
-			{Device: "/dev/md0", Level: "raid1", Risk: &StorageRisk{Level: storagehealth.RiskHealthy}},
+			{Device: "/dev/md0", Level: "raid1", RequiredDevices: 2, TotalDevices: 3, SpareDevices: 1, Risk: &StorageRisk{Level: storagehealth.RiskHealthy}},
 		},
 		PackageUpdates: &AgentPackageUpdateMeta{Packages: []AgentPackageUpdate{{Name: "openssl"}}},
 		StorageCleanup: &AgentStorageCleanupMeta{Provider: "apt-package-cache", ReclaimableBytes: 512},
@@ -583,6 +633,13 @@ func TestCloneAgentData_DeepIsolation(t *testing.T) {
 	cloned.RAID[0].Risk.Level = storagehealth.RiskCritical
 	if original.RAID[0].Risk.Level == storagehealth.RiskCritical {
 		t.Error("mutating cloned RAID risk should not affect original")
+	}
+	if cloned.RAID[0].RequiredDevices != 2 || cloned.RAID[0].TotalDevices != 3 || cloned.RAID[0].SpareDevices != 1 {
+		t.Fatalf("clone lost RAID count provenance: %+v", cloned.RAID[0])
+	}
+	cloned.RAID[0].RequiredDevices = 1
+	if original.RAID[0].RequiredDevices != 2 {
+		t.Fatal("mutating cloned RAID required count changed the source")
 	}
 	cloned.PackageUpdates.Packages[0].Name = "mutated"
 	cloned.StorageCleanup.Provider = "mutated"

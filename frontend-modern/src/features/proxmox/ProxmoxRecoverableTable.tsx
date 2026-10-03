@@ -123,6 +123,9 @@ export function ProxmoxRecoverableTable(props: {
               artifact.workload.name || artifact.workload.label,
               artifact.workload.typeLabel,
               artifact.workload.vmid,
+              // The phone projection has no location column, so the row's
+              // hover title carries the repository instead.
+              columnVisible('location') ? undefined : artifact.location,
             ]
               .filter(Boolean)
               .join(' · ')}
@@ -163,7 +166,7 @@ export function ProxmoxRecoverableTable(props: {
         </TableCell>
       </Show>
       <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}>
-        <ProxmoxBackupAgeText artifact={artifact} />
+        <ProxmoxBackupAgeText artifact={artifact} compact={layoutMode() === 'compact'} />
       </TableCell>
       <Show when={columnVisible('size')}>
         <TableCell class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}>
@@ -189,7 +192,10 @@ export function ProxmoxRecoverableTable(props: {
       </TableCell>
       <Show when={columnVisible('details')}>
         <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-          <span class="inline-block max-w-[20rem] truncate" title={artifact.detail}>
+          <span
+            class="inline-block max-w-[20rem] truncate"
+            title={artifact.detailTitle ?? artifact.detail}
+          >
             {artifact.detail || '—'}
           </span>
         </TableCell>
@@ -226,7 +232,7 @@ export function ProxmoxRecoverableTable(props: {
         data-proxmox-backups-windowed={tableWindow.isWindowed()}
       >
         <PlatformTableShell
-          tableClass="min-w-[0px] table-fixed text-xs"
+          tableClass="min-w-0 table-fixed text-xs"
           colgroup={
             <colgroup>
               <For each={visibleColumns()}>

@@ -2,10 +2,13 @@ package sensors
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -20,77 +23,166 @@ const (
 
 var (
 	errCommandOutputTooLarge = errors.New("command output exceeds size limit")
-	rpiThermalZonePath       = "/sys/class/thermal/thermal_zone0/temp"
+	thermalZoneRoot          = "/sys/class/thermal"
+	hwmonRoot                = "/sys/class/hwmon"
 )
 
-var rpiThermalZoneTempPath = "/sys/class/thermal/thermal_zone0/temp"
-
-// CollectLocal reads sensor data from the local machine using lm-sensors.
-// Returns the raw JSON output from `sensors -j` or an error if sensors is not available.
+// CollectLocal reads lm-sensors JSON and supplements it with a recognised CPU
+// thermal sysfs source when it contains no usable CPU temperature. Other
+// lm-sensors readings are retained; sysfs is also used when lm-sensors is
+// unavailable or empty.
 func CollectLocal(ctx context.Context) (string, error) {
 	ctx = normalizeCollectionContext(ctx)
 
-	// Check if sensors command exists
 	sensorsPath, err := exec.LookPath("sensors")
-	if err != nil {
-		return "", fmt.Errorf("lm-sensors not installed: %w", err)
-	}
+	if err == nil {
+		cmdCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
 
-	// Create context with timeout
-	cmdCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	// Run sensors -j command with bounded output capture.
-	// sensors exits non-zero when optional subfeatures fail, so non-empty output is still accepted.
-	cmd := exec.CommandContext(cmdCtx, sensorsPath, "-j")
-	cmd.Stderr = io.Discard
-	output, err := runCommandOutputLimited(cmd, maxSensorsOutputSizeBytes)
-	if err != nil && errors.Is(err, errCommandOutputTooLarge) {
-		return "", fmt.Errorf("failed to execute sensors: %w", err)
-	}
-
-	outputStr := strings.TrimSpace(string(output))
-	if err != nil && outputStr == "" {
-		return "", fmt.Errorf("failed to execute sensors: %w", err)
-	}
-
-	if outputStr == "" || outputStr == "{}" {
-		log.Debug().
-			Str("component", "sensors_collector").
-			Str("action", "collect_local_empty_output").
-			Msg("lm-sensors returned empty output, attempting Raspberry Pi thermal fallback")
-
-		// Try Raspberry Pi temperature method as fallback
-		cmd = exec.CommandContext(cmdCtx, "cat", rpiThermalZonePath)
-		rpiOutput, rpiErr := cmd.Output()
-		if rpiErr == nil {
-			rpiTemp := strings.TrimSpace(string(rpiOutput))
-			if rpiTemp != "" {
-				parsed, parseErr := strconv.ParseFloat(rpiTemp, 64)
-				if parseErr != nil {
-					return "", fmt.Errorf("invalid thermal value %q: %w", rpiTemp, parseErr)
-				}
-				// Linux thermal_zone values are commonly millidegrees (e.g. 42000).
-				// Convert only when magnitude indicates millidegrees to keep degree inputs intact.
-				if parsed >= 1000 || parsed <= -1000 {
-					parsed = parsed / 1000.0
-				}
-				rpiTemp = strconv.FormatFloat(parsed, 'f', 3, 64)
-				// Convert to pseudo-sensors format for compatibility
-				return fmt.Sprintf(`{"cpu_thermal-virtual-0":{"temp1":{"temp1_input":%s}}}`, rpiTemp), nil
-			}
-		} else {
-			log.Debug().
-				Str("component", "sensors_collector").
-				Str("action", "collect_local_rpi_fallback_failed").
-				Str("thermal_path", "/sys/class/thermal/thermal_zone0/temp").
-				Err(rpiErr).
-				Msg("Raspberry Pi thermal fallback failed")
+		// sensors can exit non-zero when optional subfeatures fail, so accept
+		// non-empty output even then. Never fall back after an output-limit hit.
+		cmd := exec.CommandContext(cmdCtx, sensorsPath, "-j")
+		cmd.Stderr = io.Discard
+		output, commandErr := runCommandOutputLimited(cmd, maxSensorsOutputSizeBytes)
+		if errors.Is(commandErr, errCommandOutputTooLarge) {
+			return "", fmt.Errorf("failed to execute sensors: %w", commandErr)
 		}
-		return "", fmt.Errorf("sensors returned empty output")
+		outputStr := strings.TrimSpace(string(output))
+		if outputStr != "" && outputStr != "{}" {
+			return addMissingSysfsCPU(ctx, outputStr), nil
+		}
+		if cmdCtx.Err() != nil {
+			return "", fmt.Errorf("failed to execute sensors: %w", cmdCtx.Err())
+		}
+		log.Debug().Str("component", "sensors_collector").
+			Str("action", "collect_local_empty_output").
+			Msg("lm-sensors returned no data; trying recognised CPU thermal sysfs sources")
 	}
 
-	return outputStr, nil
+	output, fallbackErr := collectSysfsCPUTemperature(ctx)
+	if fallbackErr == nil {
+		return output, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("lm-sensors unavailable and CPU thermal fallback failed: %w", fallbackErr)
+	}
+	return "", fmt.Errorf("sensors returned empty output and CPU thermal fallback failed: %w", fallbackErr)
+}
+
+// addMissingSysfsCPU leaves existing output unchanged unless it is a JSON
+// object without a usable CPU reading and an identified sysfs source is
+// available. A failed optional lookup must not discard working sensors data.
+func addMissingSysfsCPU(ctx context.Context, sensorsJSON string) string {
+	var chips map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(sensorsJSON), &chips); err != nil || chips == nil {
+		return sensorsJSON
+	}
+	parsed, err := Parse(sensorsJSON)
+	if err != nil || parsed.CPUPackage > 0 {
+		return sensorsJSON
+	}
+	fallbackJSON, err := collectSysfsCPUTemperature(ctx)
+	if err != nil {
+		return sensorsJSON
+	}
+	var fallback map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(fallbackJSON), &fallback); err != nil {
+		return sensorsJSON
+	}
+	for name, value := range fallback {
+		if _, exists := chips[name]; exists {
+			// A real lm-sensors chip can have the same name as the synthetic
+			// fallback. Keep its other readings rather than replacing the chip.
+			for suffix := 1; ; suffix++ {
+				alternate := fmt.Sprintf("%s-sysfs-%d", name, suffix)
+				if _, exists := chips[alternate]; !exists {
+					name = alternate
+					break
+				}
+			}
+		}
+		chips[name] = value
+	}
+	merged, err := json.Marshal(chips)
+	if err != nil || len(merged) > maxSensorsOutputSizeBytes {
+		return sensorsJSON
+	}
+	return string(merged)
+}
+
+// collectSysfsCPUTemperature deliberately accepts only identified CPU/SoC
+// sensors. thermal_zone0 is not necessarily a CPU on every Linux machine.
+func collectSysfsCPUTemperature(ctx context.Context) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	var lastErr error
+	for _, source := range []struct {
+		root, prefix, label, value string
+	}{
+		{thermalZoneRoot, "thermal_zone", "type", "temp"},
+		{hwmonRoot, "hwmon", "name", "temp1_input"},
+	} {
+		entries, err := os.ReadDir(source.root)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		for _, entry := range entries {
+			if err := ctx.Err(); err != nil {
+				return "", err
+			}
+			if !strings.HasPrefix(entry.Name(), source.prefix) {
+				continue
+			}
+			dir := filepath.Join(source.root, entry.Name())
+			name, err := readBoundedThermalFile(filepath.Join(dir, source.label))
+			if err != nil || !isCPUSysfsThermalName(name) {
+				continue
+			}
+			raw, err := readBoundedThermalFile(filepath.Join(dir, source.value))
+			if err != nil {
+				lastErr = err
+				continue
+			}
+			millidegrees, err := strconv.ParseInt(raw, 10, 64)
+			if err != nil || millidegrees < 1000 || millidegrees >= 150000 {
+				lastErr = fmt.Errorf("invalid CPU thermal millidegree value from %s", dir)
+				continue
+			}
+			celsius := float64(millidegrees) / 1000
+			return fmt.Sprintf(`{"cpu_thermal-virtual-0":{"temp1":{"temp1_input":%.3f}}}`, celsius), nil
+		}
+	}
+	if lastErr != nil {
+		return "", fmt.Errorf("no valid CPU thermal sysfs reading: %w", lastErr)
+	}
+	return "", errors.New("no recognised CPU thermal sysfs source")
+}
+
+func isCPUSysfsThermalName(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "armada_thermal", "cpu_thermal", "cpu-thermal", "soc_thermal", "soc-thermal", "x86_pkg_temp", "rpitemp":
+		return true
+	default:
+		return false
+	}
+}
+
+func readBoundedThermalFile(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	contents, err := io.ReadAll(io.LimitReader(f, maxThermalFileReadBytes+1))
+	if err != nil {
+		return "", err
+	}
+	if len(contents) > maxThermalFileReadBytes {
+		return "", fmt.Errorf("thermal sysfs value exceeds %d bytes", maxThermalFileReadBytes)
+	}
+	return strings.TrimSpace(string(contents)), nil
 }
 
 func runCommandOutputLimited(cmd *exec.Cmd, maxBytes int) ([]byte, error) {

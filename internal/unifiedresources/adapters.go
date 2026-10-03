@@ -360,21 +360,22 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 			}
 			assessment := storagehealth.AssessHostRAIDArray(r)
 			raid[i] = HostRAIDMeta{
-				Device:         r.Device,
-				Name:           r.Name,
-				Level:          r.Level,
-				State:          r.State,
-				TotalDevices:   r.TotalDevices,
-				ActiveDevices:  r.ActiveDevices,
-				WorkingDevices: r.WorkingDevices,
-				FailedDevices:  r.FailedDevices,
-				SpareDevices:   r.SpareDevices,
-				UUID:           r.UUID,
-				Devices:        devices,
-				RebuildPercent: r.RebuildPercent,
-				RebuildSpeed:   r.RebuildSpeed,
-				Operation:      r.Operation,
-				Risk:           storageRiskFromAssessment(assessment),
+				Device:          r.Device,
+				Name:            r.Name,
+				Level:           r.Level,
+				State:           r.State,
+				RequiredDevices: r.RequiredDevices,
+				TotalDevices:    r.TotalDevices,
+				ActiveDevices:   r.ActiveDevices,
+				WorkingDevices:  r.WorkingDevices,
+				FailedDevices:   r.FailedDevices,
+				SpareDevices:    r.SpareDevices,
+				UUID:            r.UUID,
+				Devices:         devices,
+				RebuildPercent:  r.RebuildPercent,
+				RebuildSpeed:    r.RebuildSpeed,
+				Operation:       r.Operation,
+				Risk:            storageRiskFromAssessment(assessment),
 			}
 			if !isInternalHostRAIDDevice(r.Device) {
 				storageAssessments = append(storageAssessments, assessment)
@@ -1561,7 +1562,11 @@ func resourceFromPBSDatastore(instance models.PBSInstance, datastore models.PBSD
 	name := strings.TrimSpace(datastore.Name)
 	assessment := storagehealth.AssessPBSDatastore(datastore)
 	risk := storageRiskFromAssessment(assessment)
-	status := storageStatus(statusFromString(datastore.Status), risk)
+	// The PBS poller reports datastores as "available"/"unavailable", the same
+	// storage vocabulary PVE uses; the generic string mapper does not know it
+	// and left every healthy datastore "unknown".
+	datastoreStatus, _ := statusFromStorageState(datastore.Status)
+	status := storageStatus(datastoreStatus, risk)
 	incidents := incidentsFromAssessment("pulse", string(SourcePBS), "pbs-datastore:"+name, assessment, instance.LastSeen)
 	status = incidentsStatus(status, incidents)
 
@@ -3908,11 +3913,7 @@ func extractHostname(raw string) string {
 	}
 	parsed, err := url.Parse(raw)
 	if err == nil && parsed.Host != "" {
-		host := parsed.Host
-		if strings.Contains(host, ":") {
-			host = strings.Split(host, ":")[0]
-		}
-		return host
+		return parsed.Hostname()
 	}
 
 	if strings.Contains(raw, "/") {

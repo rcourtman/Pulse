@@ -48,10 +48,22 @@ describe('tokenRevealStore', () => {
       const state = tokenRevealStore.state();
       expect(state).not.toBeNull();
       expect(state!.token).toBe('secret-token');
-      expect(state!.record.id).toBe('token-1');
+      expect(state!.record!.id).toBe('token-1');
       expect(state!.source).toBe('settings');
       expect(state!.note).toBe('Test note');
       expect(state!.issuedAt).toBeDefined();
+    });
+
+    it('reveals a temporary setup token without inventing an API token record', () => {
+      showTokenReveal({
+        token: 'synthetic-setup-token',
+        source: 'pve',
+        note: 'Private input only',
+      });
+      expect(tokenRevealStore.state()?.token).toBe('synthetic-setup-token');
+      expect(tokenRevealStore.state()?.record).toBeUndefined();
+      dismissTokenReveal();
+      expect(tokenRevealStore.state()).toBeNull();
     });
 
     it('sets issuedAt to current timestamp', () => {

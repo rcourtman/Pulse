@@ -35,42 +35,42 @@ export const EN_MESSAGES = {
     'Your admin account is ready and Pulse is already receiving telemetry. Open Infrastructure to inspect the first system, then return to Add infrastructure when you want another platform API or Agent source.',
   'setup.completion.hero.connected.title': 'First monitored system connected',
   'setup.completion.hero.empty.description':
-    'Your admin account is ready. Next, choose how the first system should enter the unified infrastructure model: platform API inventory, Pulse Agent telemetry, or both.',
-  'setup.completion.hero.empty.title': 'Choose your first infrastructure source',
+    'Your admin account is ready. Next, tell Pulse what to monitor: a Proxmox server, a NAS, VMware, or any Linux, Windows, or macOS machine.',
+  'setup.completion.hero.empty.title': 'Connect your first system',
   'setup.completion.nextStep.ariaLabel': 'Setup next step',
   'setup.completion.nextStep.badge': 'Recommended next step',
   'setup.completion.nextStep.detail.agent':
-    'Add infrastructure stays available for more Pulse Agent systems or platform API inventory when a platform manages the estate.',
+    'Use Add infrastructure any time to add more machines, or to connect a platform such as Proxmox through its API.',
   'setup.completion.nextStep.detail.api':
-    'Add infrastructure stays available for more API-backed systems or Pulse Agent telemetry when a system needs node-local coverage.',
+    'Use Add infrastructure any time to connect more systems, or to install Pulse Agent on Proxmox nodes for host-local telemetry such as temperatures and SMART data where available.',
   'setup.completion.nextStep.detail.both':
-    'Add infrastructure stays available any time you want to expand from this first system with another API source, Agent source, or both.',
+    'Use Add infrastructure any time to connect more systems through their API, with the agent, or both.',
   'setup.completion.nextStep.detail.empty':
-    'Start with a platform API when a platform manages the estate. Install Pulse Agent when the system itself should report node-local telemetry.',
+    'Connect Proxmox, TrueNAS, or VMware through their API, or run the Pulse Agent installer on a standalone host. On Proxmox nodes, the agent can add host-local temperatures and SMART data when available.',
   'setup.completion.nextStep.label': 'Next step',
   'setup.completion.nextStep.summary.connected.singular':
     'Open Infrastructure to review your first connected system.',
   'setup.completion.nextStep.summary.connected.plural':
     'Open Infrastructure to review your connected systems.',
   'setup.completion.nextStep.summary.empty':
-    'Open Add infrastructure to choose a platform API, Pulse Agent, or both.',
+    'Open Add infrastructure and choose a platform API connection or a host to install Pulse Agent on.',
   'setup.completion.nextStep.title.connected': 'Open Infrastructure',
-  'setup.completion.nextStep.title.empty': 'Choose the first source strategy',
+  'setup.completion.nextStep.title.empty': 'Add the first system to monitor',
   'setup.completion.proActivation.action': 'Enter activation key',
   'setup.completion.proActivation.description':
     'This server is running the Pulse Pro build without an active license. Enter the activation key from your purchase email to unlock Pro features.',
   'setup.completion.proActivation.title': 'Activate Pulse Pro',
   'setup.completion.resource.unknownName': 'Unknown',
   'setup.completion.sourceOptions.agent.description':
-    'Node-local telemetry for standalone hosts, services, Docker, and Kubernetes.',
+    'Run the installer on a Linux, Windows, or macOS host. Pulse Agent reports host telemetry. Temperatures, SMART, Docker, and Kubernetes are available only where supported.',
   'setup.completion.sourceOptions.agent.title': 'Pulse Agent',
   'setup.completion.sourceOptions.both.description':
-    'Combine platform inventory with Agent telemetry when full coverage matters.',
+    'Connect Proxmox by API for the whole cluster, then add the agent on nodes where you want host-local telemetry such as temperatures and SMART data where available.',
   'setup.completion.sourceOptions.both.title': 'Use both',
   'setup.completion.sourceOptions.platformApi.description':
-    'Inventory and health from Proxmox, TrueNAS, VMware, PBS, or PMG.',
-  'setup.completion.sourceOptions.platformApi.title': 'Platform API',
-  'setup.completion.sourceOptions.title': 'Source choices',
+    'Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, TrueNAS, or VMware. Pulse reads VMs, storage, and health through the platform API.',
+  'setup.completion.sourceOptions.platformApi.title': 'Connect by API',
+  'setup.completion.sourceOptions.title': 'Ways to connect',
   'setup.progress.ariaLabel': 'Setup progress',
   'setup.progress.state.completed': ', completed',
   'setup.progress.state.current': ', current',
@@ -301,6 +301,8 @@ export const EN_MESSAGES = {
     'Pulse appears to be running in Docker. Run the command on the Docker host and replace <pulse-container> with the running Pulse container name.',
   'setup.welcome.deploymentHint.lxc':
     'Pulse appears to be running in LXC container {ctid}. Run the command on the Proxmox host to execute into that container and print the one-time setup token.',
+  'setup.welcome.deploymentLabel.containerConsole':
+    'Container console (Unraid, Portainer, TrueNAS apps)',
   'setup.welcome.deploymentLabel.containerized': 'Containerized deployment',
   'setup.welcome.deploymentLabel.direct': 'Direct host install',
   'setup.welcome.deploymentLabel.docker': 'Docker deployment',
@@ -469,11 +471,11 @@ export const EN_MESSAGES = {
     'Manage backup/snapshot polling plus configuration export and import workflows.',
   'settings.header.systemRecovery.title': 'Recovery',
   'settings.header.systemRelay.description':
-    'Check on your systems and get alert push notifications anywhere with the Pulse Mobile app — no port forwarding or VPN required.',
-  'settings.header.systemRelay.title': 'Remote Access',
+    'Connect paired Pulse Mobile devices to this instance. Pulse Mobile is being retired on 31 March 2027, and paired phones keep working until then.',
+  'settings.header.systemRelay.title': 'Pulse Mobile',
   'settings.header.systemUpdates.description':
-    'Manage Pulse server runtime version checks, update channels, and automatic updates. Agent updates stay under Infrastructure.',
-  'settings.header.systemUpdates.title': 'Pulse server updates',
+    'Check for new Pulse versions, choose an update channel, and manage automatic updates. Agent updates stay under Infrastructure.',
+  'settings.header.systemUpdates.title': 'Updates',
   'settings.header.supportDiagnostics.description':
     'Run health checks, validate connectivity, and export troubleshooting snapshots.',
   'settings.header.supportDiagnostics.title': 'Diagnostics & Health',
@@ -510,14 +512,14 @@ export const EN_MESSAGES = {
   'settings.nav.item.plans': 'Plans & Billing',
   'settings.nav.item.providerModels': 'Provider & Models',
   'settings.nav.item.recovery': 'Recovery',
-  'settings.nav.item.remoteAccess': 'Remote Access',
+  'settings.nav.item.remoteAccess': 'Pulse Mobile',
   'settings.nav.item.resourcePrivacy': 'Resource Privacy',
   'settings.nav.item.roles': 'Roles',
   'settings.nav.item.securityOverview': 'Security Overview',
   'settings.nav.item.sharing': 'Sharing',
   'settings.nav.item.singleSignOn': 'Single Sign-On',
   'settings.nav.item.systemLogs': 'System Logs',
-  'settings.nav.item.updates': 'Pulse server updates',
+  'settings.nav.item.updates': 'Updates',
   'settings.nav.item.users': 'Users',
   'settings.shell.collapseSidebarLabel': 'Collapse settings navigation',
   'settings.shell.configurationLoading': 'Loading configuration...',
@@ -694,6 +696,7 @@ export const FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS = [
   'setup.welcome.deploymentHint.dockerNamed',
   'setup.welcome.deploymentHint.dockerUnnamed',
   'setup.welcome.deploymentHint.lxc',
+  'setup.welcome.deploymentLabel.containerConsole',
   'setup.welcome.deploymentLabel.containerized',
   'setup.welcome.deploymentLabel.direct',
   'setup.welcome.deploymentLabel.docker',

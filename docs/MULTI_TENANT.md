@@ -51,9 +51,30 @@ Each member has a role within an organization:
 
 Organizations can share specific resources with other organizations:
 
-- Share a VM, container, host, or storage resource with another org.
+- Share a VM, container, machine agent, storage, PBS, or PMG resource with another org.
 - Assign an access role (`viewer`, `editor`, or `admin`) to the share.
-- The receiving org sees shared resources alongside their own, with a share badge.
+- The receiving org must accept the share before it sees the resource alongside its own.
+
+## Before Using the API
+
+Create organizations and manage members and shares in the signed-in Pulse UI.
+These changes require **session-based user authentication** and the relevant
+organization role; API tokens are rejected with `403 session_required`, even
+when they have `settings:write`. The UI handles the session and CSRF protection.
+Do not extract a session cookie or CSRF token into a shell command.
+
+The read-only curl examples use an org-bound token with `settings:read` and
+the private header file from [API authentication](API.md#-authentication).
+Keep the token out of command lines, URLs and reports. A token's organization
+binding is an access boundary: changing a URL or `X-Pulse-Org-ID` header does
+not grant it access to another organization.
+
+Use curl 7.76 or later. Keep `--disable` first to ignore local trace/verbose
+defaults; `--fail-with-body` makes HTTP failures return a non-zero exit. The
+loopback URLs apply on the Pulse host; remotely, use your Pulse HTTPS URL and
+keep certificate verification enabled. Replace the example organization ID
+`production-datacenter` with your own. Run requests separately, and share only
+the relevant redacted error, not whole member or infrastructure responses.
 
 ## Managing Organizations
 
@@ -61,13 +82,15 @@ Organizations can share specific resources with other organizations:
 
 **UI:** Settings → Organization → Create Organization
 
-**API:**
-```bash
-curl -X POST http://localhost:7655/api/orgs \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Production Datacenter", "description": "EU production infrastructure"}'
+**API contract:** `POST /api/orgs`, session authentication only:
+```json
+{"id": "production-datacenter", "displayName": "Production Datacenter"}
 ```
+
+The creator becomes the owner. `id` is a stable ID of 1–64 characters using
+letters, digits, periods, underscores or hyphens, but not `.` or `..`; use a
+simple lowercase/hyphen ID such as the example. `displayName` is the name
+shown in Pulse. `name` and `description` are not the creation fields.
 
 ### Switching Organizations
 
@@ -81,45 +104,58 @@ Use the **Org Switcher** dropdown in the header. When you switch:
 
 **UI:** Settings → Organization → Access
 
-**API:**
+**Read-only API:**
 ```bash
-# List members
-curl http://localhost:7655/api/orgs/{orgId}/members \
-  -H "Authorization: Bearer $TOKEN"
-
-# Add a member
-curl -X POST http://localhost:7655/api/orgs/{orgId}/members \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"userId": "user-id", "role": "editor"}'
-
-# Update role
-curl -X PATCH http://localhost:7655/api/orgs/{orgId}/members/{userId} \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"role": "admin"}'
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  http://127.0.0.1:7655/api/orgs/production-datacenter/members
 ```
+
+**Invite or update a member:** use the Access panel as an owner or admin.
+Its API contract is `POST /api/orgs/{id}/members`, session authentication only:
+```json
+{"userId": "user-id", "role": "editor"}
+```
+
+For a new member, the response is `202` with a pending invitation; the user
+must accept it in Pulse before gaining access. An existing member's role is
+updated by posting their `userId` and new role to the same endpoint, not by
+PATCHing a member URL:
+```json
+{"userId": "user-id", "role": "admin"}
+```
+
+Only the current owner can transfer ownership, and only to an existing member
+after fresh sign-in. The owner cannot be demoted or removed as an ordinary
+member update. Default-organization members cannot be managed here.
 
 ### Sharing Resources
 
 **UI:** Settings → Organization → Sharing
 
-**API:**
-```bash
-# Create a share
-curl -X POST http://localhost:7655/api/orgs/{orgId}/shares \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "targetOrgId": "other-org-id",
-    "resourceType": "host",
-    "resourceId": "resource-id",
-    "role": "viewer"
-  }'
+Create the share as an owner or admin of the source organization. An owner or
+admin of the target organization then accepts it in **Sharing → Incoming**.
+Until acceptance, the share is pending and does not grant access.
 
-# View incoming shares
-curl http://localhost:7655/api/orgs/{orgId}/shares/incoming \
-  -H "Authorization: Bearer $TOKEN"
+**API contract:** `POST /api/orgs/{id}/shares`, session authentication only:
+```json
+{
+  "targetOrgId": "other-org-id",
+  "resourceType": "vm",
+  "resourceId": "vm:101",
+  "accessRole": "viewer"
+}
+```
+
+Use `accessRole`, not `role`, and the resource type and ID returned by Pulse,
+not a display name. Supported types include `vm`, `system-container`, `agent`,
+`node`, `docker-host`, `storage`, `pbs` and `pmg`; the generic types `host` and
+`container` are not supported. Changing a share's access role makes it pending
+again, so the target must accept the new grant.
+
+**Read-only incoming shares:**
+```bash
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  http://127.0.0.1:7655/api/orgs/production-datacenter/shares/incoming
 ```
 
 ## Monitoring Multiple Internal Estates
@@ -158,15 +194,16 @@ When multi-tenant is enabled, **Settings → Organization** shows:
 | `GET` | `/api/orgs` | List organizations the current user can access |
 | `POST` | `/api/orgs` | Create a new organization |
 | `GET` | `/api/orgs/{id}` | Get organization details |
-| `PATCH` | `/api/orgs/{id}` | Update organization |
+| `PUT` | `/api/orgs/{id}` | Update organization (session only) |
 | `DELETE` | `/api/orgs/{id}` | Delete organization |
 | `GET` | `/api/orgs/{id}/members` | List members |
-| `POST` | `/api/orgs/{id}/members` | Add a member |
-| `PATCH` | `/api/orgs/{id}/members/{userId}` | Update member role |
+| `POST` | `/api/orgs/{id}/members` | Invite a member or update an existing member's role (session only) |
 | `DELETE` | `/api/orgs/{id}/members/{userId}` | Remove a member |
+| `POST` | `/api/org-invitations/{id}/accept` | Accept your pending invitation (session only) |
 | `GET` | `/api/orgs/{id}/shares` | List outgoing shares |
 | `GET` | `/api/orgs/{id}/shares/incoming` | List incoming shares |
-| `POST` | `/api/orgs/{id}/shares` | Create a share |
+| `POST` | `/api/orgs/{id}/shares` | Create or update a share (session only) |
+| `POST` | `/api/orgs/{id}/shares/incoming/{shareId}/accept` | Accept an incoming share (session only) |
 | `DELETE` | `/api/orgs/{id}/shares/{shareId}` | Remove a share |
 
 ### Tenant Context
@@ -176,6 +213,9 @@ All data-fetching endpoints respect the active organization context. The active 
 1. `X-Pulse-Org-ID` header (API clients)
 2. Session cookie (browser)
 3. Falls back to the `default` organization
+
+Neither the active context nor a token scope overrides organization membership
+or a token's organization binding.
 
 ## Storage
 
@@ -202,7 +242,7 @@ Activate an Enterprise license with the `multi_tenant` capability in **Settings 
 
 ### Shared resources not appearing
 
-1. Verify the share exists: **Settings → Organization → Sharing → Incoming**.
+1. Verify the share exists and has been accepted: **Settings → Organization → Sharing → Incoming**.
 2. Confirm the share role grants sufficient access.
 3. Check that the source org's resources are online.
 

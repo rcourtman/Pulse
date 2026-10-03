@@ -27,4 +27,20 @@ describe('ResourceActionsAPI durable inbox', () => {
       body: JSON.stringify({ planHash: 'sha256:reviewed' }),
     });
   });
+
+  it('records a justified operator audit override without a plan hash or resend', async () => {
+    fetchJSON.mockResolvedValue({ actionId: 'action/one', state: 'failed' });
+    await ResourceActionsAPI.forceFailAction(
+      'action/one',
+      '  Checked the running container image.  ',
+    );
+    expect(fetchJSON).toHaveBeenCalledWith('/api/actions/action%2Fone/force-fail', {
+      method: 'POST',
+      body: JSON.stringify({ reason: 'Checked the running container image.' }),
+    });
+    await expect(ResourceActionsAPI.forceFailAction('action/one', '  ')).rejects.toThrow(
+      'Record what you verified directly',
+    );
+    expect(fetchJSON).toHaveBeenCalledTimes(1);
+  });
 });

@@ -12,6 +12,85 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
+func TestRegistry_CachedReadsUseSharedLock(t *testing.T) {
+	rr := NewRegistry(nil)
+	// A clean, empty registry already has a valid empty cache. Holding another
+	// read lock must not prevent a cached accessor from completing.
+	rr.mu.RLock()
+	done := make(chan struct{})
+	go func() {
+		_ = rr.VMs()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		rr.mu.RUnlock()
+	case <-time.After(5 * time.Second):
+		rr.mu.RUnlock()
+		<-done
+		t.Fatal("cached view read waited for an exclusive registry lock")
+	}
+}
+
+func TestRegistryGenerationComparisonIgnoresUnchangedTelemetry(t *testing.T) {
+	store := NewMemoryStore()
+	before := NewRegistry(store)
+	after := NewRegistry(store)
+	observedAt := time.Date(2026, 9, 24, 6, 0, 0, 0, time.UTC)
+	first := IngestRecord{
+		SourceID: "vm-101",
+		Resource: Resource{
+			Type:     ResourceTypeVM,
+			Name:     "vm-101",
+			Status:   StatusOnline,
+			LastSeen: observedAt,
+		},
+	}
+	before.IngestRecords(SourceProxmox, []IngestRecord{first})
+	updated := first
+	updated.Resource.LastSeen = observedAt.Add(time.Minute)
+	after.IngestRecords(SourceProxmox, []IngestRecord{updated})
+
+	recordRegistryChangesBetweenGenerations(before, after, observedAt.Add(time.Minute), nil, SourcePulseDiff, "")
+	if got := len(store.changes); got != 0 {
+		t.Fatalf("telemetry-only generation emitted %d change records, want none", got)
+	}
+}
+
+func TestRegistryGenerationComparisonTreatsIdentityListsAsSets(t *testing.T) {
+	store := NewMemoryStore()
+	now := time.Date(2026, 9, 29, 17, 0, 0, 0, time.UTC)
+	entry := IngestRecord{
+		SourceID: "disk-1",
+		Resource: Resource{Type: ResourceTypePhysicalDisk, Name: "disk", Status: StatusOnline, LastSeen: now},
+		Identity: ResourceIdentity{MachineID: "serial-1", Hostnames: []string{"node", "node.example"}},
+	}
+	before := NewRegistry(store)
+	before.IngestRecords(SourceAgent, []IngestRecord{entry})
+
+	reordered := entry
+	reordered.Identity = ResourceIdentity{
+		MachineID: "serial-1", Hostnames: []string{"node.example", "node"},
+		IPAddresses: []string{}, MACAddresses: []string{},
+	}
+	after := NewRegistry(store)
+	after.IngestRecords(SourceAgent, []IngestRecord{reordered})
+	recordRegistryChangesBetweenGenerations(before, after, now.Add(time.Minute), nil, SourcePulseDiff, "")
+	if len(store.changes) != 0 {
+		t.Fatalf("equivalent identity lists emitted %d history rows: %+v", len(store.changes), store.changes)
+	}
+
+	changed := reordered
+	changed.Identity.IPAddresses = []string{"192.0.2.10"}
+	later := NewRegistry(store)
+	later.IngestRecords(SourceAgent, []IngestRecord{changed})
+	recordRegistryChangesBetweenGenerations(after, later, now.Add(2*time.Minute), nil, SourcePulseDiff, "")
+	if len(store.changes) != 1 || !sameStringSet(mustChangedFields(t, &store.changes[0]), []string{"identity"}) {
+		t.Fatalf("real address change not recorded once: %+v", store.changes)
+	}
+}
+
 // TestMemoryStore_RecordActionAuditAppliesRedaction is an integration check
 // at the registry-store boundary. The MemoryStore is the backing store the
 // registry uses in tests and contract examples, and operator-authored audit
@@ -242,6 +321,101 @@ func TestResourceRegistry_GetByReferenceResolvesAgentRefOnMergedProxmoxHost(t *t
 	}
 	if resolvedID != "agent-abcdef123456" || resource.ID != "agent-abcdef123456" {
 		t.Fatalf("agent reference resolved to id=%q resource=%q, want agent-abcdef123456", resolvedID, resource.ID)
+	}
+}
+
+func TestResourceRegistry_CanonicalAliasIndexPreservesFoldAndAmbiguity(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestResources([]Resource{
+		{ID: "kelvin-host", Type: ResourceTypeAgent, Agent: &AgentData{AgentID: "Kelvin"}},
+		{ID: "dotted-host", Type: ResourceTypeAgent, Agent: &AgentData{AgentID: "İmachine"}},
+		{ID: "first-shared", Type: ResourceTypeAgent, Agent: &AgentData{AgentID: "shared"}},
+		{ID: "second-shared", Type: ResourceTypeAgent, Agent: &AgentData{AgentID: "shared"}},
+	})
+	if rr.canonicalIdentityIndex != nil {
+		t.Fatal("ingest should defer alias index construction")
+	}
+	if id, ok := rr.ResolveReferenceID("first-shared"); !ok || id != "first-shared" {
+		t.Fatalf("exact ID resolved to %q, %v; want first-shared", id, ok)
+	}
+	if rr.canonicalIdentityIndex != nil {
+		t.Fatal("exact ID read should not build the alias index")
+	}
+
+	if id, ok := rr.ResolveReferenceID("  AGENT:kelvin  "); !ok || id != "kelvin-host" {
+		t.Fatalf("Unicode folded alias resolved to %q, %v; want kelvin-host", id, ok)
+	}
+	if rr.canonicalIdentityIndex == nil {
+		t.Fatal("alias lookup did not build the index")
+	}
+	if id, ok := rr.ResolveReferenceID("agent:imachine"); ok {
+		t.Fatalf("dotted I must not fold into ordinary i, got %q", id)
+	}
+	if id, ok := rr.ResolveReferenceID("agent:shared"); ok {
+		t.Fatalf("ambiguous canonical alias resolved to %q", id)
+	}
+	if id, ok := rr.ResolveReferenceID("first-shared"); !ok || id != "first-shared" {
+		t.Fatalf("exact ID lost priority to ambiguous alias: %q, %v", id, ok)
+	}
+
+	rr.mu.Lock()
+	rr.canonicalIdentityIndex = nil
+	rr.mu.Unlock()
+	rr.mu.RLock()
+	id := rr.uniqueCanonicalIdentityResourceIDLocked("AGENT:kelvin")
+	sharedID := rr.uniqueCanonicalIdentityResourceIDLocked("agent:shared")
+	rr.mu.RUnlock()
+	if id != "kelvin-host" {
+		t.Fatalf("in-progress ingest scan resolved to %q; want kelvin-host", id)
+	}
+	if sharedID != "" {
+		t.Fatalf("in-progress ingest scan resolved ambiguous alias to %q", sharedID)
+	}
+}
+
+func TestResourceRegistry_CanonicalAliasIndexRefreshesAfterIngest(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestResources([]Resource{{
+		ID: "renamed-host", Type: ResourceTypeAgent, Agent: &AgentData{AgentID: "old-machine"},
+	}})
+	if _, ok := rr.ResolveReferenceID("agent:old-machine"); !ok {
+		t.Fatal("initial alias missing")
+	}
+	rr.IngestResources([]Resource{{
+		ID: "renamed-host", Type: ResourceTypeAgent, Agent: &AgentData{AgentID: "new-machine"},
+	}})
+	if id, ok := rr.ResolveReferenceID("agent:old-machine"); ok {
+		t.Fatalf("stale alias resolved after ingest to %q", id)
+	}
+	if id, ok := rr.ResolveReferenceID("agent:new-machine"); !ok || id != "renamed-host" {
+		t.Fatalf("new alias resolved to %q, %v; want renamed-host", id, ok)
+	}
+}
+
+func BenchmarkResourceRegistry_GetByCanonicalAlias(b *testing.B) {
+	resources := make([]Resource, 1500)
+	for i := range resources {
+		resources[i] = Resource{
+			ID:    fmt.Sprintf("agent-%d", i),
+			Type:  ResourceTypeAgent,
+			Agent: &AgentData{AgentID: fmt.Sprintf("machine-%d", i)},
+		}
+	}
+	rr := NewRegistry(nil)
+	rr.IngestResources(resources)
+	for _, test := range []struct {
+		name string
+		ref  string
+	}{
+		{"hit", "agent:machine-750"},
+		{"miss", "agent:unknown"},
+	} {
+		b.Run(test.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_, _, _ = rr.GetByReference(test.ref)
+			}
+		})
 	}
 }
 
@@ -6605,35 +6779,131 @@ func TestIssue2076USBLinkedDiskAmbiguity(t *testing.T) {
 	}
 }
 
-func TestRegistryListComparisonTreatsIdentityListsAsSets(t *testing.T) {
-	store := NewMemoryStore()
-	now := time.Date(2026, 9, 29, 17, 0, 0, 0, time.UTC)
-	entry := IngestRecord{
-		SourceID: "disk-1",
-		Resource: Resource{Type: ResourceTypePhysicalDisk, Name: "disk", Status: StatusOnline, LastSeen: now},
-		Identity: ResourceIdentity{MachineID: "serial-1", Hostnames: []string{"node", "node.example"}},
-	}
-	before := NewRegistry(store)
-	before.IngestRecords(SourceAgent, []IngestRecord{entry})
+// Guest ingest resolves each guest's parent node, which can fall back to a
+// scan of every agent. The guest pass answers that fallback from
+// agentNodeScanIndex, so the index must resolve exactly what the scan would.
 
-	reordered := entry
-	reordered.Identity = ResourceIdentity{
-		MachineID: "serial-1", Hostnames: []string{"node.example", "node"},
-		IPAddresses: []string{}, MACAddresses: []string{},
+// agentNodeScanFixture spans three clusters that reuse node names, so a
+// by-name bucket holds candidates from every cluster and scope scoring has to
+// pick the right one. Every other node runs a linked host agent. A fourth
+// cluster's nodes are keyed by their endpoint instance while its guests report
+// the cluster name, so no direct source mapping reaches their parent and only
+// the agent scan resolves it.
+func agentNodeScanFixture(now time.Time) models.StateSnapshot {
+	snapshot := models.StateSnapshot{LastUpdate: now}
+	for n := 0; n < 2; n++ {
+		nodeName := fmt.Sprintf("pve%d", n)
+		snapshot.Nodes = append(snapshot.Nodes, models.Node{
+			ID: "ep-" + nodeName, Name: nodeName, Instance: "ep", ClusterName: "prod",
+			Status: "online", Type: "node", LastSeen: now,
+		})
+		vmid := 900 + n
+		snapshot.VMs = append(snapshot.VMs, models.VM{
+			ID: fmt.Sprintf("prod:%s:%d", nodeName, vmid), VMID: vmid,
+			Name: fmt.Sprintf("vm-%d", vmid), Node: nodeName, Instance: "prod",
+			Status: "running", Type: "qemu", LastSeen: now,
+		})
 	}
-	after := NewRegistry(store)
-	after.IngestRecords(SourceAgent, []IngestRecord{reordered})
-	recordRegistryChanges(store, before.List(), after.List(), now.Add(time.Minute), nil, SourcePulseDiff, "")
-	if len(store.changes) != 0 {
-		t.Fatalf("equivalent identity lists emitted %d history rows: %+v", len(store.changes), store.changes)
+	for cluster := 0; cluster < 3; cluster++ {
+		instance := fmt.Sprintf("lab%d", cluster)
+		for n := 0; n < 4; n++ {
+			nodeName := fmt.Sprintf("pve%d", n)
+			nodeID := instance + "-" + nodeName
+			node := models.Node{
+				ID:       nodeID,
+				Name:     nodeName,
+				Instance: instance,
+				Status:   "online",
+				Type:     "node",
+				LastSeen: now,
+			}
+			if n%2 == 0 {
+				hostID := fmt.Sprintf("agent-%s-%s", instance, nodeName)
+				node.LinkedAgentID = hostID
+				snapshot.Hosts = append(snapshot.Hosts, models.Host{
+					ID:           hostID,
+					Hostname:     fmt.Sprintf("%s.%s.example", nodeName, instance),
+					Status:       "online",
+					LastSeen:     now,
+					LinkedNodeID: nodeID,
+				})
+			}
+			snapshot.Nodes = append(snapshot.Nodes, node)
+			for g := 0; g < 3; g++ {
+				vmid := 100 + cluster*100 + n*10 + g
+				snapshot.VMs = append(snapshot.VMs, models.VM{
+					ID: fmt.Sprintf("%s:%s:%d", instance, nodeName, vmid), VMID: vmid,
+					Name: fmt.Sprintf("vm-%d", vmid), Node: nodeName, Instance: instance,
+					Status: "running", Type: "qemu", LastSeen: now,
+				})
+				ctid := 5000 + vmid
+				snapshot.Containers = append(snapshot.Containers, models.Container{
+					ID: fmt.Sprintf("%s:%s:%d", instance, nodeName, ctid), VMID: ctid,
+					Name: fmt.Sprintf("ct-%d", ctid), Node: nodeName, Instance: instance,
+					Status: "running", Type: "lxc", LastSeen: now,
+				})
+			}
+		}
 	}
+	return snapshot
+}
 
-	changed := reordered
-	changed.Identity.IPAddresses = []string{"192.0.2.10"}
-	later := NewRegistry(store)
-	later.IngestRecords(SourceAgent, []IngestRecord{changed})
-	recordRegistryChanges(store, after.List(), later.List(), now.Add(2*time.Minute), nil, SourcePulseDiff, "")
-	if len(store.changes) != 1 || !sameStringSet(mustChangedFields(t, &store.changes[0]), []string{"identity"}) {
-		t.Fatalf("real address change not recorded once: %+v", store.changes)
+func TestGuestIngestParentsMatchFullAgentScan(t *testing.T) {
+	snapshot := agentNodeScanFixture(time.Now().UTC())
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(snapshot)
+
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+	if rr.agentNodeScanIndex != nil {
+		t.Fatal("agent node index outlived the ingest pass")
+	}
+	checked := 0
+	for id, resource := range rr.resources {
+		if resource.Type != ResourceTypeVM && resource.Type != ResourceTypeSystemContainer {
+			continue
+		}
+		if resource.Proxmox == nil {
+			t.Fatalf("guest %s has no Proxmox data", id)
+		}
+		// With the index nil this resolves through the full scan.
+		want := rr.proxmoxNodeParentIDLocked(resource.Proxmox.Instance, resource.Proxmox.ClusterName, resource.Proxmox.NodeName, "")
+		if want == "" {
+			t.Fatalf("full scan found no parent for guest %s on %s/%s", id, resource.Proxmox.Instance, resource.Proxmox.NodeName)
+		}
+		if got := CanonicalResourceID(resource.parentBySource[SourceProxmox]); got != want {
+			t.Fatalf("guest %s on %s/%s: ingest parent %q, full scan %q", id, resource.Proxmox.Instance, resource.Proxmox.NodeName, got, want)
+		}
+		checked++
+	}
+	if want := len(snapshot.VMs) + len(snapshot.Containers); checked != want {
+		t.Fatalf("checked %d guests, want %d", checked, want)
+	}
+}
+
+func TestAgentNodeScanIndexTracksAgentsIngestedWhileLive(t *testing.T) {
+	now := time.Now().UTC()
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		LastUpdate: now,
+		Nodes:      []models.Node{{ID: "lab-pve1", Name: "pve1", Instance: "lab", Status: "online", Type: "node", LastSeen: now}},
+	})
+
+	rr.mu.Lock()
+	rr.agentNodeScanIndex = rr.buildAgentNodeScanIndexLocked()
+	rr.mu.Unlock()
+	defer func() {
+		rr.mu.Lock()
+		rr.agentNodeScanIndex = nil
+		rr.mu.Unlock()
+	}()
+
+	rr.ingestProxmoxNode(models.Node{ID: "lab-pve2", Name: "pve2", Instance: "lab", Status: "online", Type: "node", LastSeen: now}, nil)
+
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+	candidates := rr.agentNodeScanIndex["pve2"]
+	if len(candidates) != 1 || rr.resources[candidates[0].id] != candidates[0].resource {
+		t.Fatalf("index bucket for an agent ingested while live = %+v, want its registry entry", candidates)
 	}
 }

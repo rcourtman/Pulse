@@ -1,9 +1,48 @@
 package unifiedresources
 
 import (
+	"reflect"
+	"sort"
 	"testing"
 	"time"
 )
+
+func TestRecordRegistryChangesBetweenGenerationsMatchesListComparison(t *testing.T) {
+	newStore := NewMemoryStore()
+	referenceStore := NewMemoryStore()
+	before := NewRegistry(newStore)
+	after := NewRegistry(newStore)
+	base := []IngestRecord{
+		{SourceID: "vm-a", Resource: Resource{Type: ResourceTypeVM, Name: "a", Status: StatusOnline}},
+		{SourceID: "vm-b", Resource: Resource{Type: ResourceTypeVM, Name: "b", Status: StatusOnline}},
+		{SourceID: "vm-unchanged", Resource: Resource{Type: ResourceTypeVM, Name: "unchanged", Status: StatusOnline}},
+	}
+	before.IngestRecords(SourceProxmox, base)
+	after.IngestRecords(SourceProxmox, []IngestRecord{
+		{SourceID: "vm-a", Resource: Resource{Type: ResourceTypeVM, Name: "a", Status: StatusOffline}},
+		base[2],
+		{SourceID: "vm-c", Resource: Resource{Type: ResourceTypeVM, Name: "c", Status: StatusOnline}},
+	})
+
+	observedAt := time.Date(2026, 9, 24, 6, 0, 0, 0, time.UTC)
+	recordRegistryChanges(referenceStore, before.List(), after.List(), observedAt, nil, SourcePulseDiff, "")
+	recordRegistryChangesBetweenGenerations(before, after, observedAt, nil, SourcePulseDiff, "")
+
+	if got := len(referenceStore.changes); got != 3 {
+		t.Fatalf("reference changes = %d, want changed, removed and added", got)
+	}
+	normalize := func(changes []ResourceChange) []ResourceChange {
+		out := append([]ResourceChange(nil), changes...)
+		for i := range out {
+			out[i].ID = "" // Change IDs are generated independently.
+		}
+		sort.Slice(out, func(i, j int) bool { return out[i].ResourceID < out[j].ResourceID })
+		return out
+	}
+	if got, want := normalize(newStore.changes), normalize(referenceStore.changes); !reflect.DeepEqual(got, want) {
+		t.Fatalf("generation comparison differs from List comparison:\n got: %+v\nwant: %+v", got, want)
+	}
+}
 
 func TestBuildResourceChange_ReturnsNilWhenUnchanged(t *testing.T) {
 	before := Resource{

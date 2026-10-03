@@ -74,7 +74,7 @@ interface InfrastructureSourceManagerProps {
 // dominant. They retain the 1-click shortcut for users adding another node
 // to an existing platform without competing with the primary CTA.
 const addSectionButtonClass =
-  'inline-flex min-h-11 items-center justify-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 lg:min-h-0 dark:text-blue-300 dark:hover:bg-blue-950/30';
+  'inline-flex min-h-11 items-center justify-center gap-1 rounded-sm px-2 py-0.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 lg:min-h-0 dark:text-blue-300 dark:hover:bg-blue-950/30';
 const discoveryRowClass =
   'border-b border-border-subtle bg-blue-50/30 hover:bg-blue-50/40 dark:bg-blue-950/10 dark:hover:bg-blue-950/20';
 const discoveryScanTargetLabel = 'Proxmox VE, Proxmox Backup Server, and Proxmox Mail Gateway APIs';
@@ -669,7 +669,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     <section
       aria-label="Discover Proxmox systems"
       aria-live="polite"
-      class="border-t border-border bg-surface-alt/35 px-4 py-3"
+      class="border-t border-border px-4 py-3"
     >
       <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div class="min-w-0 flex-1">
@@ -700,7 +700,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
           <Show when={discoveryErrorSummary(props.discoveryScanStatus().errors)}>
             {(summary) => (
               <div class="mt-2 flex items-start gap-2 text-xs text-amber-800 dark:text-amber-200">
-                <AlertTriangle class="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                <AlertTriangle class="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 <span>{summary()}</span>
               </div>
             )}
@@ -860,7 +860,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
         <Show when={!useCardLayout()}>
           <Table class="w-full min-w-[820px] table-fixed text-sm">
-            <TableHeader class="bg-surface-alt/60">
+            <TableHeader class="">
               <TableRow>
                 <TableHead class="w-[30%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap">
                   System
@@ -872,7 +872,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                   Health
                 </TableHead>
                 <Show when={actionColumnVisible()}>
-                  <TableHead class="w-[12rem] px-3 py-1.5 text-right text-[11px] font-medium text-muted whitespace-nowrap">
+                  <TableHead class="w-48 px-3 py-1.5 text-right text-[11px] font-medium text-muted whitespace-nowrap">
                     Actions
                   </TableHead>
                 </Show>
@@ -944,16 +944,14 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                   <>
                                     <TableRow
                                       class={`border-b border-border-subtle ${
-                                        row.isCluster ? 'bg-surface-alt/40' : ''
+                                        row.isCluster ? '' : ''
                                       }`}
                                     >
                                       <TableCell class="py-1.5 pl-3 pr-3 align-middle">
                                         <div class="flex min-w-0 flex-wrap items-center gap-1.5">
                                           <div
                                             class={`min-w-0 truncate text-[13px] ${
-                                              row.isCluster
-                                                ? 'font-medium text-base-content'
-                                                : 'text-base-content/90'
+                                              row.isCluster ? 'font-medium text-base-content' : ''
                                             }`}
                                             title={rowSystemTitle(row)}
                                           >
@@ -967,7 +965,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                               agentMethodTitleFor(row) ?? presentation.title;
                                             return (
                                               <span
-                                                class={`${presentation.badgeClassName} flex-shrink-0 whitespace-nowrap`}
+                                                class={`${presentation.badgeClassName} shrink-0 whitespace-nowrap`}
                                                 title={title}
                                               >
                                                 {presentation.label}
@@ -977,7 +975,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                           <Show when={row.members.length > 0}>
                                             <button
                                               type="button"
-                                              class="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-medium text-muted transition-colors hover:bg-surface-alt hover:text-base-content"
+                                              class="inline-flex items-center gap-0.5 rounded-sm px-1 py-0.5 text-[11px] font-medium text-muted transition-colors hover:bg-surface-alt hover:text-base-content"
                                               aria-expanded={membersExpanded(row)}
                                               aria-label={`${membersExpanded(row) ? 'Hide' : 'Show'} ${formatCount(row.members.length, row.ownerType === 'vmware' ? 'host' : 'node')} for ${row.name}`}
                                               onClick={() => toggleMembers(row)}
@@ -1031,7 +1029,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             <Show
                                               when={props.onOpenAgentDoctor}
                                               fallback={
-                                                <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                                                <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-amber-800 dark:bg-amber-900/25 dark:text-amber-200">
                                                   {row.agentUpdateCount === 1
                                                     ? 'Agent update'
                                                     : `${row.agentUpdateCount} updates`}
@@ -1040,7 +1038,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             >
                                               <button
                                                 type="button"
-                                                class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-amber-800 transition-colors hover:bg-amber-200 dark:bg-amber-900 dark:text-amber-200 dark:hover:bg-amber-800"
+                                                class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-amber-800 transition-colors hover:bg-amber-200 dark:bg-amber-900/25 dark:text-amber-200 dark:hover:bg-amber-800"
                                                 onClick={() =>
                                                   props.onOpenAgentDoctor?.(
                                                     agentConnectionIDsForInfrastructureRow(
@@ -1058,7 +1056,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             </Show>
                                           </Show>
                                           <span
-                                            class="truncate text-[12px] text-muted/90"
+                                            class="truncate text-[12px]"
                                             title={
                                               row.isCluster
                                                 ? 'Oldest activity across cluster API and member agents'
@@ -1110,7 +1108,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                 type="button"
                                                 variant="outline"
                                                 size="xs"
-                                                class="min-w-[4.5rem]"
+                                                class="min-w-18"
                                                 onClick={() => props.onOpenConnection?.(row)}
                                                 data-infrastructure-manage-id={row.id}
                                               >
@@ -1145,7 +1143,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                           <Show when={row.lastErrorMessage}>
                                             <div
                                               role="alert"
-                                              class="mt-1 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+                                              class="mt-1 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/25 dark:text-rose-200"
                                             >
                                               {row.lastErrorMessage}
                                             </div>
@@ -1165,13 +1163,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             : MEMBER_SHARED_API_TITLE;
                                           return (
                                             <>
-                                              <TableRow class="border-b border-border-subtle bg-surface-alt/30">
+                                              <TableRow class="border-b border-border-subtle">
                                                 <TableCell class="py-1.5 pl-3 pr-3 align-middle">
                                                   <div class="min-w-0 pl-4">
                                                     <div class="flex min-w-0 items-center gap-1.5">
-                                                      <span class="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-border" />
+                                                      <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-border" />
                                                       <div
-                                                        class="truncate text-[13px] text-base-content/85"
+                                                        class="truncate text-[13px]"
                                                         title={memberSystemTitle(member)}
                                                       >
                                                         {member.name}
@@ -1179,7 +1177,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                       <Show when={memberPresentation}>
                                                         {(presentation) => (
                                                           <span
-                                                            class={`${presentation().badgeClassName} flex-shrink-0 whitespace-nowrap`}
+                                                            class={`${presentation().badgeClassName} shrink-0 whitespace-nowrap`}
                                                             title={memberSourceTitle}
                                                           >
                                                             {presentation().label}
@@ -1226,7 +1224,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                     >
                                                       {member.statusLabel}
                                                     </span>
-                                                    <span class="truncate text-[12px] text-muted/90">
+                                                    <span class="truncate text-[12px]">
                                                       {member.lastActivityText}
                                                     </span>
                                                   </div>
@@ -1271,7 +1269,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
                                               <Show when={member.problem}>
                                                 {(problem) => (
-                                                  <TableRow class="border-b border-border-subtle bg-surface-alt/30">
+                                                  <TableRow class="border-b border-border-subtle">
                                                     <TableCell
                                                       colspan={actionColumnVisible() ? 4 : 3}
                                                       class="pb-1.5 pl-9 pr-3 pt-0"
@@ -1309,13 +1307,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         <div class="min-w-0">
                                           <div class="flex items-center gap-1.5">
                                             <div
-                                              class="truncate text-[13px] text-base-content/85"
+                                              class="truncate text-[13px]"
                                               title={`${discoveredServerName(server)}${server.version ? ` · ${server.version}` : ''}`}
                                             >
                                               {discoveredServerName(server)}
                                             </div>
                                             <span
-                                              class="inline-flex flex-shrink-0 items-center rounded-full border border-dashed border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-muted whitespace-nowrap"
+                                              class="inline-flex shrink-0 items-center rounded-full border border-dashed border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-muted whitespace-nowrap"
                                               title="Discovery candidate — review to attach a source"
                                             >
                                               Candidate
@@ -1344,7 +1342,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                           <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
                                             Discovered
                                           </span>
-                                          <span class="truncate text-[12px] text-muted/90">
+                                          <span class="truncate text-[12px]">
                                             {lastDiscoveryResultText() ?? 'Waiting for scan'}
                                           </span>
                                         </div>
@@ -1362,7 +1360,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                               type="button"
                                               variant="outline"
                                               size="xs"
-                                              class="min-w-[4.5rem]"
+                                              class="min-w-18"
                                               onClick={() =>
                                                 props.onReviewDiscoveredSource?.(server)
                                               }
@@ -1443,11 +1441,11 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                             const presentation = infrastructureSourcePresentation(row.source);
                             const sourceTitle = agentMethodTitleFor(row) ?? presentation.title;
                             return (
-                              <article class="rounded-md border border-border-subtle bg-surface p-3 shadow-sm">
+                              <article class="rounded-md border border-border-subtle bg-surface p-3 shadow-xs">
                                 <header class="flex items-start justify-between gap-2">
                                   <div class="min-w-0 flex-1">
                                     <div
-                                      class="break-words text-[13px] font-medium text-base-content"
+                                      class="wrap-break-word text-[13px] font-medium text-base-content"
                                       title={row.name}
                                     >
                                       {row.name}
@@ -1465,7 +1463,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                     <Show when={row.members.length > 0}>
                                       <button
                                         type="button"
-                                        class="mt-1 inline-flex min-h-11 items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-medium text-muted transition-colors hover:bg-surface-alt hover:text-base-content lg:min-h-0"
+                                        class="mt-1 inline-flex min-h-11 items-center gap-0.5 rounded-sm px-1 py-0.5 text-[11px] font-medium text-muted transition-colors hover:bg-surface-alt hover:text-base-content lg:min-h-0"
                                         aria-expanded={membersExpanded(row)}
                                         aria-label={`${membersExpanded(row) ? 'Hide' : 'Show'} ${formatCount(row.members.length, row.ownerType === 'vmware' ? 'host' : 'node')} for ${row.name}`}
                                         onClick={() => toggleMembers(row)}
@@ -1484,7 +1482,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                     </Show>
                                   </div>
                                   <span
-                                    class={`${presentation.badgeClassName} flex-shrink-0`}
+                                    class={`${presentation.badgeClassName} shrink-0`}
                                     title={sourceTitle}
                                   >
                                     {presentation.label}
@@ -1517,11 +1515,11 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                               memberPresentation.title)
                                             : MEMBER_SHARED_API_TITLE;
                                           return (
-                                            <div class="rounded-md border border-border-subtle bg-surface-alt/30 px-2.5 py-2">
+                                            <div class="rounded-md border border-border-subtle px-2.5 py-2">
                                               <div class="flex items-start justify-between gap-2">
                                                 <div class="min-w-0 flex-1">
                                                   <div
-                                                    class="break-words text-[13px] font-medium text-base-content"
+                                                    class="wrap-break-word text-[13px] font-medium text-base-content"
                                                     title={member.name}
                                                   >
                                                     {member.name}
@@ -1533,7 +1531,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                 <Show when={memberPresentation}>
                                                   {(presentation) => (
                                                     <span
-                                                      class={`${presentation().badgeClassName} flex-shrink-0`}
+                                                      class={`${presentation().badgeClassName} shrink-0`}
                                                       title={memberSourceTitle}
                                                     >
                                                       {presentation().label}
@@ -1563,7 +1561,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                 >
                                                   {member.statusLabel}
                                                 </span>
-                                                <span class="text-[12px] text-muted/90">
+                                                <span class="text-[12px]">
                                                   {member.lastActivityText}
                                                 </span>
                                               </div>
@@ -1624,7 +1622,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         <Show
                                           when={props.onOpenAgentDoctor}
                                           fallback={
-                                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900/25 dark:text-amber-200">
                                               {row.agentUpdateCount === 1
                                                 ? 'Agent update'
                                                 : `${row.agentUpdateCount} agent updates`}
@@ -1633,7 +1631,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         >
                                           <button
                                             type="button"
-                                            class="inline-flex min-h-11 items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 transition-colors hover:bg-amber-200 lg:min-h-0 dark:bg-amber-900 dark:text-amber-200 dark:hover:bg-amber-800"
+                                            class="inline-flex min-h-11 items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 transition-colors hover:bg-amber-200 lg:min-h-0 dark:bg-amber-900/25 dark:text-amber-200 dark:hover:bg-amber-800"
                                             onClick={() =>
                                               props.onOpenAgentDoctor?.(
                                                 agentConnectionIDsForInfrastructureRow(row, true),
@@ -1648,7 +1646,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         </Show>
                                       </Show>
                                       <span
-                                        class="text-[12px] text-muted/90"
+                                        class="text-[12px]"
                                         title={
                                           row.isCluster
                                             ? 'Oldest activity across cluster API and member agents'
@@ -1689,7 +1687,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                           type="button"
                                           variant="outline"
                                           size="xs"
-                                          class="min-h-11 min-w-[4.5rem] flex-shrink-0 lg:min-h-0"
+                                          class="min-h-11 min-w-18 shrink-0 lg:min-h-0"
                                           onClick={() => props.onOpenConnection?.(row)}
                                           data-infrastructure-manage-id={row.id}
                                         >
@@ -1717,7 +1715,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                 <Show when={row.lastErrorMessage}>
                                   <div
                                     role="alert"
-                                    class="mt-2 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+                                    class="mt-2 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/25 dark:text-rose-200"
                                   >
                                     {row.lastErrorMessage}
                                   </div>
@@ -1730,16 +1728,16 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                         <Show when={group.id === product.type && discoveredRows().length > 0}>
                           <For each={discoveredRows()}>
                             {(server) => (
-                              <article class="rounded-md border border-blue-200 bg-blue-50/50 p-3 shadow-sm dark:border-blue-900 dark:bg-blue-950/20">
+                              <article class="rounded-md border border-blue-200 bg-blue-50/50 p-3 shadow-xs dark:border-blue-900/25 dark:bg-blue-950/20">
                                 <header class="flex items-start justify-between gap-2">
                                   <div
-                                    class="min-w-0 flex-1 break-words text-[13px] font-medium text-base-content"
+                                    class="min-w-0 flex-1 wrap-break-word text-[13px] font-medium text-base-content"
                                     title={`${discoveredServerName(server)}${server.version ? ` · ${server.version}` : ''}`}
                                   >
                                     {discoveredServerName(server)}
                                   </div>
                                   <span
-                                    class="inline-flex flex-shrink-0 items-center rounded-full border border-dashed border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-muted whitespace-nowrap"
+                                    class="inline-flex shrink-0 items-center rounded-full border border-dashed border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-muted whitespace-nowrap"
                                     title="Discovery candidate — review to attach a source"
                                   >
                                     Candidate
@@ -1762,7 +1760,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                     <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
                                       Discovered
                                     </span>
-                                    <span class="text-[12px] text-muted/90">
+                                    <span class="text-[12px]">
                                       {lastDiscoveryResultText() ?? 'Waiting for scan'}
                                     </span>
                                   </div>
@@ -1771,7 +1769,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                       type="button"
                                       variant="outline"
                                       size="xs"
-                                      class="min-h-11 min-w-[4.5rem] flex-shrink-0 lg:min-h-0"
+                                      class="min-h-11 min-w-18 shrink-0 lg:min-h-0"
                                       onClick={() => props.onReviewDiscoveredSource?.(server)}
                                     >
                                       Review

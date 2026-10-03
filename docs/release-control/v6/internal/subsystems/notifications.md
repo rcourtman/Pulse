@@ -73,9 +73,7 @@ or displayed a notification.
 10. `internal/notifications/delivery_health.go`
 11. `internal/notifications/deadman_config.go`
 12. `internal/notifications/failure_class.go`
-
-Queue current-policy scheduling is owned by `internal/notifications/quiet_hours_queue.go`.
-
+13. `internal/notifications/quiet_hours_queue.go`
 14. `internal/notifications/apprise_diagnostics.go`
 
 ## Shared Boundaries
@@ -173,7 +171,6 @@ typed transport failures and the real queue's retry/DLQ/audit/log projection.
 `internal/api/alerting/notifications_test.go` covers configuration logging and
 the real sender's test-error HTTP response. All secrets are synthetic; these
 controls do not establish installed Apprise acceptance or prior user exposure.
-
 
 ### Current-policy quiet-hours replay
 

@@ -4,6 +4,7 @@ import { installAccountRuntime } from './account_runtime';
 import { createPortalAPI, PortalAPIError } from './api';
 import { installAuthController } from './auth_controller';
 import { installBillingRuntime } from './billing';
+import { installProviderPlan, type ProviderPlanController } from './provider_plan';
 import { installShell } from './shell';
 import { createAnonymousBootstrap } from './store';
 import { createPortalRuntime } from './runtime';
@@ -69,9 +70,14 @@ export function installPortalApp(deps: PortalAppDeps): PortalApp {
     showToast: showToast,
   });
 
+  var providerPlan: ProviderPlanController | null = null;
+
   installShell({
     store: deps.store,
     onSectionChange: function(section) {
+      if (section === 'billing' && providerPlan) {
+        void providerPlan.load();
+      }
       if (section === 'access') {
         var accounts = deps.store.getBootstrap().accounts || [];
         for (var i = 0; i < accounts.length; i += 1) {
@@ -85,6 +91,17 @@ export function installPortalApp(deps: PortalAppDeps): PortalApp {
     api: api,
     store: deps.store,
   });
+
+  // Installed after the shell so its bootstrap subscriber re-mounts the plan
+  // panel once the shell has re-rendered.
+  providerPlan = installProviderPlan({
+    api: api,
+    store: deps.store,
+    showToast: showToast,
+  });
+  if (deps.store.getBootstrap().provider_hosted_mode === true && deps.store.getBootstrap().authenticated) {
+    void providerPlan.load();
+  }
 
   installAuthController({
     api: api,

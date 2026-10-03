@@ -90,13 +90,11 @@ describe('NodeModalSetupGuideSection', () => {
       quickSetupTokenHint: 'set…123',
     });
 
-    expect(screen.getByText('Credentialed command ready')).toBeInTheDocument();
+    expect(screen.getByText('Credential-free command ready')).toBeInTheDocument();
     expect(
       screen.getByText(/Use Copy command to place the runnable command on your clipboard/i),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/one-time setup token is intentionally not shown/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/one-time setup token is shown separately/i)).toBeInTheDocument();
     expect(screen.queryByText(/curl -fsSL/i)).not.toBeInTheDocument();
     expect(screen.getByText('set…123')).toBeInTheDocument();
   });

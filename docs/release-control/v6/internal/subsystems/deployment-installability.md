@@ -24,6 +24,63 @@ Concurrency groups continue to isolate workflows and refs. Cancellation of an
 obsolete PR run supplies no passing evidence for its replacement, which still
 needs its own checks. Release publication workflows are unaffected.
 
+### Sharded internal/api backend tests
+
+Build and Test runs the `internal/api` race tests as five `Backend tests
+(api-N)` shards instead of one job, because that one package took about 27 of
+the 31 minutes of the old `Backend tests (api)` job and set the critical path
+of every pull request. Each shard lists the package's tests with `go test
+-race -list` from the commit under test and runs one contiguous slice of that
+list in go test's own order, so the shards cover every test exactly once,
+including tests added later, and a shard that resolves no tests fails. The
+order is kept on purpose. Some `internal/api` tests depend on package state
+left by the tests just before them, and an interleaved split by name broke
+dozens of them. Slices are cut by estimated run time, not test count.
+Equal-count quarters ran 1.9, 8.0, 1.5 and 10.3 minutes of tests, because one
+contract mock chart test runs about six minutes on the runner and the
+integration server tail about twenty seconds per test.
+`.github/scripts/select-internal-api-shard.sh` weighs each test by its seconds
+in `.github/scripts/internal-api-test-seconds.txt` (the slowest tests only,
+plus a `DEFAULT_WEIGHT` line for every unlisted, new or renamed test), finds
+the smallest per-shard budget that fits the list into the shard count, and
+fills contiguous slices up to it, cutting the tail early if needed so no shard
+is empty. The weights only move cut points. Each test is assigned one shard in
+a single pass, so a stale weights file can unbalance the shards but never drop
+or repeat a test. The weights must describe the GitHub runner, not a
+workstation. A first seeding from one local run scaled by guesswork left the
+four shards at 4.5, 8.8, 17.1 and 12.5 minutes. Every shard therefore runs
+`go test -json` through `.github/scripts/record-internal-api-test-seconds.py`,
+which prints only package lines and the output of failing or unfinished tests
+(as plain `go test` does), exits non-zero on any failure behind `pipefail`,
+and writes each top-level test's seconds to an `internal-api-test-seconds-N`
+artifact that is uploaded even when the shard fails.
+`.github/scripts/refresh-internal-api-test-seconds.py --run <id>` downloads
+those artifacts with `gh run download`, takes each test's median across the
+given runs, and rewrites the weights file with `DEFAULT_WEIGHT` set to the mean
+of the unlisted tests. Until such runs exist, the weights are a local
+`-race -json` run with each region of the list scaled to the seconds the
+runner reported for it across the count-based and weighted runs. Five shards
+put the six minute contract mock chart test with only its next few
+neighbours, and the predicted slowest shard is about 8.5 minutes against about
+10 with four, which keeps a 20% slower runner under the 11 minutes of the
+Frontend and rest checks. A shard holding most of the
+tests passes `-skip` of every other shard's tests instead of naming its own,
+which runs the same tests in the same order and keeps the single argument
+under the 120,000 byte ceiling. It passes `-skip` alone. The test binary
+caches only its last compiled pattern, so `-run .` next to `-skip` recompiled
+the long skip pattern for every test and subtest and roughly doubled that
+shard. The required check name
+`Backend tests (api)` belongs to a verdict job that passes only when every
+shard succeeded, and `Backend tests (rest-0)` and `Backend tests (rest-1)` keep
+their names and package split. All shards still expand for documentation-only
+changes so no required check is left pending or reads skipped shards as a
+pass. Go test steps are not skipped for frontend-only changes, because Go tests
+read frontend sources (the `internal/api` contract tests, the
+`internal/unifiedresources` code standards walk of `frontend-modern/src`, and
+the `internal/telemetry` repository-wide wording scan). Core E2E runs its
+non-gating probation tier only outside pull requests, since promotion counts
+only main runs.
+
 ### Docker SDK dependency compatibility
 
 The Docker consumers use Moby API v1.56.0 and client v0.6.0 together, without
@@ -74,15 +131,41 @@ product checks use the selected checkout; a missing branch or policy mismatch
 fails closed rather than falling back to main.
 
 Manual dispatch retains its governed event branch and exact event SHA, VERSION
-equality and explicit rollback requirement. Only scheduled runs may derive the
-preceding stable rollback target. Summaries distinguish workflow event revision
+equality and explicit rollback requirement. The one additional dispatch mode
+is a fixed no-publication watchdog: `watchdog=true` plus the exact reviewed
+main `expected_workflow_sha`, with no candidate, exception, mobile or note
+inputs. It checks the main ref and event SHA before checkout, then uses the
+same one-fetch governed-source selection and preceding stable rollback
+derivation as the schedule. A moving control head fails closed. Ordinary
+candidate dispatches cannot use the watchdog SHA or omit explicit rollback.
+Summaries distinguish workflow event revision
 from tested branch and revision; unresolved selection is not test evidence.
 This watchdog is not an admitted release candidate and cannot qualify or
-replace the fixed release packet.
+replace the fixed release packet. Its distinct `Release Watchdog at <sha>`
+title cannot satisfy an exact-version candidate rehearsal. The candidate-build
+job is always skipped in watchdog mode; actual preflight, demo resolver,
+no-mutation verification and definitive verdict must all succeed. Delivery's
+reviewed dispatcher fixes repository, workflow, main and both inputs, retains
+intent before POST and never replays a refused or uncertain watchdog attempt.
+
+A release line can still declare its published stable VERSION after reviewed
+runtime fixes land. Watchdog metadata therefore observes the selected source's
+supported version stage and preceding stable tag; it does not call the
+candidate-promotion resolver, infer an RC, override soak or generate a promotion
+envelope. Candidate rehearsals still use that unchanged resolver and all its
+explicit rollback, ancestry, runtime-content and soak gates. Branch/VERSION
+equality and missing-reference failures remain fatal in both paths. Watchdog
+summaries retain actual preflight failure/success separately from the definitive
+demo verdict, use the distinct `release-watchdog-summary` artifact, and cannot
+be mistaken for the recorder's `rc-to-ga-rehearsal-summary` promotion evidence.
 
 Verification: `rehearsal_source_test.py` executes the source-selection shell
 against local Git fixtures. `release_promotion_policy_test.py` pins workflow
-ordering, metadata wiring and separate source reporting. Passing local fixtures
+ordering, metadata wiring and separate source reporting. The executable fixtures
+cover a post-publication runtime change with the same stable VERSION, the
+identical candidate's continued promotion refusal, RC/missing-reference/version
+failure paths and a failed watchdog's non-promotion summary. Registered
+`build_release_assets_test.go` guards that evidence separation. Passing local fixtures
 does not establish hosted backend, integration or demo execution; those outcomes
 must be observed after landing.
 
@@ -251,11 +334,10 @@ select zero captures when its investigation finds that screenshots add no
 meaningful customer value. Committed sidecars remain schema-valid review
 records and retain the evidence-backed reason for selecting captures or none.
 
-Customer-facing notes describe each visible change once, without a parallel
-`Fixes` list, for packets from `v6.4.0-rc.6` onward. Historical packets keep their
-`What's improved` shape. From v6.4.6 onward, a short `Highlights` list and relevant
-plain-language change groups are supported; a narrow patch may retain
-`What's improved`. Groups must be non-empty and must not repeat a change. Internal
+Customer-facing notes use one outcome list for features and fixes. Each visible
+change is described once under `What's improved`; a parallel `Fixes` section is
+forbidden for packets from `v6.4.0-rc.6` onward because it encourages the same
+change to be restated with slightly different implementation detail. Internal
 toolchain and architecture work stays in the detailed changelog unless it
 changes something users can recognize or act on.
 
@@ -557,7 +639,18 @@ as complete.
 
 Published exact-version install and rollback guidance must preserve the server
 and Unified Agent installer boundary. Supported systemd and Proxmox LXC
-deployments use the signed `/bin/update --version vX.Y.Z` server helper;
+deployments may use `/bin/update --version vX.Y.Z` only when the installed
+helper belongs to the Pulse server installer. Community-scripts Proxmox
+containers may own a different `/bin/update` that ignores the version argument.
+Generated install and rollback sections must each state this ownership boundary
+and link the signed server-installer flow from the candidate's versioned docs,
+with the exact installation or rollback target, for absent or unverified helpers.
+Operators verify the resulting version after restart.
+Signed installer recipes run in a fresh temporary directory and stop on any
+download or signature-verification failure before executing the installer.
+`scripts/tests/test_signed_installer_docs.py` executes both documented recipes
+with controlled download and verification failures and checks exact-version
+forwarding on success.
 `/opt/pulse/scripts/install.sh` and release archives' `scripts/install.sh` are
 Unified Agent installers and must never be presented as server rollback
 commands. Docker guidance instead pins the target image and recreates the
@@ -749,6 +842,11 @@ release-latency optimization.
 98. `scripts/verify-github-release-integrity.sh`
 99. `scripts/verify-release-container-images.sh`
 100. `scripts/release_control/verify_release_container_images_test.py`
+101. `.github/workflows/release-lifecycle-rehearsal.yml`
+102. `scripts/release_lifecycle_rehearsal.sh`
+103. `scripts/release_lifecycle_rehearsal_versions.py`
+104. `.github/workflows/dependency-advisory-watch.yml`
+105. `scripts/dependency_advisory_watch.py`
 
 ## Shared Boundaries
 
@@ -895,6 +993,13 @@ artifact-selection behaviour.
    sign-in page agree. `provider-msp portal-link` is part of the packaged
    day-2 surface and mints links only for existing account members or pending
    invitees.
+   Setup's evaluation and closing guidance must point to Plan for actual paid
+   upgrade availability, not promise live Stripe checkout or a time-bound cap
+   increase. Operators must remain within the two-client evaluation limit
+   until Plan confirms a higher active limit. The ordinary empty-license path
+   must not present a lease signing key as a manual purchase step; the explicit
+   `--print-lease-signing-public-key` path remains available for separately
+   issued custom licenses, which must bind that key.
    Provider-hosted MSP installability must also pass provider-default report
    branding through the packaged tenant environment rather than requiring
    report-specific operator provisioning. The deployable control-plane config
@@ -1202,7 +1307,16 @@ artifact-selection behaviour.
    Private signing material and publication credentials must never enter the
    compilation job.
    Post-publication secure-runtime qualification must authenticate before it
-   executes. `.github/workflows/qualify-secure-runtime-release.yml` may download
+   executes. The publication workflow dispatches the reviewed qualification
+   control from protected `main`, with the immutable RC tag as its sole source
+   input. The qualification workflow must prove its own repository, workflow
+   ref and workflow SHA are that `main` control, then check out the detached
+   release tag and verify its commit is on the governed release line. Its
+   checkout may report either canonical HTTPS origin spelling, with or without
+   `.git`; it must reject every other origin before normalising to the exact
+   `.git` spelling required by the packet attester. Normalisation must not
+   relax the separate remote tag, branch, release and artifact identity checks.
+   `.github/workflows/qualify-secure-runtime-release.yml` may download
    caller-owned release assets only into a non-executable holding directory.
    `scripts/release_control/secure_runtime_attestation_v7.py` must copy the six
    binaries, four collector signatures, checksum manifest, assembly and
@@ -1213,6 +1327,18 @@ artifact-selection behaviour.
    privileged systemd container must mount that exact snapshot read-only and
    must never execute directly from the download directory. The post-run
    attester must consume the same snapshot paths.
+   The outer systemd qualification container must retain `--network none`:
+   it may create a non-loopback host-interface canary only as a veth pair
+   wholly inside that container's network namespace, with no runner bridge,
+   egress attachment, or default IPv4 route. The immutable RC lab uses this
+   reachable local canary to distinguish host-network access from the typed
+   helper's private network isolation. Canary setup and the no-default-route
+   check must fail qualification before that lab if the boundary is absent;
+   they must not skip the lab or change the release packet under test.
+   The lab writes its receipt and transcript as root inside that container.
+   After a passing lab and before attestation, the workflow must hand the
+   evidence directory to the runner user without altering its content, so the
+   attester can read the receipt and write the attestation beside it.
    PVE jobs must consume their runner users' persistent local Go and npm caches
    directly; disposable-runner Actions cache restore/save phases must remain
    disabled because archiving those same caches adds network work after the
@@ -1261,6 +1387,21 @@ artifact-selection behaviour.
    candidate workflow; publishing releases invoke it as a sibling of inert
    draft staging so qualification and upload overlap without weakening the
    activation join.
+   A provider-isolation security backport also requires a live two-installation
+   Docker result before the release steward freezes a packet. On protected
+   `release/v*` pushes, Build and Test checks out the event SHA, preloads a
+   digest-pinned helper image, and runs the opt-in provider-pair case against a
+   fresh daemon; a skipped test is not a pass. The case provisions the same
+   tenant ID in two independently named provider networks, verifies each
+   provider's support containers attach only to its own tenant network,
+   refuses a same-name unowned network, and checks that cleanup of one
+   provider neither detaches nor removes the other's resources. This is
+   source-line acceptance, not candidate-image or installed-service proof.
+   After packet freeze, the reusable container qualifier repeats the case
+   against its already assembled and digest-verified exact-candidate control-
+   plane image before Helm smoke. It requires the explicit live-test PASS and
+   retains the caller SHA and immutable payload binding; the earlier branch
+   result cannot substitute for this candidate qualification or vice versa.
    The server executable and its detached Minisign and SSH signatures are one
    architecture-bound payload unit; cross-archive deduplication must allow
    those three files to differ while continuing to reject drift in every
@@ -1320,15 +1461,21 @@ artifact-selection behaviour.
    bound to the anticipated exact 40-character source SHA, verifies that SHA is
    reachable from the governed release branch, and rejects an existing tag at
    any other commit. Exact-version registry tags are public publication surfaces.
-   The `candidate_qualification` join must require all exact-source candidate
-   checks, including container qualification, draft validation, installer smoke
-   and private Pro qualification, before the first public Git tag, Docker tag or
-   Helm chart write. Restricted drafts bind `target_commitish` without pushing
+   The candidate predicate must require all exact-source candidate checks,
+   including container qualification, draft validation, installer smoke and
+   private Pro qualification, before the first public Git tag, Docker tag or
+   Helm chart write. `publish_release_tag`, `publish_docker`,
+   `publish_helm_chart` and `activate_release` each carry that exact predicate,
+   guarded by `!cancelled()` so integration skips are judged explicitly and
+   workflow cancellation still blocks every writer. No echo-only join job may
+   stand in for it. Restricted drafts bind `target_commitish` without pushing
    a Git ref and do not retain checkout credentials. Only the qualified Git-tag
    publication job retains credentials for its authenticated ref write. Draft
    state never authorizes rewriting an existing public tag.
-   The `release_readiness` join then requires verified Docker and Helm digests
-   before activation or floating-alias promotion. A failure before qualification
+   `activate_release` then requires the published tag and verified Docker and
+   Helm digests directly before activation or floating-alias promotion, and
+   `release_commit_verdict` restates every candidate result in place of the
+   former readiness join. A failure before qualification
    leaves the unexposed candidate repairable under its intended version. A
    failure during public distribution retains the exposed source identity for
    recovery or a clearly explained successor, since registries are not atomic. The exact-version server and provider control-plane image builds
@@ -2042,9 +2189,14 @@ artifact-selection behaviour.
    activation-only recovery workflow. Recovery must accept only a completed
    failed `create-release.yml` run whose failures are confined to activation,
    require the successful `release_readiness` DAG join as the canonical proof
-   that every immutable gate succeeded, and reject every failure outside the
-   activation boundary. Recovery must not duplicate reusable-workflow display
-   names as a parallel gate catalog. It must revalidate GitHub's stored
+   that every immutable gate succeeded when the source run has that job, and
+   reject every failure outside the activation boundary. Runs made after the
+   join was folded into its writers have no `release_readiness` job; for them
+   recovery requires a successful `publish_release_tag`, which carries the
+   candidate predicate itself, and at least one job and only successful jobs
+   under each of the `publish_docker` and `publish_helm_chart` caller IDs.
+   Old-shape runs must keep recovering exactly as before, and recovery must not
+   grow a per-display-name gate catalog beyond those caller-ID prefixes. It must revalidate GitHub's stored
    asset digests against that source run's unexpired candidate manifest, and
    require the same draft release ID, tag, target commit, and absent activation
    marker. It then dispatches a fresh durable convergence owner and repeats the
@@ -2170,6 +2322,9 @@ artifact-selection behaviour.
    containing Playwright `test-results/` plus
    `release-integration-diagnostics/docker.log`; that Docker log must capture
    container state and the Pulse test server plus mock GitHub server logs.
+   Failure diagnostics and the inspection-only packaged Helm chart artifact are
+   kept for three days, since no job or workflow downloads them. Artifacts that
+   later jobs, recovery or other workflows consume keep their own retention.
    The release integration job must also name at least one current,
    non-quarantined browser spec. For the v6.1.0 release line that proof is
    `tests/66-organization-sharing-approval-ui.spec.ts`; the job must not point
@@ -2429,81 +2584,192 @@ artifact-selection behaviour.
    the manifest range, the locked `@types/node`/`undici-types` versions and the
    `ES2022` lib declaration stay in step.
 
-### Release-note compatibility and server-helper ownership backport (1 October 2026)
-
-Reviewed main `90c80acb493eb4ff6a789b184a794b87b4a6d538` repairs the authored
-v6.4.5 watchdog failure and supports the required grouped v6.4.6 release story.
-This line takes its note generator, renderer, install-metadata helper, exact
-historical fixture, visual fixture correction and complete compiled-source
-boundary. It also takes the renderer-only ownership prerequisites from
-`62c3761ee6fe67ee3af5ba9d0efa4fe35bb19c67` and
-`9d77f09b4f6b52a03bd9246e81c9273f42a2129d`: every executable
-`/bin/update --version` example must have its own nearby condition that the
-helper was installed by the Pulse server installer. A distant warning cannot
-qualify another command. The generated install and rollback sections link to
-exact-version signed server-installer instructions for community-scripts
-containers and unknown helper ownership, preserving the selected target.
-
-Version identity, unsigned-Windows/publisher warning, companion compatibility,
-exact rollback, immutable promotion lineage and all qualification gates remain
-required. The authored v6.4.5 fixture is retained verbatim as historical evidence,
-not a new publication body. Neither published packets nor release metadata,
-source routing, application runtime or dependency manifests change.
-
-The source-closure test checks all repository-local compiled dependencies of
-the install-test package, collector and helper and reports all missing packages.
-The v6.5 line already contains `internal/filesystemprobe` and
-`pkg/agents/filesystem`; both are included as compiled qualification dependencies.
-No new filesystem implementation is introduced by this backport.
-
-The v6.5 containing-source suite also requires its control-plane page to name
-the already configured `v6-release-reliability` target. The reviewed upstream
-page correction is backported verbatim; target configuration and version/source
-routing are not changed. The stale prose was a separate observed source-check
-failure, not evidence of a release-runtime or provider fault. The v6.4 profile
-has a different configured target and does not take this current-main page.
-
-The containing line's full Python suite also checks the current notes packet.
-That check binds the first heading to the exact escaped version, accepting
-`# Pulse vX.Y.Z` and `# Pulse vX.Y.Z Release Notes` rather than requiring both a
-boilerplate suffix and an inline repeated version. Its eight valid and ten
-negative title cases reject prefix collisions, wrong versions, draft suffixes,
-non-heading mentions and a displaced heading. Changelog/version/index lineage
-checks remain unchanged. This is a line validation adaptation of the reviewed
-note compatibility repair, not a published-note rewrite or a gate waiver.
-
-`scripts/installtests/release_notes_contract_test.go` reproduces authored-copy
-acceptance and rejects seven identity/safety violations. The renderer cases
-exercise grouped notes, unsafe ownership, duplicates, historical formats and the
-actual shell authoring path with a local model double. Install and complete
-Python suites are source evidence; the containing line still needs independent
-review, exact qualification and a new-source terminal no-mutation watchdog.
-
 ## Current State
 
-### Provider MSP tenant-network ownership during provisioning and cleanup
+### Existing-install auto-update consent (1 October 2026)
 
-Provisioning refuses an empty tenant ID or an existing same-named network
-without the exact tenant and runtime labels. It connects only role-labelled
-support containers on this installation's provider ingress network. Removing a
-managed client selects only its derived, correctly labelled tenant network and
-force-disconnects only local support containers actually attached to it. This
-prevents role labels shared by two provider installations on one Docker daemon
-from selecting the other installation. Docker API fixture tests cover these
-guards; they do not establish installed two-provider acceptance.
+A manual update, version-pinned rollback or reinstall is not consent to turn
+on unattended updates. The root server installer's three existing-install
+prompt paths share `offer_existing_auto_updates`: missing timers and explicitly
+disabled settings default to **No**, including Enter and non-TTY reads. Only
+`y`/`yes` (case-insensitive), or the existing explicit enable option, opts in.
+Explicit CLI choices are not prompted again. Existing enabled or disabled timer
+assets still refresh without changing their enablement; fresh installs remain
+opt-in. Readiness, signature validation and persistent-data backup are unchanged.
 
-### Provider MSP clients survive a support-container recreate (v6.5)
+`auto_update_intent_test.go` executes the real main flows for update, rollback,
+same-version reinstall and both menu actions, covering absent/disabled/enabled
+timers, Enter, EOF, invalid/no/affirmative input and explicit CLI choices.
+`root_install_sh_test.go` binds those paths to the shared choice, and
+`build_release_assets_test.go` binds the signed published lifecycle rehearsal to
+its new intent check. The rehearsal now retains only the boolean choice and
+timer enablement/activity before and after upgrade and rollback, fails changed
+or unavailable observations, and does not pass a disable flag to hide the bug.
+Its Python tests execute the observer/comparator against intact, changed and
+unreadable fixtures. These source proofs are not native installed acceptance;
+the published containing installer and both actual lifecycle phases still need
+their terminal observations.
 
-Backported from main. `upgrade.sh` recreates the control plane, and a
-recreated control plane or Traefik is no longer attached to any client's
-isolated network. The control plane's health monitor now reattaches both on
-startup and on every pass, within the installation-scoped ownership checks,
-and restarts rather than stops an unhealthy client, so upgrading a provider
-install with clients keeps their routes, leases and portal health intact.
-Verified on main on 2026-09-23 against a v6.4.1 provider bundle with two
-clients: a control-plane recreate rejoined both client networks within a
-second, a Traefik-only recreate had its routes back on the next 60-second
-pass, and clients the old monitor had stopped came back healthy.
+### Credential-safe Proxmox bootstrap (1 October 2026)
+
+Current PVE auto-registration metadata accepts the credential-free setup artifact: all command aliases use a private-file handoff and `downloadURL` equals the tokenless script URL. This replaces earlier requirements to embed setup tokens in commands/URLs. The older coherent server artifact is accepted read-only during upgrades, never executed. Host, type, canonical filename/URL, masked hint and live expiry remain required. Root-installer JSON parsing and registration pass secrets through descriptor/stdin input rather than Python/curl argv, and the setup response is no longer persisted as a plaintext /tmp diagnostic. No install source, API scope, trust exception, release selector or success condition is widened.
+
+
+### Update progress stream delivery
+
+`GET /api/updates/stream` is the in-app updater's progress feed and must never
+look like a stalled update. The handler marks the response `text/event-stream`
+with `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no` so
+reverse proxies and compressing intermediaries do not hold events back, and the
+gzip middleware keeps excluding event streams. `SSEBroadcaster.AddClient` in
+`internal/updates/sse.go` writes the connection preamble and the current cached
+status and flushes them before returning, and every later broadcast reaches a
+client through that client's single ordered writer under the client lock, so
+stages arrive in emission order and no two goroutines write one
+ResponseWriter. Write failures remove the client off the writer goroutine so
+removal never waits on the broadcaster lock while holding a client lock.
+Comment heartbeats run every 15 seconds. `UpdateProgressModal` must not trust
+an open-but-silent EventSource. It also polls `/api/updates/status` after
+`UPDATE_STREAM_SILENCE_FALLBACK_MS` without a stream message, ignores polled
+stages that would move progress backwards or are update-check chatter, keeps
+reloading only once `/api/version` reports a different version, and after
+`UPDATE_PROGRESS_STALL_TIMEOUT_MS` without movement shows a reload-to-check
+state instead of an endless spinner. A failed status poll is never restart
+evidence on its own. The modal enters its restart phase only when the backend
+reports `restarting` or `completed`, or, unconfirmed, when the stream has
+closed and consecutive polls fail after the update reached `applying` or
+`restoring`. An unconfirmed restart keeps polling so a later progress or
+`error` status still wins, and the same-version reload fallback in
+`resolvePostUpdateReload` applies only after a confirmed restart. When the
+modal opens before the running version is known it fetches `/api/version`
+immediately and also adopts the update store's version once it loads, but
+only while no restart signal has been seen. With no baseline it never reloads
+on unconfirmed completion, and after confirmed completion it reloads only
+once a probe has seen the old process go away, or after the bounded fallback. `internal/updates/sse_test.go`, the
+stream handler tests in `internal/api/updates_test.go`, and
+`frontend-modern/src/components/__tests__/UpdateProgressModal.test.tsx` are
+the proof surface.
+
+### Provider MSP upgrades move an install to a new release bundle
+
+`setup.sh` resolves the image pins in `.env` to digests once, so `upgrade.sh`
+only ever re-pulled the release a provider first installed; moving to a new
+release meant finding the new digests by hand, and none of that release's
+fixes reached the install. Run from a newly extracted and verified release
+bundle (it carries `VERSION` and no `.env`), `upgrade.sh` now works on the
+existing install (`PULSE_PROVIDER_MSP_INSTALL_DIR`, default
+`/opt/pulse-provider-msp`): it resolves the bundle's `CONTROL_PLANE_IMAGE` and
+`CP_PULSE_IMAGE` tags (stamped by `scripts/build-release.sh`) to digests and
+prints current and target pins. It runs the status gate, preflight and the
+verified backup with the new release's control plane through a shell override,
+which compose prefers over `.env`, so those checks carry the new release's
+fixes while nothing on disk changes. Only then does it keep a
+`.env.pre-upgrade-<time>` copy, install the same bundle files `setup.sh`
+installs, write the new pins and start the new images. `--keep-image-pins`
+keeps hand-set pins. The runner also pulls the tenant runtime image before the
+first status check, which otherwise failed every upgrade to a new
+`CP_PULSE_IMAGE` with "not present locally". Verified on 2026-09-24 against
+the walkthrough lab with a v6.4.5-rc.2 bundle: the pins resolved from the real
+registry, and when that release's own status check failed the upgrade stopped
+with `.env`, the compose file and `upgrade.sh` byte-identical and the control
+plane unchanged. Regression coverage:
+`TestProviderMSPUpgradeFromBundleRepinsToTheBundleRelease` in
+`scripts/installtests/provider_msp_deploy_test.go`.
+
+### Provider MSP install proof never strands a client slot
+
+`run-install-proof.sh`, which setup's summary recommends before the first real
+client, creates its temporary proof workspaces on the provider's own account,
+so they count against the same client limit. It now checks for room before
+creating any and refuses with the counts ("the proof creates 2 temporary client
+workspaces but this account has 0 free (3 of 3 in use)"). Previously, on a
+two-client evaluation that already had a client, it created the first proof
+workspace, was refused the second, and returned no report, so its cleanup had
+no workspace list and the first proof workspace stayed behind in one of the
+evaluation's two slots. A proof that fails part-way now returns the IDs it
+created, and `install-proof` removes them. Verified on 2026-09-24 against the
+walkthrough lab: refusal before any workspace was created, client count
+unchanged. Regression coverage:
+`TestProviderMSPProofRefusesWithoutFreeSlotsAndCreatesNothing` in
+`cmd/pulse-control-plane/provider_msp_proof_test.go` and
+`TestProviderMSPInstallProofCleansUpWorkspacesFromAPartialProof` in
+`cmd/pulse-control-plane/provider_msp_install_proof_test.go`.
+
+### A lapsed provider MSP install still starts and upgrades
+
+A provider-hosted install whose licence is past expiry and grace (an
+evaluation that ran out, or a paid plan that was not renewed) now starts its
+control plane instead of crash-looping on licence validation, so the portal
+and its Plan tab stay reachable to buy or renew. `provider-msp status`, which
+`upgrade.sh` gates on, prints `license_lapsed=true` as information rather than
+a failure, so such an install can still be upgraded. Client runtimes keep
+enforcing the lapse themselves and new clients are refused until a current
+licence is in place. Verified on 2026-09-24 on the walkthrough lab with an
+evaluation that lapsed 20 days earlier. Regression coverage:
+`TestProviderMSPStatusReportsALapsedLicenceWithoutFailing` in
+`cmd/pulse-control-plane/provider_msp_status_test.go`.
+
+### Provider MSP setup points buyers at the portal
+
+`deploy/provider-msp/setup.sh` no longer tells an evaluating provider to
+"request an upgrade" at a pulserelay.pro form that waited on a human reply with
+a checkout link. The evaluation log line and the closing summary both say to
+buy from Plan in the provider portal, where checkout binds the platform's lease
+signing key without a copy step, and the summary no longer prints that key as
+something the provider must send. `./setup.sh --print-lease-signing-public-key`
+remains for a custom licence. `TestProviderMSPSetupLeavesPlatformRunning` and
+the evaluation-issuance test in `scripts/installtests/provider_msp_deploy_test.go`
+pin both lines.
+
+### Provider MSP setup leaves the platform running
+
+`deploy/provider-msp/setup.sh` now ends by starting `traefik`,
+`docker-socket-proxy` and `control-plane` and waits for the control plane to
+run before printing its summary. It previously stopped at "setup prepared"
+with only the bootstrap command as the next step, so a first-time provider's
+sign-in link answered `404` until `run-install-proof.sh` or a manual
+`docker compose up -d` happened to start the control plane. The first-run
+message also names only the three values a provider must supply (`DOMAIN`,
+`ACME_EMAIL`, and the DNS-01 credential) instead of listing fourteen, most of
+which have working defaults or are generated. PR #2212 reports a v6.4.1
+first-run 404 and a 200 after starting the platform; this assigned candidate
+has not repeated that live-host proof.
+
+### Provider MSP clients survive a support-container recreate
+
+Recreating the control plane or Traefik detaches it from each client's
+isolated network. The health monitor now reattaches both support containers
+on startup and each pass, and restarts rather than stops an unhealthy client.
+The original PR reports a two-client v6.4.1 lab reproduction and recovery on
+the same installation on 2026-09-23; that is not installed acceptance of this
+integrated source. Reconnection selects support containers from the configured
+provider ingress network. Both reconnection and new workspace provisioning
+require exact tenant ownership and tenant-runtime labels on an existing
+isolated network before attaching containers; provisioning refuses an
+unlabelled same-named network instead of adopting it. A legacy client without
+an isolated network remains a reconnection no-op.
+Client removal follows the same installation boundary: the Docker manager
+identifies the managed client's network by its derived name and exact tenant
+and runtime labels, not by a generic tenant-network label alone. It must force
+disconnect only this provider's role-labelled support containers that are
+still attached to that network, selecting them through the configured provider
+ingress network. A recreated or other provider's support container is not a
+cleanup target. `internal/cloudcp/docker/manager_test.go` covers the network
+selection and disconnect filters; source-only coverage does not replace a
+two-provider installed upgrade, recreation and cleanup check.
+
+### Provider MSP operations accept a renewed licence
+
+`provider-msp preflight`, `proof`, `recover` and `backup` treat a licence
+the control plane renewed into its data directory (plan source
+`renewed_license`) the same as the host `CP_PROVIDER_MSP_LICENSE_FILE`,
+through `ProviderMSPPlanSourceIsSignedLicense`. Only the development
+environment fallback is still refused. Without this, the first paid renewal
+would have made every day-2 command refuse to run on the platform it was paid
+for. Backups keep including the host licence file, and a restored platform
+fetches its renewed licence again on the next refresh. Regression coverage:
+`TestProviderMSPPreflightAcceptsRenewedLicenseSource` in
+`cmd/pulse-control-plane/provider_msp_preflight_test.go`.
 
 ### Provider MSP upgrades work once a client exists
 
@@ -2531,23 +2797,50 @@ parity is unchanged.
 `frontend-modern/src/security/__tests__/dependencySecurity.test.ts` pins the
 manifest ranges and locked floors so a later downgrade is rejected.
 
+### Reviewed brace-expansion and DOMPurify advisory floors (30 Sep 2026)
 
-### Reviewed brace-expansion and DOMPurify advisory floors (1 Oct 2026)
-
-`frontend-modern/package-lock.json` on `release/v6.5` moves every locked
-`brace-expansion` copy to 1.1.21 or 5.0.12 for `GHSA-q2hr-2g5m-vwhr`
-(quadratic `{a},b}` rewrite CPU denial of service, affecting below 1.1.21 and
-4.0.0 to 5.0.11), and the locked `dompurify` from 3.4.15 to 3.4.16 for
-`GHSA-p98j-92pf-mc4p` (an `IN_PLACE` `afterSanitize` hook that removes a node
-could leave detached event handlers armed, affecting 3.4.13 to 3.4.15). Both
-failed the required complete frontend audit on this line, matching the main
-change in #2349. `brace-expansion` is reached only through build and lint
-tooling; DOMPurify ships in the frontend bundle, and its change is a patch
-release inside the reviewed `^3` range. The change is lockfile only and leaves
-the installer, artifact, signing, promotion and rollback boundary unchanged.
+`frontend-modern/package-lock.json` moves every locked `brace-expansion` copy
+to 1.1.21 or 5.0.12 for `GHSA-q2hr-2g5m-vwhr` (quadratic `{a},b}` rewrite CPU
+denial of service, affecting below 1.1.21 and 4.0.0 to 5.0.11), which failed
+the required frontend dependency audit on every pull request. `brace-expansion`
+is reached only through build and lint tooling. The locked `dompurify` moves
+from 3.4.15 to 3.4.16 for `GHSA-p98j-92pf-mc4p` (an `IN_PLACE` `afterSanitize`
+hook that removes a node could leave detached event handlers armed, affecting
+3.4.13 to 3.4.15). DOMPurify ships in the frontend bundle, and the change is a
+patch release inside the reviewed `^3` range. The change is lockfile only, with
+no manifest range change, and leaves the installer, artifact, signing,
+promotion and rollback boundary unchanged.
 `frontend-modern/src/security/__tests__/dependencySecurity.test.ts` raises the
 `brace-expansion` floors to 1.1.21 and 5.0.12 and the reviewed `dompurify`
 floor to 3.4.16, so a later downgrade is rejected.
+
+### braces removed from the frontend dependency graph (3 Oct 2026)
+
+`GHSA-vfj7-8cjw-p6xm` affects every `braces` release (up to 3.0.3) and has no
+patched version, so the required frontend dependency audit failed with seven
+high findings on every pull request that changes the dependency graph. All of
+them were dev-only: Tailwind CSS 3 reached `braces` through `chokidar`,
+`fast-glob` and `micromatch`, and `jscpd` 4 through `@jscpd/finder` and
+`fast-glob`. Every `fast-glob` and `micromatch` release depends on `braces`, so
+an override cannot close it. `frontend-modern` therefore moves to Tailwind CSS
+4.3.3 through `@tailwindcss/vite` (dropping `postcss.config.js`,
+`tailwind.config.js`, `autoprefixer` and the direct `postcss` dependency) and to
+`jscpd` 5.4.0, which has no runtime dependencies; `npm audit` over the full graph
+then reports no findings. `npm audit --omit=dev` was already clean, so no shipped
+bundle code changes for security reasons, and the installer, artifact, signing,
+promotion and rollback boundary is unchanged. The stylesheet keeps the v3
+rendering: it pins the v3 palette, font stacks and line heights, keeps the v3
+cascade order, and restores the v3 `space-*`, `divide-*`, hover, border, ring,
+placeholder and button-cursor behaviour. Tailwind CSS 4 is tested on Safari
+16.4, Chrome 111 and Firefox 128 and later. The production stylesheet itself
+needs cascade layers (Safari 15.4, Chrome 99, Firefox 97), because the build
+lowers media range syntax and nesting and folds palette opacity modifiers to
+static colors; that is below the container-query floor (Safari 16, Chrome 105,
+Firefox 110) the platform tables already required.
+`frontend-modern/src/security/__tests__/dependencySecurity.test.ts` now rejects
+any locked `braces` copy, so the advisory cannot return through a later
+dependency, and drops the `autoprefixer` floor because the package is gone.
+
 ### Reviewed @types/node 26.6.2 refresh
 
 The 2026-09-23 `npm-minor-patch` group (Dependabot #2189) advances the
@@ -2975,7 +3268,7 @@ version. It opened the `v6.4.0` candidate line from `main` with
 `rollback_version=v6.3.1` and did not move stable/latest install pointers or
 stable semver aliases.
 
-The earlier prerelease `v6.4.3-rc.1` cut set the repo-root `VERSION`, repo-root
+The active prerelease `v6.4.3-rc.1` cut sets the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
 Helm chart release metadata to the same `6.4.3-rc.1` release version. It follows
 stable `v6.4.1` and opens the published `v6.4.3` candidate line. It opens that
@@ -3450,7 +3743,7 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the earlier prerelease `v6.4.3-rc.1` cut, the repo-root compose default and
+For the active prerelease `v6.4.3-rc.1` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.4.3-rc.1` until the next
 governed stable cut moves them forward. The tagged but unpublished `v6.4.2`
 cut pinned `6.4.2` until this candidate moved them forward. The stable promotion guard remains in
@@ -3598,6 +3891,13 @@ vulnerabilities in the current patch level, the canonical fix is to advance the
 governed release toolchain and immutable Go builder digest together, not to
 suppress the scanner or produce release artifacts with an older patched-over
 runtime.
+The hosted control-plane source builder and integration mock builder are both
+on the reviewed `golang:1.26.8-alpine` digest
+`sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c`.
+`TestProviderMSPGoBuilderMatchesIntegrationMock` pins their exact agreement;
+it does not pull the image, prove its registry contents, or qualify a deployed
+control plane. The release publisher's prebuilt control-plane target is a
+separate path and does not rebuild its binary from this stage.
 As of 2026-08-27, the governed release floor is Go `1.26.7`. It supersedes
 `1.26.5`, whose standard library is reachable through seven vulnerable Pulse
 call paths reported by `govulncheck`, including HTTP/TLS, URL parsing, SAML XML
@@ -3684,13 +3984,14 @@ for stable-versus-prerelease metadata validation shared by `.github/workflows/re
 and `.github/workflows/create-release.yml`. Promotion rollback targets, promoted
 prerelease lineage, soak checks, and GA/v5 notice metadata may not drift between those
 two workflows through duplicated inline shell validation.
-One scoped exception keeps the weekly drift watchdog viable: scheduled
+One scoped exception keeps the drift watchdog viable: scheduled
 `release-dry-run.yml` runs carry no `workflow_dispatch` inputs (GitHub does
 not apply input defaults to `schedule` events), so the rehearsal step passes
 `--derive-rollback-latest-stable` and the resolver fills the empty
 `rollback_version` with the latest stable repository tag preceding the
-rehearsal version. The derivation flag is gated on the `schedule` event in
-the workflow; manual rehearsal dispatches and real promotions must still
+rehearsal version. The derivation flag is gated on admitted watchdog mode
+(schedule or the exact-main, candidate-input-free dispatch envelope described
+above); ordinary candidate rehearsal dispatches and real promotions must still
 supply an explicit stable `rollback_version`, and the resolver still fails
 closed when the input is empty and the flag is absent.
 `scripts/release_control/validate_artifact_release_line.py` is the canonical
@@ -3717,6 +4018,10 @@ bypass the preflight. That dry run must call `update-demo-server.yml` in
 verification-only mode against the latest stable release. It must prove
 Tailscale, SSH host identity, runtime version, frontend parity, public health,
 and browser smoke without changing the host.
+The reusable demo workflow's resolver must check out the repository before it
+calls `scripts/write_github_output.py` to emit the selected tag and target.
+This checkout is credential-free; a verification-only dry run must not fail
+before its demo checks merely because the output helper is absent.
 That same release-validation boundary also owns draft-versus-published asset
 state. Every normal `.github/workflows/create-release.yml` cut validates the
 uploaded packet while the release is still a draft and must pass `draft=true`
@@ -3850,8 +4155,23 @@ hostnames or Tailscale IPs, rather than silently depending on public SSH
 reachability from GitHub-hosted runners. The workflow must use the current
 pinned Tailscale GitHub Action, its target `ping` readiness gate, and the shared
 `.github/scripts/check-demo-reachability.sh` TCP/22 diagnostic before SSH key
-capture. A successful tailnet join alone is not connectivity proof. After that
-network preflight, shared SSH
+capture. A successful tailnet join alone is not connectivity proof.
+
+The shared helper's `diagnose` mode is local-only after a failed setup action:
+it must not ping the peer or attempt direct TCP as a fallback. Its `check` mode
+requires recognised local `Running` state before any probe, then a successful
+tailnet ping before TCP/22. Missing, malformed or non-running daemon state is
+an incomplete setup result, not proof that the demo is down. Failed ping is
+retained without another diagnostic ping or TCP attempt. Status diagnostics
+report only allowlisted backend states and peer-presence/online/active booleans;
+they never print tailnet addresses, DNS names, tags, relay locations, raw JSON
+or local CLI errors. Tailnet and TCP probe stdout/stderr are also suppressed
+on both success and failure; their exits and bounded, topology-free verdicts
+remain visible. Diagnostic success cannot establish connectivity or
+installed acceptance, and neither mode changes credentials or authorises
+replaying a provider refusal.
+
+After that network preflight, shared SSH
 setup must wait for configured demo hostnames to resolve, accept configured IP
 literals without a DNS precheck, and then capture host keys with bounded
 short retries before any installer or binary copy runs; a long `ssh-keyscan`
@@ -4007,6 +4327,25 @@ or unrecognised. It must not assume ARMv7 for every ARM installation.
 Malformed metadata stays a hard error and only the typed over-limit condition
 may fall through to the feed. Proof:
 `internal/updates/issue2282_release_metadata_stream_test.go`.
+The update check must also leave a content-free record of its own outcome.
+`internal/updates/check_observation.go` stores the closed outcome, the
+effective channel, and whether an update was offered for every check on the
+install's effective channel, and ignores explicit previews of another channel.
+Lookup failures carry their category (`network_error`, `metadata_error`,
+`rate_limited`) without changing the error text operators see, and usage
+telemetry exports only that record at schema v18. An update discovery failure
+that records nothing is a regression, because a failed check never reaches the
+update history and is otherwise invisible in the fleet (#2285). Proof:
+`internal/updates/issue2285_update_check_observation_test.go`.
+The observation describes installability, not merely version ordering. Positive
+release fixtures must include the exact server archive; a newer release that
+lacks that archive is not offered and records `metadata_error`, rather than
+`up_to_date` or `available`. A compiled Pro install without usable broker
+activation credentials returns its existing operator warning but records
+`skipped`, never `up_to_date`; this unavailable result must not be cached across
+a later activation. A stable-channel Pro check against a prerelease-only broker
+pin records `no_release`. No version, URL, credential or warning text enters
+the telemetry observation.
 Those same workflows must also fetch and dispatch the governed release branch
 derived from release-control metadata instead of hardcoding `pulse/v6`,
 `pulse/v6-release`, `main`, or any later branch literal inline; when a stable
@@ -4476,20 +4815,41 @@ borrowing the local dev-runtime orchestration tests. The canonical
 `npm audit` after a clean install, through `scripts/npm-audit-retry.sh`. The
 production-only `npm audit --omit=dev` is deliberately not on that
 per-pull-request path: it audits a subset of the same packages, so it can only
-report a subset of the same advisories, and because the complete audit fails
-the job on any finding, the production step could only ever execute in the
-cases where it was already guaranteed clean. The dev-versus-production split
+report a subset of the same advisories under the same blocking rule, so a
+production step could never block a change the complete audit lets through. The dev-versus-production split
 is reported instead by the scheduled `npm-audit` job in
 `.github/workflows/security-scan.yml`, which covers every npm workspace and
 informs rather than blocks delivery. That runner exists because
 `npm audit` exits non-zero both for a real advisory and for an unreachable
 advisory endpoint: on 2026-09-03 registry.npmjs.org returned 503s and timeouts
 for over an hour and no pull request could land, including changes that touch
-no JavaScript. It separates the two and nothing else. A conclusive result is
-acted on immediately and any vulnerability at any severity still fails, even
+no JavaScript. It separates the two, and decides whether a finding blocks the change by
+whether the change moves the dependency graph. A conclusive result is
+acted on immediately and any vulnerability at any severity is a finding, even
 if the same response also carries a transport error, so a severity threshold
 must never be introduced; only an unreachable endpoint is
-retried. Retrying is bounded by wall clock and not by attempt count alone,
+retried. A nonempty package-finding map or any positive integer
+summary count must fail immediately, even when the total is missing or
+contradicts that evidence; a later response must not replace a known finding.
+A clean verdict requires all six known summary counts to be integer zero,
+no endpoint error and an absent or empty package-finding map. Booleans,
+strings, nulls, negative counts and partial summaries are not zero-finding
+evidence. Without positive evidence, malformed reports retain the existing
+bounded outage policy, never a clean verdict. Summary diagnostics may print
+only validated nonnegative integer counts (or `unknown`) and the package-record
+count, not raw metadata strings capable of emitting workflow commands.
+Finding diagnostics must use that same captured JSON response, never
+a second registry request: such a request could hang outside the watchdog or
+describe a different verdict. Logs retain the affected package, severity,
+range, locked paths, advisory source/title/link and fix availability through
+allowlisted, JSON-escaped fields, not arbitrary registry text or transport-error
+details. Missing package-level detail leaves the vulnerability failure intact;
+it must not trigger another request. `scripts/tests/test_npm_audit_retry.py`
+executes changed-second-response, missing-detail, escaping and single-request
+fixtures, including production argument forwarding and findings accompanied by
+transport errors, positive package/severity evidence with missing or zero
+totals, malformed zero summaries under both outage modes, and metadata
+annotation injection. Retrying is bounded by wall clock and not by attempt count alone,
 because npm's own `fetch-timeout` defaults to five minutes and it retries
 internally: on 2026-09-04 three attempts against a hanging endpoint ran for
 10m56s and cancelled the Frontend job at its own timeout with every test
@@ -4502,13 +4862,29 @@ by attempt count or by budget, the run fails if the change touches
 `frontend-modern/package.json`, `frontend-modern/package-lock.json`, or the
 runner itself, because then the answer is genuinely unknown and the runner may
 never be relaxed under cover of its own tolerant mode, and warns without
-failing when it does not, because the dependency graph is then identical to the base commit that
-already produced a passing answer. Advisories published later against
-unchanged dependencies are the responsibility of Dependabot security updates
-and the scheduled scan, not of a per-pull-request audit.
-`scripts/tests/test-npm-audit-retry.sh` pins
-that split, including that a real advisory fails even when the tolerant mode
-is active, that an unparseable or unrecognised report is never read as
+failing when it does not, because the dependency graph is then identical to its
+base commit. The same split governs a finding. A change that moves the graph,
+or edits the runner, fails on any finding. A change that leaves
+`package.json` and `package-lock.json` untouched warns instead, still printing
+every finding, because any advisory it sees is one its base commit already has
+and only a dependency change can remove it. Only `NPM_AUDIT_REQUIRE_RESULT=false`
+selects that mode; an empty or unrecognised value keeps the strict verdict. On
+3 October 2026 the unpatched `braces` advisory `GHSA-vfj7-8cjw-p6xm`, reached
+only through the dev-only `tailwindcss` 3 and `jscpd` 4 chains with a clean
+`--omit=dev` audit, failed the required Frontend check on every open pull
+request, Go-only ones included, which made nothing safer and blocked every
+fix. Advisories against unchanged dependencies are owned by the jobs that audit
+the graph as it stands: the scheduled `npm-audit` scan and the daily
+`dependency-advisory-watch.yml`, which keep the strict default and fail on any
+finding, and Dependabot security updates;
+`scripts/tests/test_dependency_advisory_watch.py` runs the real runner with the
+watch's own environment and proves an advisory that only warns a pull request
+fails the watch.
+`scripts/tests/test-npm-audit-retry.sh` and
+`scripts/tests/test_npm_audit_retry.py` pin that split, including that a real
+advisory fails whenever the graph moves or the mode value is not exactly
+`false`, that an inherited advisory warns and is still named, that an
+unparseable or unrecognised report is never read as
 clean, and that neither a hung attempt nor an exhausted budget can outlive
 its bound. `frontend-modern/src/security/__tests__/dependencySecurity.test.ts`
 pins the known safe floors for advisories remediated by commit `6ba85a185`,
@@ -5534,12 +5910,19 @@ in release metadata: `VERSION`, the Helm chart version and README, the compose
 default image, `docs/RELEASE_NOTES.md`, `docs/UPGRADE_v6.md` and its shipped
 docs mirror, `docs/releases/`, release-control records, this contract, and
 `status.json`. Any other path refuses the promotion unless `hotfix_exception`
-names active customer harm, because that content was never soaked. Minor
-releases (`X.Y.0`) additionally require a seven day soak; patches keep 72
-hours. `docs/release-control/control_plane.json` declares `release/v6.5` for
+names active customer harm, because that content was never soaked. Since
+the founder direction of 28 September 2026 minor releases (`X.Y.0`) and
+patches both require a 24 hour soak (`MIN_STABLE_SOAK_HOURS` and
+`MIN_MINOR_STABLE_SOAK_HOURS`); it was seven days and 72 hours. The workflow
+and trigger prompts describe the hotfix exception against the same 24 hours.
+A release line cut earlier keeps its own resolver's longer minimum, which the
+maintainer's release admission relaxes to the release plan's soak only
+through that exception and only once the stable source is shown to add
+nothing beyond release metadata. `docs/release-control/control_plane.json` declares `release/v6.5` for
 the first release train so the workflow refuses a v6.5 dispatch from any other
 branch. `scripts/release_control/resolve_release_promotion_test.py` pins the
-allowlist, the drift refusal, the hotfix path, and the minor soak;
+allowlist, the drift refusal, the hotfix path, and the 24 hour minor and
+patch soak;
 `release_promotion_policy_test.py` pins the policy's Release Train section.
 
 ### Provider docs name the Patrol weekly summary schedule kind
@@ -5684,6 +6067,20 @@ a valid pinned SSH signature and the extracted request expression with absent
 and synthetic email. It does not establish installed onboarding, server acceptance
 or legal identity. See the qualification evidence below.
 
+### Node 24 amd64 release-builder digest parity
+
+The canonical Pulse release Dockerfile and provider-MSP control-plane Dockerfile
+pin the same immutable amd64 Node 24 Alpine frontend-builder image. The
+`TestNode24FrontendBuilderDigestIsAligned` installability test binds both
+build inputs to the current dependency digest. The canonical release-build
+metadata proof `TestDockerBuildUsesCanonicalReleaseLdflags` and hosted
+provider-MSP control proof `TestProviderMSPControlPlaneDockerfileBuildsReleaseLicenseBinary`
+also require that exact digest while retaining their release metadata and
+license-build assertions. These are source-contract checks, not an image build.
+The hosted release build must verify the landed exact source, and provider-MSP
+rollout and installed acceptance must be observed separately before this refresh
+is considered operationally complete.
+
 ### Pinned release action consumer compatibility
 
 The grouped release actions use immutable revisions recorded in
@@ -5823,21 +6220,172 @@ its caller-level benchmarks do not corroborate it (`NormalizeRoute` improved and
 advisory for source landing; no threshold was changed and the failed advisory
 result is preserved.
 
-Verification status: focused release-metadata proof and full exact-source
-qualification are separate checks. Neither a documented contract nor a focused
-test by itself establishes installed build or release acceptance.
+Verification status: the exact-source Go build and package tests require the
+offline dependency snapshot for the updated lockfile, which is not present in
+the current assignment; a host dependency acquisition on the next launch is
+required before this contract's Go evidence can be produced. No passing Go
+suite, installed build or release acceptance is claimed here.
 
-For the active prerelease `v6.5.0-rc.1` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.5.0-rc.1` until the next
-governed stable cut moves them forward. The active prerelease `v6.5.0-rc.1`
-cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default,
-`scripts/install-docker.sh` fallback, and Helm chart release metadata to the same
-`6.5.0-rc.1` release version. It follows stable `v6.4.1` and opens the published
-`v6.5.0` candidate line. This prerelease keeps `rollback_version=v6.4.1`,
-publishes a versioned public GitHub prerelease plus versioned Docker and Helm
-artifacts, and does not move stable/latest install pointers or stable semver
-aliases. No governed mobile-facing path changed from `v6.4.1`, so the release
-decision is `no-mobile-impact` and no companion upload or public mobile-store
-rollout is part of this candidate. The prerelease Windows path retains
-exact-SHA, checksum, and detached-signature verification without Authenticode.
-Stable `v6.5.0` also skips SignPath under the standing unavailable policy.
+### Published-release lifecycle rehearsal (shadow)
+
+`.github/workflows/release-lifecycle-rehearsal.yml` rehearses the systemd
+install, upgrade and rollback journey between two published releases. It is
+the shadow first step toward making install, upgrade and rollback a publication
+gate. It runs daily and on manual dispatch, holds only `contents: read`, runs
+on the hosted `ubuntu-24.04` image, uses no secrets and uploads no artifacts.
+No release workflow calls it or waits on it, so it reports without gating.
+
+`scripts/release_lifecycle_rehearsal_versions.py` chooses the pair from
+published, non-draft release tags under SemVer precedence. The default FROM is
+the release GitHub advertises as latest and must be stable. The default TO is
+the newest published release or prerelease newer than FROM. When FROM was
+defaulted and nothing newer is published, the pair is the previous stable to
+the latest stable. An explicit pair must be published and move forward, so a
+same-version or missing-target run fails instead of passing.
+
+`scripts/release_lifecycle_rehearsal.sh` runs every phase inside the same
+digest-pinned `jrei/systemd-debian:12` container as the install smoke.
+
+1. Install FROM with that release's own `install.sh --version`, after the
+   asset verifies against the README-pinned `pulse-installer` key and passes
+   the server-installer identity checks.
+2. Assert `/api/version` and `/opt/pulse/bin/pulse --version` both report
+   FROM, `/api/health` reports `healthy`, and `pulse.service` is active and
+   enabled with no newly failed unit.
+3. Seed state through the real API. First-run security setup uses the
+   bootstrap token from `pulse bootstrap-token`, then a disabled webhook with
+   a secret header and a PVE node with fake token credentials are created. The
+   read-back must show that auth is required, that an unauthenticated request
+   gets 401, and that the API token and password both get 200. The webhook must
+   keep its id, URL, method, service, disabled state and header key. The node
+   must keep its host, token name, stored token secret (`hasToken`), no
+   password and `verifySSL=false`. The `/etc/pulse` file list and checksums
+   become the baseline.
+4. Upgrade with the installed helper, `/bin/update --version TO`, after
+   checking that the helper is the Pulse server installer's. The helper
+   downloads the latest published `install.sh`, verifies it with its embedded
+   key and runs it.
+5. After the upgrade, and again after the documented rollback
+   `/bin/update --version FROM`, assert the expected identity, health and unit
+   state. The settings read-back must equal the baseline and meet the fixed
+   expectations. No baseline file may be missing from `/etc/pulse`.
+   `.encryption.key`, `nodes.enc` and `webhooks.enc` must be byte-identical.
+   The API reports only `hasToken` and redacted header values, so byte
+   identity under an unchanged key is what proves the exact seeded secrets
+   survived. A release that legitimately rewrites those stores fails the
+   rehearsal instead of passing unproven. The API token and password checks
+   prove those exact credentials directly.
+
+Rollback still runs when the upgrade phase fails. A phase also fails if
+`pulse-update.service` started during the run, because an unattended update
+would make the version assertions unattributable. Three D-Bus-activated host
+services that cannot run in the container (`systemd-hostnamed`,
+`systemd-timedated` and `systemd-localed`) are reported as warnings rather
+than failures. A unit drop-in sets `PULSE_TELEMETRY=false` so daily CI installs
+stay out of usage telemetry. It lives outside the installer's files and the
+data dir.
+
+Scope: only published assets and the amd64 systemd path are exercised. Docker,
+Helm, Proxmox LXC creation, the in-app updater and a prerelease's own
+`install.sh` (the helper always fetches the latest published installer) are
+not covered. A passing run is not release admission.
+
+Verification: `scripts/tests/test_release_lifecycle_rehearsal.py` covers pair
+resolution (SemVer ordering, draft exclusion, forward-only and published-only
+pairs, the previous-stable fallback), the fixed settings expectations (each lost
+or altered seeded field fails `--check-snapshot`, and a deleted file or a
+rewritten secret store fails `--compare-datadir`), the harness contract (the real updater
+invocation without bypass flags, the signed installer, the shared image digest,
+and per-phase identity, settings and data-dir checks) and the workflow trust
+shape. A local podman run (amd64 emulation) of `v6.4.1 -> v6.4.5 -> v6.4.1`
+passed all four phases. An earlier run correctly failed phase 1 on a new failed
+unit (`systemd-hostnamed`), which led to the container-only list above. The
+hosted Docker run is not yet claimed.
+
+### Release-line dependency advisory watch (1 October 2026)
+
+On 30 September and 1 October 2026 `GHSA-q2hr-2g5m-vwhr` (`brace-expansion`)
+and `GHSA-p98j-92pf-mc4p` (DOMPurify) were published against unchanged
+`frontend-modern/package-lock.json` graphs. The required *Audit complete
+frontend dependency graph* step in `build-and-test.yml` then failed every pull
+request on `main`, `release/v6.4` and `release/v6.5`. That held the v6.4.6
+preparation pull request and the v6.5 release candidate for days with no owner.
+The scheduled npm audit in `security-scan.yml` only informs, and a scheduled
+workflow runs on the default branch alone, so release lines were never checked
+before a pull request hit them.
+
+`.github/workflows/dependency-advisory-watch.yml` runs daily and on manual
+dispatch with only `contents: read` on the hosted `ubuntu-24.04` image. It uses
+no secrets, persists no checkout credentials and uploads nothing. Its first job
+lists `main` plus every remote `release/v<major>.<minor>` branch at or newer
+than the line of the release GitHub reports as latest. Patch branches such as
+`release/v6.4.2` and legacy `release/5.1` are never lines. If the latest-release
+lookup fails, every release line is audited instead of none.
+
+The second job is a fail-fast-free matrix over those branches. A scheduled job
+runs in the default branch's cache and token scope, so it never checks out,
+installs or runs another branch's code: each entry fetches the audited branch
+and reads only its `frontend-modern/package.json` and `package-lock.json` as
+data with `git show`, uses no dependency cache (its `actions/setup-node` step
+sets `package-manager-cache: false`, because that pin turns npm caching on by
+itself once `package.json` names npm as its `packageManager`), and repeats the required
+build-and-test audit against that lockfile with the same `actions/setup-node`
+pin and Node.js 24 and `scripts/npm-audit-retry.sh all` with
+`NPM_AUDIT_REQUIRE_RESULT=true`. `npm audit` answers from the lockfile, so the
+verdict is the one the required step reaches after its install. The runner always comes from the workflow's
+own commit, so a line whose build-and-test predates it is held to main's
+verdict, which fails on any finding at any severity just as a plain `npm audit`
+does. `frontend-modern/package-lock.json` is the only lockfile the required
+audit covers, so it is the only one the watch audits. The job fails whenever
+the audit fails. The step summary and one failure annotation name the branch,
+the GHSA identifiers and packages, and the fix: `npm audit fix
+--package-lock-only` in `frontend-modern` on that line, then raising the
+matching floors in `frontend-modern/src/security/__tests__/dependencySecurity.test.ts`.
+An unreachable advisory endpoint, or a missing lockfile before any verdict,
+also fails the job but is reported as such and never as an advisory. Only
+validated branch names, package names and GHSA identifiers reach the
+annotation, and registry text in the summary is escaped.
+
+The watch gates nothing directly. The maintainer release-path health timer
+watches it, so a failed run becomes a top-priority Delivery request naming the
+failing line.
+
+Verification: `scripts/tests/test_dependency_advisory_watch.py` covers line
+selection (newest-stable floor, patch and legacy branch exclusion, the
+fail-wide fallback, `main` always present), the summary and annotation for
+advisory, clean, unreachable and install-failure outcomes, escaping of hostile
+registry text, refusal of unexpected branch names, and the workflow contract
+(triggers, read-only hosted shape, matrix wiring, and parity of the Node.js
+pin, install command and audit runner with the required build-and-test step).
+`scripts/check_workflow_trust.py` and actionlint pass. A local run of the
+helper and `npm-audit-retry.sh` against the 1 October 2026 heads selected
+`main`, `release/v6.4` and `release/v6.5`, passed `main`, and failed
+`release/v6.4` (`GHSA-p98j-92pf-mc4p`) and `release/v6.5`
+(`brace-expansion` and DOMPurify advisories). The hosted run is not yet claimed.
+
+## Release-body updater ownership (30 September 2026)
+
+Each executable `/bin/update --version` example in a published body must carry
+its own nearby condition: only use it when that helper was installed by the
+Pulse server installer. A warning in a distant highlight does not scope an
+unqualified install, rollback or authored Before-you-upgrade command. The
+existing generated sections retain their signed, version-pinned installer
+fallback for community-scripts installations or an unknown helper owner.
+
+`validate_release_body_shape` applies `validate_server_updater_guidance` to
+the complete body before accepting it; it rejects unsafe examples rather than
+rewriting the author's instructions or selecting another rollback version.
+`render_release_body_test.py` exercises all three unsafe published contexts,
+distant-scope rejection, and valid generated and inline ownership conditions.
+This changes publication validation, not installer behaviour, immutable release
+contents or proof of an installed upgrade/rollback.
+
+## Rootful qualification source closure (1 October 2026)
+
+The rootful source manifest includes `internal/filesystemprobe` and
+`pkg/agents/filesystem`: both are compiled dependencies of the current collector
+and qualification harness. Omitting them would leave the attested packet
+unbound to filesystem-observation code that it actually executes. The closure
+test enumerates all repository-local dependencies of the install-test binary,
+collector and helper and reports every missing package together. No qualification
+gate, source exclusion or production permission is relaxed by this correction.

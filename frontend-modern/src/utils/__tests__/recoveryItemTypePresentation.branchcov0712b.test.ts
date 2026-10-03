@@ -28,18 +28,19 @@ const FORCE_NULL_KEY = '__force_null__';
 // describe the documented badge composition rather than echoing the unit under
 // test. These are the primitives the module concatenates.
 const BADGE_BASE_CLASSES =
-  'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap';
+  'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap';
 const TABLE_BADGE_BASE_CLASSES =
-  'inline-flex items-center px-1 py-0.5 text-[10px] font-medium rounded whitespace-nowrap';
+  'inline-flex items-center px-1 py-0.5 text-[10px] font-medium rounded-sm whitespace-nowrap';
 const DEFAULT_BADGE_TONE_CLASSES = 'bg-surface-alt text-base-content';
 const DEFAULT_BADGE_CLASSES = `${BADGE_BASE_CLASSES} ${DEFAULT_BADGE_TONE_CLASSES}`;
 const DEFAULT_TABLE_BADGE_CLASSES = `${TABLE_BADGE_BASE_CLASSES} ${DEFAULT_BADGE_TONE_CLASSES}`;
 
 // Workload tones mirrored from workloadTypePresentation's PRESENTATION_MAP; the
 // vm / system-container / app-container arms thread these through verbatim.
-const VM_TONE = 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
-const SYSTEM_CONTAINER_TONE = 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
-const APP_CONTAINER_TONE = 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300';
+const VM_TONE = 'bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300';
+const SYSTEM_CONTAINER_TONE =
+  'bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300';
+const APP_CONTAINER_TONE = 'bg-sky-100 text-sky-700 dark:bg-sky-900/25 dark:text-sky-300';
 
 describe('getRecoveryItemTypePresentation — branch coverage (branchcov2)', () => {
   it('composes the full vm presentation (workload-map badge + table badge composition)', () => {

@@ -707,21 +707,22 @@ type HostRAIDDeviceMeta struct {
 
 // HostRAIDMeta describes a RAID array.
 type HostRAIDMeta struct {
-	Device         string               `json:"device"`
-	Name           string               `json:"name,omitempty"`
-	Level          string               `json:"level"`
-	State          string               `json:"state"`
-	TotalDevices   int                  `json:"totalDevices"`
-	ActiveDevices  int                  `json:"activeDevices"`
-	WorkingDevices int                  `json:"workingDevices"`
-	FailedDevices  int                  `json:"failedDevices"`
-	SpareDevices   int                  `json:"spareDevices"`
-	UUID           string               `json:"uuid,omitempty"`
-	Devices        []HostRAIDDeviceMeta `json:"devices,omitempty"`
-	RebuildPercent float64              `json:"rebuildPercent,omitempty"`
-	RebuildSpeed   string               `json:"rebuildSpeed,omitempty"`
-	Operation      string               `json:"operation,omitempty"`
-	Risk           *StorageRisk         `json:"risk,omitempty"`
+	Device          string               `json:"device"`
+	Name            string               `json:"name,omitempty"`
+	Level           string               `json:"level"`
+	State           string               `json:"state"`
+	RequiredDevices int                  `json:"requiredDevices,omitempty"` // configured members, excluding spares; zero means unknown
+	TotalDevices    int                  `json:"totalDevices"`
+	ActiveDevices   int                  `json:"activeDevices"`
+	WorkingDevices  int                  `json:"workingDevices"`
+	FailedDevices   int                  `json:"failedDevices"`
+	SpareDevices    int                  `json:"spareDevices"`
+	UUID            string               `json:"uuid,omitempty"`
+	Devices         []HostRAIDDeviceMeta `json:"devices,omitempty"`
+	RebuildPercent  float64              `json:"rebuildPercent,omitempty"`
+	RebuildSpeed    string               `json:"rebuildSpeed,omitempty"`
+	Operation       string               `json:"operation,omitempty"`
+	Risk            *StorageRisk         `json:"risk,omitempty"`
 }
 
 // HostUnraidDiskMeta describes a disk's role and state inside an Unraid array.
@@ -1246,9 +1247,13 @@ type DockerData struct {
 //
 // NOTE: Some tools need per-datastore details; those are exposed via Datastores.
 type PBSData struct {
-	InstanceID               string                        `json:"instanceId,omitempty"`
-	Hostname                 string                        `json:"hostname,omitempty"`
-	NodeName                 string                        `json:"nodeName,omitempty"`
+	InstanceID string `json:"instanceId,omitempty"`
+	Hostname   string `json:"hostname,omitempty"`
+	NodeName   string `json:"nodeName,omitempty"`
+	// LinkedAgentID is set only when the PBS connection uniquely corroborates
+	// a host agent. API-token connections cannot read the PBS node-name endpoint,
+	// so consumers must not rely on a matching display name for host history.
+	LinkedAgentID            string                        `json:"linkedAgentId,omitempty"`
 	HostURL                  string                        `json:"hostUrl,omitempty"`
 	GuestURL                 string                        `json:"guestUrl,omitempty"`
 	Version                  string                        `json:"version,omitempty"`

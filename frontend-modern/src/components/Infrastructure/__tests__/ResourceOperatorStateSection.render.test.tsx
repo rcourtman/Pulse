@@ -92,3 +92,27 @@ describe('ResourceOperatorStateSection render with capabilityNames: null', () =>
     expect(screen.queryByText('Allowed actions')).toBeNull();
   });
 });
+
+describe('maintenance schedule timestamps', () => {
+  it.each(['active', 'scheduled'] as const)(
+    'shows absolute future times for a %s window',
+    async (kind) => {
+      const start = new Date(Date.now() + (kind === 'active' ? -60_000 : 3_600_000)).toISOString();
+      const end = new Date(Date.now() + 7_200_000).toISOString();
+      apiClientMock.apiFetchJSON.mockResolvedValue({
+        canonicalId: `maintenance-${kind}`,
+        maintenanceStartAt: start,
+        maintenanceEndAt: end,
+      });
+      render(() => <ResourceOperatorStateSection resourceId={`maintenance-${kind}`} />);
+      const badge = await screen.findByText(
+        kind === 'active' ? 'Maintenance window active.' : 'Maintenance window scheduled.',
+      );
+      expect(badge.parentElement).toHaveTextContent(new Date(end).toLocaleString());
+      if (kind === 'scheduled')
+        expect(badge.parentElement).toHaveTextContent(new Date(start).toLocaleString());
+      expect(badge.parentElement).not.toHaveTextContent('just now');
+      expect(badge.parentElement).toHaveTextContent(/attention.*paused/i);
+    },
+  );
+});

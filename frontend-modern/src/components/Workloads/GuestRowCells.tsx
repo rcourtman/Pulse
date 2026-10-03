@@ -16,7 +16,7 @@ import {
 function BackupShieldIcon(props: { icon: 'check' | 'warning' | 'x' | 'running'; pulse?: boolean }) {
   return (
     <svg
-      class="h-3.5 w-3.5 flex-shrink-0"
+      class="h-3.5 w-3.5 shrink-0"
       classList={{ 'animate-pulse': props.pulse }}
       viewBox="0 0 24 24"
       fill="none"
@@ -65,11 +65,7 @@ function BackupIndicator(props: {
   });
 
   return (
-    <span
-      class={`flex-shrink-0 ${config().color}`}
-      title={tooltipText()}
-      aria-label={tooltipText()}
-    >
+    <span class={`shrink-0 ${config().color}`} title={tooltipText()} aria-label={tooltipText()}>
       <BackupShieldIcon icon={config().icon} pulse={displayStatus() === 'running'} />
     </span>
   );
@@ -90,7 +86,7 @@ function getBackupAgeBadgeLabel(
 
 function getBackupAgeBadgeClass(status: WorkloadsGuestBackupDisplayStatus): string {
   const layout =
-    'inline-flex h-5 min-w-[3.25rem] items-center justify-center gap-1 px-1.5 text-[10px] font-semibold leading-none tabular-nums cursor-help';
+    'inline-flex h-5 min-w-13 items-center justify-center gap-1 px-1.5 text-[10px] font-semibold leading-none tabular-nums cursor-help';
   // A healthy backup only needs its shield. Existing backups that cross an age
   // threshold remain amber because age is a policy-relative caution, while red
   // is reserved for the materially different state where no backup exists.
@@ -456,7 +452,7 @@ function AvailabilityProbeCell(props: { presentation: AvailabilityProbePresentat
   return (
     <Show when={badgeText()}>
       <span
-        class={`inline-flex items-center rounded px-1 py-0.5 text-[9px] font-semibold leading-none whitespace-nowrap ${p().toneClassName}`}
+        class={`inline-flex items-center rounded-sm px-1 py-0.5 text-[9px] font-semibold leading-none whitespace-nowrap ${p().toneClassName}`}
         title={p().rowLabel}
       >
         {badgeText()}

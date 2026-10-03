@@ -144,6 +144,30 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 	}
 }
 
+// A no-flag, signed published-installer rehearsal must catch re-enabling after
+// a version change. The install smoke's explicit disable flag alone cannot.
+func TestPublishedLifecycleRehearsalPreservesAutoUpdateChoice(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "release_lifecycle_rehearsal.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{
+		`auto_update_snapshot > "${WORK_DIR}/state/auto-updates.baseline.tsv"`,
+		`check_auto_update_intent upgrade || true`,
+		`check_auto_update_intent rollback || true`,
+		`cexec '/bin/update --version "$TARGET"'`,
+	} {
+		if !strings.Contains(string(content), required) {
+			t.Fatalf("published installer lifecycle proof missing %s", required)
+		}
+	}
+	for _, line := range strings.Split(string(content), "\n") {
+		if strings.Contains(line, "/bin/update --version") && strings.Contains(line, "--disable-auto-updates") {
+			t.Fatal("lifecycle proof must observe installer consent, not bypass it")
+		}
+	}
+}
+
 func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 	content, err := os.ReadFile(repoFile(".github", "workflows", "security-scan.yml"))
 	if err != nil {
@@ -825,14 +849,8 @@ func TestHelmChartShipsOpenShiftProfile(t *testing.T) {
 			t.Fatalf("Helm CI missing OpenShift render assertion %q", required)
 		}
 	}
-	if !strings.Contains(docs, "--set openShift.enabled=true") ||
-		!strings.Contains(docs, "--set openShift.kubernetesAgent.enabled=true") ||
-		!strings.Contains(docs, "create secret generic pulse-server-env") ||
-		!strings.Contains(docs, "create secret generic pulse-agent-env") {
-		t.Fatal("Kubernetes guide must document the shipped OpenShift profile")
-	}
-	if strings.Contains(docs, "--set-string agent.secretEnv.data.PULSE_TOKEN") {
-		t.Fatal("OpenShift guide must not persist the agent token in Helm release values")
+	if issues := openShiftDocsIssues(docs); len(issues) > 0 {
+		t.Fatalf("Kubernetes guide must document the shipped credential-safe OpenShift profile: %v", issues)
 	}
 }
 
@@ -1059,9 +1077,10 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 	if !strings.Contains(installSmokeJob, "contents: write") {
 		t.Fatal("create-release.yml install_sh_smoke must grant contents: write so the called workflow can read unpublished draft assets")
 	}
-	qualificationJob := workflowJobBlock(t, workflow, "candidate_qualification")
-	if !strings.Contains(qualificationJob, publishedReleaseGuard) {
-		t.Fatal("candidate qualification must skip historical backfill and draft-only runs")
+	for _, job := range []string{"publish_release_tag", "publish_docker", "activate_release"} {
+		if !strings.Contains(workflowJobBlock(t, workflow, job), publishedReleaseGuard) {
+			t.Fatalf("public writer %s must carry the candidate predicate that skips historical backfill and draft-only runs", job)
+		}
 	}
 	for _, job := range []string{"promote_floating_tags", "publish_helm_pages", "promote_private_pro_runtime", "update_stable_demo"} {
 		if strings.Contains(workflow, "\n  "+job+":\n") {
@@ -1317,21 +1336,62 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"# Pulse v"+version+" Release Notes",
 		"## What's improved",
 		"## Before you upgrade",
+		"Same-name systems stay separate",
+		"Windows agent delivery is restored",
+		"Large Availability estates scan faster",
+		"Slow starts are recoverable",
+		"Disk I/O totals are more accurate",
+		"carries every change from the `v6.4.2` packet",
+		"map at least one trusted IdP group to the built-in `admin` role",
+		"not Authenticode-signed",
+		"Unknown Publisher warning",
+		"does not require a companion mobile release",
 		"The rollback target is stable `v"+previous+"`",
 	)
 	assertFileDoesNotContain(t, releaseNotesPath, "## Fixes")
+	comparisonSummary := "This changelog describes the changes since `v" + comparisonVersion + "`"
+	if version == "6.4.0-rc.10" {
+		comparisonSummary = "The `v6.4.0-rc.9` release staged an immutable draft, tag, and exact-version artifacts but did not activate publicly."
+	}
 	assertFileContainsAllNormalized(t, changelogPath,
-		"This changelog describes the changes since `v"+comparisonVersion+"`",
 		"Version: `v"+version+"`",
 		"Previous stable: `v"+previous+"`",
 		"Rollback target: `v"+previous+"`",
-		"Rollback command: `sudo /bin/update --version v"+previous+"`",
+		"Promotion path: exact-SHA single-build release candidate from `main`",
+		comparisonSummary,
+		"carries the complete `v6.4.2` change set",
+		"no longer pin a guest in Backup Running",
+		"(#1815)",
+		"no longer collapse into a single host or Docker record",
+		"(#1753)",
+		"Windows Unified Agent auto-update no longer fails with HTTP 404",
+		"(#1820)",
+		"Windows signing decision: prereleases publish checksum- and detached-signature-verified Windows agents without Authenticode",
 		"Mobile decision: `no-mobile-impact`",
+		"no companion mobile build or store rollout is required",
 	)
-	branch := requiredReleaseBranchForVersion(t, version)
-	assertFileContainsAllNormalized(t, changelogPath,
-		"Promotion path: exact-SHA release candidate from `"+branch+"`",
-	)
+	if version == "6.3.0-rc.6" {
+		assertFileContainsAllNormalized(t, releaseNotesPath,
+			"Chart and resource-query services now qualify independently from the residual API router, shrinking the root test critical path.",
+			"Public server and provider control-plane images publish and attest in parallel from one verified exact-candidate payload.",
+			"PVE compilation remains credential-free. GitHub-hosted jobs retain signing, release mutation, and publication credentials.",
+		)
+		assertFileContainsAllNormalized(t, changelogPath,
+			"Chart handling and resource queries are production packages with independent test scheduling",
+			"Exact-version public Docker staging overlaps qualification, and server and provider control-plane products publish as parallel matrix legs.",
+			"Publication still requires exact-source identity, immutable manifests, signatures, public/private artifact integrity, installer smoke, and final convergence verification.",
+		)
+	}
+	if version == "6.4.0-rc.13" {
+		assertFileContainsAllNormalized(t, releaseNotesPath,
+			"Unchanged stopped-container details are refreshed every 15 minutes instead of being re-inspected every 30 seconds",
+			"Separate standalone sites that reuse a short node name can link to their own host agents through unique provider-observed addresses",
+		)
+		assertFileContainsAllNormalized(t, changelogPath,
+			"Docker hosts with many stopped containers no longer re-inspect every historical container on each 30-second agent report",
+			"Separate standalone Proxmox sites that reuse a short node name no longer lose correct agent links when their provider-observed addresses uniquely disambiguate them",
+		)
+	}
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
 		"docs/releases/RELEASE_NOTES_v"+version+".md",
 		"docs/releases/V6_CHANGELOG_v"+version+".md",
@@ -1360,7 +1420,7 @@ func TestCurrentPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		`CANONICAL_DEFAULT_PULSE_VERSION="`+version+`"`,
 	)
 	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
-		"cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
+		"The active prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"This prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
 		"For the active prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
 		"No governed mobile-facing path changed from `v"+previous+"`, so the release decision is `no-mobile-impact`",
@@ -1600,7 +1660,7 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 	}
 	dockerfile := string(dockerfileBytes)
 	dockerRequired := []string{
-		`FROM --platform=linux/amd64 node:24-alpine@sha256:`,
+		"FROM --platform=linux/amd64 node:24-alpine@sha256:" + node24Amd64FrontendDigest + " AS frontend-builder",
 		`FROM --platform=linux/amd64 golang:1.26.8-alpine@sha256:`,
 		`FROM backend-builder AS release-assets-builder`,
 		`AS agent_runtime`,
@@ -2351,6 +2411,89 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 	}
 }
 
+func TestUpdateDemoResolverChecksOutOutputHelperBeforeUse(t *testing.T) {
+	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "update-demo-server.yml"))
+	if err != nil {
+		t.Fatalf("read update-demo-server workflow: %v", err)
+	}
+	workflow := string(workflowBytes)
+	resolveStart := strings.Index(workflow, "\n  resolve:\n")
+	updateStart := strings.Index(workflow, "\n  update-demo:\n")
+	if resolveStart < 0 || updateStart <= resolveStart {
+		t.Fatal("update-demo-server workflow must retain separate resolve and update-demo jobs")
+	}
+	resolve := workflow[resolveStart:updateStart]
+	checkout := strings.Index(resolve, "- name: Checkout repository")
+	target := strings.Index(resolve, "- name: Resolve target tag and demo environment")
+	helper := strings.Index(resolve, "python3 scripts/write_github_output.py tag \"$TAG\"")
+	if checkout < 0 || target <= checkout || helper <= target {
+		t.Fatal("demo resolver must check out its source before using scripts/write_github_output.py")
+	}
+	if !strings.Contains(resolve[checkout:target], "persist-credentials: false") {
+		t.Fatal("demo resolver checkout must not persist GitHub credentials")
+	}
+}
+
+func TestReleaseWatchdogIsControlBoundAndCannotBuildCandidate(t *testing.T) {
+	workflow, err := os.ReadFile(repoFile(".github", "workflows", "release-dry-run.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(workflow)
+	for _, required := range []string{
+		"Release Watchdog at {0}",
+		"if: ${{ inputs.watchdog != true && inputs.version != '' }}",
+		`[ "${EXPECTED_WORKFLOW_SHA_INPUT}" != "${GITHUB_SHA}" ]`,
+		`[ "${GITHUB_REF}" != "refs/heads/main" ]`,
+		`Candidate rehearsal requires explicit rollback and no watchdog SHA.`,
+		`Watchdog refuses candidate input ${name}.`,
+		`Watchdog refuses exception input ${name}.`,
+		"WATCHDOG_MODE: ${{ steps.mode.outputs.watchdog }}",
+		"verify_only: true",
+		`require_result "stable demo no-mutation verification" "$DEMO_RESULT" success`,
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("fixed release watchdog missing safety contract: %s", required)
+		}
+	}
+	guard := strings.Index(text, "- name: Validate release ref")
+	checkout := strings.Index(text, "- name: Checkout repository")
+	if guard < 0 || checkout <= guard {
+		t.Fatal("watchdog control identity and envelope must be checked before checkout")
+	}
+}
+
+func TestReleaseWatchdogDoesNotManufacturePromotionReadiness(t *testing.T) {
+	workflow, err := os.ReadFile(repoFile(".github", "workflows", "release-dry-run.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(workflow)
+	for _, required := range []string{
+		`print("metadata_mode=watchdog")`,
+		`echo "metadata_mode=promotion"`,
+		`derive_latest_stable_rollback_tag(version, list_stable_tags())`,
+		`ARTIFACT_NAME="release-watchdog-summary"`,
+		`SUMMARY_FILE="release-dry-run/watchdog-summary.md"`,
+		`not a candidate promotion`,
+		`does not establish promotion readiness, soak, qualification or installed recovery`,
+		`name: ${{ steps.summary.outputs.artifact_name }}`,
+		`path: ${{ steps.summary.outputs.summary_file }}`,
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("watchdog/promotion evidence separation missing: %s", required)
+		}
+	}
+	if strings.Contains(text, "--derive-rollback-latest-stable") {
+		t.Fatal("watchdog must not manufacture a stable-promotion envelope from the branch VERSION")
+	}
+	assertFileContainsAll(t, repoFile("scripts", "release_control", "rehearsal_source_test.py"),
+		`test_postpublication_watchdog_does_not_pretend_to_promote_stable`,
+		`test_identical_candidate_rehearsal_still_refuses_new_stable_promotion`,
+		`test_watchdog_summary_cannot_be_recorded_as_promotion_readiness`,
+	)
+}
+
 func TestDemoMutationAndRecoverySharePhysicalTargetLock(t *testing.T) {
 	updateBytes, err := os.ReadFile(repoFile(".github", "workflows", "update-demo-server.yml"))
 	if err != nil {
@@ -2457,8 +2600,8 @@ func TestDemoReachabilityHelperSeparatesTailnetAndSshTransportProof(t *testing.T
 		`tailscale status --json`,
 		`tailscale ping --c 3 --timeout 10s "$DEMO_SERVER_HOST"`,
 		`nc -z -w 5 "$DEMO_SERVER_HOST" "$TCP_PORT"`,
-		`Runner Tailscale DNS:`,
-		`Runner Tailscale tags:`,
+		`Tailscale backend:`,
+		`Diagnostic mode is local-only`,
 		`Demo peer is not present in the runner peer map yet.`,
 		`Verify sshd and the host firewall on tailscale0.`,
 	} {
@@ -2499,7 +2642,7 @@ exit 1
 	if err != nil {
 		t.Fatalf("demo reachability helper failed: %v\n%s", err, output)
 	}
-	for _, needle := range []string{"Tailscale backend: Running", "Demo peer state: online=True active=True relay=lhr", "Demo SSH transport is reachable over Tailscale."} {
+	for _, needle := range []string{"Tailscale backend: Running", "Demo peer state: online=True active=True", "Demo SSH transport is reachable over Tailscale."} {
 		if !strings.Contains(string(output), needle) {
 			t.Fatalf("demo reachability output missing %q: %s", needle, output)
 		}
@@ -2751,7 +2894,7 @@ func TestSecureRuntimeQualificationPacketIsHostedAndReleaseBound(t *testing.T) {
 		"release/pulse-secure-runtime-collector-v1-linux-amd64",
 		"release/pulse-secure-runtime-collector-v3-linux-amd64",
 		"qualify-secure-runtime-release.yml/dispatches",
-		`{ref: $tag, return_run_details: true, inputs: {tag: $tag}}`,
+		`{ref: "main", return_run_details: true, inputs: {tag: $tag}}`,
 		"Secure-runtime qualification dispatch did not return an exact workflow run.",
 		"Immutable RC publication did not retain an exact secure-runtime qualification run identity.",
 	} {
@@ -2764,9 +2907,11 @@ func TestSecureRuntimeQualificationPacketIsHostedAndReleaseBound(t *testing.T) {
 	if strings.Contains(qualificationWorkflow, "release:\n    types: [published]") {
 		t.Fatal("secure-runtime qualification must be explicitly dispatched after immutable publication, not rely on suppressed release events")
 	}
+	originIndex := strings.Index(qualificationWorkflow, "Bind canonical Pulse origin")
+	sourceIndex := strings.Index(qualificationWorkflow, "Verify detached release source")
 	preauthenticationIndex := strings.Index(qualificationWorkflow, "Pre-authenticate exact qualification packet")
 	privilegedExecutionIndex := strings.Index(qualificationWorkflow, "docker run")
-	if preauthenticationIndex < 0 || privilegedExecutionIndex < 0 || preauthenticationIndex > privilegedExecutionIndex {
+	if originIndex < 0 || sourceIndex < originIndex || preauthenticationIndex < sourceIndex || privilegedExecutionIndex < preauthenticationIndex {
 		t.Fatal("secure-runtime release packet must be authenticated before any privileged Docker execution")
 	}
 	if strings.Contains(qualificationWorkflow, `$RUNNER_TEMP/secure-runtime-downloads:/release:ro`) {
@@ -2774,16 +2919,23 @@ func TestSecureRuntimeQualificationPacketIsHostedAndReleaseBound(t *testing.T) {
 	}
 	for _, required := range []string{
 		".immutable == true",
-		`test "${GITHUB_REF}" = "refs/tags/${TAG}"`,
-		`test "${GITHUB_SHA}" = "${commit}"`,
+		`test "${GITHUB_REF}" = "refs/heads/main"`,
+		`test "${GITHUB_WORKFLOW_SHA}" = "${GITHUB_SHA}"`,
+		`test "${GITHUB_REPOSITORY}" = "rcourtman/Pulse"`,
+		`https://github.com/rcourtman/Pulse|https://github.com/rcourtman/Pulse.git)`,
+		`git remote set-url origin https://github.com/rcourtman/Pulse.git`,
 		"ca-certificates curl dbus systemd systemd-sysv util-linux",
 		`docker:27.5.1-dind@sha256:f649ef046008ca7f926a2571c32b0ac22e5c59eb61b959617f9acc2a4c638cf5`,
-		`for command in curl docker dockerd id nsenter runuser systemctl`,
+		`for command in curl docker dockerd id ip nsenter runuser systemctl`,
 		`--host=unix:///var/run/docker.sock`,
 		`--storage-driver=vfs`,
 		`--bridge=none`,
 		`--iptables=false`,
 		`--network none`,
+		`ip link add pulse-can0 type veth peer name pulse-can1`,
+		`ip address add 192.0.2.1/32 dev pulse-can0`,
+		`test -z "$(ip -4 route show default)"`,
+		`docker exec "${container}" chown -R "$(id -u):$(id -g)" /evidence`,
 		`pulse-secure-runtime-fixture:v7`,
 		"--verify-release-packet-only",
 		"--verified-packet-dir",
@@ -2800,6 +2952,21 @@ func TestSecureRuntimeQualificationPacketIsHostedAndReleaseBound(t *testing.T) {
 		if !strings.Contains(qualificationWorkflow, required) {
 			t.Fatalf("post-publication secure-runtime qualification missing %q", required)
 		}
+	}
+	canaryIndex := strings.Index(qualificationWorkflow, `ip link add pulse-can0 type veth peer name pulse-can1`)
+	labIndex := strings.Index(qualificationWorkflow, `--env PULSE_SECURE_RUNTIME_SYSTEMD_LAB=1`)
+	if canaryIndex <= privilegedExecutionIndex || labIndex <= canaryIndex {
+		t.Fatal("the isolated host-interface canary must be configured before running the immutable RC lab")
+	}
+	ownershipIndex := strings.Index(qualificationWorkflow, `docker exec "${container}" chown -R "$(id -u):$(id -g)" /evidence`)
+	attestIndex := strings.Index(qualificationWorkflow, `--output "${evidence_dir}/attestation.json"`)
+	if ownershipIndex <= labIndex || attestIndex <= ownershipIndex {
+		t.Fatal("the lab evidence must be handed to the runner user after the lab and before attestation")
+	}
+	if !strings.Contains(qualificationWorkflow, `--privileged \
+            --network none \
+            --cgroupns=host`) {
+		t.Fatal("the outer systemd lab must retain its no-network namespace")
 	}
 	for _, forbidden := range []string{
 		`/var/run/docker.sock:/var/run/docker.sock`,
@@ -3267,8 +3434,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	integrationJob := workflowJobBlock(t, createWorkflow, "integration_tests")
 	validationJob := workflowJobBlock(t, createWorkflow, "validate_release_assets")
 	privateStageJob := workflowJobBlock(t, createWorkflow, "stage_private_pro_runtime")
-	qualificationJob := workflowJobBlock(t, createWorkflow, "candidate_qualification")
-	readinessJob := workflowJobBlock(t, createWorkflow, "release_readiness")
+	qualificationJob := workflowJobBlock(t, createWorkflow, "publish_release_tag")
 	dispatchJob := workflowJobBlock(t, createWorkflow, "dispatch_release_convergence")
 	activationJob := workflowJobBlock(t, createWorkflow, "activate_release")
 	commitVerdictJob := workflowJobBlock(t, createWorkflow, "release_commit_verdict")
@@ -3414,11 +3580,28 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 			t.Fatalf("build-release-candidate.yml missing single-build contract: %s", needle)
 		}
 	}
-	for _, jobName := range []string{"publish_release_tag", "publish_docker", "publish_helm_chart"} {
+	for _, removedJoin := range []string{"candidate_qualification", "release_readiness"} {
+		if strings.Contains(createWorkflow, "\n  "+removedJoin+":\n") ||
+			strings.Contains(createWorkflow, "needs."+removedJoin+".") {
+			t.Fatalf("create-release.yml must not reintroduce the echo-only %s join", removedJoin)
+		}
+	}
+	for _, jobName := range []string{"publish_release_tag", "publish_docker", "publish_helm_chart", "activate_release"} {
 		job := workflowJobBlock(t, createWorkflow, jobName)
-		if !strings.Contains(job, "- candidate_qualification") ||
-			!strings.Contains(job, "needs.candidate_qualification.result == 'success'") {
-			t.Fatalf("public writer %s must require successful candidate qualification", jobName)
+		for _, dependency := range []string{
+			"publication_trust_preflight", "build_release_candidate", "qualify_release_containers",
+			"frontend_bundle", "frontend_checks", "windows_install_command_smoke", "backend_tests",
+			"release_smoke", "create_release", "validate_release_assets", "install_sh_smoke",
+		} {
+			if !strings.Contains(job, "- "+dependency) ||
+				!strings.Contains(job, "needs."+dependency+".result == 'success'") {
+				t.Fatalf("public writer %s must require successful candidate check %s itself", jobName, dependency)
+			}
+		}
+		if !strings.Contains(job, "!cancelled() && needs.prepare.result == 'success'") ||
+			!strings.Contains(job, "(needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped')") ||
+			!strings.Contains(job, "needs.stage_private_pro_runtime.result == 'success'") {
+			t.Fatalf("public writer %s must carry the complete cancellation-safe candidate predicate", jobName)
 		}
 	}
 	publishDockerJob := workflowJobBlock(t, createWorkflow, "publish_docker")
@@ -3490,11 +3673,11 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		}
 	}
 	for _, dependency := range []string{
-		"candidate_qualification", "publish_release_tag", "publish_docker", "publish_helm_chart",
+		"publish_release_tag", "publish_docker", "publish_helm_chart",
 	} {
-		if !strings.Contains(readinessJob, "- "+dependency) ||
-			!strings.Contains(readinessJob, "needs."+dependency+".result == 'success'") {
-			t.Fatalf("release readiness must require successful %s", dependency)
+		if !strings.Contains(activationJob, "- "+dependency) ||
+			!strings.Contains(activationJob, "needs."+dependency+".result == 'success'") {
+			t.Fatalf("release activation must require successful %s", dependency)
 		}
 	}
 
@@ -3508,8 +3691,8 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		"- promote_private_pro_runtime",
 		"- update_stable_demo",
 	} {
-		if strings.Contains(readinessJob, forbiddenDependency) {
-			t.Fatalf("immutable readiness must exclude mutable customer state: %s", forbiddenDependency)
+		if strings.Contains(activationJob, forbiddenDependency) {
+			t.Fatalf("immutable activation must exclude mutable customer state: %s", forbiddenDependency)
 		}
 	}
 	for _, dependency := range []string{"- create_release", "- stage_private_pro_runtime"} {
@@ -3517,8 +3700,8 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 			t.Fatalf("durable convergence dispatch missing staged dependency: %s", dependency)
 		}
 	}
-	if strings.Contains(dispatchJob, "- release_readiness") {
-		t.Fatal("durable convergence dispatch must prewarm before the readiness join")
+	if strings.Contains(dispatchJob, "- publish_release_tag") {
+		t.Fatal("durable convergence dispatch must prewarm before public publication")
 	}
 	if !strings.Contains(dispatchJob, "github.event.inputs.draft_only != 'true'") ||
 		!strings.Contains(dispatchJob, "historical_asset_backfill_only != 'true'") {
@@ -3660,6 +3843,73 @@ func TestReleaseTrainCITriggersIncludeBuildAndE2E(t *testing.T) {
 	}
 }
 
+func TestProviderPairDockerProofRunsBeforeFreezeAndOnExactCandidate(t *testing.T) {
+	const testName = "TestIntegrationProviderPairNetworkIsolation"
+	const helperImage = "alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6"
+	const liveFlag = "PULSE_RUN_PROVIDER_PAIR_DOCKER_INTEGRATION: '1'"
+	const requiredPass = "grep -q '^--- PASS: " + testName + " '"
+
+	ciBytes, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	branchJob := workflowJobBlock(t, string(ciBytes), "provider-pair-docker")
+	for _, required := range []string{
+		"github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/')",
+		"needs.changes.outputs.code == 'true'",
+		"runs-on: ubuntu-24.04",
+		"ref: ${{ github.sha }}",
+		"persist-credentials: false",
+		"EXPECTED_SOURCE_SHA: ${{ github.sha }}",
+		`test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"`,
+		"docker pull '" + helperImage + "'",
+		liveFlag,
+		"PULSE_DOCKER_INTEGRATION_IMAGE: " + helperImage,
+		"-run '^" + testName + "$' -v",
+		requiredPass,
+	} {
+		if !strings.Contains(branchJob, required) {
+			t.Fatalf("release-line provider pair job missing %q", required)
+		}
+	}
+	if strings.Index(branchJob, "Verify exact release-line source") > strings.Index(branchJob, "Prove provider pair provisioning and cleanup") {
+		t.Fatal("provider pair check ran before exact release-line source verification")
+	}
+
+	qualifiedBytes, err := os.ReadFile(repoFile(".github", "workflows", "qualify-release-containers.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	qualifiedJob := workflowJobBlock(t, string(qualifiedBytes), "qualify")
+	for _, required := range []string{
+		"ref: ${{ github.sha }}",
+		"persist-credentials: false",
+		"--source-sha \"${{ github.sha }}\"",
+		"Verify container binaries match immutable candidate",
+		liveFlag,
+		"PULSE_DOCKER_INTEGRATION_IMAGE: pulse-control-plane-candidate:${{ inputs.version }}",
+		"-run '^" + testName + "$' -v",
+		requiredPass,
+	} {
+		if !strings.Contains(qualifiedJob, required) {
+			t.Fatalf("exact-candidate provider pair job missing %q", required)
+		}
+	}
+	verify := strings.Index(qualifiedJob, "Verify container binaries match immutable candidate")
+	pair := strings.Index(qualifiedJob, "Verify two-provider network isolation on live Docker")
+	helm := strings.Index(qualifiedJob, "Helm smoke test with local release-line image")
+	if verify < 0 || pair <= verify || helm <= pair {
+		t.Fatal("live provider pair check must follow payload digest verification and precede Helm smoke")
+	}
+
+	assertFileContainsAll(t, repoFile("internal", "cloudcp", "docker", "manager_integration_test.go"),
+		"func "+testName+"(t *testing.T)",
+		`os.Getenv("PULSE_RUN_PROVIDER_PAIR_DOCKER_INTEGRATION") != "1"`,
+		"provider A adopted an unowned same-name network",
+		"A cleanup removed B tenant network",
+	)
+}
+
 func TestBenchmarkQualificationRetainsProvenance(t *testing.T) {
 	content, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
 	if err != nil {
@@ -3681,6 +3931,256 @@ func TestBenchmarkQualificationRetainsProvenance(t *testing.T) {
 	}
 	if !strings.Contains(job, "bash scripts/check-bench-regression.sh bench-comparison.txt") {
 		t.Fatal("provenance must not replace the benchmark regression gate")
+	}
+}
+
+func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := string(content)
+
+	// Branch protection requires these exact check names. The rest shards stay
+	// matrix entries and internal/api keeps its name on the verdict job.
+	backend := workflowJobBlock(t, workflow, "backend")
+	for _, required := range []string{
+		"name: Backend tests (${{ matrix.shard }})",
+		"shard: [rest-0, rest-1]",
+		"grep -v '/internal/api$'",
+		"go test -race -timeout 50m $pkgs",
+	} {
+		if !strings.Contains(backend, required) {
+			t.Fatalf("backend rest shards missing %q", required)
+		}
+	}
+
+	shards := workflowJobBlock(t, workflow, "backend-api")
+	indexes := regexp.MustCompile(`(?m)^        index: \[([0-9, ]+)\]$`).FindStringSubmatch(shards)
+	count := regexp.MustCompile(`(?m)^      API_SHARD_COUNT: ([0-9]+)$`).FindStringSubmatch(shards)
+	if len(indexes) != 2 || len(count) != 2 {
+		t.Fatal("internal/api shard job must declare its index matrix and API_SHARD_COUNT")
+	}
+	want, _ := strconv.Atoi(count[1])
+	listed := strings.Split(indexes[1], ", ")
+	if want < 2 || len(listed) != want {
+		t.Fatalf("internal/api shard matrix %v must list exactly API_SHARD_COUNT=%d indexes", listed, want)
+	}
+	for i, value := range listed {
+		if value != strconv.Itoa(i) {
+			t.Fatalf("internal/api shard indexes must be 0..%d in order, got %v", want-1, listed)
+		}
+	}
+	for _, required := range []string{
+		"needs: changes",
+		"fail-fast: false",
+		// The list comes from the commit under test, so a new test cannot be
+		// missed, and contiguous slices of go test's own order put it in
+		// exactly one shard while keeping order-coupled neighbours together.
+		// The checked-in weights only choose where those slices are cut.
+		"go test -race -list . ./internal/api",
+		"bash .github/scripts/select-internal-api-shard.sh \\\n            .github/scripts/internal-api-test-seconds.txt \"$API_SHARD_COUNT\" \"$API_SHARD_INDEX\")",
+		"resolved to an empty test list",
+		"go test -list found no tests in ./internal/api",
+		// A shard holding most tests is named by skipping every other
+		// shard's tests, which keeps its argument under the exec limit.
+		`others=$(printf '%s\n' "$tests" | grep -vxF -f <(printf '%s\n' "$selected") || true)`,
+		`filter=(-skip "$pattern")`,
+		`if [ "${#pattern}" -gt 120000 ]; then`,
+		// Every shard records per-test seconds on the runner through -json
+		// so the weights can be refreshed from CI, while pipefail keeps a
+		// go test failure fatal behind the recorder.
+		"set -euo pipefail",
+		`go test -race -timeout 50m -json "${filter[@]}" ./internal/api \
+            | python3 .github/scripts/record-internal-api-test-seconds.py "$timings/api-${API_SHARD_INDEX}.txt"`,
+		"if: always() && needs.changes.outputs.code == 'true'",
+		"name: internal-api-test-seconds-${{ matrix.index }}",
+		"path: ${{ runner.temp }}/internal-api-test-seconds/",
+		"PULSE_DATA_DIR: /tmp/pulse-test-data",
+	} {
+		if !strings.Contains(shards, required) {
+			t.Fatalf("internal/api shard job missing %q", required)
+		}
+	}
+	// The test binary caches one compiled pattern, so -run next to -skip
+	// recompiles the long skip pattern for every test and subtest.
+	if strings.Contains(shards, "-run . -skip") {
+		t.Fatal("internal/api shards must pass -skip alone; pairing it with -run recompiles the skip pattern per test")
+	}
+	if strings.Contains(shards, "sort") {
+		t.Fatal("internal/api shards must keep go test's run order; sorting splits order-coupled tests")
+	}
+	if strings.Contains(shards, "\n    if:") {
+		t.Fatal("internal/api shards must expand for every change so the verdict never sees skipped shards")
+	}
+
+	verdict := workflowJobBlock(t, workflow, "backend-api-verdict")
+	for _, required := range []string{
+		"name: Backend tests (api)\n",
+		"needs: backend-api",
+		"if: always()",
+		"API_SHARDS_RESULT: ${{ needs.backend-api.result }}",
+		`if [ "$API_SHARDS_RESULT" != success ]; then`,
+	} {
+		if !strings.Contains(verdict, required) {
+			t.Fatalf("Backend tests (api) verdict missing %q", required)
+		}
+	}
+	if got := strings.Count(workflow, "name: Backend tests (api)\n"); got != 1 {
+		t.Fatalf("exactly one job may carry the required Backend tests (api) name, found %d", got)
+	}
+
+	assertInternalAPIShardSelectionExhaustive(t, want)
+	assertInternalAPITimingRecorderKeepsFailuresVisible(t)
+}
+
+// assertInternalAPITimingRecorderKeepsFailuresVisible feeds the -json
+// recorder a passing, a failing and an unfinished test. Passing output must
+// stay hidden like plain go test, failing and unfinished output must print,
+// any failure must exit non-zero, and every finished top-level test must be
+// written with its seconds.
+func assertInternalAPITimingRecorderKeepsFailuresVisible(t *testing.T) {
+	t.Helper()
+	recorder := repoFile(".github", "scripts", "record-internal-api-test-seconds.py")
+	record := func(events string) (string, string, error) {
+		out := filepath.Join(t.TempDir(), "seconds.txt")
+		cmd := exec.Command("python3", recorder, out)
+		cmd.Stdin = strings.NewReader(events)
+		printed, err := cmd.Output()
+		written, readErr := os.ReadFile(out)
+		if readErr != nil {
+			t.Fatalf("recorder wrote no seconds file: %v", readErr)
+		}
+		return string(printed), string(written), err
+	}
+	const pkg = `"Package":"example/internal/api"`
+	passing := strings.Join([]string{
+		`{"Action":"run",` + pkg + `,"Test":"TestQuiet"}`,
+		`{"Action":"output",` + pkg + `,"Test":"TestQuiet","Output":"quiet log line\n"}`,
+		`{"Action":"pass",` + pkg + `,"Test":"TestQuiet","Elapsed":1.25}`,
+		`{"Action":"output",` + pkg + `,"Output":"ok  \texample/internal/api\t2.000s\n"}`,
+		`{"Action":"pass",` + pkg + `,"Elapsed":2}`,
+	}, "\n") + "\n"
+	printed, written, err := record(passing)
+	if err != nil {
+		t.Fatalf("recorder must pass a passing run: %v", err)
+	}
+	if strings.Contains(printed, "quiet log line") || !strings.Contains(printed, "ok  \texample/internal/api") {
+		t.Fatalf("recorder must print package lines and hide passing test output, printed %q", printed)
+	}
+	if written != "# package-seconds 2.00\nTestQuiet 1.25\n" {
+		t.Fatalf("recorder seconds file = %q", written)
+	}
+
+	failing := strings.Join([]string{
+		`{"Action":"run",` + pkg + `,"Test":"TestBroken"}`,
+		`{"Action":"output",` + pkg + `,"Test":"TestBroken/case","Output":"broken detail\n"}`,
+		`{"Action":"fail",` + pkg + `,"Test":"TestBroken/case","Elapsed":0.5}`,
+		`{"Action":"fail",` + pkg + `,"Test":"TestBroken","Elapsed":0.75}`,
+		`{"Action":"run",` + pkg + `,"Test":"TestHung"}`,
+		`{"Action":"output",` + pkg + `,"Test":"TestHung","Output":"panic: test timed out\n"}`,
+	}, "\n") + "\n"
+	printed, written, err = record(failing)
+	if err == nil {
+		t.Fatal("recorder must exit non-zero when a test fails or never finishes")
+	}
+	for _, want := range []string{"broken detail", "TestHung did not finish", "panic: test timed out"} {
+		if !strings.Contains(printed, want) {
+			t.Fatalf("recorder must print %q for failing or unfinished tests, printed %q", want, printed)
+		}
+	}
+	if written != "TestBroken 0.75\n" {
+		t.Fatalf("recorder must record only finished top-level tests, wrote %q", written)
+	}
+}
+
+// assertInternalAPIShardSelectionExhaustive runs the shard selector the way
+// the workflow does and proves that, whatever the weights say, the shards are
+// non-empty contiguous slices that together cover the list exactly once in
+// order.
+func assertInternalAPIShardSelectionExhaustive(t *testing.T, workflowShards int) {
+	t.Helper()
+	selector := repoFile(".github", "scripts", "select-internal-api-shard.sh")
+	weightsPath := repoFile(".github", "scripts", "internal-api-test-seconds.txt")
+	weightsContent, err := os.ReadFile(weightsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Weighted names from the checked-in file interleaved with unknown ones,
+	// which stand in for tests added after the weights were measured.
+	var weighted []string
+	for _, line := range strings.Split(string(weightsContent), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 || strings.HasPrefix(fields[0], "#") {
+			continue
+		}
+		if len(fields) != 2 || !(strings.HasPrefix(fields[0], "Test") || fields[0] == "DEFAULT_WEIGHT") {
+			t.Fatalf("internal/api weights line must be `<TestName> <seconds>` or `DEFAULT_WEIGHT <seconds>`, got %q", line)
+		}
+		if seconds, err := strconv.ParseFloat(fields[1], 64); err != nil || seconds <= 0 {
+			t.Fatalf("internal/api weight for %s must be positive seconds, got %q", fields[0], fields[1])
+		}
+		if fields[0] == "DEFAULT_WEIGHT" {
+			continue
+		}
+		weighted = append(weighted, fields[0])
+	}
+	if len(weighted) == 0 {
+		t.Fatal("internal/api weights file lists no tests")
+	}
+	var tests []string
+	for i, name := range weighted {
+		tests = append(tests, name)
+		for j := 0; j < 1+i%7; j++ {
+			tests = append(tests, "TestUnweightedShardProbe"+strconv.Itoa(i)+"x"+strconv.Itoa(j))
+		}
+	}
+
+	emptyWeights := filepath.Join(t.TempDir(), "empty.txt")
+	if err := os.WriteFile(emptyWeights, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skewedWeights := filepath.Join(t.TempDir(), "skewed.txt")
+	skewed := "DEFAULT_WEIGHT 7.5\n" + tests[len(tests)/3] + " 900\n" + tests[len(tests)-1] + " 450\n"
+	if err := os.WriteFile(skewedWeights, []byte(skewed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	selectShard := func(weights string, count, index int, input []string) ([]string, error) {
+		cmd := exec.Command("bash", selector, weights, strconv.Itoa(count), strconv.Itoa(index))
+		cmd.Stdin = strings.NewReader(strings.Join(input, "\n") + "\n")
+		out, err := cmd.Output()
+		if err != nil {
+			return nil, err
+		}
+		return strings.Fields(string(out)), nil
+	}
+
+	for _, weights := range []string{weightsPath, emptyWeights, skewedWeights} {
+		for _, count := range []int{1, 2, workflowShards, workflowShards + 1, 9} {
+			var combined []string
+			for index := 0; index < count; index++ {
+				selected, err := selectShard(weights, count, index, tests)
+				if err != nil {
+					t.Fatalf("select shard %d of %d with %s: %v", index, count, filepath.Base(weights), err)
+				}
+				if len(selected) == 0 {
+					t.Fatalf("shard %d of %d with %s selected no tests", index, count, filepath.Base(weights))
+				}
+				combined = append(combined, selected...)
+			}
+			if strings.Join(combined, "\n") != strings.Join(tests, "\n") {
+				t.Fatalf("%d shards with %s do not cover the test list exactly once in order", count, filepath.Base(weights))
+			}
+		}
+	}
+
+	if _, err := selectShard(weightsPath, workflowShards, workflowShards, tests); err == nil {
+		t.Fatal("shard selector must reject an index outside the shard count")
+	}
+	if _, err := selectShard(weightsPath, 3, 0, tests[:2]); err == nil {
+		t.Fatal("shard selector must fail when there are fewer tests than shards")
 	}
 }
 
@@ -3713,7 +4213,11 @@ func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	)
 	// The gate itself must stay strict. An unreachable endpoint may be
 	// retried, but no severity threshold may be introduced that lets a real
-	// advisory through, and any vulnerability total must still fail.
+	// advisory through. Any positive package, severity or total evidence is
+	// a finding, even when the summary is missing or contradictory, and it
+	// fails every change that moves the dependency graph. Only an explicit
+	// NPM_AUDIT_REQUIRE_RESULT=false, a graph identical to its base, may turn
+	// a finding the base already has into a warning.
 	runnerPath := repoFile("scripts", "npm-audit-retry.sh")
 	runner, err := os.ReadFile(runnerPath)
 	if err != nil {
@@ -3725,8 +4229,14 @@ func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	assertFileContainsAll(t, runnerPath,
 		`NPM_AUDIT_REQUIRE_RESULT:-true`,
 		`AUDIT_ARGS=("$@")`,
-		`if isinstance(vulns, dict) and "total" in vulns:`,
-		`print("vulnerable" if total else "clean")`,
+		`if type(value) is int and value >= 0:`,
+		`has_findings = isinstance(findings, dict) and bool(findings)`,
+		`if has_findings or any(count > 0 for count in counts.values()):`,
+		`print("vulnerable")`,
+		`isinstance(report, dict) and not report.get("error")`,
+		`len(counts) == len(count_names) and all(count == 0 for count in counts.values())`,
+		`and ("vulnerabilities" not in report or isinstance(findings, dict))`,
+		`if [ "${REQUIRE_RESULT}" = "false" ]; then`,
 	)
 	// Retrying must be bounded by wall clock, not by attempt count alone.
 	// npm's own fetch-timeout defaults to five minutes and it retries
@@ -3761,7 +4271,7 @@ func TestReleaseCutGatesCriticalFrontendAndWindowsRuntimeProof(t *testing.T) {
 	windowsJob := workflowJobBlock(t, workflow, "windows_install_command_smoke")
 	smokeJob := workflowJobBlock(t, workflow, "release_smoke")
 	createJob := workflowJobBlock(t, workflow, "create_release")
-	qualificationJob := workflowJobBlock(t, workflow, "candidate_qualification")
+	qualificationJob := workflowJobBlock(t, workflow, "publish_release_tag")
 	verdictJob := workflowJobBlock(t, workflow, "release_commit_verdict")
 
 	for _, needle := range []string{

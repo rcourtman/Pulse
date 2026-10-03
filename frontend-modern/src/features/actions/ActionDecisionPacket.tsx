@@ -159,7 +159,7 @@ export const ActionDecisionPacket: Component<{
           data-testid="action-policy-provenance"
           class="group rounded-lg border border-border bg-surface"
         >
-          <summary class="flex cursor-pointer list-none items-center justify-between gap-4 p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500">
+          <summary class="flex cursor-pointer list-none items-center justify-between gap-4 p-4 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-blue-500">
             <span>
               <span
                 id="action-policy-heading"
@@ -183,7 +183,7 @@ export const ActionDecisionPacket: Component<{
             <div class="mt-3 space-y-2">
               <For each={policy()?.authorities ?? []}>
                 {(authority) => (
-                  <div class="rounded border border-border-subtle bg-surface-hover p-3">
+                  <div class="rounded-sm border border-border-subtle bg-surface-hover p-3">
                     <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
                       <span class="font-medium">{formatPolicyAuthority(authority)}</span>
                       <span class="text-muted">
@@ -288,7 +288,7 @@ export const ActionDecisionPacket: Component<{
                 <p class="mt-2 text-sm">{truth().verification.summary}</p>
               </Show>
               <Show when={(truth().verification.evidence ?? []).length > 0}>
-                <details class="mt-3 rounded border border-border-subtle p-3 text-xs">
+                <details class="mt-3 rounded-sm border border-border-subtle p-3 text-xs">
                   <summary class="cursor-pointer font-medium">Evidence details</summary>
                   <ul class="mt-2 space-y-2">
                     <For each={truth().verification.evidence}>
@@ -333,7 +333,7 @@ export const ActionDecisionPacket: Component<{
               {(presentation) => (
                 <div
                   data-testid="apt-action-next-step"
-                  class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
+                  class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900/25 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
                 >
                   <div class="font-semibold">What to do next</div>
                   <p class="mt-1">{presentation().nextStep}</p>
@@ -356,9 +356,11 @@ export const ActionDecisionPacket: Component<{
           <p class="mt-2 text-sm font-medium">
             {props.detail?.receipt
               ? 'One agent receipt is recorded for this action.'
-              : props.detail?.attempt?.state === 'receipt_pending'
-                ? 'The action was sent once and Pulse is waiting for the durable agent receipt.'
-                : 'Pulse recorded the delivery attempt before sending it.'}
+              : props.audit.result?.actionResultV2?.execution.reasonCode === 'operator_force_failed'
+                ? 'The audit was closed without an agent receipt. The operation outcome remains unknown.'
+                : props.detail?.attempt?.state === 'receipt_pending'
+                  ? 'The action was sent once and Pulse is waiting for the durable agent receipt.'
+                  : 'Pulse recorded the delivery attempt before sending it.'}
           </p>
           <p class="mt-1 text-sm text-muted">
             Refreshing or reconnecting re-reads this action record. It does not create another
@@ -378,7 +380,7 @@ export const ActionDecisionPacket: Component<{
               </div>
             </Show>
           </dl>
-          <details class="mt-3 rounded border border-border-subtle p-3 text-xs">
+          <details class="mt-3 rounded-sm border border-border-subtle p-3 text-xs">
             <summary class="cursor-pointer font-medium">Delivery identifiers</summary>
             <div class="mt-2 break-all text-muted">
               Action {props.audit.id}

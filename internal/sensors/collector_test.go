@@ -16,9 +16,42 @@ func writeScript(t *testing.T, dir, name, content string) {
 	}
 }
 
+func useTestSysfsRoots(t *testing.T) (string, string) {
+	t.Helper()
+	root := t.TempDir()
+	thermal := filepath.Join(root, "thermal")
+	hwmon := filepath.Join(root, "hwmon")
+	for _, dir := range []string{thermal, hwmon} {
+		if err := os.Mkdir(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	previousThermal, previousHwmon := thermalZoneRoot, hwmonRoot
+	thermalZoneRoot, hwmonRoot = thermal, hwmon
+	t.Cleanup(func() { thermalZoneRoot, hwmonRoot = previousThermal, previousHwmon })
+	return thermal, hwmon
+}
+
+func writeSysfsSensor(t *testing.T, root, dir, label, name, value string) {
+	t.Helper()
+	path := filepath.Join(root, dir)
+	if err := os.Mkdir(path, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for file, content := range map[string]string{label: name, "temp": value} {
+		if label == "name" && file == "temp" {
+			file = "temp1_input"
+		}
+		if err := os.WriteFile(filepath.Join(path, file), []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestCollectLocalMissingSensors(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("PATH", dir)
+	useTestSysfsRoots(t)
 
 	if _, err := CollectLocal(context.Background()); err == nil {
 		t.Fatal("expected error when sensors missing")
@@ -57,15 +90,8 @@ func TestCollectLocalFallbackToPiTemp(t *testing.T) {
 	dir := t.TempDir()
 	writeScript(t, dir, "sensors", "#!/bin/sh\necho '{}'\n")
 	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
-	thermalPath := filepath.Join(dir, "thermal_zone0_temp")
-	if err := os.WriteFile(thermalPath, []byte("42000\n"), 0600); err != nil {
-		t.Fatalf("write thermal file: %v", err)
-	}
-	originalThermalPath := rpiThermalZonePath
-	rpiThermalZonePath = thermalPath
-	t.Cleanup(func() {
-		rpiThermalZonePath = originalThermalPath
-	})
+	thermal, _ := useTestSysfsRoots(t)
+	writeSysfsSensor(t, thermal, "thermal_zone0", "type", "cpu-thermal\n", "42000\n")
 
 	out, err := CollectLocal(context.Background())
 	if err != nil {
@@ -77,21 +103,12 @@ func TestCollectLocalFallbackToPiTemp(t *testing.T) {
 	}
 }
 
-func TestCollectLocalFallbackKeepsDegreeInput(t *testing.T) {
+func TestCollectLocalFallbackToArmadaHwmon(t *testing.T) {
 	dir := t.TempDir()
 	writeScript(t, dir, "sensors", "#!/bin/sh\necho '{}'\n")
-	writeScript(t, dir, "cat", "#!/bin/sh\necho '42'\n")
 	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
-
-	thermalPath := filepath.Join(t.TempDir(), "thermal_zone0_temp")
-	if err := os.WriteFile(thermalPath, []byte("42000"), 0644); err != nil {
-		t.Fatalf("write thermal file: %v", err)
-	}
-	originalThermalPath := rpiThermalZoneTempPath
-	rpiThermalZoneTempPath = thermalPath
-	t.Cleanup(func() {
-		rpiThermalZoneTempPath = originalThermalPath
-	})
+	_, hwmon := useTestSysfsRoots(t)
+	writeSysfsSensor(t, hwmon, "hwmon0", "name", "armada_thermal\n", "42000\n")
 
 	out, err := CollectLocal(context.Background())
 	if err != nil {
@@ -136,15 +153,8 @@ func TestCollectLocalFallbackRejectsInvalidThermalValue(t *testing.T) {
 	dir := t.TempDir()
 	writeScript(t, dir, "sensors", "#!/bin/sh\necho '{}'\n")
 	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
-	thermalPath := filepath.Join(dir, "thermal_zone0_temp")
-	if err := os.WriteFile(thermalPath, []byte(`42"},"bad":{"temp1_input":1}`), 0600); err != nil {
-		t.Fatalf("write thermal file: %v", err)
-	}
-	originalThermalPath := rpiThermalZonePath
-	rpiThermalZonePath = thermalPath
-	t.Cleanup(func() {
-		rpiThermalZonePath = originalThermalPath
-	})
+	thermal, _ := useTestSysfsRoots(t)
+	writeSysfsSensor(t, thermal, "thermal_zone0", "type", "cpu-thermal", `42"},"bad":{"temp1_input":1}`)
 
 	if _, err := CollectLocal(context.Background()); err == nil {
 		t.Fatal("expected error for invalid fallback thermal value")

@@ -16,8 +16,29 @@ import { resetAIRuntimeState, syncAIRuntimeSettings } from '@/stores/aiRuntimeSt
 import guestDrawerSource from './GuestDrawer.tsx?raw';
 import guestDrawerManageSource from './GuestDrawerManage.tsx?raw';
 import guestDrawerOverviewSource from './GuestDrawerOverview.tsx?raw';
+import { getGuestDrawerHistoryRangeBounds } from './guestDrawerModel';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
+
+describe('shared drawer History window geometry', () => {
+  it('preserves the requested interval and edge observations without manufacturing timestamps', () => {
+    const sample = (timestamp: number) => ({ timestamp, value: 0, min: 0, max: 0 });
+    const series = [{ points: [sample(800), sample(900)] }, { points: [sample(300)] }];
+    expect(getGuestDrawerHistoryRangeBounds(series, { start: 0, end: 1000 })).toEqual({
+      startTime: 0,
+      endTime: 1000,
+    });
+    expect(getGuestDrawerHistoryRangeBounds(series, { start: 500, end: 1000 })).toEqual({
+      startTime: 300,
+      endTime: 1000,
+    });
+    expect(getGuestDrawerHistoryRangeBounds(series, { start: 1000, end: 0 })).toEqual({
+      startTime: 300,
+      endTime: 900,
+    });
+    expect(getGuestDrawerHistoryRangeBounds([], { start: 0, end: 0 })).toBeNull();
+  });
+});
 
 const chartsApiMocks = vi.hoisted(() => ({
   getMetricsHistory: vi.fn(),
@@ -535,8 +556,8 @@ describe('GuestDrawer', () => {
       await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalled());
 
       const utilizationChart = screen.getAllByTestId('guest-history-group-chart')[0];
-      expect(utilizationChart).toHaveTextContent('CPU25.0%');
-      expect(utilizationChart).toHaveTextContent('Collecting history');
+      expect(utilizationChart).toHaveTextContent('CPU25.0%current');
+      expect(utilizationChart).toHaveTextContent('No stored history in this range');
       expect(utilizationChart.querySelector('path')).toBeNull();
     });
 

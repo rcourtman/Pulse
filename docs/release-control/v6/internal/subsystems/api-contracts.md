@@ -20,23 +20,6 @@
 
 ## Purpose
 
-### Successful agent-config audit information — issue #2320
-
-`/api/agents/agent/{id}/config` still signs, scopes and delivers the same config.
-Every failed fetch is audited. A successful fetch is new audit information
-only on first delivery after startup, a different token or desired-config hash,
-or 24 hours after the last audited success. Recorded successes include
-`config=<desiredConfig hash>` and
-`reason=first_since_start|token_changed|config_changed|daily`. Tracking is
-isolated by organization and agent; a nil tracker audits every success.
-Existing security log rows age under retention, never deletion by this repair.
-`TestAgentConfigFetchAuditsNewDeliveriesAndEveryFailure` and
-`TestAgentConfigFetchAuditTrackerRecordsOnlyNewDeliveries` verify runtime
-scope failures and the per-agent/organization/token/config/daily decisions.
-The additional day/restart/concurrency control compares 1,440 unchanged polls
-with one audit event. This is source proof, not a natural installed day.
-
-
 ### Resource maintenance API reference
 
 The canonical and shipped API references document the existing authenticated
@@ -336,6 +319,11 @@ collapse evidence, protection posture, and lifecycle history, but it must not
 drop those typed fields or replace their server-authored trust state. Decision,
 finding, and approval counts remain distinct API projections and must not be
 presented as interchangeable totals.
+The attention list's authenticated read contract is independent of Patrol's
+model-readiness and on/off state. `PatrolIntelligenceSurface.tsx` must not gate
+the attention transport or its canonical list on `shouldShowPatrolSetupOnly`;
+the setup task remains a separate runtime projection above it. This changes no
+attention route, response shape, token scope, or mutation authority.
 Physical-disk payloads preserve optional SMART counter presence, including
 explicit zero values, and expose provider vendor metadata without converting
 missing data into health. Unified-resource clients may request bounded server
@@ -714,6 +702,20 @@ over it; every path must observe the same stable signal. Ordinary unregister
 and slow-client eviction must use the same synchronized send/close ownership;
 recovering a send-on-closed panic is not a substitute for a race-free channel
 lifecycle.
+
+Invalidation coalescing is a throttle, not a restart-on-signal debounce. The
+first invalidation after a quiet period broadcasts after the 100 ms coalesce
+window; later invalidations for the same audience (all clients, or one tenant)
+replace the pending request without rescheduling it, and are broadcast no
+sooner than `defaultStateBroadcastInterval` (2 seconds) after that audience's
+previous broadcast. Every accepted agent report sends an invalidation and each
+broadcast resolves and diffs the full frontend state (about 130 ms at 2,080
+synthetic resources), so the debounce let broadcast work scale with agent
+count, and signals closer together than the window could postpone broadcasts
+indefinitely (#2199). `TestStateBroadcastsSpacedByInterval`,
+`TestTenantStateBroadcastsSpacedByInterval`, and
+`TestStateBroadcastNotStarvedBySteadySignals` pin the spacing, latest-state,
+and no-starvation behaviour.
 
 Browser clients declare their inbound state-frame ceiling on the WebSocket
 upgrade URL before initial-state construction begins. If a complete snapshot
@@ -4584,6 +4586,43 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Credential-safe container diagnostics response (1 October 2026)
+
+`POST /api/diagnostics/docker/prepare-token` retains its fields and durable,
+tenant-bound monitoring-token issuance. Only the separate `token` field may
+contain the credential; `installCommand` is now a credential-free single line
+with complete download, installer preflight, then root/sudo private terminal
+input and token-file handoff. The response is `Cache-Control: no-store`.
+`systemdServiceSnippet` is a default-Linux reference to the installer's private
+state file, with no raw token in environment or process arguments. It explicitly
+instructs callers to use `installCommand` for the complete service and retain
+installer-generated units for custom state/privilege profiles. Unit URL data is
+quoted with literal percent specifiers; structural control characters fail
+before token issuance. Existing module flags/scopes, optional-token omission,
+normalised target and plain-HTTP policy are unchanged. No new endpoint,
+credential authority, execution scope or trust exception is introduced.
+`agent_install_command_shared_test.go`, `contract_test.go`,
+`router_low_coverage_additional_test.go` and `security_regression_test.go` pin
+the response, hosted-origin boundary, persisted scope and safe unit grammar.
+
+### Credential-safe Proxmox bootstrap (1 October 2026)
+
+The current Proxmox setup artifact supersedes the former token-bearing command/download contract: `command`, `commandWithEnv` and `commandWithoutEnv` are identical credential-free, single-line transports. `downloadURL` equals the tokenless `url`; downloads embed no setup token. `setupToken` (or agent-install `token`) is returned separately through the authenticated issuance response for an explicit reveal, never interpolated by the consumer. Settings uses the existing token-reveal dialog and tells users to run the command before pasting at its silent terminal prompt. Setup cache remains bound to endpoint/mode/live five-minute expiry and is discarded on modal close. The rendered scripts accept a bounded private `PULSE_SETUP_TOKEN_FILE` before mutation, unexport the secret, and put registration credentials in stdin, not process arguments. Legacy explicit query-token downloads remain accepted for compatibility, but no current artifact generates those URLs. Failed attempted registration returns nonzero and never echoes the response body. Runtime and root-installer consumers validate either the complete new artifact or the coherent old-server artifact; mixed transports fail closed.
+
+
+### Update progress stream delivery
+
+`GET /api/updates/stream` answers `text/event-stream` with
+`Cache-Control: no-cache, no-transform`, `X-Accel-Buffering: no`, and no
+content encoding. The first flushed frames are a `: connected` comment and a
+`data:` event carrying the current `UpdateStatus`, so a connecting client never
+waits for the next stage change. Later statuses are `data:` events in emission
+order, each flushed on write, with `: heartbeat` comments between them. The
+payload shape is the same `UpdateStatus` returned by `/api/updates/status`,
+which stays the polling fallback for clients whose stream goes quiet. The
+stream handler tests in `internal/api/updates_test.go` cover this transport
+contract.
+
 ### Hosted install command payloads carry a minted token
 
 `POST /api/agent-install-command` returns a non-empty `token` (and, for
@@ -4733,6 +4772,17 @@ ignores them without a validation error and never writes them back into
 `system.json`. `TestSystemSettingsUpdate_LegacyAutoUpdateFieldsIgnored` in
 `internal/api/system_settings_telemetry_test.go` and the response snapshot in
 `internal/api/contract_test.go` pin that payload shape.
+
+### Telemetry preference saves preserve the sender lifecycle
+
+The telemetry preference callback runs only after durable persistence of an
+explicit boolean that changes the effective runtime value. Resubmitting that
+value still saves it, including correction of a stale disk preference, without
+restarting or stopping the sender. Null and omitted preferences preserve the
+runtime value and the stored preference; failed saves never invoke the toggle.
+`TestTelemetryUpdate_OnlyPreferenceTransitionsToggle` pins ordering and both
+transitions; the stale-disk/null and persistence-failure tests pin those edges.
+The settings payload and administration/tenant authority are unchanged.
 
 ### System settings save clears the temperature SSH failure backoff
 
@@ -8718,6 +8768,28 @@ payload shape: `agentId`, `commandsEnabled`, `settings`, `issuedAt`, and
 signed command decision and the signed settings payload, restricted to the
 agent-applied settings key schema, rather than treating `desiredConfig` itself
 as a direct member of that signature payload.
+
+Its `agent_config_fetch` audit events record every failed fetch but a
+successful fetch only when it is new audit information: the agent's first
+delivery after Pulse starts, a different token or `desiredConfig` hash, or an
+unchanged delivery last recorded 24 hours earlier. Agents poll every minute,
+and auditing each poll made this event over 99.9% of audit rows. Recorded
+successes carry `config=<desiredConfig hash>` and
+`reason=first_since_start|token_changed|config_changed|daily` in their details.
+The suppression tracker remembers at most 4,096 organisation/agent pairs.
+An expiry index replaces only entries last audited at least 24 hours ago,
+with no full-map scan on new-key admission. Recent entries are never evicted
+by key churn, so their unchanged minute polls stay suppressed. If every slot
+is recent, unremembered agents' successful fetches are recorded on every poll
+with `reason=capacity` until an expired slot is available. This conservative
+overflow can produce extra audit writes but must never suppress access events,
+change config authorisation/delivery, or grow either map or expiry index beyond
+the limit. Token, config and daily changes update the entry's expiry position;
+concurrent and out-of-order observations preserve that index.
+`TestAgentConfigFetchAuditsNewDeliveriesAndEveryFailure` and
+`TestAgentConfigFetchAuditTrackerRecordsOnlyNewDeliveries` pin the rule;
+`TestAgentConfigFetchAuditCapacityContract` and the tracker capacity, expiry,
+churn and concurrency controls pin bounded state and conservative overflow.
 Agent profile delete and unassign clients must now also route canonical `204`
 success handling through shared allowed-status helpers in
 `frontend-modern/src/api/responseUtils.ts` instead of open-coding local
@@ -9533,6 +9605,16 @@ inconclusive shape as automatic terminalization under reason code
 `operator_force_failed`, attributed to the authenticated operator, with the
 operator's justification preserved verbatim in the terminal audit event.
 
+The browser's `ResourceActionsAPI.forceFailAction` is a thin client for that
+existing route. It sends a non-empty operator reason and consumes the returned
+action detail; it carries no plan hash or new dispatch authority. The Actions
+review may offer it only after an aged `receipt_pending` presentation and a
+fresh detail read, but those are safeguards rather than authorization: the API
+must still enforce the local admin, `settings:write`, action-execute and
+`executing`-only checks, including the already-final conflict on a race. A
+successful response says that the audit wait was closed inconclusively, not
+that the operation failed, stopped or was cancelled.
+
 Typed Docker / Podman container start, stop, and restart operations extend that
 same durable boundary rather than creating a provider-local action protocol.
 The agent wire request is closed and binds the exact action, dispatch attempt,
@@ -10323,6 +10405,21 @@ its investigation status when no outcome is recorded. No provider ID, model
 name, endpoint, account identity, exact token count, finding ID, resource ID,
 or session ID may be added to any of these fields.
 
+### Update channel and last update check outcome are a closed contract at schema v18
+
+Schema v18 adds `update_channel` (`stable`, `rc`, or `unknown`) and
+`update_check_outcome` (`not_checked`, `up_to_date`, `available`,
+`no_release`, `rate_limited`, `network_error`, `metadata_error`, `skipped`, or
+`error`) as always-present closed strings, plus the boolean `update_available`.
+The Go sender, the Settings `TelemetryPingPreview` interface, and the Pulse Pro
+receiver keep the same field names and types, and
+`scripts/check_telemetry_schema_parity.py` remains the executable proof. The
+receiver stores an omitted string from a pre-v18 sender as `unknown`, which
+the sender itself never emits for the outcome. `update_available` may only be
+true alongside an `available` outcome, on both sides. No version string,
+release tag, URL, response body, or error text may be added to any of these
+fields.
+
 ### Per-tenant resource stores are released on offboarding and shutdown
 
 `ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the
@@ -10948,16 +11045,63 @@ status-only or unrelated test for the setup contract. The registry routes only `
 setup proof policy; unrelated API runtime paths retain their existing verification
 requirements. No runtime paths or required contract updates are exempted.
 
-### Single-line Unix client install transport
+### Single-line private Unix client install transport
 
-`frontend-modern/src/utils/agentInstallCommand.ts` emits a single-line Unix
-bootstrap with explicit shell separators so text-input paste normalization
-cannot join shell statements (#2123). It retains the canonical URL, quoted
-credential-to-private-file transport, custom CA/insecure continuity, and
-preflight-before-install ordering; no API request, response or auth scope changes.
-Normalized values containing CR/LF are rejected, not rewritten. Regression
-coverage in `agentInstallCommand.test.ts` checks shell syntax after
-text-input normalization, literal quoted token bytes, root/sudo private-file
-permissions, cleanup and early exit when download or preflight fails. This
-client transport repair does not establish the reporter's native pfSense abort
-cause or successful offline installation.
+`frontend-modern/src/utils/agentInstallCommand.ts` retains explicit single-line
+shell grammar for paste hosts (#2123), canonical URLs, custom CA/insecure
+continuity and complete-download-before-execution. Token values select private
+entry only and never become shell source, argv or environment. The privileged
+Bash child uses the bounded Core bootstrap reader; 4096-character input is
+preserved, overflow is drained before returning to the caller, and terminal
+modes and temporary 0700/0600 files are restored/removed on exit. Download and
+unprivileged preflight precede credential entry and installation; sudo
+validation precedes the download so authentication cannot consume token input.
+
+A no-terminal command can use an absolute local `tokenFilePath`. It requires a
+privileged-user-owned regular non-symlink 0600 file in an owned non-symlink 0700
+parent, passes only its path, and leaves this operator-owned file untouched.
+The existing installer's bounded trusted token reader still validates content
+and ancestor trust. The FreeBSD card explains this existing private-file route
+and does not put credentials in GUI command fields. It does not claim a GUI can
+create private files or establish native appliance installation.
+
+Unix install, credential replacement, upgrade and uninstall use the shared
+transport. Explicit replacement/uninstall retain canonical agent ID and host;
+ordinary updates recover their existing credential/identity from installer
+state without a new prompt. Uninstall skips new-binary preflight so detachment
+is not blocked by availability of an unrelated replacement binary. Server
+minting, scope, TLS choice, execution opt-in and response shapes are unchanged.
+Windows command transport is unchanged and remains separate unfinished work.
+`agentInstallCommand.test.ts` exercises actual shells, PTYs, private-file
+boundaries and failures; `infrastructureAgentDoctorModel.test.ts` exercises the
+real lifecycle closures. These are modelled installer/privilege probes, not
+native system installation or publication.
+
+### AI usage export carries prompt-cache buckets
+
+`GET /api/ai/cost/export` now includes `cache_creation_input_tokens` and
+`cache_read_input_tokens` beside the existing input and output counts, in
+the JSON events (as optional fields of the usage event) and as two CSV
+columns after `output_tokens`, and prices each event with the cache-aware
+estimator so `estimated_usd` matches the summary surfaces. Existing columns,
+their order, the query parameters and the authentication boundary are
+unchanged; the chat service adapter passes the same buckets through the
+Patrol stream response without changing its request shape.
+`ai_handlers_more_test.go` covers the export in both formats with a cached
+Anthropic event.
+
+### Pulse Mobile pairing readiness wording
+
+The onboarding readiness diagnostics for a disabled or unconnected relay name
+the renamed Settings > Pulse Mobile section instead of Remote Access. Codes,
+severities and the response shape are unchanged. The API reference heading
+for the relay protocol records that Pulse Mobile retires on 31 March 2027, and
+the published copy stays identical to `docs/API.md`.
+
+### Patrol attention detail header pinning
+
+Pinning the Patrol attention detail header on phones
+(`frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx`) is a
+layout-only change. It reads no new attention fields, sends no new request,
+and leaves the attention projection, lifecycle, and queue ordering contracts
+above unchanged.

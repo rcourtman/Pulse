@@ -1,4 +1,4 @@
-import { onCleanup, createEffect, createSignal, type Accessor } from 'solid-js';
+import { onCleanup, createEffect, createSignal, untrack, type Accessor } from 'solid-js';
 import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
 import { normalizeOrgScope } from '@/utils/orgScope';
 import { eventBus } from '@/stores/events';
@@ -260,6 +260,10 @@ const reconcileWorkloadRowIdentity = (
   let reusedCount = 0;
   const reconciled = next.map((row) => {
     const previousRow = previousById.get(row.id);
+    if (previousRow === row) {
+      reusedCount += 1;
+      return row;
+    }
     if (previousRow && workloadSignature(previousRow) === workloadSignature(row)) {
       reusedCount += 1;
       return previousRow;
@@ -833,6 +837,11 @@ export const __resetWorkloadsCacheForTests = () => {
 export interface UseWorkloadsOptions {
   /** Optional canonical snapshot owned by a platform page. */
   resourceSnapshot?: Accessor<Resource[] | undefined>;
+  /** Changed IDs from the same committed snapshot, or null for a full refresh. */
+  resourceSnapshotChange?: Accessor<{
+    version: number;
+    changedIds: ReadonlySet<string> | null;
+  }>;
   /** Refetch the owner snapshot when the surface explicitly reconnects. */
   refetchSnapshot?: () => Promise<unknown>;
 }
@@ -852,6 +861,9 @@ export function useWorkloads(
   );
   const [error, setError] = createSignal<unknown>(undefined);
   let requestVersion = 0;
+  let lastSnapshotVersion = 0;
+  let lastSnapshotOrgScope = resolveActiveOrgScope();
+  let lastSnapshotRowsByResourceID = new Map<string, WorkloadGuest | null>();
 
   const mutate = (value: WorkloadGuest[] | ((prev: WorkloadGuest[]) => WorkloadGuest[])) =>
     setWorkloads((previous) => {
@@ -870,7 +882,8 @@ export function useWorkloads(
 
   const applyWorkloads = (next: WorkloadGuest[], targetOrgScope = resolveActiveOrgScope()) => {
     const cacheEntry = getWorkloadsCacheEntry(targetOrgScope);
-    const current = targetOrgScope === resolveActiveOrgScope() ? workloads() : cacheEntry.workloads;
+    const current =
+      targetOrgScope === resolveActiveOrgScope() ? untrack(workloads) : cacheEntry.workloads;
     const reconciled = reconcileWorkloadRowIdentity(current, next);
     if (reconciled === current) {
       setWorkloadsCache(cacheEntry, current, Date.now());
@@ -933,6 +946,8 @@ export function useWorkloads(
   createEffect(() => {
     if (!enabled()) {
       requestVersion += 1;
+      lastSnapshotVersion = 0;
+      lastSnapshotRowsByResourceID.clear();
       setLoading(false);
       return;
     }
@@ -943,9 +958,27 @@ export function useWorkloads(
         return;
       }
 
-      const next = resourceSnapshot
-        .map(mapCanonicalResourceToWorkload)
-        .filter((resource): resource is WorkloadGuest => Boolean(resource));
+      const change = options.resourceSnapshotChange?.();
+      const currentOrgScope = resolveActiveOrgScope();
+      const canReuseStableRows =
+        change?.changedIds !== null &&
+        change?.changedIds !== undefined &&
+        change.version === lastSnapshotVersion + 1 &&
+        currentOrgScope === lastSnapshotOrgScope;
+      const nextRowsByResourceID = new Map<string, WorkloadGuest | null>();
+      const next = resourceSnapshot.flatMap((resource) => {
+        const mapped =
+          canReuseStableRows &&
+          !change!.changedIds!.has(resource.id) &&
+          lastSnapshotRowsByResourceID.has(resource.id)
+            ? lastSnapshotRowsByResourceID.get(resource.id)!
+            : mapCanonicalResourceToWorkload(resource);
+        nextRowsByResourceID.set(resource.id, mapped);
+        return mapped ? [mapped] : [];
+      });
+      lastSnapshotVersion = change?.version ?? 0;
+      lastSnapshotOrgScope = currentOrgScope;
+      lastSnapshotRowsByResourceID = nextRowsByResourceID;
       applyWorkloads(next);
       setLoading(false);
       setError(undefined);

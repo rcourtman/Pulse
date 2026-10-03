@@ -76,8 +76,9 @@ func (m *Monitor) readStateWithStandaloneHostContinuity(
 		return readState
 	}
 
-	liveHostIDs := make(map[string]struct{}, len(m.GetLiveHostsSnapshot()))
-	for _, host := range m.GetLiveHostsSnapshot() {
+	liveHosts := m.GetLiveHostsSnapshot()
+	liveHostIDs := make(map[string]struct{}, len(liveHosts))
+	for _, host := range liveHosts {
 		if id := strings.TrimSpace(host.ID); id != "" {
 			liveHostIDs[id] = struct{}{}
 		}

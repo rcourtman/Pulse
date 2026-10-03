@@ -1,7 +1,16 @@
-import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  symlinkSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   buildUnixAgentInstallCommand,
@@ -20,8 +29,8 @@ describe('agentInstallCommand', () => {
 
     expect(command).toContain("--url 'http://pulse.example:7655'");
     expect(command).toContain('token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)');
-    expect(command).toContain('token_dir=$(sudo mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)');
-    expect(command).toContain('printf %s \'token-123\' | sudo tee "$token_file" >/dev/null');
+    expect(command).toContain('sudo bash -c');
+    expect(command).not.toContain('token-123');
     expect(command).toContain('--token-file "$token_file"');
     expect(command).toContain('--insecure');
   });
@@ -36,8 +45,8 @@ describe('agentInstallCommand', () => {
       "curl -fsSL 'https://pulse.example/base path/agent'\"'\"'s/install.sh' -o \"$install_script\"",
     );
     expect(command).toContain("--url 'https://pulse.example/base path/agent'\"'\"'s'");
-    expect(command).toContain("printf %s 'tok'\"'\"'en' > \"$token_file\"");
-    expect(command).toContain("printf %s 'tok'\"'\"'en' | sudo tee \"$token_file\" >/dev/null");
+    expect(command).not.toContain("tok'en");
+    expect(command).not.toContain("tok'\"'\"'en");
     expect(command).toContain('--token-file "$token_file"');
     expect(command).not.toContain("--token 'tok");
   });
@@ -49,101 +58,18 @@ describe('agentInstallCommand', () => {
     });
 
     const preflightIndex = command.indexOf('--preflight-only');
-    const sudoIndex = command.indexOf('sudo bash "$install_script"');
+    const sudoIndex = command.indexOf('sudo bash -c');
 
-    expect(command).toContain('tmp_dir=$(mktemp -d)');
-    expect(command).toContain('trap cleanup EXIT HUP INT TERM');
+    expect(command).toContain('bootstrap_dir=$(mktemp -d /tmp/pulse-bootstrap.XXXXXX)');
+    expect(command).toContain('trap cleanup EXIT');
     expect(command).toContain('bash "$install_script" --url');
     expect(command).toContain('--output json');
     expect(command).toContain('--non-interactive');
     expect(preflightIndex).toBeGreaterThan(-1);
     expect(sudoIndex).toBeGreaterThan(preflightIndex);
     expect(
-      command.indexOf('token_dir=$(sudo mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)'),
+      command.indexOf('token_dir=$(mktemp -d /tmp/pulse-agent-bootstrap.XXXXXX)'),
     ).toBeGreaterThan(preflightIndex);
-  });
-
-  it('executes root and sudo token bootstraps from trusted private directories', () => {
-    if (process.platform === 'win32') return;
-
-    const fixtureDir = mkdtempSync(join(tmpdir(), 'pulse-install-command-'));
-    try {
-      const binDir = join(fixtureDir, 'bin');
-      const installer = join(fixtureDir, 'installer.sh');
-      const capture = join(fixtureDir, 'captured-token');
-      execFileSync('mkdir', ['-p', binDir]);
-      writeFileSync(
-        installer,
-        `#!/usr/bin/env bash
-set -e
-token_file=""
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    --preflight-only) exit 0 ;;
-    --token-file) token_file="$2"; shift 2 ;;
-    *) shift ;;
-  esac
-done
-[ -n "$token_file" ]
-[ "$(stat -c %a "$token_file" 2>/dev/null || stat -f %Lp "$token_file")" = "600" ]
-parent_dir=$(dirname "$token_file")
-[ "$(stat -c %a "$parent_dir" 2>/dev/null || stat -f %Lp "$parent_dir")" = "700" ]
-[ "$(stat -c %u "$token_file" 2>/dev/null || stat -f %u "$token_file")" = "$(stat -c %u "$parent_dir" 2>/dev/null || stat -f %u "$parent_dir")" ]
-cat "$token_file" > "$FAKE_CAPTURE"
-`,
-      );
-      chmodSync(installer, 0o700);
-      writeFileSync(
-        join(binDir, 'curl'),
-        `#!/bin/sh
-output=""
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    -o) output="$2"; shift 2 ;;
-    *) shift ;;
-  esac
-done
-cp "$FAKE_INSTALLER" "$output"
-`,
-      );
-      writeFileSync(
-        join(binDir, 'sudo'),
-        `#!/bin/sh
-exec "$@"
-`,
-      );
-      writeFileSync(
-        join(binDir, 'id'),
-        `#!/bin/sh
-if [ "$1" = "-u" ]; then
-  printf '%s\n' "$FAKE_ID_UID"
-else
-  exec /usr/bin/id "$@"
-fi
-`,
-      );
-      for (const name of ['curl', 'sudo', 'id']) chmodSync(join(binDir, name), 0o700);
-
-      const command = buildUnixAgentInstallCommand({
-        baseUrl: 'https://pulse.example',
-        token: 'token-123',
-      });
-      for (const fakeUID of ['0', '1000']) {
-        rmSync(capture, { force: true });
-        execFileSync('bash', ['-c', command], {
-          env: {
-            ...process.env,
-            PATH: `${binDir}:${process.env.PATH || ''}`,
-            FAKE_CAPTURE: capture,
-            FAKE_ID_UID: fakeUID,
-            FAKE_INSTALLER: installer,
-          },
-        });
-        expect(readFileSync(capture, 'utf8')).toBe('token-123');
-      }
-    } finally {
-      rmSync(fixtureDir, { recursive: true, force: true });
-    }
   });
 
   it('normalizes trailing slashes before building installer transport', () => {
@@ -422,100 +348,392 @@ describe('single-line Unix install commands', () => {
 
   it.each([
     { baseUrl: 'https://pulse.invalid/a\nb' },
-    { baseUrl: 'https://pulse.invalid', token: 'a\rb' },
+    { baseUrl: 'https://pulse.invalid', tokenFilePath: '/tmp/a\rb' },
     { baseUrl: 'https://pulse.invalid', caCertPath: '/tmp/a\nb' },
     { baseUrl: 'https://pulse.invalid', extraArgs: ['--a\n--b'] },
   ])('rejects embedded line breaks without silently changing values: %j', (options) => {
     expect(() => buildUnixAgentInstallCommand(options)).toThrow('must not contain line breaks');
   });
 
-  it.each(['sh', 'bash'])(
-    'preserves execution and failure ordering under %s after paste',
-    (shell) => {
-      const dir = mkdtempSync(join(tmpdir(), 'pulse-single-line-'));
-      const trace = join(dir, 'trace');
-      const tokenPath = join(dir, 'token-path');
-      const scriptPath = join(dir, 'script-path');
-      const token = "tok'en;$(false)`false`\\value";
-      const installer = join(dir, 'fixture-installer');
-      const fake = (name: string, body: string) => {
-        writeFileSync(join(dir, name), `#!/bin/sh\n${body}\n`);
-        chmodSync(join(dir, name), 0o700);
-      };
-      try {
-        fake('id', 'echo "$FAKE_UID"');
-        fake('sudo', 'echo sudo >> "$TRACE"; exec "$@"');
-        fake(
-          'curl',
-          `echo fetch >> "$TRACE"
+  it.each(['sh', 'bash'])('runs tokenless commands under %s', (shell) => {
+    const fixture = makeUnixFixture();
+    try {
+      for (const uid of ['0', '1000']) {
+        const command = buildUnixAgentInstallCommand({ baseUrl: 'https://pulse.invalid' });
+        const result = spawnSync(shell, ['-c', command], {
+          env: fixture.env(uid),
+          encoding: 'utf8',
+        });
+        expect(result.status, result.stderr).toBe(0);
+        expect(readFileSync(fixture.trace, 'utf8')).toContain('install');
+        assertUnixCleanup(fixture.dir);
+      }
+    } finally {
+      fixture.close();
+    }
+  });
+});
+
+const unixPTYRunner = `
+import errno, fcntl, json, os, pty, select, signal, subprocess, sys, termios, time
+p = json.load(sys.stdin)
+master, slave = pty.openpty()
+tty_watch = os.dup(slave)
+initial_tty = termios.tcgetattr(tty_watch)
+def session():
+    os.setsid()
+    fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+history = p.get("history")
+env = os.environ.copy()
+if history:
+    env.update(HISTFILE=history, HISTSIZE="100", HISTFILESIZE="100", HISTCONTROL="", PS1="PULSE_TEST$ ")
+program = ["bash", "--noprofile", "--norc", "-i"] if history else ["sh", "-c", p["command"]]
+child = subprocess.Popen(program, stdin=slave, stdout=slave, stderr=slave, preexec_fn=session, env=env)
+if history: os.write(master, (p["command"] + "\\n").encode())
+os.close(slave)
+output = b""
+sent = False
+deadline = time.monotonic() + 15
+while time.monotonic() < deadline:
+    ready, _, _ = select.select([master], [], [], .1)
+    if ready:
+        try: chunk = os.read(master, 65536)
+        except OSError as e:
+            if e.errno == errno.EIO: break
+            raise
+        if not chunk: break
+        output += chunk
+        if output.endswith(b"(paste at this prompt, not in the command): ") and not sent:
+            if p.get("read_signal"):
+                time.sleep(.1)  # read has displayed its own prompt and is waiting
+                with open(env["READER_PID"]) as f: reader = int(f.read())
+                os.kill(reader, getattr(signal, "SIG" + p["read_signal"]))
+            elif p.get("slow"):
+                for piece in [p["input"][:4], p["input"][4:], "\\n"]:
+                    os.write(master, piece.encode())
+                    time.sleep(.05)
+            else:
+                os.write(master, (p["input"] + "\\n").encode())
+            sent = True
+            if history: os.write(master, b"exit\\n")
+    if child.poll() is not None and not ready: break
+else:
+    os.killpg(child.pid, signal.SIGKILL)
+    output += b"\\nPTY fixture deadline expired\\n"
+code = child.wait()
+final_tty = termios.tcgetattr(tty_watch)
+mode_mask = termios.ECHO | termios.ICANON
+if (initial_tty[3] & mode_mask) != (final_tty[3] & mode_mask):
+    output += b"\\nBootstrap did not restore terminal echo/canonical mode\\n"
+    code = 1
+os.close(tty_watch)
+os.close(master)
+sys.stdout.buffer.write(output)
+sys.exit(code if code >= 0 else 128 - code)
+`;
+
+const makeUnixFixture = () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pulse-private-unix-'));
+  chmodSync(dir, 0o700);
+  const trace = join(dir, 'trace');
+  writeFileSync(trace, '');
+  const bin = join(dir, 'bin');
+  mkdirSync(bin, { mode: 0o700 });
+  const fake = (name: string, body: string) => {
+    writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`, { mode: 0o700 });
+  };
+  fake(
+    'stty',
+    'if [ \"$1\" = -echo ]; then echo \"$PPID\" > \"$READER_PID\"; fi; exec /bin/stty \"$@\"',
+  );
+  fake('id', 'if [ "$1" = -u ]; then echo "$FAKE_UID"; else exec /usr/bin/id "$@"; fi');
+  fake(
+    'sudo',
+    'printf "%s\\n" "$@" >> "$ARGV"; [ "$FAIL_AT" != sudo ] || exit 1; [ "$1" != -v ] || exit 0; exec "$@"',
+  );
+  fake(
+    'mktemp',
+    'path=$(/usr/bin/mktemp "$@") || exit 1; printf "%s\\n" "$path" >> "$DIRS"; printf "%s\\n" "$path"',
+  );
+  fake(
+    'curl',
+    `printf '%s\\n' "$@" >> "$ARGV"
 while [ "$#" -gt 0 ]; do
   if [ "$1" = -o ]; then output="$2"; shift; fi
   shift
 done
-printf %s "$output" > "$SCRIPT_PATH"
-[ "$FAIL_AT" != fetch ] || exit 22
-cp "$INSTALLER" "$output"`,
-        );
-        writeFileSync(
-          installer,
-          `#!/bin/sh
-set -e
-case " $* " in
-  *' --preflight-only '*) echo preflight >> "$TRACE"; [ "$FAIL_AT" != preflight ]; exit $? ;;
-esac
+cp "$INSTALLER" "$output"
+echo fetch >> "$TRACE"
+[ "$FAIL_AT" != fetch ] || exit 22`,
+  );
+  writeFileSync(
+    join(dir, 'installer'),
+    `#!/bin/bash
+set -eu
+printf '%s\\n' "$@" >> "$ARGV"
+case " $* " in *' --preflight-only '*) echo preflight >> "$TRACE"; [ "$FAIL_AT" != preflight ]; exit $?;; esac
 echo install >> "$TRACE"
+printf '%s:%s' "\${pulse_token:-}" "\${PULSE_TOKEN:-}" > "$SECRET_ENV"
+token_file=''
 while [ "$#" -gt 0 ]; do
   if [ "$1" = --token-file ]; then token_file="$2"; shift; fi
   shift
 done
-printf %s "$token_file" > "$TOKEN_PATH"
-[ "$(stat -c %a "$token_file")" = 600 ]
-[ "$(stat -c %a "$(dirname "$token_file")")" = 700 ]
-[ "$(cat "$token_file")" = "$EXPECTED_TOKEN" ]
+if [ -n "$token_file" ]; then
+  [ "$(stat -c %a "$token_file")" = 600 ]
+  [ "$(stat -c %a "$(dirname "$token_file")")" = 700 ]
+  [ "$(stat -c %u "$token_file")" = "$(stat -c %u "$(dirname "$token_file")")" ]
+  cat "$token_file" > "$CAPTURE"
+fi
+if [ "$FAIL_AT" = TERM ] || [ "$FAIL_AT" = HUP ]; then kill -s "$FAIL_AT" "$PPID"; fi
 [ "$FAIL_AT" != install ]
 `,
-        );
-        for (const uid of ['0', '1000']) {
-          for (const failAt of ['', 'fetch', 'preflight', 'install']) {
-            writeFileSync(trace, '');
-            rmSync(tokenPath, { force: true });
-            const command = buildUnixAgentInstallCommand({
-              baseUrl: 'https://pulse.invalid',
-              token,
-            });
-            const input = document.createElement('input');
-            input.value = command;
-            const run = () =>
-              execFileSync(shell, ['-c', input.value], {
-                env: {
-                  ...process.env,
-                  PATH: `${dir}:${process.env.PATH}`,
-                  FAKE_UID: uid,
-                  FAIL_AT: failAt,
-                  TRACE: trace,
-                  TOKEN_PATH: tokenPath,
-                  SCRIPT_PATH: scriptPath,
-                  INSTALLER: installer,
-                  EXPECTED_TOKEN: token,
-                },
-              });
-            if (failAt) expect(run).toThrow();
-            else expect(run).not.toThrow();
-            const events = readFileSync(trace, 'utf8').trim().split('\n');
-            expect(events[0]).toBe('fetch');
-            expect(existsSync(dirname(readFileSync(scriptPath, 'utf8')))).toBe(false);
-            if (failAt === 'fetch' || failAt === 'preflight') {
-              expect(events).toEqual(failAt === 'fetch' ? ['fetch'] : ['fetch', 'preflight']);
-              expect(existsSync(tokenPath)).toBe(false);
-            } else {
-              expect(events[1]).toBe('preflight');
-              expect(events).toContain('install');
-              expect(existsSync(dirname(readFileSync(tokenPath, 'utf8')))).toBe(false);
-            }
-          }
-        }
+    { mode: 0o700 },
+  );
+  return {
+    dir,
+    trace,
+    env: (uid = '0', failure = '') => ({
+      ...process.env,
+      PATH: `${bin}:${process.env.PATH}`,
+      FAKE_UID: uid,
+      FAIL_AT: failure,
+      TRACE: trace,
+      ARGV: join(dir, 'argv'),
+      DIRS: join(dir, 'dirs'),
+      INSTALLER: join(dir, 'installer'),
+      CAPTURE: join(dir, 'capture'),
+      SECRET_ENV: join(dir, 'secret-env'),
+      READER_PID: join(dir, 'reader-pid'),
+      PULSE_TOKEN: '',
+    }),
+    close: () => rmSync(dir, { recursive: true, force: true }),
+  };
+};
+
+const assertUnixCleanup = (dir: string) => {
+  if (existsSync(join(dir, 'dirs')))
+    for (const path of readFileSync(join(dir, 'dirs'), 'utf8').trim().split('\n'))
+      expect(existsSync(path), `temporary directory left behind: ${path}`).toBe(false);
+};
+const runPrivateUnix = (
+  command: string,
+  input: string,
+  env: NodeJS.ProcessEnv,
+  history?: string,
+  readSignal?: string,
+  slow = false,
+) =>
+  spawnSync('python3', ['-c', unixPTYRunner], {
+    input: JSON.stringify({ command, input, history, read_signal: readSignal, slow }),
+    env,
+    encoding: 'utf8',
+    timeout: 20000,
+  });
+
+describe('credential-free Unix lifecycle execution', () => {
+  it.each(['0', '1000'])(
+    'keeps private input out of root/sudo argv, environment, output and history (uid=%s)',
+    (uid) => {
+      const fixture = makeUnixFixture();
+      const marker = join(fixture.dir, 'must-not-execute');
+      const token = `synthetic-' ; $(touch ${marker}) \`false\` \\value`;
+      try {
+        const command = buildUnixAgentInstallCommand({
+          baseUrl: "https://pulse.invalid/agent's path",
+          token,
+          extraArgs: ['--enable-docker', "--agent-id 'agent-42'", "--hostname 'node.example'"],
+        });
+        const history = join(fixture.dir, 'history');
+        const result = runPrivateUnix(command, token, fixture.env(uid), history);
+        expect(result.status, result.stdout + result.stderr).toBe(0);
+        expect(readFileSync(join(fixture.dir, 'capture'), 'utf8')).toBe(token);
+        expect(existsSync(marker)).toBe(false);
+        expect(readFileSync(join(fixture.dir, 'secret-env'), 'utf8')).toBe(':');
+        const argv = readFileSync(join(fixture.dir, 'argv'), 'utf8');
+        expect(argv).toContain("--url\nhttps://pulse.invalid/agent's path\n");
+        expect(argv).toContain('--agent-id\nagent-42\n');
+        expect(argv).toContain('--hostname\nnode.example\n');
+        const hist = readFileSync(history, 'utf8');
+        expect(hist).toContain(command);
+        for (const text of [command, argv, hist, result.stdout, result.stderr])
+          expect(text).not.toContain(token);
+        assertUnixCleanup(fixture.dir);
       } finally {
-        rmSync(dir, { recursive: true, force: true });
+        fixture.close();
+      }
+    },
+  );
+
+  it('preserves every character of the maximum-size accepted token', () => {
+    const fixture = makeUnixFixture();
+    try {
+      const input = 'a'.repeat(4096);
+      const result = runPrivateUnix(
+        buildUnixAgentInstallCommand({ baseUrl: 'https://pulse.invalid', token: 'present' }),
+        input,
+        fixture.env(),
+      );
+      expect(result.status, result.stdout + result.stderr).toBe(0);
+      expect(readFileSync(join(fixture.dir, 'capture'), 'utf8')).toBe(input);
+      assertUnixCleanup(fixture.dir);
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it('drains oversized input without echoing it or returning it to interactive history', () => {
+    const fixture = makeUnixFixture();
+    try {
+      const input = 'x'.repeat(10000) + '-OVERFLOW_HISTORY_MARKER';
+      const history = join(fixture.dir, 'history');
+      const result = runPrivateUnix(
+        buildUnixAgentInstallCommand({ baseUrl: 'https://pulse.invalid', token: 'present' }),
+        input,
+        fixture.env(),
+        history,
+      );
+      expect(result.status, result.stdout + result.stderr).not.toBe(0);
+      expect(result.stdout).toContain('at most 4096');
+      expect(existsSync(join(fixture.dir, 'capture'))).toBe(false);
+      for (const text of [result.stdout, readFileSync(history, 'utf8')]) {
+        expect(text).not.toContain('OVERFLOW_HISTORY_MARKER');
+        expect(text).not.toContain('x'.repeat(512));
+      }
+      assertUnixCleanup(fixture.dir);
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it.each([
+    'fetch',
+    'preflight',
+    'sudo',
+    'install',
+    'HUP',
+    'TERM',
+    'blank',
+    'interrupt',
+    'no-terminal',
+  ])('stops and cleans up on %s', (failure) => {
+    const fixture = makeUnixFixture();
+    try {
+      const command = buildUnixAgentInstallCommand({
+        baseUrl: 'https://pulse.invalid',
+        token: 'present',
+      });
+      const env = fixture.env(failure === 'sudo' ? '1000' : '0', failure);
+      const result =
+        failure === 'no-terminal'
+          ? spawnSync('sh', ['-c', command], { env, encoding: 'utf8' })
+          : runPrivateUnix(
+              command,
+              failure === 'blank' ? '' : failure === 'interrupt' ? '\x03' : 'test-input-secret',
+              env,
+            );
+      expect(result.status, result.stdout + result.stderr).not.toBe(0);
+      if (!['install', 'HUP', 'TERM'].includes(failure))
+        expect(existsSync(join(fixture.dir, 'capture'))).toBe(false);
+      expect(result.stdout).not.toContain('test-input-secret');
+      expect(result.stdout).not.toContain('did not restore');
+      assertUnixCleanup(fixture.dir);
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it.each(['HUP', 'TERM', 'INT'])(
+    'restores the terminal when %s interrupts private input',
+    (readSignal) => {
+      const fixture = makeUnixFixture();
+      try {
+        const command = buildUnixAgentInstallCommand({
+          baseUrl: 'https://pulse.invalid',
+          token: 'present',
+        });
+        const result = runPrivateUnix(command, '', fixture.env(), undefined, readSignal);
+        expect(result.status, result.stdout + result.stderr).not.toBe(0);
+        expect(result.stdout).not.toContain('did not restore');
+        expect(result.stdout).not.toContain('deadline expired');
+        expect(existsSync(join(fixture.dir, 'capture'))).toBe(false);
+        assertUnixCleanup(fixture.dir);
+      } finally {
+        fixture.close();
+      }
+    },
+  );
+
+  it('accepts deliberate slow token input without a timeout or truncation', () => {
+    const fixture = makeUnixFixture();
+    try {
+      const command = buildUnixAgentInstallCommand({
+        baseUrl: 'https://pulse.invalid',
+        token: 'present',
+      });
+      const input = 'deliberate-slow-input';
+      const result = runPrivateUnix(command, input, fixture.env(), undefined, undefined, true);
+      expect(result.status, result.stdout + result.stderr).toBe(0);
+      expect(readFileSync(join(fixture.dir, 'capture'), 'utf8')).toBe(input);
+      expect(result.stdout).not.toContain(input);
+      assertUnixCleanup(fixture.dir);
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it('supports non-terminal private-file input without deleting the operator file', () => {
+    const fixture = makeUnixFixture();
+    try {
+      const file = join(fixture.dir, "operator's token");
+      writeFileSync(file, 'private-file-token', { mode: 0o600 });
+      const command = buildUnixAgentInstallCommand({
+        baseUrl: 'https://pulse.invalid',
+        tokenFilePath: file,
+      });
+      expect(command).not.toContain('read -r');
+      expect(command).not.toContain('private-file-token');
+      const result = spawnSync('sh', ['-c', command], { env: fixture.env(), encoding: 'utf8' });
+      expect(result.status, result.stdout + result.stderr).toBe(0);
+      expect(readFileSync(join(fixture.dir, 'capture'), 'utf8')).toBe('private-file-token');
+      expect(readFileSync(file, 'utf8')).toBe('private-file-token');
+      assertUnixCleanup(fixture.dir);
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it.each(['missing', 'symlink', 'fifo', 'directory', 'public-file', 'public-parent'])(
+    'rejects unsafe private-file input: %s',
+    (kind) => {
+      const fixture = makeUnixFixture();
+      try {
+        const file = join(fixture.dir, 'provided-token');
+        const real = join(fixture.dir, 'actual-token');
+        writeFileSync(real, 'private-file-token', { mode: 0o600 });
+        if (kind === 'symlink') symlinkSync(real, file);
+        if (kind === 'fifo') execFileSync('mkfifo', [file]);
+        if (kind === 'directory') mkdirSync(file);
+        if (kind === 'public-file' || kind === 'public-parent') {
+          writeFileSync(file, 'private-file-token', {
+            mode: kind === 'public-file' ? 0o644 : 0o600,
+          });
+          if (kind === 'public-parent') chmodSync(fixture.dir, 0o755);
+        }
+        const command = buildUnixAgentInstallCommand({
+          baseUrl: 'https://pulse.invalid',
+          tokenFilePath: file,
+        });
+        const result = spawnSync('sh', ['-c', command], {
+          env: fixture.env(),
+          encoding: 'utf8',
+          timeout: 3000,
+        });
+        expect(result.status, result.stdout + result.stderr).not.toBe(0);
+        expect(existsSync(join(fixture.dir, 'capture'))).toBe(false);
+        assertUnixCleanup(fixture.dir);
+      } finally {
+        fixture.close();
       }
     },
   );

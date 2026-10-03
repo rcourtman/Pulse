@@ -1034,13 +1034,13 @@
     }
     function messageFromPayload(payload, fallback) {
       if (payload && typeof payload === "object") {
-        var errorMessage = payload.error;
-        if (typeof errorMessage === "string" && errorMessage.trim()) {
-          return errorMessage;
-        }
         var message = payload.message;
         if (typeof message === "string" && message.trim()) {
           return message;
+        }
+        var errorMessage = payload.error;
+        if (typeof errorMessage === "string" && errorMessage.trim()) {
+          return errorMessage;
         }
       }
       if (typeof payload === "string" && payload.trim()) {
@@ -1143,6 +1143,28 @@
         return request(accountURL(accountID, "/members/" + encodeURIComponent(userID)), {
           method: "DELETE"
         }, "Failed to remove member.");
+      },
+      fetchPlan: function(accountID) {
+        return request(accountURL(accountID, "/provider-msp/plan"), {
+          headers: { Accept: "application/json" }
+        }, "Your plan could not be loaded.");
+      },
+      startCheckout: function(accountID, planVersion, billingCycle) {
+        return request(accountURL(accountID, "/provider-msp/checkout"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ plan_version: planVersion, billing_cycle: billingCycle })
+        }, "Checkout is unavailable right now.");
+      },
+      openBillingPortal: function(accountID) {
+        return request(accountURL(accountID, "/provider-msp/billing-portal"), {
+          method: "POST"
+        }, "Billing is unavailable right now.");
+      },
+      refreshLicense: function(accountID) {
+        return request(accountURL(accountID, "/provider-msp/license/refresh"), {
+          method: "POST"
+        }, "The licence could not be refreshed right now.");
       }
     };
   }
@@ -1495,7 +1517,7 @@
       if (body.error !== "workspace_limit_reached") return "";
       var entity = clientLanguage ? "client workspaces" : "workspaces";
       var counts = typeof body.current === "number" && typeof body.limit === "number" && body.limit > 0 ? " (" + body.current + " of " + body.limit + " in use)" : "";
-      return "Your license limit for " + entity + " is reached" + counts + ". Remove a " + (clientLanguage ? "client" : "workspace") + " or upgrade your license to add more.";
+      return "Your plan limit for " + entity + " is reached" + counts + ". Remove a " + (clientLanguage ? "client" : "workspace") + " or move to a bigger plan to add more.";
     }
     var createWorkspace = async function(accountID) {
       var nameEl = getElement("ws-name-" + accountID);
@@ -2671,6 +2693,385 @@
     });
   }
 
+  // src/provider_plan.ts
+  var PROVIDER_PLAN_ROOT_ID = "provider-plan-root";
+  var PLAN_NAMES = {
+    msp_eval: "Free evaluation",
+    msp_solo: "Solo",
+    msp_starter: "Starter",
+    msp_growth: "Growth",
+    msp_scale: "Scale"
+  };
+  function providerPlanName(planVersion) {
+    return PLAN_NAMES[planVersion] || planVersion;
+  }
+  function formatProviderPlanPrice(option) {
+    var amount = Math.round(Number(option.unit_amount || 0)) / 100;
+    var whole = amount % 1 === 0;
+    var currency = String(option.currency || "usd").toUpperCase();
+    var symbol = currency === "USD" ? "$" : currency + " ";
+    var formatted = symbol + (whole ? amount.toFixed(0) : amount.toFixed(2)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return formatted + (option.billing_cycle === "annual" ? "/yr" : "/mo");
+  }
+  function formatDate(value) {
+    if (!value) return "";
+    var date = new Date(value);
+    if (isNaN(date.getTime())) return "";
+    return date.toLocaleDateString(void 0, { year: "numeric", month: "short", day: "numeric" });
+  }
+  function clientWorkspaces(count) {
+    return count === 1 ? "1 client workspace" : String(count) + " client workspaces";
+  }
+  var PAID_GRACE_MS = 14 * 24 * 60 * 60 * 1e3;
+  function paidLicenceInGrace(plan, now) {
+    if (!plan.expires_at) return false;
+    var expiresAt = new Date(plan.expires_at).getTime();
+    return !isNaN(expiresAt) && expiresAt - now <= PAID_GRACE_MS;
+  }
+  function planEnded(plan, now) {
+    if (plan.lapsed) return true;
+    if (!plan.expires_at) return false;
+    var expiresAt = new Date(plan.expires_at).getTime();
+    return !isNaN(expiresAt) && now >= expiresAt;
+  }
+  function renderCurrentPlan(plan, canManage, busy, inUse, now) {
+    var expires = formatDate(plan.expires_at);
+    var title = providerPlanName(plan.plan_version);
+    var description;
+    var meta = [inUse >= 0 ? String(inUse) + " of " + clientWorkspaces(plan.workspace_limit) + " in use" : clientWorkspaces(plan.workspace_limit)];
+    var cta = "";
+    var ended = planEnded(plan, now);
+    var lostFeatures = plan.lapsed ? " Client workspaces keep running with core monitoring but have lost their MSP features, and no new clients can be added." : "";
+    if (plan.evaluation && ended) {
+      description = "Your evaluation ended" + (expires ? " on " + expires : "") + "." + lostFeatures + " Buy a plan to keep your clients monitored and to add more.";
+    } else if (plan.evaluation) {
+      description = expires ? "Your evaluation covers " + clientWorkspaces(plan.workspace_limit) + " until " + expires + ". Buy a plan to keep your clients monitored after that and to add more." : "Your evaluation covers " + clientWorkspaces(plan.workspace_limit) + ". Buy a plan to add more.";
+      if (expires) meta.push("Expires " + expires);
+    } else if (ended) {
+      description = "Your " + title + " plan ended" + (expires ? " on " + expires : "") + "." + lostFeatures + " Renew from Manage billing or buy a plan below.";
+      if (canManage) {
+        cta = '<button class="btn-secondary billing-action-button" type="button" data-provider-plan-action="manage-billing"' + (busy ? " disabled" : "") + ">" + (busy === "manage-billing" ? "Opening\u2026" : "Manage billing") + "</button>";
+      }
+    } else {
+      description = paidLicenceInGrace(plan, now) ? "Your subscription has not renewed. Your clients keep this plan until " + expires + ". Open Manage billing to renew or update your payment method." : "Up to " + clientWorkspaces(plan.workspace_limit) + ". Renews automatically while your subscription is active.";
+      if (canManage) {
+        cta = '<button class="btn-secondary billing-action-button" type="button" data-provider-plan-action="manage-billing"' + (busy ? " disabled" : "") + ">" + (busy === "manage-billing" ? "Opening\u2026" : "Manage billing") + "</button>";
+      }
+    }
+    return '<article class="billing-action-row" data-provider-plan-current="' + escapeAttribute(plan.plan_version) + '"><div class="billing-action-main"><div class="billing-action-copy"><h3>' + escapeText(title) + "</h3><p>" + escapeText(description) + '</p></div><div class="billing-action-meta">' + escapeText(meta.join(" \u2022 ")) + "</div></div>" + (cta ? '<div class="billing-action-cta">' + cta + "</div>" : "") + "</article>";
+  }
+  function renderCycleToggle(cycle, hasAnnual) {
+    if (!hasAnnual) return "";
+    function button(value, label) {
+      var active = value === cycle;
+      return '<button class="' + (active ? "btn-primary" : "btn-secondary") + ' btn-compact" type="button" data-provider-plan-action="select-cycle" data-provider-plan-cycle="' + value + '" aria-pressed="' + (active ? "true" : "false") + '">' + label + "</button>";
+    }
+    return '<div class="billing-action-meta" role="group" aria-label="Billing period">' + button("monthly", "Monthly") + " " + button("annual", "Annual, 2 months free") + "</div>";
+  }
+  function renderOffer(option, canManage, busy) {
+    var name = providerPlanName(option.plan_version);
+    var action = canManage ? '<button class="btn-primary billing-action-button" type="button" data-provider-plan-action="buy" data-provider-plan-version="' + escapeAttribute(option.plan_version) + '" data-provider-plan-cycle="' + escapeAttribute(option.billing_cycle) + '"' + (busy ? " disabled" : "") + ">" + (busy === "buy:" + option.plan_version ? "Opening checkout\u2026" : "Buy " + escapeText(name)) + "</button>" : "";
+    return '<article class="billing-action-row" data-provider-plan-offer="' + escapeAttribute(option.plan_version) + '"><div class="billing-action-main"><div class="billing-action-copy"><h3>' + escapeText(name) + "</h3><p>Up to " + escapeText(clientWorkspaces(option.workspace_limit)) + '.</p></div><div class="billing-action-meta">' + escapeText(formatProviderPlanPrice(option)) + "</div></div>" + (action ? '<div class="billing-action-cta">' + action + "</div>" : "") + "</article>";
+  }
+  function renderProviderPlanHTML(view, canManage, inUse = -1, now = Date.now()) {
+    var parts = ['<div class="billing-section-intro"><h2>Plan</h2></div>'];
+    if (view.notice) {
+      parts.push('<p class="billing-action-meta" role="status">' + escapeText(view.notice) + "</p>");
+    }
+    if (view.loading && !view.plan) {
+      parts.push('<p class="billing-action-meta">Loading your plan\u2026</p>');
+      return parts.join("");
+    }
+    if (view.error && !view.plan) {
+      parts.push('<p class="billing-action-meta" role="alert">' + escapeText(view.error) + "</p>");
+      return parts.join("");
+    }
+    var plan = view.plan;
+    if (!plan) return parts.join("");
+    parts.push(renderCurrentPlan(plan, canManage, view.busy, inUse, now));
+    var ended = planEnded(plan, now);
+    if (plan.evaluation || ended) {
+      if (plan.plans_error) {
+        parts.push('<p class="billing-action-meta" role="alert">' + escapeText(plan.plans_error) + "</p>");
+      } else if (plan.purchase_available) {
+        var hasAnnual = plan.plans.some(function(option) {
+          return option.billing_cycle === "annual";
+        });
+        var cycle = hasAnnual ? view.cycle : "monthly";
+        var offers = plan.plans.filter(function(option) {
+          return option.billing_cycle === cycle && (ended && !plan.evaluation ? option.workspace_limit >= plan.workspace_limit : option.workspace_limit > plan.workspace_limit);
+        });
+        parts.push('<div class="billing-section-intro"><h3>Choose a plan</h3><p>You pay per client workspace, never per monitored system. Every client workspace is full Pulse.</p></div>');
+        parts.push(renderCycleToggle(cycle, hasAnnual));
+        parts.push(offers.map(function(option) {
+          return renderOffer(option, canManage, view.busy);
+        }).join(""));
+        if (!canManage) {
+          parts.push('<p class="billing-action-meta">Only an owner or admin of this account can buy a plan.</p>');
+        }
+      }
+    } else if (canManage) {
+      parts.push('<p class="billing-action-meta">Change plan, update your payment method or cancel renewal from Manage billing.</p>');
+    }
+    if (canManage && plan.license_id) {
+      parts.push(
+        '<p class="billing-action-meta">' + (plan.evaluation ? "Just paid? " : "Changed your plan? ") + '<button class="btn-secondary btn-compact" type="button" data-provider-plan-action="refresh"' + (view.busy ? " disabled" : "") + ">" + (view.busy === "refresh" ? "Checking\u2026" : plan.evaluation ? "Apply my purchase now" : "Apply it now") + "</button></p>"
+      );
+    }
+    return parts.join("");
+  }
+  function providerAccount(accounts) {
+    var list = Array.isArray(accounts) ? accounts : [];
+    for (var i = 0; i < list.length; i += 1) {
+      if (list[i] && list[i].can_manage) return list[i];
+    }
+    return list[0] || null;
+  }
+  var CHECKOUT_RETURN_PARAM = "provider_msp_checkout";
+  var APPLY_POLL_MS = 5e3;
+  var APPLY_POLL_ATTEMPTS = 12;
+  var BILLING_RETURN_ATTEMPTS = 2;
+  var RESTART_SETTLE_MS = 8e3;
+  var RESTART_POLL_MS = 3e3;
+  var RESTART_POLL_ATTEMPTS = 20;
+  function installProviderPlan(deps) {
+    var navigate = deps.navigate || function(url) {
+      window.location.assign(url);
+    };
+    var later = deps.setTimeoutFn || function(fn, ms) {
+      return setTimeout(fn, ms);
+    };
+    var view = { loading: false, error: "", plan: null, cycle: "monthly", busy: "", notice: "" };
+    var planEpoch = 0;
+    var applying = null;
+    function isApplied(plan, target) {
+      return !plan.evaluation && !!target.plan_version && plan.plan_version === target.plan_version && (!target.license_id || plan.license_id === target.license_id) && (!target.expires_at || plan.expires_at === target.expires_at);
+    }
+    function sameRunningPlan(left, right) {
+      return left.evaluation === right.evaluation && left.plan_version === right.plan_version && left.license_id === right.license_id && left.expires_at === right.expires_at;
+    }
+    function acceptRunningPlan(plan, announce) {
+      applying = null;
+      planEpoch += 1;
+      view.plan = plan;
+      view.error = "";
+      if (announce) view.notice = "Your " + providerPlanName(plan.plan_version) + " plan is active.";
+      render();
+    }
+    function finishApplying(plan) {
+      acceptRunningPlan(plan, true);
+    }
+    function account() {
+      var bootstrap = deps.store.getBootstrap();
+      if (bootstrap.provider_hosted_mode !== true || !bootstrap.authenticated) return null;
+      return providerAccount(bootstrap.accounts);
+    }
+    function render() {
+      var root = document.getElementById(PROVIDER_PLAN_ROOT_ID);
+      var current = account();
+      if (!root || !current) return;
+      var workspaces = Array.isArray(current.workspaces) ? current.workspaces : [];
+      root.innerHTML = renderProviderPlanHTML(view, current.can_manage === true, workspaces.length);
+    }
+    async function load() {
+      var current = account();
+      if (!current) return;
+      var epoch = planEpoch;
+      view.loading = true;
+      render();
+      try {
+        var plan = await deps.api.fetchPlan(current.id);
+        if (epoch !== planEpoch) return;
+        if (applying) {
+          if (isApplied(plan, applying)) finishApplying(plan);
+          return;
+        }
+        view.plan = plan;
+        view.error = "";
+      } catch (error) {
+        if (epoch === planEpoch) {
+          view.error = error instanceof Error && error.message ? error.message : "Your plan could not be loaded.";
+        }
+      } finally {
+        view.loading = false;
+        render();
+      }
+    }
+    function waitForAppliedPlan(target, attempt) {
+      if (applying !== target) return;
+      var current = account();
+      if (!current) return;
+      deps.api.fetchPlan(current.id).then(function(plan) {
+        if (applying !== target) return;
+        if (isApplied(plan, target)) {
+          finishApplying(plan);
+          return;
+        }
+        throw new Error("plan not applied yet");
+      }).catch(function() {
+        if (applying !== target) return;
+        if (attempt + 1 >= RESTART_POLL_ATTEMPTS) {
+          applying = null;
+          planEpoch += 1;
+          view.notice = "The updated plan could not be confirmed yet. Open this page again or use the apply button.";
+          render();
+          return;
+        }
+        later(function() {
+          waitForAppliedPlan(target, attempt + 1);
+        }, RESTART_POLL_MS);
+      });
+    }
+    function applyRestart(target) {
+      applying = target;
+      planEpoch += 1;
+      view.notice = "Your plan is being applied. This takes a few seconds.";
+      render();
+      later(function() {
+        waitForAppliedPlan(target, 0);
+      }, RESTART_SETTLE_MS);
+    }
+    async function refresh(manual, confirmCurrent = false, billingReturn = false) {
+      var current = account();
+      if (!current) return false;
+      view.busy = "refresh";
+      render();
+      try {
+        var result = await deps.api.refreshLicense(current.id);
+        if (result.restart_scheduled) {
+          applyRestart(result);
+          return true;
+        }
+        if (confirmCurrent && result.status === "active" && result.plan_version) {
+          var plan = await deps.api.fetchPlan(current.id);
+          if (isApplied(plan, result)) {
+            if (billingReturn) {
+              if (!view.plan) {
+                acceptRunningPlan(plan, false);
+                return false;
+              }
+              if (sameRunningPlan(view.plan, plan)) return false;
+            }
+            finishApplying(plan);
+            return true;
+          }
+        }
+        if (manual) {
+          deps.showToast(result.status === "active" ? "The updated plan could not be confirmed yet. Try again shortly." : "No payment has reached this platform yet. It can take a minute after checkout.");
+        }
+        return false;
+      } catch (error) {
+        if (manual) deps.showToast(error instanceof Error ? error.message : "Refresh failed.", true);
+        return false;
+      } finally {
+        view.busy = "";
+        render();
+      }
+    }
+    function pollAfterCheckout(attempt) {
+      void refresh(false, true).then(function(applied) {
+        if (applied) return;
+        if (attempt + 1 >= APPLY_POLL_ATTEMPTS) {
+          view.notice = "A paid plan could not be confirmed yet. If you completed checkout, wait a minute and use Apply my purchase now.";
+          render();
+          return;
+        }
+        later(function() {
+          pollAfterCheckout(attempt + 1);
+        }, APPLY_POLL_MS);
+      });
+    }
+    function checkAfterBillingReturn(attempt) {
+      void refresh(false, true, true).then(function(applied) {
+        if (applied || attempt + 1 >= BILLING_RETURN_ATTEMPTS) return;
+        later(function() {
+          checkAfterBillingReturn(attempt + 1);
+        }, APPLY_POLL_MS);
+      });
+    }
+    document.addEventListener("click", function(event) {
+      var target = event.target instanceof HTMLElement ? event.target.closest("[data-provider-plan-action]") : null;
+      if (!target) return;
+      var current = account();
+      if (!current) return;
+      event.preventDefault();
+      var action = target.getAttribute("data-provider-plan-action") || "";
+      switch (action) {
+        case "select-cycle":
+          view.cycle = target.getAttribute("data-provider-plan-cycle") === "annual" ? "annual" : "monthly";
+          render();
+          return;
+        case "buy": {
+          var planVersion = target.getAttribute("data-provider-plan-version") || "";
+          var cycle = target.getAttribute("data-provider-plan-cycle") || "monthly";
+          view.busy = "buy:" + planVersion;
+          render();
+          deps.api.startCheckout(current.id, planVersion, cycle).then(function(response) {
+            if (response && response.url) {
+              navigate(response.url);
+              return;
+            }
+            throw new Error("Checkout is unavailable right now.");
+          }).catch(function(error) {
+            view.busy = "";
+            render();
+            deps.showToast(error instanceof Error ? error.message : "Checkout is unavailable right now.", true);
+          });
+          return;
+        }
+        case "manage-billing":
+          view.busy = "manage-billing";
+          render();
+          deps.api.openBillingPortal(current.id).then(function(response) {
+            if (response && response.url) {
+              navigate(response.url);
+              return;
+            }
+            throw new Error("Billing is unavailable right now.");
+          }).catch(function(error) {
+            view.busy = "";
+            render();
+            deps.showToast(error instanceof Error ? error.message : "Billing is unavailable right now.", true);
+          });
+          return;
+        case "refresh":
+          void refresh(true, true);
+          return;
+      }
+    });
+    deps.store.subscribeBootstrap(function() {
+      render();
+    });
+    var search = deps.locationSearch ? deps.locationSearch() : window.location.search;
+    var params = new URLSearchParams(search || "");
+    var returned = params.get(CHECKOUT_RETURN_PARAM);
+    if (returned && account()) {
+      params.delete(CHECKOUT_RETURN_PARAM);
+      var remaining = params.toString();
+      if (deps.replaceSearch) {
+        deps.replaceSearch(remaining ? "?" + remaining : "");
+      } else if (window.history && typeof window.history.replaceState === "function") {
+        window.history.replaceState(null, "", window.location.pathname + (remaining ? "?" + remaining : "") + window.location.hash);
+      }
+      deps.store.setActiveShellSection("billing");
+      if (returned === "complete") {
+        view.notice = "Checking for your paid plan\u2026";
+        pollAfterCheckout(0);
+      } else if (returned === "billing") {
+        checkAfterBillingReturn(0);
+      } else if (returned === "cancelled") {
+        view.notice = "Checkout was not completed here. Check your current plan below.";
+      }
+    }
+    return {
+      load,
+      render,
+      view: function() {
+        return view;
+      }
+    };
+  }
+
   // src/shell_view.ts
   function escapeHTML(value) {
     return String(value || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -2897,10 +3298,16 @@
       sections.push({ section: "workspaces", title: accountsUseClientLanguage(accounts) ? "Clients" : "Workspaces" });
       sections.push({ section: "access", title: "Access" });
     }
-    if (hasHostedBilling || showSelfHostedCommercial) {
+    if (providerHostedPlanShown(bootstrap)) {
+      sections.push({ section: "billing", title: "Plan" });
+    } else if (hasHostedBilling || showSelfHostedCommercial) {
       sections.push({ section: "billing", title: "Billing" });
     }
     return sections;
+  }
+  function providerHostedPlanShown(bootstrap) {
+    var accounts = Array.isArray(bootstrap.accounts) ? bootstrap.accounts : [];
+    return bootstrap.provider_hosted_mode === true && accounts.length > 0;
   }
   function utilityShellSections(_bootstrap) {
     return [{ section: "support", title: "Support" }];
@@ -3405,7 +3812,7 @@
         '<div class="subsection"><div id="data-export-root"></div></div><div class="subsection"><div id="data-delete-root"></div></div><div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + "</a>.</div>"
       );
     }
-    return '<div class="portal-shell" data-shell-section="' + activeSection + '"><div class="portal-shell-main">' + renderIdentityBar(accounts, showSelfHostedCommercial) + renderTabBar(context.bootstrap, activeSection) + (hosted ? '<section class="portal-content-panel portal-content-panel-workspaces">' + workspaceSummaryContent + workspacesContent + '</section><section class="portal-content-panel portal-content-panel-access">' + accessContent + "</section>" : "") + (showBillingPanel ? '<section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section">' + (hosted && hasHostedBilling ? renderHostedBillingCards(accounts, showSelfHostedCommercial) : "") + (showSelfHostedBillingShell ? '<div class="billing-shell billing-shell-idle"><div class="billing-shell-main"><div class="billing-shell-main-head"><h3>Self-hosted billing</h3><p>' + escapeHTML(selfHostedBillingLeadCopy) + '</p></div><div class="billing-action-list">' + selfHostedBillingActionsHTML + '</div><div class="billing-inline-support"><h4>Support</h4><p>' + selfHostedBillingEscalationCopy + '</p><div class="billing-inline-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button><a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div></div></div><div class="billing-shell-detail" id="billing-detail-shell" hidden>' + selfHostedBillingPanelsHTML + "</div></div>" : "") + "</section>" : "") + '<section class="portal-content-panel portal-content-panel-support">' + renderSupportSection(context) + "</section></div></div>";
+    return '<div class="portal-shell" data-shell-section="' + activeSection + '"><div class="portal-shell-main">' + renderIdentityBar(accounts, showSelfHostedCommercial) + renderTabBar(context.bootstrap, activeSection) + (hosted ? '<section class="portal-content-panel portal-content-panel-workspaces">' + workspaceSummaryContent + workspacesContent + '</section><section class="portal-content-panel portal-content-panel-access">' + accessContent + "</section>" : "") + (providerHostedPlanShown(context.bootstrap) ? '<section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section"><div id="' + PROVIDER_PLAN_ROOT_ID + '"><p class="billing-action-meta">Loading your plan\u2026</p></div></section>' : "") + (showBillingPanel && !providerHostedPlanShown(context.bootstrap) ? '<section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section">' + (hosted && hasHostedBilling ? renderHostedBillingCards(accounts, showSelfHostedCommercial) : "") + (showSelfHostedBillingShell ? '<div class="billing-shell billing-shell-idle"><div class="billing-shell-main"><div class="billing-shell-main-head"><h3>Self-hosted billing</h3><p>' + escapeHTML(selfHostedBillingLeadCopy) + '</p></div><div class="billing-action-list">' + selfHostedBillingActionsHTML + '</div><div class="billing-inline-support"><h4>Support</h4><p>' + selfHostedBillingEscalationCopy + '</p><div class="billing-inline-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button><a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div></div></div><div class="billing-shell-detail" id="billing-detail-shell" hidden>' + selfHostedBillingPanelsHTML + "</div></div>" : "") + "</section>" : "") + '<section class="portal-content-panel portal-content-panel-support">' + renderSupportSection(context) + "</section></div></div>";
   }
   function renderAuthScopeRow(title, copy) {
     return '<article class="portal-auth-scope-row"><h3>' + escapeHTML(title) + "</h3><p>" + escapeHTML(copy) + "</p></article>";
@@ -3822,9 +4229,13 @@
       refreshBootstrap,
       showToast
     });
+    var providerPlan = null;
     installShell({
       store: deps.store,
       onSectionChange: function(section) {
+        if (section === "billing" && providerPlan) {
+          void providerPlan.load();
+        }
         if (section === "access") {
           var accounts = deps.store.getBootstrap().accounts || [];
           for (var i = 0; i < accounts.length; i += 1) {
@@ -3837,6 +4248,14 @@
       api,
       store: deps.store
     });
+    providerPlan = installProviderPlan({
+      api,
+      store: deps.store,
+      showToast
+    });
+    if (deps.store.getBootstrap().provider_hosted_mode === true && deps.store.getBootstrap().authenticated) {
+      void providerPlan.load();
+    }
     installAuthController({
       api,
       store: deps.store

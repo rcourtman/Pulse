@@ -123,12 +123,12 @@ export function DockerHostDrawerManagement(props: DockerHostDrawerOverviewProps)
             />
           </Show>
           <Show when={updateActions.dockerActionError()}>
-            <div class="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900 dark:text-red-200">
+            <div class="rounded-sm border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900/25 dark:text-red-200">
               {updateActions.dockerActionError()}
             </div>
           </Show>
           <Show when={updateActions.dockerActionNote()}>
-            <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px] text-base-content">
+            <div class="rounded-sm border border-border bg-surface-hover px-2 py-1.5 text-[10px] text-base-content">
               {updateActions.dockerActionNote()}
             </div>
           </Show>

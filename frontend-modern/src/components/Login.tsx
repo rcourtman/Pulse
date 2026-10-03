@@ -442,9 +442,9 @@ const LoginForm: Component<{
       <div class="max-w-md w-full space-y-8">
         {/* Demo Credentials Banner */}
         <Show when={demoModeEnabled}>
-          <div class="bg-surface rounded-md p-4 shadow-sm border border-blue-200 dark:border-blue-800 animate-fade-in">
+          <div class="bg-surface rounded-md p-4 shadow-xs border border-blue-200 dark:border-blue-800 animate-fade-in">
             <div class="flex items-center gap-3">
-              <div class="flex-shrink-0 w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
+              <div class="shrink-0 w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
                 <svg
                   class="w-5 h-5 text-white"
                   fill="none"
@@ -466,11 +466,11 @@ const LoginForm: Component<{
                   fallback={
                     <div class="text-sm text-muted">
                       Login with{' '}
-                      <code class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">
+                      <code class="bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-sm font-mono text-xs">
                         demo
                       </code>{' '}
                       /{' '}
-                      <code class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">
+                      <code class="bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-sm font-mono text-xs">
                         demo
                       </code>
                     </div>
@@ -503,7 +503,7 @@ const LoginForm: Component<{
           </Show>
         </div>
         <form
-          class="mt-8 space-y-6 bg-surface rounded-md p-8 shadow-sm border border-border animate-slide-up"
+          class="mt-8 space-y-6 bg-surface rounded-md p-8 shadow-xs border border-border animate-slide-up"
           onSubmit={handleSubmit}
         >
           {/* Multi-Provider SSO Section */}
@@ -513,7 +513,7 @@ const LoginForm: Component<{
                 {(provider) => (
                   <button
                     type="button"
-                    class={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-md border border-blue-500 text-blue-600 hover:bg-blue-50 transition dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-900 ${oidcLoading() ? 'opacity-75 cursor-wait' : ''}`}
+                    class={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-md border border-blue-500 text-blue-600 hover:bg-blue-50 transition dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-900/25 ${oidcLoading() ? 'opacity-75 cursor-wait' : ''}`}
                     disabled={oidcLoading()}
                     onClick={() => {
                       window.location.href = provider.loginUrl;
@@ -538,12 +538,12 @@ const LoginForm: Component<{
                 )}
               </For>
               <Show when={oidcError()}>
-                <div class="rounded-md bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-300">
+                <div class="rounded-md bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-300">
                   {oidcError()}
                 </div>
               </Show>
               <Show when={oidcMessage()}>
-                <div class="rounded-md bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-700 px-3 py-2 text-sm text-green-600 dark:text-green-300">
+                <div class="rounded-md bg-green-50 dark:bg-green-900/25 border border-green-200 dark:border-green-700 px-3 py-2 text-sm text-green-600 dark:text-green-300">
                   {oidcMessage()}
                 </div>
               </Show>
@@ -581,7 +581,7 @@ const LoginForm: Component<{
                   type="text"
                   autocomplete="username"
                   required
-                  class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-border placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm"
+                  class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-border placeholder-gray-500 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm"
                   placeholder="Username"
                   value={username()}
                   onInput={(e) => setUsername(e.currentTarget.value)}
@@ -607,7 +607,7 @@ const LoginForm: Component<{
                   type="password"
                   autocomplete="current-password"
                   required
-                  class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-border placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm"
+                  class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-border placeholder-gray-500 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm"
                   placeholder="Password"
                   value={password()}
                   onInput={(e) => setPassword(e.currentTarget.value)}
@@ -620,7 +620,7 @@ const LoginForm: Component<{
                   type="checkbox"
                   checked={rememberMe()}
                   onChange={(e) => setRememberMe(e.currentTarget.checked)}
-                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-border rounded cursor-pointer"
+                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-border rounded-sm cursor-pointer"
                 />
                 <label
                   for="remember-me"
@@ -638,11 +638,11 @@ const LoginForm: Component<{
                 class={`rounded-md p-4 ${
                   error().includes('locked')
                     ? 'bg-orange-50 dark:bg-orange-900'
-                    : 'bg-red-50 dark:bg-red-900'
+                    : 'bg-red-50 dark:bg-red-900/25'
                 }`}
               >
                 <div class="flex">
-                  <div class="flex-shrink-0">
+                  <div class="shrink-0">
                     <Show
                       when={error().includes('locked')}
                       fallback={
@@ -689,7 +689,7 @@ const LoginForm: Component<{
               <button
                 type="submit"
                 disabled={loading()}
-                class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <Show when={loading()}>
                   <LoadingSpinner size="button" tone="inverse" class="-ml-1 mr-3" />
@@ -703,7 +703,7 @@ const LoginForm: Component<{
           <div class="border-t border-border pt-4 text-center">
             <a
               href={TROUBLESHOOTING_DOC_URL}
-              class="inline-flex min-h-10 items-center rounded px-1 text-xs font-medium text-blue-700 underline-offset-2 transition-colors hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 dark:text-blue-300 sm:min-h-9"
+              class="inline-flex min-h-10 items-center rounded-sm px-1 text-xs font-medium text-blue-700 underline-offset-2 transition-colors hover:underline focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/60 dark:text-blue-300 sm:min-h-9"
             >
               Can’t sign in?
             </a>

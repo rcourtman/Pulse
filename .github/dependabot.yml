@@ -119,6 +119,26 @@ updates:
       - dependency-name: "typescript"
         update-types:
           - "version-update:semver-major"
+      # ESLint 10's proposed lockfile drops every js-yaml copy, which breaks the
+      # checked-in dependency-security contract. Migrate the lint stack and
+      # its lockfile together rather than accepting an isolated major bump.
+      - dependency-name: "eslint"
+        update-types:
+          - "version-update:semver-major"
+      # lucide-solid 1.x removes an icon subpath still imported by the app.
+      # Keep majors explicit until the icon imports and frontend proof migrate.
+      - dependency-name: "lucide-solid"
+        update-types:
+          - "version-update:semver-major"
+      # Vitest and its V8 coverage provider require matching major versions.
+      # An isolated coverage-v8 5.x update cannot install beside Vitest 4.x;
+      # migrate the pair with frontend proof as one explicit change instead.
+      - dependency-name: "vitest"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "@vitest/coverage-v8"
+        update-types:
+          - "version-update:semver-major"
 
   - package-ecosystem: "docker"
     directories:

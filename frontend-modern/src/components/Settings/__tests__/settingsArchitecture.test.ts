@@ -98,6 +98,7 @@ import rbacFeatureGateStateSource from '../useRBACFeatureGateState.ts?raw';
 import reportingStateSource from '../useReportingPanelState.ts?raw';
 import ssoProvidersPanelSource from '../SSOProvidersPanel.tsx?raw';
 import ssoProvidersStateSource from '../useSSOProvidersState.ts?raw';
+import ssoProvidersModelSource from '../ssoProvidersModel.ts?raw';
 import useInfrastructureInstallStateSource from '../useInfrastructureInstallState.tsx?raw';
 import useInfrastructureConfiguredNodesStateSource from '../useInfrastructureConfiguredNodesState.ts?raw';
 import useInfrastructureSettingsStateSource from '../useInfrastructureSettingsState.ts?raw';
@@ -374,6 +375,10 @@ describe('settings architecture guardrails', () => {
     );
     expect(systemRelayNavBlock?.[0]).toContain("features: ['relay']");
     expect(systemRelayNavBlock?.[0]).toContain('hideWhenUnavailable: true');
+    // Relay only ever connected Pulse Mobile; the section is named for the app,
+    // never as remote access to the web UI.
+    expect(systemRelayNavBlock?.[0]).toContain("label: 'Pulse Mobile'");
+    expect(settingsNavCatalogSource).not.toContain("label: 'Remote Access'");
     expect(settingsHeaderMetaSource).toContain(
       'title: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle',
     );
@@ -428,7 +433,7 @@ describe('settings architecture guardrails', () => {
   it('gates the admin-only System tabs on the served systemSettingsRead capability', () => {
     // Same rationale as Infrastructure rather than the paid-feature one: a free
     // install can act on a paid tab by upgrading, but a non-admin cannot grant
-    // themselves admin, so Network / Pulse server updates / Recovery can only
+    // themselves admin, so Network / Updates / Recovery can only
     // end in a panel they will never populate.
     for (const id of ['system-network', 'system-updates', 'system-recovery']) {
       const navBlock = settingsNavCatalogSource.match(
@@ -486,12 +491,12 @@ describe('settings architecture guardrails', () => {
     );
   });
 
-  it('keeps Pulse server updates separate from Agent Doctor lifecycle triage', () => {
+  it('keeps Pulse updates separate from Agent Doctor lifecycle triage', () => {
     const updatesNavBlock = settingsNavCatalogSource.match(
       /id: 'system-updates',[\s\S]*?id: 'system-recovery',/,
     );
-    expect(updatesNavBlock?.[0]).toContain("label: 'Pulse server updates'");
-    expect(settingsHeaderMetaSource).toContain("title: 'Pulse server updates'");
+    expect(updatesNavBlock?.[0]).toContain("label: 'Updates'");
+    expect(settingsHeaderMetaSource).toContain("title: 'Updates'");
     expect(settingsNavCatalogSource).not.toContain("label: 'Agent Doctor'");
   });
 
@@ -625,10 +630,10 @@ describe('settings architecture guardrails', () => {
       'inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700',
     );
     expect(infrastructureInstallerSectionSource).not.toContain(
-      'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100',
+      'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 transition-colors hover:bg-emerald-100',
     );
     expect(infrastructureInstallerSectionSource).not.toContain(
-      'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
+      'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100',
     );
 
     expect(ssoProvidersPanelSource).toContain(
@@ -750,7 +755,7 @@ describe('settings architecture guardrails', () => {
     expect(discoverySettingsFormSource).not.toContain(
       'rounded-md border border-amber-200 bg-amber-50/80',
     );
-    expect(aiProviderConfigurationSectionSource).not.toContain('rounded border border-red-200');
+    expect(aiProviderConfigurationSectionSource).not.toContain('rounded-sm border border-red-200');
     expect(diagnosticsResultsPanelSource).not.toContain(
       'rounded-md border border-amber-200 bg-amber-50',
     );
@@ -1205,6 +1210,12 @@ describe('settings architecture guardrails', () => {
     expect(ssoProvidersStateSource).not.toContain('advanced_sso');
     expect(ssoProvidersStateSource).not.toContain('getUpgradeActionDestination');
     expect(ssoProvidersStateSource).not.toContain('loadRuntimeCapabilities');
+  });
+
+  it('separates SSO mapping entries without splitting spaces inside IdP group names', () => {
+    expect(ssoProvidersModelSource).toContain('input.split(/[,\\r\\n]+/)');
+    expect(ssoProvidersModelSource).not.toContain('splitList(input).forEach');
+    expect(ssoProvidersPanelSource).toContain('Group names may contain spaces.');
   });
 
   it('never offers a localhost SSO endpoint URL as if it were registerable with an IdP', () => {
@@ -1802,11 +1813,10 @@ describe('settings architecture guardrails', () => {
     );
     expect(nodeModalSetupGuideSectionSource).toContain('setupCommandButtonTitle');
     expect(nodeModalSetupGuideSectionSource).toContain('disabled={setupHandoffDisabled()}');
-    expect(nodeModalSetupGuideSectionSource).toContain('Credentialed command ready');
-    expect(nodeModalSetupGuideSectionSource).toContain(
-      'one-time setup token is intentionally not shown on this page',
-    );
-    expect(nodeModalStateSource).toContain('data.commandWithEnv');
+    expect(nodeModalSetupGuideSectionSource).toContain('Credential-free command ready');
+    expect(nodeModalSetupGuideSectionSource).toContain('one-time setup token is shown separately');
+    expect(nodeModalStateSource).toContain('copyToClipboard(data.command)');
+    expect(nodeModalStateSource).toContain('showSetupToken(data)');
     expect(nodeModalStateSource).not.toContain('quickSetupPreviewCommand');
     expect(nodeModalStatusFooterSource).toContain('guidedSetupOnlyMode');
     expect(nodeModalStatusFooterSource).toContain('props.saveDisabled');

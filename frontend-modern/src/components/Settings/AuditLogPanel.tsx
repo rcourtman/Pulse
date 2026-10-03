@@ -324,7 +324,7 @@ export default function AuditLogPanel() {
         <div
           role="alert"
           aria-live="assertive"
-          class="p-4 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded-md text-red-700 dark:text-red-300"
+          class="p-4 bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800 rounded-md text-red-700 dark:text-red-300"
         >
           {error()}
         </div>
@@ -402,7 +402,7 @@ export default function AuditLogPanel() {
                 render: (event) => (
                   <div class="min-w-0">
                     <span
-                      class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getAuditEventTypeBadgeClass(event.event)}`}
+                      class={`inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium ${getAuditEventTypeBadgeClass(event.event)}`}
                     >
                       {event.event}
                     </span>
@@ -454,7 +454,7 @@ export default function AuditLogPanel() {
                         when={isVerifying}
                         fallback={
                           <span
-                            class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badge.className}`}
+                            class={`inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium ${badge.className}`}
                           >
                             {badge.label}
                           </span>

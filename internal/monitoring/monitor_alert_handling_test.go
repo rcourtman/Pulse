@@ -1139,3 +1139,69 @@ func TestMonitorLifecycleReplayPreservesOccurrenceTimelines(t *testing.T) {
 		})
 	}
 }
+
+func TestMonitorLifecycleRefireReopensRetainedOccurrence(t *testing.T) {
+	for _, canonical := range []bool{false, true} {
+		name := "local"
+		if canonical {
+			name = "canonical"
+		}
+		t.Run(name, func(t *testing.T) {
+			store := unifiedresources.NewMemoryStore()
+			incidents := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+			m := &Monitor{incidentStore: incidents, resourceStore: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))}
+			if canonical {
+				incidents.SetResourceTimelineStore(m.resourceStore.(memory.IncidentTimelineStore))
+			}
+			start := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+			alert := &alerts.Alert{ID: "node-connectivity", ResourceID: "node", StartTime: start}
+			fire := alerts.LifecycleEvent{Type: eventlog.TypeFired, OccurredAt: start, Alert: alert}
+			resolve := alerts.LifecycleEvent{Type: eventlog.TypeResolved, OccurredAt: start.Add(time.Minute), Alert: alert}
+			refire := alerts.LifecycleEvent{Type: eventlog.TypeRefired, OccurredAt: start.Add(2 * time.Minute), Alert: alert}
+			m.handleAlertLifecycleEvent(fire)
+			m.handleAlertLifecycleEvent(resolve)
+			original := incidents.GetTimelineByAlertAt(alert.ID, start)
+			require.Equal(t, memory.IncidentStatusResolved, original.Status)
+			m.handleAlertLifecycleEvent(refire)
+			assertOpen := func() {
+				t.Helper()
+				current := incidents.GetTimelineByAlertAt(alert.ID, start)
+				require.Equal(t, original.ID, current.ID)
+				require.Equal(t, memory.IncidentStatusOpen, current.Status)
+				require.Nil(t, current.ClosedAt)
+				require.Len(t, current.Events, 3)
+				require.Len(t, incidents.ListIncidentsByResource(alert.ResourceID, 0), 1)
+			}
+			assertOpen()
+			if canonical {
+				// Canonical history must recover the retained occurrence even when
+				// no incident checkpoint survives.
+				recovered := memory.NewIncidentStore(memory.IncidentStoreConfig{})
+				recovered.SetResourceTimelineStore(m.resourceStore.(memory.IncidentTimelineStore))
+				page, err := recovered.QueryIncidents(memory.IncidentQuery{ResourceID: alert.ResourceID})
+				require.NoError(t, err)
+				require.Len(t, page.Incidents, 1)
+				require.Equal(t, memory.IncidentStatusOpen, page.Incidents[0].Status)
+				require.Equal(t, start, page.Incidents[0].OpenedAt)
+				require.Len(t, page.Incidents[0].Events, 3)
+			}
+			for i := 0; i < 10; i++ {
+				m.handleAlertLifecycleEvent(fire)
+				m.handleAlertLifecycleEvent(resolve)
+				m.handleAlertLifecycleEvent(refire)
+			}
+			assertOpen()
+			// Historical read repair must not close an occurrence that re-fired.
+			incidents.EnsureAlertOccurrence(alert, &resolve.OccurredAt)
+			assertOpen()
+			finalResolve := resolve
+			finalResolve.OccurredAt = start.Add(3 * time.Minute)
+			m.handleAlertLifecycleEvent(finalResolve)
+			m.handleAlertLifecycleEvent(refire)
+			current := incidents.GetTimelineByAlertAt(alert.ID, start)
+			require.Equal(t, memory.IncidentStatusResolved, current.Status)
+			require.Equal(t, &finalResolve.OccurredAt, current.ClosedAt)
+			require.Len(t, current.Events, 4)
+		})
+	}
+}

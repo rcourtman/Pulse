@@ -305,11 +305,10 @@ describe('ProLicensePanel', () => {
 
     expect(screen.getByText('Select a plan')).toBeInTheDocument();
     expect(screen.getByText('Available plans')).toBeInTheDocument();
-    expect(screen.getByText('Relay plan')).toBeInTheDocument();
+    // Relay was retired on 2026-09-29: Community sees only the Pro card.
+    expect(screen.queryByText('Relay plan')).not.toBeInTheDocument();
     expect(screen.getByText('Pulse Pro plan')).toBeInTheDocument();
-    expect(screen.getByText('Remote web access via Relay')).toBeInTheDocument();
-    expect(screen.getByText('Pulse Mobile pairing')).toBeInTheDocument();
-    expect(screen.getByText('Push notifications')).toBeInTheDocument();
+    expect(screen.queryByText(/remote web access/i)).not.toBeInTheDocument();
     expect(
       screen.getByText('Patrol modes: Ask first, Safe auto-fix, or Autopilot'),
     ).toBeInTheDocument();
@@ -830,7 +829,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Current plan: Pulse Pro')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Pulse Pro is active on this instance. It includes Relay connectivity, Pulse Mobile pairing, push notifications, Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.',
+        'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, agent profiles, and Pulse Mobile pairing until 31 March 2027.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Primary capabilities')).toBeInTheDocument();
@@ -853,10 +852,10 @@ describe('ProLicensePanel', () => {
         'Open this only when a Pro capability looks unavailable. Normal setup is choosing Patrol mode.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText('Remote access, pairing, and push')).toBeInTheDocument();
+    expect(screen.getByText('Pulse Mobile pairing and push')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Relay, Pulse Mobile pairing, and push notifications are available on this instance.',
+        'Pulse Mobile pairing and push notifications are available on this instance until Pulse Mobile is retired on 31 March 2027.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Patrol investigation and remediation')).toBeInTheDocument();
@@ -900,7 +899,7 @@ describe('ProLicensePanel', () => {
 
     expect(
       screen.getByText(
-        'Relay is active on this instance. It includes remote web access, Pulse Mobile pairing, push notifications, and 14-day metric history.',
+        'Relay is active on this instance. It includes Pulse Mobile pairing and push notifications until 31 March 2027, and 14-day metric history.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Available plans')).not.toBeInTheDocument();
@@ -908,9 +907,9 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('Pulse Pro plan')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
     expect(screen.getByText('Relay status')).toBeInTheDocument();
-    expect(screen.getByText('Remote access, pairing, and push')).toBeInTheDocument();
+    expect(screen.getAllByText('Pulse Mobile pairing and push').length).toBeGreaterThan(0);
     expect(screen.getAllByText('14-day metric history').length).toBeGreaterThan(0);
-    expect(screen.getByText('Pulse Relay (Remote Access)')).toBeInTheDocument();
+    expect(screen.getByText('Pulse Relay (Mobile Connection)')).toBeInTheDocument();
     expect(screen.getByText('Pulse Mobile Pairing')).toBeInTheDocument();
     expect(screen.getByText('Push Notifications')).toBeInTheDocument();
   });
@@ -1098,7 +1097,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Audit Logging')).toBeInTheDocument();
     expect(screen.getByText('PDF/CSV Reporting')).toBeInTheDocument();
     expect(screen.getByText('Centralized Agent Profiles')).toBeInTheDocument();
-    expect(screen.getByText('Pulse Relay (Remote Access)')).toBeInTheDocument();
+    expect(screen.getByText('Pulse Relay (Mobile Connection)')).toBeInTheDocument();
     expect(screen.getByText('Pulse Mobile Pairing')).toBeInTheDocument();
     expect(screen.getByText('Push Notifications')).toBeInTheDocument();
     expect(screen.getByText('Extended Metric History')).toBeInTheDocument();
@@ -1667,7 +1666,7 @@ describe('ProLicensePanel', () => {
     expect(selfHostedCommercialRecoverySectionSource).not.toContain('target="_blank"');
     expect(selfHostedCommercialRecoverySectionSource).not.toContain('rel="noopener noreferrer"');
     expect(proLicensePlanSectionSource).not.toContain(
-      'inline-flex items-center gap-1 mt-3 min-h-10 sm:min-h-9 rounded-md border border-current/20 px-3 py-2 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5',
+      'inline-flex items-center gap-1 mt-3 min-h-10 sm:min-h-9 rounded-md border px-3 py-2 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5',
     );
     expect(proLicensePlanSectionSource).toContain('props.planComparisonSummary.cards.length > 0');
     expect(proLicensePlanSectionSource).toContain(

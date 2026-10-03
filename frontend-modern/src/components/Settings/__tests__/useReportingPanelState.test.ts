@@ -98,14 +98,26 @@ describe('useReportingPanelState', () => {
   let hasReportingFeature: boolean;
   let loadRuntimeLicenseStatusMock: ReturnType<typeof vi.fn>;
   let loadCommercialLicenseStatusMock: ReturnType<typeof vi.fn>;
+  let aiEnabled: boolean | null;
+  let showWarningMock: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     vi.resetModules();
 
     apiFetchMock = buildCatalogAndSchedulesFetchMock();
     hasReportingFeature = true;
+    aiEnabled = null;
+    showWarningMock = vi.fn();
     loadRuntimeLicenseStatusMock = vi.fn();
     loadCommercialLicenseStatusMock = vi.fn();
+
+    vi.doMock('@/stores/aiChat', () => ({
+      aiChatStore: {
+        get enabled() {
+          return aiEnabled;
+        },
+      },
+    }));
 
     vi.doMock('@/utils/apiClient', async () => {
       const actual = await vi.importActual<typeof import('@/utils/apiClient')>('@/utils/apiClient');
@@ -117,7 +129,7 @@ describe('useReportingPanelState', () => {
 
     vi.doMock('@/utils/toast', () => ({
       showSuccess: vi.fn(),
-      showWarning: vi.fn(),
+      showWarning: showWarningMock,
     }));
 
     vi.doMock('@/stores/license', () => ({
@@ -423,6 +435,110 @@ describe('useReportingPanelState', () => {
       '/api/reporting',
     );
     expect(hookState.reportingCatalog()?.vmInventoryExport).toBeNull();
+
+    dispose();
+  });
+
+  it('offers the Patrol weekly summary only while the session reports Patrol can run', async () => {
+    aiEnabled = null;
+    const first = mountHook();
+    await flushAsync();
+    expect(first.hookState.patrolDigestAvailable()).toBe(false);
+    first.dispose();
+
+    aiEnabled = true;
+    const second = mountHook();
+    await flushAsync();
+    expect(second.hookState.patrolDigestAvailable()).toBe(true);
+    second.dispose();
+  });
+
+  it('pins a Patrol weekly summary to a weekly email and drops any picked resources', async () => {
+    const { hookState, dispose } = mountHook();
+    await flushAsync();
+
+    hookState.startCreateSchedule();
+    hookState.updateScheduleForm({ cadenceType: 'monthly', deliveryMethod: 'disk' });
+    hookState.setScheduleResources([{ id: 'vm-1', type: 'vm', name: 'vm-1' }]);
+
+    hookState.setScheduleKind('patrol_digest');
+
+    expect(hookState.scheduleForm()).toMatchObject({
+      kind: 'patrol_digest',
+      cadenceType: 'weekly',
+      deliveryMethod: 'email',
+      attach: false,
+      saveToDisk: false,
+    });
+    expect(hookState.scheduleResources()).toEqual([]);
+
+    hookState.setScheduleKind('resources');
+    expect(hookState.scheduleForm()).toMatchObject({ kind: 'resources', attach: true });
+
+    dispose();
+  });
+
+  it('saves a Patrol weekly summary without a resource scope', async () => {
+    const savedSchedule = {
+      id: 'digest-1',
+      name: 'Weekly Patrol',
+      kind: 'patrol_digest',
+      enabled: true,
+      cadence: { type: 'weekly', weekday: 'monday', time: '09:00', timezone: 'UTC' },
+      scope: { resources: [], tags: [] },
+      format: 'email',
+      delivery: { method: 'email', to: [], attach: false, save_to_disk: false },
+    };
+    apiFetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/admin/reports/schedules' && init?.method === 'POST') {
+        return Promise.resolve(jsonResponse(savedSchedule));
+      }
+      if (url === '/api/admin/reports/schedules') {
+        return Promise.resolve(jsonResponse(schedulesPayload));
+      }
+      return Promise.resolve(jsonResponse(catalogPayload));
+    });
+
+    const { hookState, dispose } = mountHook();
+    await flushAsync();
+
+    hookState.startCreateSchedule();
+    hookState.updateScheduleForm({ name: 'Weekly Patrol', timezone: 'UTC' });
+    hookState.setScheduleKind('patrol_digest');
+    await hookState.saveReportSchedule();
+    await flushAsync();
+
+    expect(showWarningMock).not.toHaveBeenCalled();
+    const post = apiFetchMock.mock.calls.find(
+      ([url, init]) => url === '/api/admin/reports/schedules' && init?.method === 'POST',
+    );
+    expect(post).toBeDefined();
+    const body = JSON.parse(String(post![1].body));
+    expect(body.kind).toBe('patrol_digest');
+    expect(body.format).toBe('email');
+    expect(body.scope).toEqual({ resources: [], tags: [] });
+    expect(body.delivery).toMatchObject({ method: 'email', attach: false, save_to_disk: false });
+    expect(hookState.reportSchedules()).toHaveLength(1);
+    expect(hookState.reportSchedules()[0].kind).toBe('patrol_digest');
+    expect(hookState.scheduleFormOpen()).toBe(false);
+
+    dispose();
+  });
+
+  it('still requires a scope for a performance report schedule', async () => {
+    const { hookState, dispose } = mountHook();
+    await flushAsync();
+
+    hookState.startCreateSchedule();
+    hookState.updateScheduleForm({ name: 'Monthly clients' });
+    await hookState.saveReportSchedule();
+
+    expect(showWarningMock).toHaveBeenCalledWith('Select resources or enter at least one tag');
+    expect(
+      apiFetchMock.mock.calls.some(
+        ([, init]) => (init as RequestInit | undefined)?.method === 'POST',
+      ),
+    ).toBe(false);
 
     dispose();
   });

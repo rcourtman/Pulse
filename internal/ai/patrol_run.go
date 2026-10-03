@@ -797,6 +797,8 @@ func (p *PatrolService) runPatrolWithTriggerStart(ctx context.Context, trigger T
 		runRecord.FindingAssessments = append([]PatrolFindingAssessment(nil), runStats.aiAnalysis.Assessments...)
 		runRecord.InputTokens = runStats.aiAnalysis.InputTokens
 		runRecord.OutputTokens = runStats.aiAnalysis.OutputTokens
+		runRecord.CacheCreationInputTokens = runStats.aiAnalysis.CacheCreationInputTokens
+		runRecord.CacheReadInputTokens = runStats.aiAnalysis.CacheReadInputTokens
 		runRecord.TriageFlags = runStats.triageFlags
 		runRecord.TriageSkippedLLM = runStats.triageSkippedLLM
 		toolCalls := runStats.aiAnalysis.ToolCalls
@@ -1266,6 +1268,8 @@ func (p *PatrolService) runScopedPatrolWithStart(ctx context.Context, scope Patr
 		runRecord.FindingAssessments = append([]PatrolFindingAssessment(nil), runStats.aiAnalysis.Assessments...)
 		runRecord.InputTokens = runStats.aiAnalysis.InputTokens
 		runRecord.OutputTokens = runStats.aiAnalysis.OutputTokens
+		runRecord.CacheCreationInputTokens = runStats.aiAnalysis.CacheCreationInputTokens
+		runRecord.CacheReadInputTokens = runStats.aiAnalysis.CacheReadInputTokens
 		runRecord.TriageFlags = runStats.triageFlags
 		runRecord.TriageSkippedLLM = runStats.triageSkippedLLM
 		toolCalls := runStats.aiAnalysis.ToolCalls

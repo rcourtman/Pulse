@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
@@ -99,6 +100,10 @@ type ResourceRegistry struct {
 	// ID (availability links, API reads) keep resolving. An empty value marks
 	// an ambiguous claim and never resolves.
 	supersededIndex map[string]string
+	// Derived from each stored resource's canonical identity after ingest.
+	// nil during a batch means reference reads use the live scan until the
+	// final identity refresh rebuilds the index. Empty values are ambiguous.
+	canonicalIdentityIndex map[string]string
 
 	// Cached typed view indexes. Invalidated on ingest, rebuilt lazily on
 	// first access. Protected by mu — callers hold RLock to read, and the
@@ -126,12 +131,13 @@ type ResourceRegistry struct {
 	// viewsDirty is false, like every other cached field above.
 	cachedSourceTargets map[string][]SourceTarget
 
-	// agentNodeScanIndex buckets agent resources by lowercased node name for
-	// the duration of one buildChildCounts pass, where the agent-parent
-	// fallback would otherwise scan every resource once per guest. Only that
-	// pass sets it; nil means callers take the full scan. Bucket membership
-	// is fixed for the pass (Type and NodeName are never mutated mid-pass)
-	// while scores stay live through the shared pointers.
+	// agentNodeScanIndex buckets agent resources by lowercased node name
+	// while guests are ingested and during one buildChildCounts pass, where
+	// the agent-parent fallback would otherwise scan every resource once per
+	// guest. nil means callers take the full scan. ingestRecord rebuilds it
+	// whenever an ingest yields an agent, so bucket membership always matches
+	// what the full scan would see; scores stay live through the shared
+	// pointers.
 	agentNodeScanIndex map[string][]agentNodeCandidate
 }
 
@@ -262,18 +268,29 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 	}
 	for _, instance := range snapshot.PBSInstances {
 		rr.ingestPBSInstance(instance)
-		rr.associatePBSHostAgentResources(instance, snapshot.Hosts)
+		rr.associatePBSHostAgentResources(instance, snapshot.Hosts, snapshot.VMs)
 	}
 	for _, instance := range snapshot.PMGInstances {
 		rr.ingestPMGInstance(instance)
 	}
 	var guestSuccessions []CanonicalIDSuccession
+	// Every guest resolves its parent node, which can fall back to a scan of
+	// every resource. Each agent-producing source is ingested above, so bucket
+	// agents by node once for the guest loops instead of walking the registry
+	// per guest: that walk made every agent report's rebuild quadratic in the
+	// estate (#2199).
+	rr.mu.Lock()
+	rr.agentNodeScanIndex = rr.buildAgentNodeScanIndexLocked()
+	rr.mu.Unlock()
 	for _, vm := range snapshot.VMs {
 		guestSuccessions = append(guestSuccessions, rr.ingestVM(vm, clusterByInstance, nodeNamesByInstance)...)
 	}
 	for _, ct := range snapshot.Containers {
 		guestSuccessions = append(guestSuccessions, rr.ingestContainer(ct, clusterByInstance, nodeNamesByInstance)...)
 	}
+	rr.mu.Lock()
+	rr.agentNodeScanIndex = nil
+	rr.mu.Unlock()
 	rr.applyRecordSuccessions(guestSuccessions)
 	for _, storage := range snapshot.Storage {
 		rr.ingestStorage(storage)
@@ -683,17 +700,20 @@ func (rr *ResourceRegistry) proxmoxGuestResourceIDForSourceRefLocked(ref string)
 	if !ok {
 		return ""
 	}
-	matches := map[string]struct{}{}
+	uniqueID := ""
 	for _, resourceType := range []ResourceType{ResourceTypeVM, ResourceTypeSystemContainer} {
 		candidateID := ProxmoxGuestCanonicalID(resourceType, instance, vmid)
 		if candidateID == "" {
 			continue
 		}
 		if rr.resources[candidateID] != nil {
-			matches[candidateID] = struct{}{}
+			if uniqueID != "" && uniqueID != candidateID {
+				return ""
+			}
+			uniqueID = candidateID
 		}
 	}
-	return uniqueResourceIDMatch(matches)
+	return uniqueID
 }
 
 // applyRecordSuccessions re-keys operator-owned store rows from canonical IDs
@@ -768,6 +788,7 @@ func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map
 		}
 
 		rr.mu.Lock()
+		rr.canonicalIdentityIndex = nil
 		rr.resources[resource.ID] = resource
 		rr.matcher.Add(resource.ID, resource.Identity)
 		rr.viewsDirty = true
@@ -1348,35 +1369,72 @@ func (rr *ResourceRegistry) Get(id string) (*Resource, bool) {
 // resource ID alongside the cloned resource so callers can keep downstream
 // store lookups on the canonical registry identity.
 func (rr *ResourceRegistry) GetByReference(ref string) (*Resource, string, bool) {
-	rr.mu.RLock()
-	defer rr.mu.RUnlock()
-
 	ref = CanonicalResourceID(ref)
-	if ref == "" {
+	rr.mu.RLock()
+	resolvedID, needsAliasIndex := rr.resolveReferenceIDLocked(ref)
+	if needsAliasIndex {
+		rr.mu.RUnlock()
+		rr.mu.Lock()
+		if rr.canonicalIdentityIndex == nil {
+			rr.buildCanonicalIdentityIndexLocked()
+		}
+		resolvedID, _ = rr.resolveReferenceIDLocked(ref)
+		defer rr.mu.Unlock()
+	} else {
+		defer rr.mu.RUnlock()
+	}
+	if resolvedID == "" {
 		return nil, "", false
 	}
+	clone := cloneResource(rr.resources[resolvedID])
+	return &clone, resolvedID, true
+}
 
-	if r := rr.resources[ref]; r != nil {
-		clone := cloneResource(r)
-		return &clone, ref, true
-	}
-
-	for _, resolvedID := range []string{
-		rr.supersededResourceIDLocked(ref),
-		rr.uniqueSourceResourceIDLocked(ref),
-		rr.proxmoxGuestResourceIDForSourceRefLocked(ref),
-		rr.uniqueCanonicalIdentityResourceIDLocked(ref),
-	} {
-		if resolvedID == "" {
-			continue
+// ResolveReferenceID keeps identity-only consumers on the same precedence and
+// ambiguity rules as GetByReference without cloning a full resource.
+func (rr *ResourceRegistry) ResolveReferenceID(ref string) (string, bool) {
+	rr.mu.RLock()
+	ref = CanonicalResourceID(ref)
+	resolvedID, needsAliasIndex := rr.resolveReferenceIDLocked(ref)
+	if needsAliasIndex {
+		rr.mu.RUnlock()
+		rr.mu.Lock()
+		if rr.canonicalIdentityIndex == nil {
+			rr.buildCanonicalIdentityIndexLocked()
 		}
-		if r := rr.resources[resolvedID]; r != nil {
-			clone := cloneResource(r)
-			return &clone, resolvedID, true
-		}
+		resolvedID, _ = rr.resolveReferenceIDLocked(ref)
+		rr.mu.Unlock()
+	} else {
+		rr.mu.RUnlock()
 	}
+	return resolvedID, resolvedID != ""
+}
 
-	return nil, "", false
+// The second result requests a one-time alias-index build after the read lock
+// is released. Exact and source references never pay that cost.
+func (rr *ResourceRegistry) resolveReferenceIDLocked(ref string) (string, bool) {
+	if ref == "" {
+		return "", false
+	}
+	if rr.resources[ref] != nil {
+		return ref, false
+	}
+	if resolvedID := rr.supersededResourceIDLocked(ref); rr.resources[resolvedID] != nil {
+		return resolvedID, false
+	}
+	if resolvedID := rr.uniqueSourceResourceIDLocked(ref); rr.resources[resolvedID] != nil {
+		return resolvedID, false
+	}
+	if resolvedID := rr.proxmoxGuestResourceIDForSourceRefLocked(ref); rr.resources[resolvedID] != nil {
+		return resolvedID, false
+	}
+	if rr.canonicalIdentityIndex == nil {
+		return "", true
+	}
+	if resolvedID := rr.uniqueCanonicalIdentityResourceIDLocked(ref); rr.resources[resolvedID] != nil {
+		return resolvedID, false
+	}
+	return "", false
 }
 
 func (rr *ResourceRegistry) uniqueSourceResourceIDLocked(sourceID string) string {
@@ -1385,19 +1443,25 @@ func (rr *ResourceRegistry) uniqueSourceResourceIDLocked(sourceID string) string
 		return ""
 	}
 
-	matches := map[string]struct{}{}
+	uniqueID := ""
 	for _, mapping := range rr.bySource {
 		if resourceID := mapping[sourceID]; resourceID != "" {
-			matches[resourceID] = struct{}{}
+			if uniqueID != "" && uniqueID != resourceID {
+				return ""
+			}
+			uniqueID = resourceID
 		}
 	}
-	return uniqueResourceIDMatch(matches)
+	return uniqueID
 }
 
 func (rr *ResourceRegistry) uniqueCanonicalIdentityResourceIDLocked(ref string) string {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
 		return ""
+	}
+	if rr.canonicalIdentityIndex != nil {
+		return rr.canonicalIdentityIndex[canonicalIdentityFoldKey(ref)]
 	}
 
 	matches := map[string]struct{}{}
@@ -1407,6 +1471,25 @@ func (rr *ResourceRegistry) uniqueCanonicalIdentityResourceIDLocked(ref string) 
 		}
 	}
 	return uniqueResourceIDMatch(matches)
+}
+
+// strings.EqualFold compares Unicode simple-fold classes, which cannot be
+// keyed safely with strings.ToLower (for example, dotted I has a different
+// fold class). Use the smallest rune of each class as the derived map key.
+func canonicalIdentityFoldKey(ref string) string {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return ""
+	}
+	return strings.Map(func(r rune) rune {
+		minimum := r
+		for folded := unicode.SimpleFold(r); folded != r; folded = unicode.SimpleFold(folded) {
+			if folded < minimum {
+				minimum = folded
+			}
+		}
+		return minimum
+	}, ref)
 }
 
 func resourceMatchesCanonicalIdentityReference(resource *Resource, ref string) bool {
@@ -2658,9 +2741,13 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 // normal canonical matching rules, but may only introduce absent resources.
 // Returning an empty ID also prevents a skipped record from attaching retired
 // identities or migrating operator-owned state onto the current resource.
-func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, resource Resource, identity ResourceIdentity, onlyMissing bool) string {
+func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, resource Resource, identity ResourceIdentity, onlyMissing bool) (ingestedID string) {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
+	rr.canonicalIdentityIndex = nil
+	if rr.agentNodeScanIndex != nil {
+		defer func() { rr.refreshAgentNodeScanIndexLocked(ingestedID) }()
+	}
 	rr.invalidateSourceTargetsLocked()
 	sourceID = normalizeSourceID(sourceID)
 	if sourceID == "" {
@@ -3289,16 +3376,25 @@ func (rr *ResourceRegistry) resolveAvailabilityLinkedResource(ref string, incomi
 	// node-scoped guest source ID follow the resource across identity eras
 	// and live migrations. These arms resolve provider-declared persistence
 	// keys, not display aliases, so the explicit link stays fail-closed.
-	for _, candidateID := range uniqueTrimmed(
-		rr.supersededResourceIDLocked(exactID),
-		rr.uniqueSourceResourceIDLocked(ref),
-		rr.proxmoxGuestResourceIDForSourceRefLocked(ref),
-		rr.uniqueCanonicalIdentityResourceIDLocked(ref),
-	) {
+	eligible := func(candidateID string) string {
+		candidateID = CanonicalResourceID(candidateID)
 		existing := rr.resources[candidateID]
 		if existing != nil && !isAvailabilityOwnedResource(*existing) {
 			return candidateID
 		}
+		return ""
+	}
+	if candidateID := eligible(rr.supersededResourceIDLocked(exactID)); candidateID != "" {
+		return candidateID
+	}
+	if candidateID := eligible(rr.uniqueSourceResourceIDLocked(ref)); candidateID != "" {
+		return candidateID
+	}
+	if candidateID := eligible(rr.proxmoxGuestResourceIDForSourceRefLocked(ref)); candidateID != "" {
+		return candidateID
+	}
+	if candidateID := eligible(rr.uniqueCanonicalIdentityResourceIDLocked(ref)); candidateID != "" {
+		return candidateID
 	}
 
 	return ""
@@ -4549,6 +4645,11 @@ func (rr *ResourceRegistry) proxmoxNodeParentIDFromResourcesLocked(instance, clu
 		// buildChildCounts is mid-pass: only this node's agent candidates
 		// can match, so skip the full walk.
 		for _, candidate := range rr.agentNodeScanIndex[strings.ToLower(nodeName)] {
+			// A merge since indexing may have replaced or removed the entry;
+			// the full scan would only see the registry's current object.
+			if rr.resources[candidate.id] != candidate.resource {
+				continue
+			}
 			consider(candidate.id, candidate.resource)
 		}
 		return bestID
@@ -4601,11 +4702,10 @@ func proxmoxNodeParentScopeScore(instance, clusterName string, parent *ProxmoxDa
 	}
 }
 
-func (rr *ResourceRegistry) buildChildCounts() {
-	// The parent-resolution loop below may hit the agent fallback scan once
-	// per guest. Bucketing agents by node name up front turns each of those
-	// scans into a lookup over that node's few candidates.
-	rr.agentNodeScanIndex = make(map[string][]agentNodeCandidate)
+// buildAgentNodeScanIndexLocked buckets agent resources by lowercased node
+// name. The caller holds rr.mu for writing.
+func (rr *ResourceRegistry) buildAgentNodeScanIndexLocked() map[string][]agentNodeCandidate {
+	index := make(map[string][]agentNodeCandidate)
 	for id, r := range rr.resources {
 		if r == nil || r.Proxmox == nil || CanonicalResourceType(r.Type) != ResourceTypeAgent {
 			continue
@@ -4614,8 +4714,30 @@ func (rr *ResourceRegistry) buildChildCounts() {
 		if nodeName == "" {
 			continue
 		}
-		rr.agentNodeScanIndex[nodeName] = append(rr.agentNodeScanIndex[nodeName], agentNodeCandidate{id: id, resource: r})
+		index[nodeName] = append(index[nodeName], agentNodeCandidate{id: id, resource: r})
 	}
+	return index
+}
+
+// refreshAgentNodeScanIndexLocked rebuilds a live index after an ingest
+// yields an agent, whose node name may be new to the buckets. Guest ingests,
+// the common case while the index is live, leave it untouched.
+func (rr *ResourceRegistry) refreshAgentNodeScanIndexLocked(resourceID string) {
+	if rr.agentNodeScanIndex == nil {
+		return
+	}
+	resource := rr.resources[CanonicalResourceID(resourceID)]
+	if resource == nil || resource.Proxmox == nil || CanonicalResourceType(resource.Type) != ResourceTypeAgent {
+		return
+	}
+	rr.agentNodeScanIndex = rr.buildAgentNodeScanIndexLocked()
+}
+
+func (rr *ResourceRegistry) buildChildCounts() {
+	// The parent-resolution loop below may hit the agent fallback scan once
+	// per guest. Bucketing agents by node name up front turns each of those
+	// scans into a lookup over that node's few candidates.
+	rr.agentNodeScanIndex = rr.buildAgentNodeScanIndexLocked()
 	defer func() { rr.agentNodeScanIndex = nil }()
 
 	// ChildCount and ParentName are derived fields. Clear prior values before
@@ -4665,9 +4787,40 @@ func (rr *ResourceRegistry) buildChildCounts() {
 // policies silently fall back to factory (#1497). Runs after links and merges
 // settle so alias sets reflect the fully assembled resource.
 func (rr *ResourceRegistry) refreshCanonicalIdentitiesLocked() {
+	rr.canonicalIdentityIndex = nil
 	for _, resource := range rr.resources {
 		RefreshCanonicalIdentity(resource)
 	}
+}
+
+// buildCanonicalIdentityIndexLocked is deferred until a public reference read
+// actually needs alias resolution. Ingest already walks every resource to
+// refresh canonical identity, and rebuilding the map there would repeat work
+// on every batch even when no alias is queried.
+func (rr *ResourceRegistry) buildCanonicalIdentityIndexLocked() {
+	index := make(map[string]string, len(rr.resources)*2)
+	indexCandidate := func(candidate, resourceID string) {
+		key := canonicalIdentityFoldKey(candidate)
+		if key == "" {
+			return
+		}
+		if previous, exists := index[key]; !exists {
+			index[key] = resourceID
+		} else if previous != resourceID {
+			index[key] = ""
+		}
+	}
+	for resourceID, resource := range rr.resources {
+		if resource.Canonical == nil {
+			continue
+		}
+		indexCandidate(resource.Canonical.PrimaryID, resourceID)
+		indexCandidate(resource.Canonical.PlatformID, resourceID)
+		for _, alias := range resource.Canonical.Aliases {
+			indexCandidate(alias, resourceID)
+		}
+	}
+	rr.canonicalIdentityIndex = index
 }
 
 func (rr *ResourceRegistry) refreshLinkedAgentIDFromParentLocked(resource *Resource) {
@@ -5622,15 +5775,29 @@ func (rr *ResourceRegistry) ensureViewsLocked() {
 	rr.rebuildViews()
 }
 
-// withViewCache acquires a write lock to ensure views are fresh, then
-// downgrades to a read lock and calls fn. This avoids TOCTOU gaps.
+// withViewCache reads clean cached views under a shared lock. If a rebuild is
+// needed, it ensures the cache under the write lock and retries the shared
+// read; retrying also handles invalidation between rebuilding and reading.
 func withViewCache[T any](rr *ResourceRegistry, fn func() T) T {
-	rr.mu.Lock()
-	rr.ensureViewsLocked()
-	rr.mu.Unlock()
+	for {
+		if value, clean := readCleanViewCache(rr, fn); clean {
+			return value
+		}
+
+		rr.mu.Lock()
+		rr.ensureViewsLocked()
+		rr.mu.Unlock()
+	}
+}
+
+func readCleanViewCache[T any](rr *ResourceRegistry, fn func() T) (T, bool) {
 	rr.mu.RLock()
 	defer rr.mu.RUnlock()
-	return fn()
+	if rr.viewsDirty {
+		var zero T
+		return zero, false
+	}
+	return fn(), true
 }
 
 // rebuildViews recomputes all cached view slices from the current resource map.

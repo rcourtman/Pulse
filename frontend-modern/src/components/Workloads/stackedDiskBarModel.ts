@@ -87,6 +87,10 @@ export interface StackedDiskBarPresentation {
   tooltipTitle: string;
   useStackedSegments: boolean;
   verticalBars: StackedDiskVerticalBar[];
+  // The fullest disk's usage, shown beside the micro-bars so a multi-disk
+  // host answers "how close is this host to running out?" without a hover.
+  verticalBarsLabel: string;
+  verticalBarsLabelTitle: string;
   verticalBarsMode: boolean;
 }
 
@@ -144,8 +148,17 @@ function getShortDiskLabel(label: string): string {
   return trimmed;
 }
 
+// Horizontal padding around the aggregate label inside the bar (px-0.5 in
+// StackedDiskBar.tsx).
+const LABEL_PADDING_PX = 4;
+// Inline per-disk labels are text-[9px] font-semibold, in px-px slots that a
+// gap-0.5 separates.
+const INLINE_DISK_FONT_PX = 9;
+const INLINE_DISK_SLOT_PADDING_PX = 2;
+const INLINE_DISK_SLOT_GAP_PX = 2;
+
 function estimateInlineTextWidth(text: string): number {
-  return text.length * 5.4 + 4;
+  return estimateTextWidth(text, { fontPx: INLINE_DISK_FONT_PX }) + INLINE_DISK_SLOT_PADDING_PX;
 }
 
 function getInlineDiskText(shortLabel: string, percentLabel: string, slotWidth: number): string {
@@ -269,7 +282,10 @@ export function buildStackedDiskBarPresentation(
   const inlineDiskMode =
     (miniMode || hasMultipleDisks) && !aggregateMode && !explicitStackedMode && !verticalBarsMode;
   const useStackedSegments = hasMultipleDisks && explicitStackedMode;
-  const inlineDiskSlotWidth = disks.length > 0 ? containerWidth / disks.length : 0;
+  const inlineDiskSlotWidth =
+    disks.length > 0
+      ? (containerWidth - INLINE_DISK_SLOT_GAP_PX * (disks.length - 1)) / disks.length
+      : 0;
   const totalCapacity = hasDisks
     ? disks.reduce((sum, disk) => sum + (disk.total || 0), 0)
     : (props.aggregateDisk?.total ?? 0);
@@ -307,15 +323,19 @@ export function buildStackedDiskBarPresentation(
     (aggregateMode &&
       hasMultipleDisks &&
       maxLabelShort.length > 0 &&
-      containerWidth >= estimateTextWidth(`${displayLabel} ${maxLabelShort}`));
+      containerWidth >=
+        estimateTextWidth(displayLabel, { detail: ` ${maxLabelShort}` }) + LABEL_PADDING_PX);
+  // The anomaly marker shares the label's line whenever it renders.
+  const anomalyMarker = props.anomaly?.description && anomalyRatio ? ` ${anomalyRatio}` : '';
   const showSublabel =
     displaySublabel.length > 0 &&
     containerWidth >=
-      estimateTextWidth(
-        `${displayLabel}${showMaxLabel ? ` ${maxLabelShort}` : ''} (${displaySublabel})${
+      estimateTextWidth(`${displayLabel}${anomalyMarker}`, {
+        detail: `${showMaxLabel ? ` ${maxLabelShort}` : ''} (${displaySublabel})${
           showDiskCount ? ` ${diskCountLabel}` : ''
         }`,
-      );
+      }) +
+        LABEL_PADDING_PX;
   const barColor =
     aggregateMode && hasMultipleDisks && maxInfo
       ? getMetricColorRgba(maxInfo.percent, 'disk', props.thresholds)
@@ -359,6 +379,8 @@ export function buildStackedDiskBarPresentation(
         };
       })
     : [];
+  const verticalBarsLabel = verticalBarsMode && maxInfo ? formatPercent(maxInfo.percent) : '';
+  const verticalBarsLabelTitle = verticalBarsMode && maxInfo ? maxLabelFull : '';
   const tooltipContent = buildTooltipContent(allDisks, {
     aggregateDisk: props.aggregateDisk,
     aggregateMode,
@@ -402,6 +424,8 @@ export function buildStackedDiskBarPresentation(
     tooltipTitle: allDisks.length > 1 ? 'Disk Breakdown' : 'Disk Usage',
     useStackedSegments,
     verticalBars,
+    verticalBarsLabel,
+    verticalBarsLabelTitle,
     verticalBarsMode,
   };
 }

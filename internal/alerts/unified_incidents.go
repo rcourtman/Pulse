@@ -319,8 +319,7 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 			if newlyIndependent {
 				notificationReason = "supported-primary-ended"
 			}
-			if (newlyIndependent || becameCritical) &&
-				!existing.Acknowledged &&
+			if (newlyIndependent || becameCritical) && !existing.Acknowledged &&
 				m.allowNotificationByRateLimit(storageKey, existing, notificationReason) {
 				m.dispatchAlert(existing, false)
 			}

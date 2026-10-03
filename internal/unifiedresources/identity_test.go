@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 )
 
@@ -188,4 +189,74 @@ func TestIPOnlyMatchRequiresReview(t *testing.T) {
 	if !candidates[0].RequiresReview {
 		t.Fatalf("expected requires review")
 	}
+}
+
+func assertCandidateFloorMatchesReference(t testing.TB, matcher *IdentityMatcher, query ResourceIdentity) {
+	t.Helper()
+	full := matcher.findCandidatesReference(query)
+	if got := matcher.FindCandidates(query); !reflect.DeepEqual(got, full) {
+		t.Fatalf("general identity candidate/review results changed: got=%v want=%v", got, full)
+	}
+	for _, minimum := range []float64{0, 0.4, 0.5, 0.8, HighConfidenceThreshold, 0.99, 1.0, 1.1} {
+		want := make([]MatchCandidate, 0)
+		for _, match := range full {
+			if match.Confidence >= minimum {
+				want = append(want, match)
+			}
+		}
+		if got := matcher.findCandidatesAtLeast(query, minimum); !reflect.DeepEqual(got, want) {
+			t.Fatalf("floor %v changed identity/reason/order/review: got=%v want=%v", minimum, got, want)
+		}
+	}
+}
+
+func TestBroadcastIdentityFloorMatchesGeneralMatching(t *testing.T) {
+	matcher := NewIdentityMatcher()
+	identities := []ResourceIdentity{
+		{MachineID: "machine", DMIUUID: "uuid", Hostnames: []string{"tower.local"}, IPAddresses: []string{"192.0.2.10"}, MACAddresses: []string{"00:11:22:33:44:55"}},
+		{Hostnames: []string{"tower.remote"}, IPAddresses: []string{"192.0.2.10"}, MACAddresses: []string{"00-11-22-33-44-55"}},
+		{Hostnames: []string{"tower.other"}, IPAddresses: []string{"192.0.2.11"}},
+		{Hostnames: []string{"distinct"}, IPAddresses: []string{"127.0.0.1", "172.17.0.1"}},
+		{},
+	}
+	for i, identity := range identities {
+		matcher.Add(fmt.Sprint(i), identity)
+	}
+	for _, query := range append(identities, ResourceIdentity{MachineID: " machine ", DMIUUID: " uuid ", Hostnames: []string{"TOWER"}}) {
+		assertCandidateFloorMatchesReference(t, matcher, query)
+	}
+}
+
+func TestBroadcastIdentityFloorDoesNotAllocateDiscardedPeers(t *testing.T) {
+	makeMatcher := func(count int) *IdentityMatcher {
+		matcher := NewIdentityMatcher()
+		for i := 0; i < count; i++ {
+			matcher.Add(fmt.Sprint(i), ResourceIdentity{Hostnames: []string{"shared-host.local"}})
+		}
+		return matcher
+	}
+	query := ResourceIdentity{Hostnames: []string{"shared-host.local"}}
+	small, large := makeMatcher(8), makeMatcher(1000)
+	if len(large.FindCandidates(query)) != 1000 || len(large.findCandidatesAtLeast(query, HighConfidenceThreshold)) != 0 {
+		t.Fatal("candidate floor changed hostname confidence")
+	}
+	smallAllocs := testing.AllocsPerRun(20, func() { small.findCandidatesAtLeast(query, HighConfidenceThreshold) })
+	largeAllocs := testing.AllocsPerRun(20, func() { large.findCandidatesAtLeast(query, HighConfidenceThreshold) })
+	if largeAllocs > smallAllocs+8 {
+		t.Fatalf("discarded peers allocate with estate size: %v vs %v", smallAllocs, largeAllocs)
+	}
+}
+
+func FuzzBroadcastIdentityFloorMatchesGeneralMatching(f *testing.F) {
+	f.Add("machine", "uuid", "tower.local", "192.0.2.10", "00:11:22:33:44:55")
+	f.Add("", "", "tower.remote", "127.0.0.1", "")
+	f.Fuzz(func(t *testing.T, machine, uuid, host, ip, mac string) {
+		query := ResourceIdentity{MachineID: machine, DMIUUID: uuid, Hostnames: []string{host}, IPAddresses: []string{ip}, MACAddresses: []string{mac}}
+		matcher := NewIdentityMatcher()
+		matcher.Add("exact", query)
+		matcher.Add("hostname", ResourceIdentity{Hostnames: query.Hostnames})
+		matcher.Add("ip", ResourceIdentity{IPAddresses: query.IPAddresses})
+		matcher.Add("hostname-mac", ResourceIdentity{Hostnames: query.Hostnames, MACAddresses: query.MACAddresses})
+		assertCandidateFloorMatchesReference(t, matcher, query)
+	})
 }

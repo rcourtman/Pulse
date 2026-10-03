@@ -23,7 +23,7 @@ describe('StatusIndicatorBadge', () => {
     ));
 
     const badge = screen.getByText('Cooldown: Missing');
-    expect(badge).toHaveClass('rounded');
+    expect(badge).toHaveClass('rounded-sm');
     expect(badge).toHaveClass('py-1');
     expect(badge).toHaveClass('bg-amber-100');
     expect(badge.querySelector('[aria-hidden="true"]')).toBeNull();
@@ -36,7 +36,7 @@ describe('StatusIndicatorBadge', () => {
     ));
 
     const badge = screen.getByText('Run in progress');
-    expect(badge).toHaveClass('rounded');
+    expect(badge).toHaveClass('rounded-sm');
     expect(badge).toHaveClass('text-[10px]');
     expect(badge).toHaveClass('bg-blue-100');
     expect(badge).toHaveClass('text-blue-700');

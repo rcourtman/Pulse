@@ -295,6 +295,7 @@ describe('useUnifiedResources', () => {
 
     await waitForResourceCount(() => result!.resources().length);
     expect(result!.resources()[0]?.cpu?.current).toBe(15);
+    expect(result!.resourceSnapshotChange().changedIds).toBeNull();
 
     batch(() => {
       setWsState('resources', 0, 'cpu', 'current', 88);
@@ -303,6 +304,7 @@ describe('useUnifiedResources', () => {
     });
 
     await waitForValue(() => result!.resources()[0]?.cpu?.current, 88);
+    expect(result!.resourceSnapshotChange().changedIds).toEqual(new Set(['vm-1']));
     expect(apiFetchMock).not.toHaveBeenCalled();
     dispose();
   });
@@ -1620,6 +1622,64 @@ describe('useUnifiedResources', () => {
         connectionHealth: 'healthy',
       }),
     );
+
+    dispose();
+  });
+
+  it('keeps PMG metadata on the canonical resource for REST-first paints', async () => {
+    // The Mail Gateway table reads `resource.pmg`. The mapper used to keep it
+    // only under platformData, so a REST-sourced row rendered every PMG column
+    // as a dash until a websocket row happened to replace it.
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            id: 'pmg-1',
+            type: 'pmg',
+            name: 'mail-gateway-eu',
+            status: 'online',
+            lastSeen: '2026-02-06T12:00:00Z',
+            sources: ['pmg'],
+            uptime: 1_555_222,
+            technology: 'pmg',
+            sourceStatus: { pmg: { status: 'online', lastSeen: '2026-02-06T12:00:00Z' } },
+            actionReadiness: [{ name: 'restart', available: true }],
+            pmg: {
+              instanceId: 'pmg-eu',
+              hostname: 'pmg.example.lan',
+              version: '8.1-2',
+              nodeCount: 1,
+              mailCountTotal: 2_740,
+              spamIn: 321,
+              virusIn: 14,
+              queueTotal: 11,
+              queueDeferred: 5,
+            },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({ query: 'type=pmg&source=pmg', cacheKey: 'pmg-first-paint' });
+    });
+
+    await result!.refetch();
+    const row = result!.resources().find((resource) => resource.id === 'pmg-1');
+    expect(row?.pmg).toEqual(
+      expect.objectContaining({ version: '8.1-2', spamIn: 321, queueDeferred: 5 }),
+    );
+    expect(row?.platformData?.pmg).toEqual(row?.pmg);
+    // The per-source status, action readiness, and technology facets ride the
+    // same race: Docker lifecycle actions and storage freshness read them at
+    // the top level, where only websocket rows used to carry them.
+    expect(row?.sourceStatus?.pmg?.status).toBe('online');
+    expect(row?.actionReadiness?.[0]?.name).toBe('restart');
+    expect(row?.technology).toBe('pmg');
 
     dispose();
   });

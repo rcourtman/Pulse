@@ -375,6 +375,11 @@ or historical proof/counting for resolved-only work.
    chips, loop-state chips, recurrence badges, expand chevrons, or finding
    filters in this state because those controls do not help the operator fix
    Patrol setup.
+   The operational attention Inbox is independent of Patrol model readiness and
+   its on/off switch. Keep that attention workbench available below the focused
+   setup task when Patrol is off or its model needs setup; do not discard the
+   setup task, turn a runtime finding into an infrastructure decision, or
+   enable disabled Patrol controls merely to expose the independent queue.
    The Patrol page must not expose a generic Details/supporting-context evidence
    panel for nearby activity, learned correlations, or policy buckets. Those
    payloads may still feed Assistant context, backend investigation, and explicit
@@ -1254,6 +1259,12 @@ proof, including failed verification and reduced motion, remains
 `tests/integration/tests/91-operational-trust-attention-workbench.spec.ts`.
 The durable decision and proof record is
 `internal/records/operational-trust-governed-docker-restart-2026-07-19.md`.
+
+Reviewing a long decision on a phone must not lose the queue controls: the
+selected-detail header with Back, Previous, and Next issue stays pinned while
+the detail scrolls. The shell-level rule (opaque sticky header, `overflow-clip`
+inbox section) is owned by the frontend-primitives attention workbench shell
+contract.
 
 ## Current State
 
