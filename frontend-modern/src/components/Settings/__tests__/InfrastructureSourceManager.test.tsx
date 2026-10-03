@@ -169,7 +169,7 @@ describe('InfrastructureSourceManager setup summary', () => {
       'lg:min-h-0',
     );
     expect(infrastructureSourceManagerSource).toContain(
-      'class="min-h-11 min-w-[4.5rem] flex-shrink-0 lg:min-h-0"',
+      'class="min-h-11 min-w-18 shrink-0 lg:min-h-0"',
     );
   });
 

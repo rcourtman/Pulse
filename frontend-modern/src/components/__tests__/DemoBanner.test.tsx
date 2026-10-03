@@ -40,10 +40,10 @@ describe('DemoBanner', () => {
     expect(demoBannerSource).toContain('lucide-solid/icons/info');
     expect(demoBannerSource).not.toContain('<svg');
     expect(demoBannerSource).not.toContain(
-      'bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800',
+      'bg-blue-50 dark:bg-blue-900/25 border-b border-blue-200 dark:border-blue-800',
     );
     expect(demoBannerSource).not.toContain(
-      'p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded text-blue-600',
+      'p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded-sm text-blue-600',
     );
   });
 

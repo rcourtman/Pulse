@@ -67,7 +67,7 @@ const FilterSearchTermChip: Component<{
   term: FilterSearchTerm;
   onRemove: () => void;
 }> = (props) => (
-  <div class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 text-xs dark:border-blue-900 dark:bg-blue-950/40">
+  <div class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 text-xs dark:border-blue-900/25 dark:bg-blue-950/40">
     <span class="py-0.5 pl-2 pr-1 font-medium text-base-content">{props.term.label}</span>
     <button
       type="button"
@@ -277,7 +277,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
             </Show>
             <Show when={hasAddableMenuFilters() || hasClearableState() || hasAuxiliaryControls()}>
               <div
-                class="inline-flex max-w-full flex-shrink-0 flex-wrap items-center justify-start gap-2"
+                class="inline-flex max-w-full shrink-0 flex-wrap items-center justify-start gap-2"
                 data-filter-action-cluster
               >
                 <Show when={hasAddableMenuFilters()}>

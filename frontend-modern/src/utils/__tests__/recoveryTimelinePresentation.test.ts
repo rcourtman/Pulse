@@ -13,13 +13,13 @@ import {
 describe('getRecoveryTimelineColumnButtonClass', () => {
   it('keeps the full-height column as an accessible hit target only', () => {
     expect(getRecoveryTimelineColumnButtonClass(true)).toContain('group');
-    expect(getRecoveryTimelineColumnButtonClass(true)).toContain('focus-visible:outline');
+    expect(getRecoveryTimelineColumnButtonClass(true)).toContain('focus-visible:outline-solid');
     expect(getRecoveryTimelineColumnButtonClass(true)).not.toContain('ring-blue-500');
     expect(getRecoveryTimelineColumnButtonClass(true)).not.toContain('bg-blue-100');
   });
 
   it('does not dim the full-height click column when another day is focused', () => {
-    expect(getRecoveryTimelineColumnButtonClass(false)).toContain('focus-visible:outline');
+    expect(getRecoveryTimelineColumnButtonClass(false)).toContain('focus-visible:outline-solid');
     expect(getRecoveryTimelineColumnButtonClass(false, true)).not.toContain('opacity-40');
   });
 

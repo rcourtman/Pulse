@@ -80,7 +80,7 @@ export const ViewOptionsDisclosurePanel: Component<ViewOptionsDisclosurePanelPro
         event.preventDefault();
         props.state.close(true);
       }}
-      class="rounded-md border border-border-subtle bg-surface-alt/40 p-3"
+      class="rounded-md border border-border-subtle p-3"
     >
       <div class="mb-3 border-b border-border-subtle pb-2">
         <div id={props.state.titleId} class="text-xs font-medium text-base-content">

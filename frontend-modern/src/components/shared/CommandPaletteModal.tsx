@@ -71,7 +71,7 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
                     role="option"
                     aria-selected={selected()}
                     tabIndex={-1}
-                    class={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-base-content outline-none transition-colors hover:bg-surface-hover focus:bg-surface-hover ${
+                    class={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-base-content outline-hidden transition-colors hover:bg-surface-hover focus:bg-surface-hover ${
                       selected() ? 'bg-surface-hover' : ''
                     }`}
                     onClick={() => handleSelect(command)}
@@ -84,7 +84,7 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
                       </Show>
                     </div>
                     <Show when={command.shortcut}>
-                      <span class="rounded border border-border-subtle bg-base px-2 py-1 text-[10px] font-medium text-base-content">
+                      <span class="rounded-sm border border-border-subtle bg-base px-2 py-1 text-[10px] font-medium text-base-content">
                         {command.shortcut}
                       </span>
                     </Show>

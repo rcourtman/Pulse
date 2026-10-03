@@ -336,8 +336,8 @@ export const KubernetesNodesTable: Component<{
                       const s = nodeAlertStyles();
                       if (!s.hasUnacknowledgedAlert) return '';
                       return s.severity === 'critical'
-                        ? 'bg-red-50 dark:bg-red-950'
-                        : 'bg-yellow-50 dark:bg-yellow-950';
+                        ? 'bg-red-50 dark:bg-red-950/25'
+                        : 'bg-yellow-50 dark:bg-yellow-950/25';
                     };
                     return (
                       <>
@@ -386,7 +386,7 @@ export const KubernetesNodesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden font-mono text-[11px] text-base-content md:table-cell`}
                           >
-                            <span class="truncate inline-block max-w-[10rem]" title={runtime()}>
+                            <span class="truncate inline-block max-w-40" title={runtime()}>
                               {runtime()}
                             </span>
                           </TableCell>

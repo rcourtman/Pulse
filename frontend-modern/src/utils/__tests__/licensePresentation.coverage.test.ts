@@ -113,18 +113,18 @@ describe('getLicenseSubscriptionStatusPresentation - uncovered branches', () => 
   it('returns Active and Suspended for their respective states', () => {
     expect(getLicenseSubscriptionStatusPresentation('active')).toEqual({
       label: 'Active',
-      badgeClass: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+      badgeClass: 'bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300',
     });
     expect(getLicenseSubscriptionStatusPresentation('suspended')).toEqual({
       label: 'Suspended',
-      badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+      badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-300',
     });
   });
 
   it('maps canceled to the same presentation as expired', () => {
     expect(getLicenseSubscriptionStatusPresentation('canceled')).toEqual({
       label: 'Expired',
-      badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+      badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-300',
     });
   });
 
@@ -166,7 +166,7 @@ describe('getSelfHostedCurrentPlanStatusPresentation - edge cases', () => {
       }),
     ).toEqual({
       label: 'Suspended',
-      badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+      badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-300',
     });
   });
 });

@@ -20,12 +20,12 @@ export const filterLabelClass =
 export const filterToolbarControlClass =
   'min-h-11 rounded-md text-xs font-medium sm:h-7 sm:min-h-0';
 export const filterActionButtonClass = `inline-flex items-center gap-1.5 ${filterToolbarControlClass} bg-surface-hover px-2.5 text-muted ring-1 ring-border-subtle transition-colors hover:bg-surface hover:text-base-content`;
-export const filterActionButtonActiveClass = 'bg-surface text-base-content shadow-sm';
+export const filterActionButtonActiveClass = 'bg-surface text-base-content shadow-xs';
 export const filterSelectClass =
-  'min-h-11 rounded-md border border-border bg-surface px-2 text-xs font-medium text-base-content outline-none focus:border-blue-500 sm:h-7 sm:min-h-0';
+  'min-h-11 rounded-md border border-border bg-surface px-2 text-xs font-medium text-base-content outline-hidden focus:border-blue-500 sm:h-7 sm:min-h-0';
 export const filterDividerClass = 'hidden h-5 w-px bg-surface-hover sm:block';
 export const filterPanelClass =
-  'absolute right-0 top-[calc(100%+0.5rem)] z-[80] rounded-md border border-border bg-surface p-3 shadow-lg';
+  'absolute right-0 top-[calc(100%+0.5rem)] z-80 rounded-md border border-border bg-surface p-3 shadow-lg';
 export const filterPanelDefaultWidthClass = 'w-[min(40rem,calc(100vw-2rem))]';
 export const filterPanelTitleClass = 'text-sm font-medium text-base-content';
 export const filterPanelDescriptionClass = 'text-xs text-muted';

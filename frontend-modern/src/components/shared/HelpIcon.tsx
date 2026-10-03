@@ -24,7 +24,7 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
       <button
         ref={state.setButtonRef}
         type="button"
-        class={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-full p-1 text-slate-400 transition-colors hover:text-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-8 sm:min-w-8 dark:hover:text-blue-400 ${props.class ?? ''}`}
+        class={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-full p-1 text-slate-400 transition-colors hover:text-blue-500 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-8 sm:min-w-8 dark:hover:text-blue-400 ${props.class ?? ''}`}
         onClick={state.toggleOpen}
         aria-label={`Help: ${helpContent.title}`}
         aria-expanded={state.isOpen()}
@@ -41,7 +41,7 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
             id={popoverId}
             role="dialog"
             aria-labelledby={titleId}
-            class="fixed z-[9999] bg-surface rounded-md shadow-sm border border-border overflow-hidden animate-in fade-in-0 zoom-in-95 duration-150"
+            class="fixed z-9999 bg-surface rounded-md shadow-xs border border-border overflow-hidden animate-in fade-in-0 zoom-in-95 duration-150"
             style={{
               top: `${state.popoverPosition().top}px`,
               left: `${state.popoverPosition().left}px`,
@@ -57,7 +57,7 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
               <button
                 ref={state.setCloseButtonRef}
                 type="button"
-                class="inline-flex min-h-11 min-w-11 items-center justify-center rounded text-slate-400 transition-colors hover:text-muted sm:min-h-8 sm:min-w-8"
+                class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm text-slate-400 transition-colors hover:text-muted sm:min-h-8 sm:min-w-8"
                 onClick={state.closeAndRestoreFocus}
                 aria-label="Close help"
               >

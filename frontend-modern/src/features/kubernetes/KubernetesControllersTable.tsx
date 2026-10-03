@@ -426,14 +426,14 @@ export const KubernetesControllersTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
-                            <span class="inline-block max-w-[12rem] truncate" title={scope()}>
+                            <span class="inline-block max-w-48 truncate" title={scope()}>
                               {scope()}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-[12rem] truncate" title={target()}>
+                            <span class="inline-block max-w-48 truncate" title={target()}>
                               {target()}
                             </span>
                           </TableCell>
@@ -455,7 +455,7 @@ export const KubernetesControllersTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-[13rem] truncate" title={exceptions()}>
+                            <span class="inline-block max-w-52 truncate" title={exceptions()}>
                               {exceptions()}
                             </span>
                           </TableCell>

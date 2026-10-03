@@ -85,13 +85,13 @@ describe('alertResourceTablePresentation', () => {
     expect(getAlertResourceTableOfflineStatePresentation('warning')).toEqual({
       label: 'Warn',
       className:
-        'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800',
+        'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/25 dark:text-blue-200 dark:hover:bg-blue-800',
       title: 'Offline alerts will raise warning-level notifications.',
     });
     expect(getAlertResourceTableOfflineStatePresentation('critical')).toEqual({
       label: 'Crit',
       className:
-        'bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800',
+        'bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/25 dark:text-red-200 dark:hover:bg-red-800',
       title: 'Offline alerts will raise critical-level notifications.',
     });
     expect(getAlertResourceTableMetricInputTitle(true)).toBe('Click to enable this metric');

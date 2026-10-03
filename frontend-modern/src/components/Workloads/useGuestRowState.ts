@@ -256,16 +256,16 @@ export function useGuestRowState(props: GuestRowProps) {
     const base = 'transition-all duration-200 relative group cursor-pointer';
 
     if (props.isExpanded) {
-      return `${base} bg-blue-50 dark:bg-blue-900 z-10 hover:shadow-sm`;
+      return `${base} bg-blue-50 dark:bg-blue-900/25 z-10 hover:shadow-xs`;
     }
 
-    const hover = 'hover:shadow-sm';
+    const hover = 'hover:shadow-xs';
     const alertBg = hasUnacknowledgedAlert()
       ? props.alertStyles?.severity === 'critical'
-        ? 'bg-red-50 dark:bg-red-950'
+        ? 'bg-red-50 dark:bg-red-950/25'
         : props.alertStyles?.severity === 'info'
-          ? 'bg-blue-50 dark:bg-blue-950'
-          : 'bg-yellow-50 dark:bg-yellow-950'
+          ? 'bg-blue-50 dark:bg-blue-950/25'
+          : 'bg-yellow-50 dark:bg-yellow-950/25'
       : '';
     const defaultHover = hasUnacknowledgedAlert() ? '' : 'hover:bg-surface-hover';
     const stoppedDimming = !isRunning() ? 'opacity-60' : '';

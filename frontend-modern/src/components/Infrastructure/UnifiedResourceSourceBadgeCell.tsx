@@ -58,7 +58,7 @@ export const UnifiedResourceSourceBadgeCell: Component<UnifiedResourceSourceBadg
       </For>
       <Show when={hiddenBadgeCount() > 0}>
         <span
-          class="inline-flex min-w-0 max-w-full items-center overflow-hidden rounded bg-surface-alt px-1 py-0.5 text-[10px] font-medium text-muted"
+          class="inline-flex min-w-0 max-w-full items-center overflow-hidden rounded-sm bg-surface-alt px-1 py-0.5 text-[10px] font-medium text-muted"
           aria-label={`Additional systems: ${hiddenBadges()
             .map((badge) => badge.title ?? badge.label)
             .join(', ')}`}

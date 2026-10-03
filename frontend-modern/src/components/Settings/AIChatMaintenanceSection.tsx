@@ -92,7 +92,7 @@ export const AIChatMaintenanceSection: Component<AIChatMaintenanceSectionProps> 
                   fieldBaseClass="contents"
                   value={state.selectedSessionId()}
                   onChange={(e) => state.setSelectedSessionId(e.currentTarget.value)}
-                  selectBaseClass="w-full min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded"
+                  selectBaseClass="w-full min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded-sm"
                   disabled={state.saving()}
                 >
                   <For each={state.chatSessions()}>
@@ -116,7 +116,7 @@ export const AIChatMaintenanceSection: Component<AIChatMaintenanceSectionProps> 
               type="button"
               onClick={state.handleSessionSummarize}
               disabled={!state.selectedSessionId() || state.sessionActionLoading() !== null}
-              class="w-full sm:w-auto min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded border border-border bg-surface text-base-content hover:bg-surface-hover disabled:opacity-50"
+              class="w-full sm:w-auto min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-sm border border-border bg-surface text-base-content hover:bg-surface-hover disabled:opacity-50"
             >
               {state.sessionActionLoading() === 'summarize'
                 ? 'Summarizing...'

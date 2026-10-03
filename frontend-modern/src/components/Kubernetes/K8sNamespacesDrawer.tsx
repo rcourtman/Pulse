@@ -95,12 +95,12 @@ export const K8sNamespacesDrawer: Component<{
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <div class="w-[12rem]">
+            <div class="w-48">
               <SearchInput
                 value={search}
                 onChange={setSearch}
                 placeholder={drawerPresentation.searchPlaceholder}
-                inputClass="py-1 text-xs font-medium shadow-sm"
+                inputClass="py-1 text-xs font-medium shadow-xs"
                 typeToSearch
                 clearOnEscape
               />
@@ -108,7 +108,7 @@ export const K8sNamespacesDrawer: Component<{
             <button
               type="button"
               onClick={() => openPods(null)}
-              class="rounded-md border border-border bg-surface px-3 py-1 text-xs font-semibold shadow-sm hover:bg-surface-hover"
+              class="rounded-md border border-border bg-surface px-3 py-1 text-xs font-semibold shadow-xs hover:bg-surface-hover"
             >
               {drawerPresentation.openAllPodsLabel}
             </button>
@@ -222,7 +222,7 @@ export const K8sNamespacesDrawer: Component<{
                                 type="button"
                                 aria-label={drawerPresentation.openPodsLabel}
                                 onClick={() => openPods(row.namespace)}
-                                class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-surface-hover"
+                                class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-xs hover:bg-surface-hover"
                               >
                                 <PlatformResponsiveTableLabel
                                   compact="Pods"
@@ -234,7 +234,7 @@ export const K8sNamespacesDrawer: Component<{
                                   type="button"
                                   aria-label={drawerPresentation.viewDeploymentsLabel}
                                   onClick={() => props.onOpenDeployments?.(row.namespace)}
-                                  class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-surface-hover"
+                                  class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-xs hover:bg-surface-hover"
                                 >
                                   <PlatformResponsiveTableLabel
                                     compact="Deployments"

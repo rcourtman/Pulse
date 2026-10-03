@@ -29,7 +29,7 @@ interface WebhookConfigListProps {
 export function WebhookConfigList(props: WebhookConfigListProps) {
   return (
     <div class="space-y-3 w-full">
-      <div class="flex flex-col gap-2 rounded border border-border px-3 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex flex-col gap-2 rounded-sm border border-border px-3 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
         <div class="text-muted sm:text-sm">
           {getAlertWebhookSummaryLabel(
             props.webhooks.filter((webhook) => webhook.enabled).length,
@@ -40,14 +40,14 @@ export function WebhookConfigList(props: WebhookConfigListProps) {
           <button
             onClick={() => props.toggleAllWebhooks(false)}
             disabled={!props.someEnabled()}
-            class="min-h-11 w-full rounded border px-3 py-1 text-xs transition-colors hover:bg-surface-hover sm:min-h-0 sm:w-auto"
+            class="min-h-11 w-full rounded-sm border px-3 py-1 text-xs transition-colors hover:bg-surface-hover sm:min-h-0 sm:w-auto"
           >
             {getAlertWebhookToggleAllLabel(false)}
           </button>
           <button
             onClick={() => props.toggleAllWebhooks(true)}
             disabled={props.allEnabled()}
-            class="min-h-11 w-full rounded border border-green-500 px-3 py-1 text-xs text-green-700 transition-colors hover:bg-green-50 sm:min-h-0 sm:w-auto dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900"
+            class="min-h-11 w-full rounded-sm border border-green-500 px-3 py-1 text-xs text-green-700 transition-colors hover:bg-green-50 sm:min-h-0 sm:w-auto dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900/25"
           >
             {getAlertWebhookToggleAllLabel(true)}
           </button>
@@ -61,22 +61,22 @@ export function WebhookConfigList(props: WebhookConfigListProps) {
               <span class="font-medium text-base-content">{webhook.name}</span>
               <button
                 onClick={() => props.onToggleWebhook(webhook)}
-                class={`min-h-11 rounded border px-3 py-1 text-xs font-medium transition-colors sm:min-h-0 ${webhook.enabled ? 'border-green-500 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900' : 'border-border text-muted hover:bg-surface-hover'}`}
+                class={`min-h-11 rounded-sm border px-3 py-1 text-xs font-medium transition-colors sm:min-h-0 ${webhook.enabled ? 'border-green-500 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900/25' : 'border-border text-muted hover:bg-surface-hover'}`}
               >
                 {getAlertWebhookToggleLabel(webhook.enabled)}
               </button>
             </div>
             <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-muted sm:text-xs">
-              <span class="rounded bg-surface-alt px-2 py-0.5 text-base-content">
+              <span class="rounded-sm bg-surface-alt px-2 py-0.5 text-base-content">
                 {getAlertWebhookServiceLabelFromTemplates(
                   webhook.service || 'generic',
                   props.templates(),
                 )}
               </span>
-              <span class="rounded bg-surface-alt px-2 py-0.5 text-base-content">
+              <span class="rounded-sm bg-surface-alt px-2 py-0.5 text-base-content">
                 {webhook.method}
               </span>
-              <span class="rounded bg-surface-alt px-2 py-0.5 text-base-content">
+              <span class="rounded-sm bg-surface-alt px-2 py-0.5 text-base-content">
                 {getAlertDestinationSeverityLabel(
                   webhook.minimumSeverity === 'critical' || webhook.minimumSeverity === 'warning'
                     ? webhook.minimumSeverity
@@ -85,13 +85,13 @@ export function WebhookConfigList(props: WebhookConfigListProps) {
               </span>
               <For each={webhook.tagFilter ?? []}>
                 {(tag) => (
-                  <span class="rounded bg-sky-50 px-2 py-0.5 text-sky-700 dark:bg-sky-900 dark:text-sky-300">
+                  <span class="rounded-sm bg-sky-50 px-2 py-0.5 text-sky-700 dark:bg-sky-900/25 dark:text-sky-300">
                     {tag}
                   </span>
                 )}
               </For>
               <Show when={(webhook.tagFilter?.length ?? 0) > 1}>
-                <span class="rounded bg-surface-alt px-2 py-0.5 text-muted">
+                <span class="rounded-sm bg-surface-alt px-2 py-0.5 text-muted">
                   Match {webhook.tagFilterMode === 'any' ? 'any' : 'all'}
                 </span>
               </Show>
@@ -101,19 +101,19 @@ export function WebhookConfigList(props: WebhookConfigListProps) {
               <button
                 onClick={() => props.onTestWebhook(webhook)}
                 disabled={props.testing === webhook.id || !webhook.enabled}
-                class="min-h-11 rounded border px-3 py-1 text-xs text-base-content transition-colors hover:bg-surface-hover disabled:opacity-50 sm:min-h-0"
+                class="min-h-11 rounded-sm border px-3 py-1 text-xs text-base-content transition-colors hover:bg-surface-hover disabled:opacity-50 sm:min-h-0"
               >
                 {getAlertWebhookTestLabel(props.testing === webhook.id)}
               </button>
               <button
                 onClick={() => props.onEditWebhook(webhook)}
-                class="min-h-11 rounded border border-blue-300 px-3 py-1 text-xs text-blue-600 transition-colors hover:bg-blue-50 sm:min-h-0 dark:border-blue-500 dark:text-blue-300 dark:hover:bg-blue-900"
+                class="min-h-11 rounded-sm border border-blue-300 px-3 py-1 text-xs text-blue-600 transition-colors hover:bg-blue-50 sm:min-h-0 dark:border-blue-500 dark:text-blue-300 dark:hover:bg-blue-900/25"
               >
                 {ALERT_WEBHOOK_EDIT_LABEL}
               </button>
               <button
                 onClick={() => props.onDeleteWebhook(webhook)}
-                class="min-h-11 rounded border border-red-300 px-3 py-1 text-xs text-red-600 transition-colors hover:bg-red-50 sm:min-h-0 dark:border-red-500 dark:text-red-300 dark:hover:bg-red-900"
+                class="min-h-11 rounded-sm border border-red-300 px-3 py-1 text-xs text-red-600 transition-colors hover:bg-red-50 sm:min-h-0 dark:border-red-500 dark:text-red-300 dark:hover:bg-red-900/25"
               >
                 {ALERT_WEBHOOK_DELETE_LABEL}
               </button>

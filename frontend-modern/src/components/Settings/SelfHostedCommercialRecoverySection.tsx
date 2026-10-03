@@ -66,7 +66,7 @@ export const SelfHostedCommercialRecoverySection: Component<
               </>
             }
           />
-          <div class="mt-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 text-sm text-amber-800 dark:text-amber-200">
+          <div class="mt-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 p-3 text-sm text-amber-800 dark:text-amber-200">
             <p class="font-medium">
               {SELF_HOSTED_RECOVERY_PRESENTATION.privateRuntimeNotice.title}
             </p>
@@ -82,7 +82,7 @@ export const SelfHostedCommercialRecoverySection: Component<
             </ExternalTextLink>
           </div>
           <Show when={props.looksLikeLegacyLicenseKey}>
-            <div class="mt-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 text-sm text-amber-800 dark:text-amber-200">
+            <div class="mt-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 p-3 text-sm text-amber-800 dark:text-amber-200">
               <p class="font-medium">{SELF_HOSTED_RECOVERY_PRESENTATION.legacyNotice.title}</p>
               <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
                 {SELF_HOSTED_RECOVERY_PRESENTATION.legacyNotice.body}

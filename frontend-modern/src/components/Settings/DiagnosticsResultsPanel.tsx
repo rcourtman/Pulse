@@ -39,7 +39,7 @@ const DiagnosticCard: Component<{
   const tone = () => getSemanticTonePresentation(props.status || 'info');
 
   return (
-    <div class={`rounded-md border p-4 transition-all hover:shadow-sm ${tone().panelClass}`}>
+    <div class={`rounded-md border p-4 transition-all hover:shadow-xs ${tone().panelClass}`}>
       <div class="mb-3 flex items-center gap-3">
         <div class={`rounded-md bg-surface p-2 ${tone().iconClass}`}>
           <props.icon class="h-4 w-4" />
@@ -263,7 +263,7 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
           <Show when={props.diagnosticsData?.metricsStore}>
             <Card padding="md">
               <div class="mb-4 flex items-center gap-3 border-b border-border pb-3">
-                <div class="rounded-md bg-blue-100 p-2 dark:bg-blue-900">
+                <div class="rounded-md bg-blue-100 p-2 dark:bg-blue-900/25">
                   <Database class="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
@@ -352,7 +352,7 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
           <Show when={props.diagnosticsData?.apiTokens}>
             <Card padding="md">
               <div class="mb-4 flex items-center gap-3 border-b border-border pb-3">
-                <div class="rounded-md bg-blue-100 p-2 dark:bg-blue-900">
+                <div class="rounded-md bg-blue-100 p-2 dark:bg-blue-900/25">
                   <Shield class="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
@@ -385,7 +385,7 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
           <Show when={props.diagnosticsData?.dockerAgents}>
             <Card padding="md">
               <div class="mb-4 flex items-center gap-3 border-b border-border pb-3">
-                <div class="rounded-md bg-blue-100 p-2 dark:bg-blue-900">
+                <div class="rounded-md bg-blue-100 p-2 dark:bg-blue-900/25">
                   <Database class="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
@@ -435,7 +435,7 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
           <Show when={props.diagnosticsData?.alerts}>
             <Card padding="md">
               <div class="mb-4 flex items-center gap-3 border-b border-border pb-3">
-                <div class="rounded-md bg-rose-100 p-2 dark:bg-rose-900">
+                <div class="rounded-md bg-rose-100 p-2 dark:bg-rose-900/25">
                   <AlertTriangle class="h-4 w-4 text-rose-600 dark:text-rose-400" />
                 </div>
                 <div>
@@ -476,7 +476,7 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
           <Show when={props.diagnosticsData?.aiChat}>
             <Card padding="md">
               <div class="mb-4 flex items-center gap-3 border-b border-border pb-3">
-                <div class="rounded-md bg-blue-100 p-2 dark:bg-blue-900">
+                <div class="rounded-md bg-blue-100 p-2 dark:bg-blue-900/25">
                   <Sparkles class="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
@@ -536,7 +536,7 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                 </div>
               </div>
               <Show when={(props.diagnosticsData?.aiChat?.notes?.length || 0) > 0}>
-                <ul class="mt-3 list-disc rounded bg-amber-50 p-2 pl-4 text-xs text-amber-700 dark:bg-amber-900 dark:text-amber-400">
+                <ul class="mt-3 list-disc rounded-sm bg-amber-50 p-2 pl-4 text-xs text-amber-700 dark:bg-amber-900/25 dark:text-amber-400">
                   <For each={props.diagnosticsData?.aiChat?.notes || []}>
                     {(note) => <li>{note}</li>}
                   </For>
@@ -547,15 +547,20 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
         </div>
 
         <Show when={(props.diagnosticsData?.errors?.length || 0) > 0}>
-          <Card padding="md" class="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900">
+          <Card
+            padding="md"
+            class="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/25"
+          >
             <div class="mb-3 flex items-center gap-3">
               <XCircle class="h-5 w-5 text-red-600 dark:text-red-400" />
-              <h4 class="text-sm font-semibold text-red-900 dark:text-red-100">Errors Detected</h4>
+              <h4 class="text-sm font-semibold text-red-900/25 dark:text-red-100">
+                Errors Detected
+              </h4>
             </div>
             <ul class="space-y-2 text-xs text-red-700 dark:text-red-300">
               <For each={props.diagnosticsData?.errors || []}>
                 {(error) => (
-                  <li class="flex items-start gap-2 rounded bg-red-100 p-2 dark:bg-red-900">
+                  <li class="flex items-start gap-2 rounded-sm bg-red-100 p-2 dark:bg-red-900/25">
                     <span class="text-rose-400">•</span>
                     <span>{error}</span>
                   </li>

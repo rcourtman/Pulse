@@ -1,6 +1,6 @@
 export const RECOVERY_TIMELINE_LEGEND_ITEM_CLASS = 'flex items-center gap-1';
 export const RECOVERY_TIMELINE_RANGE_GROUP_CLASS =
-  'inline-flex rounded border border-border bg-surface p-0.5 text-xs';
+  'inline-flex rounded-sm border border-border bg-surface p-0.5 text-xs';
 
 export type RecoveryTimelineRangeDays = 7 | 30 | 90 | 365;
 

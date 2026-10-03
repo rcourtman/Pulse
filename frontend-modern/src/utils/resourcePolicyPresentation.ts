@@ -46,7 +46,7 @@ export const RESOURCE_POLICY_REDACTION_ORDER: ResourceRedactionHint[] = [
 ];
 
 const badgeBaseClass =
-  'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap';
+  'inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap';
 
 const sensitivityPresentation: Record<
   ResourceSensitivity,
@@ -55,7 +55,7 @@ const sensitivityPresentation: Record<
   public: {
     label: 'Public',
     title: 'Resource data is classified as public.',
-    className: `${badgeBaseClass} bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300`,
+    className: `${badgeBaseClass} bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300`,
   },
   internal: {
     label: 'Internal',
@@ -65,12 +65,12 @@ const sensitivityPresentation: Record<
   sensitive: {
     label: 'Sensitive',
     title: 'Resource data requires sensitivity-aware handling.',
-    className: `${badgeBaseClass} bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300`,
+    className: `${badgeBaseClass} bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300`,
   },
   restricted: {
     label: 'Restricted',
     title: 'Resource data is tightly restricted and requires guarded handling.',
-    className: `${badgeBaseClass} bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300`,
+    className: `${badgeBaseClass} bg-rose-100 text-rose-700 dark:bg-rose-900/25 dark:text-rose-300`,
   },
 };
 
@@ -81,17 +81,17 @@ const routingPresentation: Record<
   'cloud-summary': {
     label: 'Cloud Summary',
     title: 'This resource may use cloud summarization within policy limits.',
-    className: `${badgeBaseClass} bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300`,
+    className: `${badgeBaseClass} bg-sky-100 text-sky-700 dark:bg-sky-900/25 dark:text-sky-300`,
   },
   'local-first': {
     label: 'Local First',
     title: 'This resource should prefer local handling before cloud escalation.',
-    className: `${badgeBaseClass} bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300`,
+    className: `${badgeBaseClass} bg-indigo-100 text-indigo-700 dark:bg-indigo-900/25 dark:text-indigo-300`,
   },
   'local-only': {
     label: 'Local Only',
     title: 'This resource must remain within the local boundary.',
-    className: `${badgeBaseClass} bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300`,
+    className: `${badgeBaseClass} bg-teal-100 text-teal-700 dark:bg-teal-900/25 dark:text-teal-300`,
   },
 };
 

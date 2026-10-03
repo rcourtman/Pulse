@@ -68,9 +68,9 @@ export const getAlertStyles = (
 
   if (highestSeverity === 'critical') {
     return {
-      rowClass: 'bg-red-50 dark:bg-red-950 border-l-4 border-red-500 dark:border-red-400',
+      rowClass: 'bg-red-50 dark:bg-red-950/25 border-l-4 border-red-500 dark:border-red-400',
       indicatorClass: 'bg-red-500',
-      badgeClass: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+      badgeClass: 'bg-red-100 text-red-800 dark:bg-red-900/25 dark:text-red-200',
       hasAlert,
       alertCount,
       severity: 'critical' as const,
@@ -86,9 +86,9 @@ export const getAlertStyles = (
   if (highestSeverity === 'warning') {
     return {
       rowClass:
-        'bg-yellow-50 dark:bg-yellow-950 border-l-4 border-yellow-500 dark:border-yellow-400',
+        'bg-yellow-50 dark:bg-yellow-950/25 border-l-4 border-yellow-500 dark:border-yellow-400',
       indicatorClass: 'bg-yellow-500',
-      badgeClass: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+      badgeClass: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/25 dark:text-yellow-200',
       hasAlert,
       alertCount,
       severity: 'warning' as const,
@@ -103,9 +103,9 @@ export const getAlertStyles = (
 
   if (highestSeverity === 'info') {
     return {
-      rowClass: 'bg-blue-50 dark:bg-blue-950 border-l-4 border-blue-500 dark:border-blue-400',
+      rowClass: 'bg-blue-50 dark:bg-blue-950/25 border-l-4 border-blue-500 dark:border-blue-400',
       indicatorClass: 'bg-blue-500',
-      badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+      badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900/25 dark:text-blue-200',
       hasAlert,
       alertCount,
       severity: 'info' as const,

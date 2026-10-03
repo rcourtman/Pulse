@@ -47,11 +47,11 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
       </div>
 
       <Show when={props.hasUnsavedChanges() && props.activeTabSaveBehavior() === 'system'}>
-        <div class="mb-3 border-l-4 border-amber-500 bg-amber-50 p-3 shadow-sm dark:border-amber-400 dark:bg-amber-900 sm:rounded-r-lg sm:p-4 lg:mb-0">
+        <div class="mb-3 border-l-4 border-amber-500 bg-amber-50 p-3 shadow-xs dark:border-amber-400 dark:bg-amber-900/25 sm:rounded-r-lg sm:p-4 lg:mb-0">
           <div class="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-4">
             <div class="flex items-start gap-3">
               <svg
-                class="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
+                class="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -64,7 +64,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                 />
               </svg>
               <div>
-                <p class="font-semibold text-amber-900 dark:text-amber-100">
+                <p class="font-semibold text-amber-900/25 dark:text-amber-100">
                   {unsavedChangesBanner().title}
                 </p>
                 <p class="text-sm text-amber-700 dark:text-amber-200 mt-0.5">
@@ -75,7 +75,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
             <div class="flex w-full gap-2 sm:w-auto sm:gap-3">
               <button
                 type="button"
-                class="flex-1 sm:flex-initial px-5 py-2.5 text-sm font-medium bg-amber-600 text-white rounded-md hover:bg-amber-700 shadow-sm transition-colors"
+                class="flex-1 sm:flex-initial px-5 py-2.5 text-sm font-medium bg-amber-600 text-white rounded-md hover:bg-amber-700 shadow-xs transition-colors"
                 onClick={props.saveSettings}
               >
                 {unsavedChangesBanner().saveLabel}
@@ -99,7 +99,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
       >
         <nav
           data-settings-navigation
-          class={`${props.isMobileMenuOpen() ? 'flex w-full flex-col' : 'hidden lg:flex lg:flex-col'} ${props.sidebarCollapsed() ? 'lg:w-16 lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative z-10 max-h-[calc(100dvh-8rem)] flex-shrink-0 overflow-y-auto overscroll-contain border-b border-border bg-surface transition-all duration-200 lg:max-h-none lg:overflow-visible lg:border-b-0 lg:border-r lg:bg-transparent lg:align-top`}
+          class={`${props.isMobileMenuOpen() ? 'flex w-full flex-col' : 'hidden lg:flex lg:flex-col'} ${props.sidebarCollapsed() ? 'lg:w-16 lg:min-w-16 lg:max-w-16 lg:basis-16' : 'lg:w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative z-10 max-h-[calc(100dvh-8rem)] shrink-0 overflow-y-auto overscroll-contain border-b border-border bg-surface transition-all duration-200 lg:max-h-none lg:overflow-visible lg:border-b-0 lg:border-r lg:bg-transparent lg:align-top`}
           aria-label={shellCopy().navigationAriaLabel}
         >
           <div
@@ -202,7 +202,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                         !(group.items.length === 1 && group.items[0]?.label === group.label)
                       }
                     >
-                      <p class="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-wider text-muted lg:mb-0 lg:px-0 lg:text-xs lg:font-[500]">
+                      <p class="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-wider text-muted lg:mb-0 lg:px-0 lg:text-xs lg:font-medium">
                         {group.label}
                       </p>
                     </Show>
@@ -215,7 +215,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                               type="button"
                               aria-current={isActive() ? 'page' : undefined}
                               disabled={item.disabled}
-                              class={`group flex min-h-12 w-full items-center ${props.sidebarCollapsed() ? 'justify-center' : 'justify-between'} lg:min-h-0 lg:rounded-md ${props.sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2.5 lg:px-3 lg:py-2'} text-sm font-medium transition-colors ${item.disabled ? 'cursor-not-allowed text-muted opacity-60' : isActive() ? 'bg-surface text-blue-600 dark:text-blue-300 lg:bg-blue-50 lg:dark:bg-blue-900 lg:dark:text-blue-200' : 'hover:text-base-content active:bg-surface-hover lg:hover:bg-surface-hover lg:active:bg-transparent'}`}
+                              class={`group flex min-h-12 w-full items-center ${props.sidebarCollapsed() ? 'justify-center' : 'justify-between'} lg:min-h-0 lg:rounded-md ${props.sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2.5 lg:px-3 lg:py-2'} text-sm font-medium transition-colors ${item.disabled ? 'cursor-not-allowed text-muted opacity-60' : isActive() ? 'bg-surface text-blue-600 dark:text-blue-300 lg:bg-blue-50 lg:dark:bg-blue-900/25 lg:dark:text-blue-200' : 'hover:text-base-content active:bg-surface-hover lg:hover:bg-surface-hover lg:active:bg-transparent'}`}
                               onClick={() => {
                                 if (item.disabled) return;
                                 props.setActiveTab(item.id);
@@ -225,7 +225,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                             >
                               <div class="flex w-full items-center gap-3 lg:gap-2.5">
                                 <div
-                                  class={`flex h-8 w-8 items-center justify-center rounded-md lg:h-auto lg:w-auto lg:rounded-none ${isActive() ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400 lg:bg-transparent' : 'bg-surface text-muted lg:bg-transparent lg:text-inherit'}`}
+                                  class={`flex h-8 w-8 items-center justify-center rounded-md lg:h-auto lg:w-auto lg:rounded-none ${isActive() ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/25 dark:text-blue-400 lg:bg-transparent' : 'bg-surface text-muted lg:bg-transparent lg:text-inherit'}`}
                                 >
                                   <item.icon
                                     class="w-5 h-5 lg:w-4 lg:h-4"
@@ -243,7 +243,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                                       {item.badge}
                                     </span>
                                   </Show>
-                                  <ChevronRight class="w-4 h-4 lg:hidden text-muted ml-1 flex-shrink-0" />
+                                  <ChevronRight class="w-4 h-4 lg:hidden text-muted ml-1 shrink-0" />
                                 </Show>
                               </div>
                             </button>
@@ -263,17 +263,17 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
           class={`min-w-0 flex-1 overflow-visible lg:overflow-hidden ${props.isMobileMenuOpen() ? 'hidden lg:block' : 'block'}`}
         >
           <Show when={props.flatTabs().length > 0}>
-            <div class="sticky top-0 z-40 flex min-h-12 items-center border-b border-border-subtle bg-surface/95 px-2 backdrop-blur lg:hidden">
+            <div class="sticky top-0 z-40 flex min-h-12 items-center border-b border-border-subtle bg-surface/95 px-2 backdrop-blur-sm lg:hidden">
               <button
                 type="button"
                 onClick={() => {
                   props.setSidebarCollapsed(false);
                   props.setIsMobileMenuOpen(true);
                 }}
-                class="flex min-h-11 items-center gap-1 rounded-md px-2 py-1.5 text-sm font-medium text-blue-600 transition-colors active:bg-blue-50 dark:text-blue-400 dark:active:bg-blue-900"
+                class="flex min-h-11 items-center gap-1 rounded-md px-2 py-1.5 text-sm font-medium text-blue-600 transition-colors active:bg-blue-50 dark:text-blue-400 dark:active:bg-blue-900/25"
               >
                 <svg
-                  class="h-5 w-5 -ml-1 flex-shrink-0"
+                  class="h-5 w-5 -ml-1 shrink-0"
                   fill="none"
                   stroke="currentColor"
                   stroke-width="2.5"

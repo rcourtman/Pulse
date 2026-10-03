@@ -33,7 +33,7 @@ describe('getAISettingsReadinessPresentation — branch coverage', () => {
         modelCount: 5,
       }),
     ).toEqual({
-      containerClassName: 'bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-200',
+      containerClassName: 'bg-green-50 dark:bg-green-900/25 text-green-800 dark:text-green-200',
       dotClassName: 'bg-emerald-400',
       summary: 'Ready • 1 provider • 5 models',
     });
@@ -47,7 +47,7 @@ describe('getAISettingsReadinessPresentation — branch coverage', () => {
         modelCount: 0,
       }),
     ).toEqual({
-      containerClassName: 'bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-200',
+      containerClassName: 'bg-green-50 dark:bg-green-900/25 text-green-800 dark:text-green-200',
       dotClassName: 'bg-emerald-400',
       summary: 'Ready • 1 provider • 0 models',
     });
@@ -63,7 +63,7 @@ describe('getAISettingsReadinessPresentation — branch coverage', () => {
         modelCount: 3,
       }),
     ).toEqual({
-      containerClassName: 'bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-200',
+      containerClassName: 'bg-green-50 dark:bg-green-900/25 text-green-800 dark:text-green-200',
       dotClassName: 'bg-emerald-400',
       summary: 'Ready • 0 providers • 3 models',
     });
@@ -79,7 +79,7 @@ describe('getAISettingsReadinessPresentation — branch coverage', () => {
         modelCount: 1,
       }),
     ).toEqual({
-      containerClassName: 'bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-200',
+      containerClassName: 'bg-green-50 dark:bg-green-900/25 text-green-800 dark:text-green-200',
       dotClassName: 'bg-emerald-400',
       summary: 'Ready • 3 providers • 1 models',
     });
@@ -96,7 +96,7 @@ describe('getAISettingsReadinessPresentation — branch coverage', () => {
         modelCount: 9,
       }),
     ).toEqual({
-      containerClassName: 'bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200',
+      containerClassName: 'bg-amber-50 dark:bg-amber-900/25 text-amber-800 dark:text-amber-200',
       dotClassName: 'bg-amber-400',
       summary: 'Configure at least one provider above to enable Pulse Assistant and Patrol.',
     });

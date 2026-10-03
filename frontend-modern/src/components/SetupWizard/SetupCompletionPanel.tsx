@@ -197,7 +197,7 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
     <div class="max-w-2xl mx-auto bg-surface border border-border overflow-hidden relative rounded-md p-6 sm:p-8 text-center text-base-content">
       <div class="relative z-10">
         <div class="mb-8">
-          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-600 dark:text-emerald-400 mb-6 border border-emerald-200 dark:border-emerald-800">
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/25 text-emerald-600 dark:text-emerald-400 mb-6 border border-emerald-200 dark:border-emerald-800">
             <svg
               class="w-8 h-8"
               fill="none"
@@ -217,7 +217,7 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
         </div>
 
         <Show when={completionViewModel().hasConnectedSystems}>
-          <div class="bg-emerald-50 dark:bg-emerald-900 rounded-md border border-emerald-200 dark:border-emerald-800 p-5 text-left mb-6">
+          <div class="bg-emerald-50 dark:bg-emerald-900/25 rounded-md border border-emerald-200 dark:border-emerald-800 p-5 text-left mb-6">
             <h3 class="text-sm font-semibold text-emerald-800 dark:text-emerald-400 mb-3 flex items-center gap-2">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
@@ -238,7 +238,7 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
                       <span class="text-base-content text-sm font-medium">{system.name}</span>
                     </div>
                     <div class="flex items-center gap-2">
-                      <span class="text-[10px] text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full font-medium">
+                      <span class="text-[10px] text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/25 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full font-medium">
                         {system.typeLabel}
                       </span>
                       <Show when={system.host}>
@@ -258,7 +258,7 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
             class="w-full p-4 sm:p-6 flex items-center justify-between gap-4 text-left hover:bg-surface-hover transition-colors group"
           >
             <div class="flex items-start gap-3">
-              <div class="w-8 h-8 rounded-md bg-amber-50 dark:bg-amber-900 flex items-center justify-center border border-amber-100 dark:border-amber-800 shrink-0">
+              <div class="w-8 h-8 rounded-md bg-amber-50 dark:bg-amber-900/25 flex items-center justify-center border border-amber-100 dark:border-amber-800 shrink-0">
                 <svg
                   class="w-4 h-4 text-amber-500"
                   fill="none"
@@ -276,7 +276,7 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
               <div>
                 <span class="text-base-content font-semibold text-sm flex items-center gap-2 flex-wrap">
                   {t('setup.completion.credentials.title')}
-                  <span class="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full">
+                  <span class="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full">
                     {t('setup.completion.credentials.badge')}
                   </span>
                 </span>
@@ -409,7 +409,7 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
 
               <button
                 onClick={downloadCredentials}
-                class="w-full mt-2 py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center justify-center gap-1.5 bg-blue-50 dark:bg-blue-900 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-md transition-colors border border-blue-100 dark:border-blue-900"
+                class="w-full mt-2 py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center justify-center gap-1.5 bg-blue-50 dark:bg-blue-900/25 hover:bg-blue-100 dark:hover:bg-blue-900/25 rounded-md transition-colors border border-blue-100 dark:border-blue-900/25"
               >
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
@@ -463,7 +463,7 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
                 {completionViewModel().nextStepTitle}
               </h3>
             </div>
-            <div class="rounded-sm bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+            <div class="rounded-xs bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900/25 dark:text-blue-300">
               {t('setup.completion.nextStep.badge')}
             </div>
           </div>

@@ -156,7 +156,7 @@ const ToolInputSummary: Component<ToolInputSummaryProps> = (props) => {
   const isShellSummary = createMemo(() => props.summary.trim().startsWith('$ '));
   const className = createMemo(
     () =>
-      `mt-1 block whitespace-pre-wrap break-words leading-5 text-base-content ${
+      `mt-1 block whitespace-pre-wrap wrap-break-word leading-5 text-base-content ${
         isShellSummary() ? 'font-mono text-[11px]' : 'text-[12px] font-medium'
       }`,
   );
@@ -210,7 +210,7 @@ const VisibleToolCommandPreview: Component<ToolCommandPreviewProps> = (props) =>
       <code
         data-testid="tool-command-preview"
         aria-label="Tool command"
-        class="min-w-0 flex-1 whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-muted"
+        class="min-w-0 flex-1 whitespace-pre-wrap wrap-break-word font-mono text-[11px] leading-5 text-muted"
       >
         {props.preview}
       </code>
@@ -254,7 +254,7 @@ const detailCopyTarget = (kind: ToolDetailKind) => {
 };
 
 const detailPreClass = (kind: ToolDetailKind) =>
-  `${kind === 'output' ? 'max-h-72' : 'max-h-36'} overflow-auto rounded bg-surface-alt p-2 font-mono text-[10px] leading-5 text-muted whitespace-pre-wrap break-words`;
+  `${kind === 'output' ? 'max-h-72' : 'max-h-36'} overflow-auto rounded-sm bg-surface-alt p-2 font-mono text-[10px] leading-5 text-muted whitespace-pre-wrap wrap-break-word`;
 
 const ToolDetailsPanel: Component<ToolDetailsPanelProps> = (props) => {
   const [copiedDetail, setCopiedDetail] = createSignal<ToolDetailKind | null>(null);
@@ -450,7 +450,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
           </Show>
           <Show when={hiddenOutputBadgeSummary()}>
             <span
-              class="shrink-0 rounded border border-border-subtle bg-surface px-1.5 py-0.5 text-[9px] font-medium"
+              class="shrink-0 rounded-sm border border-border-subtle bg-surface px-1.5 py-0.5 text-[9px] font-medium"
               title="Open the completed turn to inspect tool output"
               aria-label={`Tool output available: ${hiddenOutputBadgeSummary()}`}
             >
@@ -461,14 +461,14 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
       }
     >
       <div
-        class="my-2 overflow-hidden rounded-md border border-border-subtle bg-surface text-[11px] shadow-sm"
+        class="my-2 overflow-hidden rounded-md border border-border-subtle bg-surface text-[11px] shadow-xs"
         role={settlingFastCompletion() ? 'status' : undefined}
         aria-label={settlingFastCompletion() ? 'Assistant tool running' : undefined}
       >
         <div
           class={`flex min-w-0 items-start gap-2 px-2.5 py-2 ${
             hasDetails()
-              ? 'cursor-pointer transition-colors hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:ring-inset'
+              ? 'cursor-pointer transition-colors hover:bg-surface-hover focus:outline-hidden focus:ring-2 focus:ring-blue-500/30 focus:ring-inset'
               : ''
           }`}
           role={hasDetails() ? 'button' : undefined}
@@ -512,7 +512,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
                 {toolLabel()}
               </span>
               <span
-                class={`shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-medium ${statusPillClass()}`}
+                class={`shrink-0 rounded-sm border px-1.5 py-0.5 text-[9px] font-medium ${statusPillClass()}`}
               >
                 {statusLabel()}
               </span>
@@ -536,7 +536,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
               </Show>
               <Show when={hiddenOutputBadgeSummary()}>
                 <span
-                  class="shrink-0 rounded border border-border-subtle bg-surface-alt px-1.5 py-0.5 text-[9px] font-medium text-muted"
+                  class="shrink-0 rounded-sm border border-border-subtle bg-surface-alt px-1.5 py-0.5 text-[9px] font-medium text-muted"
                   title="Open tool details to inspect output"
                   aria-label={`Tool output available: ${hiddenOutputBadgeSummary()}`}
                 >
@@ -570,7 +570,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
               Output preview
             </div>
             <pre
-              class="px-3 pb-2 pt-1 font-mono text-[11px] leading-5 text-base-content whitespace-pre-wrap break-words"
+              class="px-3 pb-2 pt-1 font-mono text-[11px] leading-5 text-base-content whitespace-pre-wrap wrap-break-word"
               aria-label="Tool output preview"
             >
               {outputPreview()}
@@ -676,7 +676,7 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
       <div
         class={`px-2.5 py-2 ${
           hasDetails()
-            ? 'cursor-pointer transition-colors hover:bg-blue-100/60 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:ring-inset dark:hover:bg-blue-950/30'
+            ? 'cursor-pointer transition-colors hover:bg-blue-100/60 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30 focus:ring-inset dark:hover:bg-blue-950/30'
             : ''
         }`}
         role={hasDetails() ? 'button' : undefined}
@@ -731,8 +731,8 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
         </div>
 
         <Show when={progressText()}>
-          <div class="mt-1 min-w-0 pl-[calc(0.875rem+0.5rem)] text-[10px] leading-snug text-muted">
-            <span class="block whitespace-pre-wrap break-words" title={progressText()}>
+          <div class="mt-1 min-w-0 pl-5.5 text-[10px] leading-snug text-muted">
+            <span class="block whitespace-pre-wrap wrap-break-word" title={progressText()}>
               {progressText()}
             </span>
           </div>
@@ -799,7 +799,7 @@ export const ToolCancellationBlock: Component<ToolCancellationBlockProps> = (pro
       <div
         class={`flex min-w-0 items-start gap-2 px-2.5 py-2 ${
           hasDetails()
-            ? 'cursor-pointer transition-colors hover:bg-amber-100/60 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:ring-inset dark:hover:bg-amber-950/30'
+            ? 'cursor-pointer transition-colors hover:bg-amber-100/60 focus:outline-hidden focus:ring-2 focus:ring-amber-500/30 focus:ring-inset dark:hover:bg-amber-950/30'
             : ''
         }`}
         role={hasDetails() ? 'button' : undefined}
@@ -822,7 +822,7 @@ export const ToolCancellationBlock: Component<ToolCancellationBlockProps> = (pro
             <span class="shrink-0 font-mono text-[9px] font-semibold uppercase tracking-wider text-muted">
               {toolLabel()}
             </span>
-            <span class="shrink-0 rounded border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+            <span class="shrink-0 rounded-sm border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
               skipped
             </span>
             <Show when={hasDetails()}>
@@ -839,7 +839,7 @@ export const ToolCancellationBlock: Component<ToolCancellationBlockProps> = (pro
             <ToolCommandPreview preview={commandPreview()} />
           </Show>
           <div class="mt-1 min-w-0 text-[10px] leading-snug text-muted">
-            <span class="block whitespace-pre-wrap break-words">{reason()}</span>
+            <span class="block whitespace-pre-wrap wrap-break-word">{reason()}</span>
           </div>
         </div>
       </div>
@@ -879,7 +879,7 @@ export const PendingToolsList: Component<PendingToolsListProps> = (props) => {
       <Show when={shouldCollapse() && !expanded()}>
         <button
           onClick={() => setExpanded(true)}
-          class="w-full mt-0.5 py-1 text-[10px] text-muted hover:text-base-content hover:bg-surface-hover rounded text-center font-medium"
+          class="w-full mt-0.5 py-1 text-[10px] text-muted hover:text-base-content hover:bg-surface-hover rounded-sm text-center font-medium"
         >
           + {hiddenCount()} more tools running...
         </button>
@@ -920,7 +920,7 @@ export const ToolExecutionsList: Component<ToolExecutionsListProps> = (props) =>
       <Show when={shouldCollapse() && !showAll()}>
         <button
           onClick={() => setShowAll(true)}
-          class="w-full mt-0.5 py-1 text-[10px] text-muted hover:bg-surface-hover rounded text-center font-medium"
+          class="w-full mt-0.5 py-1 text-[10px] text-muted hover:bg-surface-hover rounded-sm text-center font-medium"
         >
           + {hiddenCount()} more tools ({stats().success} ✓ / {stats().failed} ✗)
         </button>

@@ -27,7 +27,7 @@ export function getServiceHealthPresentation(
 
   if (normalized.includes('healthy') || normalized === 'online') {
     return {
-      bg: 'bg-green-100 dark:bg-green-900',
+      bg: 'bg-green-100 dark:bg-green-900/25',
       text: 'text-green-700 dark:text-green-400',
       dot: 'bg-green-500',
       label: 'Healthy',
@@ -36,7 +36,7 @@ export function getServiceHealthPresentation(
 
   if (normalized.includes('degraded') || normalized.includes('warning')) {
     return {
-      bg: 'bg-yellow-100 dark:bg-yellow-900',
+      bg: 'bg-yellow-100 dark:bg-yellow-900/25',
       text: 'text-yellow-700 dark:text-yellow-400',
       dot: 'bg-yellow-500',
       label: 'Degraded',
@@ -45,7 +45,7 @@ export function getServiceHealthPresentation(
 
   if (normalized.includes('error') || normalized === 'offline') {
     return {
-      bg: 'bg-red-100 dark:bg-red-900',
+      bg: 'bg-red-100 dark:bg-red-900/25',
       text: 'text-red-700 dark:text-red-400',
       dot: 'bg-red-500',
       label: 'Offline',

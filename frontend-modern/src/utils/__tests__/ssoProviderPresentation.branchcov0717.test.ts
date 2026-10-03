@@ -309,7 +309,7 @@ describe('ssoProviderPresentation branch coverage (supplemental)', () => {
   describe('getSSOProviderTypeBadgeClass', () => {
     it('returns the canonical badge class string verbatim', () => {
       expect(getSSOProviderTypeBadgeClass()).toBe(
-        'px-1.5 py-0.5 text-xs font-medium rounded bg-surface-hover',
+        'px-1.5 py-0.5 text-xs font-medium rounded-sm bg-surface-hover',
       );
     });
   });
@@ -318,8 +318,8 @@ describe('ssoProviderPresentation branch coverage (supplemental)', () => {
     it('returns the full success presentation object', () => {
       expect(getSSOTestResultPresentation(true)).toStrictEqual({
         panelClass:
-          'p-4 rounded-md border bg-green-50 dark:bg-green-900 border-green-200 dark:border-green-800',
-        iconClass: 'w-5 h-5 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5',
+          'p-4 rounded-md border bg-green-50 dark:bg-green-900/25 border-green-200 dark:border-green-800',
+        iconClass: 'w-5 h-5 text-emerald-500 dark:text-emerald-400 shrink-0 mt-0.5',
         titleClass: 'text-sm font-medium text-green-800 dark:text-green-200',
         errorClass: 'text-xs text-red-600 dark:text-red-400 mt-1',
       });
@@ -328,8 +328,8 @@ describe('ssoProviderPresentation branch coverage (supplemental)', () => {
     it('returns the full failure presentation object', () => {
       expect(getSSOTestResultPresentation(false)).toStrictEqual({
         panelClass:
-          'p-4 rounded-md border bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800',
-        iconClass: 'w-5 h-5 text-rose-500 dark:text-rose-400 flex-shrink-0 mt-0.5',
+          'p-4 rounded-md border bg-red-50 dark:bg-red-900/25 border-red-200 dark:border-red-800',
+        iconClass: 'w-5 h-5 text-rose-500 dark:text-rose-400 shrink-0 mt-0.5',
         titleClass: 'text-sm font-medium text-red-800 dark:text-red-200',
         errorClass: 'text-xs text-red-600 dark:text-red-400 mt-1',
       });
@@ -340,7 +340,7 @@ describe('ssoProviderPresentation branch coverage (supplemental)', () => {
     it('returns the full expired presentation object', () => {
       expect(getSSOCertificatePresentation(true)).toStrictEqual({
         containerClass:
-          'text-xs px-2 py-1 rounded bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300',
+          'text-xs px-2 py-1 rounded-sm bg-red-100 dark:bg-red-900/25 text-red-700 dark:text-red-300',
         expiredLabelClass: 'ml-1 text-red-600 dark:text-red-400 font-medium',
         expiredLabel: '(Expired!)',
       });
@@ -348,7 +348,7 @@ describe('ssoProviderPresentation branch coverage (supplemental)', () => {
 
     it('returns the full valid presentation object', () => {
       expect(getSSOCertificatePresentation(false)).toStrictEqual({
-        containerClass: 'text-xs px-2 py-1 rounded bg-surface-hover text-base-content',
+        containerClass: 'text-xs px-2 py-1 rounded-sm bg-surface-hover text-base-content',
         expiredLabelClass: 'ml-1 text-red-600 dark:text-red-400 font-medium',
         expiredLabel: '(Expired!)',
       });
