@@ -307,7 +307,7 @@ Environment variables take precedence over `system.json`.
 | `DISCOVERY_HTTP_TIMEOUT_MS` | HTTP probe timeout (ms) | `2000` |
 | `PULSE_AUTH_HIDE_LOCAL_LOGIN` | Hide username/password form | `false` |
 | `DEMO_MODE` | Enable read-only demo mode | `false` |
-| `PULSE_TRUSTED_PROXY_CIDRS` | Comma-separated IPs/CIDRs trusted to supply `X-Forwarded-For`/`X-Real-IP` | *(unset)* |
+| `PULSE_TRUSTED_PROXY_CIDRS` | Comma-separated immediate proxy IPs/CIDRs trusted for forwarded client IP, scheme, host and port. Use the peer seen by Pulse; wildcard ranges are rejected. See [Reverse Proxy](REVERSE_PROXY.md#before-configuring-the-proxy). | *(unset)* |
 | `PULSE_TRUSTED_NETWORKS` | Comma-separated CIDRs treated as trusted local networks (does not bypass auth) | *(unset)* |
 | `ALLOW_UNPROTECTED_EXPORT` | Allow unauthenticated config export on public networks when no auth is configured (use with caution) | `false` |
 
