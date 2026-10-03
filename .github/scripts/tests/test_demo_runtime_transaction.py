@@ -339,6 +339,7 @@ class TransactionTest(unittest.TestCase):
                 self.assertEqual(engine.estate_hash(self.paths), self.before)
                 self.assertEqual(tx.receipt["recovery"]["elapsed_seconds"], 300)
                 self.assertEqual(tx.receipt["failure"], "new-service-crash")
+                self.assertIn(phase, tx.receipt["observation_failures"])
                 self.assertEqual(tx.receipt, json.loads((self.attempt / "receipt.json").read_text()))
                 # Keep each independent snapshot/intent; never reuse its path.
                 self.attempt = self.root / "attempts" / ("b" * 64)

@@ -438,13 +438,14 @@ class Transaction:
 
         if self.receipt["observation_failures"]:
             unverified()
+        terminal = self.receipt["status"] if self.receipt["observation_failures"] else status
         try:
-            self.save(self.receipt["status"] if self.receipt["observation_failures"] else status)
+            self.save(terminal)
         except (OSError, Failure) as error:
             if isinstance(error, Failure) and str(error) != "receipt-observation":
                 raise
-            if self.receipt["status"] not in self.receipt["observation_failures"]:
-                self.receipt["observation_failures"].append(self.receipt["status"])
+            if terminal not in self.receipt["observation_failures"]:
+                self.receipt["observation_failures"].append(terminal)
             unverified()
             # One bounded attempt to retain the failure, not to obtain a pass.
             self.recovery_save("observation_failed")
