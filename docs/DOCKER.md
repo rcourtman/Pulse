@@ -118,20 +118,45 @@ services:
 
 ## 🔄 Updates
 
-To update Pulse to a specific release tag:
+These steps update the Pulse server, not the containers it monitors. Record the
+current image and take a consistent private backup of the mounted Pulse data
+before changing it. Keep the previous image and data backup for recovery; do
+not delete volumes.
 
 ```bash
-docker pull rcourtman/pulse:vX.Y.Z
-docker stop pulse
-docker rm pulse
-# Re-run your docker run command
+docker inspect pulse --format '{{.Config.Image}} {{.Image}}'
 ```
 
-If using Compose:
+Run commands from the original Compose project directory. First set the exact
+target in your Compose `image:` line, or persist `PULSE_IMAGE` in the project's
+`.env` if the file uses `image: ${PULSE_IMAGE:-rcourtman/pulse:vX.Y.Z}`.
+Setting `PULSE_IMAGE` has no effect on a hardcoded image line. Community uses
+`rcourtman/pulse:vX.Y.Z`; paid Pro installs must keep the private image and
+existing registry login from <https://pulserelay.pro/download.html>. Do not
+replace Pro with the Community image or post registry credentials.
+
+For the `pulse` service in the examples above:
+
 ```bash
-docker compose pull
-docker compose up -d
+(
+set -e
+docker compose pull pulse
+docker compose up -d --no-deps pulse
+)
 ```
+
+If pulling fails, stop rather than recreating with an unverified or old image.
+Pulling a different tag alone does not update your configured image. There is
+no need to bring the whole Compose project down. Use your actual service and
+container names if they differ; legacy `docker-compose` users can substitute
+that command name.
+
+For `docker run` or an app UI, change the image in the existing saved deployment
+and recreate it with the same data mount, ports and settings; do not start a
+second Pulse against that data. Check the running image again, Pulse's displayed
+server version and service health after recreation. See
+[rollback and backup scope](AUTO_UPDATE.md#rollback) before reverting a version:
+an image change alone does not undo data migrations.
 
 ---
 
@@ -188,12 +213,10 @@ To keep update detection anonymous-only (no credential store reads, no credentia
 
 Paid Pulse Pro Docker installs use the private Pulse Pro registry rather than
 the public `rcourtman/pulse` image. Open <https://pulserelay.pro/download.html>,
-paste your activation key, run the Docker login command shown there, then run
-the shown `PULSE_IMAGE=license.pulserelay.pro/pulse-pro:<version> docker compose pull`
-and `docker compose up -d` commands from the host that already runs Pulse. If
-your compose file has a hardcoded `image: rcourtman/pulse:...` line, change it
-to `image: ${PULSE_IMAGE:-rcourtman/pulse:vX.Y.Z}` or directly to the private
-image shown on the download page before running those commands.
+enter your activation key in the page and use its registry login instructions
+on the host that already runs Pulse. Persist the private image for both pull
+and recreation as described in [server updates](#-updates); an image override
+used for only the pull does not select it for the later recreation.
 
 ### Disabling Update Features
 
