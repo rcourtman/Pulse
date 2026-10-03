@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   # This is the same physical target lock used by update-demo-server.yml.
@@ -99,6 +100,7 @@ jobs:
       - name: Recover current installed runtime
         id: recovery
         env:
+          GH_TOKEN: ${{ github.token }}
           DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
           DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
           EXPECTED_VERSION: ${{ steps.stable.outputs.tag }}

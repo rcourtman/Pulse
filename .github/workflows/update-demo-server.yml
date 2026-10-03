@@ -40,6 +40,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 # GitHub environments gate secret access and deployment admission, but do not
 # serialize jobs. Share one resource lock with the recovery workflow so two
@@ -343,23 +344,27 @@ jobs:
           echo "::error::Timeout waiting for release assets"
           exit 1
 
-      - name: Materialize tagged installer
+      - name: Verify signed release and select only demo server runtime
         if: inputs.verify_only != true
         env:
           PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
-          WORKFLOW_OUTPUT_1: ${{ needs.resolve.outputs.tag }}
+          EXPECTED_VERSION: ${{ needs.resolve.outputs.tag }}
         run: |
           set -euo pipefail
-          TAG="${WORKFLOW_OUTPUT_1}"
           TRUSTED_SSH_PUBLIC_KEY="$(
             go run ./scripts/release_update_key.go public-key-ssh \
               --public-key "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" \
               --comment pulse-installer
           )"
-          git show "refs/tags/${TAG}:install.sh" > /tmp/pulse-install.sh
-          sed -i "s|^PINNED_RELEASE_SSH_PUBLIC_KEY=.*|PINNED_RELEASE_SSH_PUBLIC_KEY=\"${TRUSTED_SSH_PUBLIC_KEY}\"|" /tmp/pulse-install.sh
-          grep -F "PINNED_RELEASE_SSH_PUBLIC_KEY=\"${TRUSTED_SSH_PUBLIC_KEY}\"" /tmp/pulse-install.sh
-          chmod +x /tmp/pulse-install.sh
+          asset="pulse-${EXPECTED_VERSION}-linux-amd64.tar.gz"
+          curl --disable --fail --location --silent --show-error --max-time 300 \
+            -o /tmp/pulse-demo-release.tgz "https://github.com/rcourtman/Pulse/releases/download/${EXPECTED_VERSION}/${asset}"
+          curl --disable --fail --location --silent --show-error --max-time 30 \
+            -o /tmp/pulse-demo-release.sshsig "https://github.com/rcourtman/Pulse/releases/download/${EXPECTED_VERSION}/${asset}.sshsig"
+          printf 'pulse-installer %s\n' "$TRUSTED_SSH_PUBLIC_KEY" > /tmp/pulse-demo-signers
+          ssh-keygen -Y verify -f /tmp/pulse-demo-signers -I pulse-installer \
+            -n pulse-install -s /tmp/pulse-demo-release.sshsig < /tmp/pulse-demo-release.tgz
+          python3 .github/scripts/dispatch-demo-runtime.py prepare
 
       - name: Tailscale
         id: tailscale
@@ -453,6 +458,7 @@ jobs:
       - name: Apply guarded demo transaction
         if: inputs.verify_only != true
         env:
+          GH_TOKEN: ${{ github.token }}
           DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
           DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
           EXPECTED_VERSION: ${{ needs.resolve.outputs.tag }}

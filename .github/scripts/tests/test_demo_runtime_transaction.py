@@ -1,5 +1,7 @@
 import hashlib
 import importlib.util
+import io
+import tarfile
 import json
 import os
 from pathlib import Path
@@ -29,7 +31,8 @@ def request(mode="recover"):
     return {"mode": mode, "hostname": "fixture", "local_url": "http://127.0.0.1:7655",
             "public_url": "https://demo.example/api/health", "version": "v6.4.5",
             "control_sha": "a" * 40, "run_id": "123", "run_attempt": "1",
-            "installer_sha256": hashlib.sha256(b"signed-installer-fixture").hexdigest() if mode == "update" else "",
+            "binary_sha256": hashlib.sha256(b"changed binary").hexdigest() if mode == "update" else "",
+            "version_sha256": hashlib.sha256(b"6.4.6\n").hexdigest() if mode == "update" else "",
             "profile": {**{name: "2" for name in engine.COUNT_KEYS},
                         "seed_duration": "2h", "sample_interval": "5m", "update_interval": "15s"}}
 
@@ -123,13 +126,10 @@ class FixtureHost(engine.Host):
             self.unhealthy = False
 
     def install(self, attempt, req):
-        if hashlib.sha256((attempt / "installer.sh").read_bytes()).hexdigest() != req["installer_sha256"]:
-            raise engine.Failure("installer-identity")
+        # Keep the clock/services virtual, but use the real narrow file swaps.
+        super().install(attempt, req)
         self.install_count += 1
         self.runtime_version = req["version"].lstrip("v")
-        engine.PATHS["binary"].write_bytes(b"new executable")
-        engine.PATHS["unit"].write_bytes(b"new unit")
-        (engine.PATHS["data"] / "persisted-history").write_bytes(b"forward history")
 
     def profile(self, req, unhealthy):
         super().profile(req, unhealthy)
@@ -159,7 +159,15 @@ class TransactionTest(unittest.TestCase):
         self.root = root / "control"
         self.attempt = self.root / "attempts" / ("a" * 64)
         self.attempt.mkdir(parents=True)
-        (self.attempt / "installer.sh").write_bytes(b"signed-installer-fixture")
+        self.paths["version"].write_text("6.4.5\n")
+        (self.attempt / "binary").write_bytes(b"changed binary")
+        (self.attempt / "version").write_bytes(b"6.4.6\n")
+        # Untouched distribution/service assets are outside the chosen operation.
+        self.untouched = {name: root / "unowned" / name for name in
+                          ("agent", "scripts", "helper", "auto-update", "timer", "symlink", "marker", "backup")}
+        for name, path in self.untouched.items():
+            path.parent.mkdir(parents=True, exist_ok=True); path.write_text("original " + name)
+        self.untouched_before = engine.estate_hash(self.untouched)
         self.addCleanup(patch.stopall)
         patch.object(engine, "ROOT", self.root).start()
         patch.object(engine, "PATHS", self.paths).start()
@@ -221,6 +229,34 @@ class TransactionTest(unittest.TestCase):
         self.assertEqual(receipt["recovery"]["elapsed_seconds"], 300)
         self.assertEqual(engine.estate_hash(self.paths), self.before)
         self.assertEqual(self.host.runtime_version, "6.4.5")
+
+    def test_success_changes_only_runtime_and_profile_leaving_distribution_assets(self):
+        code, receipt = self.run_transaction("update", "v6.4.6")
+        self.assertEqual((code, receipt["status"]), (0, "committed"))
+        self.assertEqual(self.paths["binary"].read_bytes(), b"changed binary")
+        self.assertEqual(self.paths["version"].read_text(), "6.4.6\n")
+        for name in ("unit", "dropins"):
+            self.assertEqual(engine.estate_hash({name: self.paths[name]}),
+                             engine.estate_hash({name: self.attempt / "snapshot" / name}))
+        self.assertEqual(engine.estate_hash(self.untouched), self.untouched_before)
+        self.assertEqual(receipt["forward"]["elapsed_seconds"], 300)
+
+    def test_late_failure_restores_VERSION_and_runtime_with_untouched_helpers(self):
+        self.host.fail_at = 55
+        code, receipt = self.run_transaction("update", "v6.4.6")
+        self.assertEqual((code, receipt["status"]), (1, "rolled_back"))
+        self.assertEqual(self.paths["version"].read_text(), "6.4.5\n")
+        self.assertEqual(engine.estate_hash(self.paths), self.before)
+        self.assertEqual(engine.estate_hash(self.untouched), self.untouched_before)
+        self.assertEqual(receipt["recovery"]["runtime_sha256"], receipt["runtime_snapshot_sha256"])
+        self.assertEqual(receipt["recovery"]["elapsed_seconds"], 300)
+
+    def test_payload_version_mismatch_restores_without_installing(self):
+        (self.attempt / "version").write_text("6.4.7\n")
+        code, receipt = self.run_transaction("update", "v6.4.6")
+        self.assertEqual((code, receipt["status"]), (1, "rolled_back"))
+        self.assertEqual(receipt["failure"], "runtime-payload-identity")
+        self.assertEqual(engine.estate_hash(self.paths), self.before)
 
     def test_failure_at_299_seconds_still_collects_entire_recovery_and_cancellation(self):
         self.host.fail_at = 299
@@ -359,7 +395,7 @@ class InputAndCommandTest(unittest.TestCase):
                  ("local_url", "http://other-host:7655"), ("public_url", "http://demo.example/api/health"),
                  ("public_url", "https://user:secret@demo.example/api/health"),
                  ("public_url", "https://demo.example/api/health?token=secret"),
-                 ("installer_sha256", "arbitrary")]
+                 ("binary_sha256", "arbitrary"), ("version_sha256", "arbitrary")]
         for name, value in cases:
             with self.subTest(name=name, value=value):
                 req = request(); req[name] = value
@@ -435,7 +471,7 @@ class DispatchLifecycleTest(unittest.TestCase):
                 source = source.replace("root.stat().st_uid == 0", "root.stat().st_uid == os.getuid()")
                 clock = [0]
                 calls = []
-                payload = {"request": request(), "source": "c291cmNl", "installer": ""}
+                payload = {"request": request(), "source": "c291cmNl", "binary": "", "version_file": ""}
 
                 def launch(argv, **kwargs):
                     calls.append(argv)
@@ -490,13 +526,103 @@ class NativeAdmissionTest(unittest.TestCase):
                     self.assertEqual(result["failure_code"], "not-an-empty-disposable-public-ci-runner")
             self.assertTrue(existing.is_dir())
 
-    def test_synthetic_changed_executable_and_data_are_distinct_between_steps(self):
+    def test_synthetic_changed_executables_have_actual_persistent_effects(self):
         compile(native.binary("1.0.1"), "fixture-runtime", "exec")
-        compile(native.installer("1.0.1"), "fixture-installer", "exec")
         self.assertNotEqual(native.binary("1.0.1"), native.binary("1.0.2", 55))
-        self.assertIn(b"candidate data 1.0.1", native.installer("1.0.1"))
-        self.assertIn(b"candidate data 1.0.2", native.installer("1.0.2", 55))
-        self.assertNotIn(b"curl", native.fixture_installer("1.0.1"))
+        self.assertIn(b"persistent-marker", native.binary("1.0.1"))
+        self.assertNotIn(b"curl", native.binary("1.0.1"))
+
+
+
+class RuntimeSelectionTest(unittest.TestCase):
+    def archive(self, directory, entries):
+        path = Path(directory) / 'release.tgz'
+        with tarfile.open(path, 'w:gz') as stream:
+            for name, content, kind in entries:
+                member = tarfile.TarInfo(name); member.size = len(content); member.type = kind
+                if kind == tarfile.SYMTYPE:
+                    member.linkname = '/outside'; member.size = 0
+                    stream.addfile(member)
+                else:
+                    stream.addfile(member, io.BytesIO(content))
+        return path
+
+    def elf(self):
+        body = bytearray(64); body[:6] = b'\x7fELF\x02\x01'; body[18:20] = b'\x3e\x00'
+        return bytes(body)
+
+    def test_selects_only_signed_archive_runtime_without_extracting_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            entries = [('bin/pulse', self.elf(), tarfile.REGTYPE), ('./VERSION', b'6.4.6\n', tarfile.REGTYPE),
+                       ('../outside', b'untrusted path', tarfile.REGTYPE),
+                       ('scripts/install.sh', b'never executed', tarfile.REGTYPE),
+                       ('bin/pulse-agent', b'not installed', tarfile.REGTYPE)]
+            files = engine.runtime_members(self.archive(directory, entries), 'v6.4.6')
+            self.assertEqual(set(files), {'binary', 'version'})
+            self.assertEqual(files['binary'], self.elf())
+            self.assertEqual([p.name for p in Path(directory).iterdir()], ['release.tgz'])
+
+    def test_duplicate_link_wrong_version_or_architecture_is_rejected(self):
+        valid = [('bin/pulse', self.elf(), tarfile.REGTYPE), ('VERSION', b'6.4.6\n', tarfile.REGTYPE)]
+        cases = [valid + [('pulse', self.elf(), tarfile.REGTYPE)],
+                 [valid[0], ('VERSION', b'', tarfile.SYMTYPE)],
+                 [valid[0], ('VERSION', b'6.4.7\n', tarfile.REGTYPE)],
+                 [('bin/pulse', b'#!/bin/sh\n', tarfile.REGTYPE), valid[1]], [valid[0]]]
+        for entries in cases:
+            with self.subTest(entries=[x[0] for x in entries]), tempfile.TemporaryDirectory() as directory:
+                with self.assertRaises(engine.Failure):
+                    engine.runtime_members(self.archive(directory, entries), 'v6.4.6')
+
+
+class NativeGateTest(unittest.TestCase):
+    def row(self, run_id=10, **fields):
+        return {'id': run_id, 'head_sha': 'a' * 40, 'run_attempt': 1,
+                'created_at': '2026-10-03T01:00:00Z', 'updated_at': '2026-10-03T01:10:00Z',
+                'path': '.github/workflows/demo-runtime-native.yml', 'event': 'push', 'head_branch': 'main',
+                'status': 'completed', 'conclusion': 'success', **fields}
+
+    def check(self, rows, history=None, read_exit=0, same=True):
+        calls = []
+        def command(argv, **kwargs):
+            calls.append(argv)
+            if argv[0] == 'gh':
+                payload = rows if 'created=' in argv[-1] else (history if history is not None else rows)
+                return subprocess.CompletedProcess(argv, read_exit, json.dumps({'workflow_runs': payload}).encode())
+            return subprocess.CompletedProcess(argv, 0 if argv[1] == 'merge-base' or same else 1)
+        with patch.object(dispatcher.subprocess, 'run', side_effect=command):
+            result = dispatcher.require_native({'GITHUB_SHA': 'b' * 40, 'GITHUB_REPOSITORY': 'rcourtman/Pulse'})
+        return result, calls
+
+    def test_matching_reviewed_native_source_passes_with_current_first_inventory(self):
+        result, calls = self.check([self.row()])
+        self.assertEqual(result['run_id'], 10)
+        reads = [c for c in calls if c[0] == 'gh']
+        self.assertEqual(len(reads), 2)
+        self.assertIn('created=', reads[0][-1]); self.assertNotIn('created=', reads[1][-1])
+        self.assertEqual(set(calls[-1][6:]), set(dispatcher.NATIVE_PATHS))
+
+    def test_newer_matching_failure_or_pending_run_cannot_use_older_green(self):
+        for fields in ({'conclusion': 'failure'}, {'status': 'in_progress', 'conclusion': None}):
+            with self.subTest(fields=fields), self.assertRaisesRegex(ValueError, 'not-passed'):
+                self.check([self.row(11, **fields), self.row(10)])
+
+    def test_latest_duplicate_attempt_retains_failure(self):
+        with self.assertRaisesRegex(ValueError, 'not-passed'):
+            self.check([self.row()], [self.row(run_attempt=2, conclusion='failure')])
+
+    def test_missing_changed_or_misidentified_proof_cannot_enable_mutation(self):
+        for rows, same in (([], True), ([self.row()], False), ([self.row(event='workflow_dispatch')], True)):
+            with self.subTest(rows=rows, same=same), self.assertRaises(ValueError):
+                self.check(rows, same=same)
+
+    def test_refused_read_has_no_history_fallback_or_ssh(self):
+        calls = []
+        def denied(argv, **kwargs):
+            calls.append(argv); return subprocess.CompletedProcess(argv, 1, b'')
+        with patch.object(dispatcher.subprocess, 'run', side_effect=denied), self.assertRaises(ValueError):
+            dispatcher.require_native({'GITHUB_SHA': 'b' * 40, 'GITHUB_REPOSITORY': 'rcourtman/Pulse'})
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0:2], ['gh', 'api'])
 
 
 if __name__ == "__main__":

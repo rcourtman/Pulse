@@ -14,6 +14,7 @@ import socket
 import stat
 import subprocess
 import sys
+import tarfile
 import time
 from urllib.parse import urlsplit
 
@@ -24,6 +25,7 @@ SERVICES = ("pulse", "pulse-relay", "caddy")
 ROOT = Path("/var/lib/pulse-deploy/demo")
 LOCK = Path("/var/lib/pulse-deploy/relay/deploy.lock")
 PATHS = {"binary": Path("/opt/pulse/bin/pulse"),
+         "version": Path("/opt/pulse/VERSION"),
          "unit": Path("/etc/systemd/system/pulse.service"),
          "dropins": Path("/etc/systemd/system/pulse.service.d"),
          "data": Path("/etc/pulse")}
@@ -40,6 +42,7 @@ DEMO_HISTORY = ("ai_incidents.json", "ai_incidents.json.tmp",
                 "alerts/events.db", "alerts/events.db-shm", "alerts/events.db-wal")
 CRASH = re.compile(r"\bpanic\b|\bfatal error\b|segmentation fault|core dumped|watchdog timeout", re.I)
 TERMINAL = {"committed", "healthy_noop", "rolled_back", "refused"}
+MAX_BINARY = 128 * 1024 * 1024
 
 
 class Failure(Exception):
@@ -62,7 +65,7 @@ def atomic_json(path, value):
 
 
 def validate(request):
-    if set(request) != {"mode", "hostname", "local_url", "public_url", "version", "profile", "control_sha", "run_id", "run_attempt", "installer_sha256"}:
+    if set(request) != {"mode", "hostname", "local_url", "public_url", "version", "profile", "control_sha", "run_id", "run_attempt", "binary_sha256", "version_sha256"}:
         raise Failure("request-shape")
     if request["mode"] not in {"update", "recover"}:
         raise Failure("request-mode")
@@ -92,9 +95,47 @@ def validate(request):
         pattern = r"[1-9][0-9]{0,3}" if name in COUNT_KEYS else r"[1-9][0-9]{0,3}[smhd]"
         if not isinstance(value, str) or not re.fullmatch(pattern, value):
             raise Failure("request-profile")
-    digest = request["installer_sha256"]
-    if (request["mode"] == "update" and not re.fullmatch(r"[0-9a-f]{64}", digest)) or (request["mode"] == "recover" and digest != ""):
-        raise Failure("request-installer")
+    for name in ("binary_sha256", "version_sha256"):
+        digest = request[name]
+        if (not isinstance(digest, str)
+                or (request["mode"] == "update" and not re.fullmatch(r"[0-9a-f]{64}", digest))
+                or (request["mode"] == "recover" and digest != "")):
+            raise Failure("request-runtime")
+
+
+def runtime_members(archive, version):
+    """Select two regular files from an already signature-verified archive.
+
+    Never extract archive paths or execute its installer. This demo-only route
+    does not update bundled agents, scripts, helpers, units or timer assets.
+    """
+    files = {}
+    count = 0
+    with tarfile.open(archive, "r:gz") as stream:
+        for member in stream:
+            count += 1
+            if count > 4096:
+                raise Failure("archive-member-bound")
+            name = member.name.removeprefix("./")
+            if name not in {"pulse", "bin/pulse", "VERSION"}:
+                continue
+            label = "version" if name == "VERSION" else "binary"
+            if (label in files or not member.isfile() or member.issparse()
+                    or not 0 < member.size <= (128 if label == "version" else MAX_BINARY)):
+                raise Failure("archive-runtime-shape")
+            with stream.extractfile(member) as source:
+                files[label] = source.read(member.size + 1)
+            if len(files[label]) != member.size:
+                raise Failure("archive-runtime-size")
+    if set(files) != {"binary", "version"}:
+        raise Failure("archive-runtime-missing")
+    if files["version"].strip() not in {version.encode(), version.removeprefix("v").encode()}:
+        raise Failure("archive-runtime-version")
+    # The demo estate is the existing Linux/amd64 server, not a new platform.
+    data = files["binary"]
+    if len(data) < 64 or data[:6] != b"\x7fELF\x02\x01" or data[18:20] != b"\x3e\x00":
+        raise Failure("archive-runtime-architecture")
+    return files
 
 
 def copy_path(src, dst):
@@ -175,6 +216,8 @@ class Host:
                 raise Failure("estate-identity")
         if PATHS["dropins"].is_symlink():
             raise Failure("dropin-identity")
+        if PATHS["version"].is_symlink() or any(p.is_symlink() for p in PATHS["binary"].parents):
+            raise Failure("distribution-identity")
         for path in fields.get("DropInPaths", "").split():
             if Path(path).parent != PATHS["dropins"] or Path(path).is_symlink():
                 raise Failure("unsupported-dropin")
@@ -244,11 +287,44 @@ class Host:
         self.command(["systemctl", "start", "pulse"], timeout=90)
 
     def install(self, attempt, request):
-        installer = attempt / "installer.sh"
-        if hashlib.sha256(installer.read_bytes()).hexdigest() != request["installer_sha256"]:
-            raise Failure("installer-identity")
-        self.command(["bash", str(installer), "--version", request["version"]], timeout=900,
-                     env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "HOME": "/root", "PULSE_SERVICE_NAME": "pulse"})
+        # Trust is checked against the pinned release key in CI, before these
+        # exact bytes enter the authenticated SSH envelope. Check the retained
+        # byte identities again before any swap; no arbitrary shell is run.
+        staged = {label: attempt / label for label in ("binary", "version")}
+        for label, path in staged.items():
+            if path.is_symlink() or not path.is_file():
+                raise Failure("runtime-payload-shape")
+            if not 0 < path.stat().st_size <= (128 if label == "version" else MAX_BINARY):
+                raise Failure("runtime-payload-bound")
+            if hashlib.sha256(path.read_bytes()).hexdigest() != request[label + "_sha256"]:
+                raise Failure("runtime-payload-identity")
+        if staged["version"].read_bytes().strip() not in {
+                request["version"].encode(), request["version"].removeprefix("v").encode()}:
+            raise Failure("runtime-payload-version")
+        for label, source in staged.items():
+            destination = PATHS[label]
+            # Sibling staging keeps replacement atomic; owned recovery removes
+            # the sibling if a failure interrupts either of the two swaps.
+            temporary = destination.with_name(destination.name + ".demo-new")
+            if temporary.exists() or temporary.is_symlink():
+                raise Failure("runtime-staging-exists")
+            try:
+                with open(source, "rb") as src, open(temporary, "xb") as dst:
+                    shutil.copyfileobj(src, dst)
+                    owner = PATHS["binary"].stat()
+                    os.fchown(dst.fileno(), owner.st_uid, owner.st_gid)
+                    os.fchmod(dst.fileno(), 0o755 if label == "binary" else 0o644)
+                    dst.flush()
+                    os.fsync(dst.fileno())
+                os.replace(temporary, destination)
+                fd = os.open(destination.parent, os.O_DIRECTORY)
+                try:
+                    os.fsync(fd)
+                finally:
+                    os.close(fd)
+            finally:
+                if temporary.is_file() and not temporary.is_symlink():
+                    temporary.unlink()
 
     def profile_values(self, request):
         values = {"DEMO_MODE": "true", "PULSE_MOCK_MODE": "true", "PULSE_MOCK_RANDOM_METRICS": "true",
@@ -308,7 +384,9 @@ class Transaction:
         self.receipt = {"schema_version": 2, "status": "intent", "mutated": False,
                         "control_sha": request["control_sha"], "run_id": request["run_id"],
                         "run_attempt": request["run_attempt"], "mode": request["mode"],
-                        "expected_version": request["version"], "installer_sha256": request["installer_sha256"],
+                        "expected_version": request["version"],
+                        "footprint": "server-binary-version-and-demo-data",
+                        "binary_sha256": request["binary_sha256"], "version_sha256": request["version_sha256"],
                         "forward": {}, "recovery": {}, "recovery_required": False}
 
     def save(self, status):
@@ -346,6 +424,11 @@ class Transaction:
             evidence["observed_version"] = self.host.version(self.request["local_url"])
             if evidence["observed_version"] != expected_version:
                 raise Failure("runtime-version")
+            runtime = estate_hash({name: PATHS[name] for name in ("binary", "version")})
+            expected = self.receipt.get("runtime_snapshot_sha256" if phase == "recovery" else "installed_runtime_sha256")
+            if expected and runtime != expected:
+                raise Failure("distribution-state-changed")
+            evidence["runtime_sha256"] = runtime
             evidence["samples"] += 1
             elapsed = self.host.now() - started
             evidence["elapsed_seconds"] = elapsed
@@ -358,8 +441,8 @@ class Transaction:
         size = sum(path.lstat().st_size for root in PATHS.values() if root.exists()
                    for path in ([root] + (list(root.rglob("*")) if root.is_dir() else []))
                    if path.is_file() and not path.is_symlink())
-        # Both our independent estate and the signed installer's own backup need
-        # space. Refuse shortage; never delete backups or databases for headroom.
+        # Keep room for the independent estate and the two atomic runtime swaps.
+        # Never run the installer's backup rotation or delete data for headroom.
         if any(shutil.disk_usage(parent).free < 2 * size + 64 * 1024 * 1024
                for parent in (self.attempt, PATHS["data"].parent)):
             raise Failure("snapshot-headroom")
@@ -372,6 +455,7 @@ class Transaction:
         atomic_json(snapshot / "paths.json", manifest)
         digest = estate_hash(PATHS)
         self.receipt["snapshot_sha256"] = digest
+        self.receipt["runtime_snapshot_sha256"] = estate_hash({name: PATHS[name] for name in ("binary", "version")})
         self.receipt["snapshot_retained"] = True
         return digest
 
@@ -433,8 +517,8 @@ class Transaction:
             cursors = self.host.cursors()
             if self.request["mode"] == "update":
                 self.host.install(self.attempt, self.request)
-                # The installer may start the unit; finish profile work quiescent.
-                self.host.stop()
+                self.receipt["installed_runtime_sha256"] = estate_hash({
+                    name: PATHS[name] for name in ("binary", "version")})
             self.host.profile(self.request, not healthy_baseline)
             self.host.start()
             self.ready(cursors)

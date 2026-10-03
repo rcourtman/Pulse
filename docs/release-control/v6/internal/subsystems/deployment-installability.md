@@ -29,7 +29,7 @@ new route; disposable acceptance also rejects an unknown route rather than
 responding healthy to every URL.
 
 Before installation or runtime-profile mutation, stop only Pulse and durably
-capture its executable, unit/drop-ins and entire persistent data estate. Refuse
+capture its executable, VERSION, unit/drop-ins and entire persistent data estate. Refuse
 insufficient space rather than prune backups/databases. A failed healthy change
 restores that complete estate and observes another 300 seconds; the original
 operation still fails. An unhealthy recovery baseline is never claimed as a
@@ -50,7 +50,7 @@ recovery. See [demo transaction acceptance](../DEMO_RUNTIME_TRANSACTION.md).
 
 The secret-free public `demo-runtime-native.yml` checks the exact PR/push source
 on a fresh hosted runner, using actual systemd and Caddy with disposable TLS and
-synthetic executable/data fixtures. Its two real-window cases exercise a
+synthetic executable/data fixtures through the real narrow atomic swaps. Its two real-window cases exercise a
 changed executable, a 55-second delayed synthetic failure, observer loss and
 TERM during full restoration. It records original/fixture source identities,
 actual bounded service observations and cleanup; a missing or failed record is
@@ -2633,6 +2633,21 @@ artifact-selection behaviour.
    `ES2022` lib declaration stay in step.
 
 ## Current State
+
+### Demo runtime footprint qualification
+
+The demo transaction executes no general installer. It verifies the activated
+stable archive with the pinned SSH key/namespace, selects only regular bounded
+Linux/amd64 server and VERSION members, and rechecks their exact hashes before
+atomic sibling swaps. VERSION is in the owned rollback snapshot; runtime hashes
+remain fixed through forward and restored 300-second observations. No agent,
+script, helper, unit/timer, service-account, package or backup-rotation effect is
+claimed or applied. CI production mutation requires a successful main native
+run whose engine/dispatcher/driver/workflow final content matches current main,
+and refuses newer matching failures, pending runs and unavailable evidence.
+The v6.4.5 full-installer VERSION rollback defect and this route's signed/native
+limits are retained in DEMO_RUNTIME_TRANSACTION.md.
+
 
 ### Existing-install auto-update consent (1 October 2026)
 

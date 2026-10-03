@@ -41,7 +41,7 @@ func TestDemoTransactionKeepsSignedAdmissionAndVerificationOnlyReadOnly(t *testi
 			t.Fatalf("unguarded demo mutation remains: %s", forbidden)
 		}
 	}
-	for _, required := range []string{"Require exact committed activation marker for mutation", "release-activation.json", "Stable demo mutation refuses mutable, inactive, or prerelease tag", "PINNED_RELEASE_SSH_PUBLIC_KEY", "git show \"refs/tags/${TAG}:install.sh\"", "Verify public browser smoke"} {
+	for _, required := range []string{"Require exact committed activation marker for mutation", "release-activation.json", "Stable demo mutation refuses mutable, inactive, or prerelease tag", "ssh-keygen -Y verify", "-n pulse-install", "${asset}.sshsig", "Verify public browser smoke"} {
 		if !strings.Contains(text, required) {
 			t.Fatalf("lost signed/admission/customer verification boundary: %s", required)
 		}

@@ -31,6 +31,9 @@ def binary(version, fail_after=0, port=17655):
     return ('''#!/usr/bin/python3
 import http.server,json,os,threading,time
 VERSION = %r
+if %r == 17655:
+    from pathlib import Path
+    Path('/etc/pulse/persistent-marker').write_text('candidate data ' + VERSION)
 def fail():
     time.sleep(%r)
     print('panic: synthetic disposable service fault',flush=True)
@@ -45,27 +48,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(200); self.end_headers(); self.wfile.write(body)
     def log_message(self,*args): pass
 http.server.HTTPServer(('127.0.0.1',%r),Handler).serve_forever()
-''' % (version, fail_after, fail_after, port, port)).encode()
+''' % (version, port, fail_after, fail_after, port, port)).encode()
 
 
 def unit(executable, user="pulse"):
     return f"[Unit]\nDescription=Disposable demo native fixture\n[Service]\nUser={user}\nGroup={user}\nExecStart={executable}\nRestart=no\n[Install]\nWantedBy=multi-user.target\n"
-
-
-def installer(version, fail_after=0):
-    source = binary(version, fail_after)
-    return ("#!/usr/bin/python3\nfrom pathlib import Path\n"
-            "import base64\n"
-            f"p=Path('/opt/pulse/bin/pulse');p.write_bytes(base64.b64decode({base64.b64encode(source).decode()!r}));p.chmod(0o755)\n"
-            "p=Path('/etc/systemd/system/pulse.service');p.write_text(p.read_text()+'# candidate fixture\\n')\n"
-            f"Path('/etc/pulse/persistent-marker').write_text({'candidate data ' + version!r})\n").encode()
-
-
-def fixture_installer(version, fail_after=0):
-    # The real engine invokes bash like the published installer. This fixture
-    # deliberately changes executable, unit and persistent data without download.
-    script = installer(version, fail_after)
-    return ("#!/bin/bash\nset -eu\npython3 - <<'PY'\n" + script.decode().split("\n", 1)[1] + "\nPY\n").encode()
 
 
 def wait(predicate, limit):
@@ -110,6 +97,13 @@ def main():
         for path in Path("/etc/pulse").iterdir():
             os.chown(path, owner.pw_uid, owner.pw_gid)
         Path("/opt/pulse/bin/pulse").write_bytes(binary("1.0.0")); Path("/opt/pulse/bin/pulse").chmod(0o755)
+        Path("/opt/pulse/VERSION").write_text("1.0.0\n")
+        Path("/opt/pulse/scripts").mkdir()
+        untouched = {"agent": Path("/opt/pulse/bin/pulse-agent-fixture"),
+                     "script": Path("/opt/pulse/scripts/install-fixture.sh")}
+        for path in untouched.values():
+            path.write_bytes(b"unchanged bundled distribution asset")
+        untouched_before = {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in untouched.items()}
         Path("/opt/pulse/bin/relay").write_bytes(binary("1.0.0", port=17656)); Path("/opt/pulse/bin/relay").chmod(0o755)
         for name, executable in (("pulse", "/opt/pulse/bin/pulse"), ("pulse-relay", "/opt/pulse/bin/relay")):
             Path(f"/etc/systemd/system/{name}.service").write_text(unit(executable))
@@ -144,13 +138,16 @@ def main():
         profile.update(seed_duration="2h", sample_interval="5m", update_interval="15s")
 
         def submit(version, fault=0):
-            install = fixture_installer(version, fault)
+            candidate = binary(version, fault)
+            metadata = (version + "\n").encode()
             request = {"mode": "update", "hostname": socket.gethostname(), "local_url": "http://127.0.0.1:17655",
                        "public_url": "https://127.0.0.1:18443/api/health", "version": "v" + version,
                        "profile": profile, "control_sha": os.environ["GITHUB_SHA"],
                        "run_id": os.environ["GITHUB_RUN_ID"], "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
-                       "installer_sha256": hashlib.sha256(install).hexdigest()}
-            payload = {"request": request, "source": base64.b64encode(source).decode(), "installer": base64.b64encode(install).decode()}
+                       "binary_sha256": hashlib.sha256(candidate).hexdigest(),
+                       "version_sha256": hashlib.sha256(metadata).hexdigest()}
+            payload = {"request": request, "source": base64.b64encode(source).decode(),
+                       "binary": base64.b64encode(candidate).decode(), "version_file": base64.b64encode(metadata).decode()}
             identity = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
             proc = subprocess.Popen(["python3", "-c", dispatcher.BOOTSTRAP], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             processes.append(proc); proc.stdin.write(json.dumps(payload).encode()); proc.stdin.close()
@@ -165,6 +162,8 @@ def main():
         receipt = json.loads((attempt / "receipt.json").read_text()); result["cases"].append(receipt)
         assert proc.returncode == 0 and receipt["status"] == "committed" and receipt["forward"]["elapsed_seconds"] >= 300
         assert Path("/etc/pulse/persistent-marker").read_text() == "candidate data 1.0.1"
+        assert Path("/opt/pulse/VERSION").read_text() == "1.0.1\n"
+        assert {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in untouched.items()} == untouched_before
         # A later candidate fails at 55s; lose the observer while the owned
         # systemd child continues, then TERM during actual full recovery.
         proc, attempt, payload = submit("1.0.2", 55)
@@ -180,6 +179,8 @@ def main():
         assert replay.returncode == 1 and receipt["status"] == "rolled_back" and receipt["recovery"]["elapsed_seconds"] >= 300
         assert receipt["failure"] in {"new-service-crash", "sustained-health"}
         assert Path("/etc/pulse/persistent-marker").read_text() == "candidate data 1.0.1"
+        assert Path("/opt/pulse/VERSION").read_text() == "1.0.1\n"
+        assert {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in untouched.items()} == untouched_before
         version = json.loads(command(["curl", "--disable", "--silent", "--fail", "http://127.0.0.1:17655/api/version"]))["version"]
         assert version == "1.0.1"
         result["stage"] = "complete"
