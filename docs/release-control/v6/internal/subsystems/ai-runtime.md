@@ -8494,3 +8494,27 @@ turning AI back on needs no new path. This is presentation gating only: Patrol
 runtime, findings, schedules and the capability's server derivation are
 unchanged. `AppLayout.test.tsx`, `CommandPaletteModal.test.tsx`,
 `KeyboardShortcutsModal.test.tsx` and `App.architecture.test.ts` pin it.
+
+### Prompt-cache usage is accounted, not just logged
+
+Anthropic reports `cache_creation_input_tokens` and `cache_read_input_tokens`
+as buckets disjoint from `input_tokens`. The provider client now carries both
+buckets on `providers.ChatResponse` and the streaming `DoneEvent` (assigned
+from `message_start` and the final cumulative `message_delta`, never summed
+across events), the agentic loops and Patrol responses sum them beside the
+ordinary totals, and the usage ledger (`cost.UsageEvent`), Patrol run records
+and their persisted copies keep them. `cost.EstimateUsageUSD` prices each
+bucket at the provider's cache rate when the table knows it (Anthropic:
+5-minute write 1.25x and read 0.1x of the input rate) and at the ordinary
+input rate otherwise; `cost.EstimateUSD` remains the no-cache wrapper, so
+callers without cache data are unchanged. Spend summaries, the Patrol digest
+spend, the cost projection (per-run medians now carry cache buckets) and the
+usage export expose the buckets and price them the same way. `InputTokens`
+keeps its meaning everywhere, so the telemetry token buckets and the
+`patrol_input_tokens` semantics are unchanged; cache tokens are reported but
+not folded into those counters. Proofs: `anthropic_test.go` (both response
+paths keep the buckets, the final delta does not double them),
+`pricing_anthropic_test.go`, `store_test.go`, `patrol_digest_test.go`,
+`patrol_cost_projection_test.go` and `cost_persistence_test.go`. This repairs
+the lost accounting data from Pulse #2350; it is not a measured provider bill
+or a claim of savings across six-hourly runs.

@@ -129,16 +129,18 @@ func (s *Service) generateSessionTitle(ctx context.Context, sessionID string) er
 	}
 	if costStore != nil && response != nil && (response.InputTokens != 0 || response.OutputTokens != 0) {
 		costStore.Record(cost.UsageEvent{
-			Timestamp:     time.Now(),
-			Provider:      provider.Name(),
-			RequestModel:  requestModel,
-			ResponseModel: strings.TrimSpace(response.Model),
-			UseCase:       "chat",
-			InputTokens:   response.InputTokens,
-			OutputTokens:  response.OutputTokens,
-			TargetType:    "assistant_session_title",
-			TargetID:      normalizedSessionID,
-			SessionID:     normalizedSessionID,
+			Timestamp:                time.Now(),
+			Provider:                 provider.Name(),
+			RequestModel:             requestModel,
+			ResponseModel:            strings.TrimSpace(response.Model),
+			UseCase:                  "chat",
+			InputTokens:              response.InputTokens,
+			OutputTokens:             response.OutputTokens,
+			CacheCreationInputTokens: response.CacheCreationInputTokens,
+			CacheReadInputTokens:     response.CacheReadInputTokens,
+			TargetType:               "assistant_session_title",
+			TargetID:                 normalizedSessionID,
+			SessionID:                normalizedSessionID,
 		})
 	}
 

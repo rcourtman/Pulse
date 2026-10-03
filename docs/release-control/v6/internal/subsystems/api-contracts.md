@@ -11084,3 +11084,16 @@ the renamed Settings > Pulse Mobile section instead of Remote Access. Codes,
 severities and the response shape are unchanged. The API reference heading
 for the relay protocol records that Pulse Mobile retires on 31 March 2027, and
 the published copy stays identical to `docs/API.md`.
+
+### AI usage export carries prompt-cache buckets
+
+`GET /api/ai/cost/export` now includes `cache_creation_input_tokens` and
+`cache_read_input_tokens` beside the existing input and output counts, in
+the JSON events (as optional fields of the usage event) and as two CSV
+columns after `output_tokens`, and prices each event with the cache-aware
+estimator so `estimated_usd` matches the summary surfaces. Existing columns,
+their order, the query parameters and the authentication boundary are
+unchanged; the chat service adapter passes the same buckets through the
+Patrol stream response without changing its request shape.
+`ai_handlers_more_test.go` covers the export in both formats with a cached
+Anthropic event.

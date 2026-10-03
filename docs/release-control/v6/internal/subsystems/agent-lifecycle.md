@@ -8433,3 +8433,10 @@ update commands and credential authority unchanged.
 `internal/api/onboarding_handlers.go` changed only the human-readable pairing
 readiness messages so they name Settings > Pulse Mobile. No agent
 registration, lifecycle or install path changed.
+
+### AI usage export columns only
+
+`internal/api/ai_handlers.go` and `internal/api/chat_service_adapter.go`
+changed only to carry prompt-cache token buckets through the AI usage export
+and the Patrol stream response. No agent registration, enrolment, install,
+update or removal path changed.

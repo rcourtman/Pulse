@@ -38,17 +38,21 @@ func (a *chatServiceAdapter) ExecutePatrolStream(ctx context.Context, req ai.Pat
 	if err != nil {
 		if resp != nil {
 			return &ai.PatrolStreamResponse{
-				Content:      resp.Content,
-				InputTokens:  resp.InputTokens,
-				OutputTokens: resp.OutputTokens,
+				Content:                  resp.Content,
+				InputTokens:              resp.InputTokens,
+				OutputTokens:             resp.OutputTokens,
+				CacheCreationInputTokens: resp.CacheCreationInputTokens,
+				CacheReadInputTokens:     resp.CacheReadInputTokens,
 			}, err
 		}
 		return nil, err
 	}
 	return &ai.PatrolStreamResponse{
-		Content:      resp.Content,
-		InputTokens:  resp.InputTokens,
-		OutputTokens: resp.OutputTokens,
+		Content:                  resp.Content,
+		InputTokens:              resp.InputTokens,
+		OutputTokens:             resp.OutputTokens,
+		CacheCreationInputTokens: resp.CacheCreationInputTokens,
+		CacheReadInputTokens:     resp.CacheReadInputTokens,
 	}, nil
 }
 
