@@ -58,6 +58,15 @@ on a containing build remains required. Until then, stopping Pulse before a
 freeze-enabled backup and restarting only after verified thaw remains the safe
 workaround, with monitoring and alerts unavailable during that window.
 
+The [bounded backup observation tools](../../../../../tests/qualification/guest-agent-backup/README.md)
+provide an independent guest filesystem writer (file/directory fsync and
+synthetic readback over non-QGA stdout) and a fail-closed checker for native
+overlap, truthful deferred readings/History and post-task writes/resumption.
+An OK task without fresh writes on every covered filesystem cannot pass those
+record checks. Local tests are not native freeze/thaw evidence; supplied
+platform/artifact provenance and mount completeness still need independent
+review. The tools add no runtime interface, recovery action or release gate.
+
 ### Exact TrueNAS subscription termination — issue #2396
 
 JSON-RPC stream readers and the subscription-acknowledgement wait recognise

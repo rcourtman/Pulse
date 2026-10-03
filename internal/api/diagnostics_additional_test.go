@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -668,9 +669,11 @@ func TestBuildAIChatDiagnostic_WithService(t *testing.T) {
 
 func TestCheckVMDiskMonitoring_Success(t *testing.T) {
 	responses := map[string]proxmoxTestResponse{
-		"/api2/json/nodes":                                {body: `{"data":[{"node":"pve1","status":"online"}]}`},
-		"/api2/json/nodes/pve1/qemu":                      {body: `{"data":[{"vmid":100,"name":"vm-100","node":"pve1","status":"running","template":0}]}`},
-		"/api2/json/nodes/pve1/qemu/100/status/current":   {body: `{"data":{"agent":1}}`},
+		"/api2/json/nodes":                              {body: `{"data":[{"node":"pve1","status":"online"}]}`},
+		"/api2/json/nodes/pve1/qemu":                    {body: `{"data":[{"vmid":100,"name":"vm-100","node":"pve1","status":"running","template":0}]}`},
+		"/api2/json/nodes/pve1/qemu/100/status/current": {body: `{"data":{"agent":1}}`},
+		// Guest admission must independently verify the authoritative config lock.
+		"/api2/json/nodes/pve1/qemu/100/config":           {body: `{"data":{}}`},
 		"/api2/json/nodes/pve1/qemu/100/agent/get-fsinfo": {body: `{"data":{"result":[{"name":"root","type":"ext4","mountpoint":"/","total-bytes":100,"used-bytes":50}]}}`},
 	}
 	server := newProxmoxTestServer(t, responses)
@@ -750,5 +753,75 @@ func TestCheckPhysicalDisks_PermissionDenied(t *testing.T) {
 	}
 	if !foundNote {
 		t.Fatalf("expected permissions recommendation")
+	}
+}
+
+func TestCheckVMDiskMonitoring_BackupAdmission(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		config         proxmoxTestResponse
+		agentStatus    int
+		lockInFlight   bool
+		wantAgentCalls int32
+		wantPermission bool
+	}{
+		{name: "backup-only-in-config", config: proxmoxTestResponse{body: `{"data":{"lock":"backup"}}`}},
+		{name: "snapshot-lock", config: proxmoxTestResponse{body: `{"data":{"lock":"snapshot"}}`}},
+		{name: "lock-permission-denied", config: proxmoxTestResponse{status: http.StatusForbidden}},
+		{name: "lock-unavailable", config: proxmoxTestResponse{status: http.StatusNotFound}},
+		{name: "lock-null", config: proxmoxTestResponse{body: `{"data":null}`}},
+		{name: "lock-malformed", config: proxmoxTestResponse{body: `{"data":{"lock":true}}`}},
+		{name: "lock-starts-in-flight", config: proxmoxTestResponse{body: `{"data":{}}`}, lockInFlight: true, wantAgentCalls: 1},
+		{name: "completed-agent-permission-refusal", config: proxmoxTestResponse{body: `{"data":{}}`}, agentStatus: http.StatusForbidden, wantAgentCalls: 2, wantPermission: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls atomic.Int32
+			var locked atomic.Bool
+			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/api2/json/nodes":
+					_, _ = w.Write([]byte(`{"data":[{"node":"pve1","status":"online"}]}`))
+				case "/api2/json/nodes/pve1/qemu":
+					_, _ = w.Write([]byte(`{"data":[{"vmid":100,"name":"vm-100","node":"pve1","status":"running","template":0}]}`))
+				case "/api2/json/nodes/pve1/qemu/100/status/current":
+					// As on the failed CI fixture, current status alone has no lock field.
+					_, _ = w.Write([]byte(`{"data":{"agent":1}}`))
+				case "/api2/json/nodes/pve1/qemu/100/config":
+					if locked.Load() {
+						_, _ = w.Write([]byte(`{"data":{"lock":"backup"}}`))
+						return
+					}
+					if tc.config.status != 0 {
+						w.WriteHeader(tc.config.status)
+					}
+					_, _ = w.Write([]byte(tc.config.body))
+				case "/api2/json/nodes/pve1/qemu/100/agent/get-fsinfo":
+					calls.Add(1)
+					if tc.lockInFlight {
+						locked.Store(true)
+					}
+					if tc.agentStatus != 0 {
+						w.WriteHeader(tc.agentStatus)
+						return
+					}
+					_, _ = w.Write([]byte(`{"data":{"result":[{"name":"root","type":"ext4","mountpoint":"/","total-bytes":100,"used-bytes":50}]}}`))
+				default:
+					t.Errorf("unexpected diagnostic request: %s", r.URL.Path)
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+			result := (&Router{}).checkVMDiskMonitoring(context.Background(), newProxmoxClient(t, server.URL), "")
+			if result.VMsFound != 1 || result.VMsWithAgent != 1 || result.VMsWithDiskData != 0 || strings.Contains(result.TestResult, "SUCCESS") {
+				t.Fatalf("locked/unverified/refused data must not become successful diagnostics: %+v", result)
+			}
+			if calls.Load() != tc.wantAgentCalls {
+				t.Fatalf("guest requests = %d, want %d", calls.Load(), tc.wantAgentCalls)
+			}
+			if tc.wantPermission && result.TestResult != "Permission denied accessing guest agent" {
+				t.Fatalf("completed permission refusal lost: %q", result.TestResult)
+			}
+		})
 	}
 }
