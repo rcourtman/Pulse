@@ -1,5 +1,15 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/api/resources', () => ({
+  ResourceAPI: {
+    getFacetBundle: vi.fn().mockResolvedValue({
+      capabilities: [],
+      relationships: [],
+      recentChanges: [],
+    }),
+  },
+}));
 
 import { formatPlatformTableDateTimeValue } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
@@ -160,6 +170,117 @@ describe('KubernetesControllersTable', () => {
     expect(screen.queryByText(/2026-05-24T1[23]/)).not.toBeInTheDocument();
   });
 
+  it('keeps controller, kind, ready and issues on the phone row and moves target to the expansion', () => {
+    render(() => (
+      <KubernetesControllersTable
+        resources={[
+          makeResource({
+            id: 'node-exporter',
+            type: 'k8s-daemonset',
+            kubernetes: {
+              clusterName: 'prod',
+              namespace: 'observability',
+              resourceKind: 'DaemonSet',
+              desiredNumberScheduled: 6,
+              numberReady: 6,
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No controllers"
+        emptyDescription="No controllers"
+        showToolbar={false}
+      />
+    ));
+
+    // "DaemonSet" and "StatefulSet" clipped in a 15% kind track at 390px, and
+    // "1 completions" clipped in the target track, so the phone row widens kind
+    // and issues and demotes target to the row expansion.
+    expect(screen.getByText('Kind').closest('th')).toHaveClass('platform-table-mobile-w-25');
+    expect(screen.getByText('Target').closest('th')).toHaveClass('platform-table-phone-hidden');
+    expect(screen.getByText('6 nodes').closest('td')).toHaveClass('platform-table-phone-hidden');
+    expect(screen.getByText('Exceptions').closest('th')).toHaveClass('platform-table-mobile-w-30');
+    expect(screen.getByText('Controller').closest('th')).toHaveClass('platform-table-mobile-w-30');
+    expect(screen.getByText('Ready/Done').closest('th')).toHaveClass('platform-table-mobile-w-15');
+    expect(screen.getByText('Kind').closest('th')).not.toHaveClass('platform-table-phone-hidden');
+  });
+
+  it('shows the absolute Job and CronJob times in the row expansion', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-24T13:31:00Z'));
+
+    render(() => (
+      <KubernetesControllersTable
+        resources={[
+          makeResource({
+            id: 'nightly-import',
+            type: 'k8s-job',
+            kubernetes: {
+              clusterName: 'prod',
+              namespace: 'batch',
+              resourceKind: 'Job',
+              desiredReplicas: 10,
+              active: 1,
+              succeeded: 8,
+              failed: 2,
+              startTime: '2026-05-24T12:55:00Z',
+              completionTime: '2026-05-24T13:00:00Z',
+            },
+          }),
+          makeResource({
+            id: 'billing-rollup',
+            type: 'k8s-cronjob',
+            kubernetes: {
+              clusterName: 'prod',
+              namespace: 'batch',
+              resourceKind: 'CronJob',
+              schedule: '*/5 * * * *',
+              lastScheduleTime: '2026-05-24T13:25:00Z',
+              lastSuccessfulTime: '2026-05-24T12:55:00Z',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No controllers"
+        emptyDescription="No controllers"
+        showToolbar={false}
+      />
+    ));
+
+    // Tapping the row opens the expansion; the Detail column is hidden below a
+    // large container, so this is where a phone or half-width pane reads the
+    // completion time.
+    fireEvent.click(screen.getByText('nightly-import'));
+    const job = screen.getByTestId('resource-kubernetes-controller-section');
+    expect(within(job).getByText('Started')).toBeInTheDocument();
+    expect(
+      within(job).getByText(`${absoluteTime('2026-05-24T12:55:00Z')} (36m ago)`),
+    ).toBeInTheDocument();
+    expect(within(job).getByText('Completed')).toBeInTheDocument();
+    expect(
+      within(job).getByText(`${absoluteTime('2026-05-24T13:00:00Z')} (31m ago)`),
+    ).toBeInTheDocument();
+    expect(within(job).getByText('Duration')).toBeInTheDocument();
+    expect(within(job).getByText('5m')).toBeInTheDocument();
+    expect(within(job).getByText('Target')).toBeInTheDocument();
+    expect(within(job).getByText('10 completions')).toBeInTheDocument();
+    expect(within(job).getByText('Failed').closest('tr')).toHaveTextContent('2');
+
+    fireEvent.click(screen.getByText('billing-rollup'));
+    const cron = screen.getByTestId('resource-kubernetes-controller-section');
+    expect(within(cron).getByText('Schedule')).toBeInTheDocument();
+    expect(within(cron).getByText('*/5 * * * *')).toBeInTheDocument();
+    expect(within(cron).getByText('Last run')).toBeInTheDocument();
+    expect(
+      within(cron).getByText(`${absoluteTime('2026-05-24T13:25:00Z')} (6m ago)`),
+    ).toBeInTheDocument();
+    expect(within(cron).getByText('Last success')).toBeInTheDocument();
+    expect(
+      within(cron).getByText(`${absoluteTime('2026-05-24T12:55:00Z')} (36m ago)`),
+    ).toBeInTheDocument();
+    expect(within(cron).getByText('Namespace').closest('tr')).toHaveTextContent('batch');
+  });
+
   it('falls back to start and last-run times when a Job or CronJob has not completed', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-05-24T13:31:00Z'));
@@ -198,6 +319,9 @@ describe('KubernetesControllersTable', () => {
       />
     ));
 
+    // A single desired completion reads as "1 completion", matching the
+    // expansion's Target row.
+    expect(screen.getByText('1 completion')).toBeInTheDocument();
     expect(screen.getByText('Started 1m ago')).toHaveAttribute(
       'title',
       `Started: ${absoluteTime('2026-05-24T13:29:30Z')}`,

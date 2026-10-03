@@ -70,7 +70,9 @@ const DOCKER_CONTAINER_COLUMN_MIN_LAYOUT: Record<
   state: 'narrow',
   cpu: 'narrow',
   memory: 'narrow',
-  restarts: 'phone',
+  // A phone row cannot fit the Restarts header beside the Update control;
+  // the count stays in the row expansion there and returns at mobile width.
+  restarts: 'mobile',
   updates: 'narrow',
   actions: 'mobile',
   host: 'tablet',
@@ -126,11 +128,10 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
   },
   phone: {
     container: 32,
-    state: 13,
-    cpu: 15,
-    memory: 17,
-    restarts: 10,
-    updates: 13,
+    state: 14,
+    cpu: 14,
+    memory: 14,
+    updates: 16,
   },
   mobile: {
     container: 30,
@@ -151,17 +152,20 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
     updates: 9,
     actions: 6,
   },
+  // Compact is what a 1280-1536px laptop window gets. Host, Engine and the
+  // Update control are short values that were clipped ("docker 2…") while the
+  // percentage-only CPU and memory bars had room to spare.
   compact: {
     container: 18,
-    host: 10,
-    runtime: 8,
-    image: 18,
+    host: 12,
+    runtime: 9.5,
+    image: 16.5,
     state: 7,
-    cpu: 11,
-    memory: 12,
-    restarts: 9,
+    cpu: 9.5,
+    memory: 10,
+    restarts: 8.5,
     ports: 12,
-    updates: 9,
+    updates: 10,
     actions: 8,
   },
 };

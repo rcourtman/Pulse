@@ -1,8 +1,10 @@
+import type { JSX } from 'solid-js';
 import type {
   PhysicalDiskCollectionStatus,
   PhysicalDiskFieldStatus,
   Resource,
 } from '@/types/resource';
+import { getPlatformTableWeightedColumnWidthStyle } from '@/features/platformPage/sharedPlatformPage';
 import {
   getSourcePlatformLabel,
   getSourcePlatformPresentation,
@@ -141,12 +143,16 @@ const PHYSICAL_DISK_VISIBLE_COLUMNS: Record<
   full: ['disk', 'device', 'host', 'role', 'parent', 'health', 'life', 'temp', 'size'],
 };
 
-const PHYSICAL_DISK_COLUMN_WIDTHS: Record<
+// Relative weights per layout, resolved through the canonical weighted-width
+// helper. The phone layouts are sized from the measured values they show:
+// a temperature ("100°C"), a capacity ("5.46 TB"), a compact health word and
+// a short node name must each fit whole, and the disk model takes the rest.
+const PHYSICAL_DISK_COLUMN_WEIGHTS: Record<
   PhysicalDiskTableLayoutMode,
   Partial<Record<PhysicalDiskTableColumnId, number>>
 > = {
-  narrow: { disk: 40, host: 15, health: 20, temp: 10, size: 15 },
-  compact: { disk: 33, host: 15, health: 18, life: 10, temp: 10, size: 14 },
+  narrow: { disk: 41, host: 12, health: 19, temp: 12, size: 16 },
+  compact: { disk: 34, host: 11, health: 17, life: 11, temp: 12, size: 15 },
   basic: { disk: 33, host: 17, health: 22, temp: 12, size: 16 },
   operational: { disk: 25, host: 12, parent: 15, health: 17, life: 9, temp: 9, size: 13 },
   expanded: { disk: 22, host: 10, role: 9, parent: 14, health: 15, life: 8, temp: 8, size: 14 },
@@ -168,10 +174,31 @@ export const isPhysicalDiskColumnVisible = (
   columnId: PhysicalDiskTableColumnId,
 ): boolean => PHYSICAL_DISK_VISIBLE_COLUMNS[layout].includes(columnId);
 
-export const getPhysicalDiskColumnWidthPercent = (
+export const getPhysicalDiskColumnWidthStyle = (
   layout: PhysicalDiskTableLayoutMode,
   columnId: PhysicalDiskTableColumnId,
-): number => PHYSICAL_DISK_COLUMN_WIDTHS[layout][columnId] ?? 0;
+): JSX.CSSProperties =>
+  getPlatformTableWeightedColumnWidthStyle(
+    columnId,
+    PHYSICAL_DISK_COLUMN_WEIGHTS[layout],
+    PHYSICAL_DISK_VISIBLE_COLUMNS[layout],
+  );
+
+// The shared table cell primitives pad every cell for desktop density. On the
+// phone layouts that padding alone is a fifth of the row, so rendered cells
+// and headers shed it the same way the Proxmox replication table does.
+export const PHYSICAL_DISK_PHONE_CELL_PADDING_CLASS = '!px-1';
+
+export const getPhysicalDiskCellPaddingClass = (layout: PhysicalDiskTableLayoutMode): string =>
+  layout === 'narrow' || layout === 'compact' ? PHYSICAL_DISK_PHONE_CELL_PADDING_CLASS : '';
+
+// Health words that do not fit a phone-width health column fall back to a
+// shorter form; the full label stays in the wider projections and the detail.
+export const getPhysicalDiskHealthCompactLabel = (label: string): string => {
+  if (label === 'Needs Attention') return 'Attention';
+  if (label === 'Replace Now') return 'Replace';
+  return label;
+};
 
 export const PHYSICAL_DISK_COL_DISK_CLASS = '';
 export const PHYSICAL_DISK_COL_DEVICE_CLASS = '';
@@ -221,8 +248,10 @@ export const PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS = 'text-[11px] text-muted';
 export const PHYSICAL_DISK_LIFE_CLASS = 'text-[11px] font-medium';
 export const PHYSICAL_DISK_HEALTH_WRAP_CLASS =
   'flex min-w-0 items-center gap-1.5 whitespace-nowrap';
-export const PHYSICAL_DISK_HEALTH_LABEL_CLASS = 'min-w-0 truncate text-[11px] font-semibold';
-export const PHYSICAL_DISK_HEALTH_SUMMARY_CLASS = 'hidden xl:block truncate text-[11px] text-muted';
+// The health word is the row's verdict and always renders whole. Its reason
+// lives in the cell title and in the disk drawer, not in a truncating sibling
+// that would compete with it for the track.
+export const PHYSICAL_DISK_HEALTH_LABEL_CLASS = 'shrink-0 text-[11px] font-semibold';
 export const PHYSICAL_DISK_TEMPERATURE_CLASS = 'text-[11px] font-medium';
 export const PHYSICAL_DISK_SIZE_VALUE_CLASS = 'text-[11px] text-base-content';
 

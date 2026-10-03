@@ -15,6 +15,9 @@ import {
   getAlertDestinationsDeliveryLogEmpty,
   getAlertDestinationsDeliveryLogTitle,
   getAlertDestinationsDeliveryLogUnavailable,
+  getAlertDestinationsDeliveryLogLoading,
+  getAlertDestinationsHeldEventsLoading,
+  getAlertDestinationsHeldEventsUnavailable,
   getAlertDestinationsDeliveryRefreshLabel,
 } from '@/utils/alertDestinationsPresentation';
 import { formatRelativeTime } from '@/utils/format';
@@ -28,6 +31,8 @@ interface AlertDeliveryLogCardProps {
   onRefresh: () => void;
   webhooks: Webhook[];
   heldEvents?: AlertEvent[];
+  heldEventsUnavailable?: boolean;
+  refreshingHeldEvents?: boolean;
 }
 
 type DeliveryLogRow =
@@ -99,10 +104,18 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
     return rest.length > 0 ? `${first} +${rest.length} more` : first;
   };
 
-  const entries = () => props.log?.entries ?? [];
+  const entries = () => (props.unavailable ? [] : (props.log?.entries ?? []));
   const completedRetentionDays = () => props.log?.completedRetentionDays ?? 7;
   const deadLetterRetentionDays = () => props.log?.deadLetterRetentionDays ?? 30;
-  const rows = () => mergeDeliveryLogRows(entries(), props.heldEvents ?? []);
+  const rows = () =>
+    mergeDeliveryLogRows(entries(), props.heldEventsUnavailable ? [] : (props.heldEvents ?? []));
+  const attemptsLoading = () => props.refreshing || (!props.log && !props.unavailable);
+  const confirmedEmpty = () =>
+    props.log !== null &&
+    !props.unavailable &&
+    !attemptsLoading() &&
+    !props.heldEventsUnavailable &&
+    !props.refreshingHeldEvents;
 
   const absoluteTimestamp = (value: string): string => {
     const parsed = new Date(value);
@@ -149,100 +162,113 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
           </button>
         </div>
 
+        <Show when={props.unavailable}>
+          <p class="text-sm text-red-800 dark:text-red-300" role="alert">
+            {getAlertDestinationsDeliveryLogUnavailable()}
+          </p>
+        </Show>
+        <Show when={props.heldEventsUnavailable}>
+          <p class="text-sm text-red-800 dark:text-red-300" role="alert">
+            {getAlertDestinationsHeldEventsUnavailable()}
+          </p>
+        </Show>
+        <Show when={attemptsLoading() && entries().length === 0}>
+          <p class="text-sm text-gray-600 dark:text-gray-400" role="status">
+            {getAlertDestinationsDeliveryLogLoading()}
+          </p>
+        </Show>
+        <Show when={props.refreshingHeldEvents}>
+          <p class="text-sm text-gray-600 dark:text-gray-400" role="status">
+            {getAlertDestinationsHeldEventsLoading()}
+          </p>
+        </Show>
         <Show
-          when={!props.unavailable}
+          when={rows().length > 0}
           fallback={
-            <p class="text-sm text-red-800 dark:text-red-300" role="alert">
-              {getAlertDestinationsDeliveryLogUnavailable()}
-            </p>
-          }
-        >
-          <Show
-            when={rows().length > 0}
-            fallback={
+            <Show when={confirmedEmpty()}>
               <p class="text-sm text-gray-600 dark:text-gray-400">
                 {getAlertDestinationsDeliveryLogEmpty()}
               </p>
-            }
-          >
-            <ul class="max-h-80 divide-y divide-gray-200 overflow-y-auto dark:divide-gray-700">
-              <For each={rows()}>
-                {(row) =>
-                  row.kind === 'attempt' ? (
-                    <li class="flex flex-col gap-1 py-2">
-                      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <span
-                          class={`inline-flex flex-shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${outcomeBadgeClasses[row.entry.outcome]}`}
-                        >
-                          {getAlertDeliveryLogOutcomeLabel(row.entry.outcome)}
-                        </span>
-                        <span class="min-w-0 truncate text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {destinationLabel(row.entry)}
-                        </span>
-                        <span
-                          class="min-w-0 truncate text-sm text-gray-600 dark:text-gray-400"
-                          title={row.entry.alertIds.join(', ')}
-                        >
-                          {alertSummary(row.entry)}
-                        </span>
-                        <time
-                          class="ml-auto flex-shrink-0 text-xs text-gray-500 dark:text-gray-400"
-                          dateTime={row.entry.timestamp}
-                          title={formatRelativeTime(row.entry.timestamp)}
-                        >
-                          {absoluteTimestamp(row.entry.timestamp)}
-                        </time>
-                      </div>
-                      <Show
-                        when={
-                          !row.entry.success && (row.entry.failureClass || row.entry.errorMessage)
-                        }
+            </Show>
+          }
+        >
+          <ul class="max-h-80 divide-y divide-gray-200 overflow-y-auto dark:divide-gray-700">
+            <For each={rows()}>
+              {(row) =>
+                row.kind === 'attempt' ? (
+                  <li class="flex flex-col gap-1 py-2">
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span
+                        class={`inline-flex flex-shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${outcomeBadgeClasses[row.entry.outcome]}`}
                       >
-                        <p class="text-xs leading-5 text-red-700 dark:text-red-300">
-                          <Show when={row.entry.failureClass}>
-                            {(failureClass) => (
-                              <span class="font-medium">
-                                {getAlertDeliveryLogFailureClassLabel(failureClass())}
-                                {row.entry.errorMessage ? ': ' : ''}
-                              </span>
-                            )}
-                          </Show>
-                          {row.entry.errorMessage}
-                        </p>
-                      </Show>
-                    </li>
-                  ) : (
-                    <li class="flex flex-col gap-1 py-2" title={row.event.message}>
-                      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <span
-                          class={`inline-flex flex-shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                            row.event.type === 'notification_deferred'
-                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
-                              : 'bg-gray-100 text-gray-600 dark:bg-gray-700/60 dark:text-gray-300'
-                          }`}
-                        >
-                          {row.event.type === 'notification_deferred' ? 'Deferred' : 'Held'}
-                        </span>
-                        <span class="min-w-0 truncate text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {heldResourceLabel(row.event)}
-                        </span>
-                        <span class="min-w-0 truncate text-sm text-gray-600 dark:text-gray-400">
-                          {describeAlertEventReason(row.event.reason)}
-                        </span>
-                        <time
-                          class="ml-auto flex-shrink-0 text-xs text-gray-500 dark:text-gray-400"
-                          dateTime={row.event.occurredAt}
-                          title={formatRelativeTime(row.event.occurredAt)}
-                        >
-                          {absoluteTimestamp(row.event.occurredAt)}
-                        </time>
-                      </div>
-                    </li>
-                  )
-                }
-              </For>
-            </ul>
-          </Show>
+                        {getAlertDeliveryLogOutcomeLabel(row.entry.outcome)}
+                      </span>
+                      <span class="min-w-0 truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {destinationLabel(row.entry)}
+                      </span>
+                      <span
+                        class="min-w-0 truncate text-sm text-gray-600 dark:text-gray-400"
+                        title={row.entry.alertIds.join(', ')}
+                      >
+                        {alertSummary(row.entry)}
+                      </span>
+                      <time
+                        class="ml-auto flex-shrink-0 text-xs text-gray-500 dark:text-gray-400"
+                        dateTime={row.entry.timestamp}
+                        title={formatRelativeTime(row.entry.timestamp)}
+                      >
+                        {absoluteTimestamp(row.entry.timestamp)}
+                      </time>
+                    </div>
+                    <Show
+                      when={
+                        !row.entry.success && (row.entry.failureClass || row.entry.errorMessage)
+                      }
+                    >
+                      <p class="text-xs leading-5 text-red-700 dark:text-red-300">
+                        <Show when={row.entry.failureClass}>
+                          {(failureClass) => (
+                            <span class="font-medium">
+                              {getAlertDeliveryLogFailureClassLabel(failureClass())}
+                              {row.entry.errorMessage ? ': ' : ''}
+                            </span>
+                          )}
+                        </Show>
+                        {row.entry.errorMessage}
+                      </p>
+                    </Show>
+                  </li>
+                ) : (
+                  <li class="flex flex-col gap-1 py-2" title={row.event.message}>
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span
+                        class={`inline-flex flex-shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                          row.event.type === 'notification_deferred'
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                            : 'bg-gray-100 text-gray-600 dark:bg-gray-700/60 dark:text-gray-300'
+                        }`}
+                      >
+                        {row.event.type === 'notification_deferred' ? 'Deferred' : 'Held'}
+                      </span>
+                      <span class="min-w-0 truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {heldResourceLabel(row.event)}
+                      </span>
+                      <span class="min-w-0 truncate text-sm text-gray-600 dark:text-gray-400">
+                        {describeAlertEventReason(row.event.reason)}
+                      </span>
+                      <time
+                        class="ml-auto flex-shrink-0 text-xs text-gray-500 dark:text-gray-400"
+                        dateTime={row.event.occurredAt}
+                        title={formatRelativeTime(row.event.occurredAt)}
+                      >
+                        {absoluteTimestamp(row.event.occurredAt)}
+                      </time>
+                    </div>
+                  </li>
+                )
+              }
+            </For>
+          </ul>
         </Show>
       </div>
     </Card>

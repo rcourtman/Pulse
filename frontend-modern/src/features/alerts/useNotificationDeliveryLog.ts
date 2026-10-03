@@ -19,12 +19,15 @@ const DELIVERY_LOG_LIMIT = 200;
 // Held events are the third half of that story: notifications that were
 // deliberately not attempted, with the mechanism that held them. They come
 // from the alert event log and degrade independently — a failed events read
-// hides the held rows without marking delivery attempts unavailable.
+// withdraws the held rows and reports that gap without hiding readable attempts.
 export function useNotificationDeliveryLog() {
   const [deliveryLog, setDeliveryLog] = createSignal<NotificationDeliveryLog | null>(null);
   const [deliveryLogUnavailable, setDeliveryLogUnavailable] = createSignal(false);
   const [refreshingDeliveryLog, setRefreshingDeliveryLog] = createSignal(false);
   const [heldEvents, setHeldEvents] = createSignal<AlertEvent[]>([]);
+  const [heldEventsUnavailable, setHeldEventsUnavailable] = createSignal(false);
+  // Before the first read, an empty array means unknown, not no held alerts.
+  const [refreshingHeldEvents, setRefreshingHeldEvents] = createSignal(true);
 
   // Both reads belong to the same refresh, but held events never block the log.
   let latestRequest = 0;
@@ -35,6 +38,7 @@ export function useNotificationDeliveryLog() {
   const ownsRequest = (request: number) => !disposed && request === latestRequest;
 
   const loadHeldEvents = async (request: number) => {
+    setRefreshingHeldEvents(true);
     try {
       const since = new Date(
         Date.now() - HELD_EVENT_WINDOW_DAYS * 24 * 60 * 60 * 1000,
@@ -44,11 +48,16 @@ export function useNotificationDeliveryLog() {
         since,
         limit: HELD_EVENT_LIMIT,
       });
-      if (ownsRequest(request)) setHeldEvents(events);
+      if (!ownsRequest(request)) return;
+      setHeldEvents(events);
+      setHeldEventsUnavailable(false);
     } catch (error) {
       if (!ownsRequest(request)) return;
       logger.error('Failed to load held alert notification events', error);
       setHeldEvents([]);
+      setHeldEventsUnavailable(true);
+    } finally {
+      if (ownsRequest(request)) setRefreshingHeldEvents(false);
     }
   };
 
@@ -82,6 +91,8 @@ export function useNotificationDeliveryLog() {
     deliveryLogUnavailable,
     refreshingDeliveryLog,
     heldEvents,
+    heldEventsUnavailable,
+    refreshingHeldEvents,
     loadDeliveryLog,
   };
 }

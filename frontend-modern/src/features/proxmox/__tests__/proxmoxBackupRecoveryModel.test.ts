@@ -162,6 +162,35 @@ describe('proxmoxBackupRecoveryModel', () => {
     );
   });
 
+  it('shows the archive format as its detail and keeps the volid on hover and in search', () => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [],
+      archives: [archive({ format: 'tar.zst' })],
+      snapshots: [],
+      tasks: [],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    });
+
+    const [artifact] = model.recoverableArtifacts;
+    expect(artifact.detail).toBe('tar.zst');
+    expect(artifact.detailTitle).toBe('local:backup/vzdump-lxc-112-2026_05_24-02_00_00.tar.zst');
+    expect(recoverableArtifactMatchesSearch(artifact, 'vzdump-lxc-112')).toBe(true);
+  });
+
+  it('falls back to the archive file name when the provider reports no format', () => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [],
+      archives: [archive({ format: '' })],
+      snapshots: [],
+      tasks: [],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    });
+
+    expect(model.recoverableArtifacts[0].detail).toBe('vzdump-lxc-112-2026_05_24-02_00_00.tar.zst');
+  });
+
   it('keeps a terminally incomplete PBS artifact out of latest recovery', () => {
     const model = buildProxmoxBackupRecoveryModel({
       workloads: [workload({})],
@@ -186,8 +215,47 @@ describe('proxmoxBackupRecoveryModel', () => {
 
     const failed = model.recoverableArtifacts.find((artifact) => artifact.id.includes('failed'));
     expect(failed).toMatchObject({ failed: true, running: false, verified: undefined });
-    expect(model.coverageRows[0].latestRecovery?.createdAt).toBe('2026-05-25T01:34:25Z');
+    expect(model.coverageRows[0].latestBackup?.createdAt).toBe('2026-05-25T01:34:25Z');
     expect(recoverableArtifactMatchesSearch(failed!, 'failed incomplete')).toBe(true);
+  });
+
+  it('keeps a fresh guest snapshot from standing in for the last backup', () => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [pbsBackup({ backupTime: '2026-05-05T01:34:25Z' })],
+      archives: [],
+      snapshots: [snapshot({ time: '2026-05-26T03:00:00Z' })],
+      tasks: [],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    });
+
+    const row = model.coverageRows[0];
+    expect(row.latestSnapshot?.createdAt).toBe('2026-05-26T03:00:00Z');
+    expect(row.latestBackup?.sourceKind).toBe('pbs');
+    expect(row.latestBackup?.createdAt).toBe('2026-05-05T01:34:25Z');
+    expect(
+      getRecoveryAgeBand(
+        row.latestBackup?.createdMs,
+        model.coverageRows.length && Date.parse('2026-05-26T08:00:00Z'),
+      ),
+    ).toBe('aging');
+  });
+
+  it('reports no last backup for a snapshot-only workload', () => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [],
+      archives: [],
+      snapshots: [snapshot()],
+      tasks: [],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    });
+
+    const row = model.coverageRows[0];
+    expect(row.latestBackup).toBeUndefined();
+    expect(row.latestSnapshot?.sourceKind).toBe('snapshot');
+    expect(row.artifacts).toHaveLength(1);
+    expect(model.coverageSummary.recoverableArtifacts).toBe(1);
   });
 
   it('uses canonical workload attention while retaining the failed task as evidence', () => {
