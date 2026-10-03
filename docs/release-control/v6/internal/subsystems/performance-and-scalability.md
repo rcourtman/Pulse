@@ -359,6 +359,12 @@ every tick.
 Mock replication timing is advanced in that same full-rotation refresh, and
 only a job whose schedule phase has passed is rewritten, so keeping demo
 replication on schedule adds no per-tick change for jobs that did not run.
+Shared storage in the mock estate stays one row per cluster per store, so the
+Storage surface grows with the number of storages rather than with the node
+count times the number of shared storages.
+Demo Docker container names stay unique per host (numbered suffixes on reused
+profiles), so image "used by" lists and container rows never collapse two
+distinct containers into what reads as a duplicated row.
 
 The browser applies resource deltas to its connection-scoped raw baseline, but
 canonicalizes and reconciles only changed resources plus the host-merge groups
@@ -2510,6 +2516,13 @@ resize-observer plus tooltip lifecycle live in
 `frontend-modern/src/components/Workloads/useStackedDiskBarState.ts`.
 Future disk-bar runtime changes must extend through those owners instead of
 reintroducing mixed resize state and presentation branching into the shell.
+The multi-disk `vertical-bars` mode (Proxmox nodes, Machines, and Docker
+hosts with more than one agent-reported disk) draws one equal-weight micro-bar
+per disk and labels the cell with the fullest disk's usage percentage, derived
+in the model from the existing max-disk summary, so a multi-disk host answers
+"how close is this host to running out of space?" at a glance in Bars mode
+instead of only on hover or in Trends mode. The label names no disk in the
+row; the mount and the per-disk breakdown stay in the title and tooltip.
 The dashboard stacked memory bar now follows that same pattern: the shell
 stays in `frontend-modern/src/components/Workloads/StackedMemoryBar.tsx`,
 while memory-capacity math, balloon/swap tooltip derivation, anomaly label

@@ -87,6 +87,10 @@ export interface StackedDiskBarPresentation {
   tooltipTitle: string;
   useStackedSegments: boolean;
   verticalBars: StackedDiskVerticalBar[];
+  // The fullest disk's usage, shown beside the micro-bars so a multi-disk
+  // host answers "how close is this host to running out?" without a hover.
+  verticalBarsLabel: string;
+  verticalBarsLabelTitle: string;
   verticalBarsMode: boolean;
 }
 
@@ -375,6 +379,8 @@ export function buildStackedDiskBarPresentation(
         };
       })
     : [];
+  const verticalBarsLabel = verticalBarsMode && maxInfo ? formatPercent(maxInfo.percent) : '';
+  const verticalBarsLabelTitle = verticalBarsMode && maxInfo ? maxLabelFull : '';
   const tooltipContent = buildTooltipContent(allDisks, {
     aggregateDisk: props.aggregateDisk,
     aggregateMode,
@@ -418,6 +424,8 @@ export function buildStackedDiskBarPresentation(
     tooltipTitle: allDisks.length > 1 ? 'Disk Breakdown' : 'Disk Usage',
     useStackedSegments,
     verticalBars,
+    verticalBarsLabel,
+    verticalBarsLabelTitle,
     verticalBarsMode,
   };
 }

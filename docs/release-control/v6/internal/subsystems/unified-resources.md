@@ -2043,6 +2043,14 @@ application resource-provider or WebSocket lifecycle.
     populates only the canonical field on the REST contract, so without
     landing on `v2.uptime` ESXi hosts and VMware-backed VMs lose uptime on
     the unified-resources side even though the API payload carries it.
+    The same mapping must carry every facet the frontend reads at the top
+    level of `Resource`: the provider facets (`pmg` included) and the
+    per-source `sourceStatus`, `actionReadiness`, and `technology` fields the
+    API returns. The REST and websocket transports race on a fresh route
+    load, and a facet present only under `platformData` on the REST row left
+    the Mail Gateway table rendering every PMG column as a dash, and Docker
+    lifecycle refusals and storage freshness reading undefined, whenever the
+    REST snapshot landed last.
     That same shared cache boundary must normalize route/query type filters
     through the canonical frontend-to-`ResourceType` resolver before slicing
     the snapshot, so compatibility values such as `disk` / `physical_disk`
@@ -2566,6 +2574,11 @@ facet. Its value is owned by the backup recovery model, not by canonical
 resource identity: PBS instance and datastore form the repository scope, and
 the same value must survive the date/coverage route handoff so both views
 apply one repository selection without inventing a top-level recovery route.
+A PBS datastore resource takes its status from the storage vocabulary that PVE
+storage already uses (`available`/`unavailable` alongside online, degraded, and
+offline), so a healthy datastore is online and one PBS reports an error for is
+offline; the generic string mapper that left every datastore unknown is not a
+valid datastore status source.
 Unified-resource drawers and Kubernetes drill-down controls may own resource
 timeline filter semantics, namespace choices, and destination routes, but their
 native select chrome must compose the frontend-primitives-owned `FormSelect`.
@@ -5421,6 +5434,16 @@ read-only status and governed UpdateButton content. The boundary must preserve
 full action names, review semantics and native agent/container identity; it must
 not hide update labels to satisfy width constraints. DockerNativeTables.test.ts
 checks that the governed update action remains inside that boundary.
+A phone row (under 440px) keeps container, state, CPU, memory and the update
+control and defers the restart count to the row expansion, so the state word
+and the Update control fit whole instead of clipping to "runni…" beside an
+unreadable Restarts header. At compact width (a 1280-1536px laptop window) the
+Host, Engine and Updates columns take enough share that "docker 26.1.3", a
+host name and the Update control render whole; the percentage-only CPU and
+memory bars yield the difference. Swarm services show the rollout state as
+words ("Rollback started") with the raw token, message and completion time in
+the title, and Swarm tasks show Started as an age with the RFC3339 stamp in
+the title, matching every other platform table's time cells.
 
 ResourceDetailDrawer headings wrap long display names rather than ellipsising
 them. Overview rows may still truncate identity; keyboard expansion exposes the

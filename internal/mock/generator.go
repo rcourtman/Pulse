@@ -5197,49 +5197,61 @@ func generateStorage(nodes []models.Node) []models.Storage {
 	}
 	sort.Strings(clusterInstances)
 
-	// Every node reports the cluster's two shared PBS storage definitions. This
-	// stays linear in fleet size: the former one-storage-per-target-node shape
-	// grew quadratically and made a large demo look busy for the wrong reason.
+	// Each cluster has two shared PBS storage definitions. Every node reports
+	// them to the API, but the poller merges a shared storage into one
+	// cluster-scoped entry (issue 1049), so the fixture carries that merged
+	// shape: one row per store with the reporting nodes listed, never one row
+	// per node with a different usage figure on each.
 	for _, clusterInstance := range clusterInstances {
 		clusterNodes := clusterNodesByInstance[clusterInstance]
 		sort.Slice(clusterNodes, func(i, j int) bool { return clusterNodes[i].Name < clusterNodes[j].Name })
+		nodeNames := make([]string, 0, len(clusterNodes))
+		nodeIDs := make([]string, 0, len(clusterNodes))
+		anyNodeOnline := false
 		for _, node := range clusterNodes {
-			for storeIndex, storeName := range []string{"pbs-primary", "pbs-offsite"} {
-				pbsTotal := int64(48+storeIndex*16) * 1024 * 1024 * 1024 * 1024
-				pbsID := fmt.Sprintf("%s-%s-%s", node.Instance, node.Name, storeName)
-				pbsUsage := SampleMetric("pbsDatastore", pbsID, "usage", now)
-				pbsUsed := int64(float64(pbsTotal) * (pbsUsage / 100.0))
-				isOffline := node.Status != "online" || node.ConnectionHealth == "offline" || node.Uptime <= 0
-				status := "available"
-				enabled := true
-				active := true
-				lastSeen := now
-				if isOffline {
-					status = "offline"
-					enabled = false
-					active = false
-					pbsUsed = 0
-					pbsUsage = 0
-					lastSeen = now.Add(-10 * time.Minute)
-				}
-				storage = append(storage, models.Storage{
-					ID:       pbsID,
-					Name:     storeName,
-					Node:     node.Name,
-					Instance: node.Instance,
-					Type:     "pbs",
-					Status:   status,
-					Total:    pbsTotal,
-					Used:     pbsUsed,
-					Free:     pbsTotal - pbsUsed,
-					Usage:    pbsUsage,
-					Content:  "backup",
-					Shared:   true,
-					Enabled:  enabled,
-					Active:   active,
-					LastSeen: lastSeen,
-				})
+			nodeNames = append(nodeNames, node.Name)
+			nodeIDs = append(nodeIDs, fmt.Sprintf("%s-%s", node.Instance, node.Name))
+			if node.Status == "online" && node.ConnectionHealth != "offline" && node.Uptime > 0 {
+				anyNodeOnline = true
 			}
+		}
+		for storeIndex, storeName := range []string{"pbs-primary", "pbs-offsite"} {
+			pbsTotal := int64(48+storeIndex*16) * 1024 * 1024 * 1024 * 1024
+			pbsID := fmt.Sprintf("%s-cluster-%s", clusterInstance, storeName)
+			pbsUsage := SampleMetric("pbsDatastore", pbsID, "usage", now)
+			pbsUsed := int64(float64(pbsTotal) * (pbsUsage / 100.0))
+			status := "available"
+			enabled := true
+			active := true
+			lastSeen := now
+			if !anyNodeOnline {
+				status = "offline"
+				enabled = false
+				active = false
+				pbsUsed = 0
+				pbsUsage = 0
+				lastSeen = now.Add(-10 * time.Minute)
+			}
+			storage = append(storage, models.Storage{
+				ID:        pbsID,
+				Name:      storeName,
+				Node:      "cluster",
+				Nodes:     append([]string(nil), nodeNames...),
+				NodeIDs:   append([]string(nil), nodeIDs...),
+				NodeCount: len(nodeNames),
+				Instance:  clusterInstance,
+				Type:      "pbs",
+				Status:    status,
+				Total:     pbsTotal,
+				Used:      pbsUsed,
+				Free:      pbsTotal - pbsUsed,
+				Usage:     pbsUsage,
+				Content:   "backup",
+				Shared:    true,
+				Enabled:   enabled,
+				Active:    active,
+				LastSeen:  lastSeen,
+			})
 		}
 
 		sharedTotal := int64(20 * 1024 * 1024 * 1024 * 1024)

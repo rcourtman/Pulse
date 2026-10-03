@@ -18,8 +18,10 @@ import type {
   ResourceDockerMeta,
   ResourceHealth,
   ResourceMetricsTarget,
+  ResourceActionReadiness,
   ResourceAvailabilityMeta,
   ResourcePBSMeta,
+  ResourcePMGMeta,
   ResourcePolicyPostureSummary,
   ResourcePhysicalDiskMeta,
   ResourcePoolHealth,
@@ -210,6 +212,8 @@ type APIResource = {
   sources?: string[];
   platformScopes?: string[];
   sourceStatus?: Record<string, { status: string; lastSeen: string; error?: string }>;
+  actionReadiness?: ResourceActionReadiness[];
+  technology?: string;
   health?: ResourceHealth;
   identity?: {
     machineId?: string;
@@ -868,6 +872,17 @@ const toResource = (v2: APIResource): Resource => {
     truenas: v2.truenas as ResourceTrueNASMeta | undefined,
     vmware: v2.vmware as ResourceVMwareMeta | undefined,
     pbs: v2.pbs as ResourcePBSMeta | undefined,
+    // Mail Gateway rows read `resource.pmg` directly. Leaving it only under
+    // platformData meant a REST-first paint rendered every PMG column as a
+    // dash until a websocket row happened to replace it, and never did when
+    // the REST snapshot landed last.
+    pmg: v2.pmg as ResourcePMGMeta | undefined,
+    // Same race for the per-source status, action readiness, and technology
+    // facets: Docker lifecycle actions and storage freshness read them from
+    // the top level, and the websocket rows carry them there.
+    sourceStatus: v2.sourceStatus,
+    actionReadiness: v2.actionReadiness,
+    technology: v2.technology,
     availability: v2.availability as ResourceAvailabilityMeta | undefined,
     availabilityChecks: v2.availabilityChecks as ResourceAvailabilityMeta[] | undefined,
     physicalDisk: v2.physicalDisk,

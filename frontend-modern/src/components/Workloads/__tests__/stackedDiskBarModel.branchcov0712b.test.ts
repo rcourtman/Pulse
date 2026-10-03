@@ -394,6 +394,10 @@ describe('stackedDiskBarModel (branch coverage 2)', () => {
         title: '/x: 40% (40.0 B/100 B)',
       });
       expect(p.verticalBars[1].color).toBe(CRITICAL); // 120% -> critical
+      // The fullest disk's usage labels the cell so a multi-disk host still
+      // reads as a number without a hover.
+      expect(p.verticalBarsLabel).toBe('120%');
+      expect(p.verticalBarsLabelTitle).toBe('Highest usage: /y 120%');
       expect(p.tooltipContent).toHaveLength(3);
       expect(p.tooltipContent[2]).toMatchObject({ label: '/z', percent: '—', used: '?' });
     });

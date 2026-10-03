@@ -843,3 +843,26 @@ func TestPBSHostHistoryThreeServerTopology(t *testing.T) {
 		t.Fatalf("three-server topology: services=%d linked hosts=%d linked disks=%d", services, linkedHosts, linkedDisks)
 	}
 }
+
+func TestStatusFromStorageStateCoversPBSAndPVEVocabulary(t *testing.T) {
+	// PVE storage and PBS datastores both report "available"/"unavailable";
+	// the mapping has to be shared so neither surface falls back to unknown.
+	cases := []struct {
+		state string
+		want  ResourceStatus
+		known bool
+	}{
+		{state: "available", want: StatusOnline, known: true},
+		{state: "ACTIVE", want: StatusOnline, known: true},
+		{state: "degraded", want: StatusWarning, known: true},
+		{state: "unavailable", want: StatusOffline, known: true},
+		{state: "", want: StatusUnknown, known: false},
+		{state: "mystery", want: StatusUnknown, known: false},
+	}
+	for _, tc := range cases {
+		got, known := statusFromStorageState(tc.state)
+		if got != tc.want || known != tc.known {
+			t.Fatalf("statusFromStorageState(%q) = (%q, %v), want (%q, %v)", tc.state, got, known, tc.want, tc.known)
+		}
+	}
+}
