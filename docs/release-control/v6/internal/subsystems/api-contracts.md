@@ -11084,3 +11084,11 @@ the renamed Settings > Pulse Mobile section instead of Remote Access. Codes,
 severities and the response shape are unchanged. The API reference heading
 for the relay protocol records that Pulse Mobile retires on 31 March 2027, and
 the published copy stays identical to `docs/API.md`.
+
+### Patrol attention detail header pinning
+
+Pinning the Patrol attention detail header on phones
+(`frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx`) is a
+layout-only change. It reads no new attention fields, sends no new request,
+and leaves the attention projection, lifecycle, and queue ordering contracts
+above unchanged.
