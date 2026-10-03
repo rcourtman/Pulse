@@ -124,7 +124,7 @@ When reporting missing records, share the failing view, running Pulse version,
 affected provider, time range, expected reading and relevant redacted error.
 Use consistent placeholders for private hostnames, datasets and IDs. Do not
 share full backup inventories, request headers, tokens, cookies or recovery
-keys. See [safe issue reporting](TROUBLESHOOTING.md#getting-help).
+keys. See [safe issue reporting](TROUBLESHOOTING.md#-getting-help).
 
 ## API reference
 
