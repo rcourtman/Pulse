@@ -4,8 +4,9 @@ Pulse v6 includes first-class monitoring for **TrueNAS SCALE** and **TrueNAS COR
 
 ## Quick Start
 
-1. Go to **Settings → TrueNAS**.
-2. Click **Add Connection**.
+1. Go to **Settings → Infrastructure**.
+2. Click **Add infrastructure** and choose **TrueNAS**. Existing connections
+   are listed under **Platform connections**.
 3. Enter the TrueNAS URL (e.g., `https://truenas.local`), the API key, and the
    username that owns the key.
 4. Click **Test Connection** → **Save**.
@@ -28,27 +29,27 @@ On your TrueNAS system:
 
 ## What Gets Monitored
 
-| Data | Unified Page | Details |
+| Data | Pulse page / tab | Details |
 |---|---|---|
-| System info (hostname, version, uptime) | Infrastructure | CPU, memory, health status |
-| Virtual machines | TrueNAS Overview | State, CPU, memory, boot mode, devices, and security flags from the TrueNAS VM API |
-| Apps | TrueNAS Overview | Native app state, image/version, ports, volumes, networks, and runtime container details |
-| ZFS Pools | Storage | Total/used/free capacity, pool status (ONLINE/DEGRADED/FAULTED) |
-| ZFS Datasets | Storage | Used/available space, mount status, read-only flag |
-| Physical Disks | Storage | Model, serial, size, transport type, rotational flag, temperature, and native SMART failure/counter evidence when TrueNAS reports it |
-| ZFS Snapshots | Recovery | Dataset, creation time, size, referenced data |
-| Replication Tasks | Recovery | Source/target datasets, direction, last run status |
+| System info (hostname, version, uptime) | TrueNAS → Overview | CPU, memory, health status |
+| Virtual machines | TrueNAS → VMs | State, CPU, memory, boot mode, devices, and security flags from the TrueNAS VM API |
+| Apps | TrueNAS → Apps | Native app state, image/version, ports, volumes, networks, and runtime container details |
+| ZFS Pools | TrueNAS → Storage | Total/used/free capacity, pool status (ONLINE/DEGRADED/FAULTED) |
+| ZFS Datasets | TrueNAS → Storage | Used/available space, mount status, read-only flag |
+| Physical Disks | TrueNAS → Storage | Model, serial, size, transport type, rotational flag, temperature, and native SMART failure/counter evidence when TrueNAS reports it |
+| ZFS Snapshots | TrueNAS → Protection | Dataset, creation time, size, referenced data |
+| Replication Tasks | TrueNAS → Protection | Source/target datasets, direction, last run status |
 | TrueNAS Alerts | Alerts | Native TrueNAS alert messages and severity levels |
 
 ## Unified Resource Mapping
 
 TrueNAS resources are mapped into the unified resource model:
 
-- **TrueNAS host** → appears as a resource with `source: truenas` on the **Infrastructure** page.
-- **TrueNAS VMs** → appear as canonical `vm` workloads on the **TrueNAS** page.
-- **TrueNAS apps** → appear as canonical `app-container` workloads on the **TrueNAS** page.
-- **ZFS pools and datasets** → appear on the **Storage** page.
-- **ZFS snapshots and replication** → appear on the **Recovery** page as recovery points.
+- **TrueNAS host** → appears as a resource with `source: truenas` under **TrueNAS → Overview** (`/truenas/overview`).
+- **TrueNAS VMs** → appear as canonical `vm` workloads under **TrueNAS → VMs** (`/truenas/vms`).
+- **TrueNAS apps** → appear as canonical `app-container` workloads under **TrueNAS → Apps** (`/truenas/apps`).
+- **ZFS pools, datasets and physical disks** → appear under **TrueNAS → Storage** (`/truenas/storage`).
+- **ZFS snapshots and replication** → appear under **TrueNAS → Protection** (`/truenas/protection`) as recovery points.
 - **TrueNAS alerts** → surfaced on the **Alerts** page alongside Proxmox and other platform alerts.
 
 TrueNAS drive-health alerts that identify a specific disk remain disk-health
@@ -60,7 +61,11 @@ typed uncorrectable-error or spare-reserve argument, Pulse also projects that
 value into the disk's SMART details. Pulse does not infer counters from alert
 text, and current TrueNAS APIs do not expose every raw SMART attribute.
 
-Resources from TrueNAS can be filtered using the **source** filter on any page.
+The unified resource model is a backend contract, not a top-level
+Infrastructure, Storage or Recovery menu. TrueNAS tabs follow the inventory
+Pulse has collected; an absent tab is not proof of successful collection.
+For missing or stale data, use the [polling checks](#stale-truenas-data) before
+testing the connection or restarting.
 
 ## Multiple TrueNAS Systems
 
@@ -91,7 +96,7 @@ All endpoints require admin authentication.
 
 ### Testing and adding a connection (API)
 
-The **Settings → TrueNAS** flow is the simplest option. For an API client,
+The **Settings → Infrastructure → Platform connections** flow is the simplest option. For an API client,
 prepare the private Pulse header file as described in the
 [API authentication guide](API.md). The Pulse API token authenticates to
 Pulse; the separate TrueNAS API key belongs in the connection's JSON file.
@@ -260,4 +265,4 @@ Set `PULSE_ENABLE_TRUENAS=false` and restart Pulse. Existing connection data is 
   JSON-RPC transport, API-key, and TLS requirements
 - [Configuration Guide](CONFIGURATION.md#truenas) — environment variables and setup
 - [ZFS Monitoring](ZFS_MONITORING.md) — Proxmox-native ZFS pool monitoring
-- [Recovery](RECOVERY.md) — TrueNAS snapshots in the recovery view
+- [Recovery data](RECOVERY.md) — the snapshot and replication data shown under **TrueNAS → Protection**
