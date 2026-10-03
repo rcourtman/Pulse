@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "beb6c3f6a6f3fad74a1b9f76745bacdadcab7834",
+  "verified_at": "2026-10-03T18:34:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "5d7c824c96e90ee8c4b8a8a92ac34e42ecd3f053925512de6fa0408f6bd0370e"
+  },
+  "routes": [
+    "/patrol"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "mock stack, decision inbox with 50 decisions, light and dark color schemes",
+    "390px touch: selected decision detail with Back to list, Previous and Next issue in the header; header top 484/284/84/4/4 while .app-scroll-shell scrolls 0/200/400/600/max, staying topmost at the shell padding edge",
+    "390px: header background resolves to surface at 95% opacity in light and dark, scrolled content no longer shows through",
+    "1440px: Evidence and history expanded so the detail panel overflows (1165/832); header stays at the panel top while the panel scrolls 0/300/333, opaque in both themes",
+    "inbox section computed overflow clip with 12px corner radius, rounded corners still clipped at 1440"
+  ],
+  "interactions": [
+    "clicked Start review to open the highest-priority decision",
+    "scrolled .app-scroll-shell at 390px and checked the header stays the topmost element at its position",
+    "expanded Evidence and history and scrolled the lg detail panel at 1440px and 1024px",
+    "stepped through all 50 decisions with Next decision at 1440px"
+  ]
+}

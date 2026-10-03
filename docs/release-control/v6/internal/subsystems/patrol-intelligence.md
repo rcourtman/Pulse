@@ -1260,6 +1260,12 @@ proof, including failed verification and reduced motion, remains
 The durable decision and proof record is
 `internal/records/operational-trust-governed-docker-restart-2026-07-19.md`.
 
+Reviewing a long decision on a phone must not lose the queue controls: the
+selected-detail header with Back, Previous, and Next issue stays pinned while
+the detail scrolls. The shell-level rule (opaque sticky header, `overflow-clip`
+inbox section) is owned by the frontend-primitives attention workbench shell
+contract.
+
 ## Current State
 
 The Patrol 2.0 frontend now uses a one-task-at-a-time, decision-first

@@ -3593,6 +3593,15 @@ Patrol is off or its model needs setup, while retaining the existing setup task
 above it. Desktop and narrow browser checks must show the task and attention
 list together, then allow a selected decision to open and return without
 changing the disabled Patrol controls or overflowing the viewport.
+The selected-detail header (title, queue position, Back, and the phone
+Previous and Next issue controls) is `sticky top-0` with an opaque
+`bg-surface/95` background, and the `Patrol decision inbox` section clips its
+rounded corners with `overflow-clip`, never `overflow-hidden`. An
+`overflow-hidden` ancestor becomes the sticky scroll container, so on phones
+the header scrolled away with the page and took the queue controls with it.
+Below `lg` the header pins against `.app-scroll-shell`; at `lg` it pins inside
+the detail panel's own scroller. The class contract is pinned in
+`frontend-modern/src/features/patrol/__tests__/PatrolAttentionWorkbench.test.tsx`.
 The objective brief and optional-context fields in `PatrolObjectivesPanel`
 share the same `FormTextarea` ownership contract.
 
