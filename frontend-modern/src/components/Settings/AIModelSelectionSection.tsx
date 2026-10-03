@@ -312,7 +312,7 @@ export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> 
                 )}
               </For>
             </div>
-            <div class="mt-2 border-t pt-2">
+            <div class="mt-2 border-t border-current/15 pt-2">
               <p class="text-[11px] font-medium mb-1">Autonomy suitability</p>
               <div class="grid gap-1 sm:grid-cols-2">
                 <For each={modeRows()}>

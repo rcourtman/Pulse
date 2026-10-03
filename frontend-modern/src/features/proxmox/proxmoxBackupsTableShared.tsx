@@ -131,7 +131,7 @@ export const COVERAGE_FILTERS: FilterOption<CoverageFilterValue>[] = [
   {
     value: 'unknown',
     label: 'Unknown',
-    leading: filterChipStatusDot(''),
+    leading: filterChipStatusDot('bg-base-content/40'),
   },
 ];
 
