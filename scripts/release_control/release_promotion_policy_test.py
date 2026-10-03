@@ -45,6 +45,16 @@ def normalize_ws(text: str) -> str:
     return " ".join(text.split())
 
 
+def release_notes_have_exact_title(notes: str, version: str) -> bool:
+    """Match the first title, as the reader-facing Go notes contract does.
+
+    The optional legacy suffix is presentation, not version identity. Neither
+    a later heading nor a version repeated in prose establishes that identity.
+    """
+    first = notes.strip().split("\n", 1)[0].strip()
+    return re.fullmatch(r"# Pulse v" + re.escape(version) + r"(?: Release Notes)?", first) is not None
+
+
 _MATERIAL_APPROVAL_RE = re.compile(
     r"(?i)(?:"
     r"\brichard[- ]approved\b|"
@@ -1590,6 +1600,25 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         )
         self.assertNotIn("Limits are applied to canonical top-level monitored systems", changelog)
 
+    def test_release_notes_title_uses_exact_first_heading(self) -> None:
+        for version in ("6.4.5", "6.5.0", "6.5.0-rc.1"):
+            for suffix in ("", " Release Notes"):
+                with self.subTest(version=version, suffix=suffix):
+                    self.assertTrue(release_notes_have_exact_title(
+                        f"\n# Pulse v{version}{suffix}\n\nUser-facing changes.\n", version))
+        for title in (
+            "# Pulse v6.5.1", "# Pulse v6.5.0-rc.1", "# Pulse v6.5.00",
+            "# Pulse v6.5.0-beta.1", "## Pulse v6.5.0", "# Other Pulse v6.5.0",
+            "# Pulse v6x5x0", "# Pulse v6.5.0 Release Notes extra",
+            "# Pulse v6.5.0extra", "User-facing changes before the title.",
+        ):
+            with self.subTest(title=title):
+                self.assertFalse(release_notes_have_exact_title(
+                    title + "\n\n# Pulse v6.5.0 Release Notes\n\n`v6.5.0`\n", "6.5.0"))
+        self.assertFalse(release_notes_have_exact_title("\n \n", "6.5.0"))
+        authored = read("scripts/installtests/testdata/release-notes-v6.4.5-authored.md")
+        self.assertTrue(release_notes_have_exact_title(authored, "6.4.5"))
+
     def test_version_file_matches_current_rc_packet(self) -> None:
         current_version = read("VERSION").strip()
         release_index = read("docs/RELEASE_NOTES.md")
@@ -1600,8 +1629,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             changelog = read(changelog_path)
             self.assertIn(release_notes_path, release_index)
             self.assertIn(changelog_path, release_index)
-            self.assertIn(f"Pulse v{current_version} Release Notes", release_notes)
-            self.assertIn(f"`v{current_version}`", release_notes)
+            self.assertTrue(release_notes_have_exact_title(release_notes, current_version))
             self.assertIn(f"Pulse v{current_version}", changelog)
         else:
             packet_paths = rc_packet_paths_for_version(current_version)
@@ -1636,7 +1664,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 self.assertIn("current v6 release candidate packet", release_index)
                 self.assertIn(release_notes_path, release_index)
                 self.assertIn(changelog_path, release_index)
-                self.assertIn(f"Pulse v{current_version} Release Notes", release_notes)
+                self.assertTrue(release_notes_have_exact_title(release_notes, current_version))
                 self.assertIn(f"Pulse v{current_version}", changelog)
 
     def test_v611_packet_records_proxmox_backup_posture_identity_fix(self) -> None:
@@ -2163,7 +2191,12 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("scripts/install-mcp.ps1 release/install-mcp.ps1", candidate_workflow)
         self.assertIn("$PinnedReleaseSshPublicKey = '${TRUSTED_SSH_PUBLIC_KEY}'", candidate_workflow)
         self.assertIn("TRUSTED_SSH_PUBLIC_KEY", update_demo_workflow)
-        self.assertIn('sed -i "s|^PINNED_RELEASE_SSH_PUBLIC_KEY=.*|PINNED_RELEASE_SSH_PUBLIC_KEY=\\"${TRUSTED_SSH_PUBLIC_KEY}\\"|" /tmp/pulse-install.sh', update_demo_workflow)
+        self.assertIn("Verify signed release and select only demo server runtime", update_demo_workflow)
+        self.assertIn('printf \'pulse-installer %s\\n\' "$TRUSTED_SSH_PUBLIC_KEY" > /tmp/pulse-demo-signers', update_demo_workflow)
+        self.assertIn("ssh-keygen -Y verify -f /tmp/pulse-demo-signers -I pulse-installer", update_demo_workflow)
+        self.assertIn("-n pulse-install -s /tmp/pulse-demo-release.sshsig < /tmp/pulse-demo-release.tgz", update_demo_workflow)
+        self.assertIn("python3 .github/scripts/dispatch-demo-runtime.py prepare", update_demo_workflow)
+        self.assertNotIn("bash /tmp/pulse-install.sh", update_demo_workflow)
         self.assertIn("bash .github/scripts/setup-demo-ssh.sh", update_demo_workflow)
         self.assertIn("bash .github/scripts/check-demo-reachability.sh", update_demo_workflow)
         self.assertIn("ping: ${{ secrets.DEMO_SERVER_HOST }}", update_demo_workflow)
@@ -2776,8 +2809,12 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('WINDOW = 300', transaction)
         self.assertIn('self.watch("recovery", original_version, cursors)', transaction)
         self.assertIn('signal.signal(sig, signal.SIG_IGN)', transaction)
-        self.assertIn('self.save("rolled_back")', transaction)
-        self.assertIn('self.save("rollback_failed")', transaction)
+        self.assertIn('outcome = "rolled_back"', transaction)
+        self.assertIn('outcome = "rollback_failed"', transaction)
+        self.assertIn('self.finish(outcome)', transaction)
+        self.assertIn('self.receipt["observed_outcome"] = status', transaction)
+        self.assertIn('self.receipt["status"] = "observation_failed"', transaction)
+        self.assertIn('self.save(terminal)', transaction)
         for required in ("alerts/events.db", "alerts/alert-history.json.imported",
                          "alerts/alert-history.backup.json.imported", "ai_incidents.json", "snapshot_retained"):
             self.assertIn(required, transaction)
