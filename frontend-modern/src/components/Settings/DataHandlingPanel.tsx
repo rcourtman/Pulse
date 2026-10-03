@@ -21,7 +21,7 @@ import {
 } from './dataHandlingPanelModel';
 
 const meterClassByTone: Record<DataHandlingPostureItem['tone'], string> = {
-  neutral: '',
+  neutral: 'bg-slate-400',
   info: 'bg-sky-500 dark:bg-sky-400',
   success: 'bg-emerald-500 dark:bg-emerald-400',
   warning: 'bg-amber-500 dark:bg-amber-400',

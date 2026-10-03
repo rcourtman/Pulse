@@ -4567,7 +4567,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                         <For each={sessionPickerSections()}>
                           {(section) => (
                             <>
-                              <div class="sticky top-0 z-10 border-b bg-surface-alt px-3 py-1.5 text-[11px] font-semibold text-muted">
+                              <div class="sticky top-0 z-10 border-b border-border/60 bg-surface-alt px-3 py-1.5 text-[11px] font-semibold text-muted">
                                 {section.title}
                               </div>
                               <For each={section.sessions}>
@@ -4879,7 +4879,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                           <button
                             type="button"
                             onClick={switchToProviderReadinessAlternative}
-                            class="inline-flex max-w-44 items-center gap-1.5 rounded-md border bg-surface px-2 py-1 text-[10px] font-medium text-base-content hover:bg-surface-hover"
+                            class="inline-flex max-w-44 items-center gap-1.5 rounded-md border border-current/20 bg-surface px-2 py-1 text-[10px] font-medium text-base-content hover:bg-surface-hover"
                             aria-label={providerReadinessAlternativeButtonLabel()}
                             title={alternative().label}
                           >
@@ -4893,7 +4893,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                         type="button"
                         onClick={retrySelectedProviderReadiness}
                         disabled={providerReadiness().status === 'checking'}
-                        class="inline-flex items-center gap-1.5 rounded-md border bg-surface px-2 py-1 text-[10px] font-medium text-base-content hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+                        class="inline-flex items-center gap-1.5 rounded-md border border-current/20 bg-surface px-2 py-1 text-[10px] font-medium text-base-content hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
                         aria-label="Retry route check"
                       >
                         <RefreshCwIcon class="h-3.5 w-3.5" />
@@ -4901,7 +4901,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       </button>
                       <a
                         href={AI_CHAT_PROVIDER_READINESS_SETTINGS_HREF}
-                        class="inline-flex items-center gap-1.5 rounded-md border bg-surface px-2 py-1 text-[10px] font-medium text-base-content hover:bg-surface-hover"
+                        class="inline-flex items-center gap-1.5 rounded-md border border-current/20 bg-surface px-2 py-1 text-[10px] font-medium text-base-content hover:bg-surface-hover"
                       >
                         <SettingsIcon class="h-3.5 w-3.5" />
                         <span>{AI_CHAT_PROVIDER_READINESS_SETTINGS_LABEL}</span>
@@ -4910,7 +4910,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                         <button
                           type="button"
                           onClick={() => setProviderReadinessVisible(false)}
-                          class="inline-flex items-center gap-1.5 rounded-md border bg-surface px-2 py-1 text-[10px] font-medium text-base-content hover:bg-surface-hover"
+                          class="inline-flex items-center gap-1.5 rounded-md border border-current/20 bg-surface px-2 py-1 text-[10px] font-medium text-base-content hover:bg-surface-hover"
                           aria-label="Hide route status"
                         >
                           <XIcon class="h-3.5 w-3.5" />
@@ -5114,7 +5114,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 <Show when={autonomousWarningVisible()}>
                   <div
                     class={`flex min-h-8 min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs text-red-700 dark:text-red-200 ${
-                      currentStatus() ? 'border-t ' : ''
+                      currentStatus() ? 'border-t border-border/70' : ''
                     }`}
                     role="status"
                     aria-label="Assistant chat actions warning"
@@ -5149,7 +5149,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 <Show when={activityDockQueuedFollowUpCount() > 0}>
                   <div
                     class={`px-2.5 py-1.5 ${
-                      currentStatus() || autonomousWarningVisible() ? 'border-t ' : ''
+                      currentStatus() || autonomousWarningVisible()
+                        ? 'border-t border-border/70'
+                        : ''
                     }`}
                     role="status"
                     aria-label="Queued follow-up messages"

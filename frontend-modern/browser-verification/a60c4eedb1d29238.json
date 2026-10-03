@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "base_sha": "beb6c3f6a6f3fad74a1b9f76745bacdadcab7834",
+  "verified_at": "2026-10-03T18:30:37Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/Chat/index.tsx",
+    "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
+    "frontend-modern/src/components/Settings/DataHandlingPanel.tsx",
+    "frontend-modern/src/components/Settings/RolesPanel.tsx",
+    "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
+    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx",
+    "frontend-modern/src/pages/Actions.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/Chat/index.tsx": "27d3bd9fbdb86c7f6048b29a65d6bac41308f4650ebb7da1b7072a0fec5522e5",
+    "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx": "c94ce3d2b8c4c47bf8b07699bdbd98e9f009feb77bebc7bb81dc24f784248f87",
+    "frontend-modern/src/components/Settings/DataHandlingPanel.tsx": "c0eff8e2c786a3baa45c22d0c7118ed55ad1d52b33f8e06692b7c3222431db96",
+    "frontend-modern/src/components/Settings/RolesPanel.tsx": "f8b1cb3a8e47e2815c3978ef07239699cb60989a8ecacd93024178896f6211de",
+    "frontend-modern/src/components/Settings/SettingsPageShell.tsx": "18a195c4c71a939ae17bba3136854f6419c5cbc6c8acb6e62d003d016b0dec74",
+    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx": "be53a9d0c349a54516b29de58bf8e6fb28af6ea9f8028965591aa3cb960a851d",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "3c4883dcd79af1ecea3c7e967de8a05797c5ffd360e873dbb8550f0632708438",
+    "frontend-modern/src/pages/Actions.tsx": "9ce58a091378c5edc1469f3ad496194668d6d743a217aa43bed6d7ab9c508dcb"
+  },
+  "routes": [
+    "/settings/security-data-handling",
+    "/settings/security-roles",
+    "/settings/system-ai",
+    "/proxmox",
+    "/proxmox/backups/coverage",
+    "/actions",
+    "/alerts/thresholds",
+    "/patrol"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "light and dark color schemes on a private mock stack with a dev Pro licence; each restored class toggled off and on in one page load for before/after",
+    "Resource Privacy at 390px scrolled under the sticky Settings header: body text no longer shows through (bg-surface/95)",
+    "Resource Privacy Internal meter at 59% renders a slate-400 fill instead of an empty track",
+    "Proxmox backups coverage filter chips: Unknown shows a grey status dot like its siblings",
+    "Assistant session picker in dark mode: section header divider is border-border/60 instead of a bright gray-200 line",
+    "Assistant model-route chips and Patrol model readiness card markup in dark mode: border-current borders replace bright gray-200",
+    "Roles table at 390px with rbac capability and roles intercepted: custom-role rows 53px like built-in rows with 44px Edit and Delete targets; 28px buttons on desktop",
+    "Alerts thresholds mobile card: Cancel threshold edits renders 44x44 like Save, Edit and Delay",
+    "Patrol decision detail at 390px: Copy ID 44px tall in a row already 44px from Open resource"
+  ],
+  "interactions": [
+    "scrolled the app scroll shell under the Settings phone header",
+    "hovered an Actions row and a node disk segment",
+    "opened the Assistant, sent a message and opened the sessions picker",
+    "opened a Patrol decision and a threshold edit on the phone layout"
+  ]
+}
