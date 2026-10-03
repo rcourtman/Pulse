@@ -2589,7 +2589,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("DEMO_EXPECTED_HOSTNAME", demo)
         self.assertIn("Verify target host identity", demo)
         self.assertIn("Demo environment points at host $REMOTE_HOSTNAME but expected $DEMO_EXPECTED_HOSTNAME.", demo)
-        self.assertIn("Restore demo runtime configuration", demo)
+        self.assertIn("Apply guarded demo transaction", demo)
+        self.assertIn("dispatch-demo-runtime.py", demo)
+        self.assertIn("Retain guarded demo transaction evidence", demo)
         self.assertIn("Resolve target-compatible demo runtime profile", demo)
         self.assertIn("mockEagerHistoryPVEGuestLimit", demo_profile)
         self.assertIn("UpdateMetricCohort", demo_profile)
@@ -2608,19 +2610,17 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("MOCK_SEED_DURATION=2h", demo_profile)
         self.assertIn("MOCK_SAMPLE_INTERVAL=5m", demo_profile)
         self.assertIn("MOCK_UPDATE_INTERVAL=15s", demo_profile)
-        self.assertIn("resolve_config_dir", demo)
-        self.assertIn("set_env_value DEMO_MODE true", demo)
-        self.assertIn("set_env_value PULSE_MOCK_MODE true", demo)
-        self.assertIn('set_env_value PULSE_MOCK_NODES "$MOCK_NODES"', demo)
-        self.assertIn("set_env_value PULSE_MOCK_SEED_METRICS_STORE false", demo)
-        self.assertIn('set_env_value PULSE_MOCK_TRENDS_SEED_DURATION "$MOCK_SEED_DURATION"', demo)
-        self.assertIn('set_env_value PULSE_MOCK_TRENDS_SAMPLE_INTERVAL "$MOCK_SAMPLE_INTERVAL"', demo)
-        self.assertIn('set_env_value PULSE_MOCK_UPDATE_INTERVAL "$MOCK_UPDATE_INTERVAL"', demo)
-        self.assertIn("ensure_demo_fixture_entitlement", demo)
-        self.assertIn('"demo_fixtures"', demo)
-        self.assertIn("del(.integrity)", demo)
-        self.assertIn("Demo fixture entitlement ensured in governed demo billing state.", demo)
-        self.assertIn("Demo service restarted with governed demo runtime configuration.", demo)
+        # Profile application moved into the owned transaction; keep its
+        # runtime settings and entitlement, not the superseded shell snippets.
+        transaction = read(".github/scripts/demo-runtime-transaction.py")
+        for required in ('"DEMO_MODE": "true"', '"PULSE_MOCK_MODE": "true"',
+                         '"PULSE_MOCK_SEED_METRICS_STORE": "false"',
+                         '"seed_duration": "trends_seed_duration"', '"sample_interval": "trends_sample_interval"',
+                         '"PULSE_MOCK_" + key.upper()', '["demo_fixtures"]', 'billing.pop("integrity", None)',
+                         'self.host.profile(self.request, not healthy_baseline)', 'self.host.start()'):
+            self.assertIn(required, transaction)
+        self.assertIn("MOCK_NODES: ${{ needs.resolve.outputs.mock_nodes }}", demo)
+        self.assertIn("MOCK_UPDATE_INTERVAL: ${{ needs.resolve.outputs.mock_update_interval }}", demo)
         self.assertIn("/api/license/runtime-capabilities", demo)
         self.assertIn("Mock mode enabled", demo)
         self.assertIn("Demo server mock mode did not enable after entitlement sync", demo)
