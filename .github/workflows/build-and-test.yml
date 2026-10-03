@@ -105,10 +105,12 @@ jobs:
           fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
           # Whether this change moves the frontend dependency graph. It decides
-          # what an unreachable npm advisory endpoint means: unknown answer
-          # (must block) versus the base commit's already-passing answer. A
-          # change to the audit runner itself also demands a real result, so it
-          # can never be relaxed under cover of its own tolerant mode.
+          # whether the audit blocks it: a change that moves the graph answers
+          # for any finding and for an unreachable endpoint, while one that
+          # leaves the graph alone only warns, because its findings are the
+          # base commit's. A change to the audit runner itself also demands a
+          # clean result, so it can never be relaxed under cover of its own
+          # tolerant mode.
           if printf '%s\n' "$changed" | grep -qE '^frontend-modern/package(-lock)?\.json$|^scripts/npm-audit-retry\.sh$'; then
             frontend_deps=true
           else
@@ -193,14 +195,15 @@ jobs:
         run: npm ci --no-audit
 
       # npm audit exits 1 both for a real advisory and for an unreachable
-      # advisory endpoint. The runner keeps the advisory verdict exactly as
-      # strict and only retries the endpoint being down; see the script header.
+      # advisory endpoint. The runner retries the endpoint being down, fails a
+      # change that moves the dependency graph on any finding, and only warns,
+      # naming every finding, for a change whose graph is the base commit's;
+      # see the script header.
       #
       # Only the complete graph is audited here. `--omit=dev` audits a subset
-      # of these packages, so it can only report a subset of these advisories;
-      # and because the complete audit fails the job on any finding, the
-      # production step could only ever run in the cases where it was already
-      # guaranteed clean. The dev-versus-production split is still reported
+      # of these packages, so it can only report a subset of these advisories,
+      # under the same blocking rule; a separate production step could never
+      # block a change the complete audit lets through. The dev-versus-production split is still reported
       # for every workspace by the scheduled npm-audit job in
       # security-scan.yml, where it informs rather than blocks delivery.
       - name: Audit complete frontend dependency graph

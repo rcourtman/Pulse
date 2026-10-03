@@ -120,10 +120,12 @@ exposes independent marker damage in the same evidence packet; it never admits
 the release or enables later delivery checks unless both trust checks pass.
 Scheduled and push-time npm audits classify JSON results, use one-minute
 registry attempts, and retry an unavailable audit endpoint. Advisory findings
-still fail immediately, even if the same response contains a transport error. The
-scheduled security scan and dependency-changing builds fail if three attempts
-produce no result; a build with an unchanged dependency graph warns and uses
-the base commit's passing answer. Audit steps defer their aggregate verdict so
+are conclusive immediately, even if the same response contains a transport error. The
+scheduled security scan, the dependency advisory watch and dependency-changing
+builds fail on any finding and when three attempts produce no result. A build
+with an unchanged dependency graph warns on both instead and names every
+finding, because its graph is the base commit's, so any advisory it sees is one
+the base already has and that only a dependency change can remove. Audit steps defer their aggregate verdict so
 an unavailable endpoint cannot suppress independent frontend checks or the
 production bundle build; the preceding clean install disables npm's duplicate
 best-effort audit request.
@@ -170,8 +172,8 @@ one that passed. It uploads nothing and gates nothing.
 `dependency-advisory-watch.yml` runs the required build-and-test frontend audit
 daily against `main` and every active `release/v<major>.<minor>` line (the
 latest stable's line and newer), because a new npm advisory against an
-unchanged lockfile otherwise surfaces only when it fails every pull request on
-that branch. Each line is a separate matrix job that reads only that line's
+unchanged lockfile otherwise surfaces only as a warning on that branch's pull
+requests; this watch is where it fails. Each line is a separate matrix job that reads only that line's
 `frontend-modern/package.json` and `package-lock.json` (it never checks out,
 installs or runs another branch's code in the default branch's scope) and audits
 them with the same Node.js pin and `scripts/npm-audit-retry.sh all`. A failing job names
