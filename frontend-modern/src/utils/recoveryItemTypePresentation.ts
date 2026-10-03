@@ -11,9 +11,9 @@ export interface RecoveryItemTypePresentation {
 }
 
 const BADGE_BASE_CLASSES =
-  'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap';
+  'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap';
 const TABLE_BADGE_BASE_CLASSES =
-  'inline-flex items-center px-1 py-0.5 text-[10px] font-medium rounded whitespace-nowrap';
+  'inline-flex items-center px-1 py-0.5 text-[10px] font-medium rounded-sm whitespace-nowrap';
 const DEFAULT_BADGE_TONE_CLASSES = 'bg-surface-alt text-base-content';
 const DEFAULT_BADGE_CLASSES = `${BADGE_BASE_CLASSES} ${DEFAULT_BADGE_TONE_CLASSES}`;
 const DEFAULT_TABLE_BADGE_CLASSES = `${TABLE_BADGE_BASE_CLASSES} ${DEFAULT_BADGE_TONE_CLASSES}`;

@@ -95,13 +95,13 @@ export function getSecurityScorePresentation(score: number): SecurityScorePresen
       label: 'Strong',
       icon: 'shield-check',
       tone: {
-        headerBg: 'bg-emerald-50 dark:bg-emerald-950',
+        headerBg: 'bg-emerald-50 dark:bg-emerald-950/25',
         headerBorder: 'border-b border-emerald-200 dark:border-emerald-800',
-        iconWrap: 'bg-emerald-100 dark:bg-emerald-900',
+        iconWrap: 'bg-emerald-100 dark:bg-emerald-900/25',
         icon: 'text-emerald-700 dark:text-emerald-300',
         subtitle: 'text-emerald-700 dark:text-emerald-300',
         score: 'text-emerald-800 dark:text-emerald-200',
-        badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+        badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300',
       },
     };
   }
@@ -111,13 +111,13 @@ export function getSecurityScorePresentation(score: number): SecurityScorePresen
       label: 'Moderate',
       icon: 'shield',
       tone: {
-        headerBg: 'bg-amber-50 dark:bg-amber-950',
+        headerBg: 'bg-amber-50 dark:bg-amber-950/25',
         headerBorder: 'border-b border-amber-200 dark:border-amber-800',
-        iconWrap: 'bg-amber-100 dark:bg-amber-900',
+        iconWrap: 'bg-amber-100 dark:bg-amber-900/25',
         icon: 'text-amber-700 dark:text-amber-300',
         subtitle: 'text-amber-700 dark:text-amber-300',
         score: 'text-amber-800 dark:text-amber-200',
-        badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+        badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
       },
     };
   }
@@ -126,13 +126,13 @@ export function getSecurityScorePresentation(score: number): SecurityScorePresen
     label: 'Weak',
     icon: 'shield-alert',
     tone: {
-      headerBg: 'bg-rose-50 dark:bg-rose-950',
+      headerBg: 'bg-rose-50 dark:bg-rose-950/25',
       headerBorder: 'border-b border-rose-200 dark:border-rose-800',
-      iconWrap: 'bg-rose-100 dark:bg-rose-900',
+      iconWrap: 'bg-rose-100 dark:bg-rose-900/25',
       icon: 'text-rose-700 dark:text-rose-300',
       subtitle: 'text-rose-700 dark:text-rose-300',
       score: 'text-rose-800 dark:text-rose-200',
-      badge: 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300',
+      badge: 'bg-rose-100 text-rose-700 dark:bg-rose-900/25 dark:text-rose-300',
     },
   };
 }
@@ -147,7 +147,7 @@ export function getSecurityWarningPresentation(options: {
 }): SecurityWarningPresentation {
   if (options.publicAccess && !options.hasAuthentication) {
     return {
-      background: 'bg-red-50 dark:bg-red-900',
+      background: 'bg-red-50 dark:bg-red-900/25',
       border: 'border-red-200 dark:border-red-800',
       message:
         'WARNING: PUBLIC NETWORK ACCESS DETECTED - Your Proxmox credentials are exposed to the internet!',
@@ -192,8 +192,8 @@ export function getSecurityWarningPresentation(options: {
   return {
     background:
       posture.label === 'Moderate'
-        ? 'bg-yellow-50 dark:bg-yellow-900'
-        : 'bg-red-50 dark:bg-red-900',
+        ? 'bg-yellow-50 dark:bg-yellow-900/25'
+        : 'bg-red-50 dark:bg-red-900/25',
     border:
       posture.label === 'Moderate'
         ? 'border-yellow-200 dark:border-yellow-800'
@@ -271,7 +271,8 @@ export function getSecurityFeatureCardPresentation(options: {
 }): SecurityFeatureCardPresentation {
   if (options.enabled) {
     return {
-      cardClassName: 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950',
+      cardClassName:
+        'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/25',
       iconClassName: 'text-emerald-500 dark:text-emerald-400',
       statusLabel: 'Enabled',
       criticalLabelClassName: 'text-emerald-600 dark:text-emerald-400',
@@ -280,7 +281,7 @@ export function getSecurityFeatureCardPresentation(options: {
 
   if (options.critical) {
     return {
-      cardClassName: 'border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950',
+      cardClassName: 'border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/25',
       iconClassName: 'text-rose-500 dark:text-rose-400',
       statusLabel: 'Disabled',
       criticalLabelClassName: 'text-rose-600 dark:text-rose-400',

@@ -61,7 +61,7 @@ function WorkloadInventoryIssueList(props: { issues: readonly WorkloadInventoryS
                   </p>
                   <p class="text-sm leading-6 text-muted">{issue.description}</p>
                 </div>
-                <span class="shrink-0 rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-200">
+                <span class="shrink-0 rounded-sm bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/25 dark:text-amber-200">
                   {issue.coverageLabel}
                 </span>
               </div>
@@ -124,7 +124,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
             label="Back to top"
             tone="outline"
             size="lg"
-            class="fixed right-3 bottom-[calc(var(--pulse-mobile-nav-height)+0.75rem)] z-[70] !h-11 !w-11 rounded-full bg-surface/95 shadow-lg backdrop-blur-sm xl:right-6 xl:bottom-6"
+            class="fixed right-3 bottom-[calc(var(--pulse-mobile-nav-height)+0.75rem)] z-70 h-11! w-11! rounded-full shadow-lg backdrop-blur-xs xl:right-6 xl:bottom-6"
             data-testid="workloads-scroll-to-top"
             onClick={() => state.scrollToTop?.()}
           >

@@ -17,7 +17,7 @@ describe('getPatrolSummaryPresentation', () => {
   it('returns active critical presentation', () => {
     expect(getPatrolSummaryPresentation('critical', true)).toEqual({
       iconClass: 'text-red-500 dark:text-red-400',
-      iconContainerClass: 'bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800',
+      iconContainerClass: 'bg-red-50 dark:bg-red-900/25 border-red-200 dark:border-red-800',
       valueClass: 'text-red-600 dark:text-red-400',
     });
   });

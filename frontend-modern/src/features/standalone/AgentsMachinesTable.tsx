@@ -199,7 +199,7 @@ const AgentMachineTemperatureCell: Component<{
     <AgentMachineMetricTooltip
       triggerDataAttribute="data-agent-machine-temperature-trigger"
       tooltipDataAttribute="data-agent-machine-temperature-tooltip"
-      triggerClass="inline-flex min-w-[2.25rem] justify-end text-xs tabular-nums"
+      triggerClass="inline-flex min-w-9 justify-end text-xs tabular-nums"
       tooltipClass="min-w-[190px] max-w-[300px] space-y-2"
       enabled={hasDetails()}
       ariaLabel={fallbackTitle() || undefined}
@@ -300,7 +300,7 @@ const AgentMachineNetworkInterfacesList: Component<{
                 <For each={iface.addresses.slice(0, maxAddressesPerInterface())}>
                   {(address) => (
                     <span
-                      class="max-w-full truncate rounded border border-border bg-surface-alt px-1.5 py-0.5 font-mono text-[9px] text-base-content"
+                      class="max-w-full truncate rounded-sm border border-border bg-surface-alt px-1.5 py-0.5 font-mono text-[9px] text-base-content"
                       title={address}
                     >
                       {address}
@@ -308,7 +308,7 @@ const AgentMachineNetworkInterfacesList: Component<{
                   )}
                 </For>
                 <Show when={iface.addresses.length > maxAddressesPerInterface()}>
-                  <span class="rounded border border-border px-1.5 py-0.5 text-[9px] text-muted">
+                  <span class="rounded-sm border border-border px-1.5 py-0.5 text-[9px] text-muted">
                     +{iface.addresses.length - maxAddressesPerInterface()}
                   </span>
                 </Show>
@@ -422,7 +422,7 @@ const AgentMachineIpCell: Component<{
             {props.primaryIp || '—'}
           </span>
           <Show when={additionalIpCount() > 0}>
-            <span class="shrink-0 rounded border border-border px-1 py-0.5 text-[9px] text-muted">
+            <span class="shrink-0 rounded-sm border border-border px-1 py-0.5 text-[9px] text-muted">
               +{additionalIpCount()}
             </span>
           </Show>
@@ -439,7 +439,7 @@ const AgentMachineIpCell: Component<{
             <For each={shownIps()}>
               {(address) => (
                 <span
-                  class="max-w-full truncate rounded border border-border bg-surface-alt px-1.5 py-0.5 font-mono text-[9px] text-base-content"
+                  class="max-w-full truncate rounded-sm border border-border bg-surface-alt px-1.5 py-0.5 font-mono text-[9px] text-base-content"
                   title={address}
                 >
                   {address}
@@ -447,7 +447,7 @@ const AgentMachineIpCell: Component<{
               )}
             </For>
             <Show when={hiddenIpCount() > 0}>
-              <span class="rounded border border-border px-1.5 py-0.5 text-[9px] text-muted">
+              <span class="rounded-sm border border-border px-1.5 py-0.5 text-[9px] text-muted">
                 +{hiddenIpCount()}
               </span>
             </Show>
@@ -681,7 +681,7 @@ const AgentMachineRaidCell: Component<{
                       <For each={devices().slice(0, 12)}>
                         {(device) => (
                           <span
-                            class={`inline-flex max-w-full items-center truncate rounded border px-1.5 py-0.5 text-[9px] font-medium ${getRaidDeviceBadgeClass(device)}`}
+                            class={`inline-flex max-w-full items-center truncate rounded-sm border px-1.5 py-0.5 text-[9px] font-medium ${getRaidDeviceBadgeClass(device)}`}
                             title={`slot ${device.slot} - ${device.state}`}
                           >
                             {device.device}
@@ -689,7 +689,7 @@ const AgentMachineRaidCell: Component<{
                         )}
                       </For>
                       <Show when={devices().length > 12}>
-                        <span class="rounded border border-border px-1.5 py-0.5 text-[9px] text-muted">
+                        <span class="rounded-sm border border-border px-1.5 py-0.5 text-[9px] text-muted">
                           +{devices().length - 12}
                         </span>
                       </Show>
@@ -759,7 +759,7 @@ const AgentMachineActionsCell: Component<{
         label={`Machine actions for ${props.name}`}
         tone="muted"
         size="sm"
-        class="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
+        class="-my-2 min-h-11 min-w-11 sm:my-0 sm:min-h-0 sm:min-w-0"
         aria-haspopup="menu"
         aria-expanded={props.menuOpen ? 'true' : 'false'}
         onClick={(event) => {
@@ -777,7 +777,7 @@ const AgentMachineActionsCell: Component<{
             data-agent-machine-actions-root
             data-agent-machine-actions-menu
             role="menu"
-            class="fixed z-[9999] w-60 rounded-md border border-border bg-surface p-1 text-left shadow-lg"
+            class="fixed z-9999 w-60 rounded-md border border-border bg-surface p-1 text-left shadow-lg"
             style={{
               left: `${menuPosition().left}px`,
               top: `${menuPosition().top}px`,
@@ -792,7 +792,7 @@ const AgentMachineActionsCell: Component<{
             <button
               type="button"
               role="menuitem"
-              class="flex min-h-11 w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-red-600 transition-colors hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 dark:text-red-400 dark:hover:bg-red-950"
+              class="flex min-h-11 w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs font-medium text-red-600 transition-colors hover:bg-red-50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-red-500/60 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 dark:text-red-400 dark:hover:bg-red-950/25"
               aria-label={props.confirmingRemoval ? confirmLabel() : removeLabel()}
               disabled={props.removing || !props.agentId}
               onClick={(event) => {
@@ -1139,7 +1139,7 @@ const AgentMachineSortableHead: Component<{
         {(sortKey) => (
           <button
             type="button"
-            class="-my-3 inline-flex min-h-11 max-w-full items-center gap-1 truncate py-3 hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 sm:my-0 sm:min-h-0 sm:py-0"
+            class="-my-3 inline-flex min-h-11 max-w-full items-center gap-1 truncate py-3 hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/60 sm:my-0 sm:min-h-0 sm:py-0"
             onClick={() => props.onSort(sortKey())}
             aria-label={`Sort by ${props.column.label}`}
           >

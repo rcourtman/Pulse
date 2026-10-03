@@ -15,26 +15,26 @@ interface CalloutCardProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'tit
 
 const toneClassByTone: Record<CalloutTone, string> = {
   danger:
-    'border border-red-200 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-900 dark:text-red-100',
-  info: 'border border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-100',
+    'border border-red-200 bg-red-50 text-red-900/25 dark:border-red-800 dark:bg-red-900/25 dark:text-red-100',
+  info: 'border border-blue-200 bg-blue-50 text-blue-900/25 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-100',
   success:
-    'border border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-900 dark:text-emerald-100',
+    'border border-emerald-200 bg-emerald-50 text-emerald-900/25 dark:border-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-100',
   warning:
-    'border border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-100',
+    'border border-amber-200 bg-amber-50 text-amber-900/25 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-100',
 };
 
 const iconClassByTone: Record<CalloutTone, string> = {
-  danger: 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300',
-  info: 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300',
-  success: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900 dark:text-emerald-300',
-  warning: 'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-300',
+  danger: 'bg-red-100 text-red-600 dark:bg-red-900/25 dark:text-red-300',
+  info: 'bg-blue-100 text-blue-600 dark:bg-blue-900/25 dark:text-blue-300',
+  success: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/25 dark:text-emerald-300',
+  warning: 'bg-amber-100 text-amber-600 dark:bg-amber-900/25 dark:text-amber-300',
 };
 
 const titleClassByTone: Record<CalloutTone, string> = {
-  danger: 'text-lg font-semibold text-red-900 dark:text-red-100',
-  info: 'text-lg font-semibold text-blue-900 dark:text-blue-100',
-  success: 'text-lg font-semibold text-emerald-900 dark:text-emerald-100',
-  warning: 'text-lg font-semibold text-amber-900 dark:text-amber-100',
+  danger: 'text-lg font-semibold text-red-900/25 dark:text-red-100',
+  info: 'text-lg font-semibold text-blue-900/25 dark:text-blue-100',
+  success: 'text-lg font-semibold text-emerald-900/25 dark:text-emerald-100',
+  warning: 'text-lg font-semibold text-amber-900/25 dark:text-amber-100',
 };
 
 const descriptionClassByTone: Record<CalloutTone, string> = {
@@ -62,10 +62,10 @@ const contentClassByScale: Record<CalloutScale, string> = {
 const titleClassByScaleAndTone: Record<CalloutScale, Record<CalloutTone, string>> = {
   default: titleClassByTone,
   compact: {
-    danger: 'text-sm font-semibold text-red-900 dark:text-red-100',
-    info: 'text-sm font-semibold text-blue-900 dark:text-blue-100',
-    success: 'text-sm font-semibold text-emerald-900 dark:text-emerald-100',
-    warning: 'text-sm font-semibold text-amber-900 dark:text-amber-100',
+    danger: 'text-sm font-semibold text-red-900/25 dark:text-red-100',
+    info: 'text-sm font-semibold text-blue-900/25 dark:text-blue-100',
+    success: 'text-sm font-semibold text-emerald-900/25 dark:text-emerald-100',
+    warning: 'text-sm font-semibold text-amber-900/25 dark:text-amber-100',
   },
 };
 

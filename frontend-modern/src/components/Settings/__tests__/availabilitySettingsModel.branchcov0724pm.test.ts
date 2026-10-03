@@ -96,7 +96,7 @@ describe('getAvailabilityTargetStatusClass (indeterminate arm)', () => {
           status: status({ available: false, outcome: 'indeterminate' }),
         }),
       ),
-    ).toBe('bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300');
+    ).toBe('bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300');
   });
 });
 

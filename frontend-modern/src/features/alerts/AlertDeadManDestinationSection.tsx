@@ -18,27 +18,27 @@ const statusPresentation: Record<DeadManStatus['state'], { label: string; class:
   disabled: { label: 'Not configured', class: 'bg-base text-muted' },
   starting: {
     label: 'Starting',
-    class: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100',
+    class: 'bg-blue-100 text-blue-800 dark:bg-blue-900/25 dark:text-blue-100',
   },
   healthy: {
     label: 'Heartbeat healthy',
-    class: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100',
+    class: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-100',
   },
   delivery_failed: {
     label: 'Delivery failing',
-    class: 'bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100',
+    class: 'bg-amber-100 text-amber-900/25 dark:bg-amber-900/25 dark:text-amber-100',
   },
   monitor_stalled: {
     label: 'Monitoring stalled',
-    class: 'bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100',
+    class: 'bg-red-100 text-red-900/25 dark:bg-red-900/25 dark:text-red-100',
   },
   misconfigured: {
     label: 'Configuration invalid',
-    class: 'bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100',
+    class: 'bg-red-100 text-red-900/25 dark:bg-red-900/25 dark:text-red-100',
   },
   configuration_unavailable: {
     label: 'Configuration unavailable',
-    class: 'bg-red-100 text-red-900 dark:bg-red-900 dark:text-red-100',
+    class: 'bg-red-100 text-red-900/25 dark:bg-red-900/25 dark:text-red-100',
   },
 };
 
@@ -112,7 +112,7 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
                 hasStoredUrl() ? 'Configured — enter a new URL to replace' : 'https://hc-ping.com/…'
               }
               aria-describedby={`${inputId}-help`}
-              class="min-w-0 flex-1 rounded-md border border-border bg-surface px-3 py-2 font-mono text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              class="min-w-0 flex-1 rounded-md border border-border bg-surface px-3 py-2 font-mono text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20"
               onInput={(event) => {
                 props.setPingUrl(event.currentTarget.value);
                 props.setHasUnsavedChanges(true);
@@ -123,7 +123,7 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
               fallback={
                 <button
                   type="button"
-                  class="rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950"
+                  class="rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/25"
                   onClick={() => {
                     props.setPingUrl('');
                     props.setHasUnsavedChanges(true);
@@ -187,7 +187,7 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
         </Show>
 
         <Show when={status()?.lastError}>
-          <p class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
+          <p class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900/25 dark:border-amber-700 dark:bg-amber-950/25 dark:text-amber-100">
             {status()!.lastError}
           </p>
         </Show>

@@ -309,7 +309,7 @@ export const KubernetesNetworkingTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-[12rem] truncate" title={scope()}>
+                            <span class="inline-block max-w-48 truncate" title={scope()}>
                               {scope()}
                             </span>
                           </TableCell>
@@ -331,17 +331,14 @@ export const KubernetesNetworkingTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-[12rem] truncate" title={ports().title}>
+                            <span class="inline-block max-w-48 truncate" title={ports().title}>
                               {ports().label}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
-                            <span
-                              class="inline-block max-w-[13rem] truncate"
-                              title={targets().title}
-                            >
+                            <span class="inline-block max-w-52 truncate" title={targets().title}>
                               {targets().label}
                             </span>
                           </TableCell>

@@ -108,7 +108,7 @@ export function AlertHistoryFrequencyCard(props: AlertHistoryFrequencyCardProps)
               dozens of pointer targets below the WCAG 2.2 minimum target size.
             */}
             <div class="w-max min-w-full">
-              <div class="rounded bg-surface-alt p-1">
+              <div class="rounded-sm bg-surface-alt p-1">
                 <div class="flex h-12 items-end gap-1">
                   {trends.buckets.map((value, index) => {
                     const scaledHeight =
@@ -133,7 +133,7 @@ export function AlertHistoryFrequencyCard(props: AlertHistoryFrequencyCardProps)
                       <button
                         type="button"
                         data-alert-frequency-bucket={index}
-                        class="relative flex h-12 min-w-6 flex-1 cursor-pointer items-end rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
+                        class="relative flex h-12 min-w-6 flex-1 cursor-pointer items-end rounded-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
                         aria-pressed={isSelected()}
                         aria-label={`${countLabel} between ${bucketRangeLabel}`}
                         onClick={() =>
@@ -144,7 +144,7 @@ export function AlertHistoryFrequencyCard(props: AlertHistoryFrequencyCardProps)
                       >
                         <span class="absolute bottom-0 h-1 w-full rounded-full bg-slate-300 opacity-30"></span>
                         <span
-                          class="relative w-full rounded-sm transition-all"
+                          class="relative w-full rounded-xs transition-all"
                           style={{
                             height: `${pixelHeight}px`,
                             'background-color':

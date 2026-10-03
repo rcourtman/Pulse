@@ -18,7 +18,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
       class="metric-text w-full h-4 flex items-center justify-center"
     >
       <div
-        class="relative w-full h-full overflow-hidden bg-surface-hover rounded"
+        class="relative w-full h-full overflow-hidden bg-surface-hover rounded-sm"
         onMouseEnter={state.handleMouseEnter}
         onMouseLeave={state.handleMouseLeave}
       >
@@ -70,7 +70,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
         </svg>
 
         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none pointer-events-none min-w-0 overflow-hidden">
-          <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis rounded-sm bg-surface/80 px-1 text-center shadow-sm">
+          <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis rounded-xs px-1 text-center shadow-xs">
             <span>
               <Show
                 when={!presentation().unavailable}
@@ -80,10 +80,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
               </Show>
             </span>
             <Show when={presentation().showSublabel}>
-              <span class="metric-sublabel font-normal text-base-content/80">
-                {' '}
-                ({presentation().displaySublabel})
-              </span>
+              <span class="metric-sublabel font-normal"> ({presentation().displaySublabel})</span>
             </Show>
             <Show when={presentation().anomalyDescription && presentation().anomalyRatio}>
               <span

@@ -182,11 +182,11 @@ export function PlatformSectionTabs<TabId extends string>(props: {
         <Show when={canScrollLeft()}>
           <button
             type="button"
-            class="absolute inset-y-0 left-0 z-10 flex w-10 items-center justify-start bg-gradient-to-r from-surface via-surface to-transparent pl-1 text-muted hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500 sm:hidden"
+            class="absolute inset-y-0 left-0 z-10 flex w-10 items-center justify-start bg-linear-to-r from-surface via-surface to-transparent pl-1 text-muted hover:text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500 sm:hidden"
             onClick={() => scrollSections(-1)}
             aria-label={`${props.ariaLabel}: scroll left`}
           >
-            <span class="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface shadow-sm">
+            <span class="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface shadow-xs">
               <ChevronLeftIcon class="h-4 w-4" aria-hidden="true" />
             </span>
           </button>
@@ -194,11 +194,11 @@ export function PlatformSectionTabs<TabId extends string>(props: {
         <Show when={canScrollRight()}>
           <button
             type="button"
-            class="absolute inset-y-0 right-0 z-10 flex w-10 items-center justify-end bg-gradient-to-l from-surface via-surface to-transparent pr-1 text-muted hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500 sm:hidden"
+            class="absolute inset-y-0 right-0 z-10 flex w-10 items-center justify-end bg-linear-to-l from-surface via-surface to-transparent pr-1 text-muted hover:text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500 sm:hidden"
             onClick={() => scrollSections(1)}
             aria-label={`${props.ariaLabel}: scroll right`}
           >
-            <span class="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface shadow-sm">
+            <span class="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface shadow-xs">
               <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
             </span>
           </button>
@@ -266,7 +266,7 @@ export const PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT = 40;
 // horizontal rail even when the visible columns could fit the real container.
 // Dense tables that genuinely need a larger canvas must opt into an explicit
 // base min-width; the default should use the space it actually receives.
-export const PLATFORM_TABLE_DEFAULT_RESPONSIVE_MIN_WIDTH_CLASS = 'min-w-[0px]';
+export const PLATFORM_TABLE_DEFAULT_RESPONSIVE_MIN_WIDTH_CLASS = 'min-w-0';
 
 export function getPlatformTableResponsiveMinWidthClass(tableClass?: string): string {
   const hasExplicitBaseFloor = /(?:^|\s)min-w-\[[^\]]+\]/.test(tableClass ?? '');
@@ -397,13 +397,13 @@ export function PlatformTablePreviewFooter(props: {
       >
         <Show when={!props.expanded}>
           <div
-            class="pointer-events-none absolute inset-x-0 bottom-full h-9 bg-gradient-to-t from-surface via-surface/80 to-transparent"
+            class="pointer-events-none absolute inset-x-0 bottom-full h-9 bg-linear-to-t from-surface to-transparent"
             aria-hidden="true"
           />
         </Show>
         <button
           type="button"
-          class="group inline-flex min-h-11 w-full items-center justify-center gap-2 px-3 py-2 text-[11px] font-semibold text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500"
+          class="group inline-flex min-h-11 w-full items-center justify-center gap-2 px-3 py-2 text-[11px] font-semibold text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500"
           aria-expanded={props.expanded}
           aria-label={label()}
           onClick={props.onToggle}
@@ -1256,7 +1256,7 @@ export const PlatformTableResetFiltersButton: Component<{
   <button
     type="button"
     onClick={props.onReset}
-    class="inline-flex min-h-8 items-center justify-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+    class="inline-flex min-h-8 items-center justify-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/60"
     title={props.label ?? 'Reset filters'}
     aria-label={props.label ?? 'Reset filters'}
   >

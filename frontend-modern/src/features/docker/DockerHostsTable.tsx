@@ -379,8 +379,8 @@ export const DockerHostsTable: Component<{
                       const s = hostAlertStyles();
                       if (!s.hasUnacknowledgedAlert) return '';
                       return s.severity === 'critical'
-                        ? 'bg-red-50 dark:bg-red-950'
-                        : 'bg-yellow-50 dark:bg-yellow-950';
+                        ? 'bg-red-50 dark:bg-red-950/25'
+                        : 'bg-yellow-50 dark:bg-yellow-950/25';
                     };
                     return (
                       <>

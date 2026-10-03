@@ -221,7 +221,7 @@ const filterAttachmentRows = (
 };
 
 const AttachmentRowCard: Component<{ row: DockerNetworkAttachmentRow }> = (props) => (
-  <div class="rounded border border-border bg-surface px-3 py-2">
+  <div class="rounded-sm border border-border bg-surface px-3 py-2">
     <div class="grid gap-2 text-[11px] md:grid-cols-[minmax(0,1.2fr)_7rem_9rem_minmax(0,1fr)] md:items-center">
       <div class="flex min-w-0 items-center gap-2">
         <StatusDot size="sm" variant={props.row.status.variant} title={props.row.status.label} />
@@ -289,7 +289,7 @@ const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] 
       <Show
         when={props.rows.length > 0}
         fallback={
-          <div class="rounded border border-border bg-surface px-3 py-2 text-[11px] text-muted">
+          <div class="rounded-sm border border-border bg-surface px-3 py-2 text-[11px] text-muted">
             No attached Docker containers reported on this network.
           </div>
         }
@@ -320,7 +320,7 @@ const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] 
         <Show
           when={tableState.filtered().length > 0}
           fallback={
-            <div class="rounded border border-border bg-surface px-3 py-2 text-[11px] text-muted">
+            <div class="rounded-sm border border-border bg-surface px-3 py-2 text-[11px] text-muted">
               No attached containers match current filters.
             </div>
           }
@@ -345,7 +345,7 @@ const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] 
             <Show when={hiddenRowCount() > 0}>
               <button
                 type="button"
-                class="w-full rounded border border-border bg-surface px-3 py-2 text-xs font-medium text-base-content hover:bg-surface-hover"
+                class="w-full rounded-sm border border-border bg-surface px-3 py-2 text-xs font-medium text-base-content hover:bg-surface-hover"
                 onClick={() => setShowAll(true)}
               >
                 Show all {attachmentPlainCountLabel(tableState.filtered().length)}
@@ -354,7 +354,7 @@ const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] 
             <Show when={showAll() && tableState.filtered().length > ATTACHMENT_DETAIL_ROW_LIMIT}>
               <button
                 type="button"
-                class="w-full rounded border border-border bg-surface px-3 py-2 text-xs font-medium text-base-content hover:bg-surface-hover"
+                class="w-full rounded-sm border border-border bg-surface px-3 py-2 text-xs font-medium text-base-content hover:bg-surface-hover"
                 onClick={() => setShowAll(false)}
               >
                 Show first {ATTACHMENT_DETAIL_ROW_LIMIT}
@@ -370,7 +370,7 @@ const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] 
 const NetworkConfigDetail: Component<{ resource: Resource }> = (props) => (
   <section class="min-w-0">
     <h3 class="mb-2 text-xs font-semibold text-base-content">Network details</h3>
-    <div class="rounded border border-border bg-surface px-3 py-2">
+    <div class="rounded-sm border border-border bg-surface px-3 py-2">
       <For each={networkDetailRows(props.resource)}>
         {([label, value]) => (
           <div class="grid grid-cols-[6rem_minmax(0,1fr)] gap-3 py-1 text-[11px]">
@@ -471,7 +471,7 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
         >
           <PlatformTableShell
             title={props.title ?? 'Networks'}
-            tableClass="min-w-[0px] table-fixed text-xs"
+            tableClass="min-w-0 table-fixed text-xs"
             header={
               <>
                 <TableHead

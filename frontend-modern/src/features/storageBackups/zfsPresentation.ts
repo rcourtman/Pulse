@@ -24,4 +24,4 @@ export const getZfsPoolStateTextClass = (hasErrors: boolean): string =>
   hasErrors ? 'text-red-400 font-bold' : 'text-green-400';
 
 export const getZfsPoolErrorOverlayClass = (hasErrors: boolean): string =>
-  hasErrors ? 'absolute inset-0 rounded border-2 border-red-500 animate-pulse' : '';
+  hasErrors ? 'absolute inset-0 rounded-sm border-2 border-red-500 animate-pulse' : '';

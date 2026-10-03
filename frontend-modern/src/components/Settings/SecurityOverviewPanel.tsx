@@ -183,8 +183,8 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
                           <span
                             class={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
                               action.severity === 'critical'
-                                ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                                : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                                ? 'bg-red-100 text-red-800 dark:bg-red-900/25 dark:text-red-200'
+                                : 'bg-blue-100 text-blue-800 dark:bg-blue-900/25 dark:text-blue-200'
                             }`}
                           >
                             {action.severity === 'critical' ? 'Act now' : 'Recommended'}
@@ -219,13 +219,13 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
 
       <Show when={!props.securityStatusLoading() && props.securityStatus()?.hasProxyAuth}>
         <div class="rounded-md border border-blue-200 dark:border-blue-800 overflow-hidden bg-blue-50/60 dark:bg-blue-950/40">
-          <div class="bg-blue-50 dark:bg-blue-900 px-6 py-4 border-b border-blue-200 dark:border-blue-700">
+          <div class="bg-blue-50 dark:bg-blue-900/25 px-6 py-4 border-b border-blue-200 dark:border-blue-700">
             <div class="flex items-start gap-3">
-              <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
+              <div class="p-2 bg-blue-100 dark:bg-blue-900/25 rounded-md">
                 <Shield class="w-5 h-5 text-blue-600 dark:text-blue-300" strokeWidth={2} />
               </div>
               <div class="min-w-0 flex-1">
-                <p class="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                <p class="text-sm font-semibold text-blue-900/25 dark:text-blue-100">
                   Proxy Authentication Active
                 </p>
                 <p class="text-sm text-blue-700 dark:text-blue-300">
@@ -254,7 +254,7 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
               <Show when={props.securityStatus()?.proxyAuthLogoutURL}>
                 <a
                   href={props.securityStatus()?.proxyAuthLogoutURL}
-                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-800 transition-colors"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-800 transition-colors"
                 >
                   <svg
                     class="w-4 h-4"

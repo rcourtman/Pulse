@@ -128,7 +128,7 @@ export const SecurityWarning: Component = () => {
   return (
     <Show when={shouldShow()}>
       <div
-        class={`relative z-20 border-b shadow-sm ${warningPresentation().background} ${warningPresentation().border}`}
+        class={`relative z-20 border-b shadow-xs ${warningPresentation().background} ${warningPresentation().border}`}
         role="status"
         aria-live="polite"
       >
@@ -149,7 +149,7 @@ export const SecurityWarning: Component = () => {
                     </span>
                   }
                   size="sm"
-                  class="flex-1 min-w-[12rem]"
+                  class="flex-1 min-w-48"
                   titleClass="text-base-content"
                 />
                 <button
@@ -246,7 +246,7 @@ export const SecurityWarning: Component = () => {
                   >
                     Dismiss ▼
                   </button>
-                  <div class="absolute left-0 top-full mt-1 bg-surface rounded shadow-sm border border-border opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
+                  <div class="absolute left-0 top-full mt-1 bg-surface rounded-sm shadow-xs border border-border opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
                     <button
                       type="button"
                       onClick={() => handleDismiss('day')}

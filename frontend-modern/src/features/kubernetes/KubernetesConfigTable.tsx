@@ -364,7 +364,7 @@ export const KubernetesConfigTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-[13rem] truncate" title={scope()}>
+                            <span class="inline-block max-w-52 truncate" title={scope()}>
                               {scope()}
                             </span>
                           </TableCell>
@@ -376,21 +376,21 @@ export const KubernetesConfigTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span class="inline-block max-w-[13rem] truncate" title={data().title}>
+                            <span class="inline-block max-w-52 truncate" title={data().title}>
                               {data().label}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
-                            <span class="inline-block max-w-[13rem] truncate" title={refs().title}>
+                            <span class="inline-block max-w-52 truncate" title={refs().title}>
                               {refs().label}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                           >
-                            <span class="inline-block max-w-[9rem] truncate" title={labels().title}>
+                            <span class="inline-block max-w-36 truncate" title={labels().title}>
                               {labels().label}
                             </span>
                           </TableCell>

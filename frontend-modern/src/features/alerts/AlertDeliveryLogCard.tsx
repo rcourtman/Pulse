@@ -140,7 +140,7 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
           </div>
           <button
             type="button"
-            class="inline-flex flex-shrink-0 items-center justify-center gap-2 rounded-md border border-gray-300 bg-transparent px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700/40"
+            class="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-gray-300 bg-transparent px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700/40"
             disabled={props.refreshing}
             onClick={props.onRefresh}
           >
@@ -172,7 +172,7 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
                     <li class="flex flex-col gap-1 py-2">
                       <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
                         <span
-                          class={`inline-flex flex-shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${outcomeBadgeClasses[row.entry.outcome]}`}
+                          class={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${outcomeBadgeClasses[row.entry.outcome]}`}
                         >
                           {getAlertDeliveryLogOutcomeLabel(row.entry.outcome)}
                         </span>
@@ -186,7 +186,7 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
                           {alertSummary(row.entry)}
                         </span>
                         <time
-                          class="ml-auto flex-shrink-0 text-xs text-gray-500 dark:text-gray-400"
+                          class="ml-auto shrink-0 text-xs text-gray-500 dark:text-gray-400"
                           dateTime={row.entry.timestamp}
                           title={formatRelativeTime(row.entry.timestamp)}
                         >
@@ -215,7 +215,7 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
                     <li class="flex flex-col gap-1 py-2" title={row.event.message}>
                       <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
                         <span
-                          class={`inline-flex flex-shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                          class={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                             row.event.type === 'notification_deferred'
                               ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
                               : 'bg-gray-100 text-gray-600 dark:bg-gray-700/60 dark:text-gray-300'
@@ -230,7 +230,7 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
                           {describeAlertEventReason(row.event.reason)}
                         </span>
                         <time
-                          class="ml-auto flex-shrink-0 text-xs text-gray-500 dark:text-gray-400"
+                          class="ml-auto shrink-0 text-xs text-gray-500 dark:text-gray-400"
                           dateTime={row.event.occurredAt}
                           title={formatRelativeTime(row.event.occurredAt)}
                         >

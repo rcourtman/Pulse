@@ -250,25 +250,25 @@ describe('containerUpdateBadgeModel.branchcov2', () => {
   describe('getUpdateButtonClass', () => {
     it('returns the blue updating classes with cursor-wait', () => {
       expect(getUpdateButtonClass('updating')).toBe(
-        `${UPDATE_BUTTON_BASE_CLASS} bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-wait`,
+        `${UPDATE_BUTTON_BASE_CLASS} bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300 cursor-wait`,
       );
     });
 
     it('returns the green success classes with no special cursor', () => {
       expect(getUpdateButtonClass('success')).toBe(
-        `${UPDATE_BUTTON_BASE_CLASS} bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300`,
+        `${UPDATE_BUTTON_BASE_CLASS} bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300`,
       );
     });
 
     it('returns the red error classes with cursor-help', () => {
       expect(getUpdateButtonClass('error')).toBe(
-        `${UPDATE_BUTTON_BASE_CLASS} bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 cursor-help`,
+        `${UPDATE_BUTTON_BASE_CLASS} bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-300 cursor-help`,
       );
     });
 
     it('returns the blue idle/default classes with pointer hover', () => {
       expect(getUpdateButtonClass('idle')).toBe(
-        `${UPDATE_BUTTON_BASE_CLASS} bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900`,
+        `${UPDATE_BUTTON_BASE_CLASS} bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900/25`,
       );
     });
   });

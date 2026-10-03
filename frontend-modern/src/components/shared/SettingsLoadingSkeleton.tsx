@@ -62,7 +62,7 @@ const gapClassByGap: Record<SettingsSkeletonGap, string> = {
 
 const radiusClassByRadius: Record<SettingsSkeletonRadius, string> = {
   none: '',
-  md: 'rounded',
+  md: 'rounded-sm',
   full: 'rounded-full',
 };
 

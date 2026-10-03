@@ -89,11 +89,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       />
 
       <Show when={!state.helpBannerDismissed()}>
-        <div class="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900 p-3 relative group">
+        <div class="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/25 p-3 relative group">
           <button
             type="button"
             onClick={state.dismissHelpBanner}
-            class="absolute right-1 top-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-md p-1 text-blue-500 transition-colors hover:bg-blue-100 hover:text-blue-700 dark:text-blue-400 dark:hover:bg-blue-900 dark:hover:text-blue-200 sm:right-2 sm:top-2 sm:min-h-0 sm:min-w-0 sm:opacity-0 sm:group-hover:opacity-100"
+            class="absolute right-1 top-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-md p-1 text-blue-500 transition-colors hover:bg-blue-100 hover:text-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/25 dark:hover:text-blue-200 sm:right-2 sm:top-2 sm:min-h-0 sm:min-w-0 sm:opacity-0 sm:group-hover:opacity-100"
             title={state.getAlertThresholdsHelpDismissLabel()}
             aria-label={state.getAlertThresholdsHelpDismissLabel()}
           >
@@ -108,7 +108,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           </button>
           <div class="flex items-start gap-2 pr-6">
             <svg
-              class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
+              class="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -120,7 +120,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
               />
             </svg>
-            <div class="text-sm text-blue-900 dark:text-blue-100">
+            <div class="text-sm text-blue-900/25 dark:text-blue-100">
               <p class="font-medium">{state.getAlertThresholdsHelpBanner().title}</p>
               <p class="mt-1">{state.getAlertThresholdsHelpBanner().toggleGuidance}</p>
               <p>{state.getAlertThresholdsHelpBanner().inheritanceGuidance}</p>
@@ -152,12 +152,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 {(item) => (
                   <button
                     type="button"
-                    class="inline-flex min-h-11 items-center gap-2 rounded-full border border-sky-200 bg-surface px-3 py-1.5 text-xs font-medium text-base-content transition-colors hover:border-sky-400 hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 sm:min-h-0 dark:border-sky-700 dark:hover:bg-sky-900"
+                    class="inline-flex min-h-11 items-center gap-2 rounded-full border border-sky-200 bg-surface px-3 py-1.5 text-xs font-medium text-base-content transition-colors hover:border-sky-400 hover:bg-sky-100 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-sky-500 sm:min-h-0 dark:border-sky-700 dark:hover:bg-sky-900/25"
                     onClick={() => state.revealCustomOverrides(item.key)}
                     aria-label={`Show ${item.label}: ${state.getAlertThresholdsOverrideCountLabel(item.overrides)}`}
                   >
                     <span>{item.label}</span>
-                    <span class="rounded-full bg-sky-100 px-2 py-0.5 text-sky-700 dark:bg-sky-900 dark:text-sky-200">
+                    <span class="rounded-full bg-sky-100 px-2 py-0.5 text-sky-700 dark:bg-sky-900/25 dark:text-sky-200">
                       {state.getAlertThresholdsOverrideCountLabel(item.overrides)}
                     </span>
                   </button>
@@ -173,7 +173,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={state.expandAll}
-            class="min-h-11 rounded px-2 py-1 text-xs transition-colors hover:bg-surface-hover hover:text-muted sm:min-h-0"
+            class="min-h-11 rounded-sm px-2 py-1 text-xs transition-colors hover:bg-surface-hover hover:text-muted sm:min-h-0"
           >
             Expand all
           </button>
@@ -181,7 +181,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <button
             type="button"
             onClick={state.collapseAll}
-            class="min-h-11 rounded px-2 py-1 text-xs transition-colors hover:bg-surface-hover hover:text-muted sm:min-h-0"
+            class="min-h-11 rounded-sm px-2 py-1 text-xs transition-colors hover:bg-surface-hover hover:text-muted sm:min-h-0"
           >
             Collapse all
           </button>

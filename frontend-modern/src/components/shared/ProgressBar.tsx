@@ -21,7 +21,7 @@ export const ProgressBar: Component<ProgressBarProps> = (props) => {
 
   return (
     <div
-      class={`relative w-full overflow-hidden rounded bg-surface-hover ${props.class ?? ''}`}
+      class={`relative w-full overflow-hidden rounded-sm bg-surface-hover ${props.class ?? ''}`}
       role={props.ariaLabel ? 'progressbar' : undefined}
       aria-label={props.ariaLabel}
       aria-valuemin={props.ariaLabel ? 0 : undefined}

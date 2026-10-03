@@ -12,7 +12,7 @@ export interface CopyableCodeRowProps extends Pick<
 
 export const CopyableCodeRow: Component<CopyableCodeRowProps> = (props) => (
   <div
-    class={['flex items-start gap-2 rounded bg-surface-alt px-2 py-1.5', props.class]
+    class={['flex items-start gap-2 rounded-sm bg-surface-alt px-2 py-1.5', props.class]
       .filter(Boolean)
       .join(' ')}
   >

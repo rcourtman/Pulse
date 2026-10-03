@@ -41,7 +41,7 @@ const getNodeSetupStrategyPresentation = (
 const setupModeButtonClass = (selected: boolean): string =>
   `inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${
     selected
-      ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-sm'
+      ? 'bg-surface text-blue-600 dark:text-blue-300 border-border shadow-xs'
       : 'text-muted hover:text-blue-600 dark:hover:text-blue-300 hover:bg-surface-hover'
   }`;
 
@@ -74,7 +74,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
         class={setupModeButtonClass(state.formData().setupMode === 'auto')}
       >
         Connect via API
-        <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
+        <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900/25 text-green-700 dark:text-green-300 rounded-sm">
           Recommended
         </span>
       </button>
@@ -99,8 +99,8 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
     <div class="space-y-4">
       <Show when={modalProps.nodeType === 'pve'}>
         <div class="space-y-3 text-xs">
-          <div class="bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md p-4">
-            <h5 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3 flex items-center gap-2">
+          <div class="bg-blue-50 dark:bg-blue-900/25 border border-blue-200 dark:border-blue-800 rounded-md p-4">
+            <h5 class="text-sm font-medium text-blue-900/25 dark:text-blue-100 mb-3 flex items-center gap-2">
               <svg
                 width="16"
                 height="16"
@@ -116,7 +116,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
             </h5>
             {setupStrategyPanel()}
             <Show when={setupHandoffDisabled()}>
-              <p class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+              <p class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-900/25 dark:bg-amber-950/30 dark:text-amber-200">
                 {setupHandoffDisabledReason()}
               </p>
             </Show>
@@ -151,11 +151,11 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       Pulse server must also be opted in: turn on{' '}
                       <span class="font-medium">Discover Docker in LXC guests</span> in Settings →
                       System → General (admin only), or set{' '}
-                      <code class="break-all rounded bg-blue-100 px-1 font-mono dark:bg-blue-900">
+                      <code class="break-all rounded-sm bg-blue-100 px-1 font-mono dark:bg-blue-900/25">
                         PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true
                       </code>{' '}
                       in the server environment to lock it on. You can limit guests with{' '}
-                      <code class="break-all rounded bg-blue-100 px-1 font-mono dark:bg-blue-900">
+                      <code class="break-all rounded-sm bg-blue-100 px-1 font-mono dark:bg-blue-900/25">
                         PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102
                       </code>
                       . Pulse uses bounded <code>pct exec</code> Docker summary checks and skips
@@ -218,7 +218,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                         </code>
                       }
                     >
-                      <code class="block text-base-content whitespace-pre-wrap break-words">
+                      <code class="block text-base-content whitespace-pre-wrap wrap-break-word">
                         {state.agentInstallCommand()}
                       </code>
                     </Show>
@@ -233,7 +233,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       onChange={(event) =>
                         state.setAgentInstallInsecure(event.currentTarget.checked)
                       }
-                      class="mt-0.5 rounded text-blue-600 focus:ring-blue-500"
+                      class="mt-0.5 rounded-sm text-blue-600 focus:ring-blue-500"
                     />
                     <span>
                       Skip TLS certificate verification when downloading the installer and
@@ -329,7 +329,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       <Show when={state.quickSetupTokenHint().length > 0}>
                         <div class="mt-2 text-xs text-blue-800 dark:text-blue-200">
                           <span class="font-semibold">Setup token hint:</span>
-                          <code class="ml-1 font-mono break-all text-blue-900 dark:text-blue-100">
+                          <code class="ml-1 font-mono break-all text-blue-900/25 dark:text-blue-100">
                             {state.quickSetupTokenHint()}
                           </code>
                           <Show when={state.quickSetupExpiry()}>
@@ -339,10 +339,10 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       </Show>
                     </div>
 
-                    <div class="bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+                    <div class="bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-md p-3">
                       <div class="flex items-start space-x-2">
                         <svg
-                          class="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0"
+                          class="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -386,7 +386,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                           2. Upload to your server via SCP/SFTP
                           <br />
                           3. Run:{' '}
-                          <code class="bg-surface-alt px-1 rounded">
+                          <code class="bg-surface-alt px-1 rounded-sm">
                             bash &lt;downloaded-script&gt;
                           </code>
                         </div>
@@ -394,7 +394,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                     </details>
                   </div>
 
-                  <div class="bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md p-3">
+                  <div class="bg-blue-50 dark:bg-blue-900/25 border border-blue-200 dark:border-blue-800 rounded-md p-3">
                     <p class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">
                       What this does:
                     </p>
@@ -403,7 +403,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                         <span class="text-emerald-400 mr-2 mt-0.5">✓</span>
                         <span>
                           Creates monitoring user{' '}
-                          <code class="bg-blue-100 dark:bg-blue-800 px-1 rounded">
+                          <code class="bg-blue-100 dark:bg-blue-800 px-1 rounded-sm">
                             pulse-monitor@pve
                           </code>
                         </span>
@@ -583,8 +583,8 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       </p>
                     </div>
 
-                    <div class="bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 rounded-md p-2">
-                      <p class="text-sm font-medium text-green-900 dark:text-green-100 mb-1">
+                    <div class="bg-green-50 dark:bg-green-900/25 border border-green-200 dark:border-green-800 rounded-md p-2">
+                      <p class="text-sm font-medium text-green-900/25 dark:text-green-100 mb-1">
                         4. Add to Pulse with:
                       </p>
                       <ul class="text-xs text-green-800 dark:text-green-200 ml-4 list-disc">
@@ -610,8 +610,8 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
 
       <Show when={modalProps.nodeType === 'pbs'}>
         <div class="space-y-3 text-xs">
-          <div class="bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md p-4">
-            <h5 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3 flex items-center gap-2">
+          <div class="bg-blue-50 dark:bg-blue-900/25 border border-blue-200 dark:border-blue-800 rounded-md p-4">
+            <h5 class="text-sm font-medium text-blue-900/25 dark:text-blue-100 mb-3 flex items-center gap-2">
               <svg
                 width="16"
                 height="16"
@@ -627,7 +627,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
             </h5>
             {setupStrategyPanel()}
             <Show when={setupHandoffDisabled()}>
-              <p class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+              <p class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-900/25 dark:bg-amber-950/30 dark:text-amber-200">
                 {setupHandoffDisabledReason()}
               </p>
             </Show>
@@ -659,7 +659,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       onClick={() =>
                         state.copyProxmoxAgentInstallCommand('pbs', 'Command copied to clipboard')
                       }
-                      class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-white rounded bg-surface hover:bg-slate-700 transition-colors"
+                      class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-white rounded-sm bg-surface hover:bg-slate-700 transition-colors"
                       title={
                         setupHandoffDisabled() ? setupHandoffDisabledReason() : 'Copy to clipboard'
                       }
@@ -721,7 +721,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       onChange={(event) =>
                         state.setAgentInstallInsecure(event.currentTarget.checked)
                       }
-                      class="mt-0.5 rounded text-blue-600 focus:ring-blue-500"
+                      class="mt-0.5 rounded-sm text-blue-600 focus:ring-blue-500"
                     />
                     <span>
                       Skip TLS certificate verification when downloading the installer and
@@ -802,7 +802,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       <Show when={state.quickSetupTokenHint().length > 0}>
                         <div class="mt-2 text-xs text-blue-800 dark:text-blue-200">
                           <span class="font-semibold">Setup token hint:</span>
-                          <code class="ml-1 font-mono break-all text-blue-900 dark:text-blue-100">
+                          <code class="ml-1 font-mono break-all text-blue-900/25 dark:text-blue-100">
                             {state.quickSetupTokenHint()}
                           </code>
                           <Show when={state.quickSetupExpiry()}>
@@ -812,10 +812,10 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       </Show>
                     </div>
 
-                    <div class="bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+                    <div class="bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-md p-3">
                       <div class="flex items-start space-x-2">
                         <svg
-                          class="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0"
+                          class="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -859,7 +859,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                           2. Upload to your PBS via SCP/SFTP
                           <br />
                           3. Run:{' '}
-                          <code class="bg-surface-alt px-1 rounded">
+                          <code class="bg-surface-alt px-1 rounded-sm">
                             bash &lt;downloaded-script&gt;
                           </code>
                         </div>
@@ -867,7 +867,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                     </details>
                   </div>
 
-                  <div class="bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md p-3">
+                  <div class="bg-blue-50 dark:bg-blue-900/25 border border-blue-200 dark:border-blue-800 rounded-md p-3">
                     <p class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">
                       What this does:
                     </p>
@@ -876,7 +876,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                         <span class="text-emerald-400 mr-2 mt-0.5">✓</span>
                         <span>
                           Creates monitoring user{' '}
-                          <code class="bg-blue-100 dark:bg-blue-800 px-1 rounded">
+                          <code class="bg-blue-100 dark:bg-blue-800 px-1 rounded-sm">
                             pulse-monitor@pbs
                           </code>
                         </span>
@@ -1052,8 +1052,8 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       </div>
                     </div>
 
-                    <div class="bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 rounded-md p-2">
-                      <p class="text-sm font-medium text-green-900 dark:text-green-100 mb-1">
+                    <div class="bg-green-50 dark:bg-green-900/25 border border-green-200 dark:border-green-800 rounded-md p-2">
+                      <p class="text-sm font-medium text-green-900/25 dark:text-green-100 mb-1">
                         4. Add to Pulse with:
                       </p>
                       <ul class="text-xs text-green-800 dark:text-green-200 ml-4 list-disc">
@@ -1070,7 +1070,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       </ul>
                     </div>
 
-                    <div class="bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded-md p-2 mt-3">
+                    <div class="bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-md p-2 mt-3">
                       <p class="text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1">
                         About PBS Permissions:
                       </p>

@@ -13,10 +13,10 @@ export type CardProps = {
 const toneClassMap: Record<Tone, string> = {
   default: 'bg-surface',
   muted: 'bg-base',
-  info: 'bg-blue-50 dark:bg-blue-900',
-  success: 'bg-emerald-50 dark:bg-emerald-900',
-  warning: 'bg-amber-50 dark:bg-amber-900',
-  danger: 'bg-red-50 dark:bg-red-900',
+  info: 'bg-blue-50 dark:bg-blue-900/25',
+  success: 'bg-emerald-50 dark:bg-emerald-900/25',
+  warning: 'bg-amber-50 dark:bg-amber-900/25',
+  danger: 'bg-red-50 dark:bg-red-900/25',
   card: 'bg-surface',
   glass: 'bg-base',
 };

@@ -665,16 +665,16 @@ describe('AIChat', () => {
       );
       expect(aiChatSource).toContain('<ActionIconButton');
       for (const retiredActionIconShell of [
-        'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted',
-        'flex-shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors',
-        'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
-        'rounded p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900 dark:hover:text-blue-300',
-        'order-2 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-none',
-        'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900',
-        'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900',
-        'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60',
-        'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45',
-        'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+        'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted',
+        'shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors',
+        'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
+        'rounded-sm p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900/25 dark:hover:text-blue-300',
+        'order-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-0',
+        'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25',
+        'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:text-amber-200 dark:hover:bg-amber-900/25',
+        'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 dark:text-blue-200 dark:hover:bg-blue-900/60',
+        'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-xs transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45',
+        'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
         'disabled:opacity-45',
       ]) {
         expect(aiChatSource).not.toContain(retiredActionIconShell);
@@ -2040,12 +2040,12 @@ describe('AIChat', () => {
       const panel = screen.getByText('Pulse Assistant').closest('[data-layout-mode]');
       expect(panel).toHaveAttribute('data-layout-mode', 'overlay');
       expect(panel).toHaveClass('top-0');
-      expect(panel).toHaveClass('bottom-[var(--pulse-mobile-nav-height)]');
+      expect(panel).toHaveClass('bottom-(--pulse-mobile-nav-height)');
       expect(panel).toHaveClass('h-auto');
       expect(panel).not.toHaveClass('inset-y-0');
       expect(panel).not.toHaveClass('h-full');
       const backdrop = screen.getByRole('button', { name: 'Close Pulse Assistant backdrop' });
-      expect(backdrop).toHaveClass('bottom-[var(--pulse-mobile-nav-height)]');
+      expect(backdrop).toHaveClass('bottom-(--pulse-mobile-nav-height)');
       expect(backdrop).not.toHaveClass('inset-0');
       expect(screen.queryByTitle('Collapse Pulse Assistant')).not.toBeInTheDocument();
       expect(screen.getByLabelText('Close Pulse Assistant')).toBeInTheDocument();
