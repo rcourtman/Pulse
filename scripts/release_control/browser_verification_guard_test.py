@@ -61,6 +61,9 @@ class BrowserVerificationGuardTest(unittest.TestCase):
 
         self.assertLess(formatter, guard)
 
+    def test_shared_receipt_is_retired_from_the_tree(self) -> None:
+        self.assertFalse((REPO_ROOT / LEGACY_RECEIPT_PATH).exists())
+
     def test_frontend_runtime_paths_exclude_tests_and_receipt(self) -> None:
         self.assertEqual(
             frontend_runtime_paths(
@@ -722,23 +725,21 @@ class IntegrationRangeTest(GuardRepoTestCase):
 
 
 class RetiredSharedReceiptTest(GuardRepoTestCase):
-    """Work verified against the shared receipt keeps its evidence; nothing new may write it."""
+    """Work verified against the shared receipt keeps its evidence; nothing new may use it."""
 
     def setUp(self) -> None:
         super().setUp()
         self.write_receipt([CHANGED_PATH], at=LEGACY_RECEIPT_PATH)
         self.base = self.commit("main while the shared receipt was current")
 
-    def shared_receipt_change(self, path: str, text: str, message: str) -> str:
-        self.write(path, text)
-        self.write_receipt([path], at=LEGACY_RECEIPT_PATH)
-        return self.commit(message)
-
-    def test_in_flight_commit_is_repaired_by_merging_main(self) -> None:
+    def test_in_flight_commit_survives_a_merge_of_the_retirement(self) -> None:
         self.git("checkout", "--quiet", "-b", "in-flight", self.base)
-        self.shared_receipt_change(CHANGED_PATH, "export const a = 1;\n", "in flight")
+        self.write(CHANGED_PATH, "export const a = 1;\n")
+        self.write_receipt([CHANGED_PATH], at=LEGACY_RECEIPT_PATH)
+        self.commit("verified before the retirement")
         self.git("checkout", "--quiet", "main")
-        landed = self.shared_receipt_change(OTHER_PATH, "export const b = 1;\n", "landed first")
+        self.git("rm", "--quiet", LEGACY_RECEIPT_PATH)
+        retired = self.commit("retire the shared receipt")
 
         self.git("checkout", "--quiet", "in-flight")
         merge = subprocess.run(
@@ -746,20 +747,33 @@ class RetiredSharedReceiptTest(GuardRepoTestCase):
              "merge", "--quiet", "--no-ff", "main"],
             cwd=self.repo_root, capture_output=True, text=True, env=self.env,
         )
-        self.assertNotEqual(merge.returncode, 0, "both sides rewrote the shared receipt")
+        self.assertNotEqual(merge.returncode, 0, "modify/delete on the shared receipt")
 
-        # A hand-combined resolution is a new write of the retired file.
-        self.write(LEGACY_RECEIPT_PATH, "{}\n")
+        # Keeping the file changes nothing against HEAD, but would restore it
+        # on main once this branch merges.
         self.git("add", LEGACY_RECEIPT_PATH)
         status, _, stderr = self.run_guard()
         self.assertEqual(status, 1)
         self.assertIn(f"{LEGACY_RECEIPT_PATH} is retired", stderr)
-        self.assertIn("git checkout MERGE_HEAD", stderr)
 
-        self.git("checkout", "MERGE_HEAD", "--", LEGACY_RECEIPT_PATH)
+        self.git("rm", "--quiet", "--force", LEGACY_RECEIPT_PATH)
         self.assertEqual(self.run_guard()[0], 0)
         self.commit("merge main")
-        self.assertEqual(self.run_range(base=landed), (0, ""))
+        self.assertEqual(self.run_range(base=retired), (0, ""))
+
+    def test_recreating_the_shared_receipt_is_rejected_even_with_a_valid_one(self) -> None:
+        self.git("rm", "--quiet", LEGACY_RECEIPT_PATH)
+        retired = self.commit("retire the shared receipt")
+        self.write(CHANGED_PATH, "export const a = 1;\n")
+        self.write_receipt([CHANGED_PATH])
+        self.write_receipt([CHANGED_PATH], at=LEGACY_RECEIPT_PATH)
+        self.commit("verified, but also recreates the shared receipt")
+
+        status, stderr = self.run_range(base=retired)
+
+        self.assertEqual(status, 1)
+        self.assertIn(f"{LEGACY_RECEIPT_PATH} is retired", stderr)
+        self.assertNotIn("is not verified", stderr)
 
 
 class PruneTest(GuardRepoTestCase):

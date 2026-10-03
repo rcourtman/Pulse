@@ -30,9 +30,7 @@ RECEIPT_DIR = "frontend-modern/browser-verification"
 # The single shared receipt every frontend commit rewrote before per-commit
 # receipts. It is retired: nothing may write it again. Range mode still reads
 # it from commits that modified it, because those commits were verified
-# honestly against a tree that carried it and are still merging. The file
-# itself is deleted in a change of its own, since deleting it conflicts with
-# every open pull request that still rewrites it.
+# honestly against a tree that carried it and are still merging.
 LEGACY_RECEIPT_PATH = "frontend-modern/browser-verification.json"
 RECEIPT_FINGERPRINT_LENGTH = 16
 DEFAULT_LANDED_REF = "origin/main"
@@ -452,7 +450,8 @@ PRUNE_SEPARATELY = (
 
 
 RETIRED_RECEIPT = (
-    f"{LEGACY_RECEIPT_PATH} is retired and must not be written. Each commit now "
+    f"{LEGACY_RECEIPT_PATH} is retired and must not exist. Remove it with git rm; a "
+    "receipt it held stays valid in the commit that recorded it. Each commit now "
     f"records its receipt in its own file under {RECEIPT_DIR}/, so concurrent "
     "frontend changes no longer conflict."
 )
@@ -472,11 +471,15 @@ def range_receipt_coverage(
     that fails contributes no coverage and is reported as a diagnostic.
 
     Violations are returned separately because they block the range even when
-    coverage is complete: a commit that both records and deletes receipts.
+    coverage is complete: a tip that still carries the retired shared receipt
+    (recreated, or kept while resolving a merge with the main that deleted
+    it), or a commit that both records and deletes receipts.
     """
     covered: dict[str, set[str]] = {}
     diagnostics: list[str] = []
     violations: list[str] = []
+    if LEGACY_RECEIPT_PATH in blob_ids(head, [LEGACY_RECEIPT_PATH], repo_root=repo_root):
+        violations.append(RETIRED_RECEIPT)
     for commit in receipt_commits_in_range(base, head, repo_root=repo_root):
         try:
             changes = receipt_changes(commit=commit, repo_root=repo_root)
@@ -677,20 +680,25 @@ def check_commit(
         inherited = merged_in_paths(
             sorted({*changes, *frontend_paths}), commit=commit, repo_root=repo_root
         )
+        # The index is held to the tree it will become: a merge that keeps the
+        # shared receipt changes nothing against HEAD yet would restore it on
+        # main. A named commit is held only to what it writes itself.
+        retired_receipt_written = (
+            changes.get(LEGACY_RECEIPT_PATH, "D") != "D"
+            if commit
+            else LEGACY_RECEIPT_PATH
+            in blob_ids(None, [LEGACY_RECEIPT_PATH], repo_root=repo_root)
+        )
     except subprocess.CalledProcessError as exc:
         return blocked(f"unable to inspect browser verification state: {exc}")
 
-    changes = {path: status for path, status in changes.items() if path not in inherited}
-    if changes.get(LEGACY_RECEIPT_PATH, "D") != "D":
+    if retired_receipt_written:
         return blocked(
             RETIRED_RECEIPT,
-            advice=[
-                "While concluding a merge, take the merged parent's version: "
-                f"git checkout MERGE_HEAD -- {LEGACY_RECEIPT_PATH}"
-                if merging
-                else f"Unstage it and run: {GUARD_COMMAND} --write-template"
-            ],
+            advice=[f"For a new receipt, run: {GUARD_COMMAND} --write-template"],
         )
+
+    changes = {path: status for path, status in changes.items() if path not in inherited}
     frontend_paths = [path for path in frontend_paths if path not in inherited]
     recorded = sorted(
         path for path, status in changes.items() if status != "D" and path != LEGACY_RECEIPT_PATH

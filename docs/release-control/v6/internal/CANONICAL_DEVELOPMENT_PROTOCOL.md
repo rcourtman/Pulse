@@ -255,12 +255,12 @@ frontend pull requests conflict. Until 2026-10-03 each frontend commit rewrote
 `frontend-modern/browser-verification.json`, so the first pull request to merge
 left every other one conflicting, and each conflict cost a rebuild on the new
 `main` and a fresh browser pass. Files that are only ever added cannot collide.
-The shared file is retired: the guard refuses any commit that writes it. Range
-mode still accepts it as evidence from a commit that modified it, because that
-commit was verified while its own parent still carried the file. A pull request
-that still rewrites it is repaired by merging `main` and taking `main`'s copy of
-the file, not by a rebuild. The file is deleted in a change of its own, because
-deleting it conflicts with every pull request that still rewrites it.
+The shared file is retired and deleted. The guard refuses a staged tree or a
+range tip that carries it, so resolving a merge by keeping the file cannot
+bring it back. Range mode still accepts it as evidence from a commit that
+modified it, because that commit was verified while its own parent still
+carried the file. A pull request that still rewrites it is repaired by merging
+`main` and removing the file with `git rm`, not by a rebuild.
 
 `scripts/release_control/browser_verification_guard.py` enforces the receipt
 against the staged index locally and against the final integration range in
