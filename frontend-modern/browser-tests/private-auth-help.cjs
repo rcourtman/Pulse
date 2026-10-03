@@ -9,6 +9,9 @@ const { chromium, webkit } = require('playwright');
   const root = path.resolve('frontend-modern');
   const artifacts = path.join(root, 'node_modules', 'private-auth-help-browser');
   fs.mkdirSync(artifacts, { recursive: true });
+  // Tailwind resolves its config/content from cwd, as the normal npm build
+  // does. The tool is still invoked from the assigned repository root.
+  process.chdir(root);
   const { createServer } = await import(path.join(root, 'node_modules/vite/dist/node/index.js'));
   const server = await createServer({
     root, configFile: path.join(root, 'vite.config.ts'),
@@ -45,7 +48,8 @@ const { chromium, webkit } = require('playwright');
         'does not scrub its original value', 'this new-container example is not an upgrade procedure'])
         assert.ok(text.includes(phrase), phrase);
       assert.ok(!text.includes('secret123'));
-      const shell = await page.locator('pre code.language-bash').allTextContents();
+      // The production Docs sanitizer removes Markdown language classes.
+      const shell = await page.locator('pre code').allTextContents();
       assert.ok(shell.some((block) => block.includes('--env-file "$HOME/.config/pulse/docker-auth.env"')));
       assert.ok(shell.every((block) => !/-e\s+PULSE_AUTH_(PASS|USER)=/.test(block)));
       const firstLogin = page.getByRole('link', { name: 'First login', exact: true });
