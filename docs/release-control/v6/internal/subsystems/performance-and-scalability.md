@@ -2536,6 +2536,22 @@ resize-observer lifecycle lives in
 `frontend-modern/src/components/Workloads/useMetricBarState.ts`. Future
 metric-bar runtime changes must extend through those owners instead of
 reintroducing mixed resize state and label-fit logic into the shell.
+Label fit in the metric, stacked memory, and stacked disk bar models goes
+through `estimateTextWidth` in `frontend-modern/src/utils/format.ts`, which
+sums per-glyph advances rather than multiplying a character count. The
+advances come from one hidden probe of about 200 nodes carrying the label's
+type classes, read once per page load and again only if the device pixel
+ratio changes; that is the estimator's only layout read. It is never per bar,
+the bars still take their width from the resize observer alone, and each
+estimate after the probe is arithmetic over the label's characters. Each model
+adds the padding its own label sits in, the stacked bars count the anomaly
+marker that shares the label's line, and inline disk slots are sized after the
+gap between them. Measured in Chrome on the 429-bar Proxmox overview on
+2026-10-03: 1.7 ms for the probe and about 110 ns per estimate. Where layout
+is unavailable the estimator uses the advances measured for the macOS system
+font. `formatExtra.test.ts` verifies the single probe read and the fallback;
+`useMetricBarState.test.tsx` and `useStackedMemoryBarState.test.tsx` verify
+that the long label appears only at an observed width that fits it.
 The dashboard enhanced CPU bar now follows that same pattern: the shell stays
 in `frontend-modern/src/components/Workloads/EnhancedCPUBar.tsx`, while usage
 formatting, anomaly presentation, tooltip load-average formatting, and
