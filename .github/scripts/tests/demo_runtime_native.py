@@ -38,11 +38,14 @@ def fail():
 if %r: threading.Thread(target=fail,daemon=True).start()
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
+        expected = {'/healthz'} if %r == 17656 else {'/api/health','/api/version'}
+        if self.path not in expected:
+            self.send_response(404); self.end_headers(); return
         body=json.dumps({'version':VERSION} if self.path=='/api/version' else {'status':'healthy'}).encode()
         self.send_response(200); self.end_headers(); self.wfile.write(body)
     def log_message(self,*args): pass
 http.server.HTTPServer(('127.0.0.1',%r),Handler).serve_forever()
-''' % (version, fail_after, fail_after, port)).encode()
+''' % (version, fail_after, fail_after, port, port)).encode()
 
 
 def unit(executable, user="pulse"):
@@ -128,9 +131,9 @@ def main():
         original = (SCRIPTS / "demo-runtime-transaction.py").read_bytes()
         # Only the cohost endpoint is rebound. Transaction, paths, locking,
         # systemd, HTTP/TLS, estate, clocks and watches remain real and unchanged.
-        endpoint = b'https://relay.pulserelay.pro/health'
+        endpoint = b'https://relay.pulserelay.pro/healthz'
         assert original.count(endpoint) == 1
-        source = original.replace(endpoint, b'https://127.0.0.1:18444/health')
+        source = original.replace(endpoint, b'https://127.0.0.1:18444/healthz')
         result["original_engine_sha256"] = hashlib.sha256(original).hexdigest()
         result["fixture_engine_sha256"] = hashlib.sha256(source).hexdigest()
         result["bootstrap_sha256"] = hashlib.sha256(dispatcher.BOOTSTRAP.encode()).hexdigest()

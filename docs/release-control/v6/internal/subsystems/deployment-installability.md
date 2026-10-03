@@ -24,6 +24,9 @@ The mutating paths now share the Relay host's existing
 Every successful path, including a healthy no-op, needs a complete 300-second
 local/public/Relay health, version, service PID/restart and new-journal-crash
 window. Readiness is separate. Missing observations fail closed.
+The fixed Relay observation is its existing `/healthz` endpoint, not a guessed
+new route; disposable acceptance also rejects an unknown route rather than
+responding healthy to every URL.
 
 Before installation or runtime-profile mutation, stop only Pulse and durably
 capture its executable, unit/drop-ins and entire persistent data estate. Refuse

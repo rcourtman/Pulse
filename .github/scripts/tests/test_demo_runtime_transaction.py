@@ -347,6 +347,9 @@ class TransactionTest(unittest.TestCase):
 
 
 class InputAndCommandTest(unittest.TestCase):
+    def test_cohost_check_uses_the_existing_relay_health_route(self):
+        self.assertEqual(engine.RELAY_HEALTH, "https://relay.pulserelay.pro/healthz")
+
     def test_valid_current_envelope(self):
         engine.validate(request())
         engine.validate(request("update"))

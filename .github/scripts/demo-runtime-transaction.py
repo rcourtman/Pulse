@@ -27,7 +27,7 @@ PATHS = {"binary": Path("/opt/pulse/bin/pulse"),
          "unit": Path("/etc/systemd/system/pulse.service"),
          "dropins": Path("/etc/systemd/system/pulse.service.d"),
          "data": Path("/etc/pulse")}
-RELAY_HEALTH = "https://relay.pulserelay.pro/health"
+RELAY_HEALTH = "https://relay.pulserelay.pro/healthz"
 COUNT_KEYS = ("nodes", "vms_per_node", "lxcs_per_node", "docker_hosts",
               "docker_containers", "generic_hosts", "k8s_clusters", "k8s_nodes",
               "k8s_pods", "k8s_deployments")
