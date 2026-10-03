@@ -124,7 +124,7 @@ const observations = (mode) => [
 
 (async () => {
   const root = '/workspace/frontend-modern';
-  const output = '/workspace/tmp/proxmox-docker-rows-selfcontained';
+  const output = '/workspace/tmp/proxmox-docker-rows-final-source';
   fs.mkdirSync(output, { recursive: true });
   process.chdir(root);
   const playwright = require('playwright/package.json').version;
@@ -417,7 +417,7 @@ const observations = (mode) => [
           assert.match(await started.innerText(), /ago/);
           await page
             .getByRole('region', { name: 'Swarm tasks' })
-            .getByText('running', { exact: true })
+            .getByTitle('running', { exact: true })
             .waitFor();
         },
       );
