@@ -58,7 +58,7 @@ export function AvailabilityProbeSuggestionCard(props: AvailabilityProbeSuggesti
             Availability Monitoring
           </h3>
         </div>
-        <span class="shrink-0 rounded bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted">
+        <span class="shrink-0 rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted">
           Suggested
         </span>
       </div>
@@ -84,7 +84,7 @@ export function AvailabilityProbeSuggestionCard(props: AvailabilityProbeSuggesti
             type="button"
             disabled={state() === 'creating'}
             onClick={handleCreate}
-            class="mt-2 w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+            class="mt-2 w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-emerald-500"
           >
             <Show when={state() === 'creating'}>
               <Loader2 class="h-3 w-3 animate-spin" aria-hidden="true" />

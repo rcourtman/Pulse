@@ -189,7 +189,7 @@ describe('Toast', () => {
     expect(toastSource).not.toContain('<svg');
     expect(toastSource).not.toContain('const icons = {');
     expect(toastSource).not.toContain(
-      'flex-shrink-0 text-muted hover:text-base-content hover:bg-surface rounded-md p-1.5 transition-all duration-200',
+      'shrink-0 text-muted hover:text-base-content hover:bg-surface rounded-md p-1.5 transition-all duration-200',
     );
   });
 });

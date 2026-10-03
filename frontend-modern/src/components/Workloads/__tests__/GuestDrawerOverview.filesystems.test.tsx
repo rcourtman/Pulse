@@ -88,7 +88,7 @@ describe('GuestDrawerOverview filesystem labels', () => {
     for (const path of paths) {
       const label = screen.getByText(path);
       expect(label.tagName).toBe('SPAN');
-      expect(label).toHaveClass('whitespace-normal', '[overflow-wrap:anywhere]');
+      expect(label).toHaveClass('whitespace-normal', 'wrap-anywhere');
       expect(label.closest('td')).toHaveAttribute('colspan', '2');
     }
     expect(

@@ -58,7 +58,7 @@ describe('securityScorePresentation', () => {
         hasHTTPS: false,
       }),
     ).toMatchObject({
-      background: 'bg-red-50 dark:bg-red-900',
+      background: 'bg-red-50 dark:bg-red-900/25',
       border: 'border-red-200 dark:border-red-800',
       messageClass: 'font-semibold text-red-700 dark:text-red-300',
     });
@@ -75,7 +75,7 @@ describe('securityScorePresentation', () => {
         hasHTTPS: false,
       }),
     ).toMatchObject({
-      background: 'bg-red-50 dark:bg-red-900',
+      background: 'bg-red-50 dark:bg-red-900/25',
       border: 'border-red-200 dark:border-red-800',
       messageClass: 'text-base-content',
     });
@@ -92,7 +92,7 @@ describe('securityScorePresentation', () => {
         hasHTTPS: false,
       }),
     ).toMatchObject({
-      background: 'bg-yellow-50 dark:bg-yellow-900',
+      background: 'bg-yellow-50 dark:bg-yellow-900/25',
       border: 'border-yellow-200 dark:border-yellow-800',
       messageClass: 'text-base-content',
     });
@@ -215,7 +215,8 @@ describe('securityScorePresentation', () => {
         critical: true,
       }),
     ).toMatchObject({
-      cardClassName: 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950',
+      cardClassName:
+        'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/25',
       iconClassName: 'text-emerald-500 dark:text-emerald-400',
       statusLabel: 'Enabled',
     });
@@ -226,7 +227,7 @@ describe('securityScorePresentation', () => {
         critical: true,
       }),
     ).toMatchObject({
-      cardClassName: 'border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950',
+      cardClassName: 'border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/25',
       iconClassName: 'text-rose-500 dark:text-rose-400',
       statusLabel: 'Disabled',
     });

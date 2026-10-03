@@ -195,7 +195,7 @@ export function ProxmoxCoverageTable(props: {
         data-proxmox-backups-windowed={tableWindow.isWindowed()}
       >
         <PlatformTableShell
-          tableClass="min-w-[0px] table-fixed text-xs"
+          tableClass="min-w-0 table-fixed text-xs"
           colgroup={
             <colgroup>
               <For each={visibleColumns()}>
@@ -527,7 +527,7 @@ export function ProxmoxCoverageTable(props: {
                       <Show when={isExpanded()}>
                         <InlineDetailTableRow
                           cellId={detailRowId()}
-                          class="bg-surface-alt/40"
+                          class=""
                           cellClass="px-3 py-2 whitespace-normal"
                           contentClass="min-w-0 whitespace-normal"
                           colspan={columnCount()}

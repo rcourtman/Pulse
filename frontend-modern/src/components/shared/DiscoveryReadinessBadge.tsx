@@ -16,12 +16,12 @@ interface DiscoveryReadinessBadgeProps {
 
 const toneClasses: Record<DiscoveryReadinessPresentation['tone'], string> = {
   success:
-    'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
+    'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/25 dark:text-emerald-300',
   warning:
-    'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300',
-  info: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300',
+    'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/25 dark:text-amber-300',
+  info: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/25 dark:text-blue-300',
   danger:
-    'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300',
+    'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/25 dark:text-red-300',
   muted:
     'border-border bg-surface-alt text-muted dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
 };
@@ -56,7 +56,7 @@ export const DiscoveryReadinessBadge: Component<DiscoveryReadinessBadgeProps> = 
   return (
     <span
       class={[
-        'inline-flex h-6 max-w-full items-center gap-1 rounded border px-1.5 text-[10px] font-medium leading-none whitespace-nowrap',
+        'inline-flex h-6 max-w-full items-center gap-1 rounded-sm border px-1.5 text-[10px] font-medium leading-none whitespace-nowrap',
         presentation() ? toneClasses[presentation()!.tone] : toneClasses.muted,
         props.class,
       ]

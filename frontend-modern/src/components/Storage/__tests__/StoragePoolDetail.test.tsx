@@ -206,7 +206,7 @@ describe('StoragePoolDetail', () => {
     );
     expect(screen.getByText('London Edge Standalone')).toHaveClass(
       'min-w-0',
-      'break-words',
+      'wrap-break-word',
       'text-right',
       'sm:text-left',
     );

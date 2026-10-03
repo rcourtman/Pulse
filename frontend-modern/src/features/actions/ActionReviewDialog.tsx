@@ -533,7 +533,7 @@ export const ActionReviewDialog: Component<{
                 <div
                   role="alert"
                   data-testid="action-review-invalid"
-                  class="mt-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                  class="mt-4 rounded-sm border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900/25 dark:bg-amber-950/40 dark:text-amber-200"
                 >
                   {invalidActionMessage()}
                 </div>
@@ -541,7 +541,7 @@ export const ActionReviewDialog: Component<{
               <Show when={error()}>
                 <div
                   role="alert"
-                  class="mt-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-200"
+                  class="mt-4 rounded-sm border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-200"
                 >
                   {error()}
                 </div>

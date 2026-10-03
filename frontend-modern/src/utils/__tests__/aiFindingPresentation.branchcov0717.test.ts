@@ -44,19 +44,19 @@ import {
 const DEFAULT_BADGE_CLASSES = 'border-border bg-surface-alt text-muted';
 const DEFAULT_LOOP_STATE_CLASSES = 'border-border bg-surface-alt text-muted';
 const SKY_RUNTIME_CLASSES =
-  'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900 dark:text-sky-300';
+  'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/25 dark:text-sky-300';
 const BLUE_CLASSES =
-  'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300';
+  'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-300';
 const GREEN_CLASSES =
-  'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900 dark:text-green-300';
+  'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/25 dark:text-green-300';
 const INDIGO_CLASSES =
-  'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-900 dark:text-indigo-300';
+  'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-900/25 dark:text-indigo-300';
 const AMBER_CLASSES =
-  'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300';
+  'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-300';
 const RED_CLASSES =
-  'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300';
+  'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/25 dark:text-red-300';
 const EMERALD_CLASSES =
-  'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900 dark:text-emerald-300';
+  'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-300';
 
 // A finding whose resourceId marks it as a Patrol runtime finding.
 const RUNTIME_SUBJECT = { resourceId: 'ai-service', resourceName: 'other', title: 'other' };

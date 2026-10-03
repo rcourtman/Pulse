@@ -200,7 +200,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
             <span class="text-xs font-semibold uppercase tracking-wider text-muted">
               Patrol mode
             </span>
-            <span class="rounded border border-border-subtle bg-surface px-2 py-0.5 text-xs font-medium text-base-content">
+            <span class="rounded-sm border border-border-subtle bg-surface px-2 py-0.5 text-xs font-medium text-base-content">
               {selectedAutonomyPolicy().label}
             </span>
           </div>
@@ -230,7 +230,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
       <Show when={showAutonomyAvailabilityPrompt()}>
         <div class="mt-3 flex flex-col gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-3 dark:border-blue-800 dark:bg-blue-950/40 sm:flex-row sm:items-center sm:justify-between">
           <div class="min-w-0">
-            <p class="text-sm font-semibold text-blue-950 dark:text-blue-100">
+            <p class="text-sm font-semibold text-blue-950/25 dark:text-blue-100">
               {autonomyAvailability().title}
             </p>
             <p class="mt-1 text-xs leading-5 text-blue-800 dark:text-blue-200">
@@ -258,7 +258,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
       <Show when={state.requestedAutonomyLevel() !== state.autonomyLevel()}>
         <div
           role="status"
-          class="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+          class="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
         >
           Requested {PATROL_AUTONOMY_POLICY_PRESENTATION[state.requestedAutonomyLevel()].label}.
           Effective mode is {selectedAutonomyPolicy().label}. Server status:{' '}
@@ -304,7 +304,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
             <span>{headerMeta().title}</span>
           </span>
         }
-        class="relative z-[200] mb-3"
+        class="relative z-200 mb-3"
       />
 
       <section id={PATROL_CONTROL_ANCHOR} class="border-y border-border">
@@ -391,14 +391,14 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
         <span id={PATROL_OPERATIONS_LOOP_ANCHOR} class="sr-only" aria-hidden="true" />
         <Show when={shouldShowAutonomyActionColumn()}>
           <details class="border-t border-border-subtle px-1 py-1 sm:px-2">
-            <summary class="min-h-11 cursor-pointer text-xs font-medium text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-0">
+            <summary class="min-h-11 cursor-pointer text-xs font-medium text-muted focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-0">
               Mode and automation
             </summary>
             <div class="pt-3">
               {renderAutonomyPolicyControl({
                 ariaLabel: 'Patrol mode',
                 layoutClass: 'flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between',
-                controlClass: 'w-full lg:w-[34rem]',
+                controlClass: 'w-full lg:w-136',
               })}
             </div>
           </details>

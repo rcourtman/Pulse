@@ -1,11 +1,11 @@
 export const AUDIT_WEBHOOK_READONLY_NOTICE_CLASS =
-  'rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200';
+  'rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-200';
 
 export const AUDIT_WEBHOOK_ENDPOINT_CARD_CLASS =
   'flex items-center justify-between gap-3 rounded-md border border-border bg-surface-alt p-3';
 
 export const AUDIT_WEBHOOK_ENDPOINT_ICON_CLASS =
-  'p-2 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 rounded-md shrink-0';
+  'p-2 bg-blue-100 dark:bg-blue-900/25 text-blue-600 dark:text-blue-300 rounded-md shrink-0';
 
 export const AUDIT_WEBHOOK_SECURITY_NOTE_TITLE = 'Security Note';
 

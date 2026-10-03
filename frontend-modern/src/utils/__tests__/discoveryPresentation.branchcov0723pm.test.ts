@@ -62,7 +62,7 @@ describe('getDiscoverySuggestedURLTextClass (function + branch coverage)', () =>
 describe('getDiscoverySuggestedURLCodeClass (function + branch coverage)', () => {
   it('returns the canonical mono code class string and takes no inputs', () => {
     expect(getDiscoverySuggestedURLCodeClass()).toBe(
-      'min-w-0 flex-1 rounded bg-blue-100 px-2 py-1.5 text-xs text-blue-800 dark:bg-blue-950 dark:text-blue-100 font-mono break-all',
+      'min-w-0 flex-1 rounded-sm bg-blue-100 px-2 py-1.5 text-xs text-blue-800 dark:bg-blue-950/25 dark:text-blue-100 font-mono break-all',
     );
   });
 });

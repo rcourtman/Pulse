@@ -26,7 +26,7 @@ export const OrganizationAccessManagementSection: Component<
                 value={props.state.inviteUserID()}
                 onInput={(event) => props.state.setInviteUserID(event.currentTarget.value)}
                 placeholder="username"
-                class="w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               />
               <FormSelect
                 label="Invite role"
@@ -36,7 +36,7 @@ export const OrganizationAccessManagementSection: Component<
                 onChange={(event) =>
                   props.state.setInviteRole(event.currentTarget.value as OrganizationRole)
                 }
-                selectBaseClass="rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                selectBaseClass="rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               >
                 <For
                   each={ORGANIZATION_MEMBER_ROLE_OPTIONS.filter(
@@ -61,7 +61,7 @@ export const OrganizationAccessManagementSection: Component<
         </Show>
 
         <Show when={!props.state.canManageCurrentOrg()}>
-          <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300">
+          <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-300">
             {getOrganizationAccessManageRequiredMessage()}
           </div>
         </Show>

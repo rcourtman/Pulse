@@ -47,14 +47,14 @@ export function getSearchTipsPopoverTriggerClass(
   triggerVariant: 'button' | 'link' | 'icon',
 ): string {
   const triggerBaseClasses =
-    'text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-white dark:focus:ring-blue-400';
+    'text-xs font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-white dark:focus:ring-blue-400';
 
   if (triggerVariant === 'button') {
     return `rounded-md border border-border px-2.5 py-1 text-muted transition-colors hover:bg-surface-hover ${triggerBaseClasses}`;
   }
 
   if (triggerVariant === 'link') {
-    return `rounded px-1 py-0.5 underline decoration-dotted underline-offset-4 transition-colors hover:text-base-content ${triggerBaseClasses}`;
+    return `rounded-sm px-1 py-0.5 underline decoration-dotted underline-offset-4 transition-colors hover:text-base-content ${triggerBaseClasses}`;
   }
 
   return `flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:text-muted sm:h-5 sm:w-5 ${triggerBaseClasses}`;

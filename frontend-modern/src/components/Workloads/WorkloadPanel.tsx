@@ -84,7 +84,7 @@ type WorkloadPanelProps = Pick<
 
 const GROUP_NODE_METRIC_CELL_CLASS = 'px-1.5 sm:px-2 py-0.5 align-middle';
 const GROUP_NODE_NAME_CELL_CLASS = getGroupedTableRowCellClass(
-  '!py-1 !pl-2 sm:!pl-3 !pr-1.5 sm:!pr-2',
+  'py-1! pl-2! sm:pl-3! pr-1.5! sm:pr-2!',
 );
 
 const getGroupNodeColumnCellClass = (_columnId: string, isNameColumn: boolean): string => {
@@ -203,7 +203,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
         return (
           <div class="flex justify-center">
             <span
-              class="inline-flex items-center px-1 py-0.5 text-[10px] font-medium rounded whitespace-nowrap bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300"
+              class="inline-flex items-center px-1 py-0.5 text-[10px] font-medium rounded-sm whitespace-nowrap bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300"
               title="Proxmox VE node"
             >
               PVE
@@ -365,8 +365,8 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
   return (
     <TableBody ref={props.setTableBodyRef} class="divide-y divide-border">
       <Show when={props.groupedWindowing.isWindowed() && props.topSpacerHeight() > 0}>
-        <TableRow aria-hidden="true" class="h-0 !border-0">
-          <TableCell colspan={props.totalColumns()} class="h-0 !p-0 !border-0 leading-[0]">
+        <TableRow aria-hidden="true" class="h-0 border-0!">
+          <TableCell colspan={props.totalColumns()} class="h-0 p-0! border-0! leading-0">
             <svg
               aria-hidden="true"
               width="1"
@@ -644,8 +644,8 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
         }}
       </For>
       <Show when={props.groupedWindowing.isWindowed() && props.bottomSpacerHeight() > 0}>
-        <TableRow aria-hidden="true" class="h-0 !border-0">
-          <TableCell colspan={props.totalColumns()} class="h-0 !p-0 !border-0 leading-[0]">
+        <TableRow aria-hidden="true" class="h-0 border-0!">
+          <TableCell colspan={props.totalColumns()} class="h-0 p-0! border-0! leading-0">
             <svg
               aria-hidden="true"
               width="1"

@@ -184,7 +184,7 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
   return (
     <Show when={props.visible && filteredResources().length > 0}>
       <div
-        class="absolute z-50 w-[calc(100vw-36px)] min-w-[280px] max-w-[400px] overflow-hidden rounded-md border border-border bg-surface shadow-sm"
+        class="absolute z-50 w-[calc(100vw-36px)] min-w-[280px] max-w-[400px] overflow-hidden rounded-md border border-border bg-surface shadow-xs"
         style={{
           bottom: `${props.position.top}px`,
           left: `${props.position.left}px`,
@@ -247,11 +247,11 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
           </For>
         </div>
         <div class="px-3 py-1.5 border-t border-border text-xs text-muted flex items-center gap-2">
-          <span class="px-1.5 py-0.5 bg-surface-hover rounded text-[10px]">↑↓</span>
+          <span class="px-1.5 py-0.5 bg-surface-hover rounded-sm text-[10px]">↑↓</span>
           navigate
-          <span class="px-1.5 py-0.5 bg-surface-hover rounded text-[10px]">↵</span>
+          <span class="px-1.5 py-0.5 bg-surface-hover rounded-sm text-[10px]">↵</span>
           select
-          <span class="px-1.5 py-0.5 bg-surface-hover rounded text-[10px]">esc</span>
+          <span class="px-1.5 py-0.5 bg-surface-hover rounded-sm text-[10px]">esc</span>
           close
         </div>
       </div>

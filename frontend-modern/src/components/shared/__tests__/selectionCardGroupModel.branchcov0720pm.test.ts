@@ -25,8 +25,8 @@ const GROUP_CLASS_DETAIL = 'grid grid-cols-1 gap-3';
 const BUTTON_BASE_DETAIL = 'p-4 rounded-md border-2 transition-all text-left';
 const BUTTON_BASE_COMPACT = 'p-3 rounded-md border-2 transition-all text-center';
 
-const ACTIVE_SUCCESS = 'border-green-500 bg-green-50 dark:bg-green-900';
-const ACTIVE_ACCENT = 'border-blue-500 bg-blue-50 dark:bg-blue-900';
+const ACTIVE_SUCCESS = 'border-green-500 bg-green-50 dark:bg-green-900/25';
+const ACTIVE_ACCENT = 'border-blue-500 bg-blue-50 dark:bg-blue-900/25';
 
 const INACTIVE_COMPACT = 'border-border hover:border-blue-300';
 const INACTIVE_DETAIL = 'border-border hover:border-border';
@@ -188,13 +188,13 @@ describe('selectionCardGroupModel.branchcov0720pm', () => {
 
     it("returns the green title class for variant='detail', active=true, tone='success' (tone === 'success' arm)", () => {
       expect(getSelectionCardTitleClass('detail', 'success', true)).toBe(
-        'text-sm font-semibold text-green-900 dark:text-green-100',
+        'text-sm font-semibold text-green-900/25 dark:text-green-100',
       );
     });
 
     it("returns the blue title class for variant='detail', active=true, tone='accent' (else arm)", () => {
       expect(getSelectionCardTitleClass('detail', 'accent', true)).toBe(
-        'text-sm font-semibold text-blue-900 dark:text-blue-100',
+        'text-sm font-semibold text-blue-900/25 dark:text-blue-100',
       );
     });
   });
@@ -257,8 +257,8 @@ describe('selectionCardGroupModel.branchcov0720pm', () => {
         const result = getSelectionCardTitleClass('detail', tone, true);
         const titleToken =
           tone === 'success'
-            ? 'text-green-900 dark:text-green-100'
-            : 'text-blue-900 dark:text-blue-100';
+            ? 'text-green-900/25 dark:text-green-100'
+            : 'text-blue-900/25 dark:text-blue-100';
         expect(result).toContain(titleToken);
       }
     });

@@ -217,7 +217,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               <span
                 class={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
                   isWildcard
-                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-200'
                     : 'bg-surface-alt text-base-content'
                 }`}
                 title={scope.value}
@@ -259,7 +259,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       >
         <span class="text-muted">{usageSummary}</span>
         <Show when={agentUsageEntry && agentUsageEntry.count > 1}>
-          <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+          <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-900/25 dark:text-amber-200">
             <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
               <path
                 fill-rule="evenodd"
@@ -288,7 +288,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         data-api-token-action="edit-scopes"
         onClick={(event) => openScopeEditor(token, event.currentTarget)}
         disabled={!canManage()}
-        class={`inline-flex min-h-10 items-center justify-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-blue-300 dark:hover:bg-blue-900 dark:hover:text-blue-200 ${
+        class={`inline-flex min-h-10 items-center justify-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-blue-300 dark:hover:bg-blue-900/25 dark:hover:text-blue-200 ${
           compact ? 'flex-1 border border-blue-200 dark:border-blue-800' : 'sm:min-h-9'
         }`}
       >
@@ -300,7 +300,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         data-api-token-action="rename"
         onClick={(event) => openRenameDialog(token, event.currentTarget)}
         disabled={!canManage()}
-        class={`inline-flex min-h-10 items-center justify-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-blue-300 dark:hover:bg-blue-900 dark:hover:text-blue-200 ${
+        class={`inline-flex min-h-10 items-center justify-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-blue-300 dark:hover:bg-blue-900/25 dark:hover:text-blue-200 ${
           compact ? 'flex-1 border border-blue-200 dark:border-blue-800' : 'sm:min-h-9'
         }`}
       >
@@ -312,8 +312,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         data-api-token-action="revoke"
         onClick={(event) => openRevokeDialog(token, event.currentTarget)}
         disabled={!canManage()}
-        class={`inline-flex min-h-10 items-center justify-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300 ${
-          compact ? 'flex-1 border border-red-200 dark:border-red-900' : 'sm:min-h-9'
+        class={`inline-flex min-h-10 items-center justify-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-400 dark:hover:bg-red-900/25 dark:hover:text-red-300 ${
+          compact ? 'flex-1 border border-red-200 dark:border-red-900/25' : 'sm:min-h-9'
         }`}
       >
         Revoke
@@ -323,7 +323,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
   return (
     <div class="space-y-5">
-      <Card padding="none" class="border border-border shadow-sm">
+      <Card padding="none" class="border border-border shadow-xs">
         <div class="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
           <div class="flex flex-wrap items-center justify-between gap-4">
             <div class="flex flex-wrap items-center gap-3">
@@ -342,7 +342,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               type="button"
               onClick={focusCreateSection}
               disabled={!canManage()}
-              class="inline-flex min-h-10 sm:min-h-10 items-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-white"
+              class="inline-flex min-h-10 sm:min-h-10 items-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-blue-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-white"
             >
               <svg
                 class="h-4 w-4"
@@ -369,14 +369,14 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
           </Show>
 
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <div class="rounded-md border border-border p-4 text-sm shadow-sm">
+            <div class="rounded-md border border-border p-4 text-sm shadow-xs">
               <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-muted">
                 Total tokens
               </div>
               <div class="mt-1 text-2xl font-semibold text-base-content">{totalTokens()}</div>
               <p class="mt-1 text-xs text-muted">Stored credentials across all agents</p>
             </div>
-            <div class="rounded-md border border-border p-4 text-sm shadow-sm">
+            <div class="rounded-md border border-border p-4 text-sm shadow-xs">
               <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-muted">
                 Scoped tokens
               </div>
@@ -384,7 +384,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               <p class="mt-1 text-xs text-muted">Limited access tokens with defined scopes</p>
             </div>
             <div
-              class={`rounded-md border p-4 text-sm shadow-sm ${hasWildcardTokens() ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100' : 'border-border bg-surface text-base-content'}`}
+              class={`rounded-md border p-4 text-sm shadow-xs ${hasWildcardTokens() ? 'border-amber-300 bg-amber-50 text-amber-900/25 dark:border-amber-700 dark:bg-amber-900/25 dark:text-amber-100' : 'border-border bg-surface text-base-content'}`}
             >
               <div
                 class={`text-[0.7rem] font-semibold uppercase tracking-wide ${
@@ -440,7 +440,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               <button
                 onClick={reopenTokenDialog}
                 disabled={!canManage()}
-                class="font-medium underline decoration-green-500 underline-offset-2 hover:text-green-900 dark:hover:text-green-100"
+                class="font-medium underline decoration-green-500 underline-offset-2 hover:text-green-900/25 dark:hover:text-green-100"
               >
                 Show
               </button>
@@ -448,7 +448,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 onClick={() => {
                   dismissNewToken();
                 }}
-                class="font-medium underline decoration-green-500 underline-offset-2 hover:text-green-900 dark:hover:text-green-100"
+                class="font-medium underline decoration-green-500 underline-offset-2 hover:text-green-900/25 dark:hover:text-green-100"
               >
                 Dismiss
               </button>
@@ -461,20 +461,20 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               newTokenRecord()?.scopes?.[0] === MONITORING_READ_SCOPE
             }
           >
-            <div class="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 shadow-sm dark:border-blue-800 dark:bg-blue-900 dark:text-blue-100">
+            <div class="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900/25 shadow-xs dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-100">
               <div class="mb-2 font-semibold">Magic Kiosk Link</div>
               <p class="mb-3 text-xs text-blue-700 dark:text-blue-300">
                 Use this link to open Pulse directly in Kiosk mode without logging in. Perfect for
                 wall displays and digital signage.
               </p>
               <div class="flex items-center gap-2">
-                <code class="flex-1 rounded border border-blue-200 bg-surface px-3 py-2 font-mono text-xs text-blue-800 dark:border-blue-800 dark:bg-black dark:text-blue-200 break-all">
+                <code class="flex-1 rounded-sm border border-blue-200 bg-surface px-3 py-2 font-mono text-xs text-blue-800 dark:border-blue-800 dark:bg-black dark:text-blue-200 break-all">
                   {newMonitoringKioskLink()}
                 </code>
                 <button
                   type="button"
                   onClick={() => void copyNewMonitoringKioskLink()}
-                  class="flex-shrink-0 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 dark:bg-blue-600 dark:hover:bg-blue-500"
+                  class="shrink-0 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 dark:bg-blue-600 dark:hover:bg-blue-500"
                 >
                   Copy Link
                 </button>
@@ -516,7 +516,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               type="button"
               onClick={focusCreateSection}
               disabled={!canManage()}
-              class="inline-flex min-h-10 sm:min-h-10 items-center gap-2 rounded-md border border-blue-200 px-3 py-2 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-900"
+              class="inline-flex min-h-10 sm:min-h-10 items-center gap-2 rounded-md border border-blue-200 px-3 py-2 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-900/25"
             >
               Generate new
             </button>
@@ -535,7 +535,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 >
                   <div class="flex min-w-0 items-start justify-between gap-3">
                     <div class="min-w-0">
-                      <h5 class="break-words text-sm font-semibold text-base-content">
+                      <h5 class="wrap-break-word text-sm font-semibold text-base-content">
                         {token.name || 'Untitled'}
                       </h5>
                       <div class="mt-1 font-mono text-xs text-muted">{tokenHint(token)}</div>
@@ -641,7 +641,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         id={API_TOKEN_CREATE_ANCHOR}
         padding="none"
         class={`border border-border transition-shadow ${
-          createHighlight() ? 'ring-2 ring-blue-500 shadow-sm' : ''
+          createHighlight() ? 'ring-2 ring-blue-500 shadow-xs' : ''
         }`}
         ref={setCreateSectionRef}
       >
@@ -661,7 +661,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                   ? undefined
                   : 'Choose a scope preset or custom scope before generating a token.'
               }
-              class="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-10 sm:w-auto dark:bg-blue-500 dark:hover:bg-blue-400"
+              class="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-10 sm:w-auto dark:bg-blue-500 dark:hover:bg-blue-400"
             >
               {isGenerating() ? 'Generating…' : 'Generate'}
             </button>
@@ -682,7 +682,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 onInput={(e) => setNameInput(e.currentTarget.value)}
                 placeholder={API_TOKEN_NAME_PLACEHOLDER}
                 disabled={!canManage()}
-                class="w-full min-h-10 sm:min-h-10 rounded-md border border-border bg-surface px-3 py-2.5 text-sm text-base-content shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-500"
+                class="w-full min-h-10 sm:min-h-10 rounded-md border border-border bg-surface px-3 py-2.5 text-sm text-base-content shadow-xs transition focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-500"
               />
             </div>
 

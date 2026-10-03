@@ -86,7 +86,7 @@ describe('getNodeModalTestResultPresentation branch coverage', () => {
     // optional-parameter handling on the default arm is otherwise unexercised.
     expect(getNodeModalTestResultPresentation()).toStrictEqual({
       panelClass:
-        'mx-6 p-3 rounded-md text-sm bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200',
+        'mx-6 p-3 rounded-md text-sm bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200',
       textClass: 'text-red-800 dark:text-red-200',
       icon: 'error',
     });
@@ -97,7 +97,7 @@ describe('getNodeModalTestResultPresentation branch coverage', () => {
     // icon and the dark-mode panelClass together.
     expect(getNodeModalTestResultPresentation(null)).toStrictEqual({
       panelClass:
-        'mx-6 p-3 rounded-md text-sm bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200',
+        'mx-6 p-3 rounded-md text-sm bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200',
       textClass: 'text-red-800 dark:text-red-200',
       icon: 'error',
     });
@@ -108,7 +108,7 @@ describe('getNodeModalTestResultPresentation branch coverage', () => {
     const out = getNodeModalTestResultPresentation('');
     expect(out.icon).toBe('error');
     expect(out.panelClass).toBe(
-      'mx-6 p-3 rounded-md text-sm bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200',
+      'mx-6 p-3 rounded-md text-sm bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200',
     );
     expect(out.textClass).toBe('text-red-800 dark:text-red-200');
   });
@@ -120,7 +120,7 @@ describe('getNodeModalTestResultPresentation branch coverage', () => {
     const out = getNodeModalTestResultPresentation('connection-refused');
     expect(out.icon).toBe('error');
     expect(out.panelClass).toContain('bg-red-50');
-    expect(out.panelClass).toContain('dark:bg-red-900');
+    expect(out.panelClass).toContain('dark:bg-red-900/25');
     expect(out.textClass).toBe('text-red-800 dark:text-red-200');
   });
 
@@ -131,7 +131,7 @@ describe('getNodeModalTestResultPresentation branch coverage', () => {
     // cannot silently drop a class.
     expect(getNodeModalTestResultPresentation('success')).toStrictEqual({
       panelClass:
-        'mx-6 p-3 rounded-md text-sm bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200',
+        'mx-6 p-3 rounded-md text-sm bg-green-50 dark:bg-green-900/25 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200',
       textClass: 'text-green-800 dark:text-green-200',
       icon: 'success',
     });
@@ -140,7 +140,7 @@ describe('getNodeModalTestResultPresentation branch coverage', () => {
   it('returns the exact warning presentation with every dark-mode class pinned', () => {
     expect(getNodeModalTestResultPresentation('warning')).toStrictEqual({
       panelClass:
-        'mx-6 p-3 rounded-md text-sm bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200',
+        'mx-6 p-3 rounded-md text-sm bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200',
       textClass: 'text-amber-800 dark:text-amber-200',
       icon: 'warning',
     });
@@ -152,7 +152,7 @@ describe('getNodeModalTestResultPresentation branch coverage', () => {
     // full panelClass and the previously-unasserted textClass.
     expect(getNodeModalTestResultPresentation('error')).toStrictEqual({
       panelClass:
-        'mx-6 p-3 rounded-md text-sm bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200',
+        'mx-6 p-3 rounded-md text-sm bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200',
       textClass: 'text-red-800 dark:text-red-200',
       icon: 'error',
     });

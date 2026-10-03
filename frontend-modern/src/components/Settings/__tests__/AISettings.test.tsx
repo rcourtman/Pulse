@@ -246,7 +246,7 @@ describe('AISettings model loading error states', () => {
     expect(chatActionMode.parentElement).toHaveClass('flex-col', 'sm:flex-row');
     expect(
       screen.getByText('Assistant asks before chat-only actions.', { exact: false }),
-    ).toHaveClass('sm:ml-[7.5rem]');
+    ).toHaveClass('sm:ml-30');
     expect(screen.getByRole('option', { name: /Ask first/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Save Assistant settings/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'External agents' })).toBeInTheDocument();

@@ -50,7 +50,7 @@ export const WebInterfaceLink: Component<WebInterfaceLinkProps> = (props) => {
           role="img"
           class={
             props.invalidClass ??
-            'inline-flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded text-amber-600 dark:text-amber-400'
+            'inline-flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded-sm text-amber-600 dark:text-amber-400'
           }
           title={props.invalidTitle ?? 'Invalid web interface URL. Pulse will not open it.'}
           aria-label={props.invalidAriaLabel ?? 'Invalid web interface URL'}
@@ -89,7 +89,7 @@ export const ResourceNameWithWebInterfaceLink: Component<ResourceNameWithWebInte
       ariaLabel={props.ariaLabel ?? `Open web interface for ${props.name}`}
       title={props.title}
       invalidAriaLabel={`Web interface URL for ${props.name} is invalid`}
-      class={`-my-1 inline-flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${WEB_INTERFACE_LINK_COLOR_CLASS}`}
+      class={`-my-1 inline-flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded-sm transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 ${WEB_INTERFACE_LINK_COLOR_CLASS}`}
     >
       <ExternalLinkIcon class="h-3.5 w-3.5" aria-hidden="true" />
     </WebInterfaceLink>

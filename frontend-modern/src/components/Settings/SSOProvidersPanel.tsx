@@ -106,7 +106,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
         bodyClass="space-y-6"
       >
         <Show when={!canManage()}>
-          <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200">
+          <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-200">
             Single sign-on is read-only for this account. You can review configured providers but
             cannot add, edit, enable, or delete them.
           </div>
@@ -462,7 +462,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     >
                       <div class="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
                         <span class="text-xs text-muted">SP Metadata:</span>
-                        <code class="inline-block max-w-full break-all rounded bg-surface-hover px-2 py-0.5 text-xs">
+                        <code class="inline-block max-w-full break-all rounded-sm bg-surface-hover px-2 py-0.5 text-xs">
                           {publicUrl()}/api/saml/{form.id || '{id}'}/metadata
                         </code>
                       </div>
@@ -599,7 +599,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         type="checkbox"
                         checked={form.samlAllowIdpInitiated}
                         onChange={(e) => setForm('samlAllowIdpInitiated', e.currentTarget.checked)}
-                        class="rounded border-slate-300"
+                        class="rounded-sm border-slate-300"
                       />
                       <span class="text-base-content">Allow IdP-initiated SSO</span>
                     </label>
@@ -712,7 +712,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   type="button"
                   variant="ghost"
                   size="xs"
-                  class="justify-start font-semibold hover:underline"
+                  class="font-semibold hover:underline"
                   onClick={() => setAdvancedOpen(!advancedOpen())}
                 >
                   {advancedOpen() ? 'Hide' : 'Show'} access restrictions & role mapping
@@ -853,7 +853,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
         >
           <div class="w-full max-h-[90vh] flex flex-col">
             {/* Modal header */}
-            <div class="px-6 py-4 border-b border-border flex items-center justify-between flex-shrink-0">
+            <div class="px-6 py-4 border-b border-border flex items-center justify-between shrink-0">
               <h3 class="text-lg font-semibold text-base-content">IdP Metadata Preview</h3>
               <ActionIconButton
                 type="button"
@@ -867,7 +867,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
             </div>
 
             {/* Parsed info summary */}
-            <div class="px-6 py-4 bg-surface-alt border-b border-border flex-shrink-0">
+            <div class="px-6 py-4 bg-surface-alt border-b border-border shrink-0">
               <h4 class="text-sm font-medium text-base-content mb-3">Parsed Information</h4>
               <dl class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 <div>
@@ -946,7 +946,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
             </div>
 
             {/* Modal footer */}
-            <div class="px-6 py-4 border-t border-border flex justify-end flex-shrink-0">
+            <div class="px-6 py-4 border-t border-border flex justify-end shrink-0">
               <Button
                 type="button"
                 onClick={() => setShowMetadataPreview(false)}

@@ -102,7 +102,7 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
             <Show when={props.state.alertStats().active > 0}>
               <button
                 type="button"
-                class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-200 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900 disabled:opacity-60 disabled:cursor-not-allowed"
+                class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-200 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/25 disabled:opacity-60 disabled:cursor-not-allowed"
                 disabled={props.state.bulkAckProcessing()}
                 onClick={() => {
                   void props.state.handleBulkAcknowledge();

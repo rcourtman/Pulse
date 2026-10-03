@@ -133,7 +133,7 @@ describe('unifiedResourceTableStateModel', () => {
     expect(getUnifiedResourceTableShellClass('mobile')).not.toContain('min-w-[640px]');
     expect(getUnifiedResourceTableShellClass('compact')).toContain('min-w-[640px]');
     expect(getUnifiedResourceTableShellClass('wide')).toContain('min-w-[640px]');
-    expect(getUnifiedResourceTableShellClass('wide')).not.toContain('min-w-[max-content]');
+    expect(getUnifiedResourceTableShellClass('wide')).not.toContain('min-w-max');
     // Mobile keeps the prioritized column set but preserves a readable width
     // floor inside the shared horizontal-scroll shell. Wider modes keep all
     // host columns visible while compressing their tracks before any

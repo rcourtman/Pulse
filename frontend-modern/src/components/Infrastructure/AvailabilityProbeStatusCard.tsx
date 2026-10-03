@@ -152,13 +152,13 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
     <InfoCardFrame data-testid="availability-probe-status">
       <div class="flex items-center justify-between gap-2 mb-2">
         <div class="flex min-w-0 items-center gap-1.5">
-          <Activity class="h-3.5 w-3.5 text-base-content/60" aria-hidden="true" />
+          <Activity class="h-3.5 w-3.5" aria-hidden="true" />
           <h3 class="truncate text-[11px] font-medium uppercase tracking-wide text-base-content">
             Availability
           </h3>
         </div>
         <span
-          class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold"
+          class="shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold"
           classList={{
             'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300':
               isFreshUp(),
@@ -215,7 +215,7 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
             </div>
             <For each={props.availability.locations}>
               {(location) => (
-                <div class="flex items-start justify-between gap-3 rounded bg-base-200/60 px-2 py-1.5">
+                <div class="flex items-start justify-between gap-3 rounded-sm bg-base-200/60 px-2 py-1.5">
                   <div class="min-w-0">
                     <div
                       class="truncate font-medium text-base-content"
@@ -253,11 +253,7 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
           valueTitle={targetAddr()}
         />
         <Show when={lastChecked()}>
-          <InfoCardKeyValueRow
-            label="Checked"
-            value={lastChecked()}
-            valueClass="text-base-content/70"
-          />
+          <InfoCardKeyValueRow label="Checked" value={lastChecked()} valueClass="" />
         </Show>
         <InfoCardKeyValueRow
           label="Freshness"
