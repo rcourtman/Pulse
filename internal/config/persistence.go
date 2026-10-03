@@ -2969,9 +2969,11 @@ type PatrolRunRecord struct {
 	TriageFlags      int  `json:"triage_flags"`
 	TriageSkippedLLM bool `json:"triage_skipped_llm,omitempty"`
 	// AI Analysis details
-	AIAnalysis   string `json:"ai_analysis,omitempty"`   // The AI's raw response/analysis
-	InputTokens  int    `json:"input_tokens,omitempty"`  // Tokens sent to AI
-	OutputTokens int    `json:"output_tokens,omitempty"` // Tokens received from AI
+	AIAnalysis               string `json:"ai_analysis,omitempty"`                 // The AI's raw response/analysis
+	InputTokens              int    `json:"input_tokens,omitempty"`                // Tokens sent to AI
+	OutputTokens             int    `json:"output_tokens,omitempty"`               // Tokens received from AI
+	CacheCreationInputTokens int    `json:"cache_creation_input_tokens,omitempty"` // Prompt-cache writes, disjoint from InputTokens
+	CacheReadInputTokens     int    `json:"cache_read_input_tokens,omitempty"`     // Prompt-cache reads, disjoint from InputTokens
 	// Tool call traces
 	ToolCalls     []ToolCallRecord `json:"tool_calls,omitempty"`
 	ToolCallCount int              `json:"tool_call_count"`
@@ -3017,6 +3019,8 @@ type patrolRunRecordJSON struct {
 	AIAnalysis                string                              `json:"ai_analysis,omitempty"`
 	InputTokens               int                                 `json:"input_tokens,omitempty"`
 	OutputTokens              int                                 `json:"output_tokens,omitempty"`
+	CacheCreationInputTokens  int                                 `json:"cache_creation_input_tokens,omitempty"` // Prompt-cache writes, disjoint from InputTokens
+	CacheReadInputTokens      int                                 `json:"cache_read_input_tokens,omitempty"`     // Prompt-cache reads, disjoint from InputTokens
 	ToolCalls                 []ToolCallRecord                    `json:"tool_calls,omitempty"`
 	ToolCallCount             int                                 `json:"tool_call_count"`
 }
@@ -3108,6 +3112,8 @@ func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
 		AIAnalysis:                normalized.AIAnalysis,
 		InputTokens:               normalized.InputTokens,
 		OutputTokens:              normalized.OutputTokens,
+		CacheCreationInputTokens:  normalized.CacheCreationInputTokens,
+		CacheReadInputTokens:      normalized.CacheReadInputTokens,
 		ToolCalls:                 normalized.ToolCalls,
 		ToolCallCount:             normalized.ToolCallCount,
 	})
@@ -3160,6 +3166,8 @@ func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
 		AIAnalysis:                payload.AIAnalysis,
 		InputTokens:               payload.InputTokens,
 		OutputTokens:              payload.OutputTokens,
+		CacheCreationInputTokens:  payload.CacheCreationInputTokens,
+		CacheReadInputTokens:      payload.CacheReadInputTokens,
 		ToolCalls:                 payload.ToolCalls,
 		ToolCallCount:             payload.ToolCallCount,
 	}
@@ -3188,18 +3196,20 @@ type AIUsageHistoryData struct {
 // AIUsageEventRecord is a persisted usage event for an AI provider call.
 // This intentionally excludes prompt/response content for privacy.
 type AIUsageEventRecord struct {
-	Timestamp     time.Time `json:"timestamp"`
-	Provider      string    `json:"provider"`
-	RequestModel  string    `json:"request_model"`
-	ResponseModel string    `json:"response_model,omitempty"`
-	UseCase       string    `json:"use_case,omitempty"` // "chat" or "patrol"
-	ContextScope  string    `json:"context_scope,omitempty"`
-	ToolCallCount int       `json:"tool_call_count,omitempty"`
-	InputTokens   int       `json:"input_tokens,omitempty"`
-	OutputTokens  int       `json:"output_tokens,omitempty"`
-	TargetType    string    `json:"target_type,omitempty"`
-	TargetID      string    `json:"target_id,omitempty"`
-	FindingID     string    `json:"finding_id,omitempty"`
+	Timestamp                time.Time `json:"timestamp"`
+	Provider                 string    `json:"provider"`
+	RequestModel             string    `json:"request_model"`
+	ResponseModel            string    `json:"response_model,omitempty"`
+	UseCase                  string    `json:"use_case,omitempty"` // "chat" or "patrol"
+	ContextScope             string    `json:"context_scope,omitempty"`
+	ToolCallCount            int       `json:"tool_call_count,omitempty"`
+	InputTokens              int       `json:"input_tokens,omitempty"`
+	OutputTokens             int       `json:"output_tokens,omitempty"`
+	CacheCreationInputTokens int       `json:"cache_creation_input_tokens,omitempty"` // Prompt-cache writes, disjoint from InputTokens
+	CacheReadInputTokens     int       `json:"cache_read_input_tokens,omitempty"`     // Prompt-cache reads, disjoint from InputTokens
+	TargetType               string    `json:"target_type,omitempty"`
+	TargetID                 string    `json:"target_id,omitempty"`
+	FindingID                string    `json:"finding_id,omitempty"`
 }
 
 const (

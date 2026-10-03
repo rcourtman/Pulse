@@ -117,6 +117,10 @@ func (a *AgenticLoop) ensureFinalTextResponseWithSystemPrompt(
 		case "done":
 			if data, ok := event.Data.(providers.DoneEvent); ok {
 				a.totalInputTokens += data.InputTokens
+
+				a.totalCacheCreationTokens += data.CacheCreationInputTokens
+
+				a.totalCacheReadTokens += data.CacheReadInputTokens
 				a.totalOutputTokens += data.OutputTokens
 			}
 		}

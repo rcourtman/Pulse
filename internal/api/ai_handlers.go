@@ -7265,7 +7265,7 @@ func (h *AISettingsHandler) HandleExportAICostHistory(w http.ResponseWriter, r *
 		exported := make([]exportEvent, 0, len(events))
 		for _, e := range events {
 			provider, model := cost.ResolveProviderAndModel(e.Provider, e.RequestModel, e.ResponseModel)
-			usd, ok, _ := cost.EstimateUSD(provider, model, int64(e.InputTokens), int64(e.OutputTokens))
+			usd, ok, _ := cost.EstimateUsageUSD(provider, model, e.TokenUsage())
 			exported = append(exported, exportEvent{
 				UsageEvent:   e,
 				EstimatedUSD: usd,
@@ -7292,6 +7292,8 @@ func (h *AISettingsHandler) HandleExportAICostHistory(w http.ResponseWriter, r *
 		"use_case",
 		"input_tokens",
 		"output_tokens",
+		"cache_creation_input_tokens",
+		"cache_read_input_tokens",
 		"estimated_usd",
 		"pricing_known",
 		"target_type",
@@ -7300,7 +7302,7 @@ func (h *AISettingsHandler) HandleExportAICostHistory(w http.ResponseWriter, r *
 	})
 	for _, e := range events {
 		provider, model := cost.ResolveProviderAndModel(e.Provider, e.RequestModel, e.ResponseModel)
-		usd, ok, _ := cost.EstimateUSD(provider, model, int64(e.InputTokens), int64(e.OutputTokens))
+		usd, ok, _ := cost.EstimateUsageUSD(provider, model, e.TokenUsage())
 
 		_ = cw.Write([]string{
 			e.Timestamp.UTC().Format(time.RFC3339Nano),
@@ -7310,6 +7312,8 @@ func (h *AISettingsHandler) HandleExportAICostHistory(w http.ResponseWriter, r *
 			e.UseCase,
 			strconv.Itoa(e.InputTokens),
 			strconv.Itoa(e.OutputTokens),
+			strconv.Itoa(e.CacheCreationInputTokens),
+			strconv.Itoa(e.CacheReadInputTokens),
 			strconv.FormatFloat(usd, 'f', 6, 64),
 			strconv.FormatBool(ok),
 			e.TargetType,

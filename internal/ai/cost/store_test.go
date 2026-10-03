@@ -540,3 +540,55 @@ func TestSessionCostUSD(t *testing.T) {
 		t.Errorf("expected free session to be known at 0, got usd=%v known=%v", usd, known)
 	}
 }
+
+func TestSummaryCountsAndPricesPromptCacheBuckets(t *testing.T) {
+	store := NewStore(90)
+	now := time.Now()
+	store.Record(UsageEvent{
+		Timestamp:                now,
+		Provider:                 "anthropic",
+		RequestModel:             "anthropic:claude-sonnet-5",
+		UseCase:                  "patrol",
+		TargetType:               "node",
+		TargetID:                 "pve1",
+		InputTokens:              100_000,
+		OutputTokens:             10_000,
+		CacheCreationInputTokens: 200_000,
+		CacheReadInputTokens:     1_000_000,
+	})
+
+	// 0.1M*2.00 + 0.01M*10.00 + 0.2M*2.50 + 1.0M*0.20
+	wantUSD := 0.2 + 0.1 + 0.5 + 0.2
+	check := func(name string, in, out, creation, read, total int64, usd float64, known bool) {
+		t.Helper()
+		if in != 100_000 || out != 10_000 || creation != 200_000 || read != 1_000_000 {
+			t.Fatalf("%s buckets = in %d out %d creation %d read %d", name, in, out, creation, read)
+		}
+		if total != 1_310_000 {
+			t.Fatalf("%s total tokens = %d, want every bucket counted", name, total)
+		}
+		if !known || math.Abs(usd-wantUSD) > 1e-9 {
+			t.Fatalf("%s estimated usd = %f (known=%v), want %f", name, usd, known, wantUSD)
+		}
+	}
+
+	summary := store.GetSummary(7)
+	tot := summary.Totals
+	check("totals", tot.InputTokens, tot.OutputTokens, tot.CacheCreationInputTokens, tot.CacheReadInputTokens, tot.TotalTokens, tot.EstimatedUSD, tot.PricingKnown)
+	if len(summary.ProviderModels) != 1 || len(summary.UseCases) != 1 || len(summary.Targets) != 1 || len(summary.DailyTotals) != 1 {
+		t.Fatalf("unexpected summary shape: %+v", summary)
+	}
+	pm := summary.ProviderModels[0]
+	check("provider model", pm.InputTokens, pm.OutputTokens, pm.CacheCreationInputTokens, pm.CacheReadInputTokens, pm.TotalTokens, pm.EstimatedUSD, pm.PricingKnown)
+	uc := summary.UseCases[0]
+	check("use case", uc.InputTokens, uc.OutputTokens, uc.CacheCreationInputTokens, uc.CacheReadInputTokens, uc.TotalTokens, uc.EstimatedUSD, uc.PricingKnown)
+	tg := summary.Targets[0]
+	check("target", tg.InputTokens, tg.OutputTokens, tg.CacheCreationInputTokens, tg.CacheReadInputTokens, tg.TotalTokens, tg.EstimatedUSD, tg.PricingKnown)
+	ds := summary.DailyTotals[0]
+	check("daily", ds.InputTokens, ds.OutputTokens, ds.CacheCreationInputTokens, ds.CacheReadInputTokens, ds.TotalTokens, ds.EstimatedUSD, true)
+
+	events := store.ListEvents(7)
+	if len(events) != 1 || events[0].CacheCreationInputTokens != 200_000 || events[0].CacheReadInputTokens != 1_000_000 {
+		t.Fatalf("listed event lost cache buckets: %+v", events)
+	}
+}
