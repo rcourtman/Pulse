@@ -36,7 +36,7 @@ export function IncidentAssistantHandoffButton(props: IncidentAssistantHandoffBu
       type="button"
       class={
         props.class ||
-        'inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-surface-hover hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-400 dark:hover:text-blue-300'
+        'inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-surface-hover hover:text-blue-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-400 dark:hover:text-blue-300'
       }
       title="Discuss this incident with Pulse Assistant"
       aria-label={`Discuss incident ${props.incident.id} with Pulse Assistant`}

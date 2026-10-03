@@ -202,7 +202,7 @@ export function RowMetricBar(props: {
 }) {
   return (
     <div
-      class="metric-text relative h-4 w-full min-w-[5rem] overflow-hidden"
+      class="metric-text relative h-4 w-full min-w-20 overflow-hidden"
       title={props.tooltip ?? props.label}
     >
       <ProgressBar
@@ -346,7 +346,7 @@ export function ProxmoxBackupWorkloadTypeBadge(props: {
 // restate the header casing or it renders in sentence case beside its
 // uppercase non-sortable neighbours.
 const SORT_BUTTON_CLASS =
-  'inline-flex min-w-0 max-w-full items-center gap-1 rounded-sm uppercase tracking-[inherit] outline-none transition-colors hover:text-base-content focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface';
+  'inline-flex min-w-0 max-w-full items-center gap-1 rounded-xs uppercase tracking-[inherit] outline-hidden transition-colors hover:text-base-content focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface';
 
 export function SortableHead<K extends string>(props: {
   label: string;

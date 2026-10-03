@@ -24,8 +24,8 @@ describe('getAlertHistoryStatusPresentation — branch coverage', () => {
     expect(getAlertHistoryStatusPresentation('  ACTIVE  ')).toStrictEqual({
       label: 'active',
       className:
-        'text-xs px-2 py-0.5 rounded bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 font-medium',
-      rowClassName: 'bg-red-50 dark:bg-red-900',
+        'text-xs px-2 py-0.5 rounded-sm bg-red-100 dark:bg-red-900/25 text-red-700 dark:text-red-300 font-medium',
+      rowClassName: 'bg-red-50 dark:bg-red-900/25',
     });
   });
 
@@ -33,7 +33,7 @@ describe('getAlertHistoryStatusPresentation — branch coverage', () => {
     expect(getAlertHistoryStatusPresentation('Acknowledged')).toStrictEqual({
       label: 'acknowledged',
       className:
-        'text-xs px-2 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300',
+        'text-xs px-2 py-0.5 rounded-sm bg-yellow-100 dark:bg-yellow-900/25 text-yellow-700 dark:text-yellow-300',
       rowClassName: '',
     });
   });
@@ -43,7 +43,7 @@ describe('getAlertHistoryStatusPresentation — branch coverage', () => {
     // keeps the left operand verbatim.
     expect(getAlertHistoryStatusPresentation('pending')).toStrictEqual({
       label: 'pending',
-      className: 'text-xs px-2 py-0.5 rounded bg-surface-hover text-base-content',
+      className: 'text-xs px-2 py-0.5 rounded-sm bg-surface-hover text-base-content',
       rowClassName: '',
     });
   });
@@ -51,7 +51,7 @@ describe('getAlertHistoryStatusPresentation — branch coverage', () => {
   it('lowercases an unrecognized status used as the label', () => {
     expect(getAlertHistoryStatusPresentation('PENDING')).toStrictEqual({
       label: 'pending',
-      className: 'text-xs px-2 py-0.5 rounded bg-surface-hover text-base-content',
+      className: 'text-xs px-2 py-0.5 rounded-sm bg-surface-hover text-base-content',
       rowClassName: '',
     });
   });
@@ -59,7 +59,7 @@ describe('getAlertHistoryStatusPresentation — branch coverage', () => {
   it('falls back to "resolved" when status is null (?? right operand)', () => {
     expect(getAlertHistoryStatusPresentation(null)).toStrictEqual({
       label: 'resolved',
-      className: 'text-xs px-2 py-0.5 rounded bg-surface-hover text-base-content',
+      className: 'text-xs px-2 py-0.5 rounded-sm bg-surface-hover text-base-content',
       rowClassName: '',
     });
   });
@@ -67,7 +67,7 @@ describe('getAlertHistoryStatusPresentation — branch coverage', () => {
   it('falls back to "resolved" when status is undefined (?? right operand)', () => {
     expect(getAlertHistoryStatusPresentation(undefined)).toStrictEqual({
       label: 'resolved',
-      className: 'text-xs px-2 py-0.5 rounded bg-surface-hover text-base-content',
+      className: 'text-xs px-2 py-0.5 rounded-sm bg-surface-hover text-base-content',
       rowClassName: '',
     });
   });
@@ -75,7 +75,7 @@ describe('getAlertHistoryStatusPresentation — branch coverage', () => {
   it('falls back to "resolved" for a whitespace-only status (|| right operand)', () => {
     expect(getAlertHistoryStatusPresentation('   ')).toStrictEqual({
       label: 'resolved',
-      className: 'text-xs px-2 py-0.5 rounded bg-surface-hover text-base-content',
+      className: 'text-xs px-2 py-0.5 rounded-sm bg-surface-hover text-base-content',
       rowClassName: '',
     });
   });
@@ -83,7 +83,7 @@ describe('getAlertHistoryStatusPresentation — branch coverage', () => {
   it('falls back to "resolved" for an empty-string status (?? passes "" through, || right operand)', () => {
     expect(getAlertHistoryStatusPresentation('')).toStrictEqual({
       label: 'resolved',
-      className: 'text-xs px-2 py-0.5 rounded bg-surface-hover text-base-content',
+      className: 'text-xs px-2 py-0.5 rounded-sm bg-surface-hover text-base-content',
       rowClassName: '',
     });
   });

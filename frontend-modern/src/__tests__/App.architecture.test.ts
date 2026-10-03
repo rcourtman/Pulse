@@ -639,7 +639,7 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('animate-pulse-brand');
     expect(appLayoutSource).toContain('pulse-brand-wordmark');
     expect(appLayoutSource).toContain("'pb-safe-or-14 xl:pb-0'");
-    expect(appStylesSource).toContain('.pb-safe-or-14');
+    expect(appStylesSource).toContain('@utility pb-safe-or-14');
     expect(appStylesSource).toContain('.pulse-shell--full-width');
     expect(appStylesSource).toContain('.pulse-wide-data-surface.space-y-3');
     expect(appStylesSource).toContain('.filter-bar > div > div:first-child button');

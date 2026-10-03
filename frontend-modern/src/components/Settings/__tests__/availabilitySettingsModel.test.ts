@@ -145,7 +145,7 @@ describe('availabilitySettingsModel', () => {
       'bg-surface-alt text-muted',
     );
     expect(getAvailabilityTargetStatusClass(target())).toBe(
-      'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
+      'bg-sky-100 text-sky-700 dark:bg-sky-900/25 dark:text-sky-300',
     );
     expect(
       getAvailabilityTargetStatusClass(
@@ -153,12 +153,12 @@ describe('availabilitySettingsModel', () => {
           status: { ...target(), targetId: 'mqtt-broker', available: true, latencyMillis: 12 },
         }),
       ),
-    ).toBe('bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300');
+    ).toBe('bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300');
     expect(
       getAvailabilityTargetStatusClass(
         target({ status: { ...target(), targetId: 'mqtt-broker', available: false } }),
       ),
-    ).toBe('bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300');
+    ).toBe('bg-rose-100 text-rose-700 dark:bg-rose-900/25 dark:text-rose-300');
   });
 
   it('attributes probe-reported results to the assigned agent host', () => {
@@ -214,7 +214,7 @@ describe('availabilitySettingsModel', () => {
     expect(getAvailabilityTargetStatusLabel(stale)).toBe('No recent probe report');
     // No new visual language: it reuses the amber indeterminate badge.
     expect(getAvailabilityTargetStatusClass(stale)).toBe(
-      'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+      'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
     );
     // The UDP open-or-filtered case keeps its own copy.
     expect(

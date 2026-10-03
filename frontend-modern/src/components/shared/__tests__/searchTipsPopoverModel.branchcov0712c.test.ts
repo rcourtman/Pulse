@@ -8,7 +8,7 @@ import {
 // mirror the literal here in order to assert the full, concrete composed string
 // for every branch of getSearchTipsPopoverTriggerClass.
 const TRIGGER_BASE_CLASSES =
-  'text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-white dark:focus:ring-blue-400';
+  'text-xs font-medium focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-white dark:focus:ring-blue-400';
 
 describe('searchTipsPopoverModel.branchcov0712c', () => {
   describe('getSearchTipsPopoverPositionClass', () => {
@@ -42,7 +42,7 @@ describe('searchTipsPopoverModel.branchcov0712c', () => {
 
     it("returns the link variant classes when triggerVariant === 'link' (first if false, second if arm)", () => {
       expect(getSearchTipsPopoverTriggerClass('link')).toBe(
-        `rounded px-1 py-0.5 underline decoration-dotted underline-offset-4 transition-colors hover:text-base-content ${TRIGGER_BASE_CLASSES}`,
+        `rounded-sm px-1 py-0.5 underline decoration-dotted underline-offset-4 transition-colors hover:text-base-content ${TRIGGER_BASE_CLASSES}`,
       );
     });
 

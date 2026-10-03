@@ -101,7 +101,7 @@ describe('getAlertIncidentStatusPresentation — switch branch coverage', () => 
     const expected = {
       label: 'acknowledged',
       className:
-        'px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300',
+        'px-2 py-0.5 rounded-sm bg-emerald-100 dark:bg-emerald-900/25 text-emerald-700 dark:text-emerald-300',
     };
     expect(getAlertIncidentStatusPresentation('acknowledged')).toStrictEqual(expected);
     // open + acknowledged flag normalises to 'acknowledged' label -> same case.
@@ -111,28 +111,29 @@ describe('getAlertIncidentStatusPresentation — switch branch coverage', () => 
   it('hits the "open" case', () => {
     expect(getAlertIncidentStatusPresentation('open')).toStrictEqual({
       label: 'open',
-      className: 'px-2 py-0.5 rounded bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300',
+      className:
+        'px-2 py-0.5 rounded-sm bg-red-100 dark:bg-red-900/25 text-red-700 dark:text-red-300',
     });
   });
 
   it('routes "resolved" through the default case', () => {
     expect(getAlertIncidentStatusPresentation('resolved')).toStrictEqual({
       label: 'resolved',
-      className: 'px-2 py-0.5 rounded bg-surface-hover text-base-content',
+      className: 'px-2 py-0.5 rounded-sm bg-surface-hover text-base-content',
     });
   });
 
   it('routes a nullish status onto the default case with the "unknown" label', () => {
     expect(getAlertIncidentStatusPresentation(undefined)).toStrictEqual({
       label: 'unknown',
-      className: 'px-2 py-0.5 rounded bg-surface-hover text-base-content',
+      className: 'px-2 py-0.5 rounded-sm bg-surface-hover text-base-content',
     });
   });
 
   it('routes an unrecognised status onto the default case, echoing the normalised label', () => {
     expect(getAlertIncidentStatusPresentation('fizzing')).toStrictEqual({
       label: 'fizzing',
-      className: 'px-2 py-0.5 rounded bg-surface-hover text-base-content',
+      className: 'px-2 py-0.5 rounded-sm bg-surface-hover text-base-content',
     });
   });
 });
@@ -140,31 +141,31 @@ describe('getAlertIncidentStatusPresentation — switch branch coverage', () => 
 describe('getAlertIncidentLevelBadgeClass — branch coverage', () => {
   it('returns the critical palette for level === "critical"', () => {
     expect(getAlertIncidentLevelBadgeClass('critical')).toBe(
-      'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+      'inline-flex shrink-0 items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-300',
     );
   });
 
   it('returns the warning palette for the canonical "warning" level', () => {
     expect(getAlertIncidentLevelBadgeClass('warning')).toBe(
-      'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+      'inline-flex shrink-0 items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
     );
   });
 
   it('falls back to the warning palette for a null level', () => {
     expect(getAlertIncidentLevelBadgeClass(null)).toBe(
-      'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+      'inline-flex shrink-0 items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
     );
   });
 
   it('falls back to the warning palette for an undefined level', () => {
     expect(getAlertIncidentLevelBadgeClass(undefined)).toBe(
-      'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+      'inline-flex shrink-0 items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
     );
   });
 
   it('returns the informational palette for info', () => {
     expect(getAlertIncidentLevelBadgeClass('info')).toBe(
-      'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+      'inline-flex shrink-0 items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300',
     );
   });
 });
@@ -174,8 +175,8 @@ describe('getAlertHistoryStatusPresentation — branch coverage', () => {
     expect(getAlertHistoryStatusPresentation('active')).toStrictEqual({
       label: 'active',
       className:
-        'text-xs px-2 py-0.5 rounded bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 font-medium',
-      rowClassName: 'bg-red-50 dark:bg-red-900',
+        'text-xs px-2 py-0.5 rounded-sm bg-red-100 dark:bg-red-900/25 text-red-700 dark:text-red-300 font-medium',
+      rowClassName: 'bg-red-50 dark:bg-red-900/25',
     });
   });
 
@@ -189,7 +190,7 @@ describe('getAlertHistoryStatusPresentation — branch coverage', () => {
     expect(getAlertHistoryStatusPresentation('acknowledged')).toStrictEqual({
       label: 'acknowledged',
       className:
-        'text-xs px-2 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300',
+        'text-xs px-2 py-0.5 rounded-sm bg-yellow-100 dark:bg-yellow-900/25 text-yellow-700 dark:text-yellow-300',
       rowClassName: '',
     });
   });
@@ -197,7 +198,7 @@ describe('getAlertHistoryStatusPresentation — branch coverage', () => {
   it('returns the resolved presentation for "resolved" (falls through both guards)', () => {
     expect(getAlertHistoryStatusPresentation('resolved')).toStrictEqual({
       label: 'resolved',
-      className: 'text-xs px-2 py-0.5 rounded bg-surface-hover text-base-content',
+      className: 'text-xs px-2 py-0.5 rounded-sm bg-surface-hover text-base-content',
       rowClassName: '',
     });
   });
@@ -205,7 +206,7 @@ describe('getAlertHistoryStatusPresentation — branch coverage', () => {
   it('uses the truthy `||` left operand for an unrecognised non-empty status', () => {
     expect(getAlertHistoryStatusPresentation('suppressed')).toStrictEqual({
       label: 'suppressed',
-      className: 'text-xs px-2 py-0.5 rounded bg-surface-hover text-base-content',
+      className: 'text-xs px-2 py-0.5 rounded-sm bg-surface-hover text-base-content',
       rowClassName: '',
     });
   });
@@ -214,7 +215,7 @@ describe('getAlertHistoryStatusPresentation — branch coverage', () => {
     // undefined -> '' -> '' || 'resolved'.
     expect(getAlertHistoryStatusPresentation(undefined)).toStrictEqual({
       label: 'resolved',
-      className: 'text-xs px-2 py-0.5 rounded bg-surface-hover text-base-content',
+      className: 'text-xs px-2 py-0.5 rounded-sm bg-surface-hover text-base-content',
       rowClassName: '',
     });
   });
@@ -222,7 +223,7 @@ describe('getAlertHistoryStatusPresentation — branch coverage', () => {
   it('substitutes "resolved" for a null status via the ??-coalesce arm then || fallback', () => {
     expect(getAlertHistoryStatusPresentation(null)).toStrictEqual({
       label: 'resolved',
-      className: 'text-xs px-2 py-0.5 rounded bg-surface-hover text-base-content',
+      className: 'text-xs px-2 py-0.5 rounded-sm bg-surface-hover text-base-content',
       rowClassName: '',
     });
   });
@@ -230,7 +231,7 @@ describe('getAlertHistoryStatusPresentation — branch coverage', () => {
   it('substitutes "resolved" for a whitespace-only status (trim -> "" -> || fallback)', () => {
     expect(getAlertHistoryStatusPresentation('   ')).toStrictEqual({
       label: 'resolved',
-      className: 'text-xs px-2 py-0.5 rounded bg-surface-hover text-base-content',
+      className: 'text-xs px-2 py-0.5 rounded-sm bg-surface-hover text-base-content',
       rowClassName: '',
     });
   });
@@ -318,7 +319,7 @@ describe('non-branching label/state helpers — concrete value pins', () => {
 describe('event-filter class helpers — variant + selected branch coverage', () => {
   it('getAlertIncidentEventFilterContainerClass returns the panel layout for variant "panel"', () => {
     expect(getAlertIncidentEventFilterContainerClass('panel')).toBe(
-      'flex flex-wrap items-center gap-1.5 rounded border border-border bg-surface-alt/50 p-2',
+      'flex flex-wrap items-center gap-1.5 rounded-sm border border-border p-2',
     );
   });
 
@@ -342,13 +343,13 @@ describe('event-filter class helpers — variant + selected branch coverage', ()
 
   it('getAlertIncidentEventFilterActionButtonClass returns the constant action class', () => {
     expect(getAlertIncidentEventFilterActionButtonClass()).toBe(
-      'px-2 py-0.5 rounded border border-border text-muted hover:bg-surface-hover',
+      'px-2 py-0.5 rounded-sm border border-border text-muted hover:bg-surface-hover',
     );
   });
 
   it('getAlertIncidentEventFilterChipClass returns the selected (blue) chip regardless of variant', () => {
     const selected =
-      'px-2 py-0.5 rounded border text-[10px] transition-colors border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300';
+      'px-2 py-0.5 rounded-sm border text-[10px] transition-colors border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-300';
     // selected short-circuits before the variant check, so both variants are equal.
     expect(getAlertIncidentEventFilterChipClass(true, 'compact')).toBe(selected);
     expect(getAlertIncidentEventFilterChipClass(true, 'panel')).toBe(selected);
@@ -356,13 +357,13 @@ describe('event-filter class helpers — variant + selected branch coverage', ()
 
   it('getAlertIncidentEventFilterChipClass returns the unselected panel chip (variant === "panel")', () => {
     expect(getAlertIncidentEventFilterChipClass(false, 'panel')).toBe(
-      'px-2 py-0.5 rounded border text-[10px] transition-colors font-medium border-border text-muted hover:bg-surface-alt',
+      'px-2 py-0.5 rounded-sm border text-[10px] transition-colors font-medium border-border text-muted hover:bg-surface-alt',
     );
   });
 
   it('getAlertIncidentEventFilterChipClass returns the unselected compact chip (variant !== "panel")', () => {
     expect(getAlertIncidentEventFilterChipClass(false, 'compact')).toBe(
-      'px-2 py-0.5 rounded border text-[10px] transition-colors border-border text-slate-500',
+      'px-2 py-0.5 rounded-sm border text-[10px] transition-colors border-border text-slate-500',
     );
   });
 });
@@ -370,22 +371,22 @@ describe('event-filter class helpers — variant + selected branch coverage', ()
 describe('timeline + card class helpers — branch coverage', () => {
   it('getAlertIncidentTimelineEventCardClass uses bg-surface-alt for variant "alt"', () => {
     expect(getAlertIncidentTimelineEventCardClass('alt')).toBe(
-      'rounded border border-border bg-surface-alt p-2 whitespace-normal break-words',
+      'rounded-sm border border-border bg-surface-alt p-2 whitespace-normal wrap-break-word',
     );
   });
 
   it('getAlertIncidentTimelineEventCardClass uses bg-surface for variant "surface"', () => {
     expect(getAlertIncidentTimelineEventCardClass('surface')).toBe(
-      'rounded border border-border bg-surface p-2 whitespace-normal break-words',
+      'rounded-sm border border-border bg-surface p-2 whitespace-normal wrap-break-word',
     );
   });
 
   it('pins the remaining constant class helpers (regression guards)', () => {
     expect(getAlertIncidentAcknowledgedBadgeClass()).toBe(
-      'px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+      'px-2 py-0.5 rounded-sm bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300',
     );
     expect(getAlertIncidentNoteTextareaClass()).toBe(
-      'w-full rounded border border-border bg-surface p-2 text-xs text-base-content',
+      'w-full rounded-sm border border-border bg-surface p-2 text-xs text-base-content',
     );
     expect(getAlertIncidentNoteSaveButtonClass()).toBe(
       'px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed',
@@ -399,7 +400,9 @@ describe('timeline + card class helpers — branch coverage', () => {
     );
     expect(getAlertIncidentTimelineCommandClass()).toBe('mt-1 font-mono text-xs text-base-content');
     expect(getAlertIncidentTimelineOutputClass()).toBe('mt-1 text-xs text-muted');
-    expect(getAlertResourceIncidentCardClass()).toBe('rounded border border-border bg-surface p-3');
+    expect(getAlertResourceIncidentCardClass()).toBe(
+      'rounded-sm border border-border bg-surface p-3',
+    );
     expect(getAlertResourceIncidentSummaryRowClass()).toBe(
       'mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted',
     );
@@ -407,7 +410,7 @@ describe('timeline + card class helpers — branch coverage', () => {
       'flex flex-wrap items-center gap-1.5',
     );
     expect(getAlertResourceIncidentActivityChipClass()).toBe(
-      'rounded bg-surface-alt px-2 py-0.5 text-[10px] font-medium text-base-content',
+      'rounded-sm bg-surface-alt px-2 py-0.5 text-[10px] font-medium text-base-content',
     );
     expect(getAlertResourceIncidentToggleButtonClass()).toBe(
       'px-2 py-1 text-[10px] border rounded-md border-border text-muted hover:bg-surface-hover',

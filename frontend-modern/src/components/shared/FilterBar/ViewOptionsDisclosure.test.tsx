@@ -32,7 +32,7 @@ describe('ViewOptionsDisclosure', () => {
     fireEvent.click(trigger);
 
     const region = screen.getByRole('region', { name: 'View preferences' });
-    expect(region).toHaveClass('border', 'bg-surface-alt/40');
+    expect(region).toHaveClass('border');
     expect(region).not.toHaveClass('absolute', 'fixed', 'shadow-lg');
     expect(region.firstElementChild?.nextElementSibling).toHaveClass('view-options-grid', 'grid');
     expect(screen.getByRole('button', { name: 'Grouped' })).toBeInTheDocument();

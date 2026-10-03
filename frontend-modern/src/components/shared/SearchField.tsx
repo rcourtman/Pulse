@@ -28,7 +28,7 @@ export const SearchField: Component<SearchFieldProps> = (props) => {
         aria-activedescendant={props.ariaActiveDescendant}
         class={`min-h-11 w-full pl-8 sm:min-h-10 sm:pl-9 ${search.inputPaddingRight()} py-1.5 sm:py-2 text-sm border border-border rounded-md
  bg-surface text-base-content placeholder-muted
- focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all disabled:opacity-60 disabled:cursor-not-allowed ${props.inputClass ?? ''}`}
+ focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-hidden transition-all disabled:opacity-60 disabled:cursor-not-allowed ${props.inputClass ?? ''}`}
         title={props.title}
       />
       <Show when={props.completionSuffix}>
@@ -57,14 +57,14 @@ export const SearchField: Component<SearchFieldProps> = (props) => {
       </svg>
       <div class="absolute inset-y-0 right-2 flex items-center gap-1">
         <Show when={search.showShortcutHint()}>
-          <span class="pointer-events-none hidden items-center rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] font-semibold text-muted sm:inline-flex">
+          <span class="pointer-events-none hidden items-center rounded-sm border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] font-semibold text-muted sm:inline-flex">
             {props.shortcutHint}
           </span>
         </Show>
         <Show when={search.showClearButton()}>
           <button
             type="button"
-            class="inline-flex h-11 w-11 items-center justify-center rounded-full bg-surface-hover text-muted transition-all duration-150 hover:bg-red-100 hover:text-red-600 active:scale-90 sm:h-6 sm:w-6 dark:hover:bg-red-900 dark:hover:text-red-400"
+            class="inline-flex h-11 w-11 items-center justify-center rounded-full bg-surface-hover text-muted transition-all duration-150 hover:bg-red-100 hover:text-red-600 active:scale-90 sm:h-6 sm:w-6 dark:hover:bg-red-900/25 dark:hover:text-red-400"
             onClick={() => props.onChange('')}
             onMouseDown={props.onClearMouseDown}
             aria-label="Clear search"

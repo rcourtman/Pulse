@@ -96,7 +96,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
     return (
       <button
         type="button"
-        class={`inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 ${config.className} ${disabled ? 'opacity-60 cursor-not-allowed pointer-events-none' : ''}`.trim()}
+        class={`inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded-sm transition-colors duration-150 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 ${config.className} ${disabled ? 'opacity-60 cursor-not-allowed pointer-events-none' : ''}`.trim()}
         disabled={disabled}
         onClick={() => {
           if (disabled) return;
@@ -195,7 +195,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                     });
                   }}
                   onChange={(e) => props.toggleAll(e.currentTarget.checked)}
-                  class="rounded text-sky-600 focus:ring-sky-500 transition-shadow cursor-pointer"
+                  class="rounded-sm text-sky-600 focus:ring-sky-500 transition-shadow cursor-pointer"
                   aria-label="Select all resources"
                 />
               </TableHead>
@@ -209,7 +209,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
             <For each={props.table.columns}>
               {(column) => (
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind(getAlertResourceColumnKind(column))} whitespace-normal break-words`}
+                  class={`${getPlatformTableHeadClassForKind(getAlertResourceColumnKind(column))} whitespace-normal wrap-break-word`}
                   title={getAlertResourceColumnHeaderTooltip(column)}
                 >
                   {column}
@@ -260,7 +260,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                         props.table.onToggleGlobalDisable?.();
                         props.table.setHasUnsavedChanges?.(true);
                       }}
-                      class="my-[1px]"
+                      class="my-px"
                       title="Global alerts toggle - disable all alerts for this resource type"
                       ariaLabel="Global alerts toggle"
                     />
@@ -271,7 +271,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                 <div class="flex items-center gap-2">
                   <span class="text-sm font-semibold text-base-content">Global Defaults</span>
                   <Show when={props.hasCustomGlobalDefaults()}>
-                    <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                    <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 rounded-sm">
                       {getAlertResourceTableCustomBadgeLabel()}
                     </span>
                   </Show>
@@ -328,7 +328,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                           <Show when={isOff()}>
                             <button
                               type="button"
-                              class="absolute inset-0 w-full rounded cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                              class="absolute inset-0 w-full rounded-sm cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-400"
                               onClick={() => {
                                 props.table.setGlobalDefaults?.((prev) => ({
                                   ...prev,
@@ -501,7 +501,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                           min="0"
                           value={overrideDelay !== undefined ? overrideDelay : ''}
                           placeholder={String(typeDefaultDelay)}
-                          class="w-16 rounded border border-border bg-surface px-2 py-0.5 text-sm text-center text-base-content focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                          class="w-16 rounded-sm border border-border bg-surface px-2 py-0.5 text-sm text-center text-base-content focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                           onInput={(e) => {
                             const raw = e.currentTarget.value;
                             if (raw === '') {

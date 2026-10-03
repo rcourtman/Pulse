@@ -20,7 +20,7 @@ export const Tooltip: Component<TooltipProps> = (props) => {
     <Show when={props.visible}>
       <Portal mount={document.body}>
         <svg
-          class="fixed inset-0 z-[9999] h-screen w-screen overflow-visible pointer-events-none"
+          class="fixed inset-0 z-9999 h-screen w-screen overflow-visible pointer-events-none"
           viewBox={`0 0 ${state.viewport().width} ${state.viewport().height}`}
           preserveAspectRatio="none"
           aria-hidden="true"
@@ -35,7 +35,7 @@ export const Tooltip: Component<TooltipProps> = (props) => {
             <div
               ref={state.setTooltipRef}
               data-tooltip="true"
-              class="inline-block max-w-full whitespace-pre-line rounded-md border border-border bg-surface px-3 py-2 text-xs leading-tight text-base-content shadow-sm"
+              class="inline-block max-w-full whitespace-pre-line rounded-md border border-border bg-surface px-3 py-2 text-xs leading-tight text-base-content shadow-xs"
             >
               {state.sanitizedContent()}
             </div>

@@ -148,12 +148,12 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
                 </span>
               </Show>
               <Show when={isAlertSnoozed(props.alert)}>
-                <span class="shrink-0 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                <span class="shrink-0 rounded-sm bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
                   {getAlertOverviewSnoozeLabel()}
                 </span>
               </Show>
             </div>
-            <p class="text-sm text-base-content mt-1 break-words">{props.alert.message}</p>
+            <p class="text-sm text-base-content mt-1 wrap-break-word">{props.alert.message}</p>
             <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
               <p class={getAlertOverviewStartedAtClass()}>
                 {getAlertOverviewStartedAtLabel(new Date(props.alert.startTime).toLocaleString())}

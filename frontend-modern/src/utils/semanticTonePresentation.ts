@@ -7,19 +7,19 @@ export interface SemanticTonePresentation {
 
 const SEMANTIC_TONE_PRESENTATION: Record<SemanticTone, SemanticTonePresentation> = {
   success: {
-    panelClass: 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900',
+    panelClass: 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/25',
     iconClass: 'text-green-600 dark:text-green-400',
   },
   warning: {
-    panelClass: 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900',
+    panelClass: 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25',
     iconClass: 'text-amber-600 dark:text-amber-400',
   },
   error: {
-    panelClass: 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900',
+    panelClass: 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/25',
     iconClass: 'text-red-600 dark:text-red-400',
   },
   info: {
-    panelClass: 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900',
+    panelClass: 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/25',
     iconClass: 'text-blue-600 dark:text-blue-400',
   },
 };

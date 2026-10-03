@@ -15,7 +15,7 @@ interface ErrorBoundaryProps {
 const DefaultErrorFallback: Component<{ error: Error; reset: () => void }> = (props) => {
   return (
     <div class="min-h-screen flex items-center justify-center bg-base p-4">
-      <div class="max-w-md w-full bg-surface rounded-md shadow-sm p-6">
+      <div class="max-w-md w-full bg-surface rounded-md shadow-xs p-6">
         <div class="flex items-center mb-4">
           <AlertTriangleIcon class="mr-3 h-12 w-12 text-red-500" aria-hidden="true" />
           <div>
@@ -91,7 +91,7 @@ export const RouteErrorBoundary: Component<{ children: JSX.Element }> = (props) 
     <ErrorBoundary
       fallback={(_error, reset) => (
         <div class="flex min-h-[60vh] items-center justify-center p-4">
-          <div class="max-w-md w-full bg-surface rounded-md shadow-sm p-6">
+          <div class="max-w-md w-full bg-surface rounded-md shadow-xs p-6">
             <div class="flex items-center mb-4">
               <AlertTriangleIcon class="mr-3 h-10 w-10 text-red-500" aria-hidden="true" />
               <SectionHeader

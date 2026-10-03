@@ -355,7 +355,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
 
   return (
     <section
-      class="flex min-h-[154px] flex-col rounded-sm border border-border bg-surface p-2.5"
+      class="flex min-h-[154px] flex-col rounded-xs border border-border bg-surface p-2.5"
       data-testid="guest-history-group-chart"
       data-history-group={props.group.id}
     >
@@ -489,7 +489,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
               stroke="currentColor"
               stroke-dasharray="3 3"
               stroke-width="1"
-              class="text-base-content/50"
+              class=""
               vector-effect="non-scaling-stroke"
             />
             <For each={hoveredSeries()}>
@@ -509,12 +509,12 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
           </Show>
         </svg>
         <Show when={!hasStoredData() && !props.loading}>
-          <div class="absolute inset-x-8 inset-y-2 flex items-center justify-center rounded-sm bg-surface/80 text-xs text-muted">
+          <div class="absolute inset-x-8 inset-y-2 flex items-center justify-center rounded-xs text-xs text-muted">
             No stored history in this range
           </div>
         </Show>
         <Show when={props.loading}>
-          <div class="absolute inset-x-8 inset-y-2 flex items-center justify-center rounded-sm bg-surface/80 text-xs text-muted">
+          <div class="absolute inset-x-8 inset-y-2 flex items-center justify-center rounded-xs text-xs text-muted">
             Loading history
           </div>
         </Show>
@@ -583,7 +583,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
             max={observationTimes().length - 1}
             step="1"
             value={selectedIndex()}
-            class="h-11 w-full cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-6"
+            class="h-11 w-full cursor-pointer rounded-xs focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-6"
             onFocus={() => {
               setHoverTimestamp(null);
               setSelectedTimestamp(observationTimes()[selectedIndex()] ?? null);
@@ -670,7 +670,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
         <Show
           when={!locked()}
           fallback={
-            <div class="rounded-sm border border-border bg-surface p-5 text-sm text-muted">
+            <div class="rounded-xs border border-border bg-surface p-5 text-sm text-muted">
               {formatRangeLabel(props.range)} history requires a higher license plan. This
               instance's plan retains {maxHistoryDays()} days.
             </div>

@@ -1222,7 +1222,7 @@ describe('licensePresentation', () => {
         source: 'purchase',
       }),
     ).toEqual({
-      tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
+      tone: 'border-green-200 dark:border-green-900/25 bg-green-50 dark:bg-green-900/25 text-green-900/25 dark:text-green-100',
       title: 'Pulse Pro is now active',
       body: 'Checkout completed and Pulse Pro is active. Choose Patrol mode.',
       highlightsLabel: 'Available now on this instance',
@@ -1258,7 +1258,7 @@ describe('licensePresentation', () => {
         source: 'manual',
       }),
     ).toEqual({
-      tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
+      tone: 'border-green-200 dark:border-green-900/25 bg-green-50 dark:bg-green-900/25 text-green-900/25 dark:text-green-100',
       title: 'Relay is now active',
       body: 'The license key was accepted and this instance is now running Relay.',
       highlightsLabel: 'Available now on this instance',

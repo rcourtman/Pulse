@@ -88,23 +88,23 @@ export const PHYSICAL_DISK_EMPTY_FALLBACK_CLASS =
   'mt-4 rounded-md border border-border bg-surface-alt p-4 text-left';
 export const PHYSICAL_DISK_EMPTY_FALLBACK_TEXT_CLASS = 'text-sm text-muted';
 export const PHYSICAL_DISK_EMPTY_REQUIREMENTS_CLASS =
-  'mt-4 rounded-md border border-blue-200 bg-blue-50 p-4 text-left dark:border-blue-800 dark:bg-blue-900';
+  'mt-4 rounded-md border border-blue-200 bg-blue-50 p-4 text-left dark:border-blue-800 dark:bg-blue-900/25';
 export const PHYSICAL_DISK_EMPTY_REQUIREMENTS_TITLE_CLASS =
-  'mb-2 text-sm font-medium text-blue-900 dark:text-blue-100';
+  'mb-2 text-sm font-medium text-blue-900/25 dark:text-blue-100';
 export const PHYSICAL_DISK_EMPTY_REQUIREMENTS_LIST_CLASS =
   'ml-4 list-decimal space-y-1.5 text-xs text-blue-800 dark:text-blue-200';
 export const PHYSICAL_DISK_EMPTY_REQUIREMENTS_NOTE_CLASS =
   'mt-3 text-xs italic text-blue-700 dark:text-blue-300';
 
 const PHYSICAL_DISK_TABLE_HEADER_CLASS =
-  'overflow-hidden text-ellipsis whitespace-nowrap px-1 sm:px-1.5 lg:px-2 py-0.5 text-left text-[10px] sm:text-[11px] lg:text-xs font-medium uppercase tracking-wider';
+  'overflow-hidden text-ellipsis whitespace-nowrap px-1 sm:px-1.5 lg:px-2 py-0.5 text-left text-[10px] lg:text-xs font-medium uppercase tracking-wider';
 
 export const PHYSICAL_DISK_TABLE_CLASS = 'platform-table w-full table-fixed text-xs';
 export const PHYSICAL_DISK_TABLE_HEADER_ROW_CLASS =
   'border-b border-border bg-surface-alt text-muted';
 export const PHYSICAL_DISK_TABLE_BODY_CLASS = 'divide-y divide-border';
 export const PHYSICAL_DISK_TABLE_ROW_CLASS = 'cursor-pointer transition-colors';
-export const PHYSICAL_DISK_TABLE_ROW_SELECTED_CLASS = 'bg-blue-50 dark:bg-blue-900';
+export const PHYSICAL_DISK_TABLE_ROW_SELECTED_CLASS = 'bg-blue-50 dark:bg-blue-900/25';
 export const PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS = 'hover:bg-surface-hover';
 export const PHYSICAL_DISK_TABLE_ROW_STYLE = { height: '32px' } as const;
 export const PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS =

@@ -35,7 +35,7 @@ describe('getPlatformBadge (branch coverage)', () => {
     expect(getPlatformBadge('availability')).toStrictEqual({
       label: 'Availability',
       classes:
-        'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
+        'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-sky-100 text-sky-700 dark:bg-sky-900/25 dark:text-sky-300',
       title: 'Availability',
     });
   });

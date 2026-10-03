@@ -184,7 +184,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                       <div class="text-xs font-medium text-base-content">
                         Datasets ({zfsSummary()!.datasets.length})
                       </div>
-                      <div class="table-scroll-shell overflow-x-auto rounded border border-border">
+                      <div class="table-scroll-shell overflow-x-auto rounded-sm border border-border">
                         <table class="w-full min-w-0 table-fixed text-left text-xs">
                           <thead class="bg-surface-alt text-muted">
                             <tr>
@@ -256,24 +256,24 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                         />
                         <span class={STORAGE_DETAIL_LINKED_DISK_MODEL_CLASS}>{disk.model}</span>
                         <Show when={disk.role}>
-                          <span class="flex-shrink-0 rounded bg-surface-alt px-1.5 py-0.5 text-[10px] uppercase text-muted">
+                          <span class="shrink-0 rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] uppercase text-muted">
                             {disk.role}
                           </span>
                         </Show>
                         <Show when={disk.sizeLabel}>
-                          <span class="flex-shrink-0 font-mono text-muted">{disk.sizeLabel}</span>
+                          <span class="shrink-0 font-mono text-muted">{disk.sizeLabel}</span>
                         </Show>
                         <Show when={disk.state}>
-                          <span class="flex-shrink-0 text-muted">{disk.state}</span>
+                          <span class="shrink-0 text-muted">{disk.state}</span>
                         </Show>
                         <Show when={disk.ioLabel}>
-                          <span class="flex-shrink-0 font-mono text-muted">{disk.ioLabel}</span>
+                          <span class="shrink-0 font-mono text-muted">{disk.ioLabel}</span>
                         </Show>
                         <Show when={disk.spunDown}>
-                          <span class="flex-shrink-0 text-muted">spun down</span>
+                          <span class="shrink-0 text-muted">spun down</span>
                         </Show>
                         <Show when={disk.errorCount > 0}>
-                          <span class="flex-shrink-0 font-semibold text-amber-700 dark:text-amber-300">
+                          <span class="shrink-0 font-semibold text-amber-700 dark:text-amber-300">
                             {disk.errorCount.toLocaleString()} errors
                           </span>
                         </Show>

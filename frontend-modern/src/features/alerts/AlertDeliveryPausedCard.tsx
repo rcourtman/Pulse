@@ -27,9 +27,9 @@ export function AlertDeliveryPausedCard(props: AlertDeliveryPausedCardProps) {
     >
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div class="flex min-w-0 items-start gap-3">
-          <BellOffIcon class="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-700 dark:text-amber-300" />
+          <BellOffIcon class="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
           <div class="min-w-0">
-            <h3 class="text-sm font-semibold text-amber-900 dark:text-amber-100">
+            <h3 class="text-sm font-semibold text-amber-900/25 dark:text-amber-100">
               {getAlertDestinationsDeliveryPausedTitle()}
             </h3>
             <p class="mt-1 text-sm leading-6 text-amber-800 dark:text-amber-200">
@@ -39,7 +39,7 @@ export function AlertDeliveryPausedCard(props: AlertDeliveryPausedCardProps) {
         </div>
         <button
           type="button"
-          class="inline-flex flex-shrink-0 items-center justify-center gap-2 rounded-md border border-amber-300 bg-transparent px-3 py-1.5 text-sm font-medium text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/30"
+          class="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-amber-300 bg-transparent px-3 py-1.5 text-sm font-medium text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/30"
           disabled={props.activating}
           onClick={props.onActivate}
         >

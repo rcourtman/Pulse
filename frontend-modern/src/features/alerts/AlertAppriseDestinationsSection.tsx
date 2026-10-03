@@ -87,7 +87,7 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
             }
           />
           <button
-            class="min-h-11 rounded border border-blue-500 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed sm:min-h-0 dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-900"
+            class="min-h-11 rounded-sm border border-blue-500 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed sm:min-h-0 dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-900/25"
             disabled={!props.config.enabled || props.testing}
             onClick={props.onTest}
           >
@@ -261,7 +261,7 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
                 <input
                   id={fieldIds.skipTlsVerify}
                   type="checkbox"
-                  class="h-4 w-4 rounded border border-border"
+                  class="h-4 w-4 rounded-sm border border-border"
                   checked={props.config.skipTlsVerify}
                   onChange={(event) => {
                     props.updateApprise({ skipTlsVerify: event.currentTarget.checked });

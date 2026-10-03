@@ -123,7 +123,7 @@ describe('FilterButtonGroup', () => {
     const inactiveButton = screen.getByRole('button', { name: /fahrenheit/i });
 
     expect(activeButton.className).toContain('bg-surface');
-    expect(activeButton.className).toContain('shadow-sm');
+    expect(activeButton.className).toContain('shadow-xs');
     expect(activeButton.className).not.toContain('text-blue-600');
 
     expect(inactiveButton.className).toContain('text-muted');
@@ -171,7 +171,7 @@ describe('FilterButtonGroup', () => {
     const inactiveButton = within(group).getByRole('button', { name: 'VMs' });
 
     expect(activeButton.className).toContain('text-base-content');
-    expect(activeButton.className).toContain('shadow-sm');
+    expect(activeButton.className).toContain('shadow-xs');
     expect(inactiveButton.className).toContain('text-muted');
   });
 

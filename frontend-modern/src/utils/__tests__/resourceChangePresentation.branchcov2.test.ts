@@ -55,7 +55,7 @@ describe('getResourceChangeKindPresentation (branch coverage)', () => {
     expect(getResourceChangeKindPresentation('metric_anomaly')).toStrictEqual({
       label: 'Anomaly',
       plural: 'Anomalies',
-      className: 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300',
+      className: 'bg-rose-100 text-rose-700 dark:bg-rose-900/25 dark:text-rose-300',
     });
     expect(getResourceChangeKindPresentation('alert_unacknowledged')).toStrictEqual({
       label: 'Alert unacknowledged',
@@ -86,27 +86,27 @@ describe('getResourceChangeSourceTypePresentation (branch coverage)', () => {
     expect(getResourceChangeSourceTypePresentation('platform_event')).toStrictEqual({
       label: 'Platform event',
       plural: 'Platform events',
-      className: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
+      className: 'bg-sky-100 text-sky-700 dark:bg-sky-900/25 dark:text-sky-300',
     });
     expect(getResourceChangeSourceTypePresentation('pulse_diff')).toStrictEqual({
       label: 'Pulse diff',
       plural: 'Pulse diffs',
-      className: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300',
+      className: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/25 dark:text-indigo-300',
     });
     expect(getResourceChangeSourceTypePresentation('heuristic')).toStrictEqual({
       label: 'Heuristic',
       plural: 'Heuristics',
-      className: 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300',
+      className: 'bg-rose-100 text-rose-700 dark:bg-rose-900/25 dark:text-rose-300',
     });
     expect(getResourceChangeSourceTypePresentation('user_action')).toStrictEqual({
       label: 'User action',
       plural: 'User actions',
-      className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+      className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300',
     });
     expect(getResourceChangeSourceTypePresentation('agent_action')).toStrictEqual({
       label: 'Agent action',
       plural: 'Agent actions',
-      className: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+      className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
     });
   });
 
@@ -129,22 +129,22 @@ describe('getResourceChangeSourceAdapterPresentation (branch coverage)', () => {
     expect(getResourceChangeSourceAdapterPresentation('proxmox_adapter')).toStrictEqual({
       label: 'Proxmox adapter',
       plural: 'Proxmox adapters',
-      className: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
+      className: 'bg-sky-100 text-sky-700 dark:bg-sky-900/25 dark:text-sky-300',
     });
     expect(getResourceChangeSourceAdapterPresentation('truenas_adapter')).toStrictEqual({
       label: 'TrueNAS adapter',
       plural: 'TrueNAS adapters',
-      className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+      className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300',
     });
     expect(getResourceChangeSourceAdapterPresentation('vmware_adapter')).toStrictEqual({
       label: 'VMware adapter',
       plural: 'VMware adapters',
-      className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300',
+      className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/25 dark:text-cyan-300',
     });
     expect(getResourceChangeSourceAdapterPresentation('agent:ops-helper')).toStrictEqual({
       label: 'Ops helper',
       plural: 'Ops helpers',
-      className: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+      className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
     });
   });
 

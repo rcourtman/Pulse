@@ -55,7 +55,7 @@ interface DrawerDiskListCardProps {
 
 export function DrawerDiskListCard(props: DrawerDiskListCardProps) {
   return (
-    <InfoCardFrame class="basis-[calc(50%-0.75rem)] grow-[2]" data-testid={props.testId}>
+    <InfoCardFrame class="basis-[calc(50%-0.75rem)] grow-2" data-testid={props.testId}>
       <h3 class="mb-2 text-[11px] font-medium uppercase tracking-wide text-base-content">
         {props.title ?? 'Storage'}
       </h3>
@@ -78,9 +78,9 @@ export function DrawerDiskListCard(props: DrawerDiskListCardProps) {
                   </span>
                 </span>
               </div>
-              <div class="relative h-1.5 w-full overflow-hidden rounded bg-surface-hover">
+              <div class="relative h-1.5 w-full overflow-hidden rounded-sm bg-surface-hover">
                 <div
-                  class="absolute inset-y-0 left-0 rounded"
+                  class="absolute inset-y-0 left-0 rounded-sm"
                   style={{
                     width: `${Math.max(0, Math.min(100, disk.percent))}%`,
                     background: disk.color,

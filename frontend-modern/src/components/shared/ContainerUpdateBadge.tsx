@@ -85,7 +85,7 @@ export const ContainerUpdateBadge: Component<ContainerUpdateBadgeProps> = (props
       <Switch>
         <Match when={hasContainerUpdate(props.updateStatus)}>
           <span
-            class="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-help"
+            class="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300 cursor-help"
             onMouseEnter={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
               showTooltip(
@@ -181,7 +181,7 @@ export const UpdateIcon: Component<UpdateIconProps> = (props) => {
   return (
     <Show when={hasContainerUpdate(props.updateStatus)}>
       <span
-        class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-help"
+        class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300 cursor-help"
         onMouseEnter={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
           showTooltip(

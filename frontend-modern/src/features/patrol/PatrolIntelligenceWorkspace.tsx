@@ -187,10 +187,7 @@ export function PatrolIntelligenceWorkspace(props: {
         >
           <For each={workGroupSummaries()}>
             {(group) => (
-              <div
-                role="listitem"
-                class="rounded-md border border-border-subtle bg-surface-alt/60 px-3 py-2"
-              >
+              <div role="listitem" class="rounded-md border border-border-subtle px-3 py-2">
                 <div class="flex min-w-0 flex-wrap items-center gap-2">
                   <MetadataBadge tone={group.tone} size="xs" shape="rounded">
                     {group.label}
@@ -209,7 +206,7 @@ export function PatrolIntelligenceWorkspace(props: {
             <div class="flex flex-col gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-3 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 sm:flex-row sm:items-start sm:justify-between">
               <div class="min-w-0 space-y-1">
                 <div class="flex flex-wrap items-center gap-2 text-xs">
-                  <span class="font-semibold text-blue-950 dark:text-blue-100">
+                  <span class="font-semibold text-blue-950/25 dark:text-blue-100">
                     Patrol run {formatRelativeTime(run().started_at, { compact: true })}
                   </span>
                   <span>{formatTriggerReason(run().trigger_reason)}</span>
@@ -326,7 +323,7 @@ export function PatrolIntelligenceWorkspace(props: {
                   {setupAction().label}
                 </ButtonLink>
               </div>
-              <div class="rounded-md border border-amber-200 bg-surface/80 p-3 dark:border-amber-900">
+              <div class="rounded-md border border-amber-200 p-3 dark:border-amber-900/25">
                 <div class="flex items-center gap-2">
                   <ListChecksIcon class="h-4 w-4 text-muted" aria-hidden="true" />
                   <p class="text-xs font-semibold uppercase tracking-wider text-muted">

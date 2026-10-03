@@ -107,7 +107,7 @@ export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
                 </span>
               </div>
               <Show when={zfsSummary()?.scan}>
-                <div class={`${getZfsScanTextClass()} mt-0.5 max-w-[200px] break-words`}>
+                <div class={`${getZfsScanTextClass()} mt-0.5 max-w-[200px] wrap-break-word`}>
                   {zfsSummary()?.scan}
                 </div>
               </Show>

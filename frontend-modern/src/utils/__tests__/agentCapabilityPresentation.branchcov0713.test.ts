@@ -9,14 +9,14 @@ import type { AgentCapability } from '@/utils/agentCapabilityPresentation';
 // Full badge class strings are mirrored from the source module so assertions
 // describe the documented Tailwind badge composition rather than echoing the
 // function under test. These are the building blocks the module returns.
-const PROXMOX_BADGE = 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300';
+const PROXMOX_BADGE = 'bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-300';
 const PBS_BADGE = 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300';
-const PMG_BADGE = 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-300';
-const TRUENAS_BADGE = 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300';
-const AVAILABILITY_BADGE = 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-300';
+const PMG_BADGE = 'bg-rose-100 text-rose-800 dark:bg-rose-900/25 dark:text-rose-300';
+const TRUENAS_BADGE = 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/25 dark:text-cyan-300';
+const AVAILABILITY_BADGE = 'bg-sky-100 text-sky-800 dark:bg-sky-900/25 dark:text-sky-300';
 const KUBERNETES_BADGE =
-  'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300';
-const DEFAULT_BADGE = 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
+  'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-300';
+const DEFAULT_BADGE = 'bg-blue-100 text-blue-800 dark:bg-blue-900/25 dark:text-blue-300';
 
 describe('agentCapabilityPresentation branch coverage', () => {
   describe('getAgentCapabilityLabel', () => {

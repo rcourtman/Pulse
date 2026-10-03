@@ -37,7 +37,7 @@ export function getDialogPanelClass(layout: DialogLayout, panelClass?: string): 
       : layout === 'mobile-sheet'
         ? 'max-h-[calc(100dvh-1.5rem)] rounded-md animate-slide-up'
         : 'max-h-[calc(100dvh-2rem)] rounded-md animate-slide-up';
-  return `relative flex min-h-0 w-full flex-col overflow-hidden bg-surface border border-border outline-none pointer-events-auto ${
+  return `relative flex min-h-0 w-full flex-col overflow-hidden bg-surface border border-border outline-hidden pointer-events-auto ${
     layoutClass
   } ${panelClass ?? (layout === 'drawer-right' ? '' : 'max-w-lg')}`.trim();
 }

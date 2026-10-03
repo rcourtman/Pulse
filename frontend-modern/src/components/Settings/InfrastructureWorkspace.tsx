@@ -466,7 +466,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         </div>
       </Show>
       <Show when={showAgentProfiles()}>
-        <div class="rounded-xl border border-border bg-surface p-4 shadow-sm">
+        <div class="rounded-xl border border-border bg-surface p-4 shadow-xs">
           <div class="mb-4 space-y-1">
             <div class="text-base font-semibold text-base-content">Agent profiles</div>
             <div class="text-sm text-muted">
@@ -538,7 +538,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           </div>
 
           <Show when={connection.lastError?.message}>
-            <div class="mt-4 rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200">
+            <div class="mt-4 rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/25 dark:text-rose-200">
               {connection.lastError?.message}
             </div>
           </Show>
@@ -603,7 +603,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           {(message) => (
             <div
               role="alert"
-              class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+              class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/25 dark:text-rose-200"
             >
               {message()}
             </div>
@@ -654,7 +654,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                   <div class="space-y-1">
                     <div class="text-sm font-medium text-base-content">{connection.name}</div>
                     <Show when={connection.address && connection.address !== connection.name}>
-                      <div class="break-words text-xs text-muted">{connection.address}</div>
+                      <div class="wrap-break-word text-xs text-muted">{connection.address}</div>
                     </Show>
                     <Show when={versionPresentation()}>
                       {(presentation) => (
@@ -670,7 +670,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                     </Show>
                   </div>
                   <div class="flex items-center gap-2">
-                    <span class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-800 dark:bg-green-900 dark:text-green-300">
+                    <span class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-800 dark:bg-green-900/25 dark:text-green-300">
                       {connection.state === 'active' ? 'Active' : connection.state}
                     </span>
                     <span class="text-xs text-muted">{connectionLastActivityText(connection)}</span>
@@ -681,7 +681,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                   {(message) => (
                     <div
                       role="alert"
-                      class="mt-3 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+                      class="mt-3 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/25 dark:text-rose-200"
                     >
                       {message()}
                     </div>
@@ -737,7 +737,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         return (
           <div
             role="alert"
-            class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+            class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/25 dark:text-rose-200"
           >
             The selected connection is no longer available. Reload and try again.
           </div>
@@ -759,7 +759,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
               fallback={
                 <div
                   role="alert"
-                  class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+                  class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/25 dark:text-rose-200"
                 >
                   Couldn't find the saved configuration for {connection.name}. It may have already
                   been removed.
@@ -776,7 +776,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             return (
               <div
                 role="alert"
-                class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+                class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/25 dark:text-rose-200"
               >
                 Couldn't find the saved VMware configuration for {connection.name}. It may have
                 already been removed.
@@ -805,7 +805,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             return (
               <div
                 role="alert"
-                class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+                class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/25 dark:text-rose-200"
               >
                 Couldn't find the saved TrueNAS configuration for {connection.name}. It may have
                 already been removed.

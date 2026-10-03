@@ -83,7 +83,7 @@ export function getAlertResourceTableOfflineStatePresentation(
       return {
         label: ALERT_RESOURCE_TABLE_OFFLINE_STATE_WARNING_LABEL,
         className:
-          'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800',
+          'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/25 dark:text-blue-200 dark:hover:bg-blue-800',
         title: ALERT_RESOURCE_TABLE_OFFLINE_STATE_WARNING_TITLE,
       } as const;
     case 'critical':
@@ -91,7 +91,7 @@ export function getAlertResourceTableOfflineStatePresentation(
       return {
         label: ALERT_RESOURCE_TABLE_OFFLINE_STATE_CRITICAL_LABEL,
         className:
-          'bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800',
+          'bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/25 dark:text-red-200 dark:hover:bg-red-800',
         title: ALERT_RESOURCE_TABLE_OFFLINE_STATE_CRITICAL_TITLE,
       } as const;
   }

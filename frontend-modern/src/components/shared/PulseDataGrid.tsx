@@ -83,7 +83,7 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                                                     group transition-colors duration-150 animate-enter
                                                     ${
                                                       local.onRowClick
-                                                        ? 'cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900'
+                                                        ? 'cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/25'
                                                         : 'hover:bg-surface-hover'
                                                     }
                                                 `}
@@ -118,7 +118,7 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                       <TableRow
                         class={
                           local.onRowClick
-                            ? 'bg-surface-alt hover:bg-blue-50 dark:hover:bg-blue-900'
+                            ? 'bg-surface-alt hover:bg-blue-50 dark:hover:bg-blue-900/25'
                             : 'bg-surface-alt hover:bg-surface-hover'
                         }
                       >

@@ -74,14 +74,14 @@ export function PlatformOutdatedAgentNotice(props: PlatformOutdatedAgentNoticePr
         <Show when={count() > 3}>
           <button
             type="button"
-            class="ml-1 font-medium underline underline-offset-2 hover:no-underline focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            class="ml-1 font-medium underline underline-offset-2 hover:no-underline focus-visible:rounded-xs focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2"
             aria-expanded={showAllHosts()}
             onClick={() => setShowAllHosts((current) => !current)}
           >
             {showAllHosts() ? 'Hide affected names' : `Show all ${count()} ${subjectPlural()}`}
           </button>
           <Show when={showAllHosts()}>
-            <p class="mt-1 break-words">Affected: {names()}.</p>
+            <p class="mt-1 wrap-break-word">Affected: {names()}.</p>
           </Show>
         </Show>
       </InlineNotice>
