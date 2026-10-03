@@ -4,6 +4,7 @@ import {
   DISK_DETAIL_LIVE_CHARTS,
   getDiskAttributeValueTextClass,
   getDiskDetailAttributeCards,
+  getDiskDetailHealthPresentation,
   getDiskDetailHistoryCharts,
   getDiskDetailHistoryFallbackMessage,
   getDiskDetailLiveBadgeLabel,
@@ -32,6 +33,41 @@ describe('diskDetailPresentation', () => {
     expect(getLinkedDiskTemperatureTextClass(71, { warning: 65, critical: 70 })).toBe(
       'text-red-500',
     );
+  });
+
+  it('carries the row verdict and its reason into the drawer header', () => {
+    const disk = {
+      node: 'tower',
+      instance: 'cluster-main',
+      devPath: '/dev/sda',
+      model: 'Archive HDD',
+      serial: 'SERIAL-1',
+      wwn: '',
+      size: 1,
+      health: 'PASSED',
+      wearout: -1,
+      type: 'hdd',
+      temperature: 42,
+      rpm: 7200,
+      used: '',
+      riskReasons: [] as string[],
+    };
+    expect(getDiskDetailHealthPresentation(disk)).toEqual({
+      label: 'Healthy',
+      summary: '',
+      tone: 'text-emerald-700 dark:text-emerald-300',
+    });
+    expect(
+      getDiskDetailHealthPresentation({
+        ...disk,
+        health: 'FAILED',
+        riskReasons: ['SMART failed.'],
+      }),
+    ).toEqual({
+      label: 'Replace Now',
+      summary: 'SMART failed.',
+      tone: 'text-red-700 dark:text-red-300',
+    });
   });
 
   it('builds canonical SATA and NVMe attribute cards', () => {

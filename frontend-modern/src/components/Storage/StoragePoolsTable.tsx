@@ -9,7 +9,7 @@ import {
 } from '@/components/shared/Table';
 import { getPlatformTableHeadClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import {
-  getStoragePoolColumnWidthPercent,
+  getStoragePoolColumnWidthStyle,
   getStoragePoolTableColumns,
   getStoragePoolTableLayoutModeForContainer,
   getStorageEmptyStateMessage,
@@ -106,9 +106,7 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                 {(column) => (
                   <col
                     class={columnClass(column.colClassName, column.id, 'table-column')}
-                    style={{
-                      width: `${getStoragePoolColumnWidthPercent(layoutMode(), column.id)}%`,
-                    }}
+                    style={getStoragePoolColumnWidthStyle(layoutMode(), column.id)}
                     data-storage-column={column.id}
                   />
                 )}

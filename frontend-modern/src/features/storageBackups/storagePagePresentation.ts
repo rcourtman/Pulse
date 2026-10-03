@@ -1,5 +1,7 @@
+import type { JSX } from 'solid-js';
 import type { StorageSortKey } from './storageModelCore';
 import type { PlatformTableColumnKind } from '@/features/platformPage/columnAlignment';
+import { getPlatformTableWeightedColumnWidthStyle } from '@/features/platformPage/sharedPlatformPage';
 
 export type StorageViewOption = {
   value: 'pools' | 'disks';
@@ -21,11 +23,14 @@ export type StoragePoolTableColumn = {
 
 export type StoragePoolTableLayoutMode = 'narrow' | 'compact' | 'operational' | 'full';
 
+// The compact/operational boundary matches the shared phone projection of the
+// table container (`@container (max-width: 33.999rem)` = 544px), so the
+// columns and the in-cell labels always change projection together.
 export const getStoragePoolTableLayoutModeForContainer = (
   containerWidth: number,
 ): StoragePoolTableLayoutMode => {
   if (containerWidth >= 1_040) return 'full';
-  if (containerWidth >= 560) return 'operational';
+  if (containerWidth >= 544) return 'operational';
   if (containerWidth > 0 && containerWidth < 360) return 'narrow';
   return 'compact';
 };
@@ -43,13 +48,20 @@ const STORAGE_POOL_VISIBLE_COLUMNS: Record<
   full: ['name', 'state', 'type', 'host', 'protection', 'usage', 'growth'],
 };
 
-const STORAGE_POOL_COLUMN_WIDTHS: Record<
+// Relative weights per layout, resolved through the canonical weighted-width
+// helper. On phones the usage bar carries only its percentage, so most of the
+// row goes to the two identity strings (pool name and host); a state word such
+// as "Degraded" must still fit whole. The shared 30% identity anchor is not
+// used here because a four-column row cannot keep the host readable with it.
+const STORAGE_POOL_COLUMN_WEIGHTS: Record<
   StoragePoolTableLayoutMode,
   Partial<Record<StoragePoolTableColumnId, number>>
 > = {
-  narrow: { name: 40, state: 20, host: 20, usage: 20 },
-  compact: { name: 35, state: 20, host: 20, usage: 25 },
-  operational: { name: 29, state: 20, host: 15, protection: 15, usage: 21 },
+  narrow: { name: 35, state: 21, host: 31, usage: 13 },
+  compact: { name: 37, state: 18.5, host: 31.5, usage: 13 },
+  // The full "59% (1.18 TB/2.00 TB)" bar label returns at 544px, so the usage
+  // track must hold ~120px of text from the first operational width.
+  operational: { name: 27, state: 18, host: 15, protection: 15, usage: 25 },
   full: { name: 20, state: 14, type: 10, host: 12, protection: 13, usage: 20, growth: 11 },
 };
 
@@ -58,10 +70,24 @@ export const isStoragePoolColumnVisible = (
   columnId: StoragePoolTableColumnId,
 ): boolean => STORAGE_POOL_VISIBLE_COLUMNS[layout].includes(columnId);
 
-export const getStoragePoolColumnWidthPercent = (
+// On phones the pool row sheds the desktop cell gutter the same way its
+// headers (via the shared container query) and the physical-disk rows do:
+// four cells at 12px each were 48px of a 361px row, and the measured values
+// fit the tracks with only a pixel or two to spare.
+export const STORAGE_POOL_PHONE_CELL_PADDING_CLASS = '!px-1';
+
+export const getStoragePoolCellPaddingClass = (layout: StoragePoolTableLayoutMode): string =>
+  layout === 'narrow' || layout === 'compact' ? STORAGE_POOL_PHONE_CELL_PADDING_CLASS : '';
+
+export const getStoragePoolColumnWidthStyle = (
   layout: StoragePoolTableLayoutMode,
   columnId: StoragePoolTableColumnId,
-): number => STORAGE_POOL_COLUMN_WIDTHS[layout][columnId] ?? 0;
+): JSX.CSSProperties =>
+  getPlatformTableWeightedColumnWidthStyle(
+    columnId,
+    STORAGE_POOL_COLUMN_WEIGHTS[layout],
+    STORAGE_POOL_VISIBLE_COLUMNS[layout],
+  );
 
 const STORAGE_POOL_TABLE_HEADER_CLASS =
   'overflow-hidden text-ellipsis whitespace-nowrap text-[10px] lg:text-xs uppercase tracking-wider';

@@ -66,9 +66,32 @@ export function getStoragePoolStateTextClass(record: StorageRecord): string {
   return 'text-base-content';
 }
 
+// The rebuild summary the backend promotes into the protection label is a
+// sentence ("ZFS pool tank is resilvering (45.2%)"). The protection column is
+// a badge, so a ZFS scan reads as the activity word, derived from the pool's
+// own scan state (the same source the backend keys its risk reason on); the
+// sentence stays available as the cell title. Non-ZFS rebuilds keep the label
+// their platform supplies.
+export function getStoragePoolRebuildLabel(record: StorageRecord): string {
+  const pool = getStorageRecordZfsPool(record);
+  if (!pool) return '';
+  const scan = `${pool.scanDetails?.function || ''} ${pool.scan || ''}`.toLowerCase();
+  const percentage = pool.scanDetails?.percentage;
+  const progress =
+    typeof percentage === 'number' && Number.isFinite(percentage) && percentage > 0
+      ? ` ${Math.round(percentage)}%`
+      : '';
+  if (scan.includes('resilver')) return `Resilvering${progress}`;
+  if (scan.includes('scrub')) return `Scrubbing${progress}`;
+  return '';
+}
+
 export function getCompactStoragePoolProtectionLabel(record: StorageRecord): string {
   const label = (record.protectionLabel || '').trim();
-  if (record.rebuildInProgress || record.protectionReduced) {
+  if (record.rebuildInProgress) {
+    return getStoragePoolRebuildLabel(record) || label || '—';
+  }
+  if (record.protectionReduced) {
     return label || '—';
   }
   if (label && label.toLowerCase() !== 'healthy') {
@@ -87,7 +110,9 @@ export function getStoragePoolStateLabel(record: StorageRecord): string {
   }
   const pool = getStorageRecordZfsPool(record);
   if (pool?.state) {
-    return pool.state === 'ONLINE' ? 'Online' : pool.state;
+    // zpool reports upper-case states; present them like every other state
+    // path so a DEGRADED pool reads the same as a degraded array.
+    return titleize(pool.state);
   }
   const status = getStorageRecordStatus(record);
   return status ? titleize(status) : '—';
@@ -122,7 +147,9 @@ export function getCompactStoragePoolProtectionTitle(record: StorageRecord): str
       return issueSummary;
     }
   }
-  return label;
+  // When the badge shows a derived word, the platform's full label is the title.
+  const fullLabel = (record.protectionLabel || '').trim();
+  return fullLabel && fullLabel.toLowerCase() !== label.toLowerCase() ? fullLabel : label;
 }
 
 export function getCompactStoragePoolImpactLabel(record: StorageRecord): string {

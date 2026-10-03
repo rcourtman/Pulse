@@ -38,8 +38,13 @@ export const getStorageBarUsagePercent = (used: number, total: number): number =
   return (used / total) * 100;
 };
 
+// Phone-width tables only have room for the percentage inside the bar; the
+// used/total sublabel stays in the tooltip and in the wider projections.
+export const getStorageBarCompactLabel = (used: number, total: number): string =>
+  formatPercent(getStorageBarUsagePercent(used, total));
+
 export const getStorageBarLabel = (used: number, total: number): string =>
-  `${formatPercent(getStorageBarUsagePercent(used, total))} (${formatBytes(used)}/${formatBytes(total)})`;
+  `${getStorageBarCompactLabel(used, total)} (${formatBytes(used)}/${formatBytes(total)})`;
 
 export const getStorageBarTooltipTitle = (): string => 'Storage Details';
 
