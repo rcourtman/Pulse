@@ -469,6 +469,13 @@ const percentageColumn = (width: string): GuestColumnWidthOverride => ({
   maxWidth: width,
 });
 
+// The phone name cell carries the expansion toggle, status dot, and backup
+// badge before the name, so the shared 30% identity anchor left a 390px phone
+// 66px for the name and clipped "artifact-cache-310" to "artifact-ca…". The
+// four metric chips beside it need far less than an even split, so the name
+// takes the same wider phone anchor the Proxmox host table uses.
+const GUEST_PHONE_IDENTITY_WIDTH_PERCENT = 38;
+
 // Responsive weights are normalized against the currently visible column set.
 // That keeps each workload view mode full-width without assuming one fixed set.
 const GUEST_COLUMN_RESPONSIVE_WEIGHTS: Record<
@@ -548,9 +555,11 @@ const getResponsiveColumnOverride = (
     activeIds,
     layoutMode === 'narrow'
       ? { columnId: 'name', widthPercent: PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT }
-      : layoutMode === 'phone' || layoutMode === 'mobile'
-        ? { columnId: 'name', widthPercent: PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT }
-        : undefined,
+      : layoutMode === 'phone'
+        ? { columnId: 'name', widthPercent: GUEST_PHONE_IDENTITY_WIDTH_PERCENT }
+        : layoutMode === 'mobile'
+          ? { columnId: 'name', widthPercent: PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT }
+          : undefined,
   );
   return typeof style.width === 'string' ? percentageColumn(style.width) : undefined;
 };

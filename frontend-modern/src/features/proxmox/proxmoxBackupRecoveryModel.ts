@@ -47,6 +47,8 @@ export interface RecoverableArtifact {
   /** Operator-facing source/repository label used by the backup-location filter. */
   locationLabel?: string;
   detail: string;
+  /** Full provider identifier behind a shortened `detail`, shown on hover. */
+  detailTitle?: string;
   protected: boolean;
   verified?: boolean;
   /** A still-running backup is writing this artifact; it is not recoverable yet. */
@@ -70,7 +72,13 @@ export interface WorkloadCoverageRow {
   key: string;
   workload: WorkloadReference;
   artifacts: RecoverableArtifact[];
-  latestRecovery?: RecoverableArtifact;
+  /**
+   * Newest completed PBS snapshot or PVE backup file. Guest snapshots never
+   * fill this slot: they live on the guest's own storage and the protection
+   * posture engine does not count them as independent recovery, so a fresh
+   * snapshot must not read as a fresh backup beside a stale posture.
+   */
+  latestBackup?: RecoverableArtifact;
   latestPBS?: RecoverableArtifact;
   latestArchive?: RecoverableArtifact;
   latestSnapshot?: RecoverableArtifact;
@@ -138,10 +146,23 @@ export function getRecoveryAgeBand(
   return 'stale';
 }
 
+// A guest snapshot shares the guest's storage, so it is listed as restore
+// evidence but never counted as a backup. Mirrors the server posture rule that
+// "snapshots alone do not prove independent recovery".
+export function isBackupArtifact(artifact: RecoverableArtifact): boolean {
+  return artifact.sourceKind !== 'snapshot';
+}
+
 function parseTimestampMs(value: string | undefined): number | undefined {
   if (!value) return undefined;
   const ms = Date.parse(value);
   return Number.isFinite(ms) ? ms : undefined;
+}
+
+function archiveFileName(volid: string | undefined): string {
+  const trimmed = volid?.trim() ?? '';
+  if (!trimmed) return '';
+  return trimmed.slice(trimmed.lastIndexOf('/') + 1);
 }
 
 function pbsBackupFileDetailLabel(fileCount: number): string {
@@ -572,7 +593,12 @@ export function buildProxmoxBackupRecoveryModel(
       size: archive.size,
       location: archive.storage || archive.node || '—',
       ...artifactLocationScope('archive', archive.instance, archive.storage || archive.node),
-      detail: archive.volid || archive.format || archiveSource.detailFallbackLabel,
+      // The volid repeats the storage, guest type, VMID, and timestamp the row
+      // already shows in their own columns and clips at every width; the
+      // archive format is the one fact it adds, so that is the cell and the
+      // volid stays on hover and in search.
+      detail: archive.format || archiveFileName(archive.volid) || archiveSource.detailFallbackLabel,
+      detailTitle: archive.volid || undefined,
       protected: archive.protected,
       verified: archive.inProgress ? undefined : archive.isPBS ? archive.verified : undefined,
       running: archive.inProgress === true,
@@ -626,6 +652,7 @@ export function buildProxmoxBackupRecoveryModel(
     // the "latest" pointers (which answer "what can I recover to?") skip them.
     // The artifacts themselves stay listed with an honest state.
     const completed = row.artifacts.filter((artifact) => !artifact.running && !artifact.failed);
+    row.latestBackup = newest(completed.filter(isBackupArtifact), (artifact) => artifact.createdMs);
     row.latestPBS = newest(
       completed.filter((artifact) => artifact.sourceKind === 'pbs'),
       (artifact) => artifact.createdMs,
@@ -638,7 +665,6 @@ export function buildProxmoxBackupRecoveryModel(
       completed.filter((artifact) => artifact.sourceKind === 'snapshot'),
       (artifact) => artifact.createdMs,
     );
-    row.latestRecovery = newest(completed, (artifact) => artifact.createdMs);
   }
 
   const coverageRows = Array.from(rows.values()).map((row) => {
@@ -665,7 +691,7 @@ export function buildProxmoxBackupRecoveryModel(
 
   coverageRows.sort((left, right) => {
     if (left.postureRank !== right.postureRank) return left.postureRank - right.postureRank;
-    return (right.latestRecovery?.createdMs ?? 0) - (left.latestRecovery?.createdMs ?? 0);
+    return (right.latestBackup?.createdMs ?? 0) - (left.latestBackup?.createdMs ?? 0);
   });
   artifacts.sort((left, right) => (right.createdMs ?? 0) - (left.createdMs ?? 0));
 
@@ -730,6 +756,7 @@ export function recoverableArtifactMatchesSearch(
     artifact.sourceTitle,
     artifact.location,
     artifact.detail,
+    artifact.detailTitle,
     artifact.verified === true
       ? 'verified'
       : artifact.verified === false
