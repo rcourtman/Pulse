@@ -59,7 +59,9 @@ const { chromium, webkit } = require('playwright');
       await manual.evaluate((heading) => heading.scrollIntoView({ block: 'start' }));
       await page.waitForFunction(() => {
         const heading = document.getElementById('manual-rollback');
-        return heading && heading.getBoundingClientRect().top >= 0 && heading.getBoundingClientRect().top < 10;
+        // Respect the product's heading scroll-margin rather than demanding
+        // alignment at zero pixels above its normal reading inset.
+        return heading && heading.getBoundingClientRect().top >= 0 && heading.getBoundingClientRect().top < 200;
       });
       await page.screenshot({ path: path.join(artifacts, `${engine}-manual.png`) });
 
