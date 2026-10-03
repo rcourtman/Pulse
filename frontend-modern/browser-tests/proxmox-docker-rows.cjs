@@ -115,7 +115,7 @@ const observations = (mode) => [
       hostname: 'edge-long-hostname',
       serviceName: 'web-service',
       nodeName: 'worker-1',
-      taskState: 'running',
+      currentState: 'running',
       desiredState: 'running',
       startedAt: '2026-10-03T11:30:00.123456Z',
     },
@@ -124,7 +124,7 @@ const observations = (mode) => [
 
 (async () => {
   const root = '/workspace/frontend-modern';
-  const output = '/workspace/tmp/proxmox-docker-rows-verified';
+  const output = '/workspace/tmp/proxmox-docker-rows-selfcontained';
   fs.mkdirSync(output, { recursive: true });
   process.chdir(root);
   const playwright = require('playwright/package.json').version;
@@ -134,7 +134,19 @@ const observations = (mode) => [
       'node_modules/@playwright/test'
     ].version,
   );
-  const paths = JSON.parse(fs.readFileSync(path.join(output, 'runtime-paths.json')));
+  // Keep the fixture runnable from clean committed source, without requiring
+  // an invocation-specific untracked runtime-paths input.
+  const paths = [
+    'frontend-modern/src/components/Workloads/StackedDiskBar.tsx',
+    'frontend-modern/src/components/Workloads/stackedDiskBarModel.ts',
+    'frontend-modern/src/features/docker/DockerImagesTable.tsx',
+    'frontend-modern/src/features/docker/DockerServicesTable.tsx',
+    'frontend-modern/src/features/docker/DockerTasksTable.tsx',
+    'frontend-modern/src/features/docker/dockerContainerTableModel.ts',
+    'frontend-modern/src/features/storageBackups/resourceStoragePresentation.ts',
+    'frontend-modern/src/features/storageBackups/storageAdapters.ts',
+    'frontend-modern/src/hooks/useUnifiedResources.ts',
+  ];
   const hashes = Object.fromEntries(
     paths.map((p) => [
       p,
@@ -403,6 +415,10 @@ const observations = (mode) => [
           const started = page.locator('[title="2026-10-03T11:30:00.123456Z"]');
           await started.waitFor({ state: 'attached' });
           assert.match(await started.innerText(), /ago/);
+          await page
+            .getByRole('region', { name: 'Swarm tasks' })
+            .getByText('running', { exact: true })
+            .waitFor();
         },
       );
       await capture('swarm');
