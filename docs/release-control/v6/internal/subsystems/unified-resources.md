@@ -23,6 +23,26 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Resource evidence fallback access boundaries
+
+When the existing resource-facet reader receives a final HTTP 401/403, its
+drawer must not substitute embedded snapshot events, counts, capabilities or
+relationships for the withdrawn response. A denied filtered read must not
+substitute the unfiltered bundle. Denial remains visible during that request's
+retry, and fresh success restores its evidence. Independently successful
+unfiltered reads retain their own ownership; this is not a global revocation
+broadcast. Transient failures still retain applicable snapshots, and compact
+snapshot-only rows still make no remote history reads.
+
+Failed change/action reads are unavailable, not “loaded” or empty. The Manage
+tab keeps a failed action read's retry visible even without retained rows,
+without changing the action client's existing unavailable-plan responses.
+The hook access tests and mounted ResourceDetailDrawer.history tests protect
+these boundaries; browser-tests/resource-evidence-access.cjs exercises the
+production drawer/client/CSS on desktop Chromium and dark touch WebKit. Its
+synthetic HTTP responses do not establish native authorisation, a reporter's
+cause, installed recovery or release availability.
+
 ### Detail snapshot and selection ownership
 
 ResourceDetailDrawer reads the current resource through a reactive getter in

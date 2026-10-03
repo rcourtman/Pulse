@@ -1,25 +1,23 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "a9533eb82a29700ede2d4ad609812ddd01e5f287",
-  "verified_at": "2026-10-03T01:44:27.336168Z",
+  "base_sha": "227657b1b0d6924e98da9382f812bb0cb1874f57",
+  "verified_at": "2026-10-03T04:13:25.499572Z",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
-    "frontend-modern/src/components/shared/HistoryChartOverlay.tsx",
-    "frontend-modern/src/components/shared/useHistoryChartState.ts",
-    "frontend-modern/src/hooks/createNonSuspendingQuery.ts",
-    "frontend-modern/src/utils/apiAccessError.ts"
+    "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "c4370a69495c8ccea01a0d92076e4a051e4d06abec0e675e2fb3547d46e87bcb",
-    "frontend-modern/src/components/shared/HistoryChartOverlay.tsx": "14c0699b827ec6eb4d85cf9d8fc76d61a0af3dd6565d2396a3f22a03429af104",
-    "frontend-modern/src/components/shared/useHistoryChartState.ts": "5a9b022656ac7316710675a0742e9b2908c9114ffbed67d6f6962d361bb65bbf",
-    "frontend-modern/src/hooks/createNonSuspendingQuery.ts": "df293d0484612a6d31dd9f3fa6af2a1160e1e98d66965730a45829b7048a4ba7",
-    "frontend-modern/src/utils/apiAccessError.ts": "3b34a498959a77014af3c842677fc6646b5e7e6a8b9b332ca8acf91254c01730"
+    "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx": "44f939bd8accdb5662f2f99a2c4d6324d965ca520414d0a0db8daba790af04d9",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "41dadd17f930115374facc8f7a9dc46f3e4eab69e41e4375c90f9a5f57022fe8",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "ee9482a2076b86e62c85bffe0ce816a6ccd542ec3b07a85e829a1cc07dd8b1de",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts": "a39e66fc3ca772f0394ad0b5a74feee67a80daac3fdc604d014cadb52cda02b6"
   },
   "routes": [
-    "Existing PBS/Machine/resource drawer History batch reader",
-    "Existing Storage physical disk shared History reader"
+    "Existing PBS/resource detail Overview change history",
+    "Existing resource detail Manage action history"
   ],
   "viewports": [
     {
@@ -32,25 +30,23 @@
     }
   ],
   "states": [
-    "Real same-origin 503 responses retain stored samples with explicit warnings in both production readers",
-    "Real final HTTP 403 responses withdraw samples, tooltip, keyboard announcement, sliders and formerly displayed current-only legends",
-    "Access-denied guidance fits light desktop Chromium and dark touch WebKit without horizontal overflow",
-    "The existing focusable scoped retry remains mounted and ignores duplicate activation while busy",
-    "Earlier cached ranges and remounts cannot resurrect denied stored readings while a replacement is pending",
-    "Only a new successful read restores History and clears denial; old values do not return",
-    "Every final screenshot inspected; fixed Playwright 1.56.1 equals integration lock, no page errors or off-origin data requests"
+    "Final facet HTTP 403 withdraws embedded snapshot events/counts instead of reintroducing denied evidence",
+    "Denied filtered facets do not fall back to the unfiltered bundle",
+    "Retry retains denial while pending; fresh successful response restores events and clears guidance",
+    "First action-history HTTP 503 stays visible in Manage with retry and no false empty state",
+    "Initial facet HTTP 503 retains applicable embedded evidence; snapshot-only table rows still make no remote reads",
+    "All fourteen final screenshots inspected in desktop Chromium and dark touch phone WebKit; Playwright 1.56.1 matches the integration lock"
   ],
   "interactions": [
-    "Inspect by desktop keyboard and phone tap",
-    "Poll through 503 then 403",
-    "Retry twice while busy",
-    "Change 24h/1h range",
-    "Unmount and remount batch History",
-    "Resume with newly successful observations"
+    "Remount full production resource drawer with denied/transient reads",
+    "Activate scoped Retry with keyboard Enter",
+    "Apply and clear Change kind filter",
+    "Switch between Overview and Manage"
   ],
   "limitations": [
-    "Direct production readers/client with synthetic HTTP responses, not a complete native PBS/NAS drawer, session revocation, appliance collection or release acceptance.",
-    "401 is covered by runtime regressions; the real API client redirects on 401, not bypassed for browser proof.",
-    "Independently supplied current readings remain distinctly current during a new pending query; they are not stored History."
+    "Synthetic HTTP responses and PBS snapshots through real production drawer/client/CSS, not appliance authorisation, reporter cause, release or installed recovery acceptance.",
+    "401 withdrawal is unit-covered; real client login redirection is not overridden or browser-proved.",
+    "Action client existing 401/402/403 unavailable-plan responses are unchanged. Only thrown read failures retain actionable error presentation.",
+    "Independent reader authorisation remains independent; this is not a global session revocation broadcast."
   ]
 }
