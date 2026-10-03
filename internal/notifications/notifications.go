@@ -3035,6 +3035,12 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 			Str("webhook", webhook.Name).
 			Str("service", "ntfy").
 			Msg("failed to read resolved ntfy webhook response body")
+		// A rejected recovery has the same authoritative HTTP verdict as a
+		// firing delivery, even if its diagnostic body is interrupted. Keep
+		// permanent refusals out of the connectivity retry path.
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return FailfWithClass(ClassFromHTTPStatus(resp.StatusCode), "ntfy webhook returned HTTP %d: failed to read ntfy webhook response: %w", resp.StatusCode, err)
+		}
 		return fmt.Errorf("failed to read ntfy webhook response: %w", err)
 	}
 
