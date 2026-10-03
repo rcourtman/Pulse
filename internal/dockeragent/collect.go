@@ -601,10 +601,14 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 			return agentsdocker.Container{}, fmt.Errorf("decode stats: %w", err)
 		}
 
-		if a.runtime == RuntimePodman && podmanCPUPercent != nil {
-			cpuPercent = safeFloat(*podmanCPUPercent)
-		} else {
-			cpuPercent = a.calculateContainerCPUPercent(summary.ID, stats)
+		// Keep a baseline even when Podman supplies a percentage: one-shot
+		// compatibility responses can report cpu:0 while total_usage advances.
+		// Preserve positive native percentages (and their units, #1391), but
+		// use our interval delta for an absent, zero or invalid percentage.
+		cpuPercent = a.calculateContainerCPUPercent(summary.ID, stats, parseTime(inspect.State.StartedAt))
+		if a.runtime == RuntimePodman && podmanCPUPercent != nil &&
+			*podmanCPUPercent > 0 && !math.IsInf(*podmanCPUPercent, 0) {
+			cpuPercent = *podmanCPUPercent
 		}
 		memUsage, memLimit, memPercent = calculateMemoryUsage(stats)
 		blockIO = summarizeBlockIO(stats)
@@ -1138,7 +1142,7 @@ func decodeContainerStatsPayload(payload []byte) (containertypes.StatsResponse, 
 	return stats, probe.CPUStats.CPU, nil
 }
 
-func (a *Agent) calculateContainerCPUPercent(containerID string, stats containertypes.StatsResponse) float64 {
+func (a *Agent) calculateContainerCPUPercent(containerID string, stats containertypes.StatsResponse, startedAt time.Time) float64 {
 	a.cpuMu.Lock()
 	defer a.cpuMu.Unlock()
 
@@ -1147,6 +1151,7 @@ func (a *Agent) calculateContainerCPUPercent(containerID string, stats container
 		systemUsage: stats.CPUStats.SystemUsage,
 		onlineCPUs:  stats.CPUStats.OnlineCPUs,
 		read:        stats.Read,
+		startedAt:   startedAt,
 	}
 
 	// Always use manual delta tracking. Docker's PreCPUStats is unreliable for
@@ -1155,6 +1160,14 @@ func (a *Agent) calculateContainerCPUPercent(containerID string, stats container
 	// (from container start) and producing a constant lifetime-average CPU%
 	// instead of a current value.
 	prev, ok := a.prevContainerCPU[containerID]
+	if a.runtime == RuntimePodman && ok && !prev.read.IsZero() && !current.read.IsZero() && !current.read.After(prev.read) {
+		// Repeated or out-of-order responses must not move the baseline back
+		// and manufacture usage in the next interval.
+		return 0
+	}
+	if a.prevContainerCPU == nil {
+		a.prevContainerCPU = make(map[string]cpuSample)
+	}
 	if !ok {
 		// First time seeing this container - store current sample and return 0
 		// On next collection cycle we'll have a previous sample to compare against
@@ -1169,6 +1182,12 @@ func (a *Agent) calculateContainerCPUPercent(containerID string, stats container
 
 	// We have a previous sample - update it after calculation
 	a.prevContainerCPU[containerID] = current
+	if a.runtime == RuntimePodman && (current.totalUsage < prev.totalUsage ||
+		(!prev.startedAt.IsZero() && !current.startedAt.IsZero() && !current.startedAt.Equal(prev.startedAt))) {
+		// A restart is not an interval sample, even if the new lifetime counter
+		// has already exceeded the old one. Start again from this baseline.
+		return 0
+	}
 
 	var totalDelta float64
 	if current.totalUsage >= prev.totalUsage {

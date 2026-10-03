@@ -17,6 +17,20 @@
 
 ## Purpose
 
+### Podman zero-percentage fallback — issue #2447
+
+One-shot compatibility stats with `cpu:0` do not suppress advancing cumulative
+CPU samples. The collector records every interval and uses Podman's CPU-time
+nanoseconds over elapsed wall-clock nanoseconds, independent of host core count.
+A positive finite reported percentage remains authoritative, preserving #1391.
+Counter resets or a changed container start establish a new baseline; duplicate
+and out-of-order reads cannot create subsequent spikes. No timestamp means no
+measurable counter interval. The existing report CPU field, graph/alert units,
+Docker system-counter calculation, memory and permission scopes are unchanged.
+`TestCollectContainerPodmanCPUIntervals` in `agent_internal_test.go` covers the
+actual JSON/collector boundary, including changing percentage availability.
+Native Podman shape and graph/alert acceptance remain separate evidence.
+
 ### Guest-agent coordination around backups — issue #2439
 
 All PVE QEMU guest-agent reads, including disk diagnostics and legacy meminfo

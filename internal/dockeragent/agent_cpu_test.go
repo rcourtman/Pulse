@@ -28,7 +28,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 				OnlineCPUs:  2,
 			},
 		}
-		got := agent.calculateContainerCPUPercent("container-123456", stats1)
+		got := agent.calculateContainerCPUPercent("container-123456", stats1, time.Time{})
 		if got != 0 {
 			t.Fatalf("first call: expected 0, got %f", got)
 		}
@@ -45,7 +45,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 				OnlineCPUs:  2,
 			},
 		}
-		got = agent.calculateContainerCPUPercent("container-123456", stats2)
+		got = agent.calculateContainerCPUPercent("container-123456", stats2, time.Time{})
 		if got <= 0 {
 			t.Fatalf("second call: expected percent > 0, got %f", got)
 		}
@@ -68,7 +68,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 			},
 		}
 
-		got := agent.calculateContainerCPUPercent("container-123456", stats)
+		got := agent.calculateContainerCPUPercent("container-123456", stats, time.Time{})
 		if got != 0 {
 			t.Fatalf("expected 0, got %f", got)
 		}
@@ -103,7 +103,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 			},
 		}
 
-		got := agent.calculateContainerCPUPercent("container-123456", stats)
+		got := agent.calculateContainerCPUPercent("container-123456", stats, time.Time{})
 		if got <= 0 {
 			t.Fatalf("expected percent > 0, got %f", got)
 		}
@@ -136,7 +136,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 			},
 		}
 
-		got := agent.calculateContainerCPUPercent("container-123456", stats)
+		got := agent.calculateContainerCPUPercent("container-123456", stats, time.Time{})
 		if got <= 0 {
 			t.Fatalf("expected percent > 0, got %f", got)
 		}
@@ -168,7 +168,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 			},
 		}
 
-		got := agent.calculateContainerCPUPercent("container-123456", stats)
+		got := agent.calculateContainerCPUPercent("container-123456", stats, time.Time{})
 		if got <= 0 {
 			t.Fatalf("expected percent > 0, got %f", got)
 		}
@@ -200,7 +200,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 			},
 		}
 
-		if got := agent.calculateContainerCPUPercent("container-123456", stats); got != 0 {
+		if got := agent.calculateContainerCPUPercent("container-123456", stats, time.Time{}); got != 0 {
 			t.Fatalf("expected 0, got %f", got)
 		}
 	})
@@ -232,7 +232,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 			},
 		}
 
-		if got := agent.calculateContainerCPUPercent("container-123456", stats); got != 0 {
+		if got := agent.calculateContainerCPUPercent("container-123456", stats, time.Time{}); got != 0 {
 			t.Fatalf("expected 0, got %f", got)
 		}
 	})
@@ -263,7 +263,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 			},
 		}
 
-		if got := agent.calculateContainerCPUPercent("container-123456", stats); got != 0 {
+		if got := agent.calculateContainerCPUPercent("container-123456", stats, time.Time{}); got != 0 {
 			t.Fatalf("expected 0, got %f", got)
 		}
 	})
@@ -291,7 +291,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 			PreCPUStats: containertypes.CPUStats{},
 		}
 
-		got := agent.calculateContainerCPUPercent("container-123456", stats)
+		got := agent.calculateContainerCPUPercent("container-123456", stats, time.Time{})
 		if got != 0 {
 			t.Fatalf("expected 0, got %f", got)
 		}
@@ -319,7 +319,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 			},
 		}
 
-		got := agent.calculateContainerCPUPercent("container-123456", stats)
+		got := agent.calculateContainerCPUPercent("container-123456", stats, time.Time{})
 		if got != 0 {
 			t.Fatalf("expected 0 on first call (manual tracking), got %f", got)
 		}
@@ -349,7 +349,7 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 			},
 		}
 
-		got := agent.calculateContainerCPUPercent("container-123456", stats)
+		got := agent.calculateContainerCPUPercent("container-123456", stats, time.Time{})
 		if math.Abs(got-25.0) > 0.01 {
 			t.Fatalf("expected podman cpu percent near 25.0, got %f", got)
 		}
