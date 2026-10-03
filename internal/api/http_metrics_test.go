@@ -199,17 +199,19 @@ func TestNormalizeSegment(t *testing.T) {
 var normalizeSegmentSink string
 
 func TestNormalizeSegment_DoesNotAllocate(t *testing.T) {
-	for _, seg := range []string{
-		"12345",
-		"550e8400-e29b-41d4-a716-446655440000",
-		"abcdefghijklmnopqrstuvwxyz1234567890abcdef",
-		"resources",
-		"metrics-store",
-	} {
-		if allocs := testing.AllocsPerRun(100, func() { normalizeSegmentSink = normalizeSegment(seg) }); allocs != 0 {
-			t.Errorf("normalizeSegment(%q) allocated %v times per call, want 0", seg, allocs)
+	isolatedRouteAllocationCheck(t, func() {
+		for _, seg := range []string{
+			"12345",
+			"550e8400-e29b-41d4-a716-446655440000",
+			"abcdefghijklmnopqrstuvwxyz1234567890abcdef",
+			"resources",
+			"metrics-store",
+		} {
+			if allocs := testing.AllocsPerRun(100, func() { normalizeSegmentSink = normalizeSegment(seg) }); allocs != 0 {
+				t.Errorf("normalizeSegment(%q) allocated %v times per call, want 0", seg, allocs)
+			}
 		}
-	}
+	})
 }
 
 func TestNormalizeRoute(t *testing.T) {
@@ -268,12 +270,16 @@ func TestNormalizeRoute(t *testing.T) {
 
 // The root and empty paths must return before splitting. Without the fast
 // path, "/" still normalizes to "/" but allocates a split slice on every call.
+var normalizeRouteSink string
+
 func TestNormalizeRoute_RootFastPathDoesNotAllocate(t *testing.T) {
-	for _, path := range []string{"/", ""} {
-		if allocs := testing.AllocsPerRun(100, func() { _ = normalizeRoute(path) }); allocs != 0 {
-			t.Errorf("normalizeRoute(%q) allocated %v times per call, want 0", path, allocs)
+	isolatedRouteAllocationCheck(t, func() {
+		for _, path := range []string{"/", ""} {
+			if allocs := testing.AllocsPerRun(100, func() { normalizeRouteSink = normalizeRoute(path) }); allocs != 0 {
+				t.Errorf("normalizeRoute(%q) allocated %v times per call, want 0", path, allocs)
+			}
 		}
-	}
+	})
 }
 
 // ---------------------------------------------------------------------------
