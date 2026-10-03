@@ -16,6 +16,7 @@ func TestDemoTransactionConnectedRecoveryControls(t *testing.T) {
 	if !strings.Contains(string(output), "\nOK\n") {
 		t.Fatalf("demo controls did not return a complete unittest verdict: %s", output)
 	}
+	t.Logf("Connected Python controls:\n%s", output)
 }
 
 func TestDemoTransactionKeepsSignedAdmissionAndVerificationOnlyReadOnly(t *testing.T) {

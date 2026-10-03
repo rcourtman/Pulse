@@ -2367,7 +2367,7 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		`restored-estate-identity`,
 		`demo_fixtures`,
 		`PULSE_MOCK_SEED_METRICS_STORE`,
-		`installer-identity`,
+		`runtime-payload-identity`,
 		`/api/license/runtime-capabilities`,
 		`Mock mode enabled`,
 		`Demo server mock mode did not enable after entitlement sync`,
