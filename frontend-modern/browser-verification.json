@@ -1,46 +1,100 @@
 {
   "version": 1,
-  "base_sha": "78796b411c1f37f57b303cae9fab5ddaa13e1121",
-  "verified_at": "2026-10-02T22:13:00Z",
+  "base_sha": "0e90236d3bb901dc84d4d07e70d4d2a09d5e6705",
+  "verified_at": "2026-10-02T23:55:48Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/ReportingPanel.tsx",
-    "frontend-modern/src/components/Settings/reportingSchedulesModel.ts",
-    "frontend-modern/src/components/Settings/useReportingPanelState.ts"
+    "frontend-modern/src/components/shared/Table.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/ReportingPanel.tsx": "fbf12a7025b520e1f4ba99144f88a35778e9360f982b72bba251797361504afb",
-    "frontend-modern/src/components/Settings/reportingSchedulesModel.ts": "69fe58abb763e528ac3e3dfe5c50b969038e905fcf46974209cac29d1bc77e83",
-    "frontend-modern/src/components/Settings/useReportingPanelState.ts": "cc102740cf6eec47b8f3e5b4c9d6c24e1017d7ffd14bd653d25bfd45fc88b1af"
+    "frontend-modern/src/components/shared/Table.tsx": "8e5029d5ee9dddc86a4733fa1e7249793cdbedb135f3634e75112f8fb3b327c9"
   },
   "routes": [
-    "/settings/support/reporting"
+    "/proxmox/overview",
+    "/proxmox/storage",
+    "/proxmox/replication",
+    "/proxmox/ceph",
+    "/proxmox/mail",
+    "/docker/overview",
+    "/docker/images",
+    "/docker/storage",
+    "/docker/networks",
+    "/docker/swarm",
+    "/kubernetes/overview",
+    "/kubernetes/nodes",
+    "/kubernetes/workloads",
+    "/kubernetes/services",
+    "/kubernetes/storage",
+    "/kubernetes/configuration",
+    "/kubernetes/events",
+    "/truenas/overview",
+    "/truenas/storage",
+    "/truenas/services",
+    "/truenas/apps",
+    "/truenas/vms",
+    "/truenas/shares",
+    "/truenas/protection",
+    "/vmware/overview",
+    "/vmware/storage",
+    "/vmware/networks",
+    "/vmware/health",
+    "/vmware/activity",
+    "/standalone/machines",
+    "/standalone/availability",
+    "/alerts/overview",
+    "/alerts/history",
+    "/alerts/thresholds",
+    "/actions",
+    "/settings/infrastructure",
+    "/settings/monitoring",
+    "/settings/pulse-intelligence",
+    "/settings/organization",
+    "/settings/security-users",
+    "/settings/security-webhooks"
   ],
   "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
     {
       "width": 1280,
       "height": 900
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 900,
+      "height": 900
+    },
+    {
+      "width": 700,
+      "height": 900
+    },
+    {
+      "width": 560,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
     }
   ],
   "states": [
-    "Pro licence active with advanced_reporting; Scheduled reports header mentions the Patrol weekly summary because sessionCapabilities.assistantEnabled is true",
-    "Create schedule form opened: Report type select present with Performance report selected; cadence, format, resources, tag filter, delivery, retention, attach and save-copy controls visible",
-    "Report type switched to Patrol weekly summary: form reduced to name, timezone, weekday, time, email recipients and Enabled; help text explains the email and that nothing is saved to disk; name placeholder reads Patrol weekly summary",
-    "Saved schedule row: Weekly Patrol, Monday at 09:00, scope Patrol activity, last 7 days, delivery Email config recipients; API record carries kind patrol_digest and format email",
-    "Run now without an email destination: Last run shows Failed with the server message naming Settings > Notifications",
-    "Edit reopens the saved schedule with Report type Patrol weekly summary selected",
-    "375px: form fields stack full width, table shows name with cadence line, no horizontal clipping"
+    "Mock stack on origin/main plus this change; Playwright sweep of every table on the routes above at all six viewports, before and after, recording computed th/td padding per cell and leaf elements with scrollWidth > clientWidth under hidden overflow (455 table states compared)",
+    "Default TableCell/TableHead with no caller padding keep 8px/12px horizontal and 2px/6px vertical padding (Settings infrastructure source and agent tables unchanged at 12px/12px/6px/6px)",
+    "Platform tables (Proxmox nodes, Docker hosts and containers, Kubernetes clusters/nodes/deployments/pods, TrueNAS systems, vSphere, Machines): cells 12px -> 8px horizontal at 700px and up and 8px -> 6px at 560/390px; header cells keep the stylesheet 6px horizontal and drop to 2px vertical, header rows 29px -> 21px; row height 32px unchanged; clipped-cell count improved in 89 table states, unchanged in 362; the 4 states counted worse are live mock-value drift (relative-time and usage labels) with identical or wider content boxes",
+    "Physical Disks table (Proxmox > Storage > Physical Disks): cells 8px -> 4px horizontal at 390px and 12px -> 6px at 700px, matching the composed px-1 sm:px-1.5 lg:px-2; clipped cells at 390px 93 -> 18; detail row 12px -> 16px horizontal at 700px and 1440px",
+    "Storage pools table unchanged at 6px/8px cell padding across 390, 560 and 700px",
+    "Inline detail rows (Proxmox node, Kubernetes controller, TrueNAS system expansions): detail cell padding 12px/12px/2px/2px -> 0, detail panel inset now only its own px-2 sm:px-4; incident timeline panel in Alert History gets its p-3",
+    "Alerts overview stats table: dot column right padding 12px -> 0 and value column 12px -> 6px at 700px and up as its classes name; Alert History header cells 12px -> 8px horizontal; AI cost table (Settings > Pulse Intelligence) Est. USD column 12px -> 4px as its px-1 names",
+    "Workloads table header cells now 6px/8px to match their raw td data cells; Proxmox replication compact-mode !px-1 override still applies at 390px",
+    "Reactive case: switching a cell class between px-1 and a non-padding class re-resolves the base padding (unit test)"
   ],
   "interactions": [
-    "Click Create schedule",
-    "Change Report type select to Patrol weekly summary",
-    "Type schedule name Weekly Patrol and click Save schedule",
-    "Click Run now on the saved schedule and reload",
-    "Click Edit on the saved schedule",
-    "Resize viewport to 375x812 and scroll through the form and table"
+    "Load each route at 1440, 1280, 900, 700, 560 and 390px and run the padding and clip sweep over all tables",
+    "Click Physical Disks on Proxmox > Storage at 390, 560, 700 and 1440px and expand the first disk row",
+    "Expand the first node row on Proxmox > Overview, the first deployment row on Kubernetes > Workloads, the first host row on Docker > Overview and the first system row on TrueNAS > Overview at 390, 560, 700 and 1440px",
+    "Expand the first alert row incident timeline on Alerts > History at 1440px",
+    "Compare before and after JSON sweeps per route, tab, viewport and table; re-measure the four states counted worse three times each",
+    "Revert and restore the change on the running dev server to A/B the Kubernetes clusters memory bar label at 560px"
   ]
 }
