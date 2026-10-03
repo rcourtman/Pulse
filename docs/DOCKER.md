@@ -270,13 +270,11 @@ Pulse can start, stop, and restart Docker / Podman containers directly from the 
 ## 🛠️ Troubleshooting
 
 - **Forgot Password?**
-  ```bash
-  docker exec pulse rm /data/.env
-  docker restart pulse
-  # Access UI again. Pulse will require a bootstrap token for setup.
-  # Get it with:
-  docker exec pulse /app/pulse bootstrap-token
-  ```
+  Follow the [password recovery guide](TROUBLESHOOTING.md#i-forgot-my-password).
+  Update the active credential source; do not delete `.env`, remove the data
+  volume or repeat setup. A deployment-supplied password overrides the generated
+  file, and changing Docker's managed environment needs a recreate/redeploy,
+  not just a restart. SSO accounts and temporary lockouts have separate paths.
 
 - **Logs**
   ```bash

@@ -7,8 +7,9 @@
 Pulse does not provide an email password-reset flow. Choose the path that
 matches how this self-hosted instance authenticates:
 
-- **Local Pulse username and password**: recovery requires shell access to the
-  Pulse host or container. Follow the deployment-specific steps below.
+- **Local Pulse administrator username and password**: recovery requires
+  authorised access to the host or deployment's credential source. Follow the
+  steps below; keep the existing username.
 - **OIDC, SAML, or proxy authentication**: contact the identity-provider or
   Pulse administrator. If the administrator deliberately kept local login as a
   fallback, they can open the Pulse URL with `?show_local=true`; this only
@@ -17,45 +18,81 @@ matches how this self-hosted instance authenticates:
   administrator can use the lockout reset in Pulse; password recovery is not
   required.
 
-The local recovery steps remove only the Pulse-generated authentication file.
-After restart, Pulse still requires the host-only bootstrap token before it
-will accept replacement credentials. If `PULSE_AUTH_USER` or `PULSE_AUTH_PASS`
-is supplied by Docker Compose, Kubernetes, systemd, or another deployment
-manager, update that deployment configuration instead; its environment values
-override the generated file.
+#### Recover the existing local administrator login
 
-**Docker**:
+Do not delete `.env` or repeat first-time setup to recover a password. The file
+can also hold deployment settings, and setup replaces the primary API token.
+Replace only the password in its active credential source instead, preserving
+the username, API tokens, encryption keys, monitoring configuration and data.
+This is login recovery, not a complete response to a compromised account;
+existing sessions and API tokens need separate review if credentials leaked.
 
-```bash
-docker exec pulse rm /data/.env
-docker restart pulse
-# Access UI again. Pulse will require a bootstrap token for setup.
-# Get it with:
-docker exec pulse /app/pulse bootstrap-token
-```
+1. **Find the active credential source locally.** Deployment-supplied
+   `PULSE_AUTH_USER` and `PULSE_AUTH_PASS` take precedence over Pulse's `.env`.
+   Do not post full service units, container inspections or resolved Compose
+   configuration; they can contain secrets.
+   - **Docker**: the generated file is in the mounted data directory, normally
+     `/data/.env` inside the container. If Compose, `--env-file`, Kubernetes or
+     another manager supplies the password, edit that managed source instead.
+   - **Systemd**: check the active service's unit, environment files and
+     drop-ins privately. Root-run setup can also save credentials in
+     `/etc/systemd/system/pulse.service.d/override.conf` (or the corresponding
+     `pulse-backend.service.d` path on legacy installs). Editing only
+     `/etc/pulse/.env` will not override those values. A custom
+     `PULSE_DATA_DIR` changes the generated file's location.
+   - **Proxmox LXC**: perform the systemd steps inside the Pulse container, not
+     on the Proxmox host. Use its console or `pct enter <ctid>`.
+2. **Prepare a new password hash privately.** Use a trusted local bcrypt tool
+   that prompts for a password of at least 12 characters, never one that needs
+   the password in its command arguments. For example, if Apache's `htpasswd`
+   is installed on your trusted administration machine:
 
-**Systemd**:
+   ```bash
+   (
+   set -eu
+   umask 077
+   recovery_dir="$(mktemp -d "${TMPDIR:-/tmp}/pulse-password.XXXXXX")"
+   htpasswd -nB -C 12 pulse-recovery > "$recovery_dir/password-record"
+   printf 'Private password record saved in %s/password-record\n' "$recovery_dir"
+   )
+   ```
 
-```bash
-sudo rm /etc/pulse/.env
-sudo systemctl restart pulse
-sudo pulse bootstrap-token
-```
+   This prints only the file location. Open the record in a private editor and
+   copy the complete 60-character hash after `pulse-recovery:`; that label is
+   not a new Pulse username. Do not post the record or hash. If the tool fails,
+   stop rather than saving a partial hash or putting the password in a shell
+   command.
+3. **Back up and edit only the active password setting.** Keep an owner-only
+   backup of each file you change, then replace `PULSE_AUTH_PASS` in a private
+   editor. Keep `PULSE_AUTH_USER` and unrelated settings unchanged. In a Pulse
+   `.env`, put the hash in single quotes with literal `$` characters. Compose
+   YAML has different interpolation rules; follow the
+   [authentication guide](CONFIGURATION.md#private-docker-authentication-file)
+   for the source you actually use. If a systemd drop-in supplies the password,
+   update it and the generated authentication file consistently so a later
+   restart or reload does not restore the old value. Preserve file permissions
+   and ownership; hashes and backups are sensitive too.
+4. **Apply through the existing deployment.** For a generated Docker data-file
+   change, restart the same container. Changing Docker's managed environment
+   requires its recreate/redeploy operation, not just `docker restart`; preserve
+   the same image, mounted data and other settings. For systemd, reload the
+   service manager after a unit or drop-in change, then restart the active Pulse
+   service during a suitable maintenance window. Do not remove a data volume,
+   reinstall Pulse or re-enrol agents.
+5. **Verify the login.** Use a fresh browser session to sign in with the same
+   local administrator username and new password, then check that monitoring
+   and agent connections remain intact. If it still fails, stop and reconcile
+   the effective source and any lockout; do not delete more state. Restore the
+   private backup through the same deployment path if you need to undo the
+   change. Remove the temporary password record after verification,
+   and retain or dispose of the backup under your normal credential policy.
 
-**Proxmox LXC** (installed from the Proxmox shell):
-Pulse runs inside the container, so run the same steps through `pct exec` on the Proxmox host. The binary needs its absolute path here, because `pct exec` runs with `PATH=/sbin:/bin:/usr/sbin:/usr/bin` and that does not include `/usr/local/bin`:
+#### A fresh install's bootstrap token was missed
 
-```bash
-pct exec <ctid> -- rm /etc/pulse/.env
-pct exec <ctid> -- systemctl restart pulse
-pct exec <ctid> -- /usr/local/bin/pulse bootstrap-token
-```
-
-If you only missed the token during a fresh install (no password set yet), skip the first two commands and just read it back with the last one.
-
-Treat the bootstrap token like a password: enter it only in the Pulse setup
-screen for this instance and do not paste it into support requests or issue
-reports.
+If no local password has ever been set, there is nothing to reset. Follow
+[first login](INSTALL.md#step-1-get-the-token) to read the existing bootstrap
+token for that instance, using its actual data directory. Enter it only in the
+Pulse setup screen, not in command arguments, URLs or issue reports.
 
 ### Port change didn't take effect
 
@@ -605,9 +642,9 @@ success alone does not confirm the Pulse display has recovered.
 
 ### Recovery Mode
 
-For a forgotten local password, follow [I forgot my password](#i-forgot-my-password)
-above, using the steps for your deployment. Enter the host-only bootstrap token
-in that instance's setup screen; do not paste it into a command or a report.
+For a forgotten local administrator password, follow
+[I forgot my password](#i-forgot-my-password) above to update its active
+credential source without deleting configuration or repeating first-time setup.
 For OIDC, SAML or proxy login, use the identity-provider or administrator path
 described there instead.
 
