@@ -11,6 +11,10 @@ import {
   resolveHistoryRangeWithinLimit,
 } from '@/components/Storage/historyRangeAccess';
 import {
+  DISK_DETAIL_HEADER_STACK_CLASS,
+  DISK_DETAIL_HEALTH_LABEL_CLASS,
+  DISK_DETAIL_HEALTH_ROW_CLASS,
+  DISK_DETAIL_HEALTH_SUMMARY_CLASS,
   DISK_DETAIL_HISTORY_RANGE_OPTIONS,
   DISK_DETAIL_LIVE_CHARTS,
   getDiskAttributeValueTextClass,
@@ -55,6 +59,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
     historyResourceId,
     attributeCards,
     historyCharts,
+    healthPresentation,
     metricResourceId,
     collectionMessages,
     liveIOAvailable,
@@ -91,19 +96,32 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
   return (
     <div class={STORAGE_DISK_DETAIL_ROOT_CLASS}>
       <div class={STORAGE_DISK_DETAIL_HEADER_CLASS}>
-        <div class={STORAGE_DETAIL_META_ROW_CLASS}>
-          <span class={STORAGE_DISK_DETAIL_MODEL_CLASS}>{diskData().model || 'Unknown Disk'}</span>
-          <span class={STORAGE_DETAIL_MONO_CHIP_CLASS}>{diskData().devPath}</span>
-          <span class={STORAGE_DISK_DETAIL_NODE_CLASS}>{diskData().node}</span>
-          <span
-            class={getPhysicalDiskSourceBadgePresentation(props.disk).className}
-            title="Data source"
-          >
-            {getPhysicalDiskSourceBadgePresentation(props.disk).label}
-          </span>
-          <Show when={diskData().serial}>
-            <span class={STORAGE_DISK_DETAIL_SERIAL_CLASS}>S/N: {diskData().serial}</span>
-          </Show>
+        <div class={DISK_DETAIL_HEADER_STACK_CLASS}>
+          <div class={STORAGE_DETAIL_META_ROW_CLASS}>
+            <span class={STORAGE_DISK_DETAIL_MODEL_CLASS}>
+              {diskData().model || 'Unknown Disk'}
+            </span>
+            <span class={STORAGE_DETAIL_MONO_CHIP_CLASS}>{diskData().devPath}</span>
+            <span class={STORAGE_DISK_DETAIL_NODE_CLASS}>{diskData().node}</span>
+            <span
+              class={getPhysicalDiskSourceBadgePresentation(props.disk).className}
+              title="Data source"
+            >
+              {getPhysicalDiskSourceBadgePresentation(props.disk).label}
+            </span>
+            <Show when={diskData().serial}>
+              <span class={STORAGE_DISK_DETAIL_SERIAL_CLASS}>S/N: {diskData().serial}</span>
+            </Show>
+          </div>
+          {/* The verdict the row shows as a single word, with its reason in full. */}
+          <div class={DISK_DETAIL_HEALTH_ROW_CLASS} data-testid="disk-detail-health">
+            <span class={`${DISK_DETAIL_HEALTH_LABEL_CLASS} ${healthPresentation().tone}`}>
+              {healthPresentation().label}
+            </span>
+            <Show when={healthPresentation().summary}>
+              <span class={DISK_DETAIL_HEALTH_SUMMARY_CLASS}>{healthPresentation().summary}</span>
+            </Show>
+          </div>
         </div>
       </div>
 

@@ -1,56 +1,38 @@
 {
   "version": 1,
-  "base_sha": "0e90236d3bb901dc84d4d07e70d4d2a09d5e6705",
-  "verified_at": "2026-10-02T23:55:48Z",
+  "base_sha": "74fd189fd03098b7ed94d806b15f570722048670",
+  "verified_at": "2026-10-03T09:27:41Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/Table.tsx"
+    "frontend-modern/src/components/Storage/DiskDetail.tsx",
+    "frontend-modern/src/components/Storage/DiskList.tsx",
+    "frontend-modern/src/components/Storage/EnhancedStorageBar.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx",
+    "frontend-modern/src/components/Storage/useDiskDetailModel.ts",
+    "frontend-modern/src/components/Storage/useEnhancedStorageBarModel.ts",
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts",
+    "frontend-modern/src/features/storageBackups/rowPresentation.ts",
+    "frontend-modern/src/features/storageBackups/storageBarPresentation.ts",
+    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/Table.tsx": "8e5029d5ee9dddc86a4733fa1e7249793cdbedb135f3634e75112f8fb3b327c9"
+    "frontend-modern/src/components/Storage/DiskDetail.tsx": "04e5bacb4900cc77a94fdb804363048ed53f4b84dc1c0e9610878a106a1db1a6",
+    "frontend-modern/src/components/Storage/DiskList.tsx": "07aee61d9becb41c1cf97317bf57f5c5c70db4111eef0a15da2e31fea905d334",
+    "frontend-modern/src/components/Storage/EnhancedStorageBar.tsx": "ed72a33e754e96ebd03374c34f9732b02411cd9055667f4e0051d6f7e66ab653",
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx": "09417822bd543ddbc312d0c15a4ea74971066d6623d421d889858e56262b9d3d",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx": "7b61e9fac5e3a9fbae831a3cf907a71f1be7158f06bfe7a9fe7d16fce7a2c928",
+    "frontend-modern/src/components/Storage/useDiskDetailModel.ts": "ee5059bb3a7e0069561e4f103e2fd89101e096ad32b3b27c6f4777c26c1388f8",
+    "frontend-modern/src/components/Storage/useEnhancedStorageBarModel.ts": "d03daecfe22ede32e46edc74a20e4ac11d732d4f9ca202c0b6f36c22a590aa44",
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts": "4b348777cc39de3021e21c8f34e9e2029f2bc30e6768dfaa26c8ec6420d27d10",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts": "6ee8aaf027a9e91aa9c28a9d579449938c5139fe370ff59040ebfead9ecb53bc",
+    "frontend-modern/src/features/storageBackups/rowPresentation.ts": "cabd37e3f736467aecff68359fcb97be08bcabbe5c5ec6e0a0da2fe67d2e3261",
+    "frontend-modern/src/features/storageBackups/storageBarPresentation.ts": "562eac2212378e98823717f712c791133cebf1f44bd71c75c7db097b244f6cc0",
+    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts": "2a93a0176b912283c77b384ee2c66c4bc62c21a04b645eb93917a41740ad2d6e"
   },
   "routes": [
-    "/proxmox/overview",
-    "/proxmox/storage",
-    "/proxmox/replication",
-    "/proxmox/ceph",
-    "/proxmox/mail",
-    "/docker/overview",
-    "/docker/images",
-    "/docker/storage",
-    "/docker/networks",
-    "/docker/swarm",
-    "/kubernetes/overview",
-    "/kubernetes/nodes",
-    "/kubernetes/workloads",
-    "/kubernetes/services",
-    "/kubernetes/storage",
-    "/kubernetes/configuration",
-    "/kubernetes/events",
-    "/truenas/overview",
-    "/truenas/storage",
-    "/truenas/services",
-    "/truenas/apps",
-    "/truenas/vms",
-    "/truenas/shares",
-    "/truenas/protection",
-    "/vmware/overview",
-    "/vmware/storage",
-    "/vmware/networks",
-    "/vmware/health",
-    "/vmware/activity",
-    "/standalone/machines",
-    "/standalone/availability",
-    "/alerts/overview",
-    "/alerts/history",
-    "/alerts/thresholds",
-    "/actions",
-    "/settings/infrastructure",
-    "/settings/monitoring",
-    "/settings/pulse-intelligence",
-    "/settings/organization",
-    "/settings/security-users",
-    "/settings/security-webhooks"
+    "/proxmox/storage"
   ],
   "viewports": [
     {
@@ -63,38 +45,40 @@
     },
     {
       "width": 900,
-      "height": 900
+      "height": 844
     },
     {
       "width": 700,
-      "height": 900
+      "height": 844
     },
     {
-      "width": 560,
-      "height": 900
+      "width": 600,
+      "height": 844
+    },
+    {
+      "width": 420,
+      "height": 844
     },
     {
       "width": 390,
-      "height": 900
+      "height": 844
+    },
+    {
+      "width": 360,
+      "height": 844
     }
   ],
   "states": [
-    "Mock stack on origin/main plus this change; Playwright sweep of every table on the routes above at all six viewports, before and after, recording computed th/td padding per cell and leaf elements with scrollWidth > clientWidth under hidden overflow (455 table states compared)",
-    "Default TableCell/TableHead with no caller padding keep 8px/12px horizontal and 2px/6px vertical padding (Settings infrastructure source and agent tables unchanged at 12px/12px/6px/6px)",
-    "Platform tables (Proxmox nodes, Docker hosts and containers, Kubernetes clusters/nodes/deployments/pods, TrueNAS systems, vSphere, Machines): cells 12px -> 8px horizontal at 700px and up and 8px -> 6px at 560/390px; header cells keep the stylesheet 6px horizontal and drop to 2px vertical, header rows 29px -> 21px; row height 32px unchanged; clipped-cell count improved in 89 table states, unchanged in 362; the 4 states counted worse are live mock-value drift (relative-time and usage labels) with identical or wider content boxes",
-    "Physical Disks table (Proxmox > Storage > Physical Disks): cells 8px -> 4px horizontal at 390px and 12px -> 6px at 700px, matching the composed px-1 sm:px-1.5 lg:px-2; clipped cells at 390px 93 -> 18; detail row 12px -> 16px horizontal at 700px and 1440px",
-    "Storage pools table unchanged at 6px/8px cell padding across 390, 560 and 700px",
-    "Inline detail rows (Proxmox node, Kubernetes controller, TrueNAS system expansions): detail cell padding 12px/12px/2px/2px -> 0, detail panel inset now only its own px-2 sm:px-4; incident timeline panel in Alert History gets its p-3",
-    "Alerts overview stats table: dot column right padding 12px -> 0 and value column 12px -> 6px at 700px and up as its classes name; Alert History header cells 12px -> 8px horizontal; AI cost table (Settings > Pulse Intelligence) Est. USD column 12px -> 4px as its px-1 names",
-    "Workloads table header cells now 6px/8px to match their raw td data cells; Proxmox replication compact-mode !px-1 override still applies at 390px",
-    "Reactive case: switching a cell class between px-1 and a non-padding class re-resolves the base padding (unit test)"
+    "Proxmox Storage tab pools table in narrow (360), compact (390/420), operational (600/700/900) and full (1280/1440) container layouts on main with the table padding fix (#2427), mock data with Online, Degraded and Unknown pools and Protected / Backup Repository badges",
+    "Pools table with the first pool row expanded (StoragePoolDetail drawer) at 390, 1280 and 1440",
+    "Physical Disks sub-tab in narrow (360/390), compact (420), basic (600/700), operational (900) and full (1280/1440) layouts with Healthy, Unknown and Needs Attention disks; phone cells measured at 8px horizontal padding with no layout override",
+    "Physical Disks table with the first (Needs Attention) disk row expanded so the DiskDetail drawer header shows the verdict and its reason at 390, 1280 and 1440",
+    "The mock backend did not emit its random ZFS-issue scenario (DEGRADED pool with resilver in progress) during this pass, so the derived Resilvering/Scrubbing badge word was not observed live; it is pinned by rowPresentation.test.ts"
   ],
   "interactions": [
-    "Load each route at 1440, 1280, 900, 700, 560 and 390px and run the padding and clip sweep over all tables",
-    "Click Physical Disks on Proxmox > Storage at 390, 560, 700 and 1440px and expand the first disk row",
-    "Expand the first node row on Proxmox > Overview, the first deployment row on Kubernetes > Workloads, the first host row on Docker > Overview and the first system row on TrueNAS > Overview at 390, 560, 700 and 1440px",
-    "Expand the first alert row incident timeline on Alerts > History at 1440px",
-    "Compare before and after JSON sweeps per route, tab, viewport and table; re-measure the four states counted worse three times each",
-    "Revert and restore the change on the running dev server to A/B the Kubernetes clusters memory bar label at 560px"
+    "Switched between the Storage and Physical Disks view tabs and clicked pool and disk rows to open their inline detail drawers",
+    "Ran a Playwright scrollWidth-over-clientWidth sweep over every th/td leaf per viewport: 1440 reports nothing in either table, 1280 only one long disk model, 390 only long identity strings (two pool names, three disk models), 360 identity strings only, 600/700 the pre-existing operational host and Backup Repository clips, 900 nothing in the pools table",
+    "Measured per-column cell width, padding and text need at 390: pool name 126px for a 122px need, state 59 for 54, host 106 for 98, usage bar 39 for a 28px percentage",
+    "Confirmed the usage bar shows percentage-only below the 34rem container query and the full used/total label above it, and that the disk row health word is whole with its reason as the title"
   ]
 }

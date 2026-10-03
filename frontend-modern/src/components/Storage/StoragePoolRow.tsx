@@ -26,6 +26,7 @@ import {
 import type { StorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
 import type { Resource } from '@/types/resource';
 import {
+  getStoragePoolCellPaddingClass,
   isStoragePoolColumnVisible,
   type StoragePoolTableColumnId,
   type StoragePoolTableLayoutMode,
@@ -62,7 +63,11 @@ interface StoragePoolRowProps {
 
 export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
   const columnClass = (baseClass: string, columnId: StoragePoolTableColumnId) =>
-    `${baseClass} ${isStoragePoolColumnVisible(props.layoutMode, columnId) ? 'table-cell' : 'hidden'}`.trim();
+    `${baseClass} ${getStoragePoolCellPaddingClass(props.layoutMode)} ${
+      isStoragePoolColumnVisible(props.layoutMode, columnId) ? 'table-cell' : 'hidden'
+    }`
+      .replace(/\s+/g, ' ')
+      .trim();
   const row = createMemo(() => buildStoragePoolRowModel(props.record, props.growthDelta ?? null));
   const detailControlsId = createMemo(() =>
     buildSummaryDisclosureControlsId(props.summarySeriesId),
