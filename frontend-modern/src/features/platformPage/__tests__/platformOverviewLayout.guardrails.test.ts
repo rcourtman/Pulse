@@ -321,8 +321,19 @@ describe('platform overview layout guardrails', () => {
     ]) {
       expect(source).toContain('platform-table-mobile-w-30');
     }
+    // The images phone row keeps image, size and the update verdict; host and
+    // consumers move to the row expansion so the verdict is not clipped.
     expect(dockerImagesTableSource).toMatch(
-      /sortKey="size"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[12%\]"/,
+      /sortKey="size"[\s\S]{0,120}?class="platform-table-mobile-w-20 md:w-\[12%\]"/,
+    );
+    expect(dockerImagesTableSource).toMatch(
+      /sortKey="host"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[18%\]"/,
+    );
+    expect(dockerImagesTableSource).toMatch(
+      /sortKey="usedBy"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[24%\]"/,
+    );
+    expect(dockerImagesTableSource).toMatch(
+      /sortKey="update"[\s\S]{0,120}?class="platform-table-mobile-w-25 md:w-\[16%\]"/,
     );
     expect(dockerServicesTableSource).toMatch(
       /sortKey="mode"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[8%\]"/,

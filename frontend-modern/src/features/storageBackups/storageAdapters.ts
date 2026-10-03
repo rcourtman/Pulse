@@ -129,7 +129,16 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
   const usedBytes = asNumberOrNull(resource.disk?.used);
   const freeBytes = asNumberOrNull(resource.disk?.free);
   const canonicalPlatform = getCanonicalStoragePlatformKey(resource, resource.storage?.platform);
-  const hostLabel = locationLabel;
+  // The poller folds a shared storage into one entry whose node is the
+  // synthetic "cluster" marker (the mock uses "shared"); show that as a
+  // shared storage with its reporting node count rather than a node name.
+  const sharedLocationMarkers = new Set(['cluster', 'shared']);
+  const hostLabel =
+    shared && sharedLocationMarkers.has(locationLabel.trim().toLowerCase())
+      ? storageNodes.length > 1
+        ? `Shared · ${storageNodes.length} nodes`
+        : 'Shared'
+      : locationLabel;
   const platformLabel = getResourceStoragePlatformLabel(canonicalPlatform);
   const issueLabel = getResourceStorageIssueLabel(resource);
   const issueSummary = getResourceStorageIssueSummary(resource);

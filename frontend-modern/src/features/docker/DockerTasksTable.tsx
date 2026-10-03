@@ -12,6 +12,7 @@ import {
   createPlatformTableSortState,
   getPlatformTableCellClassForKind,
   getPlatformTableDateTimeSortValue,
+  PlatformTableRelativeTimeValue,
   PlatformTableShell,
   type PlatformTableSortValue,
   withPlatformStatusCounts,
@@ -255,11 +256,10 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-narrow-hidden hidden text-base-content md:table-cell`}
                           >
-                            <span
-                              class="inline-block max-w-48 truncate"
-                              title={dockerTextValue(resource.docker?.startedAt)}
-                            >
-                              {dockerTextValue(resource.docker?.startedAt)}
+                            {/* Swarm reports a raw RFC3339 stamp with microseconds; an age
+                                reads at a glance and the stamp stays in the title. */}
+                            <span title={dockerTextValue(resource.docker?.startedAt)}>
+                              <PlatformTableRelativeTimeValue value={resource.docker?.startedAt} />
                             </span>
                           </TableCell>
                         </TableRow>
