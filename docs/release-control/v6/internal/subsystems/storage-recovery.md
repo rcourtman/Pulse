@@ -2761,6 +2761,14 @@ capability over storage or recovery data.
 discriminator` and `falls back to the topology discriminator when no
 vdev layout is reported` in
     `frontend-modern/src/features/storageBackups/__tests__/storageAdapters.test.ts`.
+    When neither is reported, a Proxmox storage plugin type resolves to the
+    name the Proxmox UI gives it (`lvmthin` is LVM-Thin, `nfs` is NFS,
+    `cifs` is SMB/CIFS, `iscsi` is iSCSI, `zfs`, `btrfs`, `glusterfs`,
+    `esxi` likewise); title-casing the raw plugin name is not a label.
+    A storage the poller merged across the cluster carries the synthetic
+    `cluster` node (the mock fixture's `shared`), and its host label reads
+    "Shared" with the reporting node count when the storage lists its
+    nodes, never the raw marker.
 
 27. A rejected legacy RBAC import must not destroy the store. The import is
     transactional and leaves the legacy files in place, so a failure leaves the

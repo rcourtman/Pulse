@@ -1242,6 +1242,28 @@ func TestResourceFromPBSDatastoreDerivesRiskAndIncidents(t *testing.T) {
 	}
 }
 
+func TestResourceFromPBSDatastoreReadsStorageStatusVocabulary(t *testing.T) {
+	instance := models.PBSInstance{ID: "pbs-1", Name: "pbs-main", LastSeen: time.Now().UTC()}
+	// The poller stamps "available" when PBS reports no error and
+	// "unavailable" when it does; neither is in the generic status mapper.
+	cases := []struct {
+		status string
+		want   ResourceStatus
+	}{
+		{status: "available", want: StatusOnline},
+		{status: "unavailable", want: StatusOffline},
+		{status: "degraded", want: StatusWarning},
+		{status: "", want: StatusUnknown},
+	}
+	for _, tc := range cases {
+		datastore := models.PBSDatastore{Name: "backup-store", Status: tc.status, Total: 100, Used: 10}
+		resource, _ := resourceFromPBSDatastore(instance, datastore)
+		if resource.Status != tc.want {
+			t.Fatalf("status %q: Status = %q, want %q", tc.status, resource.Status, tc.want)
+		}
+	}
+}
+
 func TestResourceFromPBSInstanceRollsUpDatastoreRisk(t *testing.T) {
 	now := time.Now().UTC()
 	instance := models.PBSInstance{

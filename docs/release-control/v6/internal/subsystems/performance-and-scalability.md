@@ -402,6 +402,12 @@ every tick.
 Mock replication timing is advanced in that same full-rotation refresh, and
 only a job whose schedule phase has passed is rewritten, so keeping demo
 replication on schedule adds no per-tick change for jobs that did not run.
+Shared storage in the mock estate stays one row per cluster per store, so the
+Storage surface grows with the number of storages rather than with the node
+count times the number of shared storages.
+Demo Docker container names stay unique per host (numbered suffixes on reused
+profiles), so image "used by" lists and container rows never collapse two
+distinct containers into what reads as a duplicated row.
 
 The browser applies resource deltas to its connection-scoped raw baseline, but
 canonicalizes and reconciles only changed resources plus the host-merge groups
@@ -2563,6 +2569,13 @@ resize-observer plus tooltip lifecycle live in
 `frontend-modern/src/components/Workloads/useStackedDiskBarState.ts`.
 Future disk-bar runtime changes must extend through those owners instead of
 reintroducing mixed resize state and presentation branching into the shell.
+The multi-disk `vertical-bars` mode (Proxmox nodes, Machines, and Docker
+hosts with more than one agent-reported disk) draws one equal-weight micro-bar
+per disk and labels the cell with the fullest disk's usage percentage, derived
+in the model from the existing max-disk summary, so a multi-disk host answers
+"how close is this host to running out of space?" at a glance in Bars mode
+instead of only on hover or in Trends mode. The label names no disk in the
+row; the mount and the per-disk breakdown stay in the title and tooltip.
 The dashboard stacked memory bar now follows that same pattern: the shell
 stays in `frontend-modern/src/components/Workloads/StackedMemoryBar.tsx`,
 while memory-capacity math, balloon/swap tooltip derivation, anomaly label
@@ -2589,6 +2602,22 @@ resize-observer lifecycle lives in
 `frontend-modern/src/components/Workloads/useMetricBarState.ts`. Future
 metric-bar runtime changes must extend through those owners instead of
 reintroducing mixed resize state and label-fit logic into the shell.
+Label fit in the metric, stacked memory, and stacked disk bar models goes
+through `estimateTextWidth` in `frontend-modern/src/utils/format.ts`, which
+sums per-glyph advances rather than multiplying a character count. The
+advances come from one hidden probe of about 200 nodes carrying the label's
+type classes, read once per page load and again only if the device pixel
+ratio changes; that is the estimator's only layout read. It is never per bar,
+the bars still take their width from the resize observer alone, and each
+estimate after the probe is arithmetic over the label's characters. Each model
+adds the padding its own label sits in, the stacked bars count the anomaly
+marker that shares the label's line, and inline disk slots are sized after the
+gap between them. Measured in Chrome on the 429-bar Proxmox overview on
+2026-10-03: 1.7 ms for the probe and about 110 ns per estimate. Where layout
+is unavailable the estimator uses the advances measured for the macOS system
+font. `formatExtra.test.ts` verifies the single probe read and the fallback;
+`useMetricBarState.test.tsx` and `useStackedMemoryBarState.test.tsx` verify
+that the long label appears only at an observed width that fits it.
 The dashboard enhanced CPU bar now follows that same pattern: the shell stays
 in `frontend-modern/src/components/Workloads/EnhancedCPUBar.tsx`, while usage
 formatting, anomaly presentation, tooltip load-average formatting, and
