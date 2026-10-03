@@ -30,7 +30,9 @@ describe('dockerContainerTableModel', () => {
     const columns = getDockerContainerVisibleColumnsForLayout('phone', true, true, true);
     const ids = columns.map((column) => column.id);
 
-    expect(ids).toEqual(['container', 'state', 'cpu', 'memory', 'restarts', 'updates']);
+    // Restarts waits for mobile width: a phone row could not fit its header
+    // beside the Update control, and the count stays in the row expansion.
+    expect(ids).toEqual(['container', 'state', 'cpu', 'memory', 'updates']);
     expect(getDockerContainerColumnWidthStyle('container', 'phone', ids)).toEqual({
       width: '30%',
     });

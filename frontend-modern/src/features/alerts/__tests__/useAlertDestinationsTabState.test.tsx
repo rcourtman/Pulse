@@ -156,6 +156,17 @@ describe('useAlertDestinationsTabState', () => {
       await Promise.resolve();
       expect(result.deliveryLog()).toEqual(current);
       expect(result.deliveryLogUnavailable()).toBe(false);
+      expect(result.heldEventsUnavailable()).toBe(false);
+      expect(result.refreshingHeldEvents()).toBe(false);
+      vi.mocked(AlertsAPI.getEvents).mockRejectedValueOnce(new Error('held events denied'));
+      vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValueOnce(current);
+      await result.loadDeliveryLog();
+      expect(result.heldEvents()).toEqual([]);
+      expect(result.heldEventsUnavailable()).toBe(true);
+      expect(result.refreshingHeldEvents()).toBe(false);
+      expect(result.deliveryLogUnavailable()).toBe(false);
+      expect(result.deliveryLog()).toEqual(current);
+
       expect(result.refreshingDeliveryLog()).toBe(false);
     } finally {
       cleanup();
