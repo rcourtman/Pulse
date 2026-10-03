@@ -128,8 +128,9 @@ another update just to reproduce a failure.
 
 Before any rollback, take a consistent private backup of the current state and
 check the proposed backup's scope. Keep the failed installation and update
-snapshots until recovery is verified. A rollback can revert settings, alert
-changes and history written since the selected backup.
+snapshots until recovery is verified. Returning to an older binary is not a
+full-state recovery. Restoring a matching data snapshot can discard settings,
+alert changes and history written since that snapshot.
 
 ### Automatic Rollback
 
@@ -144,8 +145,16 @@ health afterwards; a progress message alone is not recovery evidence.
 If your installed version offers it, open **Settings → System → Updates →
 Update History**. **Roll back** is offered for a successful in-app update with
 a retained backup. The confirmation names the version before that update and
-warns that later settings and alert changes will be reverted. Check that version
-and backup before confirming; Pulse restarts to use the restored binary.
+Pulse restarts to use the restored binary. Check that version and the actual
+backup contents before confirming.
+
+**Update History is not a full-state recovery tool.** Its restore scope depends
+on the installed updater. Older updaters may replace `data/`, `config/` and
+`.env` under the installation directory, but omit active data stored elsewhere.
+Do not assume later settings and alert changes will be reverted, even if the
+confirmation says so. If active data shares those installation paths, do not
+restore it while Pulse is running; use the stopped-service procedure in
+[Manual Rollback](#manual-rollback).
 
 Older versions may not have this control. An absent button or backup does not
 justify deleting data or creating an empty configuration. Docker server installs
@@ -159,12 +168,22 @@ low-space fallback. Use the `backup_path` recorded for the actual update in
 `update-history.jsonl`, rather than guessing a timestamp. The updater retains
 the most recent three snapshots; a `/tmp` snapshot may also be lost on reboot.
 
-The in-app snapshot copies the running server binary, available `VERSION` and
+Snapshot scope is version-specific. The published **v6.4.5** and
+**v6.4.6-rc.1** in-app updaters use the limited installation snapshot described
+below. Do not assume a backup made by another updater version has the same
+contents or restore behaviour.
+
+The limited snapshot copies the running server binary, available `VERSION` and
 `.env` files, and available `data/` and `config/` directories under
 `PULSE_INSTALL_DIR` (default `/opt/pulse`). It is not necessarily a complete
 backup of the active `PULSE_DATA_DIR`, external metrics/audit stores, service
 units, bundled agents or update helpers. Copy errors can leave a partial
 snapshot: a recorded path is not proof that every file was saved.
+
+A backup's existence, or the presence of a database file, does not establish
+completeness, consistency or that Update History will restore it. A snapshot
+that includes active data still needs a verified, stopped-service recovery
+procedure; its presence is not permission to rewind live runtime stores.
 
 Verify the backup against your effective service paths and update logs. Preserve
 the active data directory, matching `.encryption.key`, audit history and its

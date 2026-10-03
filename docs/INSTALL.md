@@ -302,9 +302,21 @@ update. Use **Settings → Infrastructure → Install on a host** for a first in
 or a v5-to-v6 in-place upgrade.
 
 ### Rollback
-If an update causes issues on systemd installations, backups are created automatically during the update process.
+An update error does not establish which version is running. Check the running
+version and service health before retrying or rolling back, and preserve the
+failed installation and update logs.
 
-**Manual rollback**: In-app updates store backups under `/etc/pulse/backup-<timestamp>/`. The systemd auto-update timer uses a temporary `/tmp/pulse-backup-<timestamp>` during the update and auto-restores on failure.
+In-app update snapshots and updater-script backups have different contents and
+lifetimes. Neither is guaranteed to include all active data; an older binary
+also may not understand data migrated by a newer version. Update History is
+not a full-state recovery tool, and a recorded backup path is not proof of a
+complete backup.
+
+Check the [version-specific snapshot scope](AUTO_UPDATE.md#what-an-update-snapshot-contains)
+and use the [stopped-service recovery procedure](AUTO_UPDATE.md#manual-rollback)
+when data needs restoring. Keep matching data and keys together, verify the
+backup privately and preserve reversible copies of the failed state. Do not
+replace live runtime data or delete it to make a rollback fit.
 
 ---
 

@@ -48,7 +48,10 @@ const { chromium, webkit } = require('playwright');
       for (const text of ['Roll back from Update History', 'successful in-app update',
         'not necessarily a complete backup', 'Copy errors can leave a partial snapshot',
         'matching .encryption.key', 'SQLite sidecar files', 'keep reversible copies',
-        'An image change alone is not a data rollback']) assert.ok(article.includes(text), text);
+        'An image change alone is not a data rollback', 'published v6.4.5 and v6.4.6-rc.1',
+        'Update History is not a full-state recovery tool',
+        'Do not assume later settings and alert changes will be reverted',
+        'not permission to rewind live runtime stores']) assert.ok(article.includes(text), text);
       assert.ok(!article.includes('There is no rollback UI'));
       assert.ok(!article.includes('sudo rm -rf'));
       const scope = page.getByRole('heading', { name: 'What an update snapshot contains', exact: true });
@@ -91,10 +94,50 @@ const { chromium, webkit } = require('playwright');
       await page.getByRole('link', { name: 'rollback and backup scope', exact: true }).click();
       await page.getByRole('heading', { name: 'Rollback', exact: true }).waitFor();
       assert.ok(page.url().endsWith('/docs/AUTO_UPDATE#rollback'));
+
+      await page.getByRole('link', { name: '← All documentation' }).click();
+      const installLink = page.getByRole('link', { name: 'Install Pulse', exact: true });
+      await installLink.focus();
+      await page.keyboard.press('Enter');
+      const installRollback = page.getByRole('heading', { name: 'Rollback', exact: true });
+      await installRollback.waitFor();
+      const installText = await page.locator('article').innerText();
+      for (const text of ['Neither is guaranteed to include all active data',
+        'Update History is not a full-state recovery tool', 'matching data and keys together',
+        'preserve reversible copies', 'Do not replace live runtime data'])
+        assert.ok(installText.includes(text), text);
+      assert.ok(!installText.includes('auto-restores on failure'));
+      await installRollback.evaluate((heading) => heading.scrollIntoView({ block: 'start' }));
+      await page.waitForFunction(() => {
+        const heading = document.getElementById('rollback');
+        return heading && heading.getBoundingClientRect().top >= 0 && heading.getBoundingClientRect().top < 200;
+      });
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+      await page.screenshot({ path: path.join(artifacts, `${engine}-install-rollback.png`) });
+      const snapshotLink = page.getByRole('link', { name: 'version-specific snapshot scope', exact: true });
+      await snapshotLink.focus();
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => {
+        const heading = document.getElementById('what-an-update-snapshot-contains');
+        return heading && heading.getBoundingClientRect().top >= 0 && heading.getBoundingClientRect().top < innerHeight;
+      });
+      assert.ok(page.url().endsWith('/docs/AUTO_UPDATE#what-an-update-snapshot-contains'));
+      await page.goBack();
+      await installRollback.waitFor();
+      const stoppedLink = page.getByRole('link', { name: 'stopped-service recovery procedure', exact: true });
+      await stoppedLink.focus();
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => {
+        const heading = document.getElementById('manual-rollback');
+        return heading && heading.getBoundingClientRect().top >= 0 && heading.getBoundingClientRect().top < innerHeight;
+      });
+      assert.ok(page.url().endsWith('/docs/AUTO_UPDATE#manual-rollback'));
       assert.deepEqual(errors, []);
       results.push({ engine, version: browser.version(), width, tone,
         snapshotScope: true, noDestructiveRecipe: true, scopedCompose: true,
-        auditLink: true, dockerFragment: true, rollbackLink: true, errors });
+        auditLink: true, dockerFragment: true, rollbackLink: true,
+        versionQualifiedScope: true, noFullStatePromise: true,
+        installRollback: true, keyboardSnapshotLink: true, keyboardStoppedRecoveryLink: true, errors });
       await browser.close();
       browser = undefined;
     }
