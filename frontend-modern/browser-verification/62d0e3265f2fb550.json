@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "06a68dbff30c51d5e428126b65019e6b8323f12e",
+  "verified_at": "2026-10-03T21:44:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts": "159107b0ac3deb2daec780274e1d1ad48e6df3c27a1fca9e4bec1b774c16abf0"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 900,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Combined content of stackedDiskBarModel.ts on main 06a68dbff3 after #2438 (glyph-width label fit) and #2449 (fullest-disk label in vertical-bars mode) both edited it; neither PR's receipt covers the merged file, so the main push run of #2449 failed range validation",
+    "Proxmox Overview nodes table on a private mock stack built from main, light at 1440/1280/900/390 and dark at 1440: seven multi-disk nodes render the fullest-disk percentage (e.g. 66%) beside equal-width micro-bars with a Highest usage title, none clipped; single-disk nodes keep the inline percentage with used/total; no disk-cell text clips at any width; at 390 the column shows percentage-only bars"
+  ],
+  "interactions": [
+    "Read every visible [data-stacked-disk-max-label] and its title, and swept every leaf inside [data-stacked-disk-trigger] for scrollWidth over clientWidth, per viewport and scheme",
+    "vitest for src/components/Workloads, src/features/proxmox, src/features/docker and src/features/platformPage on main: 142 files, 2631 tests passed"
+  ]
+}
