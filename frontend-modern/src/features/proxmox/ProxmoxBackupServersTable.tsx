@@ -422,14 +422,10 @@ export function ProxmoxBackupServersTable(props: {
           }
           header={
             <>
-              <TableHead
-                class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[15%]`}
-              >
+              <TableHead class={`${getPlatformTableHeadClassForKind('name')}`}>
                 <PlatformResponsiveTableLabel compact="Server" full="Backup server" />
               </TableHead>
-              <TableHead
-                class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[10%]`}
-              >
+              <TableHead class={`${getPlatformTableHeadClassForKind('text')}`}>
                 <PlatformResponsiveTableLabel compact="State" full="Status" />
               </TableHead>
               <Show when={columnVisible('version')}>
@@ -449,20 +445,16 @@ export function ProxmoxBackupServersTable(props: {
                 </TableHead>
               </Show>
               <Show when={columnVisible('datastore')}>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-20 md:w-[13%]`}
-                >
+                <TableHead class={`${getPlatformTableHeadClassForKind('text')}`}>
                   <PlatformResponsiveTableLabel compact="Store" full="Datastore" />
                 </TableHead>
               </Show>
-              <TableHead
-                class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-20 md:w-[15%]`}
-              >
+              <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')}`}>
                 Used
               </TableHead>
               <Show when={columnVisible('backups')}>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[8%]`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')}`}
                   aria-label="Backups"
                   title="Backups"
                 >
@@ -597,12 +589,14 @@ export function ProxmoxBackupServersTable(props: {
                           >
                             {(datastore) => (
                               <div class="flex items-center justify-end gap-2">
-                                <StatusDot
-                                  size="sm"
-                                  variant={usageVariant(pct())}
-                                  title={`Datastore ${formatPlatformTablePercentValue(pct())} used`}
-                                  ariaHidden
-                                />
+                                <Show when={layoutMode() !== 'compact' && layoutMode() !== 'basic'}>
+                                  <StatusDot
+                                    size="sm"
+                                    variant={usageVariant(pct())}
+                                    title={`Datastore ${formatPlatformTablePercentValue(pct())} used`}
+                                    ariaHidden
+                                  />
+                                </Show>
                                 <span class={`tabular-nums font-medium ${usageToneClass(pct())}`}>
                                   <PlatformTablePercentValue value={pct()} />
                                 </span>

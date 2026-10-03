@@ -2,6 +2,7 @@ import { batch, createRoot, createSignal } from 'solid-js';
 import { createStore, reconcile, type SetStoreFunction } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildProxmoxPageModel } from '@/features/proxmox/proxmoxPageModel';
+import { getDockerContainerLifecycleDisabledReason } from '@/features/docker/dockerContainerLifecycleActions';
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import useUnifiedResourcesSource from '../useUnifiedResources.ts?raw';
@@ -1624,6 +1625,173 @@ describe('useUnifiedResources', () => {
     );
 
     dispose();
+  });
+
+  it('keeps PMG metadata on the canonical resource for REST-first paints', async () => {
+    // The Mail Gateway table reads `resource.pmg`. The mapper used to keep it
+    // only under platformData, so a REST-sourced row rendered every PMG column
+    // as a dash until a websocket row happened to replace it.
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            id: 'pmg-1',
+            type: 'pmg',
+            name: 'mail-gateway-eu',
+            status: 'online',
+            lastSeen: '2026-02-06T12:00:00Z',
+            sources: ['pmg'],
+            uptime: 1_555_222,
+            technology: 'pmg',
+            sourceStatus: { pmg: { status: 'online', lastSeen: '2026-02-06T12:00:00Z' } },
+            actionReadiness: [{ name: 'restart', available: true }],
+            pmg: {
+              instanceId: 'pmg-eu',
+              hostname: 'pmg.example.lan',
+              version: '8.1-2',
+              nodeCount: 1,
+              mailCountTotal: 2_740,
+              spamIn: 321,
+              virusIn: 14,
+              queueTotal: 11,
+              queueDeferred: 5,
+            },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({ query: 'type=pmg&source=pmg', cacheKey: 'pmg-first-paint' });
+    });
+
+    await result!.refetch();
+    const row = result!.resources().find((resource) => resource.id === 'pmg-1');
+    expect(row?.pmg).toEqual(
+      expect.objectContaining({ version: '8.1-2', spamIn: 321, queueDeferred: 5 }),
+    );
+    expect(row?.platformData?.pmg).toEqual(row?.pmg);
+    // The per-source status, action readiness, and technology facets ride the
+    // same race: Docker lifecycle actions and storage freshness read them at
+    // the top level, where only websocket rows used to carry them.
+    expect(row?.sourceStatus?.pmg?.status).toBe('online');
+    expect(row?.actionReadiness?.[0]?.name).toBe('restart');
+    expect(row?.technology).toBe('pmg');
+
+    dispose();
+  });
+
+  it.each([
+    {
+      label: 'stale inventory',
+      sourceStatus: { docker: { status: 'stale', lastSeen: '2026-02-06T12:00:00Z' } },
+      actionReadiness: [],
+      expected: 'Docker inventory is stale. Refresh inventory before running lifecycle actions.',
+    },
+    {
+      label: 'failed inventory',
+      sourceStatus: {
+        docker: { status: 'online', lastSeen: '2026-02-06T12:00:00Z', error: 'Collector refused' },
+      },
+      actionReadiness: [],
+      expected: 'Docker inventory is not healthy: Collector refused',
+    },
+    {
+      label: 'server action refusal',
+      sourceStatus: { docker: { status: 'online', lastSeen: '2026-02-06T12:00:00Z' } },
+      actionReadiness: [
+        { name: 'restart', available: false, reason: 'Command agent disconnected' },
+      ],
+      expected: 'Command agent disconnected',
+    },
+    {
+      label: 'no invented action grant',
+      sourceStatus: { docker: { status: 'online', lastSeen: '2026-02-06T12:00:00Z' } },
+      actionReadiness: [],
+      expected:
+        'Pulse does not currently advertise a fresh restart command capability for this container.',
+    },
+  ])('preserves $label through REST mapping into lifecycle controls', async (testCase) => {
+    apiFetchMock.mockResolvedValue(
+      resourceResponse([
+        {
+          id: 'docker-container-1',
+          type: 'app-container',
+          name: 'edge-web',
+          status: 'running',
+          lastSeen: '2026-02-06T12:00:00Z',
+          sources: ['docker'],
+          technology: 'docker',
+          docker: { runtime: 'docker', agentId: 'agent-edge', containerState: 'running' },
+          sourceStatus: testCase.sourceStatus,
+          actionReadiness: testCase.actionReadiness,
+        },
+      ]),
+    );
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({ query: 'type=app-container', cacheKey: testCase.label });
+    });
+    try {
+      await result!.refetch();
+      const row = result!.resources()[0];
+      expect(row.sourceStatus).toEqual(testCase.sourceStatus);
+      expect(row.actionReadiness).toEqual(testCase.actionReadiness);
+      expect(row.technology).toBe('docker');
+      expect(getDockerContainerLifecycleDisabledReason(row, 'restart')).toBe(testCase.expected);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('replaces REST facets without retaining a removed PMG counter or action refusal', async () => {
+    const base = {
+      id: 'pmg-1',
+      type: 'pmg',
+      name: 'mail-gateway',
+      status: 'online',
+      sources: ['pmg'],
+      lastSeen: '2026-02-06T12:00:00Z',
+    };
+    apiFetchMock.mockResolvedValue(
+      resourceResponse([
+        {
+          ...base,
+          technology: 'pmg',
+          pmg: { version: '8.1-2', queueTotal: 11 },
+          sourceStatus: { pmg: { status: 'stale', lastSeen: base.lastSeen } },
+          actionReadiness: [{ name: 'restart', available: false, reason: 'Old refusal' }],
+        },
+      ]),
+    );
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({ query: 'type=pmg', cacheKey: 'removed-rest-facets' });
+    });
+    try {
+      await result!.refetch();
+      expect(result!.resources()[0].pmg?.queueTotal).toBe(11);
+      apiFetchMock.mockResolvedValue(
+        resourceResponse([{ ...base, actionReadiness: [], sourceStatus: {} }]),
+      );
+      await result!.refetch();
+      const row = result!.resources()[0];
+      expect(row.pmg).toBeUndefined();
+      expect(row.platformData?.pmg).toBeUndefined();
+      expect(row.actionReadiness).toEqual([]);
+      expect(row.sourceStatus).toEqual({});
+      expect(row.technology).toBeUndefined();
+    } finally {
+      dispose();
+    }
   });
 
   it('falls back to canonical resource.uptime when no platform-specific field is set (vSphere)', async () => {

@@ -102,6 +102,8 @@ export function DestinationsTab(props: DestinationsTabProps) {
           onRefresh={() => void state.loadDeliveryLog()}
           webhooks={state.webhooks()}
           heldEvents={state.heldEvents()}
+          heldEventsUnavailable={state.heldEventsUnavailable()}
+          refreshingHeldEvents={state.refreshingHeldEvents()}
         />
 
         <Show when={state.hasLoadError()}>

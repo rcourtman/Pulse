@@ -107,6 +107,8 @@ describe('useNotificationDeliveryLog', () => {
         expect(state.deliveryLog()).toEqual(emptyLog);
         expect(state.refreshingDeliveryLog()).toBe(false);
         expect(state.heldEvents()).toEqual([]);
+        expect(state.refreshingHeldEvents()).toBe(true);
+        expect(state.heldEventsUnavailable()).toBe(false);
       } finally {
         held.resolve([]);
         dispose();
@@ -132,6 +134,8 @@ describe('useNotificationDeliveryLog', () => {
         expect(state.heldEvents()).toHaveLength(1);
         await state.loadDeliveryLog();
         expect(state.heldEvents()).toEqual([]);
+        expect(state.heldEventsUnavailable()).toBe(true);
+        expect(state.refreshingHeldEvents()).toBe(false);
         expect(state.deliveryLog()).toEqual(emptyLog);
         expect(state.deliveryLogUnavailable()).toBe(false);
         expect(state.refreshingDeliveryLog()).toBe(false);
@@ -222,6 +226,8 @@ describe('useNotificationDeliveryLog', () => {
         else older.reject(new Error('stale held read'));
         await Promise.resolve();
         expect(state.heldEvents()).toEqual(current);
+        expect(state.heldEventsUnavailable()).toBe(false);
+        expect(state.refreshingHeldEvents()).toBe(false);
       } finally {
         dispose();
       }
@@ -262,6 +268,58 @@ describe('useNotificationDeliveryLog', () => {
         expect(state.refreshingDeliveryLog()).toBe(true);
         expect(NotificationsAPI.getDeliveryLog).toHaveBeenCalledTimes(1);
         expect(AlertsAPI.getEvents).toHaveBeenCalledTimes(1);
+      }),
+  );
+  it('retains the held-read warning during retry until that read succeeds', () =>
+    createRoot(async (dispose) => {
+      const recovery = deferred<Awaited<ReturnType<typeof AlertsAPI.getEvents>>>();
+      vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValue(emptyLog);
+      vi.mocked(AlertsAPI.getEvents)
+        .mockRejectedValueOnce(new Error('permission denied'))
+        .mockReturnValueOnce(recovery.promise);
+      const state = useNotificationDeliveryLog();
+      try {
+        await state.loadDeliveryLog();
+        expect(state.heldEventsUnavailable()).toBe(true);
+        await state.loadDeliveryLog();
+        expect(state.heldEventsUnavailable()).toBe(true);
+        expect(state.refreshingHeldEvents()).toBe(true);
+        expect(state.refreshingDeliveryLog()).toBe(false);
+        recovery.resolve([]);
+        await recovery.promise;
+        expect(state.heldEventsUnavailable()).toBe(false);
+        expect(state.refreshingHeldEvents()).toBe(false);
+      } finally {
+        dispose();
+      }
+    }));
+
+  it.each(['success', 'failure'])(
+    'keeps the newest held read pending after an older %s',
+    (outcome) =>
+      createRoot(async (dispose) => {
+        const older = deferred<Awaited<ReturnType<typeof AlertsAPI.getEvents>>>();
+        const newer = deferred<Awaited<ReturnType<typeof AlertsAPI.getEvents>>>();
+        vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValue(emptyLog);
+        vi.mocked(AlertsAPI.getEvents)
+          .mockReturnValueOnce(older.promise)
+          .mockReturnValueOnce(newer.promise);
+        const state = useNotificationDeliveryLog();
+        try {
+          await state.loadDeliveryLog();
+          await state.loadDeliveryLog();
+          if (outcome === 'success') older.resolve([]);
+          else older.reject(new Error('stale denied request'));
+          await Promise.resolve();
+          expect(state.refreshingHeldEvents()).toBe(true);
+          expect(state.heldEventsUnavailable()).toBe(false);
+          newer.resolve([]);
+          await newer.promise;
+          expect(state.refreshingHeldEvents()).toBe(false);
+          expect(state.heldEventsUnavailable()).toBe(false);
+        } finally {
+          dispose();
+        }
       }),
   );
 });

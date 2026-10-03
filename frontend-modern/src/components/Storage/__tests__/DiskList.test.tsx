@@ -134,12 +134,18 @@ describe('DiskList', () => {
       'archive',
       'Cache Pool',
       'Archive Pool',
-      'SMART failed.',
       '4%',
       '63°C',
     ]) {
       expect(within(row as HTMLElement).getByText(text)).toBeInTheDocument();
     }
+    // The reason is not a second truncating string in the 32px row: it rides
+    // on the verdict as its title and is spelled out in the disk drawer.
+    expect(within(row as HTMLElement).queryByText('SMART failed.')).not.toBeInTheDocument();
+    expect(within(row as HTMLElement).getByText('Replace Now')).toHaveAttribute(
+      'title',
+      'SMART failed.',
+    );
     expect(within(row as HTMLElement).getByText('3.64 TB')).toBeInTheDocument();
     expect(screen.queryByText('Healthy')).not.toBeInTheDocument();
     expect(screen.queryByText('96%')).not.toBeInTheDocument();
@@ -275,7 +281,13 @@ describe('DiskList', () => {
     expect(screen.getByText('Parity')).toBeInTheDocument();
     expect(screen.getByText('Tower Array')).toBeInTheDocument();
     expect(screen.getByText('Needs Attention')).toBeInTheDocument();
-    expect(screen.getByText('Pending sectors detected.')).toBeInTheDocument();
+    // The reason stays one hover away on the verdict rather than as a second
+    // truncating string in the row; the drawer spells it out.
+    expect(screen.queryByText('Pending sectors detected.')).not.toBeInTheDocument();
+    expect(screen.getByText('Needs Attention')).toHaveAttribute(
+      'title',
+      'Pending sectors detected.',
+    );
   });
 
   it('renders SSD life and falls back to the Proxmox usage string for Belongs', () => {
