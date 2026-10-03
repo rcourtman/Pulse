@@ -185,4 +185,35 @@ describe('PulseDataGrid', () => {
 
     expect(refreshedCell).toBe(initialCell);
   });
+
+  it('lets the grid own header, cell and expansion padding instead of the shared base', () => {
+    render(() => (
+      <PulseDataGrid<TestRow>
+        data={[{ id: '1', name: 'Tower' }]}
+        columns={[{ key: 'name', label: 'Name' }]}
+        keyExtractor={(row) => row.id}
+        isRowExpanded={() => true}
+        expandedRender={() => <div>Tower details</div>}
+      />
+    ));
+
+    const head = screen.getByText('Name').closest('th')!;
+    expect(head.className).toContain('px-3 sm:px-4 py-2.5');
+    expect(head.className).not.toMatch(/(?:^|\s)(?:px|pl|pr)-2\b/);
+    expect(head.className).not.toContain('sm:px-3');
+    expect(head.className).not.toContain('py-1.5');
+
+    const cell = screen.getByText('Tower').closest('td')!;
+    expect(cell.className).toContain('px-3 sm:px-4 py-2 sm:py-3.5');
+    expect(cell.className).not.toMatch(/(?:^|\s)(?:px|pl|pr)-2\b/);
+    expect(cell.className).not.toContain('sm:px-3');
+    expect(cell.className).not.toContain('py-0.5');
+
+    const expansion = screen.getByText('Tower details').closest('td')!;
+    expect(expansion).toHaveAttribute('colspan', '1');
+    expect(expansion.className).toContain('px-0 py-0');
+    expect(expansion.className).not.toMatch(/(?:^|\s)(?:px|pl|pr)-2\b/);
+    expect(expansion.className).not.toContain('sm:px-3');
+    expect(expansion.className).not.toContain('py-0.5');
+  });
 });

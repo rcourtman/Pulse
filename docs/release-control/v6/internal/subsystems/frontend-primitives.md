@@ -5526,6 +5526,17 @@ styling. `TableHeader` and `TableBody` may provide canonical default borders
 and dividers, but when a caller supplies explicit border or divide classes the
 shared primitive must defer to that local contract instead of silently forcing
 the default separator treatment back into the rendered DOM.
+Cell padding follows the same ownership rule. `TableCell` and `TableHead`
+provide the canonical `px-2 sm:px-3` and `py-*` defaults, but Tailwind emits
+every padding utility at equal specificity in spacing-scale order, so a base
+utility silently beats any smaller caller utility. When a caller's class names
+a side's padding (`p-*`, `px-*`, `pl-*`, `pr-*`, `py-*`, `pt-*`, `pb-*`, with
+or without `!`), the primitive omits its default for that side and keeps it for
+the sides the caller left alone; prefixed-only variants such as `lg:px-0` keep
+layering on the default. Tables therefore state the padding they want in their
+own classes or presentation constants instead of carrying `!px-*` overrides to
+beat the primitive. `Table.test.tsx` pins the base, single-side, important,
+`p-*`, prefixed-only and reactive cases.
 That same shared table boundary now owns CSP-safe sizing for infrastructure
 tables and metric bars. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
 and `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
