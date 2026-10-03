@@ -88,7 +88,7 @@ describe('GuestDrawerOverview filesystem labels', () => {
     setGuest({
       ...guest(),
       diskStatusReason: '',
-      disks: guest().disks!.map((disk) => ({ ...disk, usage: 75 })),
+      disks: guest().disks!.map((disk) => ({ ...disk, used: (disk.total ?? 0) * 0.75, usage: 75 })),
     });
     expect(screen.queryByText(/Using last known/)).not.toBeInTheDocument();
     expect(screen.queryByText('Status')).not.toBeInTheDocument();
