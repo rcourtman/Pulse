@@ -130,10 +130,8 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 		}
 	}
 
-	for id, suppressUntil := range m.suppressedUntil {
-		if now.After(suppressUntil) {
-			delete(m.suppressedUntil, id)
-		}
+	for id := range m.suppressedUntil {
+		m.expireSuppressionNoLock(id, now)
 	}
 
 	cutoff := now.Add(-1 * time.Hour)

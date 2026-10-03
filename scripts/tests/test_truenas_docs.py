@@ -89,6 +89,57 @@ class TrueNASDocsTest(unittest.TestCase):
                 self.assertIn(required, text)
         self.assertNotIn("```", text)
 
+    def test_polling_guidance_preserves_evidence_before_a_manual_test(self):
+        text = DOC.read_text().split("### Stale TrueNAS data", 1)[1].split("### Disabling", 1)[0]
+        for required in (
+            "Record the existing state before testing or restarting",
+            "signed-in Pulse admin browser session",
+            "`/api/truenas/connections`", "read-only request",
+            "`poll.intervalSeconds`", "`poll.lastAttemptAt`",
+            "`poll.lastSuccessAt`", "`poll.consecutiveFailures`", "`poll.lastError`",
+            "`observed.collectedAt`", "`transport.reconnects`",
+            "two configured polling cycles", "completed attempt, not an in-flight request",
+            "without\n   pressing **Test Connection**",
+            "without refreshing `observed.collectedAt`",
+            "a successful test is not evidence",
+            "Session turnover alone does not establish failed authentication",
+            "do not stop Apps or reproduce a hang",
+            "Do not post the full connection response",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, text)
+        self.assertNotIn("```", text)
+        self.assertNotIn("Check TrueNAS connectivity and API key validity", text)
+        # Every suggested field belongs to the existing read-only projection,
+        # not a made-up diagnostic endpoint or a field in the secret payload.
+        schemas = {
+            "poll": (ROOT / "internal/monitoring/truenas_poller.go").read_text().split(
+                "type TrueNASConnectionPollStatus struct {", 1)[1].split("\n}", 1)[0],
+            "observed": (ROOT / "internal/monitoring/truenas_poller.go").read_text().split(
+                "type TrueNASConnectionObservedSummary struct {", 1)[1].split("\n}", 1)[0],
+            "transport": (ROOT / "internal/truenas/transport.go").read_text().split(
+                "type TransportStatus struct {", 1)[1].split("\n}", 1)[0],
+        }
+        fields = re.findall(r"`(poll|observed|transport)\.([A-Za-z]+)`", text)
+        self.assertGreater(len(fields), 8)
+        for projection, field in fields:
+            with self.subTest(field=f"{projection}.{field}"):
+                self.assertRegex(schemas[projection], rf'json:"{field}(?:,omitempty)?"')
+
+    def test_general_help_links_to_polling_checks_and_uses_the_actual_default(self):
+        source = (ROOT / "internal/config/truenas.go").read_text()
+        default = re.search(r"const defaultTrueNASPollIntervalSecs = (\d+)", source).group(1)
+        general = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
+        self.assertEqual((ROOT / "docs/TROUBLESHOOTING.md").read_bytes(),
+                         (ROOT / "frontend-modern/public/docs/TROUBLESHOOTING.md").read_bytes())
+        for text in (DOC.read_text(), general):
+            self.assertIn(f"{default} seconds by default", text)
+        self.assertIn("TRUENAS.md#stale-truenas-data", general)
+        self.assertIn("before testing or restarting", general)
+        self.assertIn("a successful connection test is not proof", general)
+        self.assertNotIn("(~30 seconds)", DOC.read_text())
+        self.assertNotIn("cycle (30s)", general)
+
     def test_preparation_protects_new_and_existing_payload(self):
         preparation, _ = commands()
         with tempfile.TemporaryDirectory() as temporary:

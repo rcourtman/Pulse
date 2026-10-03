@@ -103,12 +103,7 @@ func (m *Manager) checkFlappingLocked(trackingKey string) (suppress bool, justTr
 		if now.Before(until) {
 			return true, false
 		}
-		// The cooldown has been served. Clear the latch so a later episode can
-		// open a fresh one; flappingActive is otherwise only ever set to true,
-		// which would leave every subsequent episode with no cooldown at all.
-		delete(m.suppressedUntil, trackingKey)
-		delete(m.flappingActive, trackingKey)
-		delete(m.flappingHistory, trackingKey)
+		m.expireSuppressionNoLock(trackingKey, now)
 	}
 
 	// Record this state change
@@ -160,6 +155,21 @@ func (m *Manager) checkFlappingLocked(trackingKey string) (suppress bool, justTr
 	}
 
 	return false, false
+}
+
+// expireSuppressionNoLock retires a served suppression and its episode together.
+// Cleanup must use the same reset as dispatch: deleting only the deadline leaves
+// a latched flapping episode that can suppress delivery without ever rearming a
+// cooldown or notifying the flapping callback. Caller MUST hold m.mu.
+func (m *Manager) expireSuppressionNoLock(trackingKey string, now time.Time) bool {
+	until, exists := m.suppressedUntil[trackingKey]
+	if !exists || now.Before(until) {
+		return false
+	}
+	delete(m.suppressedUntil, trackingKey)
+	delete(m.flappingActive, trackingKey)
+	delete(m.flappingHistory, trackingKey)
+	return true
 }
 
 func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
