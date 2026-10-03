@@ -307,7 +307,7 @@ describe('patrolRunPresentation', () => {
       findingsSnapshotAvailable: false,
       kindLabel: 'Targeted check',
       status: {
-        badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+        badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-300',
         variant: 'danger',
         label: 'error',
       },

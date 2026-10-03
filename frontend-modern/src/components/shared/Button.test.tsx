@@ -33,7 +33,7 @@ describe('Button', () => {
     expect(buttonModelSource).toContain('getActionIconButtonClass');
     expect(buttonSource).toContain('export function ActionIconButton');
     expect(buttonModelSource).toContain(
-      "secondary: 'border border-border bg-surface text-base-content shadow-sm hover:bg-surface-hover'",
+      "secondary: 'border border-border bg-surface text-base-content shadow-xs hover:bg-surface-hover'",
     );
     expect(buttonModelSource).toContain('primaryFlat:');
     expect(buttonModelSource).toContain('success:');
@@ -45,7 +45,7 @@ describe('Button', () => {
       "'border border-border bg-surface text-muted hover:bg-surface-hover hover:text-base-content'",
     );
     expect(buttonModelSource).toContain(
-      "accent: 'text-blue-700 hover:bg-blue-100 dark:text-blue-200 dark:hover:bg-blue-950'",
+      "accent: 'text-blue-700 hover:bg-blue-100 dark:text-blue-200 dark:hover:bg-blue-950/25'",
     );
     expect(buttonModelSource).toContain('dangerOutline:');
     expect(buttonModelSource).toContain('export const BUTTON_SIZE_CLASSES');
@@ -151,11 +151,11 @@ describe('Button', () => {
 
     const openInventoryButton = screen.getByRole('button', { name: 'Open inventory' });
     expect(openInventoryButton).toHaveClass('border-emerald-300');
-    expect(openInventoryButton).toHaveClass('text-emerald-900');
+    expect(openInventoryButton).toHaveClass('text-emerald-900/25');
 
     const dismissButton = screen.getByRole('button', { name: 'Dismiss' });
     expect(dismissButton).toHaveClass('border-transparent');
-    expect(dismissButton).toHaveClass('text-emerald-900');
+    expect(dismissButton).toHaveClass('text-emerald-900/25');
 
     const removeMemberButton = screen.getByRole('button', { name: 'Remove member' });
     expect(removeMemberButton).toHaveClass('border-transparent');

@@ -2814,6 +2814,33 @@ promotion and rollback boundary unchanged.
 `brace-expansion` floors to 1.1.21 and 5.0.12 and the reviewed `dompurify`
 floor to 3.4.16, so a later downgrade is rejected.
 
+### braces removed from the frontend dependency graph (3 Oct 2026)
+
+`GHSA-vfj7-8cjw-p6xm` affects every `braces` release (up to 3.0.3) and has no
+patched version, so the required frontend dependency audit failed with seven
+high findings on every pull request that changes the dependency graph. All of
+them were dev-only: Tailwind CSS 3 reached `braces` through `chokidar`,
+`fast-glob` and `micromatch`, and `jscpd` 4 through `@jscpd/finder` and
+`fast-glob`. Every `fast-glob` and `micromatch` release depends on `braces`, so
+an override cannot close it. `frontend-modern` therefore moves to Tailwind CSS
+4.3.3 through `@tailwindcss/vite` (dropping `postcss.config.js`,
+`tailwind.config.js`, `autoprefixer` and the direct `postcss` dependency) and to
+`jscpd` 5.4.0, which has no runtime dependencies; `npm audit` over the full graph
+then reports no findings. `npm audit --omit=dev` was already clean, so no shipped
+bundle code changes for security reasons, and the installer, artifact, signing,
+promotion and rollback boundary is unchanged. The stylesheet keeps the v3
+rendering: it pins the v3 palette, font stacks and line heights, keeps the v3
+cascade order, and restores the v3 `space-*`, `divide-*`, hover, border, ring,
+placeholder and button-cursor behaviour. Tailwind CSS 4 is tested on Safari
+16.4, Chrome 111 and Firefox 128 and later. The production stylesheet itself
+needs cascade layers (Safari 15.4, Chrome 99, Firefox 97), because the build
+lowers media range syntax and nesting and folds palette opacity modifiers to
+static colors; that is below the container-query floor (Safari 16, Chrome 105,
+Firefox 110) the platform tables already required.
+`frontend-modern/src/security/__tests__/dependencySecurity.test.ts` now rejects
+any locked `braces` copy, so the advisory cannot return through a later
+dependency, and drops the `autoprefixer` floor because the package is gone.
+
 ### Reviewed @types/node 26.6.2 refresh
 
 The 2026-09-23 `npm-minor-patch` group (Dependabot #2189) advances the

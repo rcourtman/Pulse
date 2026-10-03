@@ -26,13 +26,13 @@ describe('alertTabsPresentation', () => {
 
   it('returns active sidebar presentation', () => {
     expect(getAlertsSidebarTabClass({ isActive: true, isDisabled: false })).toBe(
-      'flex w-full items-center rounded-md text-sm font-medium transition-colors gap-2.5 px-3 py-2 bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-200',
+      'flex w-full items-center rounded-md text-sm font-medium transition-colors gap-2.5 px-3 py-2 bg-blue-50 text-blue-600 dark:bg-blue-900/25 dark:text-blue-200',
     );
   });
 
   it('returns disabled mobile presentation', () => {
     expect(getAlertsMobileTabClass({ isActive: false, isDisabled: true })).toBe(
-      'flex-shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-[11px] font-medium transition-all sm:flex-1 sm:min-w-0 sm:px-4 sm:py-2 sm:text-xs cursor-not-allowed bg-surface-alt text-muted',
+      'shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-[11px] font-medium transition-all sm:flex-1 sm:min-w-0 sm:px-4 sm:py-2 sm:text-xs cursor-not-allowed bg-surface-alt text-muted',
     );
   });
 

@@ -34,9 +34,9 @@ export const AUDIT_TOOLBAR_BUTTON_CLASS =
   'flex min-h-11 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50';
 export const AUDIT_REFRESH_BUTTON_CLASS = `${AUDIT_TOOLBAR_BUTTON_CLASS} text-base-content`;
 export const AUDIT_VERIFY_ALL_BUTTON_CLASS =
-  'flex min-h-11 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-md hover:bg-blue-100 dark:hover:bg-blue-800 disabled:opacity-50';
+  'flex min-h-11 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-blue-900/25 border border-blue-200 dark:border-blue-700 rounded-md hover:bg-blue-100 dark:hover:bg-blue-800 disabled:opacity-50';
 export const AUDIT_VERIFY_ROW_BUTTON_CLASS =
-  'inline-flex min-h-11 sm:min-h-10 items-center rounded-md border border-blue-200 dark:border-blue-700 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 disabled:opacity-50';
+  'inline-flex min-h-11 sm:min-h-10 items-center rounded-md border border-blue-200 dark:border-blue-700 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/25 disabled:opacity-50';
 export const AUDIT_EVENT_FILTER_ALL_LABEL = getAllFilterOptionLabel('events');
 export const AUDIT_EVENT_CONFIG_CHANGE_LABEL = 'Config change';
 export const AUDIT_SUCCESS_FILTER_SUCCESS_ONLY_LABEL = 'Success only';
@@ -47,11 +47,11 @@ export const AUDIT_VERIFICATION_FILTER_NEEDS_LABEL = 'Needs verification';
 export function getAuditEventTypeBadgeClass(event?: string | null): string {
   switch ((event ?? '').trim()) {
     case 'login':
-      return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/25 dark:text-blue-200';
     case 'config_change':
-      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/25 dark:text-yellow-200';
     case 'startup':
-      return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+      return 'bg-green-100 text-green-800 dark:bg-green-900/25 dark:text-green-200';
     case 'logout':
     case 'oidc_token_refresh':
     default:
@@ -82,12 +82,12 @@ export function getAuditVerificationBadgePresentation(
     case 'verified':
       return {
         label: 'Verified',
-        className: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+        className: 'bg-green-100 text-green-800 dark:bg-green-900/25 dark:text-green-200',
       };
     case 'failed':
       return {
         label: 'Failed',
-        className: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+        className: 'bg-red-100 text-red-800 dark:bg-red-900/25 dark:text-red-200',
       };
     case 'error':
       return {

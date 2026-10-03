@@ -64,7 +64,7 @@ export const getStoragePoolColumnWidthPercent = (
 ): number => STORAGE_POOL_COLUMN_WIDTHS[layout][columnId] ?? 0;
 
 const STORAGE_POOL_TABLE_HEADER_CLASS =
-  'overflow-hidden text-ellipsis whitespace-nowrap text-[10px] sm:text-[11px] lg:text-xs uppercase tracking-wider';
+  'overflow-hidden text-ellipsis whitespace-nowrap text-[10px] lg:text-xs uppercase tracking-wider';
 
 export const STORAGE_VIEW_OPTIONS: readonly StorageViewOption[] = [
   { value: 'pools', label: 'Storage' },

@@ -165,7 +165,7 @@ Important:
       <Show when={!showCredentials()}>
         <div class="space-y-4">
           <div class="flex items-start space-x-3">
-            <div class="flex-shrink-0">
+            <div class="shrink-0">
               <svg
                 class="h-6 w-6 text-blue-600 dark:text-blue-400"
                 fill="none"
@@ -190,7 +190,7 @@ Important:
                 }
                 size="sm"
                 titleClass="text-base-content"
-                descriptionClass="!text-xs text-muted"
+                descriptionClass="text-xs! text-muted"
               />
               <ul class="mt-2 space-y-1 text-xs text-muted">
                 <li class="flex items-center">
@@ -295,10 +295,10 @@ Important:
             </Show>
           </div>
 
-          <div class="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+          <div class="bg-yellow-50 dark:bg-yellow-900/25 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
             <div class="flex">
               <svg
-                class="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-2 flex-shrink-0"
+                class="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-2 shrink-0"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -377,13 +377,13 @@ Important:
             <button
               type="button"
               onClick={downloadCredentials}
-              class="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+              class="px-3 py-1 text-xs bg-green-600 text-white rounded-sm hover:bg-green-700 transition-colors"
             >
               Download credentials
             </button>
           </div>
 
-          <div class="bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 rounded-md p-3">
+          <div class="bg-green-50 dark:bg-green-900/25 border border-green-200 dark:border-green-800 rounded-md p-3">
             <p class="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">
               Save these credentials now - they won't be shown again!
             </p>
@@ -393,13 +393,13 @@ Important:
             <div class="bg-base rounded-md p-3">
               <span class={labelClass('text-xs')}>Username</span>
               <div class="mt-1 flex items-center gap-2">
-                <code class="flex-1 font-mono text-sm bg-surface px-3 py-2 rounded border border-border">
+                <code class="flex-1 font-mono text-sm bg-surface px-3 py-2 rounded-sm border border-border">
                   {credentials()!.username}
                 </code>
                 <button
                   type="button"
                   onClick={() => handleCopy(credentials()!.username, 'username')}
-                  class="px-3 py-2 text-xs bg-slate-600 text-white rounded hover:bg-slate-700 transition-colors"
+                  class="px-3 py-2 text-xs bg-slate-600 text-white rounded-sm hover:bg-slate-700 transition-colors"
                 >
                   {copied() === 'username' ? 'Copied!' : 'Copy'}
                 </button>
@@ -409,13 +409,13 @@ Important:
             <div class="bg-base rounded-md p-3">
               <span class={labelClass('text-xs')}>Password</span>
               <div class="mt-1 flex items-center gap-2">
-                <code class="flex-1 font-mono text-sm bg-surface px-3 py-2 rounded border border-border break-all">
+                <code class="flex-1 font-mono text-sm bg-surface px-3 py-2 rounded-sm border border-border break-all">
                   {credentials()!.password}
                 </code>
                 <button
                   type="button"
                   onClick={() => handleCopy(credentials()!.password, 'password')}
-                  class="px-3 py-2 text-xs bg-slate-600 text-white rounded hover:bg-slate-700 transition-colors"
+                  class="px-3 py-2 text-xs bg-slate-600 text-white rounded-sm hover:bg-slate-700 transition-colors"
                 >
                   {copied() === 'password' ? 'Copied!' : 'Copy'}
                 </button>
@@ -425,13 +425,13 @@ Important:
             <div class="bg-base rounded-md p-3">
               <span class={labelClass('text-xs')}>API token</span>
               <div class="mt-1 flex items-center gap-2">
-                <code class="flex-1 font-mono text-sm bg-surface px-3 py-2 rounded border border-border break-all">
+                <code class="flex-1 font-mono text-sm bg-surface px-3 py-2 rounded-sm border border-border break-all">
                   {credentials()!.apiToken}
                 </code>
                 <button
                   type="button"
                   onClick={() => handleCopy(credentials()!.apiToken!, 'token')}
-                  class="px-3 py-2 text-xs bg-slate-600 text-white rounded hover:bg-slate-700 transition-colors"
+                  class="px-3 py-2 text-xs bg-slate-600 text-white rounded-sm hover:bg-slate-700 transition-colors"
                 >
                   {copied() === 'token' ? 'Copied!' : 'Copy'}
                 </button>
@@ -445,7 +445,7 @@ Important:
             </div>
           </div>
 
-          <div class="bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 rounded-md p-3">
+          <div class="bg-green-50 dark:bg-green-900/25 border border-green-200 dark:border-green-800 rounded-md p-3">
             <p class="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">
               Credentials saved
             </p>

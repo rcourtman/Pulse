@@ -75,7 +75,7 @@ function MobileNavDestinationContent(props: {
       </span>
       <span class="min-w-0 truncate">{tab().label}</span>
       <Show when={props.destination.kind === 'primary' && !props.destination.tab.enabled}>
-        <span class="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-900 dark:text-amber-200">
+        <span class="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-900/25 dark:text-amber-200">
           Setup
         </span>
       </Show>
@@ -88,7 +88,7 @@ function MobileNavDestinationContent(props: {
         <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-red-500"></span>
       </Show>
       <Show when={utilityTab()?.badge === 'pro'}>
-        <span class="rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+        <span class="rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700 dark:bg-blue-900/25 dark:text-blue-300">
           Pro
         </span>
       </Show>
@@ -191,7 +191,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
                 title={destination.tab.tooltip}
                 class={`flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors ${
                   active()
-                    ? 'bg-blue-50 font-semibold text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                    ? 'bg-blue-50 font-semibold text-blue-700 dark:bg-blue-900/25 dark:text-blue-300'
                     : 'text-base-content hover:bg-surface-hover'
                 } ${enabled() === false ? 'opacity-70' : ''}`.trim()}
               >

@@ -47,7 +47,7 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
   return (
     <>
       <Show when={state.patrolStream.isStreaming()}>
-        <div class="flex-shrink-0 bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800 px-4 py-2">
+        <div class="shrink-0 bg-blue-50 dark:bg-blue-900/25 border-b border-blue-200 dark:border-blue-800 px-4 py-2">
           <div class="flex items-center gap-3 text-sm">
             <div class="flex items-center gap-2">
               <div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
@@ -57,7 +57,7 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
               <span class="text-blue-700 dark:text-blue-300">{state.patrolStream.phase()}</span>
             </Show>
             <Show when={state.patrolStream.currentTool()}>
-              <span class="text-blue-600 dark:text-blue-400 font-mono text-xs bg-blue-100 dark:bg-blue-900 px-1.5 py-0.5 rounded">
+              <span class="text-blue-600 dark:text-blue-400 font-mono text-xs bg-blue-100 dark:bg-blue-900/25 px-1.5 py-0.5 rounded-sm">
                 {state.patrolStream.currentTool()}
               </span>
             </Show>
@@ -75,10 +75,10 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
       </Show>
 
       <Show when={state.patrolLoadError()}>
-        <div class="flex-shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-900">
+        <div class="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-900/25">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p class="text-sm font-semibold text-amber-900 dark:text-amber-100">
+              <p class="text-sm font-semibold text-amber-900/25 dark:text-amber-100">
                 Patrol could not refresh
               </p>
               <p class="text-xs text-amber-700 dark:text-amber-300">
@@ -89,7 +89,7 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
               type="button"
               onClick={() => void state.handleRefreshPatrol()}
               disabled={state.isManualRefreshRunning()}
-              class="inline-flex items-center justify-center gap-2 rounded-md border border-amber-200 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-200 disabled:cursor-wait disabled:opacity-60 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100 dark:hover:bg-amber-900"
+              class="inline-flex items-center justify-center gap-2 rounded-md border border-amber-200 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900/25 transition-colors hover:bg-amber-200 disabled:cursor-wait disabled:opacity-60 dark:border-amber-700 dark:bg-amber-900/25 dark:text-amber-100 dark:hover:bg-amber-900/25"
             >
               <RefreshCwIcon
                 class={`h-3.5 w-3.5 ${state.isManualRefreshRunning() ? 'animate-spin' : ''}`}
@@ -109,10 +109,10 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
           !state.showBlockedBanner()
         }
       >
-        <div class="flex-shrink-0 bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800 px-3 py-2">
+        <div class="shrink-0 bg-blue-50 dark:bg-blue-900/25 border-b border-blue-200 dark:border-blue-800 px-3 py-2">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <p class="text-xs text-blue-700 dark:text-blue-300">
-              <span class="font-semibold text-blue-900 dark:text-blue-100">
+              <span class="font-semibold text-blue-900/25 dark:text-blue-100">
                 {autonomyAvailability().title}.
               </span>{' '}
               {autonomyAvailability().body}
@@ -140,19 +140,19 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
         }
       >
         <div
-          class={`flex-shrink-0 border-b px-4 py-3 ${
+          class={`shrink-0 border-b px-4 py-3 ${
             state.patrolReadiness()?.status === 'not_ready'
-              ? 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-900'
-              : 'bg-amber-50 dark:bg-amber-900 border-amber-200 dark:border-amber-800'
+              ? 'bg-red-50 dark:bg-red-950/25 border-red-200 dark:border-red-900/25'
+              : 'bg-amber-50 dark:bg-amber-900/25 border-amber-200 dark:border-amber-800'
           }`}
         >
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="flex items-start gap-3">
               <div
-                class={`flex-shrink-0 p-1.5 rounded-md ${
+                class={`shrink-0 p-1.5 rounded-md ${
                   state.patrolReadiness()?.status === 'not_ready'
-                    ? 'bg-red-100 dark:bg-red-900'
-                    : 'bg-amber-100 dark:bg-amber-900'
+                    ? 'bg-red-100 dark:bg-red-900/25'
+                    : 'bg-amber-100 dark:bg-amber-900/25'
                 }`}
               >
                 <ShieldAlertIcon
@@ -167,8 +167,8 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
                 <p
                   class={`text-sm font-semibold ${
                     state.patrolReadiness()?.status === 'not_ready'
-                      ? 'text-red-900 dark:text-red-100'
-                      : 'text-amber-900 dark:text-amber-100'
+                      ? 'text-red-900/25 dark:text-red-100'
+                      : 'text-amber-900/25 dark:text-amber-100'
                   }`}
                 >
                   {state.patrolReadiness()?.status === 'not_ready'
@@ -238,7 +238,7 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
             <Show when={shouldShowReadinessAction()}>
               <a
                 href={setupAction().href}
-                class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-md border border-amber-200 bg-amber-100 text-amber-900 transition-colors hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100 dark:hover:bg-amber-900"
+                class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-md border border-amber-200 bg-amber-100 text-amber-900/25 transition-colors hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-900/25 dark:text-amber-100 dark:hover:bg-amber-900/25"
               >
                 <SettingsIcon class="w-3.5 h-3.5" />
                 {setupAction().label}
@@ -249,14 +249,14 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
       </Show>
 
       <Show when={state.showBlockedBanner()}>
-        <div class="flex-shrink-0 bg-amber-50 dark:bg-amber-900 border-b border-amber-200 dark:border-amber-800 px-4 py-3">
+        <div class="shrink-0 bg-amber-50 dark:bg-amber-900/25 border-b border-amber-200 dark:border-amber-800 px-4 py-3">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="flex items-start gap-3">
-              <div class="flex-shrink-0 p-1.5 bg-amber-100 dark:bg-amber-900 rounded-md">
+              <div class="shrink-0 p-1.5 bg-amber-100 dark:bg-amber-900/25 rounded-md">
                 <ShieldAlertIcon class="w-4 h-4 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
-                <p class="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                <p class="text-sm font-semibold text-amber-900/25 dark:text-amber-100">
                   Patrol paused
                 </p>
                 <p class="text-xs text-amber-700 dark:text-amber-300">{state.blockedReason()}</p>
@@ -270,7 +270,7 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
             <div class="flex items-center gap-2">
               <a
                 href={setupAction().href}
-                class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:text-amber-100 bg-amber-100 dark:bg-amber-900 border border-amber-200 dark:border-amber-700 rounded-md hover:bg-amber-200 dark:hover:bg-amber-900 transition-colors"
+                class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-amber-900/25 dark:text-amber-100 bg-amber-100 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-700 rounded-md hover:bg-amber-200 dark:hover:bg-amber-900/25 transition-colors"
               >
                 <SettingsIcon class="w-3.5 h-3.5" />
                 {setupAction().label}

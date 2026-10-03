@@ -83,7 +83,7 @@ describe('alertResourceTablePresentation.branchcov0718', () => {
       expect(getAlertResourceTableOfflineStatePresentation(bogus)).toEqual({
         label: ALERT_RESOURCE_TABLE_OFFLINE_STATE_CRITICAL_LABEL,
         className:
-          'bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800',
+          'bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/25 dark:text-red-200 dark:hover:bg-red-800',
         title: ALERT_RESOURCE_TABLE_OFFLINE_STATE_CRITICAL_TITLE,
       });
     });

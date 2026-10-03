@@ -42,9 +42,9 @@ const STATUS_LABELS: Record<MaintenanceVerificationStatus, string> = {
 
 const STATUS_CLASSES: Record<MaintenanceVerificationStatus, string> = {
   pending: 'bg-surface-hover text-base-content',
-  healthy: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
-  needs_review: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
-  failed_verification: 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300',
+  healthy: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300',
+  needs_review: 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300',
+  failed_verification: 'bg-rose-100 text-rose-700 dark:bg-rose-900/25 dark:text-rose-300',
 };
 
 export const MaintenanceVerificationSection: Component<MaintenanceVerificationSectionProps> = (
@@ -111,7 +111,7 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
 
   return (
     <section
-      class="rounded border border-border bg-surface p-3 text-sm"
+      class="rounded-sm border border-border bg-surface p-3 text-sm"
       data-testid="maintenance-verification-section"
       aria-labelledby="maintenance-verification-heading"
     >
@@ -127,7 +127,7 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
         </div>
         <button
           type="button"
-          class="rounded border border-border bg-surface-hover px-2 py-1 text-xs font-medium hover:bg-surface"
+          class="rounded-sm border border-border bg-surface-hover px-2 py-1 text-xs font-medium hover:bg-surface"
           disabled={rerunning() || !props.resourceId}
           onClick={handleRerun}
           data-testid="maintenance-verification-rerun"
@@ -139,7 +139,7 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
       <Show
         when={hasReports()}
         fallback={
-          <div class="mt-3 rounded border border-dashed border-border bg-surface-hover p-3 text-xs text-muted">
+          <div class="mt-3 rounded-sm border border-dashed border-border bg-surface-hover p-3 text-xs text-muted">
             No verification reports yet. A report is written automatically the next time this
             resource exits a maintenance window.
           </div>
@@ -149,13 +149,13 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
           <For each={reports()}>
             {(report) => (
               <li
-                class="rounded border border-border bg-surface-hover p-2"
+                class="rounded-sm border border-border bg-surface-hover p-2"
                 data-testid="maintenance-verification-report"
               >
                 <div class="flex flex-wrap items-center justify-between gap-2">
                   <div class="flex flex-wrap items-center gap-2">
                     <span
-                      class={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${STATUS_CLASSES[report.status]}`}
+                      class={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-medium ${STATUS_CLASSES[report.status]}`}
                       data-testid={`maintenance-verification-status-${report.status}`}
                     >
                       {STATUS_LABELS[report.status]}
@@ -168,7 +168,7 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
                   <Show when={!report.userOutcome}>
                     <button
                       type="button"
-                      class="rounded border border-border bg-surface px-2 py-1 text-[11px] font-medium hover:bg-surface-hover"
+                      class="rounded-sm border border-border bg-surface px-2 py-1 text-[11px] font-medium hover:bg-surface-hover"
                       disabled={reviewingId() === report.id}
                       onClick={() => handleReview(report)}
                       data-testid="maintenance-verification-review"

@@ -325,7 +325,7 @@ export const DockerServicesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} platform-table-narrow-hidden hidden text-base-content md:table-cell`}
                           >
-                            <span class="truncate inline-block max-w-[8rem]" title={stack()}>
+                            <span class="truncate inline-block max-w-32" title={stack()}>
                               {stack()}
                             </span>
                           </TableCell>
@@ -354,10 +354,7 @@ export const DockerServicesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span
-                              class="truncate inline-block max-w-[10rem]"
-                              title={update().title}
-                            >
+                            <span class="truncate inline-block max-w-40" title={update().title}>
                               {update().label}
                             </span>
                           </TableCell>

@@ -136,12 +136,12 @@ export const Toast: Component<ToastProps> = (props) => {
         class={`
            bg-surface
           border border-border
-          px-4 py-3 sm:px-5 sm:py-4 rounded-md shadow-sm
+          px-4 py-3 sm:px-5 sm:py-4 rounded-md shadow-xs
           flex w-full min-w-0 items-start gap-3 sm:gap-4
         `}
       >
         <div
-          class={`flex-shrink-0 flex items-center justify-center p-1.5 sm:p-2 rounded-md border bg-surface ${iconTone().iconClass} ${iconTone().panelClass}`}
+          class={`shrink-0 flex items-center justify-center p-1.5 sm:p-2 rounded-md border bg-surface ${iconTone().iconClass} ${iconTone().panelClass}`}
         >
           {icon()}
         </div>
@@ -155,7 +155,7 @@ export const Toast: Component<ToastProps> = (props) => {
               <summary class="text-xs text-muted cursor-pointer select-none hover:text-base-content">
                 Details
               </summary>
-              <p class="mt-1 text-xs text-base-content/70 break-all">{props.toast.detail}</p>
+              <p class="mt-1 text-xs break-all">{props.toast.detail}</p>
             </details>
           </Show>
         </div>
@@ -166,7 +166,7 @@ export const Toast: Component<ToastProps> = (props) => {
           title="Dismiss"
           tone="muted"
           size="sm"
-          class="flex-shrink-0"
+          class="shrink-0"
         >
           <XIcon class="h-4 w-4" aria-hidden="true" />
         </ActionIconButton>
@@ -217,7 +217,7 @@ export const ToastContainer: Component = () => {
       <div
         role="region"
         aria-label="Notifications"
-        class="fixed inset-x-3 bottom-3 z-[9999] space-y-2 sm:left-auto sm:right-4 sm:bottom-4 sm:w-full sm:max-w-[500px]"
+        class="fixed inset-x-3 bottom-3 z-9999 space-y-2 sm:left-auto sm:right-4 sm:bottom-4 sm:w-full sm:max-w-[500px]"
       >
         <For each={toasts()}>{(toast) => <Toast toast={toast} onRemove={removeToast} />}</For>
       </div>

@@ -95,37 +95,37 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
           <button
             type="button"
             onClick={handleToggle}
-            class="flex min-h-11 w-full min-w-0 items-center gap-3 px-4 py-3 text-left cursor-pointer select-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500"
+            class="flex min-h-11 w-full min-w-0 items-center gap-3 px-4 py-3 text-left cursor-pointer select-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500"
             aria-expanded={!isCollapsed()}
             aria-controls={`section-content-${props.id}`}
           >
             {/* Left side: Chevron + Icon + Title + Count */}
-            <span class="flex-shrink-0 text-muted transition-transform duration-200">
+            <span class="shrink-0 text-muted transition-transform duration-200">
               <Show when={isCollapsed()} fallback={<ChevronDown class="w-5 h-5" />}>
                 <ChevronRight class="w-5 h-5" />
               </Show>
             </span>
 
             <Show when={props.icon}>
-              <span class="flex-shrink-0 text-muted">{props.icon}</span>
+              <span class="shrink-0 text-muted">{props.icon}</span>
             </Show>
 
             <span class="min-w-0">
               <span class="flex items-center gap-2">
                 <span class="truncate font-semibold text-base-content">{props.title}</span>
                 <Show when={props.resourceCount !== undefined}>
-                  <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface-alt text-muted">
+                  <span class="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface-alt text-muted">
                     {props.resourceCount}
                   </span>
                 </Show>
                 <Show when={props.isGloballyDisabled}>
-                  <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400">
+                  <span class="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900/25 dark:text-yellow-400">
                     {getAlertThresholdsSectionDisabledLabel()}
                   </span>
                 </Show>
                 <Show when={props.hasChanges}>
                   <span
-                    class="flex-shrink-0 w-2 h-2 rounded-full bg-blue-500"
+                    class="shrink-0 w-2 h-2 rounded-full bg-blue-500"
                     title={getAlertThresholdsSectionUnsavedChangesTitle()}
                   />
                 </Show>
@@ -138,7 +138,7 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
         </h3>
 
         <Show when={props.headerActions}>
-          <div class="flex flex-shrink-0 items-center gap-2 pr-4">{props.headerActions}</div>
+          <div class="flex shrink-0 items-center gap-2 pr-4">{props.headerActions}</div>
         </Show>
       </div>
 
@@ -197,9 +197,9 @@ export const SectionActionButton: Component<SectionActionButtonProps> = (props) 
   const variantClasses = {
     default: 'text-slate-600 hover:text-base-content hover:bg-slate-100',
     primary:
-      'text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900',
+      'text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/25',
     danger:
-      'text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900',
+      'text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/25',
   };
   return (
     <button
@@ -247,7 +247,7 @@ export const NestedGroupHeader: Component<NestedGroupHeaderProps> = (props) => {
     >
       <div class="flex items-center gap-2 min-w-0">
         <Show when={props.onToggle}>
-          <div class="flex-shrink-0 text-slate-400">
+          <div class="shrink-0 text-slate-400">
             <Show when={props.collapsed} fallback={<ChevronDown class="w-4 h-4" />}>
               <ChevronRight class="w-4 h-4" />
             </Show>
@@ -256,7 +256,7 @@ export const NestedGroupHeader: Component<NestedGroupHeaderProps> = (props) => {
 
         <Show when={props.status}>
           <StatusDot
-            class="flex-shrink-0"
+            class="shrink-0"
             variant={statusIndicator().variant}
             title={statusIndicator().label}
             ariaLabel={statusIndicator().label}

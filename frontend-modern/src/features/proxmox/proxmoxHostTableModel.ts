@@ -171,11 +171,11 @@ export const getProxmoxHostColumnWidthStyle = (
 // does not collapse into unreadable labels.
 export const getProxmoxHostTableMinWidthClass = (
   layoutMode: WorkloadTableLayoutMode,
-): 'min-w-[0px]' | 'min-w-[50rem]' | 'min-w-[64rem]' | 'min-w-[1240px]' => {
+): 'min-w-0' | 'min-w-200' | 'min-w-5xl' | 'min-w-[1240px]' => {
   if (layoutMode === 'narrow' || layoutMode === 'phone' || layoutMode === 'mobile') {
-    return 'min-w-[0px]';
+    return 'min-w-0';
   }
-  if (layoutMode === 'tablet') return 'min-w-[50rem]';
-  if (layoutMode === 'compact') return 'min-w-[64rem]';
+  if (layoutMode === 'tablet') return 'min-w-200';
+  if (layoutMode === 'compact') return 'min-w-5xl';
   return 'min-w-[1240px]';
 };

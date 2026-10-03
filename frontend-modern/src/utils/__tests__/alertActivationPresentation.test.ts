@@ -27,7 +27,7 @@ describe('getAlertActivationPresentation', () => {
       labelClass: 'text-green-600 dark:text-green-400',
       trackClass: 'relative h-6 w-11 rounded-full transition bg-blue-600',
       thumbClass:
-        'absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white shadow transition-all translate-x-5',
+        'absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white shadow-sm transition-all translate-x-5',
     });
   });
 
@@ -37,7 +37,7 @@ describe('getAlertActivationPresentation', () => {
       labelClass: 'text-muted',
       trackClass: 'relative h-6 w-11 rounded-full transition bg-surface-hover opacity-50',
       thumbClass:
-        'absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white shadow transition-all translate-x-0',
+        'absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white shadow-sm transition-all translate-x-0',
     });
   });
 

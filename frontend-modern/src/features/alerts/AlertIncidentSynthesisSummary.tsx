@@ -23,7 +23,7 @@ export function AlertIncidentSynthesisSummary(props: AlertIncidentSynthesisSumma
             <h3 class="text-sm font-semibold text-base-content">{value().title}</h3>
             <span class={value().badgeClass}>{value().badge}</span>
           </div>
-          <p class="mt-1 text-sm text-base-content/80">{correlation()!.reason}</p>
+          <p class="mt-1 text-sm">{correlation()!.reason}</p>
           <p class="mt-1 text-xs text-muted">{value().counts}</p>
           <details class="mt-2">
             <summary class="cursor-pointer text-xs font-medium text-blue-700 dark:text-blue-300">
@@ -32,7 +32,7 @@ export function AlertIncidentSynthesisSummary(props: AlertIncidentSynthesisSumma
             <div class="mt-2 space-y-2 border-l-2 border-border pl-3">
               <For each={correlation()!.observations ?? []}>
                 {(observation) => (
-                  <div class="text-xs text-base-content/80">
+                  <div class="text-xs">
                     <div class="font-medium text-base-content">
                       {observation.resourceName || observation.resourceId}
                     </div>

@@ -172,7 +172,7 @@ export const MetricMiniSparkline: Component<MetricMiniSparklineProps> = (props) 
         </Show>
       </svg>
       <Show when={showInlineValue()}>
-        <span class="block max-w-[5.5rem] overflow-hidden text-ellipsis whitespace-nowrap text-right text-[10px] font-medium tabular-nums text-base-content">
+        <span class="block max-w-22 overflow-hidden text-ellipsis whitespace-nowrap text-right text-[10px] font-medium tabular-nums text-base-content">
           {displayLabel()}
         </span>
       </Show>

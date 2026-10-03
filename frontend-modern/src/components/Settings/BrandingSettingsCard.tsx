@@ -155,7 +155,7 @@ export const BrandingSettingsCard: Component<BrandingSettingsCardProps> = (props
         <div class="flex min-h-28 flex-col justify-between gap-4 rounded-md border border-border bg-base p-4">
           <div>
             <p class="text-xs font-medium uppercase tracking-wide text-muted">Header preview</p>
-            <div class="mt-3 flex min-h-10 items-center justify-center gap-2 overflow-hidden rounded bg-surface px-3 py-2">
+            <div class="mt-3 flex min-h-10 items-center justify-center gap-2 overflow-hidden rounded-sm bg-surface px-3 py-2">
               <Show
                 when={preview()}
                 fallback={<PulseBrandMark class="h-5 w-5 shrink-0" decorative />}
@@ -164,7 +164,7 @@ export const BrandingSettingsCard: Component<BrandingSettingsCardProps> = (props
                   <img
                     src={logo()}
                     alt=""
-                    class="max-h-8 max-w-[12rem] object-contain"
+                    class="max-h-8 max-w-48 object-contain"
                     data-testid="branding-logo-preview"
                   />
                 )}

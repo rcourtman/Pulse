@@ -124,10 +124,10 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 </Show>
               </div>
 
-              <div class="bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+              <div class="bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-md p-3">
                 <div class="flex gap-2">
                   <svg
-                    class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
+                    class="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -206,7 +206,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 />
               </div>
 
-              <div class="text-xs text-muted rounded p-2">
+              <div class="text-xs text-muted rounded-sm p-2">
                 <p class="font-semibold mb-1">{getAPITokenManagementLocationMessage()}</p>
                 <p>
                   Tokens are managed in the UI and stored in <code>api_tokens.json</code>.
@@ -279,7 +279,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 </p>
               </div>
 
-              <div class="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-800 rounded p-3">
+              <div class="bg-yellow-50 dark:bg-yellow-900/25 border border-yellow-200 dark:border-yellow-800 rounded-sm p-3">
                 <div class="space-y-2 text-xs text-yellow-700 dark:text-yellow-300">
                   <p>
                     <strong>Warning:</strong> Importing will replace all current configuration. This

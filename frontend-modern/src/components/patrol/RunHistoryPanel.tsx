@@ -73,7 +73,7 @@ export function RunHistoryPanel(props: RunHistoryPanelProps) {
 
       <Show when={!props.loading && props.runs.length > 0}>
         <div class="space-y-3">
-          <div class="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
+          <div class="max-h-112 space-y-2 overflow-y-auto pr-1">
             <For each={visibleRuns()}>
               {(run) => (
                 <RunHistoryEntry

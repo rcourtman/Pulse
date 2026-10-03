@@ -45,7 +45,7 @@ export const AISettingsStatusAndActions: Component<AISettingsStatusAndActionsPro
         <Show when={props.showConnectionControls && state.settings()?.configured}>
           <button
             type="button"
-            class="w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 text-sm border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 text-sm border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/25 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={state.handleTest}
             disabled={state.testing() || state.saving() || state.loading()}
           >

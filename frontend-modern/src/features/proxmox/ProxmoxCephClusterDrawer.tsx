@@ -85,7 +85,7 @@ function PoolUsageBar(props: { percent: number }) {
   return (
     <ProgressBar
       value={clamped}
-      class="h-4 w-full min-w-0 max-w-32 md:min-w-[3.5rem]"
+      class="h-4 w-full min-w-0 max-w-32 md:min-w-14"
       fillClass={capacityToneFor(clamped)}
       label={
         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none tabular-nums">
@@ -360,7 +360,7 @@ export const ProxmoxCephClusterDrawer: Component<{
           <span class="text-[10px] uppercase tracking-wide text-muted">Tags</span>
           <For each={props.cluster.tags ?? []}>
             {(tag) => (
-              <span class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] font-mono text-base-content">
+              <span class="inline-flex items-center rounded-xs bg-surface-alt px-1.5 py-0.5 text-[10px] font-mono text-base-content">
                 {tag}
               </span>
             )}

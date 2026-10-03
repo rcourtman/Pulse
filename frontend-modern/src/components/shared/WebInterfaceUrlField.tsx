@@ -47,7 +47,7 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
             <WebInterfaceLink
               url={state.normalizedCurrentUrl()}
               ariaLabel="Open saved web interface URL"
-              class="inline-flex min-h-8 min-w-8 items-center justify-center rounded-md text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900"
+              class="inline-flex min-h-8 min-w-8 items-center justify-center rounded-md text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/25"
               title="Open saved web interface URL"
               invalidAriaLabel="Saved web interface URL is invalid"
             >
@@ -100,7 +100,7 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
           {(error) => (
             <div
               role="alert"
-              class="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-200"
+              class="mt-2 rounded-sm border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-200"
             >
               <div class="font-medium">Suggested URL rejected</div>
               <p class="mt-0.5">{error()}</p>
@@ -109,7 +109,7 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
         </Show>
 
         <Show when={state.showSuggestedDiagnostic()}>
-          <div class="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-200">
+          <div class="mt-2 rounded-sm border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-200">
             <div class="flex items-center gap-1.5 font-medium">
               <span>{state.suggestedUrlFallback().title}</span>
               <DiscoveryProvenanceMarker />
@@ -119,7 +119,7 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
         </Show>
 
         <Show when={state.showSuggestedUrl()}>
-          <div class="mt-2 p-2 rounded bg-blue-50 border border-blue-200 dark:bg-blue-900 dark:border-blue-800">
+          <div class="mt-2 p-2 rounded-sm bg-blue-50 border border-blue-200 dark:bg-blue-900/25 dark:border-blue-800">
             <div class="mb-1 flex items-center gap-1.5 text-[10px] font-medium text-blue-700 dark:text-blue-300">
               <span>{state.normalizedCurrentUrl() ? 'Discovered URL' : 'Suggested URL'}</span>
               <DiscoveryProvenanceMarker />
@@ -142,7 +142,7 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
               <WebInterfaceLink
                 url={state.normalizedSuggestedUrl()}
                 ariaLabel="Open suggested URL"
-                class="inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 dark:text-blue-200 dark:hover:bg-blue-950"
+                class="inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 dark:text-blue-200 dark:hover:bg-blue-950/25"
                 title="Open suggested URL"
               >
                 <ExternalLinkIcon class="h-3.5 w-3.5" aria-hidden="true" />
@@ -158,7 +158,7 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
               <Button
                 variant="primaryFlat"
                 size="xs"
-                class="flex-shrink-0"
+                class="shrink-0"
                 onClick={() => state.setUrlValue(state.normalizedSuggestedUrl())}
                 disabled={state.urlSaving()}
               >
