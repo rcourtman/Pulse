@@ -797,6 +797,19 @@ last success and last schedule) are relative-age values under that rule:
 `formatPlatformTableDateTimeValue` time as hover title, never as the raw RFC
 3339 string the agent reports, and the Detail column carries enough weight
 for those labelled ages to fit whole on a full-width desktop table.
+The controller row expansion carries those timestamps in full: the
+always-visible summary tables of the resource drawer render a Kubernetes
+workload-controller section (`buildKubernetesControllerSection`, in the same
+slot as the Docker container section) with the Job start and completion time,
+the CronJob schedule and last run and last success time, each as the absolute
+`formatPlatformTableDateTimeValue` time followed by its age in parentheses and
+allowed to wrap in a phone-width detail cell, plus the target,
+count, service, and scope fields the narrower layouts drop, so a phone or a
+half-width pane reaches them in one tap rather than through a collapsed
+platform-details disclosure. The `KubernetesControllersTable` phone projection
+keeps controller, kind, ready, and issues and demotes Target with
+`platform-table-phone-hidden`, so kind labels such as `DaemonSet` and
+`StatefulSet` fit whole instead of clipping in a 15 percent track.
 Duration and interval cells keep the same split: unified-resource or
 source-specific consumers own which elapsed duration, human fallback, or poll
 interval field is meaningful, while dense platform table rendering must use

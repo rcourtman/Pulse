@@ -16,6 +16,7 @@ import {
   formatPlatformTableDateTimeValue,
   formatPlatformTableRelativeTimeValue,
   formatPlatformTableTextValue,
+  getPlatformResourceCountNoun,
   getPlatformTableCellClassForKind,
   PlatformTableShell,
   type PlatformTableSortValue,
@@ -43,15 +44,20 @@ const controllerName = (resource: Resource): string =>
 const controllerKind = (resource: Resource): string =>
   resource.kubernetes?.resourceKind || getResourceTypeLabel(resource.type) || resource.type;
 
+const countedTarget = (count: number | undefined, noun: string): string => {
+  const value = count ?? 0;
+  return `${value} ${getPlatformResourceCountNoun(noun, value)}`;
+};
+
 const targetValue = (resource: Resource): string => {
   switch (resource.type) {
     case 'k8s-replicaset':
     case 'k8s-statefulset':
-      return `${resource.kubernetes?.desiredReplicas ?? 0} pods`;
+      return countedTarget(resource.kubernetes?.desiredReplicas, 'pods');
     case 'k8s-daemonset':
-      return `${resource.kubernetes?.desiredNumberScheduled ?? 0} nodes`;
+      return countedTarget(resource.kubernetes?.desiredNumberScheduled, 'nodes');
     case 'k8s-job':
-      return `${resource.kubernetes?.desiredReplicas ?? 0} completions`;
+      return countedTarget(resource.kubernetes?.desiredReplicas, 'completions');
     case 'k8s-cronjob':
       return formatPlatformTableTextValue(resource.kubernetes?.schedule);
     default:
@@ -317,7 +323,7 @@ export const KubernetesControllersTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="kind"
-                  class="platform-table-mobile-w-15 md:w-[8%]"
+                  class="platform-table-mobile-w-25 md:w-[8%]"
                 >
                   Kind
                 </PlatformSortableTableHead>
@@ -329,11 +335,16 @@ export const KubernetesControllersTable: Component<{
                 >
                   Scope
                 </PlatformSortableTableHead>
+                {/* The phone row keeps controller, kind, ready and issues. A
+                    15% kind track clipped "DaemonSet" and "StatefulSet" and the
+                    target track clipped "1 completions", so target moves to the
+                    row expansion, which also carries the schedule and job
+                    timestamps the narrower layouts drop. */}
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
                   sortKey="target"
-                  class="platform-table-mobile-w-20 md:w-[12%]"
+                  class="platform-table-phone-hidden md:w-[12%]"
                 >
                   Target
                 </PlatformSortableTableHead>
@@ -365,7 +376,7 @@ export const KubernetesControllersTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="exceptions"
-                  class="platform-table-mobile-w-20 md:w-[11%]"
+                  class="platform-table-mobile-w-30 md:w-[11%]"
                 >
                   <PlatformResponsiveTableLabel compact="Issues" full="Exceptions" />
                 </PlatformSortableTableHead>
@@ -431,7 +442,7 @@ export const KubernetesControllersTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
                           >
                             <span class="inline-block max-w-[12rem] truncate" title={target()}>
                               {target()}
