@@ -2920,6 +2920,20 @@ transport-induced absence. Preserving this read-only evidence adds no backup,
 restore, retention, or recovery authority. The behavior is pinned by
 `useUnifiedResources.test.ts` and `useWorkloads.test.ts`.
 
+### Coverage rows name the last backup, not the newest restore point
+
+The Proxmox coverage row's `Last backup` cell is the newest completed PBS
+snapshot or PVE backup file. A guest snapshot never fills it: it shares the
+guest's own storage, and the protection posture engine already refuses to count
+snapshots as independent recovery, so a fresh snapshot beside a stale posture
+must not read as a fresh backup. Snapshot-only rows show `None` and carry the
+engine's own reason on hover; the guest snapshot keeps its dedicated column and
+the restore-evidence disclosure. The backup-location filter re-derives that
+pointer from completed, non-snapshot artifacts under the same rule. This is a
+presentation and sort change only; it adds no backup, restore, or retention
+authority. Pinned by `proxmoxBackupRecoveryModel.test.ts` and
+`ProxmoxCoverageTable.test.tsx`.
+
 ### Retained Patrol objectives do not create recovery authority
 
 The shared `internal/api` retained-objective endpoints may scope an outcome to
@@ -6435,3 +6449,12 @@ metrics target, health threshold, persistence or recovery authority changes.
 cover repeated paths/groups, direct children, scoped legacy snapshots, missing
 ownership and live target replacement. Synthetic presentation proof does not
 establish native appliance, installation or recovery acceptance.
+
+### Prompt-cache usage buckets open no storage or recovery path
+
+The AI usage ledger and Patrol run records gain two optional integer fields
+(`cache_creation_input_tokens`, `cache_read_input_tokens`) in the files
+Pulse already writes, with `omitempty` encoding so existing records load
+unchanged and older builds ignore the fields. `internal/api/ai_handlers.go`
+reads them for the usage export only. No new file, directory, retention
+window, backup, migration or recovery authority is introduced.

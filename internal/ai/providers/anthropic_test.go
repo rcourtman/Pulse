@@ -902,3 +902,87 @@ func TestAnthropicClient_ChatStream_CacheableSystemPrefix(t *testing.T) {
 		t.Fatalf("tool breakpoint must be dropped when the system block is cached: %+v", got.Tools[0])
 	}
 }
+
+// Issue #2350: cache-creation and cache-read usage must survive both response
+// paths so cost accounting can price each bucket at its own rate.
+func TestAnthropicClient_Chat_KeepsPromptCacheUsageBuckets(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(anthropicResponse{
+			ID:         "msg_cache",
+			Type:       "message",
+			Role:       "assistant",
+			Model:      "claude-sonnet-5",
+			StopReason: "end_turn",
+			Content:    []anthropicContent{{Type: "text", Text: "ok"}},
+			Usage: anthropicUsage{
+				InputTokens:              100,
+				CacheCreationInputTokens: 1000,
+				CacheReadInputTokens:     5000,
+				OutputTokens:             20,
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewAnthropicClientWithBaseURL("test-key", "claude-sonnet-5", server.URL, 0)
+	resp, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if resp.InputTokens != 100 || resp.OutputTokens != 20 {
+		t.Fatalf("ordinary usage changed: in=%d out=%d", resp.InputTokens, resp.OutputTokens)
+	}
+	if resp.CacheCreationInputTokens != 1000 || resp.CacheReadInputTokens != 5000 {
+		t.Fatalf("cache buckets dropped: creation=%d read=%d", resp.CacheCreationInputTokens, resp.CacheReadInputTokens)
+	}
+}
+
+func TestAnthropicClient_ChatStream_KeepsPromptCacheUsageBuckets(t *testing.T) {
+	// message_start carries the prompt-side usage; the final message_delta
+	// repeats it as cumulative values, which must assign, not double.
+	stream := []string{
+		`{"type":"message_start","message":{"usage":{"input_tokens":100,"cache_creation_input_tokens":1000,"cache_read_input_tokens":5000,"output_tokens":1}}}`,
+		`{"type":"content_block_start","content_block":{"type":"text"}}`,
+		`{"type":"content_block_delta","delta":{"type":"text_delta","text":"ok"}}`,
+		`{"type":"content_block_stop"}`,
+		`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"input_tokens":100,"cache_creation_input_tokens":1000,"cache_read_input_tokens":5000,"output_tokens":20}}`,
+		`{"type":"message_stop"}`,
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		for _, event := range stream {
+			_, _ = w.Write([]byte("data: " + event + "\n\n"))
+			w.(http.Flusher).Flush()
+		}
+	}))
+	defer server.Close()
+
+	client := NewAnthropicClientWithBaseURL("test-key", "claude-sonnet-5", server.URL, 0)
+	var done DoneEvent
+	doneCalled := false
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	}, func(event StreamEvent) {
+		if event.Type == "done" {
+			if data, ok := event.Data.(DoneEvent); ok {
+				done = data
+				doneCalled = true
+			}
+		}
+	})
+	if err != nil {
+		t.Fatalf("ChatStream: %v", err)
+	}
+	if !doneCalled {
+		t.Fatal("no done event")
+	}
+	if done.InputTokens != 100 || done.OutputTokens != 20 {
+		t.Fatalf("ordinary usage changed: in=%d out=%d", done.InputTokens, done.OutputTokens)
+	}
+	if done.CacheCreationInputTokens != 1000 || done.CacheReadInputTokens != 5000 {
+		t.Fatalf("cache buckets dropped or doubled: creation=%d read=%d", done.CacheCreationInputTokens, done.CacheReadInputTokens)
+	}
+}

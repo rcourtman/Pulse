@@ -34,20 +34,23 @@ import (
 
 // AIAnalysisResult contains the results of an AI analysis
 type AIAnalysisResult struct {
-	Response          string     // The AI's raw response text
-	Findings          []*Finding // Parsed findings from the response
-	RejectedFindings  int        // Findings rejected by threshold validation
-	TriageFlags       int        // Number of deterministic triage flags
-	TriageSkippedLLM  bool       // Legacy: true for older records where quiet triage skipped LLM
-	InputTokens       int
-	OutputTokens      int
-	ToolCalls         []ToolCallRecord          // Tool invocations during this analysis
-	ReportedIDs       []string                  // Finding IDs reported (created/re-reported) this run
-	NewFindingIDs     []string                  // Finding IDs first created during this run
-	ResolvedIDs       []string                  // Finding IDs explicitly resolved by LLM this run
-	Assessments       []PatrolFindingAssessment // Explicit verdicts for existing findings this run
-	SeededFindingIDs  []string                  // Finding IDs that were presented in seed context
-	QueriedFindingIDs []string                  // Finding IDs returned by patrol_get_findings this run
+	Response         string     // The AI's raw response text
+	Findings         []*Finding // Parsed findings from the response
+	RejectedFindings int        // Findings rejected by threshold validation
+	TriageFlags      int        // Number of deterministic triage flags
+	TriageSkippedLLM bool       // Legacy: true for older records where quiet triage skipped LLM
+	InputTokens      int
+	OutputTokens     int
+	// Prompt-cache buckets, disjoint from InputTokens (providers.ChatResponse).
+	CacheCreationInputTokens int
+	CacheReadInputTokens     int
+	ToolCalls                []ToolCallRecord          // Tool invocations during this analysis
+	ReportedIDs              []string                  // Finding IDs reported (created/re-reported) this run
+	NewFindingIDs            []string                  // Finding IDs first created during this run
+	ResolvedIDs              []string                  // Finding IDs explicitly resolved by LLM this run
+	Assessments              []PatrolFindingAssessment // Explicit verdicts for existing findings this run
+	SeededFindingIDs         []string                  // Finding IDs that were presented in seed context
+	QueriedFindingIDs        []string                  // Finding IDs returned by patrol_get_findings this run
 	// Forecasts are the deterministic capacity forecasts computed this run,
 	// stamped onto matching findings so the surface shows a first-class
 	// urgency signal instead of relying on model prose. Carried as the
@@ -802,26 +805,28 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 		}
 		return attempt, chatErr
 	}
-	buildAnalysisResult := func(content string, toolCalls []ToolCallRecord, inputTokens, outputTokens int) *AIAnalysisResult {
+	buildAnalysisResult := func(content string, toolCalls []ToolCallRecord, inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens int) *AIAnalysisResult {
 		adapter.findingsMu.Lock()
 		rejectedCount := adapter.rejectedCount
 		adapter.findingsMu.Unlock()
 		return &AIAnalysisResult{
-			Response:          CleanThinkingTokens(content),
-			Findings:          adapter.getCollectedFindings(),
-			RejectedFindings:  rejectedCount,
-			TriageFlags:       len(triageResult.Flags),
-			TriageSkippedLLM:  false,
-			InputTokens:       inputTokens,
-			OutputTokens:      outputTokens,
-			ToolCalls:         append([]ToolCallRecord(nil), toolCalls...),
-			ReportedIDs:       adapter.getReportedFindingIDs(),
-			NewFindingIDs:     adapter.getNewFindingIDs(),
-			ResolvedIDs:       adapter.getResolvedIDs(),
-			Assessments:       adapter.getAssessments(),
-			SeededFindingIDs:  seededFindingIDs,
-			QueriedFindingIDs: adapter.getQueriedFindingIDs(),
-			Forecasts:         triageResult.Intel.forecasts,
+			Response:                 CleanThinkingTokens(content),
+			Findings:                 adapter.getCollectedFindings(),
+			RejectedFindings:         rejectedCount,
+			TriageFlags:              len(triageResult.Flags),
+			TriageSkippedLLM:         false,
+			InputTokens:              inputTokens,
+			OutputTokens:             outputTokens,
+			CacheCreationInputTokens: cacheCreationTokens,
+			CacheReadInputTokens:     cacheReadTokens,
+			ToolCalls:                append([]ToolCallRecord(nil), toolCalls...),
+			ReportedIDs:              adapter.getReportedFindingIDs(),
+			NewFindingIDs:            adapter.getNewFindingIDs(),
+			ResolvedIDs:              adapter.getResolvedIDs(),
+			Assessments:              adapter.getAssessments(),
+			SeededFindingIDs:         seededFindingIDs,
+			QueriedFindingIDs:        adapter.getQueriedFindingIDs(),
+			Forecasts:                triageResult.Intel.forecasts,
 		}
 	}
 
@@ -859,15 +864,17 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 	if chatErr != nil {
 		var partialResult *AIAnalysisResult
 		if attempt != nil && attempt.response != nil {
-			p.recordPatrolUsage(attempt.response.InputTokens, attempt.response.OutputTokens)
+			p.recordPatrolUsage(attempt.response.InputTokens, attempt.response.OutputTokens, attempt.response.CacheCreationInputTokens, attempt.response.CacheReadInputTokens)
 		}
 		if attempt != nil {
-			inputTokens, outputTokens := 0, 0
+			inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens := 0, 0, 0, 0
 			if attempt.response != nil {
 				inputTokens = attempt.response.InputTokens
 				outputTokens = attempt.response.OutputTokens
+				cacheCreationTokens = attempt.response.CacheCreationInputTokens
+				cacheReadTokens = attempt.response.CacheReadInputTokens
 			}
-			candidate := buildAnalysisResult(attempt.finalContent, attempt.toolCalls, inputTokens, outputTokens)
+			candidate := buildAnalysisResult(attempt.finalContent, attempt.toolCalls, inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens)
 			if candidate.Response != "" || inputTokens > 0 || outputTokens > 0 || len(candidate.ToolCalls) > 0 ||
 				len(candidate.Findings) > 0 || len(candidate.ResolvedIDs) > 0 || len(candidate.Assessments) > 0 || len(candidate.QueriedFindingIDs) > 0 {
 				partialResult = candidate
@@ -883,7 +890,9 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 	finalContent := attempt.finalContent
 	inputTokens = attempt.response.InputTokens
 	outputTokens = attempt.response.OutputTokens
-	p.recordPatrolUsage(attempt.response.InputTokens, attempt.response.OutputTokens)
+	cacheCreationTokens := attempt.response.CacheCreationInputTokens
+	cacheReadTokens := attempt.response.CacheReadInputTokens
+	p.recordPatrolUsage(attempt.response.InputTokens, attempt.response.OutputTokens, attempt.response.CacheCreationInputTokens, attempt.response.CacheReadInputTokens)
 
 	log.Debug().
 		Int("input_tokens", inputTokens).
@@ -900,7 +909,7 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 	// The original conversation owns the diagnosis and finding decisions.
 	// Omitted assessments remain explicit in the result. A separate model
 	// session must not infer them from old finding excerpts or signal counts.
-	return buildAnalysisResult(finalContent, attempt.toolCalls, inputTokens, outputTokens), nil
+	return buildAnalysisResult(finalContent, attempt.toolCalls, inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens), nil
 }
 
 // These are execution limits, independent of heuristic flags or inventory size.
@@ -912,7 +921,7 @@ func patrolDetectionMaxTurns(scope *PatrolScope) int {
 	return 40
 }
 
-func (p *PatrolService) recordPatrolUsage(inputTokens, outputTokens int) {
+func (p *PatrolService) recordPatrolUsage(inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens int) {
 	if p == nil || p.aiService == nil || (inputTokens <= 0 && outputTokens <= 0) {
 		return
 	}
@@ -947,12 +956,14 @@ func (p *PatrolService) recordPatrolUsage(inputTokens, outputTokens int) {
 	}
 
 	store.Record(cost.UsageEvent{
-		Timestamp:    time.Now(),
-		Provider:     providerName,
-		RequestModel: model,
-		UseCase:      "patrol",
-		InputTokens:  inputTokens,
-		OutputTokens: outputTokens,
+		Timestamp:                time.Now(),
+		Provider:                 providerName,
+		RequestModel:             model,
+		UseCase:                  "patrol",
+		InputTokens:              inputTokens,
+		OutputTokens:             outputTokens,
+		CacheCreationInputTokens: cacheCreationTokens,
+		CacheReadInputTokens:     cacheReadTokens,
 	})
 }
 

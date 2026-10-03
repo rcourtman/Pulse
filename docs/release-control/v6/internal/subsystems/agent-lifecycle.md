@@ -8444,3 +8444,10 @@ authorisation and continuity evidence are unchanged. The connected callback
 wiring control in `monitor_notification_startup_test.go` verifies the shared
 monitor boundary against real alert evaluation and local HTTP delivery; it does
 not claim host re-enrolment or installed-agent acceptance.
+
+### AI usage export columns only
+
+`internal/api/ai_handlers.go` and `internal/api/chat_service_adapter.go`
+changed only to carry prompt-cache token buckets through the AI usage export
+and the Patrol stream response. No agent registration, enrolment, install,
+update or removal path changed.

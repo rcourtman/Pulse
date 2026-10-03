@@ -113,7 +113,11 @@ type PatrolDigestSpend struct {
 	PricingKnown bool  `json:"pricing_known"`
 	InputTokens  int64 `json:"input_tokens"`
 	OutputTokens int64 `json:"output_tokens"`
-	Calls        int   `json:"calls"`
+	// Prompt-cache buckets, disjoint from InputTokens and priced at the
+	// provider's cache rates when known.
+	CacheCreationInputTokens int64 `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     int64 `json:"cache_read_input_tokens,omitempty"`
+	Calls                    int   `json:"calls"`
 }
 
 // PatrolDigest is the wire payload for GET /api/ai/patrol/digest.
@@ -403,8 +407,10 @@ func summarizeDigestSpend(events []cost.UsageEvent, inWindow func(time.Time) boo
 		summary.Calls++
 		summary.InputTokens += int64(event.InputTokens)
 		summary.OutputTokens += int64(event.OutputTokens)
+		summary.CacheCreationInputTokens += int64(event.CacheCreationInputTokens)
+		summary.CacheReadInputTokens += int64(event.CacheReadInputTokens)
 		provider, model := cost.ResolveProviderAndModel(event.Provider, event.RequestModel, event.ResponseModel)
-		usd, known, _ := cost.EstimateUSD(provider, model, int64(event.InputTokens), int64(event.OutputTokens))
+		usd, known, _ := cost.EstimateUsageUSD(provider, model, event.TokenUsage())
 		if !known {
 			summary.PricingKnown = false
 			continue
