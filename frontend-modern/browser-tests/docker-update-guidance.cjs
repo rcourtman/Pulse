@@ -61,6 +61,12 @@ const { chromium, webkit } = require('playwright');
         );
       };
       await waitForHeading('before-updating-a-workload');
+      // Theme colours transition after the root class changes. Capture settled
+      // content, not an intermediate grey background on the phone fixture.
+      await page.evaluate(
+        () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+      );
+      await page.waitForFunction(() => document.getAnimations().length === 0);
       const article = await page.locator('article').innerText();
       for (const text of [
         'independent, consistent backup',
