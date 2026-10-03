@@ -55,7 +55,9 @@ There is currently no dedicated UI for adaptive polling. Use environment variabl
 You can also set `adaptivePollingEnabled` (and related interval fields) in `system.json` and restart Pulse.
 
 ## 📊 Metrics
-Exposed at `:9091/metrics`.
+The separate metrics listener defaults to port 9091; `METRICS_PORT` can override
+it. Use an existing authorised scrape if available, not a newly exposed port for
+diagnostics. A missing scrape is not evidence of zero errors.
 
 | Metric | Type | Description |
 | :--- | :--- | :--- |
@@ -84,3 +86,8 @@ Returns:
 - Dead-letter tasks.
 - Circuit breaker states.
 - Per-instance staleness.
+
+Use the [authenticated snapshot and local queries](../api/SCHEDULER_HEALTH.md#-common-queries-jq)
+to inspect it without putting credentials in command arguments or repeatedly
+requesting the same data. Follow the [rollout and rollback checks](../operations/ADAPTIVE_POLLING_ROLLOUT.md)
+when changing the flag; queue depth alone is not a monitoring-health verdict.
