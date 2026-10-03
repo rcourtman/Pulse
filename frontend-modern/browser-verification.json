@@ -1,27 +1,39 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "227657b1b0d6924e98da9382f812bb0cb1874f57",
-  "verified_at": "2026-10-03T04:13:25.499572Z",
+  "base_sha": "7127054c659913b75abe302c5d377b8b6f49e9f2",
+  "verified_at": "2026-10-03T08:47:10.724Z",
   "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts"
+    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx",
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts",
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx",
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts",
+    "frontend-modern/src/features/storageBackups/resourceStoragePresentation.ts",
+    "frontend-modern/src/features/storageBackups/storageAdapters.ts",
+    "frontend-modern/src/hooks/useUnifiedResources.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx": "44f939bd8accdb5662f2f99a2c4d6324d965ca520414d0a0db8daba790af04d9",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "41dadd17f930115374facc8f7a9dc46f3e4eab69e41e4375c90f9a5f57022fe8",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "ee9482a2076b86e62c85bffe0ce816a6ccd542ec3b07a85e829a1cc07dd8b1de",
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts": "a39e66fc3ca772f0394ad0b5a74feee67a80daac3fdc604d014cadb52cda02b6"
+    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx": "54f1f84dac768c6e0e333254d5c65e59751fa78b5ac55826cdaa37085a73c608",
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts": "9fde1740e300724ef9cab4a3b036c942bdab6e5d2060f262606b27f4b1a40ea6",
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx": "29284b34d9631f118a449da1c274b1028e3cea57aed37a3ac056e48e05b2b613",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx": "5a153e4b3533849ae952dadb50e512fadb87fcc9fba05403509168d8bb5caba6",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx": "58cf1656ba22475b52dc9a582a4d8f0cc8c01f38bfb3775518edac73dbf22b80",
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts": "b821b9caf65d5c247e543a6d6dbf0925f735b617c6393066d0f8c15a10e05e72",
+    "frontend-modern/src/features/storageBackups/resourceStoragePresentation.ts": "933723fb9afeeb53afa46946a346daca19d50c0d61a81fc0730498ebd8c09bb2",
+    "frontend-modern/src/features/storageBackups/storageAdapters.ts": "daa85c5d99903d5a5fb10070837106b91f06ad130cae320472b2d980b979fb48",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "166e45835c56d00f1a3ddbc37f7127348a0e36dc7c42c921f972db7750c603c6"
   },
   "routes": [
-    "Existing PBS/resource detail Overview change history",
-    "Existing resource detail Manage action history"
+    "Existing Proxmox Mail Gateway table through production REST mapper",
+    "Existing storage-pool table through production adapter",
+    "Existing Docker container, image, Swarm service and task tables",
+    "Existing multi-disk Bars cell"
   ],
   "viewports": [
     {
-      "width": 1365,
+      "width": 1440,
       "height": 900
     },
     {
@@ -30,23 +42,38 @@
     }
   ],
   "states": [
-    "Final facet HTTP 403 withdraws embedded snapshot events/counts instead of reintroducing denied evidence",
-    "Denied filtered facets do not fall back to the unfiltered bundle",
-    "Retry retains denial while pending; fresh successful response restores events and clears guidance",
-    "First action-history HTTP 503 stays visible in Manage with retry and no false empty state",
-    "Initial facet HTTP 503 retains applicable embedded evidence; snapshot-only table rows still make no remote reads",
-    "All fourteen final screenshots inspected in desktop Chromium and dark touch phone WebKit; Playwright 1.56.1 matches the integration lock"
+    "PMG REST-first queue 11, canonical in-memory store hydration then newer REST queue 19, removed PMG facet withdrawn",
+    "LVM-Thin and NFS plugin names; explicit shared cluster location reads Shared (3), local node remains pve2",
+    "Phone container identity, State/CPU/memory/Updates remain visible; Restarts 7 reachable by touch disclosure",
+    "Image phone projection keeps size and verdict; Host/Used by headers and cells hidden together",
+    "Swarm raw rollback_started reads as Rollback started; every word fits phone cell and Running heading uses Run; raw rollout and placement in keyboard/touch disclosure",
+    "Task started time reads as relative time on desktop with original timestamp retained; phone hides the started column",
+    "Fullest measured disk label 92% with /data evidence and unchanged two equal-weight member bars"
   ],
   "interactions": [
-    "Remount full production resource drawer with denied/transient reads",
-    "Activate scoped Retry with keyboard Enter",
-    "Apply and clear Change kind filter",
-    "Switch between Overview and Manage"
+    "REST-first load before in-memory canonical-store hydration",
+    "Canonical store hydration, newer REST refresh, removed facet refresh and restored observation",
+    "Touch container row expansion, keyboard Enter on Swarm disclosure and touch service row expansion",
+    "Fixture-only tab switching between production tables; no mutation clicked"
   ],
+  "browsers": [
+    {
+      "engine": "desktop",
+      "version": "141.0.7390.37"
+    },
+    {
+      "engine": "phone",
+      "version": "26.0"
+    }
+  ],
+  "playwright_version": "1.56.1",
+  "checks": 40,
+  "screenshots": 18,
+  "command": "pulse-worker-browser frontend-modern/browser-tests/proxmox-docker-rows.cjs",
+  "evidence": "browser-tests/proxmox-docker-rows.cjs and invocation browser-verified-result.json / browser-images.json",
   "limitations": [
-    "Synthetic HTTP responses and PBS snapshots through real production drawer/client/CSS, not appliance authorisation, reporter cause, release or installed recovery acceptance.",
-    "401 withdrawal is unit-covered; real client login redirection is not overridden or browser-proved.",
-    "Action client existing 401/402/403 unavailable-plan responses are unchanged. Only thrown read failures retain actionable error presentation.",
-    "Independent reader authorisation remains independent; this is not a global session revocation broadcast."
+    "Synthetic REST and canonical in-memory store hydration, not a native websocket wire or appliance test",
+    "Not backend adoption, authorisation grant, mutative lifecycle execution, installed recovery or release acceptance",
+    "Seven high braces advisory findings in unchanged dependency graph remain unresolved; offline browser proof does not clear required audit"
   ]
 }

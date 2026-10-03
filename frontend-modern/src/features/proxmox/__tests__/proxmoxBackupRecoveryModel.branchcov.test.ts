@@ -522,7 +522,7 @@ describe('buildProxmoxBackupRecoveryModel summary, sort, and empty edges', () =>
     expect(model.coverageSummary.attention).toBe(0);
   });
 
-  it('sorts rows by postureRank asc, then latestRecovery createdMs desc', () => {
+  it('sorts rows by postureRank asc, then latestBackup createdMs desc', () => {
     const postures = new Map([
       ['vm-830', posture('vm-830', 'unprotected')],
       ['vm-840', posture('vm-840', 'protected')],

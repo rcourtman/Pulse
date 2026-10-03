@@ -20,6 +20,36 @@
 
 ## Purpose
 
+### Composed operator tables and conservative rollback consent
+
+Phone storage tables use the canonical weighted-width helper and matching
+header/cell gutters. Compact labels shorten disk verdicts and capacity values,
+not their underlying health or measured units; full reasons stay in the real
+disk header and tooltips. Structured ZFS scan activity supplies a compact badge
+only during reported rebuild activity; its complete provider summary remains
+available. Stable disk History catalog/organisation/access ownership is unchanged.
+
+Controller expansions carry the supplied kind-specific targets, absolute times,
+duration and cluster/namespace when the phone row omits those columns. Proxmox
+coverage distinguishes independent backups from guest-local snapshots; By date
+retains archive identifiers in hover/search while showing the format as detail.
+Phone identity weights leave every configured metric column visible.
+
+UpdateHistory consent names both the requested target and the observed running
+version, separately from the version on the selected history entry. The API does
+not expose backup restore scope: do not infer it from a version cutoff, notes or
+a retained path. Explain installation-only versus legacy recovery and stopped,
+consistent full-state recovery without promising later settings will be reverted
+or preserved. Opening/cancelling never starts a write, rejection retains consent,
+and a pending request cannot be submitted again or cancelled.
+
+Verification: the mounted UpdateHistory regression tests, existing kind-specific
+controller/storage/backup/workload tests and production-CSS browser fixture
+`frontend-modern/browser-tests/operator-tables-consent.cjs` exercise the composed
+source at desktop, intermediate and phone widths. Synthetic HTTP/snapshots do
+not establish native collectors, tenancy, installation recovery or release delivery.
+
+
 ### Organisation-scoped single-metric History
 
 Fetched HistoryChart observations belong to the active organisation as well as
@@ -774,6 +804,28 @@ that manual-channel consequence must stay visible at desktop and narrow widths.
 143. `frontend-modern/src/i18n/__tests__/i18n.test.ts`
 
 ## Shared Boundaries
+
+### Transport-independent operator rows
+
+Proxmox/Storage and Docker presenters retain the shared table/detail, responsive
+column weighting, relative-time and governed action primitives. Display names
+for Proxmox storage plugins preserve their operator vocabulary (LVM-Thin, NFS,
+SMB/CIFS and the other supported acronyms); only explicitly shared storage on a
+synthetic cluster/shared location gets the shared label. That label does not
+alter canonical identity, parent, History target or pool-to-disk ownership.
+
+The Docker image phone projection pairs hidden headers and cells and gives
+measured size and update verdict room without hiding identity or dropping the
+existing detail disclosure. The container projection retains its shared 30%
+phone identity reservation and five scan signals; off-row restart/host/consumer
+evidence remains in detail. Swarm rollout tokens read as words, with compact
+Running headings and wrapping rollout states on phones; raw rollout and
+placement evidence remain reachable through keyboard/touch row disclosure.
+`platformOverviewLayout.guardrails.test.ts`, mounted
+Docker table tests and the desktop/touch-phone production-component browser
+fixture check these priorities, rather than treating an old percentage as an
+immutable primitive contract. No new public route or navigation entry is added.
+
 
 ### Maintenance schedule copy
 

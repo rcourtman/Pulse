@@ -13,6 +13,7 @@ import {
   STORAGE_BAR_ZFS_SECTION_CLASS,
   STORAGE_BAR_ZFS_STATE_LABEL_CLASS,
   STORAGE_BAR_ZFS_STATE_ROW_CLASS,
+  getStorageBarCompactLabel,
   getStorageBarLabel,
   getStorageBarTooltipRowClass,
   getStorageBarTooltipRows,
@@ -39,6 +40,7 @@ describe('storageBarPresentation', () => {
     expect(STORAGE_BAR_ZFS_STATE_LABEL_CLASS).toBe('text-slate-400');
     expect(getStorageBarUsagePercent(40, 100)).toBe(40);
     expect(getStorageBarLabel(40, 100)).toBe('40% (40.0 B/100 B)');
+    expect(getStorageBarCompactLabel(40, 100)).toBe('40%');
     expect(getStorageBarTooltipTitle()).toBe('Storage Details');
     expect(getStorageBarTooltipRowClass()).toBe('flex justify-between gap-3 py-0.5 ');
     expect(getStorageBarTooltipRowClass(true)).toBe(

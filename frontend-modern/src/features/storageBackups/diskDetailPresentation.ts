@@ -1,4 +1,8 @@
-import type { PhysicalDiskPresentationData } from '@/features/storageBackups/diskPresentation';
+import {
+  getPhysicalDiskHealthStatus,
+  getPhysicalDiskHealthSummary,
+  type PhysicalDiskPresentationData,
+} from '@/features/storageBackups/diskPresentation';
 import type { HistoryTimeRange } from '@/api/charts';
 import { formatPowerOnHours } from '@/utils/format';
 import { getMetricSeverity, type MetricDisplayThresholds } from '@/utils/metricThresholds';
@@ -77,6 +81,32 @@ export const getDiskDetailLiveBadgeLabel = (): string => 'Real-time';
 
 export const getDiskDetailHistoryFallbackMessage = (): string =>
   'Historical disk charts are unavailable until Pulse can resolve a stable identity for this disk.';
+
+export type DiskDetailHealthPresentation = {
+  label: string;
+  summary: string;
+  tone: string;
+};
+
+// The drawer header carries the disk's verdict and its reason. The table row
+// shows only the verdict word, so this is where the reason is read in full.
+export const DISK_DETAIL_HEADER_STACK_CLASS = 'min-w-0 space-y-1';
+export const DISK_DETAIL_HEALTH_ROW_CLASS =
+  'flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px]';
+export const DISK_DETAIL_HEALTH_LABEL_CLASS = 'font-semibold';
+export const DISK_DETAIL_HEALTH_SUMMARY_CLASS =
+  'min-w-0 max-w-full whitespace-normal break-words text-muted';
+
+export function getDiskDetailHealthPresentation(
+  disk: PhysicalDiskPresentationData,
+): DiskDetailHealthPresentation {
+  const status = getPhysicalDiskHealthStatus(disk);
+  return {
+    label: status.label,
+    summary: getPhysicalDiskHealthSummary(status),
+    tone: status.tone,
+  };
+}
 
 export function getDiskDetailAttributeCards(
   disk: PhysicalDiskPresentationData,
