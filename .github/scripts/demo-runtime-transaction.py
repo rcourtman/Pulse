@@ -417,11 +417,14 @@ class Transaction:
 
     def recovery_save(self, status):
         """Receipt storage must not gate the already-owned restoration."""
+        self.receipt["status"] = status
         try:
             self.save(status)
-        except Failure as error:
-            if str(error) != "receipt-observation":
+        except (OSError, Failure) as error:
+            if isinstance(error, Failure) and str(error) != "receipt-observation":
                 raise
+            if status not in self.receipt["observation_failures"]:
+                self.receipt["observation_failures"].append(status)
 
     def finish(self, status):
         """Best-effort failed evidence is not a verified terminal outcome."""
@@ -437,9 +440,11 @@ class Transaction:
             unverified()
         try:
             self.save(self.receipt["status"] if self.receipt["observation_failures"] else status)
-        except Failure as error:
-            if str(error) != "receipt-observation":
+        except (OSError, Failure) as error:
+            if isinstance(error, Failure) and str(error) != "receipt-observation":
                 raise
+            if self.receipt["status"] not in self.receipt["observation_failures"]:
+                self.receipt["observation_failures"].append(self.receipt["status"])
             unverified()
             # One bounded attempt to retain the failure, not to obtain a pass.
             self.recovery_save("observation_failed")

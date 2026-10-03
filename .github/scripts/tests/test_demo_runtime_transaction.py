@@ -318,6 +318,35 @@ class TransactionTest(unittest.TestCase):
         self.assertEqual(tx.receipt["forward"]["elapsed_seconds"], 50)
         self.assertEqual(tx.receipt, json.loads((self.attempt / "receipt.json").read_text()))
 
+    def test_recovery_survives_direct_phase_and_terminal_writer_oserror(self):
+        for phase in ("recovering", "rolled_back"):
+            with self.subTest(phase=phase):
+                req = request("update"); req["version"] = "v6.4.6"
+                tx = engine.Transaction(self.host, req, self.attempt)
+                self.host.transaction = tx; self.host.fail_at = self.host.clock + 55
+                self.host.failed = False
+                original = tx.save
+
+                def write(status):
+                    if status == phase:
+                        raise OSError("private writer error")
+                    original(status)
+
+                with patch.object(tx, "save", side_effect=write):
+                    code = tx.run()
+                self.assertEqual((code, tx.receipt["status"], tx.receipt["rollback"]),
+                                 (2, "observation_failed", "unverified"))
+                self.assertEqual(engine.estate_hash(self.paths), self.before)
+                self.assertEqual(tx.receipt["recovery"]["elapsed_seconds"], 300)
+                self.assertEqual(tx.receipt["failure"], "new-service-crash")
+                self.assertEqual(tx.receipt, json.loads((self.attempt / "receipt.json").read_text()))
+                # Keep each independent snapshot/intent; never reuse its path.
+                self.attempt = self.root / "attempts" / ("b" * 64)
+                if phase == "recovering":
+                    # The prior unverified estate correctly blocks a new
+                    # request; use an independent fixture for the next fault.
+                    self.doCleanups(); self.setUp()
+
     def test_recovery_terminal_receipt_failure_retains_full_restoration(self):
         tx = self.run_fault("rolled_back")
         self.assertEqual(tx.receipt["observed_outcome"], "rolled_back")

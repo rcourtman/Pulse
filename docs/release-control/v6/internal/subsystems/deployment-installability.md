@@ -39,7 +39,8 @@ mutation. No source-worker production capability, package upgrade, Relay copy
 activation or credential is added.
 
 Receipt I/O failure must not skip the owned stop/restore or shorten either
-recovery observation window. Physical restoration and complete observations
+recovery observation window, including an OSError at the phase/terminal writer
+interface itself. Physical restoration and complete observations
 remain distinct from retained evidence: any phase/terminal write loss yields
 failed, unverified `observation_failed` evidence and blocks later mutation,
 even when the old runtime/data are restored. The capture remains private and
