@@ -173,48 +173,46 @@ export function getDiskDetailAttributeCards(
   return cards;
 }
 
+const DISK_TEMPERATURE_HISTORY_CHART: DiskDetailHistoryChartConfig = {
+  metric: 'smart_temp',
+  label: 'Temperature',
+  unit: 'C',
+  color: '#ef4444',
+};
+
+const ATA_DISK_HISTORY_CHARTS: readonly DiskDetailHistoryChartConfig[] = [
+  DISK_TEMPERATURE_HISTORY_CHART,
+  {
+    metric: 'smart_reallocated_sectors',
+    label: 'Reallocated Sectors',
+    unit: 'sectors',
+    color: '#f59e0b',
+  },
+];
+
+const NVME_DISK_HISTORY_CHARTS: readonly DiskDetailHistoryChartConfig[] = [
+  DISK_TEMPERATURE_HISTORY_CHART,
+  {
+    metric: 'smart_percentage_used',
+    label: 'Life Used',
+    unit: '%',
+    color: '#f59e0b',
+  },
+  {
+    metric: 'smart_available_spare',
+    label: 'Available Spare',
+    unit: '%',
+    color: '#10b981',
+  },
+];
+
 export function getDiskDetailHistoryCharts(
   disk: PhysicalDiskPresentationData,
-): DiskDetailHistoryChartConfig[] {
-  const attrs = disk.smartAttributes;
-  const charts: DiskDetailHistoryChartConfig[] = [];
-  const isNvme = disk.type?.toLowerCase() === 'nvme';
-
-  if (disk.temperature > 0) {
-    charts.push({
-      metric: 'smart_temp',
-      label: 'Temperature',
-      unit: 'C',
-      color: '#ef4444',
-    });
-  }
-
-  if (!isNvme && attrs?.reallocatedSectors != null) {
-    charts.push({
-      metric: 'smart_reallocated_sectors',
-      label: 'Reallocated Sectors',
-      unit: 'sectors',
-      color: '#f59e0b',
-    });
-  }
-
-  if (isNvme && attrs?.percentageUsed != null) {
-    charts.push({
-      metric: 'smart_percentage_used',
-      label: 'Life Used',
-      unit: '%',
-      color: '#f59e0b',
-    });
-  }
-
-  if (isNvme && attrs?.availableSpare != null) {
-    charts.push({
-      metric: 'smart_available_spare',
-      label: 'Available Spare',
-      unit: '%',
-      color: '#10b981',
-    });
-  }
-
-  return charts;
+): readonly DiskDetailHistoryChartConfig[] {
+  // Missing current collection does not erase stored observations. Ask for the
+  // existing disk-family catalog and let the store return samples or an honest
+  // empty series; never synthesize a value from the current snapshot.
+  // Stable entries also keep Solid's reference-keyed For from remounting charts
+  // and restarting History reads on every ordinary disk snapshot replacement.
+  return disk.type?.toLowerCase() === 'nvme' ? NVME_DISK_HISTORY_CHARTS : ATA_DISK_HISTORY_CHARTS;
 }

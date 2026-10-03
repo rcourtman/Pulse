@@ -20,6 +20,18 @@
 
 ## Purpose
 
+### Stable physical-disk History composition
+
+Disk detail composes shared HistoryChart owners from stable disk-family catalog
+entries, independently of the latest optional temperature/SMART fields. Matching
+snapshots must not recreate chart DOM, reset inspection or restart reads. Stored
+series retain their own sample provenance; current collection unavailability is
+still reported in Overview, and empty history is not a manufactured zero. The
+shared target/range owner continues to cancel old selections and reject late
+responses. `DiskDetail.history-collection.test.tsx` and the production
+`browser-tests/disk-history-collection.cjs` fixture verify these boundaries with
+synthetic data; neither establishes native NAS health or installed acceptance.
+
 Storage pool Configuration key/value rows keep capacity absence distinct from
 measured zero: unavailable bytes and percentages render as `n/a`, while valid
 independent observations survive a missing total. Live partial snapshots must

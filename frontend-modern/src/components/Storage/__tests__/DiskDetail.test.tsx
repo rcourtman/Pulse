@@ -146,4 +146,17 @@ describe('DiskDetail', () => {
       screen.getByText('Detailed SMART attributes are not available for this disk.'),
     ).toHaveAttribute('role', 'status');
   });
+
+  it('offers the stored disk-family catalog when current SMART and temperature disappear', () => {
+    const disk = buildDisk();
+    delete disk.physicalDisk!.temperature;
+    delete disk.physicalDisk!.smart;
+    disk.physicalDisk!.collection = { io: { state: 'unsupported' } };
+    render(() => <DiskDetail disk={disk} nodes={[]} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    expect(screen.getAllByTestId('history-chart').map((chart) => chart.textContent)).toEqual([
+      'disk:agent-tower:sda:smart_temp:24h',
+      'disk:agent-tower:sda:smart_reallocated_sectors:24h',
+    ]);
+  });
 });

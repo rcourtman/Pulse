@@ -135,8 +135,8 @@ describe('diskDetailPresentation.branchcov0724pm', () => {
     });
   });
 
-  describe('getDiskDetailHistoryCharts SATA reallocated-sectors arm (L192)', () => {
-    it('emits only the smart_reallocated_sectors chart for a SATA disk with the field set', () => {
+  describe('getDiskDetailHistoryCharts disk-family catalog', () => {
+    it('includes stored temperature and reallocated sectors independently of current values', () => {
       const charts = getDiskDetailHistoryCharts(
         makeDiskData({
           type: 'hdd',
@@ -144,8 +144,8 @@ describe('diskDetailPresentation.branchcov0724pm', () => {
           smartAttributes: { reallocatedSectors: 3 },
         }),
       );
-      expect(charts.map((c) => c.metric)).toEqual(['smart_reallocated_sectors']);
-      expect(charts[0]).toMatchObject({
+      expect(charts.map((c) => c.metric)).toEqual(['smart_temp', 'smart_reallocated_sectors']);
+      expect(charts[1]).toMatchObject({
         metric: 'smart_reallocated_sectors',
         label: 'Reallocated Sectors',
         unit: 'sectors',
@@ -160,8 +160,13 @@ describe('diskDetailPresentation.branchcov0724pm', () => {
       expect(charts.find((c) => c.metric === 'smart_reallocated_sectors')).toBeUndefined();
     });
 
-    it('returns an empty chart list when smartAttributes is absent', () => {
-      expect(getDiskDetailHistoryCharts(makeDiskData({ type: 'hdd' }))).toEqual([]);
+    it('keeps stored charts available when current SMART fields are absent', () => {
+      expect(
+        getDiskDetailHistoryCharts(makeDiskData({ type: 'hdd' })).map((chart) => chart.metric),
+      ).toEqual(['smart_temp', 'smart_reallocated_sectors']);
+      expect(
+        getDiskDetailHistoryCharts(makeDiskData({ type: 'NVMe' })).map((chart) => chart.metric),
+      ).toEqual(['smart_temp', 'smart_percentage_used', 'smart_available_spare']);
     });
   });
 });
