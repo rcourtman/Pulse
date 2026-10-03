@@ -805,6 +805,28 @@ that manual-channel consequence must stay visible at desktop and narrow widths.
 
 ## Shared Boundaries
 
+### Transport-independent operator rows
+
+Proxmox/Storage and Docker presenters retain the shared table/detail, responsive
+column weighting, relative-time and governed action primitives. Display names
+for Proxmox storage plugins preserve their operator vocabulary (LVM-Thin, NFS,
+SMB/CIFS and the other supported acronyms); only explicitly shared storage on a
+synthetic cluster/shared location gets the shared label. That label does not
+alter canonical identity, parent, History target or pool-to-disk ownership.
+
+The Docker image phone projection pairs hidden headers and cells and gives
+measured size and update verdict room without hiding identity or dropping the
+existing detail disclosure. The container projection retains its shared 30%
+phone identity reservation and five scan signals; off-row restart/host/consumer
+evidence remains in detail. Swarm rollout tokens read as words, with compact
+Running headings and wrapping rollout states on phones; raw rollout and
+placement evidence remain reachable through keyboard/touch row disclosure.
+`platformOverviewLayout.guardrails.test.ts`, mounted
+Docker table tests and the desktop/touch-phone production-component browser
+fixture check these priorities, rather than treating an old percentage as an
+immutable primitive contract. No new public route or navigation entry is added.
+
+
 ### Maintenance schedule copy
 
 Operator maintenance banners show local absolute start and end timestamps,

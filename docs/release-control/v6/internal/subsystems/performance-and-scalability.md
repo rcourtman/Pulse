@@ -311,6 +311,21 @@ the existing bounded HTTP client and artifact-size checks.
 
 ## Shared Boundaries
 
+### Multi-disk Bars summary
+
+The existing vertical-bars workload/node disk cell shows the fullest measured
+disk's percentage beside equal-weight per-disk micro-bars. Its title retains
+the actual mount and percentage. Unknown/invalid usage cannot produce a new
+summary; an aggregate fallback must not masquerade as measured member usage.
+The displayed maximum uses the existing shared disk measurement and threshold
+logic; no collector, sorting key, metric units, History request, resampling or
+performance threshold changes. `StackedDiskBar.test.tsx` and the model branch
+controls cover real/unknown measurements and unchanged per-member bars.
+`browser-tests/proxmox-docker-rows.cjs` checks the actual label, bars and title
+at desktop and phone widths; this is presentation proof, not native collection
+or a measured fleet performance improvement.
+
+
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `unified-resources`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `unified-resources`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 3. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx` shared with `unified-resources`: the unified resource host table card is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.

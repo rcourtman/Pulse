@@ -400,6 +400,20 @@ command-capable profile.
 
 ## Shared Boundaries
 
+### Operator storage vocabulary without identity changes
+
+Storage topology names preserve Proxmox plugin vocabulary, including LVM-Thin,
+NFS, SMB/CIFS, iSCSI, ZFS and BTRFS. Explicit topology overrides still win.
+Only a storage explicitly marked shared whose retained location is the synthetic
+cluster/shared marker reads Shared, with the supplied reporting-node count when
+more than one node is present. Node-local storage and shared storage with a
+real native location keep that location. This is host-label presentation, not
+resource consolidation: IDs, parent/node hints, ownership evidence, metrics
+targets, alerts, health and recovery authority are unchanged. Adapter/presentation
+regressions and the production storage table browser fixture verify labels
+without treating shared capacity as a backup or demonstrating native recovery.
+
+
 - After password configuration has been persisted and the runtime local-admin identity changes, authorizer synchronisation must also occur if subsequent API-token persistence fails. Development first-run reset must clear the configured-admin bypass only on successful auth reset, not on its persistence-failure rollback path. No role-store deletion or migration is part of this recovery.
 
 ### PBS host history correlation

@@ -617,6 +617,29 @@ about the same disk cannot diverge.
 
 ## Shared Boundaries
 
+### REST facets and container table projection
+
+The unified-resource REST mapper carries PMG metadata, per-source status,
+server action-readiness refusals and technology at the same top-level paths
+used by canonical websocket rows. Existing platformData compatibility paths
+remain; transport order must not decide whether mail counters or lifecycle
+refusal explanations are present. A replaced REST snapshot clears removed
+facets instead of retaining old counters or refusal reasons. Mapping does not
+invent capabilities or bypass planning, review, server authorisation or execution.
+`useUnifiedResources.test.ts` checks actual lifecycle refusal consumers for stale,
+failed and server-denied observations alongside a no-invented-grant control.
+
+The Docker phone container projection keeps identity, state when applicable,
+CPU, memory and update; restart counts remain in the existing detail expansion
+and return at mobile width. Images retain image, size and update verdict on
+phones; host and consumers stay reachable in detail. Hidden header/body columns
+are symmetric. Swarm rollout tokens render as words with raw state retained in
+the title; task starts use the shared relative-time primitive with their exact
+timestamp retained. Native table/model/guardrail tests and the production
+`browser-tests/proxmox-docker-rows.cjs` exercise these surfaces without executing
+a container action or claiming native appliance or release acceptance.
+
+
 ### PBS host history correlation
 
 PBS presentation correlation accepts standalone agents and VM/system-container resources with an agent facet. Preserve unique identity matching and canonical metricsTarget type and ID. Guests without telemetry and mixed ambiguous agent/guest matches must not replace the PBS target.
