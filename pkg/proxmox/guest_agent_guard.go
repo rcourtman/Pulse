@@ -176,6 +176,11 @@ func (c *Client) getGuestAgent(ctx context.Context, path, node string, vmid int)
 	// own their usual session recovery; this guest admission is single-attempt.
 	resp, err := c.requestWithRetry(ctx, http.MethodGet, path, nil, true)
 	if err != nil {
+		var incomplete *responseBodyReadError
+		if errors.As(err, &incomplete) {
+			uncertain = true
+			return nil, &guestAgentDeferredError{reason: "agent-response-incomplete", cause: err}
+		}
 		// Explicit refusals/unsupported commands remain ordinary errors. An
 		// uncertain completion blocks every command, not just this method.
 		lower := strings.ToLower(err.Error())

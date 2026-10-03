@@ -52,13 +52,20 @@ func classifyAPIErrorLog(status int, path string) (apiErrorLogLevel, string) {
 	return apiErrorLogNone, ""
 }
 
+// Preserve an incomplete body through the HTTP error-response wrapper too.
+// An error status alone is not a completed refusal if its body was truncated.
+type responseBodyReadError struct{ cause error }
+
+func (e *responseBodyReadError) Error() string { return e.cause.Error() }
+func (e *responseBodyReadError) Unwrap() error { return e.cause }
+
 func readResponseBodyLimited(r io.Reader) ([]byte, error) {
 	body, err := io.ReadAll(io.LimitReader(r, maxResponseBodyBytes+1))
 	if err != nil {
-		return nil, err
+		return nil, &responseBodyReadError{cause: err}
 	}
 	if int64(len(body)) > maxResponseBodyBytes {
-		return nil, fmt.Errorf("response body exceeds %d bytes", maxResponseBodyBytes)
+		return nil, &responseBodyReadError{cause: fmt.Errorf("response body exceeds %d bytes", maxResponseBodyBytes)}
 	}
 	return body, nil
 }

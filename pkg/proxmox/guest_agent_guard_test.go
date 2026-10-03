@@ -101,6 +101,14 @@ func TestGuestAgentLockAppearingInFlightDiscardsPayload(t *testing.T) {
 }
 
 func TestGuestAgentIncompleteBodyBlocksWholeVM(t *testing.T) {
+	for _, status := range []int{http.StatusOK, http.StatusInternalServerError} {
+		t.Run(fmt.Sprintf("status-%d", status), func(t *testing.T) {
+			testGuestAgentIncompleteBodyBlocksWholeVM(t, status)
+		})
+	}
+}
+
+func testGuestAgentIncompleteBodyBlocksWholeVM(t *testing.T, status int) {
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/config") {
@@ -109,12 +117,13 @@ func TestGuestAgentIncompleteBodyBlocksWholeVM(t *testing.T) {
 		}
 		calls.Add(1)
 		w.Header().Set("Content-Length", "1000")
+		w.WriteHeader(status)
 		fmt.Fprint(w, `{"data":{"result":[]}}`)
 	}))
 	defer server.Close()
 	c := backupTestClient(t, server.URL)
 	if _, err := c.GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-response-incomplete" {
-		t.Fatalf("incomplete body not deferred: %v", err)
+		t.Errorf("incomplete body not deferred: %v", err)
 	}
 	for name, read := range backupAgentReads() {
 		t.Run(name, func(t *testing.T) {
@@ -125,6 +134,33 @@ func TestGuestAgentIncompleteBodyBlocksWholeVM(t *testing.T) {
 	}
 	if calls.Load() != 1 {
 		t.Fatalf("commands after incomplete body = %d", calls.Load())
+	}
+}
+
+func TestGuestAgentDeferralDoesNotHideCompletedRefusal(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
+		calls.Add(1)
+		if strings.HasSuffix(r.URL.Path, "/get-fsinfo") {
+			http.Error(w, "permission denied", http.StatusForbidden)
+			return
+		}
+		backupAgentPayload(w, r)
+	}))
+	defer server.Close()
+	c := backupTestClient(t, server.URL)
+	if _, err := c.GetVMFSInfo(context.Background(), "node", 105); err == nil || errors.Is(err, ErrGuestAgentDeferred) || !strings.Contains(err.Error(), "403") {
+		t.Fatalf("completed refusal hidden or lost: %v", err)
+	}
+	if _, err := c.GetVMAgentInfo(context.Background(), "node", 105); err != nil {
+		t.Fatalf("completed refusal poisoned other healthy reads: %v", err)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("refused/healthy command count = %d", calls.Load())
 	}
 }
 
