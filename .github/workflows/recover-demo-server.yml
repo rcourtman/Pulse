@@ -15,7 +15,7 @@ concurrency:
 jobs:
   recover:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 90
     environment: demo-stable
     env:
       DEMO_EXPECTED_HOSTNAME: ${{ vars.DEMO_EXPECTED_HOSTNAME }}
@@ -117,16 +117,8 @@ jobs:
           MOCK_UPDATE_INTERVAL: ${{ steps.runtime_profile.outputs.mock_update_interval }}
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/id_ed25519 \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile=~/.ssh/known_hosts \
-            "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
-            "bash -s -- $(printf '%q ' "$DEMO_EXPECTED_HOSTNAME" "$DEMO_LOCAL_BASE_URL" "$EXPECTED_VERSION" "$MOCK_NODES" "$MOCK_VMS_PER_NODE" "$MOCK_LXCS_PER_NODE" "$MOCK_DOCKER_HOSTS" "$MOCK_DOCKER_CONTAINERS" "$MOCK_GENERIC_HOSTS" "$MOCK_K8S_CLUSTERS" "$MOCK_K8S_NODES" "$MOCK_K8S_PODS" "$MOCK_K8S_DEPLOYMENTS" "$MOCK_SEED_DURATION" "$MOCK_SAMPLE_INTERVAL" "$MOCK_UPDATE_INTERVAL")" \
-            < .github/scripts/recover-demo-runtime.sh \
-            > demo-runtime-recovery.json
-          jq -e '.schema_version == 1 and (.status == "recovered" or .status == "healthy_noop")' \
-            demo-runtime-recovery.json
+          bash .github/scripts/recover-demo-runtime.sh > demo-runtime-recovery.json
+          jq -e '.schema_version == 2 and (.status == "committed" or .status == "healthy_noop") and .forward.elapsed_seconds >= 300' demo-runtime-recovery.json
           echo "mutated=$(jq -r '.mutated' demo-runtime-recovery.json)" >> "$GITHUB_OUTPUT"
 
       - name: Capture bounded Pulse failure diagnostics
@@ -199,22 +191,9 @@ jobs:
           export PULSE_DEMO_AUTH_PASS="${DEMO_AUTH_PASS:-demo}"
           ./scripts/run_demo_public_browser_smoke.sh
 
-      - name: Compensate failed mutated recovery
-        if: failure() && steps.recovery.outputs.mutated == 'true'
-        env:
-          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
-          DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
-        run: |
-          set -euo pipefail
-          BEFORE="$(ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
-            "systemctl show pulse --property=ActiveState,SubState,MainPID --value | paste -sd, -")"
-          ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
-            "sudo systemctl stop pulse"
-          AFTER="$(ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
-            "systemctl show pulse --property=ActiveState,SubState,MainPID --value | paste -sd, -")"
-          jq -n --arg before "$BEFORE" --arg after "$AFTER" \
-            '{schema_version: 1, status: "compensated_unavailable", before: $before, after: $after}' \
-            > demo-runtime-rollback.json
+      # The retained systemd transaction already owns compensation. A later
+      # browser/network failure is evidence to reconcile, not authority to stop
+      # an unrelated or already-committed Pulse process in a second SSH session.
 
       - name: Retain bounded recovery evidence
         if: always()
@@ -223,7 +202,6 @@ jobs:
           name: stable-demo-runtime-recovery-${{ github.run_id }}
           path: |
             demo-runtime-recovery.json
-            demo-runtime-rollback.json
             demo-runtime-diagnostics.txt
           if-no-files-found: warn
           retention-days: 14
