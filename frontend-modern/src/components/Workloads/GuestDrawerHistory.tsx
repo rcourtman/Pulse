@@ -30,6 +30,7 @@ import {
 } from '@/components/shared/historyChartModel';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { isRangeLocked, loadRuntimeCapabilities, maxHistoryDays } from '@/stores/license';
+import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 
 import {
   GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
@@ -686,9 +687,10 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
             >
               <Show when={historyQuery.error()}>
                 <InlineNotice tone={hasHistoryPoints() ? 'warning' : 'danger'}>
-                  {hasHistoryPoints()
-                    ? 'History refresh failed. Showing previously loaded history.'
-                    : 'Failed to load history data'}
+                  {getAPIReadAccessErrorMessage(historyQuery.error()) ||
+                    (hasHistoryPoints()
+                      ? 'History refresh failed. Showing previously loaded history.'
+                      : 'Failed to load history data')}
                 </InlineNotice>
               </Show>
             </div>

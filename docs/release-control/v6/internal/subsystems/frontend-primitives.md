@@ -353,7 +353,30 @@ PBS browser runner verifies delayed range and withdrawn-target reads at desktop
 and phone widths; neither proof establishes installed collection or #1723 relief.
 
 Failed same-source history refreshes keep valid previously loaded observations
-visible with an explicit warning, rather than hiding the entire chart. Initial
+visible with an explicit warning, rather than hiding the entire chart. That
+retention applies to transient transport/server failures, never a final HTTP
+`401` or `403`. Both the batch drawer and shared canvas reader withdraw stored
+samples and inspection on access failure; denied history is not an empty,
+collecting, or stale-but-still-readable result. Their guidance is bounded by
+numeric status, not transport bodies or guessed diagnostic text. The shared
+canvas announces its error, and the drawer keeps its scoped, focusable retry.
+Only a successful replacement read restores observations.
+
+The retained-value query helper also withdraws its active value on a final
+`401`/`403` and clears its shared remount cache. Other resource/range entries
+were read under the same access context, so they cannot be resurrected after
+that context is denied. Advancing the cache generation rejects cache writes
+from already-running pre-denial reads. A superseded denied completion cannot
+clear the current target or its cache. This does not broadcast a session reset
+or claim revocation of independently mounted consumers; their current response
+still owns their presentation. Transient failures keep the existing retained
+value, and a newly successful read may populate the cache normally. Verification
+uses runtime assertions in `createNonSuspendingQuery.test.tsx`,
+`GuestDrawerHistory.refresh.test.tsx`, `useHistoryChartState.test.tsx`,
+`HistoryChart.test.tsx`, and `browser-tests/history-access.cjs` (both production
+readers/client, real same-origin 403/503 responses, cache/range/remount and
+fresh-read recovery on desktop Chromium and touch WebKit). These controls do
+not establish appliance authorisation, collection or released acceptance. Initial
 or uncached replacement failures show unavailable history, never borrowed points
 or a collecting claim. The existing target/range owns every manual refresh;
 locked or absent targets expose no refresh control. The control remains mounted
@@ -674,6 +697,9 @@ that manual-channel consequence must stay visible at desktop and narrow widths.
 108. `frontend-modern/src/components/shared/summaryInteractionA11y.ts`
 109. `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`
 110. `frontend-modern/src/hooks/createNonSuspendingQuery.ts`
+    Shared API read-access classification is owned by
+    `frontend-modern/src/utils/apiAccessError.ts`; it recognises only final
+    numeric 401/403 statuses and never renders transport diagnostics.
      111a. `frontend-modern/src/utils/storageSummaryCache.ts`
 111. `frontend-modern/src/components/shared/TableCardHeader.tsx`
 112. `frontend-modern/src/components/shared/UpgradeLink.tsx`

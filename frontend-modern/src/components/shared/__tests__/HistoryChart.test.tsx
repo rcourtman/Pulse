@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSignal } from 'solid-js';
 import { ChartsAPI } from '@/api/charts';
-import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import historyChartHeaderSource from '@/components/shared/HistoryChartHeader.tsx?raw';
 import historyChartHoverGroupSource from '@/components/shared/HistoryChartHoverGroup.tsx?raw';
 import historyChartOverlaySource from '@/components/shared/HistoryChartOverlay.tsx?raw';
@@ -570,4 +570,52 @@ describe('HistoryChart', () => {
     expect(layout.x + layout.width).toBeLessThan(380);
     expect(layout.x).toBe(212);
   });
+});
+
+describe('History access boundary rendering', () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+  it.each([401, 403])(
+    'withdraws painted readings, tooltips and keyboard announcements on %s',
+    async (status) => {
+      vi.useFakeTimers();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const request = vi.mocked(ChartsAPI.getMetricsHistory);
+      request.mockReset();
+      request.mockResolvedValueOnce({
+        points: [{ timestamp: 1000, value: 42, min: 42, max: 42 }],
+        source: 'store',
+      } as never);
+      const { container } = render(() => (
+        <HistoryChart
+          resourceType="disk"
+          resourceId="disk:nas:sda"
+          metric="smart_temp"
+          label="Temperature"
+          unit="C"
+          range="1h"
+        />
+      ));
+      await vi.advanceTimersByTimeAsync(0);
+      const canvas = screen.getByRole('img', { name: 'Temperature chart' });
+      fireEvent.focus(canvas);
+      expect(container.querySelector('[data-history-chart-tooltip]')).toHaveTextContent('42°C');
+      request.mockRejectedValueOnce(Object.assign(new Error('private detail'), { status }));
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(container.querySelector('[data-history-chart-tooltip]')).toBeNull();
+      expect(container.querySelector('[aria-live="polite"]')).toHaveTextContent('');
+      expect(container).not.toHaveTextContent('42°C');
+      expect(container).not.toHaveTextContent('last successful');
+      expect(container).not.toHaveTextContent('private detail');
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        status === 401 ? 'Sign in again' : 'Access denied',
+      );
+      expect(screen.queryByText('No history samples in this time range.')).not.toBeInTheDocument();
+      fireEvent.keyDown(canvas, { key: 'End' });
+      expect(container.querySelector('[data-history-chart-tooltip]')).toBeNull();
+    },
+  );
 });

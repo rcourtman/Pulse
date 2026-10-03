@@ -5812,6 +5812,7 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/hooks/createNonSuspendingQuery.ts",
+              "frontend-modern/src/utils/apiAccessError.ts",
               "frontend-modern/src/utils/storageSummaryCache.ts"
             ],
             "allow_same_subsystem_tests": false,
@@ -5819,6 +5820,7 @@
             "exact_files": [
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx",
               "frontend-modern/src/hooks/__tests__/createNonSuspendingQuery.test.tsx",
+              "frontend-modern/src/utils/__tests__/apiAccessError.test.ts",
               "frontend-modern/src/utils/__tests__/storageSummaryCache.test.ts"
             ]
           },

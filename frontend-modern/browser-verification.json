@@ -1,16 +1,25 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "b6a42d8a4f329a1f3d7359d8d64b17c385006ed7",
-  "verified_at": "2026-10-03T00:38:42Z",
+  "base_sha": "a9533eb82a29700ede2d4ad609812ddd01e5f287",
+  "verified_at": "2026-10-03T01:44:27.336168Z",
   "changed_paths": [
-    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts"
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/shared/HistoryChartOverlay.tsx",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts",
+    "frontend-modern/src/hooks/createNonSuspendingQuery.ts",
+    "frontend-modern/src/utils/apiAccessError.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts": "31c71a2d696f1b74d55b855220885619bbeebc0b75a1f34354cc5b794ba49375"
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "c4370a69495c8ccea01a0d92076e4a051e4d06abec0e675e2fb3547d46e87bcb",
+    "frontend-modern/src/components/shared/HistoryChartOverlay.tsx": "14c0699b827ec6eb4d85cf9d8fc76d61a0af3dd6565d2396a3f22a03429af104",
+    "frontend-modern/src/components/shared/useHistoryChartState.ts": "5a9b022656ac7316710675a0742e9b2908c9114ffbed67d6f6962d361bb65bbf",
+    "frontend-modern/src/hooks/createNonSuspendingQuery.ts": "df293d0484612a6d31dd9f3fa6af2a1160e1e98d66965730a45829b7048a4ba7",
+    "frontend-modern/src/utils/apiAccessError.ts": "3b34a498959a77014af3c842677fc6646b5e7e6a8b9b332ca8acf91254c01730"
   },
   "routes": [
-    "Existing Storage physical disk detail History"
+    "Existing PBS/Machine/resource drawer History batch reader",
+    "Existing Storage physical disk shared History reader"
   ],
   "viewports": [
     {
@@ -23,23 +32,25 @@
     }
   ],
   "states": [
-    "Stored ATA temperature and measured-zero reallocated sectors render when current temperature and SMART are absent",
-    "Matching current snapshot updates keep the same chart owners and add zero History reads",
-    "Current field loss keeps stored samples and selected 7-day range; no unavailable live I/O is shown",
-    "Overview reports present collection unavailability instead of the earlier stored temperature",
-    "Empty temperature history is an explicit no-samples state, not a zero, while stored reallocated zero remains visible",
-    "NVMe uses its own explicit disk target and stored temperature/endurance/spare series without current SMART fields",
-    "No resolvable identity withdraws History and issues no guessed-target request",
-    "Keyboard desktop and touch phone inspection show real stored readings",
-    "All screenshots inspected with animations disabled; selected tab, light/dark layouts and page width agree with content",
-    "Playwright 1.56.1 matches the integration lock; no page errors or off-origin data reads"
+    "Real same-origin 503 responses retain stored samples with explicit warnings in both production readers",
+    "Real final HTTP 403 responses withdraw samples, tooltip, keyboard announcement, sliders and formerly displayed current-only legends",
+    "Access-denied guidance fits light desktop Chromium and dark touch WebKit without horizontal overflow",
+    "The existing focusable scoped retry remains mounted and ignores duplicate activation while busy",
+    "Earlier cached ranges and remounts cannot resurrect denied stored readings while a replacement is pending",
+    "Only a new successful read restores History and clears denial; old values do not return",
+    "Every final screenshot inspected; fixed Playwright 1.56.1 equals integration lock, no page errors or off-origin data requests"
   ],
   "interactions": [
-    "Open History from unavailable current Overview",
-    "Restore, update and remove current fields",
-    "Change 24h/7d/1h ranges",
-    "Inspect by keyboard or phone tap",
-    "Select NVMe B",
-    "Clear disk identity"
+    "Inspect by desktop keyboard and phone tap",
+    "Poll through 503 then 403",
+    "Retry twice while busy",
+    "Change 24h/1h range",
+    "Unmount and remount batch History",
+    "Resume with newly successful observations"
+  ],
+  "limitations": [
+    "Direct production readers/client with synthetic HTTP responses, not a complete native PBS/NAS drawer, session revocation, appliance collection or release acceptance.",
+    "401 is covered by runtime regressions; the real API client redirects on 401, not bypassed for browser proof.",
+    "Independently supplied current readings remain distinctly current during a new pending query; they are not stored History."
   ]
 }
