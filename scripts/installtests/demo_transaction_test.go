@@ -25,8 +25,11 @@ func TestDemoTransactionKeepsSignedAdmissionAndVerificationOnlyReadOnly(t *testi
 	}
 	text := string(workflow)
 	start := strings.Index(text, "- name: Apply guarded demo transaction")
+	if start < 0 {
+		t.Fatal("missing retained demo transaction entry")
+	}
 	end := strings.Index(text[start:], "- name: Retain guarded demo transaction evidence")
-	if start < 0 || end < 0 {
+	if end < 0 {
 		t.Fatal("missing retained demo transaction entry")
 	}
 	entry := text[start : start+end]

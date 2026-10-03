@@ -275,6 +275,8 @@ class Host:
             pattern = re.compile(r"^[ \t]*" + re.escape(key) + r"=.*$", re.M)
             text = pattern.sub(key + "=" + value, text) if pattern.search(text) else text.rstrip("\n") + "\n" + key + "=" + value + "\n"
         env_file.write_text(text)
+        data_owner = PATHS["data"].stat()
+        os.chown(env_file, data_owner.st_uid, data_owner.st_gid)
         os.chmod(env_file, 0o600)
         billing = json.loads(billing_file.read_text())
         if not isinstance(billing, dict) or not isinstance(billing.get("capabilities", []), list):
@@ -282,6 +284,7 @@ class Host:
         billing["capabilities"] = sorted(set(billing.get("capabilities", []) + ["demo_fixtures"]))
         billing.pop("integrity", None)
         billing_file.write_text(json.dumps(billing))
+        os.chown(billing_file, data_owner.st_uid, data_owner.st_gid)
         os.chmod(billing_file, 0o600)
         if unhealthy:
             for relative in DEMO_HISTORY:
@@ -408,14 +411,14 @@ class Transaction:
             elif self.request["mode"] == "update":
                 raise Failure("update-baseline-unhealthy")
             self.receipt["healthy_baseline"] = healthy_baseline
+            old_handlers = {sig: signal.getsignal(sig) for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP)}
+            for sig in old_handlers:
+                signal.signal(sig, cancel)
             # The no-op is observed too; an immediate healthy sample is not success.
             if self.request["mode"] == "recover" and healthy_baseline and self.host.profile_matches(self.request):
                 self.watch("forward", original_version, self.host.cursors())
                 self.save("healthy_noop")
                 return 0
-            old_handlers = {sig: signal.getsignal(sig) for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP)}
-            for sig in old_handlers:
-                signal.signal(sig, cancel)
             self.save("capturing")
             stopped = True
             self.host.stop()

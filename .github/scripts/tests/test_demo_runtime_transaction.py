@@ -1,4 +1,3 @@
-import copy
 import hashlib
 import importlib.util
 import json
@@ -194,6 +193,16 @@ class TransactionTest(unittest.TestCase):
         self.assertEqual(receipt["forward"]["elapsed_seconds"], 300)
         self.assertFalse(receipt["mutated"])
         self.assertEqual(self.host.stops, 0)
+
+    def test_noop_cancellation_retains_terminal_failure_without_stopping_service(self):
+        self.host.profile(request(), False)
+        self.host.cancel_at = 55
+        code, receipt = self.run_transaction()
+        self.assertEqual(code, 1)
+        self.assertEqual(receipt["status"], "refused")
+        self.assertEqual(receipt["failure"], "cancelled-forward")
+        self.assertEqual(self.host.stops, 0)
+        self.assertFalse(receipt["mutated"])
 
     def test_update_restores_complete_changed_executable_unit_and_data_after_late_failure(self):
         self.host.fail_at = 55
@@ -404,8 +413,6 @@ class DispatchLifecycleTest(unittest.TestCase):
         for uncertain in (False, True):
             with self.subTest(uncertain=uncertain), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory) / "state"
-                source = dispatcher.BOOTSTRAP.replace("pathlib.Path('/var/lib/pulse-deploy/demo')", repr(root))
-                # repr(Path) is not a Python literal: bind just the fixed path.
                 source = dispatcher.BOOTSTRAP.replace("'/var/lib/pulse-deploy/demo'", repr(str(root)))
                 source = source.replace("root.stat().st_uid == 0", "root.stat().st_uid == os.getuid()")
                 clock = [0]
