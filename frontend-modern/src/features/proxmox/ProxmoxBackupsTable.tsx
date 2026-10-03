@@ -43,6 +43,7 @@ import {
 import {
   buildProxmoxBackupRecoveryModel,
   coverageRowMatchesSearch,
+  isBackupArtifact,
   recoverableArtifactMatchesSearch,
   type RecoverableArtifact,
   type WorkloadCoverageRow,
@@ -347,17 +348,20 @@ export const ProxmoxBackupsTable: Component<{
     return recoveryModel().coverageRows.flatMap((row) => {
       const artifacts = row.artifacts.filter(locationMatches);
       if (artifacts.length === 0) return [];
+      // Same rule as the model: running or failed artifacts stay listed but
+      // never become a "latest" pointer, and snapshots never become the backup.
+      const completed = artifacts.filter((artifact) => !artifact.running && !artifact.failed);
       return [
         {
           ...row,
           artifacts,
-          latestRecovery: newestArtifact(artifacts),
-          latestPBS: newestArtifact(artifacts.filter((artifact) => artifact.sourceKind === 'pbs')),
+          latestBackup: newestArtifact(completed.filter(isBackupArtifact)),
+          latestPBS: newestArtifact(completed.filter((artifact) => artifact.sourceKind === 'pbs')),
           latestArchive: newestArtifact(
-            artifacts.filter((artifact) => artifact.sourceKind === 'archive'),
+            completed.filter((artifact) => artifact.sourceKind === 'archive'),
           ),
           latestSnapshot: newestArtifact(
-            artifacts.filter((artifact) => artifact.sourceKind === 'snapshot'),
+            completed.filter((artifact) => artifact.sourceKind === 'snapshot'),
           ),
           pbsCount: artifacts.filter((artifact) => artifact.sourceKind === 'pbs').length,
           archiveCount: artifacts.filter((artifact) => artifact.sourceKind === 'archive').length,
@@ -385,7 +389,7 @@ export const ProxmoxBackupsTable: Component<{
         case 'workload':
           return cmpString(a.workload.label, b.workload.label, direction);
         case 'latest':
-          return cmpNumber(a.latestRecovery?.createdMs, b.latestRecovery?.createdMs, direction);
+          return cmpNumber(a.latestBackup?.createdMs, b.latestBackup?.createdMs, direction);
         case 'pbs':
           return cmpNumber(a.latestPBS?.createdMs, b.latestPBS?.createdMs, direction);
         case 'archive':

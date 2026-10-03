@@ -37,18 +37,39 @@ Patrol mode sets how far Pulse can go when Patrol finds something that needs att
 
 **UI:** Patrol → Patrol mode
 
-**API:**
-```bash
-# Get current Patrol mode settings
-curl -s -u admin:admin http://localhost:7655/api/ai/patrol/autonomy
+**API:** Use an administrator API token with `settings:write` in the
+[private header file](API.md#api-token-recommended). This endpoint requires
+that scope even for GET; a `monitoring:read` token is not sufficient. For a
+one-off read, you can instead open the path in your signed-in administrator
+browser without extracting its cookie. There is no shared example password
+to configure or substitute into these commands.
 
-# Update Patrol mode.
-# The API keeps the autonomy_level field name for compatibility.
-curl -X PUT http://localhost:7655/api/ai/patrol/autonomy \
-  -u admin:admin \
-  -H "Content-Type: application/json" \
-  -d '{"autonomy_level": "approval", "investigation_budget": 15, "investigation_timeout_sec": 600}'
+Read the current settings first (curl 7.76 or later, on the Pulse host):
+
+```bash
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  http://127.0.0.1:7655/api/ai/patrol/autonomy
 ```
+
+The next command **changes Patrol mode**, not just connection health. Use it
+only when you intend to enable investigation and queue fixes for approval on
+a plan with that capability. The API retains `autonomy_level` for compatibility:
+
+```bash
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  --request PUT --header 'Content-Type: application/json' --data-binary @- \
+  http://127.0.0.1:7655/api/ai/patrol/autonomy <<'JSON'
+{"autonomy_level":"approval","investigation_budget":15,"investigation_timeout_sec":600}
+JSON
+```
+
+For remote use, substitute your Pulse **HTTPS** URL and keep certificate
+verification enabled. Do not add `--insecure`, verbose/trace output or redirect
+following; keep `--disable` first to ignore local curl defaults. A nonzero exit,
+401 or 403 is a failed check, not evidence that a change was saved. Stop and
+resolve authentication, permissions or the reported error before proceeding;
+after an uncertain write, read the saved settings before retrying. Keep
+tokens, cookies and unredacted responses out of reports.
 
 ### License Requirements
 
@@ -77,12 +98,18 @@ Control levels govern what the interactive Pulse Assistant can do during chat se
 
 **UI:** Settings → Pulse Intelligence → Assistant → Chat command mode
 
-**API:**
+**API:** This intentionally changes chat command access. Use the same private
+administrator header file with `settings:write`; the token must also have
+permission to change settings. Prefer the UI for one-off changes, and verify
+the saved **Chat command mode** there afterwards. Do not use a write as an
+authentication test.
+
 ```bash
-curl -X PUT http://localhost:7655/api/settings/ai/update \
-  -u admin:admin \
-  -H "Content-Type: application/json" \
-  -d '{"control_level": "controlled"}'
+curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header" \
+  --request PUT --header 'Content-Type: application/json' --data-binary @- \
+  http://127.0.0.1:7655/api/settings/ai/update <<'JSON'
+{"control_level":"controlled"}
+JSON
 ```
 
 ### Approval Flow (Controlled Mode)

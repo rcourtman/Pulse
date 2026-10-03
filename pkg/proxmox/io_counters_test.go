@@ -115,3 +115,26 @@ func TestInternalCounterMetadataNeverChangesProxmoxWireShape(t *testing.T) {
 		}
 	}
 }
+
+func TestBackupLocksRetainCumulativeCounterPresence(t *testing.T) {
+	payload := []byte(`{"lock":"backup","diskread":0,"diskwrite":null,"netin":42}`)
+	var listing VM
+	var resource ClusterResource
+	var status VMStatus
+	for _, dst := range []any{&listing, &resource, &status} {
+		if err := json.Unmarshal(payload, dst); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, value := range map[string]struct {
+		lock     string
+		presence IOCounterPresence
+	}{"listing": {listing.Lock, listing.IOCounters}, "resource": {resource.Lock, resource.IOCounters}, "status": {status.Lock, status.IOCounters}} {
+		t.Run(name, func(t *testing.T) {
+			p := value.presence.Effective()
+			if value.lock != "backup" || !p.DiskRead || !p.NetworkIn || p.DiskWrite || p.NetworkOut {
+				t.Fatalf("lock decoding corrupted presence: %#v", value)
+			}
+		})
+	}
+}

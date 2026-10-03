@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSignal } from 'solid-js';
 import { ChartsAPI } from '@/api/charts';
-import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { eventBus } from '@/stores/events';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import historyChartHeaderSource from '@/components/shared/HistoryChartHeader.tsx?raw';
 import historyChartHoverGroupSource from '@/components/shared/HistoryChartHoverGroup.tsx?raw';
 import historyChartOverlaySource from '@/components/shared/HistoryChartOverlay.tsx?raw';
@@ -570,4 +571,129 @@ describe('HistoryChart', () => {
     expect(layout.x + layout.width).toBeLessThan(380);
     expect(layout.x).toBe(212);
   });
+});
+
+describe('History organisation boundary rendering', () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+  it.each(['keyboard', 'touch'])(
+    'clears %s inspection and accessible values on org switch until a new read succeeds',
+    async (input) => {
+      vi.useFakeTimers();
+      const request = vi.mocked(ChartsAPI.getMetricsHistory);
+      request.mockReset();
+      request.mockResolvedValueOnce({
+        points: [{ timestamp: 1000, value: 42, min: 42, max: 42 }],
+        source: 'memory',
+      } as never);
+      let complete!: (response: Awaited<ReturnType<typeof ChartsAPI.getMetricsHistory>>) => void;
+      request.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            complete = resolve;
+          }),
+      );
+      const { container } = render(() => (
+        <HistoryChart
+          resourceType="disk"
+          resourceId="disk:nas:sda"
+          metric="smart_temp"
+          label="Temperature"
+          unit="C"
+          range="1h"
+        />
+      ));
+      await vi.advanceTimersByTimeAsync(0);
+      const canvas = screen.getByRole('img', { name: 'Temperature chart' });
+      vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+        x: 0,
+        y: 0,
+        left: 0,
+        top: 0,
+        right: 400,
+        bottom: 200,
+        width: 400,
+        height: 200,
+        toJSON: () => ({}),
+      });
+      if (input === 'keyboard') fireEvent.focus(canvas);
+      else {
+        touchPointer(canvas, 'pointerdown');
+        touchPointer(canvas, 'pointerup');
+      }
+      expect(container.querySelector('[data-history-chart-tooltip]')).toHaveTextContent('42°C');
+      eventBus.emit('org_switched', 'org-b');
+      expect(container.querySelector('[data-history-chart-tooltip]')).toBeNull();
+      expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe('');
+      expect(container).not.toHaveTextContent('42°C');
+      expect(container).not.toHaveTextContent('Buffer');
+      expect(canvas).toHaveAccessibleDescription(/Loading 1-hour history data/);
+      complete({
+        points: [{ timestamp: 1000, value: 80, min: 80, max: 80 }],
+        source: 'store',
+      } as never);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(canvas).toHaveAccessibleDescription(/80°C/);
+      expect(container.querySelector('[data-history-chart-tooltip]')).toBeNull();
+      if (input === 'touch') {
+        // Touch compatibility focus from the old chart must not reactivate its pinned reading.
+        fireEvent.focus(canvas);
+        expect(container.querySelector('[data-history-chart-tooltip]')).toBeNull();
+        touchPointer(canvas, 'pointerdown');
+        touchPointer(canvas, 'pointerup');
+        expect(container.querySelector('[data-history-chart-tooltip]')).toHaveTextContent('80°C');
+      }
+    },
+  );
+});
+
+describe('History access boundary rendering', () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+  it.each([401, 403])(
+    'withdraws painted readings, tooltips and keyboard announcements on %s',
+    async (status) => {
+      vi.useFakeTimers();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const request = vi.mocked(ChartsAPI.getMetricsHistory);
+      request.mockReset();
+      request.mockResolvedValueOnce({
+        points: [{ timestamp: 1000, value: 42, min: 42, max: 42 }],
+        source: 'store',
+      } as never);
+      const { container } = render(() => (
+        <HistoryChart
+          resourceType="disk"
+          resourceId="disk:nas:sda"
+          metric="smart_temp"
+          label="Temperature"
+          unit="C"
+          range="1h"
+        />
+      ));
+      await vi.advanceTimersByTimeAsync(0);
+      const canvas = screen.getByRole('img', { name: 'Temperature chart' });
+      fireEvent.focus(canvas);
+      expect(container.querySelector('[data-history-chart-tooltip]')).toHaveTextContent('42°C');
+      request.mockRejectedValueOnce(Object.assign(new Error('private detail'), { status }));
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(container.querySelector('[data-history-chart-tooltip]')).toBeNull();
+      expect(container.querySelector('[aria-live="polite"]')).toHaveTextContent('');
+      expect(container).not.toHaveTextContent('42°C');
+      expect(container).not.toHaveTextContent('last successful');
+      expect(container).not.toHaveTextContent('private detail');
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        status === 401 ? 'Sign in again' : 'Access denied',
+      );
+      expect(screen.queryByText('No history samples in this time range.')).not.toBeInTheDocument();
+      fireEvent.keyDown(canvas, { key: 'End' });
+      expect(container.querySelector('[data-history-chart-tooltip]')).toBeNull();
+    },
+  );
 });

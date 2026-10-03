@@ -692,3 +692,55 @@ func TestMemoryUnavailablePreservesActiveAlertsUntilTrustedRecovery(t *testing.T
 		})
 	}
 }
+
+func TestResolvedOccurrenceCallbackCapturesBeforeDispatch(t *testing.T) {
+	m := newTestManager(t)
+	start := time.Now().Add(-time.Hour)
+	end := start.Add(time.Minute)
+	resolved := &ResolvedAlert{Alert: &Alert{ID: "reusable", StartTime: start,
+		Metadata: map[string]interface{}{"generation": "old"}}, ResolvedTime: end}
+	entered, release := make(chan struct{}), make(chan struct{})
+	defer close(release)
+	m.SetResolvedCallback(func(id string) {
+		if id != "reusable" {
+			t.Errorf("legacy ID = %s", id)
+		}
+		close(entered)
+		<-release
+	})
+	got := make(chan *ResolvedAlert, 1)
+	m.SetResolvedAlertCallback(func(r *ResolvedAlert) { got <- r })
+	m.safeCallResolvedAlertCallback(resolved, resolved.Alert.ID, true)
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("legacy callback did not start")
+	}
+	// Both the source object and the ID-indexed history can change while the
+	// consumer waits. Neither is a source for the already-admitted snapshot.
+	resolved.Alert.StartTime = start.Add(time.Hour)
+	resolved.Alert.Metadata["generation"] = "new"
+	resolved.ResolvedTime = end.Add(time.Hour)
+	m.addRecentlyResolvedUnlocked(resolved)
+	// Unblock without closing twice in cleanup.
+	release <- struct{}{}
+	select {
+	case r := <-got:
+		if !r.Alert.StartTime.Equal(start) || !r.ResolvedTime.Equal(end) || r.Alert.Metadata["generation"] != "old" {
+			t.Fatalf("callback reconstructed the wrong occurrence: %+v", r)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no occurrence callback")
+	}
+}
+
+func TestResolvedOccurrenceCallbackSurvivesLegacyPanic(t *testing.T) {
+	m := newTestManager(t)
+	m.SetResolvedCallback(func(string) { panic("legacy consumer failure") })
+	called := false
+	m.SetResolvedAlertCallback(func(r *ResolvedAlert) { called = r.Alert.ID == "reusable" })
+	m.safeCallResolvedAlertCallback(&ResolvedAlert{Alert: &Alert{ID: "reusable"}}, "reusable", false)
+	if !called {
+		t.Fatal("legacy panic prevented occurrence-qualified recovery")
+	}
+}

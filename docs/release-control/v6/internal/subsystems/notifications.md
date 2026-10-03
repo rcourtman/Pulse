@@ -15,6 +15,84 @@
 
 ## Purpose
 
+### Delivery verdicts survive session cleanup and interrupted diagnostics
+
+A successful final SMTP DATA reply establishes server acceptance. Plain SMTP,
+TLS and STARTTLS delivery must not resend an accepted message because QUIT
+fails, nor turn that cleanup failure into a terminal delivery audit. Cleanup
+still runs, with only a fixed local diagnostic; the provider's reply text is
+not copied into it. Missing acknowledgement, certificate failures and rejected
+DATA replies remain errors with their existing retry policy. A connection test
+without a completed DATA transaction still reports QUIT failure. Server
+acceptance is not proof of arrival in a recipient's inbox or exactly-once
+recovery after a process crash.
+
+The ntfy plain-text recovery path, like the shared firing sender, retains the
+HTTP rejection class when reading the diagnostic response body fails. It
+preserves the wrapped read error, existing retry budgets and bounded body read;
+401/403/422 remain permanent failures, while transient HTTP verdicts remain
+retryable. Incomplete 2xx responses retain the existing failure behaviour.
+Historical audit rows are not rewritten and operator retry stays explicit.
+
+Verification: `email_acceptance_test.go` uses actual guest-local plain/TLS/
+STARTTLS SMTP sessions for clean, missing and rejected QUIT, permanent and
+transient DATA rejection, missing acknowledgement, threaded/attachment sends,
+connection-only tests and certificate refusal. Its connected persistent queue
+control retains one accepted send and zero terminal failures after reopen.
+`ntfy_response_verdict_test.go` exercises real interrupted HTTP bodies, then
+queue/audit/telemetry readback after reopen and an explicit repaired-destination
+retry without erasing the original rejection. These are synthetic source
+controls, not a cause attribution for aggregate fleet counters, installed
+provider acceptance or a reporter's confirmation.
+
+
+### Pending firing groups count occurrences, not callbacks
+
+Before a grouping window expires, repeated firing callbacks with the same full
+alert ID and start instant occupy one slot. The newest observed snapshot owns
+the whole payload and operational linkage, including a genuine later severity
+downgrade. Equal observation times prefer higher severity; an unknown time
+cannot replace a known later observation. Missing ID/start identity remains
+separate, as do different occurrences of a reusable ID. The index is scoped to
+the pending window and discarded on flush, disable, cancellation or stop; callbacks
+do not extend the original timer or establish delivery.
+
+`firing_grouping_occurrence_test.go` verifies timestamp/severity ordering,
+instant equality across time-zone/monotonic representations, cloned payloads,
+concurrent callbacks, occurrence-qualified cancellation, all-destination and
+webhook-only disable/zero-window flushes, and notification disable/re-enable.
+Stopping the manager cancels its volatile firing timer and snapshots, rather
+than letting an abandoned timer send directly after its queue is closed.
+Committed queue work retains its existing restart semantics.
+`TestPendingFiringGroupStopCancelsTimer` checks actual timer/HTTP silence after stop.
+The connected `TestPendingFiringGroupHTTPAcrossRestart` uses actual timer expiry,
+persistent queue reopen, the autonomous sender and two loopback receivers: one
+snapshot per occurrence/destination, truthful counts/latest content, ordinary
+cooldown and independent firing/recovery receipts. Ungrouped admissions,
+scheduled escalation, retry budgets, queue schema and delivery policy are
+unchanged. This is source acceptance, not a native destination, natural schedule
+cycle or a reproduced cause of the existing flood reports.
+
+### Completion order cannot replace a newer occurrence's cooldown
+
+Firing completions still record an independent delivery receipt for their own
+occurrence and destination. The reusable-ID cooldown, however, belongs to the
+newest known occurrence: a late older completion or unknown legacy start cannot
+evict it. Within the same occurrence, successful completion times and delivered
+severity only advance. A genuinely newer occurrence begins its own severity
+history. No queue schema, retry budget, recovery selection or schedule changes.
+
+`TestNotificationCooldownReceiptOrdering` verifies older, unknown and equal-start
+completion ordering, including legacy zero starts. The connected
+`TestLateFiringHTTPReceiptPreservesCurrentCooldown` holds an older HTTP response
+while the newer firing completes through the persistent sender. Both snapshots
+are admitted before ordinary queue activation, so one discovered batch can
+complete concurrently without adding another dispatcher. It verifies that
+the ordinary repeat adds no queue row, a current severity increase still reaches
+the receiver, and both occurrence/destination receipts survive queue reopen.
+This is loopback source acceptance, not native delivery, restart cooldown
+persistence, a natural schedule cycle or resolution of the original flood reports.
+
 ### Queue recovery handler ownership after reload
 
 Router monitor replacement must refresh the existing queue/DLQ handler as well
@@ -1054,3 +1132,27 @@ regression establish frontend control preservation, not provider delivery.
 Formatting-only follow-up retains this warning-level contract. The production-component
 browser matrix was rerun after formatting at desktop and narrow widths, including
 all/critical/warning save/reload, cancel, and warning webhook creation.
+
+### Resolution cancellation is occurrence-qualified
+
+The monitor's delayed recovery path calls `CancelResolvedAlert` with the
+captured ID/start-time snapshot. It removes only that occurrence's pending
+in-memory grouping members and cooldown record. Persistent
+`CancelByAlertOccurrence` shares the existing per-ID delivery gates and
+cancellation machinery, but matches both ID and start time: pending, sending,
+failed and dead-letter firing rows are cancelled or rewritten without removing
+a recurring incident or unrelated members/operational links in a mixed row.
+Missing occurrence identity is a no-op. The explicit identifier-wide API, audit
+history, destination receipts, retry budget, recovery rows and best-effort
+in-flight semantics remain unchanged.
+
+`queue_occurrence_cancellation_test.go` verifies all four row states after a
+fresh database reopen, nanosecond-distinct occurrences, operational-link and
+failed-attempt preservation, missing-identity safety, grouping/cooldown retention
+and the unchanged ID-wide API. Monitor connected controls additionally require
+HTTP acceptance of the surviving occurrence through the autonomous queue.
+
+The live monitor does not interpret pending-only cancellation counts as
+recipient acceptance. Per-occurrence/per-destination receipts remain the sole
+recovery admission proof, including partial delivery and lost RAM markers after
+restart; an unannounced destination receives no recovery.

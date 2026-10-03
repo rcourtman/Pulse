@@ -340,6 +340,7 @@ jobs:
     if: ${{ needs.acquire_customer_promotion_lease.result == 'success' && needs.acquire_customer_promotion_lease.outputs.superseded != 'true' && inputs.prerelease != true && startsWith(inputs.version, '6.') }}
     permissions:
       contents: read
+      actions: read
     uses: ./.github/workflows/update-demo-server.yml
     secrets: inherit
     with:

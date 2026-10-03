@@ -343,6 +343,17 @@ describe('StackedDiskBar', () => {
   // ── Tooltip ──────────────────────────────────────────────────────────────
 
   describe('tooltip', () => {
+    it('includes caller-owned freshness context beside unchanged disk evidence', async () => {
+      const message = 'Using last known disk stats. Guest reads paused while a backup is running.';
+      const { container } = render(() => (
+        <StackedDiskBar disks={[makeDisk()]} statusMessage={message} />
+      ));
+      await fireEvent.mouseEnter(getBarTrigger(container));
+      expect(screen.getByText(message)).toBeInTheDocument();
+      expect(screen.getByText('/')).toBeInTheDocument();
+      expect(screen.getByText('Disk Usage')).toBeInTheDocument();
+    });
+
     it('shows tooltip on mouse enter with disk details', async () => {
       const disk = makeDisk({
         used: 53687091200,
@@ -585,6 +596,38 @@ describe('StackedDiskBar', () => {
       expect(bar).toBeInTheDocument();
       // Bar color should be critical (based on max disk at 92%)
       expect(bar?.getAttribute('fill')).toContain('239, 68, 68');
+    });
+  });
+
+  describe('vertical-bars mode', () => {
+    it('labels the micro-bars with the fullest disk so the cell reads as a number', () => {
+      const { container } = render(() => (
+        <StackedDiskBar
+          mode="vertical-bars"
+          disks={[
+            makeDisk({ mountpoint: '/', usage: 24, used: 24, total: 100 }),
+            makeDisk({ mountpoint: '/data', usage: 52, used: 52, total: 100 }),
+          ]}
+        />
+      ));
+
+      const label = container.querySelector('[data-stacked-disk-max-label]');
+      expect(label).toHaveTextContent('52%');
+      expect(label).toHaveAttribute('title', 'Highest usage: /data 52%');
+      // Every disk keeps its own bar with equal weight; the label is derived.
+      expect(container.querySelectorAll('[data-stacked-disk-fill="vertical"]')).toHaveLength(2);
+    });
+
+    it('omits the label when no disk has measured usage', () => {
+      const { container } = render(() => (
+        <StackedDiskBar
+          mode="vertical-bars"
+          disks={[makeDisk({ mountpoint: '/', usage: -1 })]}
+          aggregateDisk={makeDisk({ usage: 30 })}
+        />
+      ));
+
+      expect(container.querySelector('[data-stacked-disk-max-label]')).toBeNull();
     });
   });
 });

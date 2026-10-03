@@ -3,6 +3,7 @@ import { render, screen, fireEvent, cleanup } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Memory, Disk } from '@/types/api';
+import { guestDiskDeferrals } from '../__fixtures__/guestDiskDeferrals';
 
 // ── Hoisted mocks ──────────────────────────────────────────────────────
 
@@ -75,7 +76,9 @@ vi.mock('@/components/Workloads/EnhancedCPUBar', () => ({
 }));
 
 vi.mock('../StackedDiskBar', () => ({
-  StackedDiskBar: () => <div data-testid="disk-bar" />,
+  StackedDiskBar: (props: { statusMessage?: string }) => (
+    <div data-testid="disk-bar" data-status-message={props.statusMessage} />
+  ),
 }));
 
 vi.mock('../StackedMemoryBar', () => ({
@@ -668,6 +671,39 @@ describe('GuestRow', () => {
   });
 
   describe('lock label', () => {
+    it.each(guestDiskDeferrals)(
+      'annotates retained row and disk tooltip for %s',
+      (reason, message) => {
+        const { container } = renderGuestRow({
+          guest: makeGuest({ diskStatusReason: `prev-${reason}` }),
+        });
+        const expected = `Using last known disk stats. ${message}`;
+        expect(container.querySelector('[data-workload-col="disk"]')).toHaveAttribute(
+          'title',
+          expected,
+        );
+        expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-status-message', expected);
+      },
+    );
+
+    it('clears retained status for a same-VM fresh update in sparkline mode without remounting', () => {
+      const [guest, setGuest] = createSignal(
+        makeGuest({ diskStatusReason: 'prev-agent-cooldown' }),
+      );
+      const { container } = render(() => (
+        <table>
+          <tbody>
+            <GuestRow guest={guest()} metricDisplayMode="sparklines" />
+          </tbody>
+        </table>
+      ));
+      const cell = container.querySelector('[data-workload-col="disk"]');
+      expect(cell).toHaveAttribute('title', expect.stringContaining('Using last known'));
+      setGuest(makeGuest({ diskStatusReason: undefined, disk: makeDisk({ usage: 75 }) }));
+      expect(container.querySelector('[data-workload-col="disk"]')).toBe(cell);
+      expect(cell).not.toHaveAttribute('title');
+    });
+
     it('shows lock label when guest is locked', () => {
       renderGuestRow({ guest: makeGuest({ lock: 'migrate' }) });
       expect(screen.getByText(/Lock:.*migrate/)).toBeTruthy();
@@ -1308,23 +1344,26 @@ describe('GUEST_COLUMNS', () => {
   });
 
   it('derives mobile overrides from the canonical guest column model', () => {
+    // The phone name cell carries the toggle, status dot, and backup badge, so
+    // it takes a wider anchor than the shared 30% and the metric chips share
+    // the rest.
     expect(getGuestColumnStyle('name', true)).toEqual({
-      width: '30%',
-      'max-width': '30%',
+      width: '38%',
+      'max-width': '38%',
     });
     expect(getGuestColumnStyle('cpu', true)).toEqual({
-      width: '11.3235%',
-      'max-width': '11.3235%',
+      width: '10.0294%',
+      'max-width': '10.0294%',
     });
     expect(getGuestColumnStyle('availability', true)).toEqual({
-      width: '7.2059%',
-      'max-width': '7.2059%',
+      width: '6.3824%',
+      'max-width': '6.3824%',
     });
     expect(getGuestColumnStyle('type', true)).toEqual({
-      width: '9.2647%',
-      'max-width': '9.2647%',
+      width: '8.2059%',
+      'max-width': '8.2059%',
     });
-    expect(getGuestColumnWidthStyle('name', true)).toEqual({ width: '30%' });
+    expect(getGuestColumnWidthStyle('name', true)).toEqual({ width: '38%' });
     expect(getGuestColumnWidthStyle('diskIo', true)).toEqual({ width: '170px' });
   });
 

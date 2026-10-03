@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -67,6 +68,11 @@ func TestClusterClientHandlesRateLimitWithoutMarkingUnhealthy(t *testing.T) {
 
 func TestClusterClientIgnoresGuestAgentTimeoutForHealth(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
 		switch r.URL.Path {
 		case "/api2/json/nodes":
 			w.Header().Set("Content-Type", "application/json")
@@ -295,6 +301,11 @@ func TestIsEndpointConnectivityError(t *testing.T) {
 
 func TestClusterClientIgnoresPlainGuestAgent500ForHealth(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
 		switch r.URL.Path {
 		case "/api2/json/nodes":
 			w.Header().Set("Content-Type", "application/json")

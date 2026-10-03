@@ -146,6 +146,11 @@ func TestClusterClient_GetVMConfig(t *testing.T) {
 
 func TestClusterClient_GetVMAgentInfo(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/api2/json/nodes" {
 			fmt.Fprint(w, `{"data":[{"node":"node1","status":"online"}]}`)
@@ -173,6 +178,11 @@ func TestClusterClient_GetVMAgentInfo(t *testing.T) {
 
 func TestClusterClient_GetVMAgentVersion(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/api2/json/nodes" {
 			fmt.Fprint(w, `{"data":[{"node":"node1","status":"online"}]}`)
@@ -200,6 +210,11 @@ func TestClusterClient_GetVMAgentVersion(t *testing.T) {
 
 func TestClusterClient_GetVMNetworkInterfaces(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/api2/json/nodes" {
 			fmt.Fprint(w, `{"data":[{"node":"node1","status":"online"}]}`)

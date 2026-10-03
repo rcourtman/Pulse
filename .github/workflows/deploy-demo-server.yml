@@ -14,6 +14,7 @@ jobs:
     name: Verify Current Committed Stable Demo (No Mutation)
     permissions:
       contents: read
+      actions: read
     uses: ./.github/workflows/update-demo-server.yml
     secrets: inherit
     with:

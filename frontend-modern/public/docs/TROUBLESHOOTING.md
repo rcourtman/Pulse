@@ -7,8 +7,9 @@
 Pulse does not provide an email password-reset flow. Choose the path that
 matches how this self-hosted instance authenticates:
 
-- **Local Pulse username and password**: recovery requires shell access to the
-  Pulse host or container. Follow the deployment-specific steps below.
+- **Local Pulse administrator username and password**: recovery requires
+  authorised access to the host or deployment's credential source. Follow the
+  steps below; keep the existing username.
 - **OIDC, SAML, or proxy authentication**: contact the identity-provider or
   Pulse administrator. If the administrator deliberately kept local login as a
   fallback, they can open the Pulse URL with `?show_local=true`; this only
@@ -17,45 +18,81 @@ matches how this self-hosted instance authenticates:
   administrator can use the lockout reset in Pulse; password recovery is not
   required.
 
-The local recovery steps remove only the Pulse-generated authentication file.
-After restart, Pulse still requires the host-only bootstrap token before it
-will accept replacement credentials. If `PULSE_AUTH_USER` or `PULSE_AUTH_PASS`
-is supplied by Docker Compose, Kubernetes, systemd, or another deployment
-manager, update that deployment configuration instead; its environment values
-override the generated file.
+#### Recover the existing local administrator login
 
-**Docker**:
+Do not delete `.env` or repeat first-time setup to recover a password. The file
+can also hold deployment settings, and setup replaces the primary API token.
+Replace only the password in its active credential source instead, preserving
+the username, API tokens, encryption keys, monitoring configuration and data.
+This is login recovery, not a complete response to a compromised account;
+existing sessions and API tokens need separate review if credentials leaked.
 
-```bash
-docker exec pulse rm /data/.env
-docker restart pulse
-# Access UI again. Pulse will require a bootstrap token for setup.
-# Get it with:
-docker exec pulse /app/pulse bootstrap-token
-```
+1. **Find the active credential source locally.** Deployment-supplied
+   `PULSE_AUTH_USER` and `PULSE_AUTH_PASS` take precedence over Pulse's `.env`.
+   Do not post full service units, container inspections or resolved Compose
+   configuration; they can contain secrets.
+   - **Docker**: the generated file is in the mounted data directory, normally
+     `/data/.env` inside the container. If Compose, `--env-file`, Kubernetes or
+     another manager supplies the password, edit that managed source instead.
+   - **Systemd**: check the active service's unit, environment files and
+     drop-ins privately. Root-run setup can also save credentials in
+     `/etc/systemd/system/pulse.service.d/override.conf` (or the corresponding
+     `pulse-backend.service.d` path on legacy installs). Editing only
+     `/etc/pulse/.env` will not override those values. A custom
+     `PULSE_DATA_DIR` changes the generated file's location.
+   - **Proxmox LXC**: perform the systemd steps inside the Pulse container, not
+     on the Proxmox host. Use its console or `pct enter <ctid>`.
+2. **Prepare a new password hash privately.** Use a trusted local bcrypt tool
+   that prompts for a password of at least 12 characters, never one that needs
+   the password in its command arguments. For example, if Apache's `htpasswd`
+   is installed on your trusted administration machine:
 
-**Systemd**:
+   ```bash
+   (
+   set -eu
+   umask 077
+   recovery_dir="$(mktemp -d "${TMPDIR:-/tmp}/pulse-password.XXXXXX")"
+   htpasswd -nB -C 12 pulse-recovery > "$recovery_dir/password-record"
+   printf 'Private password record saved in %s/password-record\n' "$recovery_dir"
+   )
+   ```
 
-```bash
-sudo rm /etc/pulse/.env
-sudo systemctl restart pulse
-sudo pulse bootstrap-token
-```
+   This prints only the file location. Open the record in a private editor and
+   copy the complete 60-character hash after `pulse-recovery:`; that label is
+   not a new Pulse username. Do not post the record or hash. If the tool fails,
+   stop rather than saving a partial hash or putting the password in a shell
+   command.
+3. **Back up and edit only the active password setting.** Keep an owner-only
+   backup of each file you change, then replace `PULSE_AUTH_PASS` in a private
+   editor. Keep `PULSE_AUTH_USER` and unrelated settings unchanged. In a Pulse
+   `.env`, put the hash in single quotes with literal `$` characters. Compose
+   YAML has different interpolation rules; follow the
+   [authentication guide](CONFIGURATION.md#private-docker-authentication-file)
+   for the source you actually use. If a systemd drop-in supplies the password,
+   update it and the generated authentication file consistently so a later
+   restart or reload does not restore the old value. Preserve file permissions
+   and ownership; hashes and backups are sensitive too.
+4. **Apply through the existing deployment.** For a generated Docker data-file
+   change, restart the same container. Changing Docker's managed environment
+   requires its recreate/redeploy operation, not just `docker restart`; preserve
+   the same image, mounted data and other settings. For systemd, reload the
+   service manager after a unit or drop-in change, then restart the active Pulse
+   service during a suitable maintenance window. Do not remove a data volume,
+   reinstall Pulse or re-enrol agents.
+5. **Verify the login.** Use a fresh browser session to sign in with the same
+   local administrator username and new password, then check that monitoring
+   and agent connections remain intact. If it still fails, stop and reconcile
+   the effective source and any lockout; do not delete more state. Restore the
+   private backup through the same deployment path if you need to undo the
+   change. Remove the temporary password record after verification,
+   and retain or dispose of the backup under your normal credential policy.
 
-**Proxmox LXC** (installed from the Proxmox shell):
-Pulse runs inside the container, so run the same steps through `pct exec` on the Proxmox host. The binary needs its absolute path here, because `pct exec` runs with `PATH=/sbin:/bin:/usr/sbin:/usr/bin` and that does not include `/usr/local/bin`:
+#### A fresh install's bootstrap token was missed
 
-```bash
-pct exec <ctid> -- rm /etc/pulse/.env
-pct exec <ctid> -- systemctl restart pulse
-pct exec <ctid> -- /usr/local/bin/pulse bootstrap-token
-```
-
-If you only missed the token during a fresh install (no password set yet), skip the first two commands and just read it back with the last one.
-
-Treat the bootstrap token like a password: enter it only in the Pulse setup
-screen for this instance and do not paste it into support requests or issue
-reports.
+If no local password has ever been set, there is nothing to reset. Follow
+[first login](INSTALL.md#step-1-get-the-token) to read the existing bootstrap
+token for that instance, using its actual data directory. Enter it only in the
+Pulse setup screen, not in command arguments, URLs or issue reports.
 
 ### Port change didn't take effect
 
@@ -190,10 +227,14 @@ installed service must contain `SyslogLevelPrefix=true` and
 repair an older generated unit rather than adding a JSON-parsing wrapper.
 
 #### VMs show "-" for disk usage
-- Install **QEMU Guest Agent** in the VM.
-- Enable "QEMU Guest Agent" in Proxmox VM Options.
-- Restart the VM.
-- See [VM Disk Monitoring](VM_DISK_MONITORING.md).
+- Read the disk value's explanation and observation time first; a dash is not
+  proof that the agent is missing.
+- Check the guest-local service, current VM Options and the configured API
+  token's read permissions. Schedule any setup change or restart outside backups.
+- Do not run guest-agent probes during backup freeze/thaw. An OK backup task
+  or an absent lock does not confirm thaw.
+- See [VM Disk Monitoring](VM_DISK_MONITORING.md) for the passive host preflight
+  and backup safety precaution; it does not verify a fresh disk poll.
 
 #### Temperature data missing
 - Install `lm-sensors` on the host.
@@ -215,6 +256,99 @@ clone a stable, unique ID in its managed service or container configuration;
 leave the original host unchanged. Follow
 [Clone identity recovery](UNIFIED_AGENT.md#duplicate-agents) for the configuration
 precedence, systemd example and checks after restart.
+
+#### Excessive CPU, writes or database growth
+
+First distinguish **Pulse server activity**, agent activity and total host or
+storage-device activity. A database's size is retained space, not the number of
+bytes written: repeated updates can produce high writes without growing the file.
+Keep the original running version, uptime, measurement time and workload before
+changing anything. A different binary can migrate persistent data; switching
+back to an older version does not make that data a clean older-version baseline.
+
+- For CPU, record the measuring tool, allocated CPUs or container quota and
+  whether its percentage represents one core or the whole allocation. A `ps`
+  `%CPU` value is an average since process start, not a recent sampling window.
+- Note fleet size, polling interval and whether Pulse dashboards are open. If
+  safe, close all Pulse tabs and compare another equal-length window, without
+  restarting the server or changing polling. A decrease narrows the workload;
+  it does not establish the cause or prove monitoring is healthy.
+- If the host is unresponsive or storage is nearly full, do not prolong the
+  failure to collect a benchmark. Keep existing observations and report the
+  interruption instead. Do not enable Debug or repeatedly export diagnostics
+  merely to measure performance; those actions add work and can change the result.
+
+For a responsive **Linux systemd / Proxmox LXC** install, the following reads
+two process-I/O samples, waiting 60 seconds between them. Run it inside the
+Pulse container for LXC, not on the Proxmox host. Substitute the actual service
+name (`pulse-backend` on some older installs). Use an account authorised to
+read the process counters; no service restart or database access is needed.
+
+```bash
+# systemd / Proxmox LXC: bounded process-write samples
+(
+  set -e
+  for sample in 1 2; do
+    date -u +'%Y-%m-%dT%H:%M:%SZ'
+    pid=$(systemctl show pulse --property=MainPID --value)
+    case "$pid" in
+      ''|0|*[!0-9]*) printf 'No running Pulse PID; sample unavailable.\n' >&2; exit 1 ;;
+    esac
+    TZ=UTC ps -p "$pid" -o pid=,lstart=
+    sudo awk '
+      $1 == "write_bytes:" || $1 == "cancelled_write_bytes:" { print; fields++ }
+      END { if (fields != 2) exit 1 }
+    ' "/proc/$pid/io"
+    if [ "$sample" -eq 1 ]; then sleep 60; fi
+  done
+)
+```
+
+Compare `write_bytes` only when both samples have the same PID and process
+start time, no restart occurred, and the counter did not decrease. Divide the
+byte difference by the **actual elapsed seconds**. This is storage-accounted
+process I/O, not filesystem growth or physical SSD wear; cancelled writes and
+background writeback can differ from device measurements. Keep
+`cancelled_write_bytes` alongside it, not as proof of bytes reaching the drive.
+An extrapolated GB/day rate is a projection of that short window, not a measured
+day's total. Preserve the window and units with the result.
+
+For **Docker / Compose**, run this on the Docker host, replacing `pulse` with
+the running container name. It reads only the start time and selected statistics,
+not the container environment or configuration.
+
+```bash
+# Docker: bounded container statistics
+(
+  set -e
+  for sample in 1 2; do
+    date -u +'%Y-%m-%dT%H:%M:%SZ'
+    docker inspect --format 'Started={{.State.StartedAt}}' pulse
+    stats=$(docker stats --no-stream --format \
+      'CPU={{.CPUPerc}} Memory={{.MemUsage}} BlockIO={{.BlockIO}}' pulse)
+    if [ -z "$stats" ]; then
+      printf 'Container statistics unavailable; no zero inferred.\n' >&2
+      exit 1
+    fi
+    printf '%s\n' "$stats"
+    if [ "$sample" -eq 1 ]; then sleep 60; fi
+  done
+)
+```
+
+Docker **BlockIO** is cumulative read / write activity, not bytes per second;
+compare its write side only across the same uninterrupted container run. Its
+displayed units are rounded. Container, process and whole-device counters have
+different scopes and must not be added together or compared as interchangeable
+measurements. A failed, denied or empty read is unavailable, not zero activity.
+
+Keep persistent data on durable storage. Do not delete or truncate history,
+incident, queue or audit files, remove database indexes, or move the data
+directory to tmpfs as a diagnostic workaround. These actions can lose evidence
+or protections without fixing the writer. Do not post databases, profiles, full
+`/proc` dumps, container configuration or raw environments. Share only the bounded
+measurements, workload, versions and a relevant manually redacted error; follow
+[Getting Help](#-getting-help) for any additional evidence.
 
 ### Notifications
 
@@ -320,7 +454,7 @@ consequential, manually redacted error.
 ### TrueNAS
 
 #### "TrueNAS service unavailable"
-- Ensure TrueNAS was added in **Settings → TrueNAS** with a valid HTTPS URL,
+- Ensure TrueNAS was added in **Settings → Infrastructure → Platform connections** with a valid HTTPS URL,
   API key, and the username that owns the key.
 - Check that the TrueNAS system is reachable from the Pulse server (default
   HTTPS port).
@@ -331,7 +465,10 @@ consequential, manually redacted error.
 #### TrueNAS pools/datasets not appearing
 - TrueNAS data appears in the unified resource model and may take one configured
   polling cycle (60 seconds by default) to appear.
-- Check **Infrastructure** (TrueNAS host), **Storage** (pools/datasets), and **Recovery** (snapshots/replication).
+- Open **TrueNAS → Overview** for the appliance, **TrueNAS → Storage**
+  (`/truenas/storage`) for pools, datasets and disks, and **TrueNAS → Protection**
+  (`/truenas/protection`) for snapshots and replication. These are tabs within
+  TrueNAS, not separate top-level Storage or Recovery pages.
 - For data that stops refreshing, use the [TrueNAS polling checks](TRUENAS.md#stale-truenas-data)
   before testing or restarting. A stale badge is not proof of an invalid key,
   and a successful connection test is not proof that collection has recovered.
@@ -339,8 +476,38 @@ consequential, manually redacted error.
 ### Navigation (v6)
 
 #### Old bookmarks don't work
-- Legacy URLs (`/proxmox`, `/docker`, `/kubernetes`, `/hosts`, `/services`) are not supported in v6.
-- Update bookmarks to canonical routes. See [Migration Guide](MIGRATION_UNIFIED_NAV.md).
+
+Current Pulse uses platform navigation. `/proxmox`, `/docker` and `/kubernetes`
+are supported; do not replace them with the retired task-based routes.
+Open Pulse at its base URL and use the menu to find the relevant page:
+
+| Menu | Entry route |
+| --- | --- |
+| Proxmox | `/proxmox/overview` |
+| Docker | `/docker/overview` |
+| Kubernetes | `/kubernetes/overview` |
+| TrueNAS | `/truenas/overview` |
+| vSphere | `/vmware/overview` |
+| Machines | `/standalone/machines` |
+
+The short-lived top-level `/workloads`, `/storage` and `/recovery` layout is
+retired. `/infrastructure` now opens the default workspace, not the former
+unified host page. For old `/hosts` or `/services` bookmarks, select the current
+platform or Machines page instead of assuming an automatic redirect. PBS
+backups are under **Proxmox → Backups**, and TrueNAS snapshots and replication
+are under **TrueNAS → Protection**.
+
+Platform-connected hosts can appear under their platform rather than Machines.
+If a menu or expected resource is missing, check its saved connection and last
+successful collection in **Settings → Infrastructure**; a missing page alone
+does not prove a host was deleted. Do not delete connections or re-enrol agents
+just to repair a bookmark.
+
+If menu navigation works but reloading the same URL returns a proxy 404, check
+the proxy's route handling using [Reverse Proxy Configuration](REVERSE_PROXY.md).
+For the current layout, see [FAQ](FAQ.md#how-is-navigation-organised-in-pulse-v6).
+The [unified-navigation migration](MIGRATION_UNIFIED_NAV.md) is historical,
+not a guide to the current menu.
 
 ### Relay / Mobile
 
@@ -452,7 +619,12 @@ For PVE 8 only, use `VM.Monitor` instead of the `VM.GuestAgent.*` privileges.
 
 Note: The built-in `PVEAuditor` role cannot be modified. Create a custom role (e.g. `PulseMonitor`) with the above privileges added, and assign it to your Pulse API token. After upgrading to PVE 9, add the `VM.GuestAgent.*` privileges and remove legacy `VM.Monitor` from the custom role.
 
-**Rocky Linux / RHEL VMs**: The default qemu-guest-agent configuration may block file-read RPCs (`guest-file-open`, `guest-file-read`, `guest-file-close`). If memory or disk data is missing for these VMs, check `/etc/sysconfig/qemu-ga` and ensure those operations are not blocked, then restart the agent. Refer to your distro's qemu-guest-agent documentation for the exact config syntax.
+**Rocky Linux / RHEL VMs**: File-read restrictions in `/etc/sysconfig/qemu-ga`
+can explain missing guest memory; they do not by themselves establish why disk
+usage is absent. Review the guest's policy before changing it. Schedule any
+allowlist change or agent restart outside backups, following the guest OS's
+documentation. See [VM Disk Monitoring](VM_DISK_MONITORING.md) for the distinct
+permissions and backup safety boundary.
 
 ### Proxmox pending-update access
 
@@ -479,9 +651,9 @@ success alone does not confirm the Pulse display has recovered.
 
 ### Recovery Mode
 
-For a forgotten local password, follow [I forgot my password](#i-forgot-my-password)
-above, using the steps for your deployment. Enter the host-only bootstrap token
-in that instance's setup screen; do not paste it into a command or a report.
+For a forgotten local administrator password, follow
+[I forgot my password](#i-forgot-my-password) above to update its active
+credential source without deleting configuration or repeating first-time setup.
 For OIDC, SAML or proxy login, use the identity-provider or administrator path
 described there instead.
 

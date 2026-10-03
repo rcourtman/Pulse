@@ -467,6 +467,37 @@ describe('storageAdapters', () => {
     expect(records[0].hostLabel).toBe('pve1');
   });
 
+  it('labels a poller-merged shared storage as shared with its node count', () => {
+    const records = buildStorageRecords({
+      state: baseState(),
+      resources: [
+        makeResourceStorage({
+          id: 'cluster-a-cluster-nfs-iso',
+          name: 'nfs-iso',
+          parentName: 'cluster',
+          platformData: { type: 'nfs', node: 'cluster', instance: 'cluster-a', shared: true },
+          storage: {
+            type: 'nfs',
+            shared: true,
+            nodes: ['pve1', 'pve2', 'pve3'],
+          } as Resource['storage'],
+        }),
+        makeResourceStorage({
+          id: 'pve2-local-lvm',
+          name: 'local-lvm',
+          parentName: 'pve2',
+          platformData: { type: 'lvmthin', node: 'pve2', instance: 'cluster-a', shared: false },
+          storage: { type: 'lvmthin', shared: false } as Resource['storage'],
+        }),
+      ],
+    });
+
+    // The poller folds a shared storage into one entry on the synthetic
+    // "cluster" node; a node-local storage keeps its node name.
+    expect(records.map((record) => record.hostLabel)).toEqual(['Shared · 3 nodes', 'pve2']);
+    expect(records.map((record) => record.topologyLabel)).toEqual(['NFS', 'LVM-Thin']);
+  });
+
   it('keeps dependency impact separate from healthy storage primary issues', () => {
     const records = buildStorageRecords({
       state: baseState(),

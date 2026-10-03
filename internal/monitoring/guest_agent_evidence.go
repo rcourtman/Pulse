@@ -39,7 +39,7 @@ func hasRecentGuestAgentEvidence(prev *models.VM, now time.Time) bool {
 
 func shouldQueryGuestAgent(vmStatus *proxmox.VMStatus, prev *models.VM, now time.Time) bool {
 	if vmStatus != nil {
-		return vmStatus.Agent.IsAvailable()
+		return vmStatus.Lock == "" && vmStatus.Agent.IsAvailable()
 	}
 	return hasRecentGuestAgentEvidence(prev, now)
 }

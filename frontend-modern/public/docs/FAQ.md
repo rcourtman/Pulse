@@ -118,30 +118,13 @@ discovery are disabled by default. See
 trust boundary and rollout checklist.
 
 ### I forgot my password. How do I reset it?
-**Docker**:
-```bash
-docker exec pulse rm /data/.env
-docker restart pulse
-# Access UI again. Pulse will require a bootstrap token for setup.
-# Get it with:
-docker exec pulse /app/pulse bootstrap-token
-```
-**Systemd**:
-Delete `/etc/pulse/.env` and restart the service. Pulse will require a bootstrap token for setup:
-
-```bash
-sudo pulse bootstrap-token
-```
-**Proxmox LXC** (installed from the Proxmox shell):
-Pulse runs inside the container, so run the same steps through `pct exec` on the Proxmox host. The binary needs its absolute path here, because `pct exec` runs with `PATH=/sbin:/bin:/usr/sbin:/usr/bin` and that does not include `/usr/local/bin`:
-
-```bash
-pct exec <ctid> -- rm /etc/pulse/.env
-pct exec <ctid> -- systemctl restart pulse
-pct exec <ctid> -- /usr/local/bin/pulse bootstrap-token
-```
-
-If you only missed the token during a fresh install (no password set yet), skip the first two commands and just read it back with the last one.
+Use the [password recovery guide](TROUBLESHOOTING.md#i-forgot-my-password).
+For the local administrator, update only the password in its active credential
+source, preserving the username, tokens, configuration and data; deleting `.env`
+is not a universal reset. The guide covers Docker, systemd and Proxmox LXC,
+including deployment overrides, private backups and verification. SSO login,
+temporary lockouts and a fresh install's missed bootstrap token need different
+steps; do not reset a working installation to retrieve that token.
 
 ### How do I enable HTTPS?
 Set `HTTPS_ENABLED=true` and provide `TLS_CERT_FILE` and `TLS_KEY_FILE` environment variables. See [Configuration](CONFIGURATION.md#-https--tls).

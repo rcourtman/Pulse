@@ -2248,8 +2248,8 @@ func (m *Monitor) wireExternalAlertCallbacks(wsHub *websocket.Hub) {
 			callback(alert)
 		}
 	})
-	m.alertManager.SetResolvedCallback(func(alertID string) {
-		m.handleAlertResolved(alertID)
+	m.alertManager.SetResolvedAlertCallback(func(resolved *alerts.ResolvedAlert) {
+		m.handleResolvedAlert(resolved)
 		// Don't broadcast full state here - it causes a cascade with many guests.
 		// The frontend gets updated alerts through the regular broadcast ticker.
 	})

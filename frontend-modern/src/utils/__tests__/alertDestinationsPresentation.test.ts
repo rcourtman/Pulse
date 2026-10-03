@@ -35,6 +35,9 @@ import {
   getAlertDestinationsDeliveryLogEmpty,
   getAlertDestinationsDeliveryLogTitle,
   getAlertDestinationsDeliveryLogUnavailable,
+  getAlertDestinationsDeliveryLogLoading,
+  getAlertDestinationsHeldEventsLoading,
+  getAlertDestinationsHeldEventsUnavailable,
   getAlertDestinationsTestPausedWarning,
   getAlertDestinationsAppriseTargetsHelp,
   getAlertDestinationsAppriseTestLabel,
@@ -265,6 +268,28 @@ describe('alert destinations delivery log copy', () => {
     expect(getAlertDestinationsDeliveryLogUnavailable()).toContain(
       'could not read the delivery log',
     );
+  });
+
+  it('distinguishes pending and unavailable activity sources without implying delivery failure', () => {
+    expect(getAlertDestinationsDeliveryLogLoading()).toBe('Loading delivery attempts...');
+    expect(getAlertDestinationsHeldEventsLoading()).toBe(
+      'Loading held and deferred notifications...',
+    );
+    expect(getAlertDestinationsHeldEventsUnavailable()).toBe(
+      'Pulse could not read held or deferred notifications. Refresh to try again.',
+    );
+    expect(getAlertDestinationsDeliveryLogUnavailable()).toBe(
+      'Pulse could not read the delivery log. Refresh to check delivery attempts.',
+    );
+    for (const message of [
+      getAlertDestinationsDeliveryLogLoading(),
+      getAlertDestinationsHeldEventsLoading(),
+      getAlertDestinationsHeldEventsUnavailable(),
+      getAlertDestinationsDeliveryLogUnavailable(),
+    ]) {
+      expect(message).not.toContain('No alert deliveries');
+      expect(message).not.toContain('not delivered');
+    }
   });
 
   it('warns that a passing test does not mean live alerts flow while delivery is paused', () => {

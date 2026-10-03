@@ -612,7 +612,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		Float64("value", value).
 		Bool("wasAcknowledged", existingAlert.Acknowledged).
 		Msg("Alert resolved with hysteresis")
-	m.safeCallResolvedAlertCallback(existingAlert, alertID, true)
+	m.safeCallResolvedAlertCallback(resolvedAlert, alertID, true)
 }
 
 func sanitizeAlertKey(label string) string {

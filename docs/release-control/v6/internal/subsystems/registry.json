@@ -4515,6 +4515,8 @@
         ".dockerignore",
         ".github/ISSUE_TEMPLATE/v6_rc_feedback.yml",
         ".github/scripts/check-demo-reachability.sh",
+        ".github/scripts/demo-runtime-transaction.py",
+        ".github/scripts/dispatch-demo-runtime.py",
         ".github/scripts/internal-api-test-seconds.txt",
         ".github/scripts/record-internal-api-test-seconds.py",
         ".github/scripts/recover-demo-runtime.sh",
@@ -4522,11 +4524,13 @@
         ".github/scripts/resolve-demo-runtime-profile.sh",
         ".github/scripts/select-internal-api-shard.sh",
         ".github/scripts/setup-demo-ssh.sh",
+        ".github/scripts/tests/demo_runtime_native.py",
         ".github/workflows/backfill-release-assets.yml",
         ".github/workflows/build-and-test.yml",
         ".github/workflows/build-release-candidate.yml",
         ".github/workflows/compile-release-payload.yml",
         ".github/workflows/create-release.yml",
+        ".github/workflows/demo-runtime-native.yml",
         ".github/workflows/dependency-advisory-watch.yml",
         ".github/workflows/deploy-demo-server.yml",
         ".github/workflows/helm-pages.yml",
@@ -5166,6 +5170,23 @@
               "scripts/installtests/agent_state_dir_lifecycle_test.go",
               "scripts/installtests/install_sh_test.go",
               "scripts/installtests/safe_profile_migration_test.go"
+            ]
+          },
+          {
+            "id": "demo-runtime-transaction",
+            "label": "demo shared-host transaction and retained recovery proof",
+            "match_prefixes": [],
+            "match_files": [
+              ".github/scripts/demo-runtime-transaction.py",
+              ".github/scripts/dispatch-demo-runtime.py",
+              ".github/scripts/tests/demo_runtime_native.py",
+              ".github/workflows/demo-runtime-native.yml"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              ".github/scripts/tests/test_demo_runtime_transaction.py",
+              "scripts/installtests/demo_transaction_test.go"
             ]
           }
         ],
@@ -5812,6 +5833,7 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/hooks/createNonSuspendingQuery.ts",
+              "frontend-modern/src/utils/apiAccessError.ts",
               "frontend-modern/src/utils/storageSummaryCache.ts"
             ],
             "allow_same_subsystem_tests": false,
@@ -5819,6 +5841,7 @@
             "exact_files": [
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx",
               "frontend-modern/src/hooks/__tests__/createNonSuspendingQuery.test.tsx",
+              "frontend-modern/src/utils/__tests__/apiAccessError.test.ts",
               "frontend-modern/src/utils/__tests__/storageSummaryCache.test.ts"
             ]
           },

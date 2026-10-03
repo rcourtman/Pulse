@@ -2150,6 +2150,30 @@ func calculateBackoff(attempt int) time.Duration {
 // these do not contribute to the pending-only return count.
 func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string) (int, error) {
 	alertIdentifiers = normalizeAlertIdentifiers(alertIdentifiers)
+	identifiers := make(map[string]struct{}, len(alertIdentifiers))
+	for _, id := range alertIdentifiers {
+		identifiers[id] = struct{}{}
+	}
+	return nq.cancelAlertNotifications(alertIdentifiers, func(alert *alerts.Alert) bool {
+		_, matched := identifiers[alert.ID]
+		return matched
+	})
+}
+
+// CancelByAlertOccurrence retires only the resolved occurrence's firing work.
+// Missing occurrence identity must never widen into ID-wide cancellation.
+// The same delivery gates, terminal-row handling and audit retention apply.
+func (nq *NotificationQueue) CancelByAlertOccurrence(alertID string, start time.Time) (int, error) {
+	alertID = strings.TrimSpace(alertID)
+	if alertID == "" || start.IsZero() {
+		return 0, nil
+	}
+	return nq.cancelAlertNotifications([]string{alertID}, func(alert *alerts.Alert) bool {
+		return alert.ID == alertID && alert.StartTime.Equal(start)
+	})
+}
+
+func (nq *NotificationQueue) cancelAlertNotifications(alertIdentifiers []string, matches func(*alerts.Alert) bool) (int, error) {
 	if len(alertIdentifiers) == 0 {
 		return 0, nil
 	}
@@ -2173,11 +2197,6 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 	rows, err := nq.db.Query(query)
 	if err != nil {
 		return 0, fmt.Errorf("failed to query notifications for cancellation: %w", err)
-	}
-
-	alertIdentifierSet := make(map[string]struct{})
-	for _, id := range alertIdentifiers {
-		alertIdentifierSet[id] = struct{}{}
 	}
 
 	type queuedAlertCancellation struct {
@@ -2244,7 +2263,7 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 				remainingAlerts = append(remainingAlerts, alert)
 				continue
 			}
-			if _, exists := alertIdentifierSet[alert.ID]; exists {
+			if matches(alert) {
 				matchedAlertCount++
 				if alert.OperationalRecord != nil && alert.LatestTransition != nil {
 					removedLinkKeys[alert.OperationalRecord.ID+"\x00"+alert.LatestTransition.ID] = struct{}{}

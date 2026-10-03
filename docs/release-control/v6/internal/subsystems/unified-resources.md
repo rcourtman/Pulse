@@ -23,6 +23,84 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Guest disk freshness presentation
+
+Existing workload disk evidence retains its source reason through the row,
+breakdown and Overview. `prev-` values are explicitly last-known, while a
+deferral with no previous disks explains the missing observation without a
+measured percentage. Lock/uncertain-completion deferrals must not become an
+install/restart recommendation. Human-readable Overview status remains visible
+without filesystem rows and is cleared by a same-identity fresh observation.
+The shared presentation and mounted regressions plus the production-component
+`browser-tests/guest-disk-deferral.cjs` fixture verify this client behaviour;
+they do not prove native QGA coordination, History freshness or delivery.
+
+
+### Narrow controller and backup summaries retain their source facts
+
+Kubernetes controller row expansions expose supplied kind-specific targets,
+counts, absolute timestamps, valid elapsed durations and namespace/cluster when
+responsive rows hide those columns. Missing facts are omitted and the ordinary
+pluralisation model handles singular targets. Job/CronJob timestamp regressions
+and the production composed-table browser fixture verify this existing summary.
+
+Proxmox Coverage uses latestBackup for completed independent backup evidence,
+with guest-local snapshots retained separately. Responsive backup-server, host
+and guest rows allocate space through existing canonical weighted-width helpers;
+archive format is presentation only, with the provider identifier retained in
+hover and search. The recovery-model, table and guest regressions plus desktop/
+phone browser rendering verify attribution, visible facts and source composition.
+These frontend improvements change no collector, API authority or native status.
+
+
+### Resource evidence fallback access boundaries
+
+When the existing resource-facet reader receives a final HTTP 401/403, its
+drawer must not substitute embedded snapshot events, counts, capabilities or
+relationships for the withdrawn response. A denied filtered read must not
+substitute the unfiltered bundle. Denial remains visible during that request's
+retry, and fresh success restores its evidence. Independently successful
+unfiltered reads retain their own ownership; this is not a global revocation
+broadcast. Transient failures still retain applicable snapshots, and compact
+snapshot-only rows still make no remote history reads.
+
+Failed change/action reads are unavailable, not “loaded” or empty. The Manage
+tab keeps a failed action read's retry visible even without retained rows,
+without changing the action client's existing unavailable-plan responses.
+The hook access tests and mounted ResourceDetailDrawer.history tests protect
+these boundaries; browser-tests/resource-evidence-access.cjs exercises the
+production drawer/client/CSS on desktop Chromium and dark touch WebKit. Its
+synthetic HTTP responses do not establish native authorisation, a reporter's
+cause, installed recovery or release availability.
+
+### Detail snapshot and selection ownership
+
+ResourceDetailDrawer reads the current resource through a reactive getter in
+its state, derived identity/telemetry and Overview consumers. Replacing a
+same-ID object must update the header, availability evidence and metrics target
+without remounting the drawer or discarding its selected History range. This
+also preserves the reconciled-store clients used by platform table rows.
+Transient loss of a same-resource metrics target withdraws its History panel
+and shows the existing unavailable notice; returning the target restores the
+selected tab. No target or alias is inferred to fill the gap.
+
+A different canonical ID disposes per-resource tabs, disclosures and outstanding
+reads before rendering the new resource. Late completions cannot become the
+new resource's facets or intelligence. Discovery source-key replacement does
+not retain a former target's identification while the next read is pending.
+Availability fleet selection stores an ID, not a clicked snapshot: the open
+drawer resolves that ID in the current fleet. Removing the selected check
+closes and clears its selection, including when the ID subsequently reappears.
+
+ResourceDetailDrawer.snapshot.test.tsx covers immutable and reconciled-store
+updates, target withdrawal/restoration, current availability and late facet
+completion. The existing History consumer guard and AvailabilityFleetView
+regressions protect composition. The production-components/browser client
+fixture browser-tests/drawer-snapshot.cjs exercises PBS History requests and
+availability selection on desktop Chromium and phone WebKit with synthetic
+snapshots. It proves no native appliance, release or installed recovery result.
+Resource identity, policy, permissions, collectors and persistence are unchanged.
+
 ### Canonical RAID configured-member evidence — issue #2369
 
 Host RAID metadata and read views retain optional `requiredDevices` (configured
@@ -551,6 +629,29 @@ about the same disk cannot diverge.
 144. `frontend-modern/src/features/vmware/VmwarePageSurface.tsx`
 
 ## Shared Boundaries
+
+### REST facets and container table projection
+
+The unified-resource REST mapper carries PMG metadata, per-source status,
+server action-readiness refusals and technology at the same top-level paths
+used by canonical websocket rows. Existing platformData compatibility paths
+remain; transport order must not decide whether mail counters or lifecycle
+refusal explanations are present. A replaced REST snapshot clears removed
+facets instead of retaining old counters or refusal reasons. Mapping does not
+invent capabilities or bypass planning, review, server authorisation or execution.
+`useUnifiedResources.test.ts` checks actual lifecycle refusal consumers for stale,
+failed and server-denied observations alongside a no-invented-grant control.
+
+The Docker phone container projection keeps identity, state when applicable,
+CPU, memory and update; restart counts remain in the existing detail expansion
+and return at mobile width. Images retain image, size and update verdict on
+phones; host and consumers stay reachable in detail. Hidden header/body columns
+are symmetric. Swarm rollout tokens render as words with raw state retained in
+the title; task starts use the shared relative-time primitive with their exact
+timestamp retained. Native table/model/guardrail tests and the production
+`browser-tests/proxmox-docker-rows.cjs` exercise these surfaces without executing
+a container action or claiming native appliance or release acceptance.
+
 
 ### PBS host history correlation
 

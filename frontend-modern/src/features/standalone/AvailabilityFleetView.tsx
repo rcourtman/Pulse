@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type Component } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, type Component } from 'solid-js';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 import { Button } from '@/components/shared/Button';
@@ -167,7 +167,15 @@ export const AvailabilityFleetView: Component<{
   probeAgentOptions?: readonly ProbeAgentOption[];
   onRetryHistory?: () => void;
 }> = (props) => {
-  const [selectedResource, setSelectedResource] = createSignal<Resource>();
+  const [selectedResourceId, setSelectedResourceId] = createSignal<string>();
+  const selectedResource = createMemo(() =>
+    props.resources.find((resource) => resource.id === selectedResourceId()),
+  );
+  // A removed check is no longer evidence for the open detail. Clear its
+  // selection as well, so a later reappearance cannot silently reopen it.
+  createEffect(() => {
+    if (selectedResourceId() && !selectedResource()) setSelectedResourceId(undefined);
+  });
   const resolveResourceLabel = (resourceId: string): string | undefined =>
     props.resources.find((resource) => resource.id === resourceId)?.name;
 
@@ -242,7 +250,7 @@ export const AvailabilityFleetView: Component<{
                 class="group min-w-0 rounded-md border border-border bg-surface p-3 text-left shadow-xs transition hover:border-blue-400/60 hover:bg-surface-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
                 aria-label={`Open details for ${resource.name}`}
                 data-availability-fleet-tile={resource.id}
-                onClick={() => setSelectedResource(resource)}
+                onClick={() => setSelectedResourceId(resource.id)}
               >
                 <div class="flex items-start justify-between gap-3">
                   <div class="min-w-0">
@@ -314,7 +322,7 @@ export const AvailabilityFleetView: Component<{
           <ResourceDetailDrawer
             resource={resource()}
             resolveResourceLabel={resolveResourceLabel}
-            onClose={() => setSelectedResource(undefined)}
+            onClose={() => setSelectedResourceId(undefined)}
           />
         )}
       </Show>

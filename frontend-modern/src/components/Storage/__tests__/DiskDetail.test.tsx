@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { DiskDetail } from '@/components/Storage/DiskDetail';
@@ -135,6 +135,33 @@ describe('DiskDetail', () => {
     expect(screen.getByText('Reallocated Sectors')).toBeInTheDocument();
   });
 
+  it('shows the health verdict and its reason in the drawer header', () => {
+    const disk = buildDisk();
+    disk.physicalDisk!.health = 'FAILED';
+
+    render(() => <DiskDetail disk={disk} nodes={[]} />);
+
+    const health = screen.getByTestId('disk-detail-health');
+    expect(within(health).getByText('Replace Now')).toHaveClass('text-red-700');
+    expect(within(health).getByText('Disk health has degraded to a critical state.')).toHaveClass(
+      'min-w-0',
+      'max-w-full',
+      'whitespace-normal',
+      'wrap-break-word',
+    );
+  });
+
+  it('keeps the drawer header to the verdict alone when the disk is healthy', () => {
+    const disk = buildDisk();
+    disk.physicalDisk!.health = 'PASSED';
+
+    render(() => <DiskDetail disk={disk} nodes={[]} />);
+
+    const health = screen.getByTestId('disk-detail-health');
+    expect(within(health).getByText('Healthy')).toBeInTheDocument();
+    expect(within(health).queryByText('No active disk-health issues.')).not.toBeInTheDocument();
+  });
+
   it('shows an explicit overview fallback when no detail readings are available', () => {
     const disk = buildDisk();
     delete disk.physicalDisk!.smart;
@@ -145,5 +172,18 @@ describe('DiskDetail', () => {
     expect(
       screen.getByText('Detailed SMART attributes are not available for this disk.'),
     ).toHaveAttribute('role', 'status');
+  });
+
+  it('offers the stored disk-family catalog when current SMART and temperature disappear', () => {
+    const disk = buildDisk();
+    delete disk.physicalDisk!.temperature;
+    delete disk.physicalDisk!.smart;
+    disk.physicalDisk!.collection = { io: { state: 'unsupported' } };
+    render(() => <DiskDetail disk={disk} nodes={[]} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+    expect(screen.getAllByTestId('history-chart').map((chart) => chart.textContent)).toEqual([
+      'disk:agent-tower:sda:smart_temp:24h',
+      'disk:agent-tower:sda:smart_reallocated_sectors:24h',
+    ]);
   });
 });

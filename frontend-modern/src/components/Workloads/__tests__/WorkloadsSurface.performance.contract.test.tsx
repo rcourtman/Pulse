@@ -1661,7 +1661,11 @@ describe('Workloads performance contract', () => {
       );
       expect(filesystemSectionSource).toContain("layout: 'stacked'");
       expect(filesystemSectionSource).toContain('wrap: true');
-      expect(guestDrawerOverviewSource.match(/layout: 'stacked'/g)).toHaveLength(1);
+      // Both filesystem paths and their longer freshness explanation need
+      // the card's full width. Do not couple that layout to a global count.
+      expect(guestDrawerOverviewSource).toContain(
+        "makeDetailRow('Status', diskStatusMessage, { layout: 'stacked', wrap: true })",
+      );
 
       expect(guestDrawerOverviewSource).toContain('TechnicalDetailsSection');
       expect(nodeDrawerOverviewSource).toContain('TechnicalDetailsSection');

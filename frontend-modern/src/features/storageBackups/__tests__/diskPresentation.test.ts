@@ -19,9 +19,11 @@ import {
   PHYSICAL_DISK_TABLE_CLASS,
   PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS,
   getPhysicalDiskEmptyStatePresentation,
-  getPhysicalDiskColumnWidthPercent,
+  getPhysicalDiskCellPaddingClass,
+  getPhysicalDiskColumnWidthStyle,
   getPhysicalDiskCollectionMessages,
   getPhysicalDiskFieldStatusMessage,
+  getPhysicalDiskHealthCompactLabel,
   getPhysicalDiskHealthStatus,
   getPhysicalDiskHealthSummary,
   getPhysicalDiskHostLabel,
@@ -158,14 +160,55 @@ describe('diskPresentation', () => {
         ),
       ),
     ).toBe(true);
-    expect(getPhysicalDiskColumnWidthPercent('compact', 'disk')).toBe(33);
-    expect(getPhysicalDiskColumnWidthPercent('compact', 'size')).toBe(14);
-    expect(getPhysicalDiskColumnWidthPercent('operational', 'life')).toBe(9);
-    expect(getPhysicalDiskColumnWidthPercent('compact', 'device')).toBe(0);
+    expect(getPhysicalDiskColumnWidthStyle('compact', 'disk')).toEqual({ width: '34%' });
+    expect(getPhysicalDiskColumnWidthStyle('compact', 'temp')).toEqual({ width: '12%' });
+    expect(getPhysicalDiskColumnWidthStyle('compact', 'size')).toEqual({ width: '15%' });
+    expect(getPhysicalDiskColumnWidthStyle('operational', 'life')).toEqual({ width: '9%' });
+    expect(getPhysicalDiskColumnWidthStyle('compact', 'device')).toEqual({ width: '0%' });
     expect(isPhysicalDiskColumnVisible('narrow', 'life')).toBe(false);
     expect(isPhysicalDiskColumnVisible('narrow', 'temp')).toBe(true);
-    expect(getPhysicalDiskColumnWidthPercent('narrow', 'disk')).toBe(40);
-    expect(getPhysicalDiskColumnWidthPercent('narrow', 'size')).toBe(15);
+    expect(getPhysicalDiskColumnWidthStyle('narrow', 'disk')).toEqual({ width: '41%' });
+    expect(getPhysicalDiskColumnWidthStyle('narrow', 'temp')).toEqual({ width: '12%' });
+    expect(getPhysicalDiskColumnWidthStyle('narrow', 'size')).toEqual({ width: '16%' });
+  });
+
+  it('keeps the desktop disk column widths on the canonical weighted helper', () => {
+    const columns = [
+      'disk',
+      'device',
+      'host',
+      'role',
+      'parent',
+      'health',
+      'life',
+      'temp',
+      'size',
+    ] as const;
+    expect(columns.map((column) => getPhysicalDiskColumnWidthStyle('full', column).width)).toEqual([
+      '19%',
+      '9%',
+      '10%',
+      '8%',
+      '12%',
+      '17%',
+      '6%',
+      '7%',
+      '12%',
+    ]);
+  });
+
+  it('sheds the shared cell padding only on the phone disk layouts', () => {
+    expect(getPhysicalDiskCellPaddingClass('narrow')).toBe('px-1!');
+    expect(getPhysicalDiskCellPaddingClass('compact')).toBe('px-1!');
+    expect(getPhysicalDiskCellPaddingClass('basic')).toBe('');
+    expect(getPhysicalDiskCellPaddingClass('full')).toBe('');
+  });
+
+  it('shortens only the health words that cannot fit a phone health column', () => {
+    expect(getPhysicalDiskHealthCompactLabel('Needs Attention')).toBe('Attention');
+    expect(getPhysicalDiskHealthCompactLabel('Replace Now')).toBe('Replace');
+    expect(getPhysicalDiskHealthCompactLabel('Healthy')).toBe('Healthy');
+    expect(getPhysicalDiskHealthCompactLabel('Unknown')).toBe('Unknown');
   });
 
   it('detects SMART warnings from counters', () => {

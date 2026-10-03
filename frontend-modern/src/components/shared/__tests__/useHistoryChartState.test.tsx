@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSignal } from 'solid-js';
 import { cleanup, render } from '@solidjs/testing-library';
 import { ChartsAPI } from '@/api/charts';
+import { eventBus } from '@/stores/events';
 import type { HistoryChartProps } from '../historyChartModel';
 import { useHistoryChartState, type HistoryChartState } from '../useHistoryChartState';
 
@@ -216,4 +217,162 @@ describe('History request ownership', () => {
     expect(request).toHaveBeenCalledTimes(1);
     expect(state.data()).toEqual([]);
   });
+});
+
+describe('History organisation ownership', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    request.mockReset();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('withdraws loaded readings, provenance and inspection before reading the same target in a new org', async () => {
+    request.mockResolvedValueOnce({ points: points(42), source: 'memory' } as never);
+    const { state } = mount();
+    await settle();
+    state.handleFocus();
+    expect(state.data()).toEqual(points(42));
+    expect(state.keyboardInspecting()).toBe(true);
+    const next = deferred();
+    request.mockReturnValueOnce(next.promise);
+    eventBus.emit('org_switched', 'org-b');
+    expect(state.data()).toEqual([]);
+    expect(state.source()).toBeNull();
+    expect(state.keyboardInspecting()).toBe(false);
+    expect(state.hoveredPoint()).toBeNull();
+    expect(state.loading()).toBe(true);
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1][0]).toMatchObject({
+      resourceType: 'agent',
+      resourceId: 'a',
+      metric: 'cpu',
+      range: '1h',
+    });
+    next.resolve({ points: points(80), source: 'store' } as never);
+    await settle();
+    expect(state.data()).toEqual(points(80));
+    expect(state.source()).toBe('store');
+    expect(state.keyboardInspecting()).toBe(false);
+  });
+
+  it.each(['success', 'failure'])(
+    'aborts a pre-switch request and ignores its late %s without settling the new request',
+    async (completion) => {
+      const old = deferred(),
+        current = deferred();
+      request.mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
+      const { state } = mount();
+      const oldSignal = request.mock.calls[0][0].signal!;
+      eventBus.emit('org_switched', 'org-b');
+      expect(oldSignal.aborted).toBe(true);
+      expect(request).toHaveBeenCalledTimes(2);
+      if (completion === 'success') old.resolve({ points: points(42), source: 'memory' } as never);
+      else old.reject(Object.assign(new Error('old org denied'), { status: 403 }));
+      await settle();
+      expect(state.loading()).toBe(true);
+      expect(state.data()).toEqual([]);
+      expect(state.error()).toBeNull();
+      current.resolve({ points: points(80), source: 'store' } as never);
+      await settle();
+      expect(state.loading()).toBe(false);
+      expect(state.data()).toEqual(points(80));
+      expect(state.error()).toBeNull();
+    },
+  );
+
+  it("does not retain another org's successful result when the new read fails", async () => {
+    request.mockResolvedValueOnce({ points: points(42), source: 'store' } as never);
+    const { state } = mount();
+    await settle();
+    request.mockRejectedValueOnce(new Error('new org unavailable'));
+    eventBus.emit('org_switched', 'org-b');
+    await settle();
+    expect(state.data()).toEqual([]);
+    expect(state.source()).toBeNull();
+    expect(state.error()).toBe('Failed to load history data');
+    expect(state.refreshFailed()).toBe(false);
+  });
+
+  it('replaces polling ownership on repeated switches and removes the subscription on disposal', async () => {
+    request.mockResolvedValue({ points: points(80), source: 'store' } as never);
+    const { state, unmount } = mount();
+    await settle();
+    eventBus.emit('org_switched', 'org-b');
+    await settle();
+    eventBus.emit('org_switched', 'org-c');
+    await settle();
+    expect(request).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(request).toHaveBeenCalledTimes(4);
+    expect(state.data()).toEqual(points(80));
+    unmount();
+    eventBus.emit('org_switched', 'org-d');
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(request).toHaveBeenCalledTimes(4);
+  });
+
+  it('preserves caller-owned supplied samples and does not fetch locked or missing targets on a switch', async () => {
+    request.mockReturnValueOnce(deferred().promise);
+    const view = mount();
+    view.change({ data: points(42) });
+    const initialCalls = request.mock.calls.length;
+    eventBus.emit('org_switched', 'org-b');
+    expect(view.state.data()).toEqual(points(42));
+    expect(view.state.source()).toBe('live');
+    view.change({ data: undefined, range: '90d' });
+    eventBus.emit('org_switched', 'org-c');
+    expect(view.state.isLocked()).toBe(true);
+    expect(view.state.data()).toEqual([]);
+    view.change({ range: '1h', resourceId: '' });
+    eventBus.emit('org_switched', 'org-d');
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(request).toHaveBeenCalledTimes(initialCalls);
+  });
+});
+
+describe('History access errors', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    request.mockReset();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+  it.each([
+    [401, 'Sign in again or check your API token.'],
+    [403, 'Access denied. Check your permissions and license plan.'],
+  ])(
+    'withdraws stored samples and source on status %s until a successful read',
+    async (status, message) => {
+      request.mockResolvedValueOnce({ points: points(42), source: 'store' } as never);
+      const { state } = mount();
+      await settle();
+      request.mockRejectedValueOnce(
+        Object.assign(new Error('private transport detail'), { status }),
+      );
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(state.data()).toEqual([]);
+      expect(state.source()).toBeNull();
+      expect(state.refreshFailed()).toBe(false);
+      expect(state.error()).toBe(message);
+      const retry = deferred();
+      request.mockReturnValueOnce(retry.promise);
+      vi.advanceTimersByTime(10_000);
+      expect(state.data()).toEqual([]);
+      expect(state.error()).toBe(message);
+      retry.resolve({ points: points(12), source: 'store' } as never);
+      await settle();
+      expect(state.data()).toEqual(points(12));
+      expect(state.error()).toBeNull();
+      expect(state.source()).toBe('store');
+    },
+  );
 });
