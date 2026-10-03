@@ -38,7 +38,8 @@ if not attempt.exists():
             os.chmod(attempt / name, 0o600)
             stream.write(data); stream.flush(); os.fsync(stream.fileno())
     # Intent is durable before starting the unit. An uncertain launch is never replayed.
-    dfd = os.open(attempt, os.O_DIRECTORY); os.fsync(dfd); os.close(dfd)
+    for directory in (attempt, root / 'attempts', root, root.parent):
+        dfd = os.open(directory, os.O_DIRECTORY); os.fsync(dfd); os.close(dfd)
     try:
         child = subprocess.run(['systemd-run', '--quiet', '--collect',
                                 '--unit=pulse-demo-' + identity[:32],
@@ -53,6 +54,7 @@ if not attempt.exists():
     with open(attempt / 'launch.json', 'x') as stream:
         os.chmod(attempt / 'launch.json', 0o600)
         json.dump(launch, stream); stream.flush(); os.fsync(stream.fileno())
+    dfd = os.open(attempt, os.O_DIRECTORY); os.fsync(dfd); os.close(dfd)
 os.close(fd)
 # Closing or losing this observer never stops the independently owned unit.
 deadline = time.monotonic() + 4000

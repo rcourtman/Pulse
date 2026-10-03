@@ -4524,11 +4524,13 @@
         ".github/scripts/resolve-demo-runtime-profile.sh",
         ".github/scripts/select-internal-api-shard.sh",
         ".github/scripts/setup-demo-ssh.sh",
+        ".github/scripts/tests/demo_runtime_native.py",
         ".github/workflows/backfill-release-assets.yml",
         ".github/workflows/build-and-test.yml",
         ".github/workflows/build-release-candidate.yml",
         ".github/workflows/compile-release-payload.yml",
         ".github/workflows/create-release.yml",
+        ".github/workflows/demo-runtime-native.yml",
         ".github/workflows/dependency-advisory-watch.yml",
         ".github/workflows/deploy-demo-server.yml",
         ".github/workflows/helm-pages.yml",
@@ -5176,7 +5178,9 @@
             "match_prefixes": [],
             "match_files": [
               ".github/scripts/demo-runtime-transaction.py",
-              ".github/scripts/dispatch-demo-runtime.py"
+              ".github/scripts/dispatch-demo-runtime.py",
+              ".github/scripts/tests/demo_runtime_native.py",
+              ".github/workflows/demo-runtime-native.yml"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],

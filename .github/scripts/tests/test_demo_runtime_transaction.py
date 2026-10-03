@@ -22,6 +22,7 @@ def load(name, filename):
 
 engine = load("demo_transaction", "demo-runtime-transaction.py")
 dispatcher = load("demo_dispatcher", "dispatch-demo-runtime.py")
+native = load("demo_native", "tests/demo_runtime_native.py")
 
 
 def request(mode="recover"):
@@ -181,6 +182,13 @@ class TransactionTest(unittest.TestCase):
         self.assertEqual(receipt["status"], "committed")
         self.assertEqual(receipt["forward"]["elapsed_seconds"], 300)
         self.assertEqual(receipt["forward"]["samples"], 61)
+        self.assertEqual(receipt["baseline_services"]["pulse"]["MainPID"], "100")
+        self.assertEqual(receipt["forward"]["initial_services"], receipt["forward"]["last_services"])
+        self.assertEqual(receipt["forward"]["observed_version"], "6.4.5")
+        self.assertEqual(self.host.install_count, 0)
+        for name in ("binary", "unit", "dropins"):
+            self.assertEqual(engine.estate_hash({name: self.paths[name]}),
+                             engine.estate_hash({name: self.attempt / "snapshot" / name}))
         self.assertEqual((self.paths["data"] / "alerts/events.db").read_bytes(), b"synthetic opaque persistent file")
         self.assertTrue((self.attempt / "snapshot/data/persisted-history").exists())
         self.assertNotIn("not-logged", json.dumps(receipt))
@@ -387,6 +395,13 @@ class InputAndCommandTest(unittest.TestCase):
             host.check_journal(cursors)
         self.assertEqual(cursors, {"pulse": "d"})
 
+    def test_available_empty_journal_window_has_no_non_json_header(self):
+        host = engine.Host(); cursors = {"pulse": "c"}
+        with patch.object(host, "command", return_value="") as command:
+            host.check_journal(cursors)
+        self.assertIn("--quiet", command.call_args.args[0])
+        self.assertEqual(cursors, {"pulse": "c"})
+
     def test_no_journal_cursor_and_malformed_service_state_fail_closed(self):
         host = engine.Host()
         with patch.object(host, "command", return_value=""):
@@ -444,6 +459,41 @@ class DispatchLifecycleTest(unittest.TestCase):
                 self.assertEqual(attempt.stat().st_mode & 0o777, 0o700)
                 if uncertain:
                     self.assertEqual(json.loads((attempt / "launch.json").read_text())["state"], "uncertain")
+
+
+class NativeAdmissionTest(unittest.TestCase):
+    def test_native_driver_refuses_wrong_context_before_any_service_command(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result_path = Path(directory) / "result.json"
+            existing = Path(directory) / "existing-estate"
+            existing.mkdir()
+            cases = [(1000, "true", "github-hosted", []),
+                     (0, "false", "github-hosted", []),
+                     (0, "true", "self-hosted", []),
+                     (0, "true", "github-hosted", [existing])]
+            for uid, actions, environment, estate in cases:
+                with self.subTest(uid=uid, actions=actions, environment=environment, occupied=bool(estate)), \
+                     patch.object(native, "RESULT", result_path), patch.object(native, "OWNED", estate), \
+                     patch.object(os, "geteuid", return_value=uid), \
+                     patch.dict(os.environ, {"GITHUB_ACTIONS": actions, "RUNNER_ENVIRONMENT": environment}), \
+                     patch.object(native.socket, "gethostname", return_value="disposable-fixture"), \
+                     patch.object(native, "command", side_effect=AssertionError("must not execute a service command")) as command:
+                    self.assertEqual(native.main(), 1)
+                    command.assert_not_called()
+                    result = json.loads(result_path.read_text())
+                    self.assertFalse(result["passed"])
+                    self.assertFalse(result["cleanup_complete"])
+                    self.assertFalse(result["signed_published_installer_acceptance"])
+                    self.assertEqual(result["failure_code"], "not-an-empty-disposable-public-ci-runner")
+            self.assertTrue(existing.is_dir())
+
+    def test_synthetic_changed_executable_and_data_are_distinct_between_steps(self):
+        compile(native.binary("1.0.1"), "fixture-runtime", "exec")
+        compile(native.installer("1.0.1"), "fixture-installer", "exec")
+        self.assertNotEqual(native.binary("1.0.1"), native.binary("1.0.2", 55))
+        self.assertIn(b"candidate data 1.0.1", native.installer("1.0.1"))
+        self.assertIn(b"candidate data 1.0.2", native.installer("1.0.2", 55))
+        self.assertNotIn(b"curl", native.fixture_installer("1.0.1"))
 
 
 if __name__ == "__main__":

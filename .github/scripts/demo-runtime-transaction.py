@@ -224,7 +224,7 @@ class Host:
 
     def check_journal(self, cursors):
         for service, cursor in cursors.items():
-            text = self.command(["journalctl", "-u", service, "--after-cursor", cursor, "--output=json", "--no-pager"])
+            text = self.command(["journalctl", "-u", service, "--after-cursor", cursor, "--output=json", "--quiet", "--no-pager"])
             for line in text.splitlines():
                 try:
                     entry = json.loads(line)
@@ -335,13 +335,16 @@ class Transaction:
         baseline = self.host.state()
         started = self.host.now()
         evidence = self.receipt[phase]
-        evidence.update({"required_seconds": WINDOW, "samples": 0, "elapsed_seconds": 0})
+        evidence.update({"required_seconds": WINDOW, "samples": 0, "elapsed_seconds": 0,
+                         "initial_services": baseline})
         while True:
             self.host.check_journal(cursors)
             state = self.host.state()
+            evidence["last_services"] = state
             if state != baseline or not self.healthy(state):
                 raise Failure("sustained-health")
-            if self.host.version(self.request["local_url"]) != expected_version:
+            evidence["observed_version"] = self.host.version(self.request["local_url"])
+            if evidence["observed_version"] != expected_version:
                 raise Failure("runtime-version")
             evidence["samples"] += 1
             elapsed = self.host.now() - started
@@ -411,6 +414,8 @@ class Transaction:
             elif self.request["mode"] == "update":
                 raise Failure("update-baseline-unhealthy")
             self.receipt["healthy_baseline"] = healthy_baseline
+            self.receipt["baseline_services"] = states
+            self.receipt["baseline_version"] = original_version
             old_handlers = {sig: signal.getsignal(sig) for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP)}
             for sig in old_handlers:
                 signal.signal(sig, cancel)

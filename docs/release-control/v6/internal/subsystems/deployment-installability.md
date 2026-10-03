@@ -45,6 +45,19 @@ session. These connected source controls do not establish native systemd,
 signed installed forward/reverse acceptance, ingress enforcement or customer
 recovery. See [demo transaction acceptance](../DEMO_RUNTIME_TRANSACTION.md).
 
+The secret-free public `demo-runtime-native.yml` checks the exact PR/push source
+on a fresh hosted runner, using actual systemd and Caddy with disposable TLS and
+synthetic executable/data fixtures. Its two real-window cases exercise a
+changed executable, a 55-second delayed synthetic failure, observer loss and
+TERM during full restoration. It records original/fixture source identities,
+actual bounded service observations and cleanup; a missing or failed record is
+not acceptance. Only the fixed Relay health URL is rebound to that fixture.
+This neither exercises a signed published installer nor proves customer or
+production recovery. The driver refuses a non-empty or non-disposable estate
+before service operations. Neither this driver nor worker source tests install
+host policy. Production activation still requires independent review and the
+operational owner's acceptance of the native result and published-source path.
+
 ### Superseded pull request validation
 
 Build and Test and Core E2E cancel an older run for the same pull request when

@@ -57,3 +57,37 @@ func TestDemoTransactionKeepsSignedAdmissionAndVerificationOnlyReadOnly(t *testi
 		t.Fatal("recovery must validate and retain the actual terminal observation")
 	}
 }
+
+func TestDemoNativeAcceptanceIsSecretFreeDisposableAndKeepsRealWindows(t *testing.T) {
+	data, err := os.ReadFile(repoFile(".github", "workflows", "demo-runtime-native.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, required := range []string{
+		"pull_request:", "branches: [main]", "contents: read", "runs-on: ubuntu-24.04", "timeout-minutes: 35",
+		"persist-credentials: false", "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+		"demo_runtime_native.py", "if: always()", "demo-native-result.json", "if-no-files-found: error",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("lost disposable native CI/source or terminal-receipt boundary: %s", required)
+		}
+	}
+	for _, forbidden := range []string{"secrets.", "pull_request_target", "self-hosted", "contents: write", "id-token: write"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("native fixture gained credentials, privileged trigger or non-disposable target: %s", forbidden)
+		}
+	}
+	driver, err := os.ReadFile(repoFile(".github", "scripts", "tests", "demo_runtime_native.py"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"not-an-empty-disposable-public-ci-runner", "dispatcher.BOOTSTRAP", "proc.terminate()", "--signal=TERM", "original_engine_sha256", "fixture_engine_sha256", "cleanup_complete", "signed_published_installer_acceptance", "elapsed_seconds\"] >= 300"} {
+		if !strings.Contains(string(driver), required) {
+			t.Fatalf("lost native fixture observation or limitation: %s", required)
+		}
+	}
+	if strings.Contains(string(driver), "WINDOW =") || strings.Contains(string(driver), "time.monotonic =") || strings.Contains(string(driver), "time.sleep =") {
+		t.Fatal("native acceptance must not shorten production windows or replace real clocks")
+	}
+}

@@ -44,6 +44,21 @@ recovery, headroom refusal, shared-lock contention, source mismatch, journal
 failure, cohost restart, source-bound repeated/lost submission and no-op proof.
 The production window is not shortened. This is **not native acceptance**.
 
+`demo-runtime-native.yml` now carries the next executable acceptance rather
+than requiring a worker to obtain system mode: exact PR/main source, a fresh
+secret-free public hosted runner, actual systemd/Caddy and disposable trusted
+TLS. The successful changed-executable step observes the full 300 seconds. A
+different executable and data then fail at 55 seconds; the original observer
+is lost, the same retained request observes its child without replay, TERM is
+sent during restoration, and the old executable/data must return through a
+full real-clock recovery window. Sanitised artifacts bind control/driver/
+engine/bootstrap identity, service PID/restart observations and cleanup. The
+fixture rebinds only Relay's fixed health URL to its local Caddy endpoint; the
+original and fixture hashes remain distinct. This is a synthetic installer,
+not signed published-installer or customer acceptance. Its source exists;
+**no native pass is asserted by this document**. Read the exact-head terminal
+job and artifact before judging that result.
+
 Before treating this route as restored, the exact reviewed source must return
 native disposable systemd/SSH-loss receipts and signed published-installer
 forward/reverse data/identity results. Then reconcile actual demo workflow and
