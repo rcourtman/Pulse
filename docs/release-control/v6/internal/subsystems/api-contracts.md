@@ -11077,14 +11077,6 @@ boundaries and failures; `infrastructureAgentDoctorModel.test.ts` exercises the
 real lifecycle closures. These are modelled installer/privilege probes, not
 native system installation or publication.
 
-### Pulse Mobile pairing readiness wording
-
-The onboarding readiness diagnostics for a disabled or unconnected relay name
-the renamed Settings > Pulse Mobile section instead of Remote Access. Codes,
-severities and the response shape are unchanged. The API reference heading
-for the relay protocol records that Pulse Mobile retires on 31 March 2027, and
-the published copy stays identical to `docs/API.md`.
-
 ### AI usage export carries prompt-cache buckets
 
 `GET /api/ai/cost/export` now includes `cache_creation_input_tokens` and
@@ -11097,3 +11089,19 @@ unchanged; the chat service adapter passes the same buckets through the
 Patrol stream response without changing its request shape.
 `ai_handlers_more_test.go` covers the export in both formats with a cached
 Anthropic event.
+
+### Pulse Mobile pairing readiness wording
+
+The onboarding readiness diagnostics for a disabled or unconnected relay name
+the renamed Settings > Pulse Mobile section instead of Remote Access. Codes,
+severities and the response shape are unchanged. The API reference heading
+for the relay protocol records that Pulse Mobile retires on 31 March 2027, and
+the published copy stays identical to `docs/API.md`.
+
+### Patrol attention detail header pinning
+
+Pinning the Patrol attention detail header on phones
+(`frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx`) is a
+layout-only change. It reads no new attention fields, sends no new request,
+and leaves the attention projection, lifecycle, and queue ordering contracts
+above unchanged.
