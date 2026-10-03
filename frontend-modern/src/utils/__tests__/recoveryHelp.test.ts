@@ -42,6 +42,24 @@ describe('recovery help', () => {
     expect(target.querySelector('#backup-safety')?.textContent).toBe('Backup safety');
   });
 
+  it('resolves safe issue reporting to the actual troubleshooting heading', () => {
+    const rendered = document.createElement('article');
+    rendered.innerHTML = renderDocMarkdown(guide, 'RECOVERY');
+    const link = rendered.querySelector<HTMLAnchorElement>('a[href^="/docs/TROUBLESHOOTING#"]');
+    expect(link?.textContent).toBe('safe issue reporting');
+    expect(link?.hasAttribute('data-doc-link')).toBe(true);
+    const destination = new URL(link!.getAttribute('href')!, 'https://pulse.example.invalid');
+    expect(destination.pathname).toBe('/docs/TROUBLESHOOTING');
+    expect(destination.hash).not.toBe('');
+
+    const target = document.createElement('article');
+    target.innerHTML = renderDocMarkdown(read('docs/TROUBLESHOOTING.md'), 'TROUBLESHOOTING');
+    const heading = [...target.querySelectorAll('h2')].find(
+      (element) => element.id === decodeURIComponent(destination.hash.slice(1)),
+    );
+    expect(heading?.textContent).toBe('🆘 Getting Help');
+  });
+
   it('documents actual point filters and an example the handlers consume', () => {
     const handlers = read('internal/api/recovery_handlers.go');
     const model = read('internal/recovery/model/types.go');
