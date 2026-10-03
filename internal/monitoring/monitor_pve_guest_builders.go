@@ -58,6 +58,12 @@ func (m *Monitor) applyVMStatusDetails(
 		return
 	}
 
+	if res.Lock != "" {
+		copy := *status
+		copy.Lock = res.Lock
+		status = &copy
+	}
+	res.Lock = status.Lock
 	state.detailedStatus = status
 	state.guestAgentStatus, state.guestAgentExpected = vmGuestAgentRuntimeState(status, recentGuestAgentEvidence)
 	state.memTotal, state.memUsed, state.memorySource = m.resolveGuestStatusMemory(
@@ -110,6 +116,9 @@ func (m *Monitor) applyVMStatusDetails(
 		)
 		if len(fsDisks) > 0 {
 			state.individualDisks = fsDisks
+		}
+		if guestAgentDiskDeferred(state.diskStatusReason) {
+			state.guestAgentStatus = "deferred"
 		}
 	} else {
 		// Agent disabled - show allocated disk size
@@ -171,6 +180,9 @@ func mergeVMRuntimeCounters(state *vmBuildState, status *proxmox.VMStatus) {
 func vmGuestAgentRuntimeState(status *proxmox.VMStatus, recentGuestAgentEvidence bool) (string, bool) {
 	if status == nil {
 		return "", false
+	}
+	if status.Lock != "" {
+		return "deferred", status.Agent.IsEnabled()
 	}
 	if status.Agent.IsAvailable() {
 		return "available", true
@@ -265,10 +277,13 @@ func (m *Monitor) buildVMFromClusterResource(
 				Msg("Could not get VM status, using cluster/resources disk data")
 		}
 
+		if state.detailedStatus != nil && state.detailedStatus.Lock != "" {
+			res.Lock = state.detailedStatus.Lock
+		}
 		now := time.Now()
 		guestAgentAvailable := shouldQueryGuestAgent(state.detailedStatus, prevVM, now) ||
 			m.hasRecentGuestMetadataEvidence(instanceName, res.Node, res.VMID, now)
-		if guestAgentAvailable && state.detailedStatus == nil {
+		if guestAgentAvailable && res.Lock == "" && state.detailedStatus == nil {
 			guestIPs, guestIfaces, guestOSName, guestOSVersion, guestAgentVersion := m.fetchGuestAgentMetadata(
 				ctx,
 				client,
@@ -308,9 +323,28 @@ func (m *Monitor) buildVMFromClusterResource(
 			if len(fsDisks) > 0 {
 				state.individualDisks = fsDisks
 			}
+			if guestAgentDiskDeferred(state.diskStatusReason) {
+				state.guestAgentStatus = "deferred"
+			}
 			state.guestAgentExpected = true
-			if len(guestIPs) > 0 || len(guestIfaces) > 0 || guestOSName != "" || guestOSVersion != "" || guestAgentVersion != "" || state.diskFromAgent {
+			if state.guestAgentStatus != "deferred" && (len(guestIPs) > 0 || len(guestIfaces) > 0 || guestOSName != "" || guestOSVersion != "" || guestAgentVersion != "" || state.diskFromAgent) {
 				state.guestAgentStatus = "available"
+			}
+		}
+
+		if res.Lock != "" {
+			state.guestAgentStatus = "deferred"
+			state.diskStatusReason = "vm-locked"
+			state.diskFromAgent = false
+			state.diskUsage = -1
+			if guestMemorySourceReliability(state.memorySource) == guestMemoryReliabilityLow {
+				state.memorySource = "unavailable"
+				state.memUsed = 0
+			}
+			if prevVM != nil {
+				state.ipAddresses = cloneStringSlice(prevVM.IPAddresses)
+				state.networkInterfaces = cloneGuestNetworkInterfaces(prevVM.NetworkInterfaces)
+				state.osName, state.osVersion, state.agentVersion = prevVM.OSName, prevVM.OSVersion, prevVM.AgentVersion
 			}
 		}
 
@@ -449,6 +483,7 @@ func (m *Monitor) buildVMFromClusterResource(
 		Disks:              state.individualDisks,
 		DiskStatusReason:   state.diskStatusReason,
 		GuestAgentStatus:   state.guestAgentStatus,
+		Lock:               res.Lock,
 		GuestAgentExpected: state.guestAgentExpected,
 		IPAddresses:        state.ipAddresses,
 		OSName:             state.osName,
@@ -531,6 +566,9 @@ type vmFSInfoSummary struct {
 }
 
 func (m *Monitor) fetchVMFSInfo(ctx context.Context, instanceName string, res proxmox.ClusterResource, client PVEClientInterface) ([]proxmox.VMFileSystem, string, bool) {
+	if res.Lock != "" {
+		return nil, "vm-locked", false
+	}
 	// Use retry logic for guest agent calls to handle transient timeouts (refs #630)
 	fsInfoRaw, err := m.retryGuestAgentCall(ctx, m.guestAgentFSInfoTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
 		return client.GetVMFSInfo(ctx, res.Node, res.VMID)
@@ -542,6 +580,9 @@ func (m *Monitor) fetchVMFSInfo(ctx context.Context, instanceName string, res pr
 		}
 	}
 	if err != nil {
+		if reason := proxmox.GuestAgentDeferredReason(err); reason != "" {
+			return nil, reason, false
+		}
 		// Log more helpful error messages based on the error type
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "500") || strings.Contains(errMsg, "QEMU guest agent is not running") {
@@ -846,4 +887,12 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 		Msg("Guest agent provided filesystem info but no usable filesystems found (all were special mounts)")
 
 	return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil, false, "special-filesystems-only"
+}
+
+func guestAgentDiskDeferred(reason string) bool {
+	switch strings.TrimPrefix(reason, "prev-") {
+	case "vm-locked", "lock-unverified", "agent-busy", "agent-cooldown", "agent-capacity", "agent-timeout", "agent-response-incomplete":
+		return true
+	}
+	return false
 }
