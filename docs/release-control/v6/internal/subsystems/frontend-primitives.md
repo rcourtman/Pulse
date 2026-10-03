@@ -68,6 +68,35 @@ guidance and existing touch/keyboard collapse. Synthetic observations establish
 presentation, not native task success, archive restorability, QGA/thaw or release
 availability; those require their own containing native and delivery evidence.
 
+### Independent backup inventory read ownership
+
+PVE files/snapshots/tasks and PBS inventory have independent, non-suspending
+read owners on the existing Backups page. A pending or failed source is not an
+empty successful inventory. Keep the other source's readable artifacts, filters
+and server health usable; name the missing source beside the evidence, mark
+restore-point totals as incomplete and retry only that source. If neither source
+can be read, the shared error action retries both. An initial pending read must
+not show “No backups yet” or a measured zero PBS count. Only a fulfilled empty
+PBS inventory establishes a zero count.
+
+Pending retries retain independently readable evidence. A settled failed read
+withdraws that source's artifacts and counts until it recovers, without clearing
+the other source or inferring server-owned protection posture. A retry remains
+disabled and its previous warning visible while pending. Organisation switches
+withdraw prior inventory, replace/abort the read owners and refetch in the new
+API context; late responses cannot repopulate old evidence. Disposal aborts
+reads and removes subscriptions. This uses the existing query lifecycle, without
+new inventory polling or a remount cache.
+
+Verification: mounted `ProxmoxBackupsTable.test.tsx` covers source pending,
+partial/both-source failure, isolated retry, fulfilled empty counts, 401/403,
+organisation replacement, late response and disposal. Production component,
+router, API adapter and stylesheet fixture `browser-tests/backup-inventory.cjs`
+checks desktop Chromium and touch WebKit recovery, warning readability, keyboard
+or touch retry, source isolation and actual new organisation headers. Synthetic
+HTTP results establish frontend truthfulness/lifecycle, not native PBS/PVE
+permission, archive restorability, guest thaw or released availability.
+
 
 ### Composed operator tables and conservative rollback consent
 

@@ -21,6 +21,26 @@
 
 ## Purpose
 
+### Partial backup inventory is not empty recovery evidence
+
+The existing Proxmox Backups view treats PVE and PBS inventories as independent
+reads. Fulfilled artifacts remain usable when the other source is loading or
+unavailable. The page identifies that source, marks totals as incomplete and
+does not claim no backups exist until both inventories have fulfilled. PBS server
+backup counts show loading/unavailable rather than a fabricated zero; current
+server health and server-owned protection posture remain independent facts.
+Isolated retry preserves filters and the other source, while settled failures
+withdraw the failed source's artifacts. Both failed reads have a shared retry.
+Organisation changes and disposal cancel/replace reads and prevent late responses
+from restoring former inventory. No polling, recovery operation, native identity
+rule, protection-policy or provider contract is changed.
+
+Verification: `ProxmoxBackupsTable.test.tsx` exercises pending/partial/both-source
+failure, retries, measured empty counts, access denial, org-switch races and
+disposal. `browser-tests/backup-inventory.cjs` uses production components,
+API adapters, router and CSS in Chromium/WebKit with synthetic HTTP responses;
+these controls are not native backup, permission, thaw or release acceptance.
+
 ### Backup identity, phone storage and History consent composition
 
 The Proxmox Coverage last-backup pointer selects completed PBS snapshots or PVE
