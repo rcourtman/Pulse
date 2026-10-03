@@ -171,7 +171,10 @@ func (c *Client) getGuestAgent(ctx context.Context, path, node string, vmid int)
 	if err := c.verifyGuestAgentUnlocked(ctx, node, vmid); err != nil {
 		return nil, err
 	}
-	resp, err := c.request(ctx, http.MethodGet, path, nil)
+	// A password-session 401 must not replay this command after re-authentication:
+	// the operation lock could change between attempts. Ordinary API reads still
+	// own their usual session recovery; this guest admission is single-attempt.
+	resp, err := c.requestWithRetry(ctx, http.MethodGet, path, nil, true)
 	if err != nil {
 		// Explicit refusals/unsupported commands remain ordinary errors. An
 		// uncertain completion blocks every command, not just this method.

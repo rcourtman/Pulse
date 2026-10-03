@@ -189,3 +189,55 @@ func TestGuestAgentCooldownExpiresWithoutSleepOrReplay(t *testing.T) {
 		t.Fatal("healthy completed operation retained estate state")
 	}
 }
+
+func TestGuestAgentPasswordSessionDoesNotReplayRefusedCommand(t *testing.T) {
+	for _, refused := range []bool{false, true} {
+		t.Run(fmt.Sprintf("refused-%t", refused), func(t *testing.T) {
+			var authCalls, agentCalls, nodeCalls atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/access/ticket"):
+					authCalls.Add(1)
+					fmt.Fprint(w, `{"data":{"ticket":"fixture-ticket","CSRFPreventionToken":"fixture-csrf"}}`)
+				case strings.HasSuffix(r.URL.Path, "/config"):
+					fmt.Fprint(w, `{"data":{}}`)
+				case strings.Contains(r.URL.Path, "/agent/"):
+					if agentCalls.Add(1) == 1 && refused {
+						http.Error(w, "session refused", http.StatusUnauthorized)
+						return
+					}
+					backupAgentPayload(w, r)
+				case strings.HasSuffix(r.URL.Path, "/nodes"):
+					if nodeCalls.Add(1) == 1 {
+						http.Error(w, "expired ordinary API session", http.StatusUnauthorized)
+						return
+					}
+					fmt.Fprint(w, `{"data":[]}`)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+			client, err := NewClient(ClientConfig{Host: server.URL, User: "fixture@pam", Password: "fixture-password", Timeout: time.Second})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = client.GetVMFSInfo(context.Background(), "node", 105)
+			if refused && (err == nil || !strings.Contains(err.Error(), "401")) {
+				t.Fatalf("guest refusal lost: %v", err)
+			}
+			if !refused && err != nil {
+				t.Fatal(err)
+			}
+			if agentCalls.Load() != 1 || authCalls.Load() != 1 {
+				t.Fatalf("guest replay: commands=%d authentications=%d", agentCalls.Load(), authCalls.Load())
+			}
+			if _, err := client.GetNodes(context.Background()); err != nil {
+				t.Fatalf("ordinary API session recovery broken: %v", err)
+			}
+			if agentCalls.Load() != 1 || nodeCalls.Load() != 2 || authCalls.Load() != 2 {
+				t.Fatalf("ordinary recovery replayed guest or did not recover: guest=%d nodes=%d auth=%d", agentCalls.Load(), nodeCalls.Load(), authCalls.Load())
+			}
+		})
+	}
+}
