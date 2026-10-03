@@ -1,6 +1,7 @@
 import { batch, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { ChartsAPI, type HistoryTimeRange } from '@/api/charts';
 import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
+import { eventBus } from '@/stores/events';
 import { isRangeLocked, loadRuntimeCapabilities, maxHistoryDays } from '@/stores/license';
 import { calculateOptimalPoints } from '@/utils/downsample';
 import { setupCanvasDPR } from '@/utils/canvasRenderQueue';
@@ -46,6 +47,7 @@ export function useHistoryChartState(
   const [localHoveredTimestamp, setLocalHoveredTimestamp] = createSignal<number | null>(null);
   const [hoveredPoint, setHoveredPoint] = createSignal<HistoryChartHoverPoint | null>(null);
   const [chartWidth, setChartWidth] = createSignal(300);
+  const [orgVersion, setOrgVersion] = createSignal(0);
   const chartHeight = createMemo(() => props.height || 200);
   let chartLeftInset = HISTORY_CHART_MIN_LEFT_INSET;
   let chartRightInset = 0;
@@ -54,6 +56,13 @@ export function useHistoryChartState(
   let pendingTouch: { pointerId: number; x: number; y: number; moved: boolean } | undefined;
   const hoveredTimestamp = hoverGroup?.hoveredTimestamp ?? localHoveredTimestamp;
   const setHoveredTimestamp = hoverGroup?.setHoveredTimestamp ?? setLocalHoveredTimestamp;
+
+  // Resource IDs can be identical in different organisations. A context switch
+  // replaces the request owner even when none of the chart props have changed.
+  const unsubscribeOrgSwitch = eventBus.on('org_switched', () => {
+    setOrgVersion((version) => version + 1);
+  });
+  onCleanup(unsubscribeOrgSwitch);
 
   const refreshIntervalMs = createMemo(() => getHistoryChartRefreshIntervalMs(range()));
 
@@ -109,6 +118,7 @@ export function useHistoryChartState(
     const pointsCap = maxPoints();
     const locked = isLocked();
     const interval = refreshIntervalMs();
+    const orgSelection = orgVersion();
     let active = true;
     let pending = false;
     let hasLoaded = false;
@@ -127,6 +137,7 @@ export function useHistoryChartState(
     setRefreshFailed(false);
     setLoading(false);
     const selection = JSON.stringify([
+      orgSelection,
       resourceType,
       resourceId,
       metric,
@@ -140,6 +151,7 @@ export function useHistoryChartState(
       touchTimestamp = null;
       setHoveredPoint(null);
       setHoveredTimestamp(null);
+      setKeyboardInspecting(false);
     }
     previousSelection = selection;
     if (suppliedData !== undefined || locked || !resourceId || !resourceType) return;

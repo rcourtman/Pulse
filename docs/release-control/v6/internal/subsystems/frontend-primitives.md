@@ -20,6 +20,27 @@
 
 ## Purpose
 
+### Organisation-scoped single-metric History
+
+Fetched HistoryChart observations belong to the active organisation as well as
+the resource type/ID, metric and range. `org_switched` replaces the request owner
+even when those chart props are unchanged: withdraw old samples, provenance,
+errors and touch/keyboard/group inspection, abort superseded reads and replace
+the polling timer before immediately requesting the same selection in the new
+API context. Late success or failure from an earlier organisation cannot update
+or settle that request. Disposal removes both timer and org subscription.
+
+Same-organisation transport/5xx failures still retain their own successful
+observations with explicit refresh warnings. A failed first read in a new org
+must not fall back to the previous org. Locked or missing targets do not fetch;
+explicit supplied samples remain caller-owned, not silently converted to fetched
+history. Matching same-org supplied-sample refreshes retain inspection.
+Runtime ownership and keyboard/touch rendering regressions plus the production
+`browser-tests/history-org.cjs` HTTP fixture verify these boundaries with the
+real API org header and the existing org-safe batch reader as a control. This is
+client presentation/isolation proof, not native tenancy, collector or release
+acceptance.
+
 ### Stable physical-disk History composition
 
 Disk detail composes shared HistoryChart owners from stable disk-family catalog
