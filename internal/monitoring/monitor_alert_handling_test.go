@@ -1372,9 +1372,17 @@ func TestMonitorDelayedPartialResolutionKeepsDestinationRecovery(t *testing.T) {
 	}
 	n := open()
 	a, pbs := occurrenceManager(t)
+	m := &Monitor{alertManager: a, notificationMgr: n}
+	// Use the live firing callback so the detector records notification policy
+	// state. Direct notifier calls would not establish LastNotified, and existing
+	// recovery policy would correctly suppress that unannounced detector alert.
+	a.SetAlertCallback(m.handleAlertFired)
 	a.CheckPBS(pbs)
 	old := a.GetActiveAlerts()[0].Clone()
-	n.SendAlert(old)
+	if old.LastNotified == nil {
+		t.Fatal("detector did not admit the firing notification")
+	}
+	awaitOccurrenceRows(t, n, 2)
 	n.StartQueueProcessing()
 	select {
 	case got := <-receipts:
@@ -1402,6 +1410,8 @@ func TestMonitorDelayedPartialResolutionKeepsDestinationRecovery(t *testing.T) {
 	pbs.CPU = 0
 	a.CheckPBS(pbs)
 	n = open() // deferred processor; prior destination receipts are now on disk only
+	m = &Monitor{alertManager: a, notificationMgr: n}
+	a.SetAlertCallback(m.handleAlertFired)
 	pbs.CPU = 95
 	a.CheckPBS(pbs)
 	active := a.GetActiveAlerts()
@@ -1409,8 +1419,7 @@ func TestMonitorDelayedPartialResolutionKeepsDestinationRecovery(t *testing.T) {
 		t.Fatalf("not a new occurrence: %+v", active)
 	}
 	current := active[0].Clone()
-	n.SendAlert(current)
-	m := &Monitor{alertManager: a, notificationMgr: n}
+	awaitOccurrenceRows(t, n, 2)
 	m.handleAlertResolved(old.ID)
 	n.StartQueueProcessing()
 	seenFiring, seenRecovery := false, false
