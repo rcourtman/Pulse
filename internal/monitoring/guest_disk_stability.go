@@ -4,6 +4,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -17,6 +19,10 @@ func cloneGuestDisks(src []models.Disk) []models.Disk {
 func classifyGuestAgentDiskStatusError(err error) string {
 	if err == nil {
 		return ""
+	}
+
+	if reason := proxmox.GuestAgentDeferredReason(err); reason != "" {
+		return reason
 	}
 
 	errStr := err.Error()

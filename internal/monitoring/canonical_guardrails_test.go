@@ -2969,3 +2969,8 @@ func TestBroadcastProjectionMatchesPreviousPipeline(t *testing.T) {
 		t.Fatal("broadcast decoration mutated registry")
 	}
 }
+
+// The runtime contract includes both poll builders, protocol admission and truthful History.
+func TestGuestAgentBackupMonitoringContract(t *testing.T) {
+	testGuestAgentBackupMonitoringLifecycle(t)
+}

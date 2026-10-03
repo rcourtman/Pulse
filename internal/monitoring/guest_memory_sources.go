@@ -173,7 +173,7 @@ func selectGuestLowTrustUsedMemory(memTotal uint64, status *proxmox.VMStatus) (u
 }
 
 func shouldPreferGuestAgentMemAvailable(status *proxmox.VMStatus, memTotal uint64) bool {
-	if status == nil || !status.Agent.IsAvailable() || status.Mem == 0 {
+	if status == nil || status.Lock != "" || !status.Agent.IsAvailable() || status.Mem == 0 {
 		return false
 	}
 	if guestStatusFreeMem(status) > 0 {
@@ -311,7 +311,7 @@ func (m *Monitor) resolveGuestStatusMemory(
 	// only in node RRD, so a guest RRD lookup can never yield memory evidence
 	// (#1634).
 
-	if !hasMemAvailable && !hasSelectedUsed && status.Agent.IsAvailable() && !triedGuestAgentMemAvailable {
+	if !hasMemAvailable && !hasSelectedUsed && status.Lock == "" && status.Agent.IsAvailable() && !triedGuestAgentMemAvailable {
 		if agentAvailable, agentSource, ok := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw); ok {
 			memAvailable = agentAvailable
 			hasMemAvailable = true

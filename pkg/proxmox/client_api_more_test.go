@@ -3,8 +3,10 @@ package proxmox
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -217,6 +219,11 @@ func TestClientClusterAndAgentInfo(t *testing.T) {
 
 func TestClientGetVMNetworkInterfaces_ObjectAndPartialPayloads(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
 		switch r.URL.Path {
 		case "/api2/json/nodes/node1/qemu/100/agent/network-get-interfaces":
 			writeJSON(t, w, map[string]interface{}{
@@ -340,6 +347,11 @@ func TestClientStatusAndResources(t *testing.T) {
 
 func TestClientGetVMMemAvailableFromAgent(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
 		switch r.URL.Path {
 		case "/api2/json/nodes/node1/qemu/100/agent/file-read":
 			if got := r.URL.Query().Get("file"); got != "/proc/meminfo" {

@@ -2,12 +2,19 @@ package proxmox
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 )
 
 func TestClientVMFSInfoParsing(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
 		switch r.URL.Path {
 		case "/api2/json/nodes/node1/qemu/100/agent/get-fsinfo":
 			writeJSON(t, w, map[string]interface{}{
@@ -56,6 +63,11 @@ func TestClientVMFSInfoParsing(t *testing.T) {
 
 func TestClientVMFSInfoParsingCentOSXFSResult(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
 		switch r.URL.Path {
 		case "/api2/json/nodes/pve1/qemu/1376/agent/get-fsinfo":
 			w.Header().Set("Content-Type", "application/json")
@@ -87,6 +99,11 @@ func TestClientVMFSInfoParsingCentOSXFSResult(t *testing.T) {
 
 func TestClientVMFSInfoParsingPrivilegedCapacityFallback(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
 		switch r.URL.Path {
 		case "/api2/json/nodes/node1/qemu/100/agent/get-fsinfo":
 			writeJSON(t, w, map[string]interface{}{
@@ -126,6 +143,11 @@ func TestClientVMFSInfoParsingPrivilegedCapacityFallback(t *testing.T) {
 
 func TestClientVMFSInfoParsingWindowsVolumeGUIDMountpointFallback(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
 		switch r.URL.Path {
 		case "/api2/json/nodes/node1/qemu/100/agent/get-fsinfo":
 			writeJSON(t, w, map[string]interface{}{
@@ -164,6 +186,11 @@ func TestClientVMFSInfoParsingWindowsVolumeGUIDMountpointFallback(t *testing.T) 
 
 func TestClientVMFSInfoParsingIssue1319WindowsVolumePayload(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
 		switch r.URL.Path {
 		case "/api2/json/nodes/pve7/qemu/116/agent/get-fsinfo":
 			w.Header().Set("Content-Type", "application/json")
@@ -200,6 +227,11 @@ func TestClientVMFSInfoParsingIssue1319WindowsVolumePayload(t *testing.T) {
 
 func TestClientVMFSInfoSkipsMalformedEntries(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
 		switch r.URL.Path {
 		case "/api2/json/nodes/node1/qemu/100/agent/get-fsinfo":
 			writeJSON(t, w, map[string]interface{}{
@@ -242,6 +274,11 @@ func TestClientVMFSInfoSkipsMalformedEntries(t *testing.T) {
 
 func TestClientVMFSInfoObjectResult(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
 		switch r.URL.Path {
 		case "/api2/json/nodes/node1/qemu/100/agent/get-fsinfo":
 			writeJSON(t, w, map[string]interface{}{
@@ -266,6 +303,11 @@ func TestClientVMFSInfoObjectResult(t *testing.T) {
 
 func TestClientVMFSInfoObjectFilesystemResult(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
 		switch r.URL.Path {
 		case "/api2/json/nodes/node1/qemu/100/agent/get-fsinfo":
 			writeJSON(t, w, map[string]interface{}{
