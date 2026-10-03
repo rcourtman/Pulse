@@ -61,6 +61,9 @@ func TestQueueOccurrenceCancellationPreservesRecurrenceAcrossRestart(t *testing.
 			if err != nil || count != wantCount {
 				t.Fatalf("cancel count = %d, %v, want %d", count, err, wantCount)
 			}
+			if row := loadQuietReplay(t, q, "mixed"); row.Status != status || len(row.Alerts) != 2 {
+				t.Fatalf("cancellation changed surviving row status: %+v", row)
+			}
 			if err := q.Stop(); err != nil {
 				t.Fatal(err)
 			}
@@ -68,14 +71,20 @@ func TestQueueOccurrenceCancellationPreservesRecurrenceAcrossRestart(t *testing.
 			if err != nil {
 				t.Fatal(err)
 			}
+			reopenStatus := status
+			if status == QueueStatusSending {
+				// Existing crash recovery requeues interrupted sends. Exact
+				// cancellation must preserve that behaviour for survivors.
+				reopenStatus = QueueStatusPending
+			}
 			oldRow, mixed := loadQuietReplay(t, q, "old"), loadQuietReplay(t, q, "mixed")
-			if oldRow.Status != QueueStatusCancelled || mixed.Status != status || len(mixed.Alerts) != 2 ||
+			if oldRow.Status != QueueStatusCancelled || mixed.Status != reopenStatus || len(mixed.Alerts) != 2 ||
 				!mixed.Alerts[0].StartTime.Equal(current.StartTime) || mixed.Alerts[1].ID != peer.ID || len(mixed.Links) != 2 ||
 				mixed.Links[0].OperationalRecordID != current.OperationalRecord.ID || mixed.Links[1].OperationalRecordID != peer.OperationalRecord.ID {
 				t.Fatalf("wrong retained rows/links: old=%+v mixed=%+v", oldRow, mixed)
 			}
 			for _, id := range []string{"new", "recovery", "unknown"} {
-				if row := loadQuietReplay(t, q, id); row.Status != status || len(row.Alerts) != 1 {
+				if row := loadQuietReplay(t, q, id); row.Status != reopenStatus || len(row.Alerts) != 1 {
 					t.Fatalf("unrelated row %s changed: %+v", id, row)
 				}
 			}
