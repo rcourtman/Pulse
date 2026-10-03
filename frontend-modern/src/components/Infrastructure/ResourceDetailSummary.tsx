@@ -13,6 +13,7 @@ import { TagBadges } from '@/components/shared/TagBadges';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
 import { getDockerImageRegistryLink } from '@/features/docker/dockerImageReference';
 import { formatInteger } from './resourceDetailMappers';
+import { buildKubernetesControllerSection } from './resourceDetailDrawerKubernetesModel';
 import type { UseResourceDetailDrawerStateResult } from './useResourceDetailDrawerState';
 
 interface ResourceSummaryPresentationProps {
@@ -285,6 +286,7 @@ export const InlineResourceSummaryTables: Component<ResourceSummaryPresentationP
           }
         : null,
       props.content !== 'overview' && docker ? dockerSection(docker) : null,
+      props.content !== 'overview' ? buildKubernetesControllerSection(props.resource) : null,
       props.content !== 'overview'
         ? {
             label: 'Identity',
