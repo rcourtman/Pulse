@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "339d69ffd2aaa2c609f36fd4d81ae1165464207c",
+  "verified_at": "2026-10-03T20:17:06Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/EnhancedStorageBar.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts",
+    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/EnhancedStorageBar.tsx": "8021e55b50564fc9dfa29ebb83a824541b3ba34a1a6fc0fcc3793af5e5e4f701",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx": "abab4dcd8a67c39a846a97e46d3ba4e910b577f84318ed1e9c6a2c1cb6dc81fa",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts": "ff0302e77362ed2ba73e87aa1c6b25788a0532d5f590b06ce02abacd7c022214",
+    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts": "37f1dca70e36d6c7b349d016dba4847a90d7879f1d32688830e4ea75d2b83c71"
+  },
+  "routes": [
+    "/proxmox/storage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 700,
+      "height": 844
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 360,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Merge of origin/main 1f140a5d38 into #2433: the four files carry the PR's storage changes plus main's Tailwind 4 class renames (wrap-break-word, border-0!/p-0!/leading-0 spacer rows, dark:bg-blue-900/25 selected disk row, dropped sm:text-[11px] header step), checked on a private mock stack built from the merged tree",
+    "Storage pools table at 1440/1280/700/390/360 in light, and 1440/390 in dark: table width equals its container at every viewport, phone pool cells compute 4px horizontal padding so the PR's !px-1 still applies under Tailwind 4, only identity strings (pool and host names) and the long degraded-pool reason clip",
+    "First pool row expanded at every viewport: the StoragePoolDetail drawer renders Configuration and ZFS Pool sections",
+    "Physical Disks tab at the same viewports: desktop has no clipped cells at 1440, phone clips only disk model names, and the selected (Needs Attention) disk row tint is subdued in dark mode",
+    "Physical Disks first row expanded: the drawer header shows the Replace Now verdict with its reason (Disk reports health status FAILED) at 390 and 1440"
+  ],
+  "interactions": [
+    "Loaded /proxmox/storage per viewport and colour scheme, clicked the first pool row to open its drawer, switched to the Physical Disks tab and clicked the first disk row",
+    "Ran a scrollWidth-over-clientWidth sweep over every th/td and leaf per table per viewport and read computed padding of the first body cell",
+    "Ran vitest for src/components/Storage, src/features/storageBackups and src/features/platformPage on the merged tree: 105 files, 1694 tests passed"
+  ]
+}
