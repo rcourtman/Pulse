@@ -212,6 +212,7 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
   isMobileMock.mockReturnValue(false);
 });
 
@@ -833,6 +834,70 @@ describe('GuestRow', () => {
       const tr = container.querySelector('tr')!;
       fireEvent.click(tr);
       expect(onClick).toHaveBeenCalledOnce();
+    });
+
+    it('marks only actionable guest rows as native touch click targets', () => {
+      const addListener = vi.spyOn(HTMLTableRowElement.prototype, 'addEventListener');
+      const removeListener = vi.spyOn(HTMLTableRowElement.prototype, 'removeEventListener');
+      const onClick = vi.fn();
+      const [enabled, setEnabled] = createSignal(false);
+      const { container } = render(() => (
+        <table>
+          <tbody>
+            <GuestRow
+              guest={makeGuest()}
+              workloadTableLayoutMode="phone"
+              onClick={enabled() ? onClick : undefined}
+            />
+          </tbody>
+        </table>
+      ));
+      const row = container.querySelector('tr')!;
+      const nativeClickCalls = () => addListener.mock.calls.filter(([type]) => type === 'click');
+
+      expect(nativeClickCalls()).toHaveLength(0);
+      setEnabled(true);
+      expect(nativeClickCalls()).toHaveLength(1);
+      expect(row).not.toHaveAttribute('tabindex');
+      expect(row).not.toHaveAttribute('role', 'button');
+      expect(row).not.toHaveAttribute('aria-expanded');
+
+      // The native compatibility target must never perform the action itself.
+      const nativeClick = nativeClickCalls()[0][1] as EventListener;
+      nativeClick.call(row, new MouseEvent('click'));
+      fireEvent.touchEnd(row);
+      fireEvent.pointerUp(row, { pointerType: 'touch' });
+      expect(onClick).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByText('test-vm'));
+      expect(onClick).toHaveBeenCalledTimes(1);
+
+      setEnabled(false);
+      expect(removeListener.mock.calls.some(([type]) => type === 'click')).toBe(true);
+      fireEvent.click(row);
+      expect(onClick).toHaveBeenCalledTimes(1);
+      setEnabled(true);
+      fireEvent.click(screen.getByText('test-vm'));
+      expect(onClick).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps child disclosure and external-link actions ahead of guest row activation', () => {
+      const onClick = vi.fn();
+      const { container } = renderGuestRow({
+        guest: makeGuest(),
+        customUrl: 'https://guest.example.invalid/',
+        onClick,
+      });
+      fireEvent.click(screen.getByRole('link', { name: 'Open web interface for test-vm' }));
+      expect(onClick).not.toHaveBeenCalled();
+      const button = screen.getByRole('button', { name: 'Expand test-vm' });
+      fireEvent.click(button.querySelector('svg')!);
+      expect(onClick).toHaveBeenCalledTimes(1);
+      fireEvent.keyDown(button, { key: 'Enter' });
+      expect(onClick).toHaveBeenCalledTimes(2);
+      fireEvent.keyDown(button, { key: ' ', code: 'Space' });
+      expect(onClick).toHaveBeenCalledTimes(3);
+      fireEvent.keyDown(container.querySelector('tr')!, { key: 'Enter' });
+      expect(onClick).toHaveBeenCalledTimes(3);
     });
 
     it('calls onHoverChange with canonical guestId on fine-pointer preview', () => {

@@ -27,6 +27,7 @@ import {
   createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
+import { nativeRowClickTarget } from '@/components/shared/Table';
 import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
 import { getWorkloadGuestDiskStatusMessage } from '@/utils/workloadGuestPresentation';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
@@ -241,6 +242,7 @@ export function GuestRow(props: GuestRowProps) {
             : undefined
         }
         data-summary-row-active={props.isSummaryHighlighted && !props.isExpanded ? 'true' : 'false'}
+        on:click={props.onClick ? nativeRowClickTarget : undefined}
         onClick={props.onClick}
         {...interactiveRowHandlers}
       >

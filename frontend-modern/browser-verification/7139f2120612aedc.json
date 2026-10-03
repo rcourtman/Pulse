@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "888d918ba1a0a4bf448542630bc0f47af72e4572",
+  "verified_at": "2026-10-03T23:27:41.013Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/shared/Table.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "1096ad3669baea8bec5c6a80b016b64f2c428d2e5a0b7c85746ff6bf21e103fa",
+    "frontend-modern/src/components/shared/Table.tsx": "014d9c4382d4de03a547f171e410fb9207686bf00dd76695b50c98249d6eacbd"
+  },
+  "routes": [
+    "/browser-tests/guest-row-touch.html?kind=qemu",
+    "/browser-tests/guest-row-touch.html?kind=lxc",
+    "/browser-tests/table-row-touch.html"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 360,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production GuestRow and full GuestDrawer, production CSS and delegated actions, synthetic VM/CT observations. Playwright 1.56.1 matches integration lock; Chromium 141.0.7390.37 desktop/phone and WebKit 26.0 phone. Six screenshots opened and inspected.",
+    "Trusted first name/row-body activation reveals missing completed backup, separately cautionary running activity and retained VM-lock disk guidance. The 360px CT control uses the row body. Full drawer safety copy wraps without page overflow; the two-column fixture is not full Workloads table layout acceptance.",
+    "Row remains a table row, not an extra tab stop or duplicate expanded control. Native disclosure retains matching aria-expanded and aria-controls, conditional action removal/re-enable preserves the same row node.",
+    "Emulated input and presentation only: no physical phone, real guest collector, QGA/thaw, installed recovery or released-availability assertion. Earlier failed parent activation and two adverse harness runs remain retained separately."
+  ],
+  "interactions": [
+    "Trusted Playwright touch taps emit click and toggle the same row exactly once; repeated name/row taps and production drawer collapse preserve independent action counts. Touch entry does not activate a hover history lens.",
+    "Focused native disclosure Enter/Space and nested SVG click each toggle once. The row body remains usable while keyboard focus makes compact disclosure visible. No touch-end or pointer-up action is added.",
+    "Real adjacent external-link SVG is exercised on the actual wide layout with only navigation prevented; production propagation isolation keeps the row closed. Phone identity intentionally hides that link; it is not forced into a non-condensed phone layout.",
+    "Removing the row action prevents activation and removes disclosure; re-enabling restores first-tap activation without remount. Exported compatibility marker preserves shared TableRow single action and delegated child-button isolation. Guest fixtures issue only local GET requests and report no page errors."
+  ]
+}

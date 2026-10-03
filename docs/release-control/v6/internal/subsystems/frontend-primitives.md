@@ -623,6 +623,20 @@ scrolling. Explicit caller-owned native listeners remain caller-owned.
 isolation and bound handlers; `PulseDataGrid.test.tsx` checks inheritance.
 The production PBS table/drawer browser fixture exercises first-tap disclosure
 and History in WebKit phone emulation, not installed collection or devices.
+The custom Workloads `GuestRow` shell reuses `Table`'s exported
+`nativeRowClickTarget` marker, conditional on its own action, without inheriting
+shared row styling or changing alert/highlight treatment. Its name and row body
+must open the full guest drawer on the first touch even when the compact-layout
+disclosure button is visually hidden. Keep the action document-delegated;
+nested disclosure SVGs, external links and keyboard controls must still perform
+only their own action. Removing the action removes the native marker, and
+re-enabling it must work without replacing the row. Pointer-up and touch-end
+alone never perform the action. `GuestRow.test.tsx` covers native binding,
+non-activation, dynamic removal and child ordering;
+`browser-tests/guest-row-touch.cjs` covers trusted row/name taps, the production
+full drawer's backup/read guidance, nested controls and shared-row compatibility
+on Chromium desktop/phone and WebKit phone VM/CT fixtures. This is emulated
+input/presentation proof, not physical-device, native thaw or released acceptance.
 `PlatformResourceDetailToggleButton` is the desktop disclosure affordance and
 is visually removed on phone layouts where the complete row is the touch target;
 provider tables must not add a second mobile chevron. When row activation
