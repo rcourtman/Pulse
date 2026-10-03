@@ -39,7 +39,7 @@ describe('alertOverviewPresentation coverage', () => {
       const presentation = getAlertOverviewCardPresentation('warning', false, false);
 
       expect(presentation.cardClassName).toBe(
-        'border rounded-md p-3 sm:p-4 transition-all border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900',
+        'border rounded-md p-3 sm:p-4 transition-all border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/25',
       );
       expect(presentation.iconClassName).toBe(
         'mr-3 mt-0.5 transition-all text-yellow-600 dark:text-yellow-400',

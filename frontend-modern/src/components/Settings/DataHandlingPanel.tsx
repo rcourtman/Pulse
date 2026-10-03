@@ -21,7 +21,7 @@ import {
 } from './dataHandlingPanelModel';
 
 const meterClassByTone: Record<DataHandlingPostureItem['tone'], string> = {
-  neutral: 'bg-base-content/40',
+  neutral: '',
   info: 'bg-sky-500 dark:bg-sky-400',
   success: 'bg-emerald-500 dark:bg-emerald-400',
   warning: 'bg-amber-500 dark:bg-amber-400',
@@ -30,10 +30,10 @@ const meterClassByTone: Record<DataHandlingPostureItem['tone'], string> = {
 
 const badgeClassByTone: Record<DataHandlingPostureItem['tone'], string> = {
   neutral: 'border border-border bg-surface text-muted',
-  info: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-200',
-  success: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200',
-  warning: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200',
-  danger: 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-200',
+  info: 'bg-sky-100 text-sky-700 dark:bg-sky-900/25 dark:text-sky-200',
+  success: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-200',
+  warning: 'bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-200',
+  danger: 'bg-rose-100 text-rose-700 dark:bg-rose-900/25 dark:text-rose-200',
 };
 
 const formatCount = (value: number): string => new Intl.NumberFormat().format(value);
@@ -64,7 +64,7 @@ const errorMessageFor = (error: unknown): string => {
 };
 
 const PolicyScopeSummary: Component = () => (
-  <section class="rounded-md border border-sky-200 bg-sky-50 px-4 py-4 dark:border-sky-900 dark:bg-sky-950/40">
+  <section class="rounded-md border border-sky-200 bg-sky-50 px-4 py-4 dark:border-sky-900/25 dark:bg-sky-950/40">
     <div class="flex items-start gap-3">
       <Info class="mt-0.5 h-4 w-4 shrink-0 text-sky-700 dark:text-sky-300" aria-hidden="true" />
       <div class="min-w-0">
@@ -125,17 +125,17 @@ const PostureMeter: Component<{ item: DataHandlingPostureItem }> = (props) => (
         <p class="mt-1 text-xs text-muted">{props.item.description}</p>
       </div>
       <span
-        class={`shrink-0 rounded px-2 py-0.5 text-xs font-semibold ${badgeClassByTone[props.item.tone]}`}
+        class={`shrink-0 rounded-sm px-2 py-0.5 text-xs font-semibold ${badgeClassByTone[props.item.tone]}`}
       >
         {formatCount(props.item.count)}
       </span>
     </div>
     <div
-      class="mt-3 h-2 overflow-hidden rounded bg-surface-hover"
+      class="mt-3 h-2 overflow-hidden rounded-sm bg-surface-hover"
       aria-label={`${props.item.label} ${props.item.percentage}%`}
     >
       <div
-        class={`h-full rounded ${meterClassByTone[props.item.tone]}`}
+        class={`h-full rounded-sm ${meterClassByTone[props.item.tone]}`}
         style={{ width: `${props.item.percentage}%` }}
       />
     </div>
@@ -176,7 +176,7 @@ export const DataHandlingPanel: Component = () => {
           <div
             role="alert"
             aria-live="polite"
-            class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-100"
+            class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900/25 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-100"
           >
             <div class="flex items-start gap-3">
               <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -278,7 +278,7 @@ export const DataHandlingPanel: Component = () => {
                 </p>
               </div>
               <Show when={!model().hasRedactions}>
-                <span class="w-fit rounded bg-surface px-2 py-1 text-xs font-medium text-muted">
+                <span class="w-fit rounded-sm bg-surface px-2 py-1 text-xs font-medium text-muted">
                   No active redaction hints
                 </span>
               </Show>
@@ -288,7 +288,7 @@ export const DataHandlingPanel: Component = () => {
                 <For each={model().redactionItems}>
                   {(item) => (
                     <span
-                      class={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium ${badgeClassByTone[item.tone]}`}
+                      class={`inline-flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-xs font-medium ${badgeClassByTone[item.tone]}`}
                       title={item.description}
                     >
                       {item.label}

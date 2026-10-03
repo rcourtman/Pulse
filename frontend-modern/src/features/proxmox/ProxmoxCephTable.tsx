@@ -354,7 +354,7 @@ export const ProxmoxCephTable: Component<{
           }
         >
           <PlatformTableShell
-            tableClass="min-w-[0px] table-fixed text-xs"
+            tableClass="min-w-0 table-fixed text-xs"
             colgroup={
               <colgroup>
                 <For each={visibleColumns()}>

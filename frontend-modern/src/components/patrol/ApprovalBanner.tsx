@@ -51,16 +51,16 @@ export const ApprovalBanner: Component = () => {
 
   return (
     <Show when={pending().length > 0}>
-      <div class="bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded-md px-4 py-3">
+      <div class="bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-md px-4 py-3">
         <div class="flex items-center justify-between gap-3 flex-wrap">
           <div class="flex items-center gap-3">
-            <div class="flex-shrink-0 p-1.5 border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900 rounded-md">
+            <div class="shrink-0 p-1.5 border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/25 rounded-md">
               <ShieldAlertIcon class="w-4 h-4 text-amber-500 dark:text-amber-400" />
             </div>
             <div>
               <Show when={pending().length === 1 && firstApproval()}>
                 <div class="flex items-center gap-2 flex-wrap">
-                  <span class="text-sm font-medium text-amber-900 dark:text-amber-100">
+                  <span class="text-sm font-medium text-amber-900/25 dark:text-amber-100">
                     Action awaiting approval
                   </span>
                   <MetadataBadge
@@ -81,7 +81,7 @@ export const ApprovalBanner: Component = () => {
                 </p>
               </Show>
               <Show when={pending().length > 1}>
-                <span class="text-sm font-medium text-amber-900 dark:text-amber-100">
+                <span class="text-sm font-medium text-amber-900/25 dark:text-amber-100">
                   {pending().length} actions awaiting your approval
                 </span>
               </Show>

@@ -105,7 +105,7 @@ export const DockerNativeDetailPanel: Component<{
       {(field) => (
         <div class="min-w-0">
           <dt class="text-[10px] font-medium uppercase tracking-wide text-muted">{field[0]}</dt>
-          <dd class="break-words font-mono text-base-content">{field[1] || '—'}</dd>
+          <dd class="wrap-break-word font-mono text-base-content">{field[1] || '—'}</dd>
         </div>
       )}
     </For>

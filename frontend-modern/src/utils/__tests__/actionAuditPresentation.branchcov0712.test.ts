@@ -26,17 +26,17 @@ describe('actionAuditPresentation branch coverage (supplemental)', () => {
       expect(getActionAuditStatePresentation('approved')).toStrictEqual({
         label: 'Approved',
         className:
-          'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700',
+          'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/25 dark:text-blue-200 dark:border-blue-700',
       });
       expect(getActionAuditStatePresentation('rejected')).toStrictEqual({
         label: 'Rejected',
         className:
-          'bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-200 dark:border-red-700',
+          'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/25 dark:text-red-200 dark:border-red-700',
       });
       expect(getActionAuditStatePresentation('executing')).toStrictEqual({
         label: 'Executing',
         className:
-          'bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-900 dark:text-sky-200 dark:border-sky-700',
+          'bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-900/25 dark:text-sky-200 dark:border-sky-700',
       });
     });
 
@@ -187,7 +187,7 @@ describe('actionAuditPresentation branch coverage (supplemental)', () => {
       ).toStrictEqual({
         label: 'Failed',
         className:
-          'bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-200 dark:border-red-700',
+          'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/25 dark:text-red-200 dark:border-red-700',
       });
     });
 
@@ -196,7 +196,7 @@ describe('actionAuditPresentation branch coverage (supplemental)', () => {
       expect(getActionAuditRecordStatePresentation({ state: 'executing' })).toStrictEqual({
         label: 'Executing',
         className:
-          'bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-900 dark:text-sky-200 dark:border-sky-700',
+          'bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-900/25 dark:text-sky-200 dark:border-sky-700',
       });
     });
   });

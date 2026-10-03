@@ -97,9 +97,9 @@ describe('ErrorBoundary', () => {
     expect(errorBoundarySource).toContain('lucide-solid/icons/alert-triangle');
     expect(errorBoundarySource).not.toContain('<svg');
     expect(errorBoundarySource).not.toContain(
-      'px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700',
+      'px-4 py-2 bg-blue-600 text-white rounded-sm hover:bg-blue-700',
     );
-    expect(errorBoundarySource).not.toContain('bg-red-50 dark:bg-red-900 border border-red-200');
+    expect(errorBoundarySource).not.toContain('bg-red-50 dark:bg-red-900/25 border border-red-200');
   });
 
   /* ---------- Logs error via logError ---------- */

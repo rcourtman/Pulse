@@ -44,7 +44,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
 
   return (
     <div
-      class={`flex flex-col h-full ${props.compact ? '' : 'bg-surface rounded-md shadow-sm border border-border p-4'}`}
+      class={`flex flex-col h-full ${props.compact ? '' : 'bg-surface rounded-md shadow-xs border border-border p-4'}`}
     >
       <HistoryChartHeader
         chart={chart}
@@ -68,7 +68,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
       >
         <canvas
           ref={canvasRef}
-          class="block w-full h-full cursor-crosshair rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
+          class="block w-full h-full cursor-crosshair rounded-sm focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-blue-500"
           tabIndex={0}
           onFocus={chart.handleFocus}
           onBlur={chart.handleBlur}

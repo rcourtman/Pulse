@@ -163,7 +163,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
   const baseButtonClass = `
     inline-flex items-center justify-center
     rounded-md transition-all duration-200
-    focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
+    focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500
     disabled:opacity-50 disabled:cursor-not-allowed
   `;
 
@@ -191,7 +191,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
             onClick={handleOpenAssistant}
             class="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-base-content hover:bg-surface-hover"
           >
-            <SparklesIcon class="h-4 w-4 flex-shrink-0 text-blue-600 dark:text-blue-400" />
+            <SparklesIcon class="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
             <span class="flex flex-col">
               <span class="font-medium">{t('alerts.assistant.explain.menuLabel')}</span>
               <span class="text-[10px] text-muted">{t('alerts.assistant.explain.menuHint')}</span>
@@ -274,7 +274,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
               </svg>
             }
           >
-            <ShieldCheckIcon class="h-3.5 w-3.5 flex-shrink-0" />
+            <ShieldCheckIcon class="h-3.5 w-3.5 shrink-0" />
           </Show>
           <span class="text-xs font-medium">
             {usesPatrolPrimary()
@@ -304,7 +304,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
           bg-blue-600
           hover:bg-blue-700
           text-white font-medium
-          shadow-sm hover:shadow-sm
+          shadow-xs hover:shadow-xs
           gap-2
           ${showPatrolOption() ? 'rounded-r-none' : ''}
           ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-blue-600' : ''}
@@ -325,7 +325,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
             </svg>
           }
         >
-          <ShieldCheckIcon class="h-4 w-4 flex-shrink-0" />
+          <ShieldCheckIcon class="h-4 w-4 shrink-0" />
         </Show>
         <span>
           {usesPatrolPrimary()

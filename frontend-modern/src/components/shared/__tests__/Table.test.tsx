@@ -266,7 +266,7 @@ describe('TableCell and TableHead padding ownership', () => {
         <TableBody>
           <TableRow>
             <TableCell class="px-1 sm:px-1.5 lg:px-2 py-1">tight cell</TableCell>
-            <TableCell class="!px-1">important cell</TableCell>
+            <TableCell class="px-1!">important cell</TableCell>
             <TableCell class="px-3 py-1.5">wide cell</TableCell>
           </TableRow>
         </TableBody>

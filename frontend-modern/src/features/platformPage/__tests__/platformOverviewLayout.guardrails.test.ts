@@ -427,11 +427,15 @@ describe('platform overview layout guardrails', () => {
     expect(vsphereNetworksTableSource).toMatch(
       /sortKey="type"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[13%\]"/,
     );
-    expect(agentsMachinesTableSource).toContain('class="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"');
+    expect(agentsMachinesTableSource).toContain(
+      'class="-my-2 min-h-11 min-w-11 sm:my-0 sm:min-h-0 sm:min-w-0"',
+    );
     expect(agentsMachinesTableSource).toContain(
       '-my-3 inline-flex min-h-11 max-w-full items-center',
     );
-    expect(agentsMachinesTableSource).toContain('flex min-h-11 w-full items-center gap-2 rounded');
+    expect(agentsMachinesTableSource).toContain(
+      'flex min-h-11 w-full items-center gap-2 rounded-sm',
+    );
   });
 
   it('keeps provider overview pages in the parent-table plus child-inventory stack', () => {

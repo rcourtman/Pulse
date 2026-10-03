@@ -104,7 +104,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
         <div>
           <div class="p-4 sm:p-6 flex flex-col gap-3 sm:gap-4">
             <Show when={!props.canManage}>
-              <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200">
+              <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-200">
                 {SECURITY_AUTH_SETTINGS_READ_ONLY_MESSAGE}
               </div>
             </Show>
@@ -188,7 +188,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
             <Show when={props.versionInfo()?.deploymentType === 'proxmoxve'}>
               <div class="space-y-2">
                 <p class="text-xs text-base-content">
-                  Type <code class="px-1 py-0.5 bg-surface-hover rounded">update</code> in your
+                  Type <code class="px-1 py-0.5 bg-surface-hover rounded-sm">update</code> in your
                   ProxmoxVE console
                 </p>
                 <p class="text-xs text-muted italic">
@@ -201,7 +201,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
             <Show when={props.versionInfo()?.deploymentType === 'docker'}>
               <div class="space-y-1">
                 <p class="text-xs text-base-content">{restartInstruction().label}</p>
-                <code class="block text-xs bg-surface-hover p-2 rounded mt-1">
+                <code class="block text-xs bg-surface-hover p-2 rounded-sm mt-1">
                   {restartInstruction().command}
                 </code>
               </div>
@@ -215,7 +215,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
             >
               <div class="space-y-1">
                 <p class="text-xs text-base-content">{restartInstruction().label}</p>
-                <code class="block text-xs bg-surface-hover p-2 rounded mt-1">
+                <code class="block text-xs bg-surface-hover p-2 rounded-sm mt-1">
                   {restartInstruction().command}
                 </code>
               </div>
@@ -224,7 +224,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
             <Show when={props.versionInfo()?.deploymentType === 'development'}>
               <div class="space-y-1">
                 <p class="text-xs text-base-content">{restartInstruction().label}</p>
-                <code class="block text-xs bg-surface-hover p-2 rounded mt-1">
+                <code class="block text-xs bg-surface-hover p-2 rounded-sm mt-1">
                   {restartInstruction().command}
                 </code>
               </div>
@@ -237,7 +237,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
             </Show>
           </div>
 
-          <div class="rounded border border-green-200 bg-green-50 p-2 dark:border-green-800 dark:bg-green-900">
+          <div class="rounded-sm border border-green-200 bg-green-50 p-2 dark:border-green-800 dark:bg-green-900/25">
             <p class="text-xs text-green-700 dark:text-green-300">
               <strong>Tip:</strong> {SECURITY_AUTH_RESTART_TIP.replace(/^Tip:\s*/, '')}
             </p>

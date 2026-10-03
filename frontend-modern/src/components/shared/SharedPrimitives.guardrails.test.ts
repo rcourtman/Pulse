@@ -406,7 +406,7 @@ describe('shared primitive guardrails', () => {
         patterns: [
           '<svg',
           'const icons = {',
-          'flex-shrink-0 text-muted hover:text-base-content hover:bg-surface rounded-md p-1.5 transition-all duration-200',
+          'shrink-0 text-muted hover:text-base-content hover:bg-surface rounded-md p-1.5 transition-all duration-200',
         ],
       },
     ]);
@@ -419,7 +419,7 @@ describe('shared primitive guardrails', () => {
     expect(toastSource).not.toContain('<svg');
     expect(toastSource).not.toContain('const icons = {');
     expect(toastSource).not.toContain(
-      'flex-shrink-0 text-muted hover:text-base-content hover:bg-surface rounded-md p-1.5 transition-all duration-200',
+      'shrink-0 text-muted hover:text-base-content hover:bg-surface rounded-md p-1.5 transition-all duration-200',
     );
   });
 
@@ -481,7 +481,7 @@ describe('shared primitive guardrails', () => {
           patterns: expect.arrayContaining([
             'const viewButtonClass',
             'inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1',
-            'inline-flex min-h-8 items-center gap-1.5 rounded-sm px-3 text-xs font-medium transition-colors',
+            'inline-flex min-h-8 items-center gap-1.5 rounded-xs px-3 text-xs font-medium transition-colors',
           ]),
         }),
       ]),
@@ -504,7 +504,7 @@ describe('shared primitive guardrails', () => {
     expect(registeredFeatureGuard?.canonical?.export).toBe('getFilterButtonGroupButtonClass');
     expect(registeredFeatureGuard?.allPatterns).toEqual([
       'inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1',
-      'inline-flex min-h-8 items-center gap-1.5 rounded-sm px-3 text-xs font-medium transition-colors',
+      'inline-flex min-h-8 items-center gap-1.5 rounded-xs px-3 text-xs font-medium transition-colors',
     ]);
     expect(registeredFeatureGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(registeredFeatureGuard?.ignoredPaths).toEqual([
@@ -573,7 +573,7 @@ describe('shared primitive guardrails', () => {
       'inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1',
     );
     expect(proxmoxBackupsTableSource).not.toContain(
-      'inline-flex min-h-8 items-center gap-1.5 rounded-sm px-3 text-xs font-medium transition-colors',
+      'inline-flex min-h-8 items-center gap-1.5 rounded-xs px-3 text-xs font-medium transition-colors',
     );
   });
 
@@ -612,7 +612,7 @@ describe('shared primitive guardrails', () => {
         patterns: [
           'inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition',
           'min-h-10 sm:min-h-10 rounded-full border px-3 py-2 text-sm font-semibold transition',
-          'border-blue-500 bg-blue-600 text-white shadow-sm',
+          'border-blue-500 bg-blue-600 text-white shadow-xs',
           'hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-200',
         ],
       },
@@ -621,7 +621,7 @@ describe('shared primitive guardrails', () => {
     expect(registeredGuard?.canonical?.export).toBe('getSelectablePillButtonClass');
     expect(registeredGuard?.allPatterns).toEqual([
       'rounded-full border px-3 py-2 text-sm font-semibold transition',
-      'border-blue-500 bg-blue-600 text-white shadow-sm',
+      'border-blue-500 bg-blue-600 text-white shadow-xs',
       'hover:border-blue-400 hover:text-blue-600',
     ]);
     expect(registeredGuard?.scopes).toEqual([
@@ -650,7 +650,7 @@ describe('shared primitive guardrails', () => {
     expect(apiTokenManagerSource).not.toContain(
       'min-h-10 sm:min-h-10 rounded-full border px-3 py-2 text-sm font-semibold transition',
     );
-    expect(apiTokenManagerSource).not.toContain('border-blue-500 bg-blue-600 text-white shadow-sm');
+    expect(apiTokenManagerSource).not.toContain('border-blue-500 bg-blue-600 text-white shadow-xs');
     expect(apiTokenManagerSource).not.toContain('hover:border-blue-400 hover:text-blue-600');
   });
 
@@ -1194,7 +1194,7 @@ describe('shared primitive guardrails', () => {
       'src/features/docker/DockerHostDrawerOverview.tsx',
       'src/features/storageBackups/detailPresentation.ts',
     ];
-    const retiredFrameClass = 'rounded border border-border bg-surface p-3 shadow-sm';
+    const retiredFrameClass = 'rounded-sm border border-border bg-surface p-3 shadow-xs';
     const registeredRule = registry.rules?.find(
       (rule) => rule.id === 'compact-info-card-frame-shell',
     );
@@ -1312,9 +1312,9 @@ describe('shared primitive guardrails', () => {
       expect(storageDetailSource).not.toContain('STORAGE_DETAIL_HEADER_SELECT_CLASS');
     }
 
-    expect(resourceDetailDrawerSource).not.toContain('listClass="!gap-2 sm:!gap-6"');
+    expect(resourceDetailDrawerSource).not.toContain('listClass="gap-2! sm:gap-6!"');
     expect(resourceDetailDrawerSource).not.toContain(
-      'tabClass="!px-0.5 !text-xs sm:!px-1 sm:!text-sm"',
+      'tabClass="px-0.5! text-xs! sm:px-1! sm:text-sm!"',
     );
   });
 
@@ -1523,7 +1523,7 @@ describe('shared primitive guardrails', () => {
     }
 
     expect(alertHistoryTableSectionSource).not.toContain(
-      'overflow-hidden rounded border border-border',
+      'overflow-hidden rounded-sm border border-border',
     );
     expect(storagePoolsTableSource).not.toContain('STORAGE_POOLS_SCROLL_WRAP_CLASS');
     expect(diskListSource).not.toContain("from '@/components/shared/Card'");
@@ -1813,7 +1813,7 @@ describe('shared primitive guardrails', () => {
         expect.objectContaining({
           path: 'src/components/Settings/ProLicensePlanSection.tsx',
           patterns: expect.arrayContaining([
-            'inline-flex items-center gap-1 mt-3 min-h-10 sm:min-h-9 rounded-md border border-current/20 px-3 py-2 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5',
+            'inline-flex items-center gap-1 mt-3 min-h-10 sm:min-h-9 rounded-md border px-3 py-2 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5',
           ]),
         }),
       ]),
@@ -1852,7 +1852,7 @@ describe('shared primitive guardrails', () => {
     }
     expect(proLicensePlanSectionSource).toContain('ButtonLink');
     expect(proLicensePlanSectionSource).not.toContain(
-      'inline-flex items-center gap-1 mt-3 min-h-10 sm:min-h-9 rounded-md border border-current/20 px-3 py-2 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5',
+      'inline-flex items-center gap-1 mt-3 min-h-10 sm:min-h-9 rounded-md border px-3 py-2 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5',
     );
     expect(proLicensePlanSectionSource).not.toContain(
       'inline-flex items-center gap-1 mt-4 min-h-10 sm:min-h-9 rounded-md border border-border px-3 py-2 text-xs font-medium text-base-content hover:bg-surface-hover',
@@ -2653,7 +2653,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(patrolFindingMetadataGuard?.canonical?.export).toBe('MetadataBadge');
     expect(patrolFindingMetadataGuard?.allPatterns).toEqual([
-      'px-1.5 py-0.5 border text-[10px] font-medium rounded',
+      'px-1.5 py-0.5 border text-[10px] font-medium rounded-sm',
     ]);
     expect(patrolFindingMetadataGuard?.scopes).toEqual(['src/components/AI']);
     expect(patrolInvestigationMetadataGuard?.canonical?.path).toBe(
@@ -2661,7 +2661,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(patrolInvestigationMetadataGuard?.canonical?.export).toBe('MetadataBadge');
     expect(patrolInvestigationMetadataGuard?.allPatterns).toEqual([
-      'px-1.5 py-0.5 border text-[10px] font-medium rounded',
+      'px-1.5 py-0.5 border text-[10px] font-medium rounded-sm',
     ]);
     expect(patrolInvestigationMetadataGuard?.scopes).toEqual(['src/components/patrol']);
     expect(patrolApprovalToolCallMetadataGuard?.canonical?.path).toBe(
@@ -2670,7 +2670,7 @@ describe('shared primitive guardrails', () => {
     expect(patrolApprovalToolCallMetadataGuard?.canonical?.export).toBe('MetadataBadge');
     expect(patrolApprovalToolCallMetadataGuard?.allPatterns).toEqual([
       'px-1.5 py-0.5',
-      'text-[10px] font-medium rounded',
+      'text-[10px] font-medium rounded-sm',
     ]);
     expect(patrolApprovalToolCallMetadataGuard?.scopes).toEqual(['src/components/patrol']);
     expect(proxmoxBackupMetadataGuard?.canonical?.path).toBe(
@@ -2678,7 +2678,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(proxmoxBackupMetadataGuard?.canonical?.export).toBe('MetadataBadge');
     expect(proxmoxBackupMetadataGuard?.allPatterns).toEqual([
-      'rounded-sm px-1.5 py-0.5 text-[10px] font-semibold',
+      'rounded-xs px-1.5 py-0.5 text-[10px] font-semibold',
     ]);
     expect(proxmoxBackupMetadataGuard?.scopes).toEqual(['src/features/proxmox']);
 
@@ -2720,7 +2720,7 @@ describe('shared primitive guardrails', () => {
       'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
     );
     expect(runHistoryEntrySource).not.toContain(
-      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50',
+      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-blue-50',
     );
     expect(patrolIntelligenceWorkspaceSource).toContain('MetadataBadge');
     expect(patrolIntelligenceWorkspaceSource).toContain('tone={group.tone}');
@@ -2740,7 +2740,7 @@ describe('shared primitive guardrails', () => {
     expect(findingsPanelSource).toContain('MetadataBadge');
     expect(findingsPanelSource).toContain('FINDING_ROW_BADGE_PROPS');
     expect(findingsPanelSource).not.toContain(
-      'px-1.5 py-0.5 border text-[10px] font-medium rounded',
+      'px-1.5 py-0.5 border text-[10px] font-medium rounded-sm',
     );
     expect(findingsPanelSource).not.toContain('getFindingStatusBadgeClasses');
     expect(findingsPanelSource).not.toContain('getFindingSourceBadgeClasses');
@@ -2751,7 +2751,7 @@ describe('shared primitive guardrails', () => {
     expect(investigationSectionSource).toContain('MetadataBadge');
     expect(investigationSectionSource).toContain('INVESTIGATION_BADGE_PROPS');
     expect(investigationSectionSource).not.toContain(
-      'px-1.5 py-0.5 border text-[10px] font-medium rounded',
+      'px-1.5 py-0.5 border text-[10px] font-medium rounded-sm',
     );
     expect(investigationSectionSource).not.toContain('getInvestigationStatusBadgeClasses');
     expect(investigationSectionSource).not.toContain('getInvestigationOutcomeBadgeClasses');
@@ -2763,7 +2763,7 @@ describe('shared primitive guardrails', () => {
     expect(proxmoxBackupsTableSharedSource).toContain('presentation().badgeTone');
     expect(proxmoxBackupsTableSharedSource).not.toContain('presentation().badgeClassName');
     expect(proxmoxBackupsTableSharedSource).not.toContain(
-      'inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold',
+      'inline-flex items-center rounded-xs px-1.5 py-0.5 text-[10px] font-semibold',
     );
   });
 
@@ -3441,20 +3441,20 @@ describe('shared primitive guardrails', () => {
         expect.objectContaining({
           path: 'src/components/Settings/OrganizationAccessMembersSection.tsx',
           patterns: expect.arrayContaining([
-            'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60',
+            'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/25 disabled:cursor-not-allowed disabled:opacity-60',
           ]),
         }),
         expect.objectContaining({
           path: 'src/components/Settings/OrganizationIncomingSharesSection.tsx',
           patterns: expect.arrayContaining([
-            'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-60',
-            'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60',
+            'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/25 disabled:cursor-not-allowed disabled:opacity-60',
+            'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/25 disabled:cursor-not-allowed disabled:opacity-60',
           ]),
         }),
         expect.objectContaining({
           path: 'src/components/Settings/OrganizationOutgoingSharesSection.tsx',
           patterns: expect.arrayContaining([
-            'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60',
+            'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/25 disabled:cursor-not-allowed disabled:opacity-60',
           ]),
         }),
         expect.objectContaining({
@@ -3501,7 +3501,7 @@ describe('shared primitive guardrails', () => {
         expect.objectContaining({
           path: 'src/components/Settings/SecurityAuthPanel.tsx',
           patterns: expect.arrayContaining([
-            'w-full sm:w-auto px-3 py-2 text-xs font-medium rounded-md border border-amber-300 text-amber-800 bg-amber-100 hover:bg-amber-200 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900 dark:hover:bg-amber-800',
+            'w-full sm:w-auto px-3 py-2 text-xs font-medium rounded-md border border-amber-300 text-amber-800 bg-amber-100 hover:bg-amber-200 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900/25 dark:hover:bg-amber-800',
             'w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors',
             'w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors',
           ]),
@@ -3526,17 +3526,17 @@ describe('shared primitive guardrails', () => {
           path: 'src/components/Settings/InfrastructureInstallerSection.tsx',
           patterns: expect.arrayContaining([
             'inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700',
-            'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100',
-            'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
-            'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
+            'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 transition-colors hover:bg-emerald-100',
+            'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100',
+            'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100',
           ]),
         }),
         expect.objectContaining({
           path: 'src/components/ErrorBoundary.tsx',
           patterns: expect.arrayContaining([
-            'px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700',
-            'px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700',
-            'text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700',
+            'px-4 py-2 bg-blue-600 text-white rounded-sm hover:bg-blue-700',
+            'px-4 py-2 bg-slate-600 text-white rounded-sm hover:bg-slate-700',
+            'text-xs px-2 py-1 bg-red-600 text-white rounded-sm hover:bg-red-700',
           ]),
         }),
         expect.objectContaining({
@@ -3549,7 +3549,7 @@ describe('shared primitive guardrails', () => {
         expect.objectContaining({
           path: 'src/components/UpdateProgressModal.tsx',
           patterns: expect.arrayContaining([
-            'mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded',
+            'mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-sm',
             'px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors',
           ]),
         }),
@@ -3557,13 +3557,13 @@ describe('shared primitive guardrails', () => {
     );
     expect(errorBoundarySource).toContain("import { Button } from '@/components/shared/Button';");
     expect(errorBoundarySource).not.toContain(
-      'px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700',
+      'px-4 py-2 bg-blue-600 text-white rounded-sm hover:bg-blue-700',
     );
     expect(errorBoundarySource).not.toContain(
-      'px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700',
+      'px-4 py-2 bg-slate-600 text-white rounded-sm hover:bg-slate-700',
     );
     expect(errorBoundarySource).not.toContain(
-      'text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700',
+      'text-xs px-2 py-1 bg-red-600 text-white rounded-sm hover:bg-red-700',
     );
     expect(updateConfirmationModalSource).toContain('ActionIconButton');
     expect(updateConfirmationModalSource).not.toContain(
@@ -3574,7 +3574,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(updateProgressModalSource).toContain('ActionIconButton');
     expect(updateProgressModalSource).not.toContain(
-      'mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded',
+      'mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-sm',
     );
     expect(updateProgressModalSource).not.toContain(
       'px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors',
@@ -3721,7 +3721,7 @@ describe('shared primitive guardrails', () => {
     expect(patrolSuccessApprovalActionGuard?.canonical?.export).toBe('getButtonClass');
     expect(patrolSuccessApprovalActionGuard?.allPatterns).toEqual([
       'px-3 py-1.5 bg-green-600 hover:bg-green-700',
-      'text-white text-xs font-medium rounded',
+      'text-white text-xs font-medium rounded-sm',
     ]);
     expect(patrolSuccessApprovalActionGuard?.scopes).toEqual([
       'src/components/patrol',
@@ -3737,7 +3737,7 @@ describe('shared primitive guardrails', () => {
     expect(patrolWarningApprovalActionGuard?.canonical?.export).toBe('getButtonClass');
     expect(patrolWarningApprovalActionGuard?.allPatterns).toEqual([
       'px-3 py-1.5 bg-amber-600 hover:bg-amber-700',
-      'text-white text-xs font-medium rounded',
+      'text-white text-xs font-medium rounded-sm',
     ]);
     expect(patrolWarningApprovalActionGuard?.scopes).toEqual([
       'src/components/patrol',
@@ -3753,7 +3753,7 @@ describe('shared primitive guardrails', () => {
     expect(patrolPrimaryApprovalActionGuard?.canonical?.export).toBe('getButtonClass');
     expect(patrolPrimaryApprovalActionGuard?.allPatterns).toEqual([
       'px-3 py-1.5 bg-blue-600 hover:bg-blue-700',
-      'text-white text-xs font-medium rounded',
+      'text-white text-xs font-medium rounded-sm',
     ]);
     expect(patrolPrimaryApprovalActionGuard?.scopes).toEqual([
       'src/components/patrol',
@@ -3784,7 +3784,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(settingsSuccessOutlineActionGuard?.canonical?.export).toBe('getButtonClass');
     expect(settingsSuccessOutlineActionGuard?.allPatterns).toEqual([
-      'rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900',
+      'rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25',
     ]);
     expect(settingsSuccessOutlineActionGuard?.scopes).toEqual([
       'src/components/Settings',
@@ -3800,7 +3800,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(settingsSuccessGhostActionGuard?.canonical?.export).toBe('getButtonClass');
     expect(settingsSuccessGhostActionGuard?.allPatterns).toEqual([
-      'rounded-md px-3 py-2 text-sm font-medium text-emerald-900',
+      'rounded-md px-3 py-2 text-sm font-medium text-emerald-900/25',
     ]);
     expect(settingsSuccessGhostActionGuard?.scopes).toEqual([
       'src/components/Settings',
@@ -3817,7 +3817,7 @@ describe('shared primitive guardrails', () => {
     expect(settingsSuccessGhostRowActionGuard?.canonical?.export).toBe('getButtonClass');
     expect(settingsSuccessGhostRowActionGuard?.allPatterns).toEqual([
       'rounded-md px-2 py-1 text-xs font-medium text-emerald-700',
-      'hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900',
+      'hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/25',
     ]);
     expect(settingsSuccessGhostRowActionGuard?.scopes).toEqual([
       'src/components/Settings',
@@ -3878,7 +3878,7 @@ describe('shared primitive guardrails', () => {
     expect(settingsDangerGhostRowActionGuard?.canonical?.export).toBe('getButtonClass');
     expect(settingsDangerGhostRowActionGuard?.allPatterns).toEqual([
       'rounded-md px-2 py-1 text-xs font-medium text-red-600',
-      'hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900',
+      'hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/25',
     ]);
     expect(settingsDangerGhostRowActionGuard?.scopes).toEqual([
       'src/components/Settings',
@@ -4016,7 +4016,7 @@ describe('shared primitive guardrails', () => {
     expect(drawerHeaderActionGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
     expect(drawerHeaderActionGuard?.canonical?.export).toBe('DrawerHeaderActionButton');
     expect(drawerHeaderActionGuard?.allPatterns).toEqual([
-      'inline-flex h-8 min-h-11 min-w-11 items-center gap-1.5 rounded border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+      'inline-flex h-8 min-h-11 min-w-11 items-center gap-1.5 rounded-sm border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500',
     ]);
     expect(drawerHeaderActionGuard?.scopes).toEqual([
       'src/components',
@@ -4030,7 +4030,7 @@ describe('shared primitive guardrails', () => {
     expect(drawerHeaderIconGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
     expect(drawerHeaderIconGuard?.canonical?.export).toBe('DrawerHeaderIconButton');
     expect(drawerHeaderIconGuard?.allPatterns).toEqual([
-      'inline-flex h-8 w-8 min-h-11 min-w-11 items-center justify-center rounded-md hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+      'inline-flex h-8 w-8 min-h-11 min-w-11 items-center justify-center rounded-md hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500',
     ]);
     expect(drawerHeaderIconGuard?.scopes).toEqual(['src/components', 'src/features', 'src/pages']);
     expect(drawerHeaderIconGuard?.allowedPaths ?? []).toHaveLength(0);
@@ -4086,35 +4086,35 @@ describe('shared primitive guardrails', () => {
         expect.objectContaining({
           path: 'src/components/AI/Chat/index.tsx',
           patterns: expect.arrayContaining([
-            'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted',
-            'flex-shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors',
-            'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
-            'rounded p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900 dark:hover:text-blue-300',
-            'order-2 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-none',
-            'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900',
-            'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900',
-            'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60',
-            'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45',
-            'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+            'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted',
+            'shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors',
+            'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
+            'rounded-sm p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900/25 dark:hover:text-blue-300',
+            'order-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-0',
+            'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25',
+            'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:text-amber-200 dark:hover:bg-amber-900/25',
+            'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 dark:text-blue-200 dark:hover:bg-blue-900/60',
+            'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-xs transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45',
+            'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
           ]),
         }),
         expect.objectContaining({
           path: 'src/components/AI/Chat/MessageItem.tsx',
           patterns: expect.arrayContaining([
-            'inline-flex h-5 w-5 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+            'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
           ]),
         }),
         expect.objectContaining({
           path: 'src/features/standalone/AgentsMachinesTable.tsx',
           patterns: expect.arrayContaining([
-            'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60',
+            'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/60',
           ]),
         }),
         expect.objectContaining({
           path: 'src/components/Settings/SSOProvidersPanel.tsx',
           patterns: expect.arrayContaining([
             'p-2 text-slate-500 hover:text-blue-600 hover:bg-surface-hover rounded-md transition-colors',
-            'p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-md transition-colors',
+            'p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/25 rounded-md transition-colors',
             'class="text-slate-400 hover:text-base-content"',
           ]),
         }),
@@ -4122,7 +4122,7 @@ describe('shared primitive guardrails', () => {
           path: 'src/components/Settings/RolesPanel.tsx',
           patterns: expect.arrayContaining([
             'p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-surface-hover dark:hover:text-blue-300',
-            'p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900',
+            'p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/25',
           ]),
         }),
       ]),
@@ -4142,7 +4142,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(standaloneAgentMachineActionGuard?.canonical?.export).toBe('ActionIconButton');
     expect(standaloneAgentMachineActionGuard?.allPatterns).toEqual([
-      'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60',
+      'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/60',
     ]);
     expect(standaloneAgentMachineActionGuard?.scopes).toEqual([
       'src/features/standalone/AgentsMachinesTable.tsx',
@@ -4156,7 +4156,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(aiChatMessageQueuedActionGuard?.canonical?.export).toBe('ActionIconButton');
     expect(aiChatMessageQueuedActionGuard?.allPatterns).toEqual([
-      'inline-flex h-5 w-5 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+      'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
     ]);
     expect(aiChatMessageQueuedActionGuard?.scopes).toEqual([
       'src/components/AI/Chat/MessageItem.tsx',
@@ -4182,13 +4182,13 @@ describe('shared primitive guardrails', () => {
       ]);
     }
     expect(aiChatActionIconHeaderGuard?.allPatterns).toEqual([
-      'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content',
+      'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content',
     ]);
     expect(aiChatActionIconAccentGuard?.allPatterns).toEqual([
-      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950',
+      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25',
     ]);
     expect(aiChatActionIconPrimarySendGuard?.allPatterns).toEqual([
-      'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700',
+      'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-xs transition-colors hover:bg-blue-700',
     ]);
     expect(aiChatActionIconWarningGuard?.allPatterns).toEqual([
       'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100',
@@ -4212,8 +4212,8 @@ describe('shared primitive guardrails', () => {
           patterns: expect.arrayContaining([
             'lucide-solid/icons/copy',
             "lucide-solid/icons/check';",
-            'mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content',
-            'ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content',
+            'mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-xs transition-opacity hover:text-base-content',
+            'ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-xs transition-opacity hover:text-base-content',
           ]),
         }),
         expect.objectContaining({
@@ -4221,7 +4221,7 @@ describe('shared primitive guardrails', () => {
           patterns: expect.arrayContaining([
             'lucide-solid/icons/copy',
             "lucide-solid/icons/check';",
-            'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+            'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
           ]),
         }),
       ]),
@@ -4235,14 +4235,14 @@ describe('shared primitive guardrails', () => {
     expect(aiChatMessageCopyValueGuard?.scopes).toEqual(['src/components/AI/Chat/MessageItem.tsx']);
     expect(aiChatMessageCopyValueGuard?.allPatterns).toEqual([
       'inline-flex h-7 w-7',
-      'border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content',
+      'border border-border-subtle bg-surface text-muted opacity-0 shadow-xs transition-opacity hover:text-base-content',
       'CopyIcon class="h-3.5 w-3.5"',
     ]);
     expect(aiChatToolCopyValueGuard?.scopes).toEqual([
       'src/components/AI/Chat/ToolExecutionBlock.tsx',
     ]);
     expect(aiChatToolCopyValueGuard?.allPatterns).toEqual([
-      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
       'CopyIcon class="h-3 w-3"',
     ]);
     expect(copyableCodeRowRule?.canonical?.path).toBe('src/components/shared/CopyableCodeRow.tsx');
@@ -4270,7 +4270,7 @@ describe('shared primitive guardrails', () => {
     expect(copyValueNeutralGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
     expect(copyValueNeutralGuard?.canonical?.export).toBe('CopyValueButton');
     expect(copyValueNeutralGuard?.allPatterns).toEqual([
-      'inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded border border-border bg-surface px-2 text-muted transition-colors hover:bg-surface-hover hover:text-base-content',
+      'inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded-sm border border-border bg-surface px-2 text-muted transition-colors hover:bg-surface-hover hover:text-base-content',
       'fallback={<CopyIcon class="h-3.5 w-3.5" />}',
     ]);
     expect(copyValueMutedGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
@@ -4282,13 +4282,13 @@ describe('shared primitive guardrails', () => {
     expect(copyValueAccentGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
     expect(copyValueAccentGuard?.canonical?.export).toBe('CopyValueButton');
     expect(copyValueAccentGuard?.allPatterns).toEqual([
-      'inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 dark:text-blue-200 dark:hover:bg-blue-950',
+      'inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 dark:text-blue-200 dark:hover:bg-blue-950/25',
       'fallback={<CopyIcon class="h-3.5 w-3.5" />}',
     ]);
     expect(copyableCodeRowGuard?.canonical?.path).toBe('src/components/shared/CopyableCodeRow.tsx');
     expect(copyableCodeRowGuard?.canonical?.export).toBe('CopyableCodeRow');
     expect(copyableCodeRowGuard?.allPatterns).toEqual([
-      'flex items-start gap-2 rounded bg-surface-alt px-2 py-1.5',
+      'flex items-start gap-2 rounded-sm bg-surface-alt px-2 py-1.5',
       'break-all font-mono text-xs text-base-content',
     ]);
 
@@ -4354,10 +4354,10 @@ describe('shared primitive guardrails', () => {
       expect(drawerSource).toContain('ObjectDrawerHeader');
       expect(drawerSource).not.toContain('@/components/shared/Button');
       expect(drawerSource).not.toContain(
-        'inline-flex h-8 min-h-11 min-w-11 items-center gap-1.5 rounded border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+        'inline-flex h-8 min-h-11 min-w-11 items-center gap-1.5 rounded-sm border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500',
       );
       expect(drawerSource).not.toContain(
-        'inline-flex h-8 w-8 min-h-11 min-w-11 items-center justify-center rounded-md hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+        'inline-flex h-8 w-8 min-h-11 min-w-11 items-center justify-center rounded-md hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500',
       );
     }
     expect(objectDrawerHeaderSource).toContain('absolute inset-0');
@@ -4371,23 +4371,23 @@ describe('shared primitive guardrails', () => {
     expect(aiChatSource).toContain('@/components/shared/Button');
     expect(aiChatSource).toContain('ActionIconButton');
     for (const retiredActionIconShell of [
-      'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted',
-      'flex-shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors',
-      'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
-      'rounded p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900 dark:hover:text-blue-300',
-      'order-2 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-none',
-      'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900',
-      'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900',
-      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60',
-      'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45',
-      'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+      'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted',
+      'shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors',
+      'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
+      'rounded-sm p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900/25 dark:hover:text-blue-300',
+      'order-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-0',
+      'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25',
+      'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900/25 dark:text-amber-200 dark:hover:bg-amber-900/25',
+      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 dark:text-blue-200 dark:hover:bg-blue-900/60',
+      'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-xs transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45',
+      'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
     ]) {
       expect(aiChatSource).not.toContain(retiredActionIconShell);
     }
     expect(agentsMachinesTableSource).toContain('@/components/shared/Button');
     expect(agentsMachinesTableSource).toContain('ActionIconButton');
     expect(agentsMachinesTableSource).not.toContain(
-      'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60',
+      'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/60',
     );
     expect(messageItemSource).toContain('@/components/shared/Button');
     expect(messageItemSource).toContain('ActionIconButton');
@@ -4395,20 +4395,20 @@ describe('shared primitive guardrails', () => {
     expect(messageItemSource).not.toContain('lucide-solid/icons/copy');
     expect(messageItemSource).not.toContain("lucide-solid/icons/check';");
     expect(messageItemSource).not.toContain(
-      'mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content',
+      'mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-xs transition-opacity hover:text-base-content',
     );
     expect(messageItemSource).not.toContain(
-      'ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content',
+      'ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-xs transition-opacity hover:text-base-content',
     );
     expect(messageItemSource).not.toContain(
-      'inline-flex h-5 w-5 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+      'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950/25 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
     );
     expect(toolExecutionBlockSource).toContain('@/components/shared/Button');
     expect(toolExecutionBlockSource).toContain('CopyValueButton');
     expect(toolExecutionBlockSource).not.toContain('lucide-solid/icons/copy');
     expect(toolExecutionBlockSource).not.toContain("lucide-solid/icons/check';");
     expect(toolExecutionBlockSource).not.toContain(
-      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
     );
     expect(resourceDetailDrawerDebugTabSource).toContain('@/components/shared/Button');
     expect(resourceDetailDrawerDebugTabSource).not.toContain(
@@ -4510,13 +4510,13 @@ describe('shared primitive guardrails', () => {
       'inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700',
     );
     expect(infrastructureInstallerSectionSource).not.toContain(
-      'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100',
+      'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 transition-colors hover:bg-emerald-100',
     );
     expect(infrastructureInstallerSectionSource).not.toContain(
-      'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
+      'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100',
     );
     expect(infrastructureInstallerSectionSource).not.toContain(
-      'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
+      'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900/25 hover:bg-emerald-100',
     );
     expect(infrastructureInstallerSectionSource).not.toContain('absolute right-2 top-2');
     expect(infrastructureInstallerSectionSource).not.toContain('bg-surface-hover p-2');
@@ -4573,7 +4573,7 @@ describe('shared primitive guardrails', () => {
       'p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-surface-hover dark:hover:text-blue-300',
     );
     expect(rolesPanelSource).not.toContain(
-      'p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900',
+      'p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/25',
     );
     for (const organizationActionSource of [
       organizationAccessInvitationsSectionSource,
@@ -4610,9 +4610,9 @@ describe('shared primitive guardrails', () => {
       'inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60',
       'inline-flex items-center justify-center rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:border-red-300 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60',
       'inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60',
-      'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60',
-      'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-60',
-      'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60',
+      'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/25 disabled:cursor-not-allowed disabled:opacity-60',
+      'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/25 disabled:cursor-not-allowed disabled:opacity-60',
+      'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/25 disabled:cursor-not-allowed disabled:opacity-60',
       'text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200',
     ]) {
       for (const organizationActionSource of [
@@ -4669,7 +4669,7 @@ describe('shared primitive guardrails', () => {
       'min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1.5',
       'min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors flex items-center gap-1.5',
       'p-2 text-slate-500 hover:text-blue-600 hover:bg-surface-hover rounded-md transition-colors',
-      'p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-md transition-colors',
+      'p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/25 rounded-md transition-colors',
       'text-blue-600 hover:underline flex items-center gap-1',
       'px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap',
       'px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50',
@@ -4687,7 +4687,7 @@ describe('shared primitive guardrails', () => {
     expect(securityAuthPanelSource).toContain('size="settingsAction"');
     expect(securityAuthPanelSource).toContain('size="settingsActionXs"');
     expect(securityAuthPanelSource).not.toContain(
-      'w-full sm:w-auto px-3 py-2 text-xs font-medium rounded-md border border-amber-300 text-amber-800 bg-amber-100 hover:bg-amber-200 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900 dark:hover:bg-amber-800',
+      'w-full sm:w-auto px-3 py-2 text-xs font-medium rounded-md border border-amber-300 text-amber-800 bg-amber-100 hover:bg-amber-200 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900/25 dark:hover:bg-amber-800',
     );
     expect(securityAuthPanelSource).not.toContain(
       'w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors',
@@ -4710,10 +4710,10 @@ describe('shared primitive guardrails', () => {
     expect(discoveryTabSource).not.toContain('const CopyValueButton');
     expect(discoveryTabSource).not.toContain('const CopyableCodeRow');
     expect(discoveryTabSource).not.toContain(
-      'inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded border border-border bg-surface px-2 text-muted transition-colors hover:bg-surface-hover hover:text-base-content',
+      'inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded-sm border border-border bg-surface px-2 text-muted transition-colors hover:bg-surface-hover hover:text-base-content',
     );
     expect(discoveryTabSource).not.toContain(
-      'flex items-start gap-2 rounded bg-surface-alt px-2 py-1.5',
+      'flex items-start gap-2 rounded-sm bg-surface-alt px-2 py-1.5',
     );
     expect(webInterfaceUrlFieldSource).toContain('CopyValueButton');
     expect(webInterfaceUrlFieldSource).not.toContain('CopyIcon class="h-3.5 w-3.5"');
@@ -4798,7 +4798,7 @@ describe('shared primitive guardrails', () => {
       expect.arrayContaining([
         expect.objectContaining({
           path: 'src/components/Settings/AIProviderConfigurationSection.tsx',
-          patterns: expect.arrayContaining(['rounded border border-red-200']),
+          patterns: expect.arrayContaining(['rounded-sm border border-red-200']),
         }),
         expect.objectContaining({
           path: 'src/components/Settings/ConnectionEditor/AddressProbeStep.tsx',
@@ -4869,7 +4869,7 @@ describe('shared primitive guardrails', () => {
       expect(source).toContain('scale="compact"');
       expect(source).toContain('padding="sm"');
     }
-    expect(aiProviderConfigurationSectionSource).not.toContain('rounded border border-red-200');
+    expect(aiProviderConfigurationSectionSource).not.toContain('rounded-sm border border-red-200');
     expect(addressProbeStepSource).not.toContain('rounded-md border border-red-300 bg-red-50');
     expect(addressProbeStepSource).not.toContain('rounded-md border border-amber-300 bg-amber-50');
     expect(availabilityTargetSlotSource).not.toContain('testToneClass');
@@ -4920,8 +4920,8 @@ describe('shared primitive guardrails', () => {
         path: 'src/components/ErrorBoundary.tsx',
         patterns: [
           '<svg',
-          'bg-red-50 dark:bg-red-900 border border-red-200',
-          'p-4 bg-red-50 dark:bg-red-900 border border-red-200',
+          'bg-red-50 dark:bg-red-900/25 border border-red-200',
+          'p-4 bg-red-50 dark:bg-red-900/25 border border-red-200',
         ],
       },
     ]);
@@ -4929,9 +4929,9 @@ describe('shared primitive guardrails', () => {
     expect(errorBoundarySource).toContain("import { Button } from '@/components/shared/Button';");
     expect(errorBoundarySource).toContain('lucide-solid/icons/alert-triangle');
     expect(errorBoundarySource).not.toContain('<svg');
-    expect(errorBoundarySource).not.toContain('bg-red-50 dark:bg-red-900 border border-red-200');
+    expect(errorBoundarySource).not.toContain('bg-red-50 dark:bg-red-900/25 border border-red-200');
     expect(errorBoundarySource).not.toContain(
-      'p-4 bg-red-50 dark:bg-red-900 border border-red-200',
+      'p-4 bg-red-50 dark:bg-red-900/25 border border-red-200',
     );
   });
 
@@ -4959,8 +4959,8 @@ describe('shared primitive guardrails', () => {
         path: 'src/components/UpdateConfirmationModal.tsx',
         patterns: [
           '<svg',
-          'bg-blue-50 dark:bg-blue-900 border border-blue-200',
-          'bg-yellow-50 dark:bg-yellow-900 border border-yellow-200',
+          'bg-blue-50 dark:bg-blue-900/25 border border-blue-200',
+          'bg-yellow-50 dark:bg-yellow-900/25 border border-yellow-200',
           'rounded-md p-4 border',
           'px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors',
         ],
@@ -4969,10 +4969,10 @@ describe('shared primitive guardrails', () => {
         path: 'src/components/UpdateProgressModal.tsx',
         patterns: [
           '<svg',
-          'bg-red-50 dark:bg-red-900 border border-red-200',
-          'bg-blue-50 dark:bg-blue-900 border border-blue-200',
-          'bg-yellow-50 dark:bg-yellow-900 border border-yellow-200',
-          'mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded',
+          'bg-red-50 dark:bg-red-900/25 border border-red-200',
+          'bg-blue-50 dark:bg-blue-900/25 border border-blue-200',
+          'bg-yellow-50 dark:bg-yellow-900/25 border border-yellow-200',
+          'mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-sm',
         ],
       },
     ]);
@@ -4986,18 +4986,18 @@ describe('shared primitive guardrails', () => {
 
     for (const source of [updateConfirmationModalSource, updateProgressModalSource]) {
       expect(source).not.toContain('<svg');
-      expect(source).not.toContain('bg-blue-50 dark:bg-blue-900 border border-blue-200');
-      expect(source).not.toContain('bg-yellow-50 dark:bg-yellow-900 border border-yellow-200');
+      expect(source).not.toContain('bg-blue-50 dark:bg-blue-900/25 border border-blue-200');
+      expect(source).not.toContain('bg-yellow-50 dark:bg-yellow-900/25 border border-yellow-200');
       expect(source).not.toContain(
         'px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors',
       );
     }
     expect(updateConfirmationModalSource).not.toContain('rounded-md p-4 border');
     expect(updateProgressModalSource).not.toContain(
-      'bg-red-50 dark:bg-red-900 border border-red-200',
+      'bg-red-50 dark:bg-red-900/25 border border-red-200',
     );
     expect(updateProgressModalSource).not.toContain(
-      'mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded',
+      'mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-sm',
     );
   });
 
@@ -5055,7 +5055,7 @@ describe('shared primitive guardrails', () => {
     ]) {
       expect(source).toContain('InlineNotice');
       expect(source).not.toContain('rounded-lg border border-amber-300 bg-amber-50');
-      expect(source).not.toContain('text-amber-900 underline-offset-2');
+      expect(source).not.toContain('text-amber-900/25 underline-offset-2');
     }
     expect(platformOutdatedAgentNoticeSource).toContain(
       "import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';",
@@ -5087,8 +5087,8 @@ describe('shared primitive guardrails', () => {
         patterns: [
           '<svg',
           '<button',
-          'bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800',
-          'p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded text-blue-600',
+          'bg-blue-50 dark:bg-blue-900/25 border-b border-blue-200 dark:border-blue-800',
+          'p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded-sm text-blue-600',
         ],
       },
     ]);
@@ -5100,10 +5100,10 @@ describe('shared primitive guardrails', () => {
     expect(demoBannerSource).not.toContain('<svg');
     expect(demoBannerSource).not.toContain('<button');
     expect(demoBannerSource).not.toContain(
-      'bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800',
+      'bg-blue-50 dark:bg-blue-900/25 border-b border-blue-200 dark:border-blue-800',
     );
     expect(demoBannerSource).not.toContain(
-      'p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded text-blue-600',
+      'p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded-sm text-blue-600',
     );
   });
 
@@ -5133,9 +5133,9 @@ describe('shared primitive guardrails', () => {
           '<button',
           'toneClasses',
           'buttonClasses',
-          'bg-amber-50 dark:bg-amber-900 border-b border-amber-200',
-          'bg-red-50 dark:bg-red-900 border-b border-red-200',
-          'p-1 rounded transition-colors opacity-70 hover:opacity-100',
+          'bg-amber-50 dark:bg-amber-900/25 border-b border-amber-200',
+          'bg-red-50 dark:bg-red-900/25 border-b border-red-200',
+          'p-1 rounded-sm transition-colors opacity-70 hover:opacity-100',
         ],
       },
     ]);
@@ -5149,13 +5149,13 @@ describe('shared primitive guardrails', () => {
     expect(commercialMigrationBannerSource).not.toContain('toneClasses');
     expect(commercialMigrationBannerSource).not.toContain('buttonClasses');
     expect(commercialMigrationBannerSource).not.toContain(
-      'bg-amber-50 dark:bg-amber-900 border-b border-amber-200',
+      'bg-amber-50 dark:bg-amber-900/25 border-b border-amber-200',
     );
     expect(commercialMigrationBannerSource).not.toContain(
-      'bg-red-50 dark:bg-red-900 border-b border-red-200',
+      'bg-red-50 dark:bg-red-900/25 border-b border-red-200',
     );
     expect(commercialMigrationBannerSource).not.toContain(
-      'p-1 rounded transition-colors opacity-70 hover:opacity-100',
+      'p-1 rounded-sm transition-colors opacity-70 hover:opacity-100',
     );
   });
 
@@ -5456,7 +5456,7 @@ describe('shared primitive guardrails', () => {
     expect(sharedPlatformPageSource).toContain('class={`${PLATFORM_TABLE_HEADER_ROW_CLASS}');
     expect(sharedPlatformPageSource).toContain('class={`${PLATFORM_TABLE_BODY_CLASS}');
     expect(sharedPlatformPageSource).toContain(
-      "export const PLATFORM_TABLE_DEFAULT_RESPONSIVE_MIN_WIDTH_CLASS = 'min-w-[0px]'",
+      "export const PLATFORM_TABLE_DEFAULT_RESPONSIVE_MIN_WIDTH_CLASS = 'min-w-0'",
     );
     expect(sharedPlatformPageSource).toContain('export function getPlatformTableClass');
     expect(sharedPlatformPageSource).toContain("className !== 'min-w-full'");
@@ -8015,7 +8015,7 @@ describe('shared primitive guardrails', () => {
       "colspan={row.layout === 'stacked' ? 2 : undefined}",
     );
     expect(detailSectionTableSource).toContain('lg:grid-cols-[minmax(0,1fr)]');
-    expect(detailSectionTableSource).toContain('[overflow-wrap:anywhere]');
+    expect(detailSectionTableSource).toContain('wrap-anywhere');
 
     expect(detailSectionTableSource).toContain('lg:text-left');
     expect(detailSectionTableSource).toContain('lg:divide-y-0');
@@ -8533,10 +8533,10 @@ describe('shared primitive guardrails', () => {
       'class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2"',
     );
     expect(filterBarSource).toContain(
-      'class="inline-flex max-w-full flex-shrink-0 flex-wrap items-center justify-start gap-2"',
+      'class="inline-flex max-w-full shrink-0 flex-wrap items-center justify-start gap-2"',
     );
     expect(filterBarSource).not.toContain(
-      'class="ml-auto inline-flex flex-shrink-0 flex-wrap items-center justify-end gap-2"',
+      'class="ml-auto inline-flex shrink-0 flex-wrap items-center justify-end gap-2"',
     );
     expect(filterBarSource).toContain('showAddFilterInMobileActionRow');
     expect(filterBarSource).toContain('showLabel={props.showAddFilterLabel === true}');
@@ -8580,14 +8580,14 @@ describe('shared primitive guardrails', () => {
     expect(addFilterMenuSource).toContain('option.value !== filter.defaultValue');
     expect(addFilterMenuSource).toContain('GROUP_ORDER');
     expect(addFilterMenuSource).toContain('filterGroupClass');
-    expect(addFilterMenuSource).toContain('selectClass="w-[7.5rem]"');
-    expect(addFilterMenuSource).not.toContain('min-w-[7.5rem]');
+    expect(addFilterMenuSource).toContain('selectClass="w-30"');
+    expect(addFilterMenuSource).not.toContain('min-w-30');
     expect(addFilterMenuSource).toContain('bg-surface-hover');
     expect(addFilterMenuSource).toContain('ring-border-subtle');
     expect(addFilterMenuSource).toContain('aria-label="Filter"');
     expect(addFilterMenuSource).toContain('filterToolbarControlClass');
     expect(addFilterMenuSource).toContain(
-      "props.showLabel === false ? 'flex-shrink-0' : `${filterGroupClass} flex-shrink-0`",
+      "props.showLabel === false ? 'shrink-0' : `${filterGroupClass} shrink-0`",
     );
     expect(addFilterMenuSource).not.toContain('LabeledFilterSelect');
     // Add-filter selection is intentionally direct: the shared primitive

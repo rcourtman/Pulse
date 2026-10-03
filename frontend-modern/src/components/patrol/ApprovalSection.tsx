@@ -226,7 +226,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                   </div>
 
                   <Show when={(preflight()?.safetyChecks?.length || 0) > 0}>
-                    <details class="rounded border border-border bg-surface-alt px-2 py-1.5 text-xs">
+                    <details class="rounded-sm border border-border bg-surface-alt px-2 py-1.5 text-xs">
                       <summary class="cursor-pointer font-medium text-muted">
                         Safety and verification
                       </summary>
@@ -259,7 +259,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                   <Show when={!reviewedPlanHash()}>
                     <div
                       role="alert"
-                      class="rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                      class="rounded-sm border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900/25 dark:bg-amber-950/40 dark:text-amber-200"
                     >
                       This action has no reviewed plan identity. Create a new plan before approving
                       or running it.

@@ -203,7 +203,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
     return (
       <button
         type="button"
-        class={`inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 ${config.className} ${disabled ? 'opacity-60 cursor-not-allowed pointer-events-none' : ''}`.trim()}
+        class={`inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded-sm transition-colors duration-150 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 ${config.className} ${disabled ? 'opacity-60 cursor-not-allowed pointer-events-none' : ''}`.trim()}
         disabled={disabled}
         onClick={() => {
           if (disabled) return;
@@ -228,7 +228,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
             type="checkbox"
             checked={props.selected}
             onChange={(e) => props.onToggleSelection?.(e.currentTarget.checked)}
-            class="rounded border-border text-sky-600 focus:ring-sky-500 transition-shadow cursor-pointer"
+            class="rounded-sm border-border text-sky-600 focus:ring-sky-500 transition-shadow cursor-pointer"
             aria-label={`Select ${resourceLabel()}`}
           />
         </TableCell>
@@ -246,7 +246,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                   checked={isChecked}
                   disabled={globallyDisabled}
                   onToggle={() => !globallyDisabled && props.onToggleDisabled?.(props.resource.id)}
-                  class="my-[1px]"
+                  class="my-px"
                   title={
                     globallyDisabled
                       ? 'Alerts disabled globally'
@@ -289,14 +289,14 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                 title={`Open ${resourceLabel()} web interface`}
               />
               <Show when={props.resource.clusterName}>
-                <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                <span class="rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300">
                   {props.resource.clusterName}
                 </span>
               </Show>
             </div>
           </Show>
           <Show when={props.resource.type === 'storage' && props.resource.node}>
-            <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+            <span class="rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300">
               {props.resource.node}
             </span>
           </Show>
@@ -304,7 +304,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
             <span class="text-xs text-muted">{props.resource.subtitle as string}</span>
           </Show>
           <Show when={props.resource.hasOverride || props.resource.disableConnectivity}>
-            <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+            <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 rounded-sm">
               {getAlertResourceTableCustomBadgeLabel()}
             </span>
           </Show>
@@ -315,7 +315,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
             label="Override note"
             labelClass="sr-only"
             fieldBaseClass="mt-2 w-full"
-            textareaBaseClass="w-full rounded border border-border bg-surface px-2 py-1 text-xs text-base-content focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            textareaBaseClass="w-full rounded-sm border border-border bg-surface px-2 py-1 text-xs text-base-content focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
             rows={2}
             placeholder={getAlertResourceTableOverrideNotePlaceholder()}
             value={props.editingNote()}
@@ -323,7 +323,9 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
           />
         </Show>
         <Show when={!isEditing() && props.resource.note}>
-          <p class="mt-2 text-xs italic text-muted break-words">{props.resource.note as string}</p>
+          <p class="mt-2 text-xs italic text-muted wrap-break-word">
+            {props.resource.note as string}
+          </p>
         </Show>
       </TableCell>
 
@@ -394,7 +396,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                           openMetricEditor();
                         }
                       }}
-                      class="cursor-pointer hover:bg-surface-hover rounded px-1 py-0.5 transition-colors"
+                      class="cursor-pointer hover:bg-surface-hover rounded-sm px-1 py-0.5 transition-colors"
                       title={getAlertResourceTableEditMetricTitle()}
                       aria-label={getAlertResourceTableEditMetricTitle()}
                     >

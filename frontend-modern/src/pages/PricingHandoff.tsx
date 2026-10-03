@@ -54,9 +54,9 @@ export default function PricingHandoff() {
             }
             descriptionVisibility="always"
             updateDocumentTitle={false}
-            class="!items-center !justify-center text-center sm:!flex-col"
-            titleClass="!text-lg !font-semibold"
-            descriptionClass="!font-normal"
+            class="items-center! justify-center! text-center sm:flex-col!"
+            titleClass="text-lg! font-semibold!"
+            descriptionClass="font-normal!"
           />
         </div>
       </div>

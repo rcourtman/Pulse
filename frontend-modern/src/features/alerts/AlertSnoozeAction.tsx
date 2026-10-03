@@ -92,7 +92,7 @@ export function AlertSnoozeAction(props: {
                 <Button
                   variant="outline"
                   size="md"
-                  class="w-full justify-start rounded-lg text-left hover:border-primary hover:bg-primary/5"
+                  class="w-full rounded-lg text-left hover:border-primary hover:bg-primary/5"
                   disabled={busy()}
                   onClick={async () => {
                     if (busy()) return;

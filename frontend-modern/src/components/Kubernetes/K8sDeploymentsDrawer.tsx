@@ -186,12 +186,12 @@ export const K8sDeploymentsDrawer: Component<{
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <div class="w-[12rem]">
+            <div class="w-48">
               <SearchInput
                 value={search}
                 onChange={setSearch}
                 placeholder={drawerPresentation.searchPlaceholder}
-                inputClass="py-1 text-xs font-medium shadow-sm"
+                inputClass="py-1 text-xs font-medium shadow-xs"
                 typeToSearch
                 clearOnEscape
               />
@@ -204,7 +204,7 @@ export const K8sDeploymentsDrawer: Component<{
                 fieldBaseClass={filterGroupClass}
                 labelClass={filterLabelClass}
                 selectBaseClass={filterSelectClass}
-                selectClass="min-w-[10rem]"
+                selectClass="min-w-40"
                 value={namespace()}
                 aria-label={drawerPresentation.namespaceFilterLabel}
                 onChange={(e) => setNamespace(e.currentTarget.value)}
@@ -217,7 +217,7 @@ export const K8sDeploymentsDrawer: Component<{
             <button
               type="button"
               onClick={() => openPods(namespace() || undefined)}
-              class="rounded-md border border-border px-3 py-1 text-xs font-semibold shadow-sm hover:bg-surface-hover"
+              class="rounded-md border border-border px-3 py-1 text-xs font-semibold shadow-xs hover:bg-surface-hover"
             >
               {drawerPresentation.openPodsLabel}
             </button>
@@ -330,7 +330,7 @@ export const K8sDeploymentsDrawer: Component<{
                               type="button"
                               aria-label={drawerPresentation.viewPodsLabel}
                               onClick={() => openPods(dep.kubernetes?.namespace)}
-                              class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-surface-hover"
+                              class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-xs hover:bg-surface-hover"
                             >
                               <PlatformResponsiveTableLabel
                                 compact="Pods"

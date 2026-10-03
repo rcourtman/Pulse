@@ -265,7 +265,7 @@ describe('FilterHeader', () => {
 
   it('keeps shared filter popovers above nested table and card shells', () => {
     expect(filterPanelClass).toContain('absolute');
-    expect(filterPanelClass).toContain('z-[80]');
+    expect(filterPanelClass).toContain('z-80');
     expect(filterPanelClass).not.toContain('w-[min(40rem,calc(100vw-2rem))]');
     expect(filterPanelDefaultWidthClass).toContain('w-[min(40rem,calc(100vw-2rem))]');
     expect(filterToolbarSource).toContain("'flex min-h-11 items-center gap-1.5");

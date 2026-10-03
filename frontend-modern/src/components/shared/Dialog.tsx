@@ -38,9 +38,9 @@ export const Dialog: Component<DialogProps> = (props) => {
   return (
     <Show when={props.isOpen}>
       <Portal mount={document.body}>
-        <div ref={state.setLayerRef} class="fixed inset-0 z-[1000]" data-dialog-layer>
+        <div ref={state.setLayerRef} class="fixed inset-0 z-1000" data-dialog-layer>
           <div
-            class="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300"
+            class="absolute inset-0 bg-black/60 backdrop-blur-xs transition-opacity duration-300"
             data-dialog-backdrop
             onClick={state.handleBackdropClick}
           />

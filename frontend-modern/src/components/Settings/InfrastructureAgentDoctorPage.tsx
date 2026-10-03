@@ -47,19 +47,19 @@ const STATUS_PRESENTATION: Record<
 > = {
   healthy: {
     label: 'Healthy',
-    badgeClass: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+    badgeClass: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-200',
   },
   waiting: {
     label: 'Waiting for updater',
-    badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+    badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900/25 dark:text-blue-200',
   },
   warning: {
     label: 'Needs attention',
-    badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+    badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-200',
   },
   critical: {
     label: 'Critical',
-    badgeClass: 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200',
+    badgeClass: 'bg-rose-100 text-rose-800 dark:bg-rose-900/25 dark:text-rose-200',
   },
   removed: {
     label: 'Removed',
@@ -418,7 +418,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                   labelClass="text-xs font-medium text-blue-800 dark:text-blue-100"
                   value={selectedTokenTarget()?.key}
                   onChange={(event) => setSelectedTokenTargetKey(event.currentTarget.value)}
-                  selectBaseClass="min-h-10 w-full rounded-md border border-blue-200 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-950 dark:focus:ring-blue-900"
+                  selectBaseClass="min-h-10 w-full rounded-md border border-blue-200 bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-950/25 dark:focus:ring-blue-900/25"
                 >
                   <For each={tokenGatedTargets()}>
                     {(target) => (
@@ -440,7 +440,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                   }
                 }}
                 placeholder="Token name (optional)"
-                class="min-h-10 flex-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-950 dark:focus:ring-blue-900"
+                class="min-h-10 flex-1 rounded-md border border-blue-200 bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-950/25 dark:focus:ring-blue-900/25"
               />
               <button
                 type="button"
@@ -483,7 +483,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
 
         <div class="rounded-md border border-border bg-surface">
           <Table class="w-full min-w-0 table-fixed text-sm">
-            <TableHeader class="bg-surface-alt/60">
+            <TableHeader class="">
               <TableRow>
                 <TableHead class="w-[40%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap sm:w-[26%]">
                   Agent
@@ -547,7 +547,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                           <div class="flex items-center gap-1.5">
                             <button
                               type="button"
-                              class="inline-flex items-center rounded p-0.5 text-muted transition-colors hover:bg-surface-alt hover:text-base-content"
+                              class="inline-flex items-center rounded-sm p-0.5 text-muted transition-colors hover:bg-surface-alt hover:text-base-content"
                               aria-expanded={expanded()}
                               aria-label={`${expanded() ? 'Hide' : 'Show'} details for ${target.displayName}`}
                               onClick={(event) => {
@@ -619,7 +619,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                               <div class="flex flex-wrap items-center gap-2">
                                 <span class="font-medium text-base-content">Security posture</span>
                                 <Show when={target.safeCollector}>
-                                  <span class="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
+                                  <span class="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-200">
                                     Safe collector confirmed
                                   </span>
                                 </Show>

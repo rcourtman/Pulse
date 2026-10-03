@@ -14,7 +14,7 @@ describe('StatusDot', () => {
 
     expect(dot).toHaveClass('inline-block');
     expect(dot).toHaveClass('rounded-full');
-    expect(dot).toHaveClass('flex-shrink-0');
+    expect(dot).toHaveClass('shrink-0');
     expect(dot).toHaveClass('h-2.5');
     expect(dot).toHaveClass('w-2.5');
     expect(dot).toHaveClass('bg-amber-500');

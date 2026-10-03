@@ -21,7 +21,7 @@ export const SkipToContentLink: Component<{ targetId?: string }> = (props) => {
       onBlur={() => setFocused(false)}
       class={
         focused()
-          ? 'absolute left-2 top-2 z-[100] rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-lg outline outline-2 outline-offset-2 outline-white'
+          ? 'absolute left-2 top-2 z-100 rounded-sm bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-lg outline-solid outline-2 outline-offset-2 outline-white'
           : 'sr-only'
       }
     >

@@ -25,7 +25,7 @@ describe('PlatformDetailTable', () => {
     ));
 
     const table = screen.getByRole('table');
-    expect(table).toHaveClass('platform-table', 'min-w-[0px]', 'table-fixed', 'text-xs');
+    expect(table).toHaveClass('platform-table', 'min-w-0', 'table-fixed', 'text-xs');
     expect(table.parentElement).toHaveClass('table-scroll-shell-phone-page');
     expect(table.querySelector('thead tr')).toHaveClass('bg-surface-alt', 'border-border');
     expect(table.querySelector('tbody')).toHaveClass('divide-y', 'divide-border');

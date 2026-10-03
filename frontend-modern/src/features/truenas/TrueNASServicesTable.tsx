@@ -340,7 +340,7 @@ export const TrueNASServicesTable: Component<{
                             <span
                               class={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                                 row.service.enabled
-                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/25 dark:text-emerald-300'
                                   : 'border-border bg-surface-alt text-muted'
                               }`}
                             >

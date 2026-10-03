@@ -155,7 +155,7 @@ export function PlatformWindowedRows<Row>(props: PlatformWindowedRowsProps<Row>)
       >
         <td
           colspan={props.colSpan ?? 100}
-          class="!p-0"
+          class="p-0!"
           style={{ height: `${windowing.topSpacerHeight()}px` }}
         />
       </tr>
@@ -167,7 +167,7 @@ export function PlatformWindowedRows<Row>(props: PlatformWindowedRowsProps<Row>)
       >
         <td
           colspan={props.colSpan ?? 100}
-          class="!p-0"
+          class="p-0!"
           style={{ height: `${windowing.bottomSpacerHeight()}px` }}
         />
       </tr>

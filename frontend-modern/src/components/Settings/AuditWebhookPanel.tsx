@@ -105,7 +105,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                     <button
                       onClick={() => setUrlToRemove(url)}
                       disabled={!canManage()}
-                      class="p-2 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900 rounded-md transition-colors"
+                      class="p-2 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/25 rounded-md transition-colors"
                       title="Remove webhook endpoint"
                     >
                       <Trash2 size={16} />
@@ -147,11 +147,11 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
       </SettingsPanel>
       <Card tone="warning" class="border border-amber-200 dark:border-amber-800">
         <div class="p-5 flex gap-4">
-          <div class="p-3 bg-amber-100 dark:bg-amber-900 rounded-md h-fit text-amber-600 dark:text-amber-300">
+          <div class="p-3 bg-amber-100 dark:bg-amber-900/25 rounded-md h-fit text-amber-600 dark:text-amber-300">
             <Shield size={22} />
           </div>
           <div>
-            <h3 class="text-base font-semibold text-amber-900 dark:text-amber-100 mb-1.5">
+            <h3 class="text-base font-semibold text-amber-900/25 dark:text-amber-100 mb-1.5">
               {AUDIT_WEBHOOK_SECURITY_NOTE_TITLE}
             </h3>
             <p class="text-sm text-amber-800 dark:text-amber-200 leading-relaxed">
