@@ -2,7 +2,8 @@
 """Exercise update help without touching a service, volume or Docker socket.
 
 The synthetic commands prove scope and failure handling, not installed recovery.
-The remaining checks bind the guide to the existing UI and snapshot writer.
+The remaining checks bind the shipped help to the existing UI labels and
+protect version-qualified recovery advice, not a particular snapshot writer.
 """
 
 import json
@@ -76,7 +77,7 @@ class UpdateRecoveryDocsTest(unittest.TestCase):
         return next(recipe for recipe in recipes if "compose" in recipe)
 
     def test_mirrors_match_the_exercised_guides(self):
-        for name in ("AUTO_UPDATE", "DOCKER"):
+        for name in ("AUTO_UPDATE", "DOCKER", "INSTALL"):
             with self.subTest(guide=name):
                 self.assertEqual(guide(name),
                                  (ROOT / "frontend-modern/public/docs" / f"{name}.md").read_text())
@@ -89,25 +90,42 @@ class UpdateRecoveryDocsTest(unittest.TestCase):
             self.assertIn(label, help_text)
         self.assertIn("entry.action === 'update' && entry.status === 'success' && Boolean(entry.backup_path)", ui)
         for phrase in ("successful in-app update", "retained backup", "version before that update",
-                       "Older versions may not have this control", "later settings and alert changes"):
+                       "Older versions may not have this control", "actual backup contents"):
             self.assertIn(phrase, help_text)
         self.assertNotIn("There is no rollback UI", help_text)
 
     def test_snapshot_scope_is_not_claimed_to_be_a_full_data_backup(self):
         help_text = " ".join(section("AUTO_UPDATE", "What an update snapshot contains", "###").split())
-        manager = (ROOT / "internal/updates/manager.go").read_text()
-        writer = manager.split("func (m *Manager) createBackup(", 1)[1].split("// ensureApplyTargetIsNewer", 1)[0]
-        self.assertIn('dirsToBackup := []string{"data", "config"}', writer)
-        self.assertIn('os.Getenv("PULSE_INSTALL_DIR")', writer)
-        self.assertIn('os.Executable()', writer)
         for phrase in ("running server binary", "`VERSION`", "`.env`", "`data/`", "`config/`",
                        "`PULSE_INSTALL_DIR`", "not necessarily a complete", "active `PULSE_DATA_DIR`",
                        "Copy errors can leave a partial", "`backup_path`", "lost on reboot"):
             self.assertIn(phrase, help_text)
-        # The current writer logs some errors and continues; existence alone
-        # must not be promoted to completeness in operator guidance.
-        self.assertIn('Msg("Failed to backup directory")', writer)
-        self.assertIn('return backupDir, nil', writer)
+
+    def test_online_rollback_never_promises_full_state_or_live_data_rewind(self):
+        help_text = " ".join(section("AUTO_UPDATE", "Rollback").split())
+        for phrase in ("Returning to an older binary is not a full-state recovery",
+                       "Update History is not a full-state recovery tool",
+                       "Do not assume later settings and alert changes will be reverted",
+                       "omit active data stored elsewhere", "do not restore it while Pulse is running",
+                       "[Manual Rollback](#manual-rollback)"):
+            self.assertIn(phrase, help_text)
+        self.assertNotIn("warns that later settings and alert changes will be reverted", help_text)
+
+    def test_snapshot_and_install_help_qualify_scope_without_claiming_future_support(self):
+        scope = " ".join(section("AUTO_UPDATE", "What an update snapshot contains", "###").split())
+        for phrase in ("published **v6.4.5** and **v6.4.6-rc.1**", "limited installation snapshot",
+                       "backup made by another updater version", "completeness, consistency",
+                       "not permission to rewind live runtime stores"):
+            self.assertIn(phrase, scope)
+        install = " ".join(section("INSTALL", "Rollback", "###").split())
+        for phrase in ("Neither is guaranteed to include all active data",
+                       "Update History is not a full-state recovery tool",
+                       "data migrated by a newer version", "version-specific snapshot scope",
+                       "AUTO_UPDATE.md#manual-rollback", "matching data and keys together",
+                       "preserve reversible copies", "Do not replace live runtime data"):
+            self.assertIn(phrase, install)
+        self.assertNotIn("backups are created automatically", install)
+        self.assertNotIn("auto-restores on failure", install)
 
     def test_recovery_preserves_failed_state_keys_and_sidecars(self):
         help_text = " ".join(section("AUTO_UPDATE", "Rollback").split())
