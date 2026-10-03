@@ -1207,6 +1207,7 @@ func TestMonitorLifecycleRefireReopensRetainedOccurrence(t *testing.T) {
 }
 
 type occurrenceHTTPReceipt struct {
+	Event  string          `json:"event"`
 	Alerts []*alerts.Alert `json:"alerts"`
 }
 
@@ -1340,4 +1341,119 @@ func TestMonitorDelayedIDResolutionPreservesNewQueuedOccurrence(t *testing.T) {
 	n.Stop()
 	n = occurrenceNotifier(t, dir, endpoint)
 	assertOccurrenceHTTP(t, n, receipts, current)
+}
+
+// One destination accepted the old firing and another still has a retry. After
+// restart, that pending work (and the lost RAM cooldown marker) is not evidence
+// that no recipient saw it. Recovery must use exact persisted receipts.
+func TestMonitorDelayedPartialResolutionKeepsDestinationRecovery(t *testing.T) {
+	endpoint, receipts := occurrenceEndpoint(t)
+	var failedFirings, unwantedRecoveries atomic.Int32
+	broken := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		var receipt occurrenceHTTPReceipt
+		if err := json.NewDecoder(r.Body).Decode(&receipt); err != nil {
+			t.Errorf("decode failing destination: %v", err)
+		}
+		if receipt.Event == "resolved" {
+			unwantedRecoveries.Add(1)
+		} else {
+			failedFirings.Add(1)
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(broken.Close)
+	dir := t.TempDir()
+	open := func() *notifications.NotificationManager {
+		n := occurrenceNotifier(t, dir, endpoint)
+		n.SetNotifyOnResolve(true)
+		n.AddWebhook(notifications.WebhookConfig{ID: "unannounced", Enabled: true, URL: broken.URL, Service: "generic"})
+		return n
+	}
+	n := open()
+	a, pbs := occurrenceManager(t)
+	a.CheckPBS(pbs)
+	old := a.GetActiveAlerts()[0].Clone()
+	n.SendAlert(old)
+	n.StartQueueProcessing()
+	select {
+	case got := <-receipts:
+		if got.Event != "" || len(got.Alerts) != 1 || !got.Alerts[0].StartTime.Equal(old.StartTime) {
+			t.Fatalf("wrong initial firing: %+v", got)
+		}
+	case <-time.After(12 * time.Second):
+		t.Fatal("initial firing did not reach accepting destination")
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		stats, err := n.GetQueueStats()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stats["sent"] == 1 && stats["pending"] == 1 && failedFirings.Load() > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("partial delivery not retained: %v", stats)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	n.Stop()
+	pbs.CPU = 0
+	a.CheckPBS(pbs)
+	n = open() // deferred processor; prior destination receipts are now on disk only
+	pbs.CPU = 95
+	a.CheckPBS(pbs)
+	active := a.GetActiveAlerts()
+	if len(active) != 1 || active[0].ID != old.ID || active[0].StartTime.Equal(old.StartTime) {
+		t.Fatalf("not a new occurrence: %+v", active)
+	}
+	current := active[0].Clone()
+	n.SendAlert(current)
+	m := &Monitor{alertManager: a, notificationMgr: n}
+	m.handleAlertResolved(old.ID)
+	n.StartQueueProcessing()
+	seenFiring, seenRecovery := false, false
+	for i := 0; i < 2; i++ {
+		select {
+		case got := <-receipts:
+			if len(got.Alerts) != 1 || got.Alerts[0].ID != old.ID {
+				t.Fatalf("wrong delivery: %+v", got)
+			}
+			switch got.Event {
+			case "resolved":
+				if seenRecovery || !got.Alerts[0].StartTime.Equal(old.StartTime) {
+					t.Fatalf("wrong recovery occurrence: %+v", got)
+				}
+				seenRecovery = true
+			case "":
+				if seenFiring || !got.Alerts[0].StartTime.Equal(current.StartTime) {
+					t.Fatalf("wrong firing occurrence: %+v", got)
+				}
+				seenFiring = true
+			default:
+				t.Fatalf("unknown event: %+v", got)
+			}
+		case <-time.After(12 * time.Second):
+			t.Fatal("lost current firing or old accepted destination's recovery after restart")
+		}
+	}
+	deadline = time.Now().Add(3 * time.Second)
+	for {
+		stats, err := n.GetQueueStats()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stats["sent"] == 3 && stats["cancelled"] == 1 && stats["pending"]+stats["sending"]+stats["failed"]+stats["dlq"] == 1 {
+			t.Logf("partial destination recovery retained exact old receipt and new firing: %v", stats)
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("partial recovery queue completion: %v", stats)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if unwantedRecoveries.Load() != 0 {
+		t.Fatal("unannounced destination received a recovery")
+	}
 }

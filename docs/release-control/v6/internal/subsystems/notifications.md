@@ -1073,3 +1073,8 @@ fresh database reopen, nanosecond-distinct occurrences, operational-link and
 failed-attempt preservation, missing-identity safety, grouping/cooldown retention
 and the unchanged ID-wide API. Monitor connected controls additionally require
 HTTP acceptance of the surviving occurrence through the autonomous queue.
+
+The live monitor does not interpret pending-only cancellation counts as
+recipient acceptance. Per-occurrence/per-destination receipts remain the sole
+recovery admission proof, including partial delivery and lost RAM markers after
+restart; an unannounced destination receives no recovery.

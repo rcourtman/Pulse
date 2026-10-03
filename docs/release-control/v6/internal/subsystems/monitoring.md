@@ -4655,3 +4655,12 @@ reach a loopback HTTP destination with one sent row and one cancelled old row.
 No clock, reducer map or configured cooldown is altered. This establishes local
 source-connected delivery, not the outstanding natural flapping cooldown check,
 a native appliance result or containing stable availability.
+
+Recovery eligibility is destination-receipt-owned, not the cancellation helper's
+pending-work count or the RAM cooldown marker. After partial delivery/restart,
+a cancelled retry at one destination cannot suppress a recovery to another
+that actually accepted the same occurrence. The connected
+`TestMonitorDelayedPartialResolutionKeepsDestinationRecovery` retains a real
+HTTP 200/503 split, reopens the persistent queue, and requires the old accepted
+destination's recovery plus the new firing, with no recovery to the unannounced
+destination. Quiet hours and disabled recovery controls still apply.

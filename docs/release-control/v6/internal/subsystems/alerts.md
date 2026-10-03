@@ -3230,3 +3230,9 @@ readback for all four cancellable row states without deleting failed audits or
 new-occurrence destination receipts. The monitor's connected tests use real PBS
 evaluation, normal callbacks, the persistent queue and a local HTTP destination;
 these receipts are not native provider or installed-release acceptance.
+
+Pending cancellation is not proof that every destination missed the firing.
+The monitor delegates recovery eligibility to persisted occurrence/destination
+receipts even when an old retry remains or restart has lost RAM cooldown state.
+The partial-destination monitor control establishes a real local HTTP 200/503
+split and preserves the newer firing and the old recipient's recovery.

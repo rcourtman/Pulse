@@ -260,24 +260,15 @@ func (m *Monitor) handleResolvedAlert(resolvedAlert *alerts.ResolvedAlert) {
 	// If the original alert would have been suppressed during quiet hours,
 	// the recovery notification is also suppressed to avoid noise.
 	if m.notificationMgr != nil {
-		firingNeverDelivered := m.notificationMgr.CancelResolvedAlert(resolvedAlert.Alert)
+		m.notificationMgr.CancelResolvedAlert(resolvedAlert.Alert)
 		if m.notificationMgr.GetNotifyOnResolve() {
-			if resolvedAlert != nil && resolvedAlert.Alert != nil {
-				if firingNeverDelivered {
-					// The firing notification was still in the grouping window
-					// or waiting in the queue (e.g. quiet-hours replay) when the
-					// alert resolved, and exact cancellation just cancelled it. A
-					// recovery for an alert the user never saw fire is noise.
-					log.Info().
-						Str("alertID", alertID).
-						Msg("Resolved notification suppressed because the firing notification was cancelled before delivery")
-				} else if m.alertManager != nil && m.alertManager.ShouldSuppressResolvedNotification(resolvedAlert.Alert) {
-					log.Info().
-						Str("alertID", alertID).
-						Msg("Resolved notification suppressed during quiet hours")
-				} else {
-					go m.notificationMgr.SendResolvedAlert(resolvedAlert)
-				}
+			if m.alertManager != nil && m.alertManager.ShouldSuppressResolvedNotification(resolvedAlert.Alert) {
+				log.Info().Str("alertID", alertID).Msg("Resolved notification suppressed during quiet hours")
+			} else {
+				// Only occurrence/destination receipts establish who saw the
+				// firing. A pending retry or lost in-memory cooldown marker
+				// after restart must not suppress recovery for other recipients.
+				go m.notificationMgr.SendResolvedAlert(resolvedAlert)
 			}
 		} else {
 			log.Info().
