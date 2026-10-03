@@ -47,6 +47,32 @@ class RegistryAuditTest(unittest.TestCase):
         args = parse_args(["--check", "--repo-scope", "pulse"])
         self.assertEqual(args.repo_scope, ["pulse"])
 
+    def test_live_registry_path_lists_are_casefold_sorted(self) -> None:
+        # Fixture-only audit tests cannot catch ordering mistakes in the
+        # committed registry. Check its real path lists using the same
+        # case-insensitive contract as candidate preflight, not ASCII order.
+        registry = registry_audit.load_registry_payload()
+        for subsystem in registry["subsystems"]:
+            lists = {
+                field: subsystem[field]
+                for field in ("owned_prefixes", "owned_files")
+            }
+            verification = subsystem["verification"]
+            lists.update({
+                f"verification.{field}": verification[field]
+                for field in ("test_prefixes", "exact_files")
+            })
+            for policy in verification["path_policies"]:
+                lists.update({
+                    f"{policy['id']}.{field}": policy[field]
+                    for field in (
+                        "match_prefixes", "match_files", "test_prefixes", "exact_files"
+                    )
+                })
+            for field, paths in lists.items():
+                with self.subTest(subsystem=subsystem["id"], field=field):
+                    self.assertEqual(paths, sorted(paths, key=str.casefold))
+
     def test_trust_gate_regression_proofs_are_registered_to_exact_policies(self) -> None:
         registry = registry_audit.load_registry_payload()
         rules = {rule["id"]: rule for rule in registry["subsystems"]}
