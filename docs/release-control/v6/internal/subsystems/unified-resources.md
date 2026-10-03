@@ -35,6 +35,13 @@ count lifecycle; `browser-tests/backup-inventory.cjs` verifies production rows
 and source notices on desktop/phone. This changes no resource identity, native
 provider assessment or permission policy.
 
+The backup inventory count also remains unavailable when an HTTP200 response
+fails the client backup-envelope/row validation; transport success is not an
+observed zero. A malformed source cannot remove independently readable canonical
+server health or the other source's artifacts. Fixed diagnostics expose no
+response body. The inventory parser, mounted table and
+`browser-tests/backup-inventory-format.cjs` exercise that combined boundary.
+
 ### Guest disk freshness presentation
 
 Existing workload disk evidence retains its source reason through the row,

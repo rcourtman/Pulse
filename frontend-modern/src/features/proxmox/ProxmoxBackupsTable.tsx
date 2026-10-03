@@ -29,9 +29,7 @@ import type {
   GuestSnapshot,
   PBSBackup,
   PBSBackupsPayload,
-  PBSBackupsResponse,
   PVEBackupsPayload,
-  PVEBackupsResponse,
   StorageBackup,
 } from '@/types/api';
 import type { Resource } from '@/types/resource';
@@ -70,6 +68,12 @@ import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
 import { ProxmoxBackupServersTable } from './ProxmoxBackupServersTable';
 import { ProxmoxCoverageTable } from './ProxmoxCoverageTable';
 import { ProxmoxRecoverableTable } from './ProxmoxRecoverableTable';
+import {
+  BackupInventoryFormatError,
+  parsePBSBackupInventory,
+  parsePVEBackupInventory,
+  readBackupInventoryJSON,
+} from './proxmoxBackupInventory';
 
 // One backups surface, two operator views: a chronological recoverable-artifact
 // feed for "what ran when", and a guest coverage table for "what is protected".
@@ -97,8 +101,7 @@ async function fetchPVEBackups(signal: AbortSignal): Promise<PVEBackupsPayload> 
       status: response.status,
     });
   }
-  const payload = (await response.json()) as PVEBackupsResponse;
-  return payload?.data ?? EMPTY_PVE_BACKUPS;
+  return parsePVEBackupInventory(await readBackupInventoryJSON(response));
 }
 
 async function fetchPBSBackups(signal: AbortSignal): Promise<PBSBackupsPayload> {
@@ -108,8 +111,7 @@ async function fetchPBSBackups(signal: AbortSignal): Promise<PBSBackupsPayload> 
       status: response.status,
     });
   }
-  const payload = (await response.json()) as PBSBackupsResponse;
-  return payload?.data ?? EMPTY_PBS_BACKUPS;
+  return parsePBSBackupInventory(await readBackupInventoryJSON(response));
 }
 
 export const ProxmoxBackupsTable: Component<{
@@ -702,6 +704,11 @@ export const ProxmoxBackupsTable: Component<{
                   <span>
                     {label} backup inventory is {query.error() ? 'unavailable' : 'loading'}. Counts
                     are incomplete. {getAPIReadAccessErrorMessage(query.error())}
+                    <Show when={query.error() instanceof BackupInventoryFormatError}>
+                      {' '}
+                      The response format is invalid. Missing restore points do not mean no backups
+                      exist.
+                    </Show>
                   </span>
                   <Show when={query.error()}>
                     <button

@@ -88,6 +88,17 @@ API context; late responses cannot repopulate old evidence. Disposal aborts
 reads and removes subscriptions. This uses the existing query lifecycle, without
 new inventory polling or a remount cache.
 
+Successful HTTP responses still need a readable backup envelope, collections
+and consumed row fields. Invalid JSON, missing data and malformed rows produce
+a source-local unavailable state with fixed format guidance, never raw response
+content, a fabricated empty inventory or a page-level rendering failure that
+hides another source. No invalid rows are silently dropped, no completion flags
+are coerced, and only a validated response clears the warning. Explicitly nil
+PVE collections remain compatible with the existing Go encoding.
+`proxmoxBackupInventory.test.ts`, mounted backup-table controls and
+`browser-tests/backup-inventory-format.cjs` verify these boundaries and isolated
+keyboard/touch recovery, not native backup or released availability.
+
 Verification: mounted `ProxmoxBackupsTable.test.tsx` covers source pending,
 partial/both-source failure, isolated retry, fulfilled empty counts, 401/403,
 organisation replacement, late response and disposal. Production component,
