@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "1e9c2bdae6cc6c7a88785136f8320530e1ec0663",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx": "7bc815d6a324bea1823600029dd8c36decf724bce9b725a4c2124df7bb3b7706"
+  },
+  "routes": [
+    "/browser-tests/configuration-migration.html (actual transfer dialogs and flow)",
+    "/docs/MIGRATION",
+    "/docs/UNIFIED_AGENT#moving-pulse-to-a-new-address"
+  ],
+  "states": [
+    "Chromium desktop/light export scope with disabled empty-passphrase export",
+    "WebKit touch phone/dark transfer warnings with Tailwind4 styling",
+    "Production Docs rendering of archive scope, recovery precautions and agent retargeting",
+    "Synthetic exported archive and deliberately rejected import; dialog remains available"
+  ],
+  "interactions": [
+    "Keyboard open migration guide from export dialog",
+    "Keyboard navigate agent retargeting link and focused destination heading",
+    "Enter synthetic passphrase and verify exported synthetic download",
+    "Choose synthetic import file and verify only the intended POST payload",
+    "Rejected import then Cancel; no duplicate export/import operations",
+    "Check no horizontal page overflow, no page errors and 16px non-shrinking warning icon"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-03T16:56:47.149Z",
+  "browser_versions": [
+    {
+      "engine": "chromium",
+      "browserVersion": "141.0.7390.37",
+      "width": 1440,
+      "height": 1000,
+      "warningScope": true,
+      "keyboardGuideAndRetargetLinks": true,
+      "syntheticExportAndRejectedImport": true,
+      "noPageOverflow": true,
+      "warningIconWidth": 16,
+      "errors": []
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.0",
+      "width": 390,
+      "height": 844,
+      "warningScope": true,
+      "keyboardGuideAndRetargetLinks": true,
+      "syntheticExportAndRejectedImport": true,
+      "noPageOverflow": true,
+      "warningIconWidth": 16,
+      "errors": []
+    }
+  ],
+  "playwright_version": "1.56.1",
+  "dependency_snapshot": "8aaf02a3db8e1c245174d04d132398d1716a69525064975470ff738d168abb82",
+  "manifest_sha256": {
+    "frontend-modern/package.json": "ed07ff9bc11ef047d04dbbdf025eb3e0c56e2fe388cfeb83e41fe6234b8af76a",
+    "frontend-modern/package-lock.json": "636405b905f4f90d9f5e38f729ecdb76f528121476ada657e084e6eccea8fa1b"
+  },
+  "guide_content_sha256": {
+    "frontend-modern/public/docs/MIGRATION.md": "ad4b5a4b07af44e1657f9512ef468a578b8b5957b9b115a30816824bbd8300e9",
+    "frontend-modern/public/docs/UNIFIED_AGENT.md": "61a15c9651223ac26f4ca900f5731534f03abf96abfd233c47bf034c2796fc05"
+  },
+  "scope": "Real dialog/flow/production Docs rendering with synthetic API; no native migration or shipment"
+}
