@@ -89,13 +89,19 @@ services:
       - "7655:7655"
     volumes:
       - pulse_data:/data
-    environment:
-      - PULSE_AUTH_USER=admin
-      - PULSE_AUTH_PASS=secret123
 
 volumes:
   pulse_data:
 ```
+
+Deja `PULSE_AUTH_USER` y `PULSE_AUTH_PASS` sin configurar en una instalación
+nueva y completa el primer acceso con el token de arranque. No uses una
+contraseña de ejemplo compartida. Para una configuración automatizada, usa
+una fuente privada de credenciales gestionada por el despliegue; consulta
+[Configuration](../../CONFIGURATION.md#private-docker-authentication-file).
+No pongas contraseñas en argumentos de comandos ni en un archivo Compose
+compartido. Un administrador de Docker aún puede leer las credenciales en el
+entorno del contenedor, aunque Pulse las convierta en hash para la autenticación.
 
 ## Primer inicio de sesión
 

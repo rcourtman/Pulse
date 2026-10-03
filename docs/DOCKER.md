@@ -45,15 +45,19 @@ services:
     environment:
       - TZ=Europe/London
       - PULSE_DEPLOYMENT_METHOD=docker_compose
-      # Optional: Pre-configure auth (skips setup wizard)
-      # - PULSE_AUTH_USER=admin
-      # - PULSE_AUTH_PASS=secret123
 
 volumes:
   pulse_data:
 ```
 
 Run with: `docker compose up -d`
+
+Leave authentication overrides unset for a new install and complete
+[bootstrap-token setup](INSTALL.md#step-1-get-the-token) in your browser. Do not add a
+shared example password to the Compose file. If automation must skip setup,
+use a private deployment-managed credential source; the
+[private Docker authentication file](CONFIGURATION.md#private-docker-authentication-file)
+example is for `docker run`, not Compose interpolation.
 
 The `PULSE_IMAGE` variable lets the same compose file run either the public
 community image or, for eligible paid customers, the private Pulse Pro image
@@ -79,7 +83,10 @@ Pulse is configured via the UI (`system.json`) with optional environment overrid
 
 > **Tip**: Set `LOG_LEVEL=warn` to reduce log volume while still capturing important events.
 > **Note**: API tokens are managed in the UI and stored in `api_tokens.json`.
-> **Note**: Plain text values in `PULSE_AUTH_PASS` are auto-hashed on startup.
+> **Note**: Plain text values in `PULSE_AUTH_PASS` are hashed for authentication
+> at startup, but remain in the container environment and deployment file.
+> Docker administrators can read those values. Prefer bootstrap setup; never
+> share full `docker inspect` or resolved Compose output.
 
 For SSD-sensitive installs, keep `/data` persistent and put only metrics
 history on tmpfs:

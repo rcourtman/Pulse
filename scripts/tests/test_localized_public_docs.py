@@ -28,8 +28,6 @@ MACHINE_FACING_STRINGS = (
     "docker run -d",
     "rcourtman/pulse:vX.Y.Z",
     "image: ${PULSE_IMAGE:-rcourtman/pulse:vX.Y.Z}",
-    "PULSE_AUTH_USER=admin",
-    "PULSE_AUTH_PASS=secret123",
     "docker exec pulse /app/pulse bootstrap-token",
     "kubectl exec -it <pod> -- /app/pulse bootstrap-token",
     "sudo pulse bootstrap-token",
@@ -69,6 +67,16 @@ class LocalizedPublicDocsTest(unittest.TestCase):
                 self.assertIn("[Troubleshooting](../../TROUBLESHOOTING.md)", content)
                 self.assertIn("[Agent Security](../../AGENT_SECURITY.md)", content)
                 self.assertIn("[Plans and entitlements](../../PULSE_PRO.md)", content)
+
+    def test_localized_compose_uses_bootstrap_not_shared_credentials(self) -> None:
+        for rel in LOCALIZED_DOCS:
+            content = read(rel)
+            with self.subTest(path=rel):
+                self.assertNotIn("secret123", content)
+                self.assertNotIn("PULSE_AUTH_USER=", content)
+                self.assertNotIn("PULSE_AUTH_PASS=", content)
+                self.assertIn("../../CONFIGURATION.md#private-docker-authentication-file", content)
+                self.assertIn("docker exec pulse /app/pulse bootstrap-token", content)
 
     def test_localized_docs_do_not_reintroduce_paid_capacity_claims(self) -> None:
         forbidden = (

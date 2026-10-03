@@ -90,13 +90,19 @@ services:
       - "7655:7655"
     volumes:
       - pulse_data:/data
-    environment:
-      - PULSE_AUTH_USER=admin
-      - PULSE_AUTH_PASS=secret123
 
 volumes:
   pulse_data:
 ```
+
+Lass `PULSE_AUTH_USER` und `PULSE_AUTH_PASS` bei einer neuen Installation
+ungesetzt und richte den Zugang beim ersten Anmelden mit dem Bootstrap-Token
+ein. Verwende kein gemeinsames Beispielpasswort. Für automatisierte Einrichtung
+nutze eine private, vom Deployment verwaltete Zugangsdatenquelle; siehe
+[Configuration](../../CONFIGURATION.md#private-docker-authentication-file).
+Passwörter gehören nicht in Befehlsargumente oder eine geteilte Compose-Datei.
+Ein Docker-Administrator kann Zugangsdaten in der Container-Umgebung weiterhin
+lesen, auch wenn Pulse sie für die Anmeldung hasht.
 
 ## Erste Anmeldung
 
