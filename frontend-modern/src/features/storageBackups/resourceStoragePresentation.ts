@@ -244,6 +244,30 @@ export const getResourceStorageTopologyLabel = (
     case 'rbd':
     case 'cephfs':
       return 'Cluster Storage';
+    // Proxmox storage plugin names are acronyms or compound words that
+    // title-casing mangles ("Lvmthin" for the default local-lvm, "Nfs"); use
+    // the names the Proxmox UI shows for them.
+    case 'nfs':
+      return 'NFS';
+    case 'cifs':
+    case 'smb':
+      return 'SMB/CIFS';
+    case 'lvm':
+      return 'LVM';
+    case 'lvmthin':
+    case 'lvm-thin':
+      return 'LVM-Thin';
+    case 'iscsi':
+    case 'iscsidirect':
+      return 'iSCSI';
+    case 'zfs':
+      return 'ZFS';
+    case 'btrfs':
+      return 'BTRFS';
+    case 'glusterfs':
+      return 'GlusterFS';
+    case 'esxi':
+      return 'ESXi';
     default:
       return titleize(storageType) || titleize(resource.type) || 'Storage';
   }

@@ -1,100 +1,45 @@
 {
   "version": 1,
-  "base_sha": "0e90236d3bb901dc84d4d07e70d4d2a09d5e6705",
-  "verified_at": "2026-10-02T23:55:48Z",
+  "base_sha": "5522c099357e21a4bbbc8cc79c29f0c93924069f",
+  "verified_at": "2026-10-02T22:44:39Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/Table.tsx"
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx",
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/Table.tsx": "8e5029d5ee9dddc86a4733fa1e7249793cdbedb135f3634e75112f8fb3b327c9"
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx": "29284b34d9631f118a449da1c274b1028e3cea57aed37a3ac056e48e05b2b613",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx": "736edcc6e7ca67624504efd5a891740e34a9babb3d871be1d8b34f26dc57dc83",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx": "58cf1656ba22475b52dc9a582a4d8f0cc8c01f38bfb3775518edac73dbf22b80",
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts": "b821b9caf65d5c247e543a6d6dbf0925f735b617c6393066d0f8c15a10e05e72"
   },
   "routes": [
-    "/proxmox/overview",
-    "/proxmox/storage",
-    "/proxmox/replication",
-    "/proxmox/ceph",
-    "/proxmox/mail",
     "/docker/overview",
     "/docker/images",
     "/docker/storage",
     "/docker/networks",
-    "/docker/swarm",
-    "/kubernetes/overview",
-    "/kubernetes/nodes",
-    "/kubernetes/workloads",
-    "/kubernetes/services",
-    "/kubernetes/storage",
-    "/kubernetes/configuration",
-    "/kubernetes/events",
-    "/truenas/overview",
-    "/truenas/storage",
-    "/truenas/services",
-    "/truenas/apps",
-    "/truenas/vms",
-    "/truenas/shares",
-    "/truenas/protection",
-    "/vmware/overview",
-    "/vmware/storage",
-    "/vmware/networks",
-    "/vmware/health",
-    "/vmware/activity",
-    "/standalone/machines",
-    "/standalone/availability",
-    "/alerts/overview",
-    "/alerts/history",
-    "/alerts/thresholds",
-    "/actions",
-    "/settings/infrastructure",
-    "/settings/monitoring",
-    "/settings/pulse-intelligence",
-    "/settings/organization",
-    "/settings/security-users",
-    "/settings/security-webhooks"
+    "/docker/swarm"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 900
-    },
-    {
-      "width": 1280,
-      "height": 900
-    },
-    {
-      "width": 900,
-      "height": 900
-    },
-    {
-      "width": 700,
-      "height": 900
-    },
-    {
-      "width": 560,
-      "height": 900
+      "height": 1000
     },
     {
       "width": 390,
-      "height": 900
+      "height": 1000
     }
   ],
   "states": [
-    "Mock stack on origin/main plus this change; Playwright sweep of every table on the routes above at all six viewports, before and after, recording computed th/td padding per cell and leaf elements with scrollWidth > clientWidth under hidden overflow (455 table states compared)",
-    "Default TableCell/TableHead with no caller padding keep 8px/12px horizontal and 2px/6px vertical padding (Settings infrastructure source and agent tables unchanged at 12px/12px/6px/6px)",
-    "Platform tables (Proxmox nodes, Docker hosts and containers, Kubernetes clusters/nodes/deployments/pods, TrueNAS systems, vSphere, Machines): cells 12px -> 8px horizontal at 700px and up and 8px -> 6px at 560/390px; header cells keep the stylesheet 6px horizontal and drop to 2px vertical, header rows 29px -> 21px; row height 32px unchanged; clipped-cell count improved in 89 table states, unchanged in 362; the 4 states counted worse are live mock-value drift (relative-time and usage labels) with identical or wider content boxes",
-    "Physical Disks table (Proxmox > Storage > Physical Disks): cells 8px -> 4px horizontal at 390px and 12px -> 6px at 700px, matching the composed px-1 sm:px-1.5 lg:px-2; clipped cells at 390px 93 -> 18; detail row 12px -> 16px horizontal at 700px and 1440px",
-    "Storage pools table unchanged at 6px/8px cell padding across 390, 560 and 700px",
-    "Inline detail rows (Proxmox node, Kubernetes controller, TrueNAS system expansions): detail cell padding 12px/12px/2px/2px -> 0, detail panel inset now only its own px-2 sm:px-4; incident timeline panel in Alert History gets its p-3",
-    "Alerts overview stats table: dot column right padding 12px -> 0 and value column 12px -> 6px at 700px and up as its classes name; Alert History header cells 12px -> 8px horizontal; AI cost table (Settings > Pulse Intelligence) Est. USD column 12px -> 4px as its px-1 names",
-    "Workloads table header cells now 6px/8px to match their raw td data cells; Proxmox replication compact-mode !px-1 override still applies at 390px",
-    "Reactive case: switching a cell class between px-1 and a non-padding class re-resolves the base padding (unit test)"
+    "Mock estate with five Docker hosts (two Docker-in-LXC, one offline), 27 containers with pending updates, 13 images, Swarm services in rollback, dark theme, Chromium",
+    "Containers table at compact width (1320px table): Host, Engine (\"docker 26.1.3\") and the Update control render whole; on a phone the row keeps container, state, CPU, memory and Update with Restarts in the expansion, and the state word no longer clips",
+    "Images table on a phone keeps image, size and update verdict with host and consumers in the expansion; Swarm services read \"Rollback started\"; Swarm tasks show Started as an age with the stamp in the title"
   ],
   "interactions": [
-    "Load each route at 1440, 1280, 900, 700, 560 and 390px and run the padding and clip sweep over all tables",
-    "Click Physical Disks on Proxmox > Storage at 390, 560, 700 and 1440px and expand the first disk row",
-    "Expand the first node row on Proxmox > Overview, the first deployment row on Kubernetes > Workloads, the first host row on Docker > Overview and the first system row on TrueNAS > Overview at 390, 560, 700 and 1440px",
-    "Expand the first alert row incident timeline on Alerts > History at 1440px",
-    "Compare before and after JSON sweeps per route, tab, viewport and table; re-measure the four states counted worse three times each",
-    "Revert and restore the change on the running dev server to A/B the Kubernetes clusters memory bar label at 560px"
-  ]
+    "Measured every containers-table column against its content need at 1440px and 390px before and after the change; swept every Docker tab for clipped short values and horizontal overflow at both widths (overview and images report none; storage, networks and swarm phone clipping is pre-existing and unchanged)",
+    "Read the Swarm services and tasks rows and the images used-by cells after the change"
+  ],
+  "command": "playwright chromium against a private mock-mode stack (backend :7685, vite :5203 from this branch)"
 }

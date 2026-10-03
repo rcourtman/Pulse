@@ -32,14 +32,25 @@ func statusFromGuest(status string) ResourceStatus {
 	}
 }
 
-func statusFromStorage(storage models.Storage) ResourceStatus {
-	switch strings.ToLower(strings.TrimSpace(storage.Status)) {
+// statusFromStorageState maps the storage-native status vocabulary, which
+// includes the "available"/"unavailable" pair PVE storage and PBS datastores
+// report, onto a resource status. The second result is false when the string
+// is not a storage state the caller can act on.
+func statusFromStorageState(status string) (ResourceStatus, bool) {
+	switch strings.ToLower(strings.TrimSpace(status)) {
 	case "online", "running", "available", "active", "ok":
-		return StatusOnline
+		return StatusOnline, true
 	case "warning", "degraded":
-		return StatusWarning
+		return StatusWarning, true
 	case "offline", "down", "unavailable", "error":
-		return StatusOffline
+		return StatusOffline, true
+	}
+	return StatusUnknown, false
+}
+
+func statusFromStorage(storage models.Storage) ResourceStatus {
+	if status, ok := statusFromStorageState(storage.Status); ok {
+		return status
 	}
 	if !storage.Active {
 		return StatusOffline
