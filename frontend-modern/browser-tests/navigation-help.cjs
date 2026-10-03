@@ -6,6 +6,7 @@ const { chromium, webkit } = require('playwright');
 
 (async () => {
   const root = '/workspace/frontend-modern';
+  process.chdir(root);
   const artifacts = path.join(root, 'node_modules', 'navigation-help-browser');
   fs.mkdirSync(artifacts, { recursive: true });
   const { createServer } = await import(path.join(root, 'node_modules/vite/dist/node/index.js'));
@@ -39,9 +40,13 @@ const { chromium, webkit } = require('playwright');
       if (tone === 'dark') await page.evaluate(() => document.documentElement.classList.add('dark'));
       const routes = page.locator('article table').filter({ hasText: '/standalone/machines' });
       assert.equal(await routes.count(), 1);
-      assert.deepEqual(await routes.locator('tbody tr').allTextContents(), [
-        'Proxmox/proxmox/overview', 'Docker/docker/overview', 'Kubernetes/kubernetes/overview',
-        'TrueNAS/truenas/overview', 'vSphere/vmware/overview', 'Machines/standalone/machines',
+      const entryRoutes = await routes.locator('tbody tr').evaluateAll((rows) =>
+        rows.map((row) => Array.from(row.cells, (cell) => cell.textContent.trim())),
+      );
+      assert.deepEqual(entryRoutes, [
+        ['Proxmox', '/proxmox/overview'], ['Docker', '/docker/overview'],
+        ['Kubernetes', '/kubernetes/overview'], ['TrueNAS', '/truenas/overview'],
+        ['vSphere', '/vmware/overview'], ['Machines', '/standalone/machines'],
       ]);
       const article = await page.locator('article').innerText();
       assert.ok(article.includes('are supported; do not replace them with the retired task-based routes.'));
