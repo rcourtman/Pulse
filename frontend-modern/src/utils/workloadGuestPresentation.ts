@@ -70,15 +70,11 @@ export function getWorkloadsGuestBackupTooltip(
 }
 
 export function getWorkloadsGuestProtectionPresentation(options: {
-  backupInProgress?: boolean;
   ageLabel?: string | null;
   ageClass?: string | null;
 }): WorkloadsGuestProtectionPresentation {
-  if (options.backupInProgress) {
-    return { label: 'Backup running', tone: 'success' };
-  }
   if (!options.ageLabel) {
-    return { label: 'No backup found', tone: 'danger' };
+    return { label: 'No completed backup found', tone: 'danger' };
   }
   return {
     label: options.ageLabel,
