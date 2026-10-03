@@ -735,6 +735,79 @@ describe('independent Proxmox backup inventory reads', () => {
     window.history.replaceState({}, '', '/proxmox/backups/date');
     apiFetchJSONMock.mockResolvedValue({ data: [], policy: {}, meta: {} });
   });
+
+  it.each(['pve', 'pbs'] as const)(
+    'keeps malformed HTTP200 %s responses source-local and recovers with an isolated retry',
+    async (source) => {
+      const bad = source === 'pbs' ? { data: { backups: [null] } } : { data: {} };
+      let response = Promise.resolve(jsonResponse(bad));
+      apiFetchMock.mockImplementation((url) =>
+        url.endsWith(`/${source}`)
+          ? response
+          : Promise.resolve(jsonResponse(source === 'pve' ? pbsPayload : readPvePayload)),
+      );
+      mountBackupReadState();
+      await screen.findByText(/The response format is invalid/);
+      await waitFor(() => expect(recoverableRows()).toHaveLength(1));
+      expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      if (source === 'pbs') expect(serverTable()).toHaveTextContent('Unavailable');
+      const pending = deferred<Response>();
+      response = pending.promise;
+      const retry = screen.getByRole('button', { name: `Retry ${source.toUpperCase()} inventory` });
+      fireEvent.click(retry);
+      expect(retry).toBeDisabled();
+      expect(screen.getByText(/The response format is invalid/)).toBeInTheDocument();
+      expect(recoverableRows()).toHaveLength(1);
+      pending.resolve(jsonResponse(source === 'pbs' ? pbsPayload : readPvePayload));
+      await waitFor(() => expect(recoverableRows()).toHaveLength(2));
+      expect(screen.queryByText(/The response format is invalid/)).not.toBeInTheDocument();
+      expect(sourceCalls(source === 'pbs' ? 'pve' : 'pbs')).toHaveLength(1);
+    },
+  );
+
+  it('does not infer empty PBS inventory from a missing data envelope', async () => {
+    apiFetchMock.mockImplementation((url) =>
+      Promise.resolve(jsonResponse(url.endsWith('/pbs') ? {} : emptyPVE)),
+    );
+    mountBackupReadState();
+    await screen.findByText('Backup inventory is incomplete');
+    expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+    expect(serverTable()).toHaveTextContent('Unavailable');
+  });
+
+  it('keeps undecodable successful bodies out of user-facing diagnostics', async () => {
+    apiFetchMock.mockImplementation((url) =>
+      Promise.resolve(
+        url.endsWith('/pbs')
+          ? new Response('SYNTHETIC_PRIVATE_BODY_DO_NOT_DISPLAY', { status: 200 })
+          : jsonResponse(readPvePayload),
+      ),
+    );
+    mountBackupReadState();
+    await screen.findByText(/The response format is invalid/);
+    await waitFor(() => expect(recoverableRows()).toHaveLength(1));
+    expect(document.body).not.toHaveTextContent('SYNTHETIC_PRIVATE_BODY_DO_NOT_DISPLAY');
+  });
+
+  it('accepts Go nil PVE collections as explicitly observed empty inventory', async () => {
+    apiFetchMock.mockImplementation((url) =>
+      Promise.resolve(
+        jsonResponse(
+          url.endsWith('/pbs')
+            ? emptyPBS
+            : { data: { backupTasks: null, storageBackups: null, guestSnapshots: null } },
+        ),
+      ),
+    );
+    mountBackupReadState();
+    await screen.findByText('No backups yet');
+    expect(screen.queryByText(/inventory is unavailable/)).not.toBeInTheDocument();
+    expect(
+      within(serverTable() as HTMLElement).getByText('0', { exact: true }),
+    ).toBeInTheDocument();
+  });
+
   it('does not present an unread PBS inventory as empty or a measured zero', async () => {
     const pending = deferred<Response>();
     apiFetchMock.mockImplementation((url) =>
