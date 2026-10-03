@@ -15,6 +15,52 @@
 
 ## Purpose
 
+### Demo transactions share the service host, not just a workflow queue
+
+Stable demo update and recovery keep their existing publication/activation,
+exact-tag installer signing key, Tailscale, pinned SSH and environment boundaries.
+The mutating paths now share the Relay host's existing
+`/var/lib/pulse-deploy/relay/deploy.lock` and one retained systemd transaction.
+Every successful path, including a healthy no-op, needs a complete 300-second
+local/public/Relay health, version, service PID/restart and new-journal-crash
+window. Readiness is separate. Missing observations fail closed.
+The fixed Relay observation is its existing `/healthz` endpoint, not a guessed
+new route; disposable acceptance also rejects an unknown route rather than
+responding healthy to every URL.
+
+Before installation or runtime-profile mutation, stop only Pulse and durably
+capture its executable, VERSION, unit/drop-ins and entire persistent data estate. Refuse
+insufficient space rather than prune backups/databases. A failed healthy change
+restores that complete estate and observes another 300 seconds; the original
+operation still fails. An unhealthy recovery baseline is never claimed as a
+healthy rollback. Retain its original generated demo history, all snapshots and
+failed/uncertain terminal evidence privately. An unresolved estate blocks later
+mutation. No source-worker production capability, package upgrade, Relay copy
+activation or credential is added.
+
+SSH observes, but never owns or cancels, the systemd child. Durable intent
+precedes submission; the exact request identity is not replayed after a lost
+response. Forward cancellation initiates restoration; recovery ignores
+TERM/INT/HUP until its watch and terminal receipt are retained. Child, stop,
+observer and workflow deadlines cover both full windows. A later browser or
+network check must not stop a committed or unrelated service in another SSH
+session. These connected source controls do not establish native systemd,
+signed installed forward/reverse acceptance, ingress enforcement or customer
+recovery. See [demo transaction acceptance](../DEMO_RUNTIME_TRANSACTION.md).
+
+The secret-free public `demo-runtime-native.yml` checks the exact PR/push source
+on a fresh hosted runner, using actual systemd and Caddy with disposable TLS and
+synthetic executable/data fixtures through the real narrow atomic swaps. Its two real-window cases exercise a
+changed executable, a 55-second delayed synthetic failure, observer loss and
+TERM during full restoration. It records original/fixture source identities,
+actual bounded service observations and cleanup; a missing or failed record is
+not acceptance. Only the fixed Relay health URL is rebound to that fixture.
+This neither exercises a signed published installer nor proves customer or
+production recovery. The driver refuses a non-empty or non-disposable estate
+before service operations. Neither this driver nor worker source tests install
+host policy. Production activation still requires independent review and the
+operational owner's acceptance of the native result and published-source path.
+
 ### Superseded pull request validation
 
 Build and Test and Core E2E cancel an older run for the same pull request when
@@ -732,6 +778,8 @@ release-latency optimization.
 23. `.github/workflows/update-demo-server.yml`
 23a. `.github/workflows/recover-demo-server.yml`
 23b. `.github/scripts/recover-demo-runtime.sh`
+23c. `.github/scripts/demo-runtime-transaction.py`
+23d. `.github/scripts/dispatch-demo-runtime.py`
 23c. `.github/scripts/resolve-demo-runtime-profile.sh`
 24. `.github/workflows/validate-release-assets.yml`
 25. `.github/workflows/install-sh-smoke.yml`
@@ -2585,6 +2633,21 @@ artifact-selection behaviour.
    `ES2022` lib declaration stay in step.
 
 ## Current State
+
+### Demo runtime footprint qualification
+
+The demo transaction executes no general installer. It verifies the activated
+stable archive with the pinned SSH key/namespace, selects only regular bounded
+Linux/amd64 server and VERSION members, and rechecks their exact hashes before
+atomic sibling swaps. VERSION is in the owned rollback snapshot; runtime hashes
+remain fixed through forward and restored 300-second observations. No agent,
+script, helper, unit/timer, service-account, package or backup-rotation effect is
+claimed or applied. CI production mutation requires a successful main native
+run whose engine/dispatcher/driver/workflow final content matches current main,
+and refuses newer matching failures, pending runs and unavailable evidence.
+The v6.4.5 full-installer VERSION rollback defect and this route's signed/native
+limits are retained in DEMO_RUNTIME_TRANSACTION.md.
+
 
 ### Existing-install auto-update consent (1 October 2026)
 
