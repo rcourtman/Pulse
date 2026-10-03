@@ -67,4 +67,34 @@ describe('useStackedMemoryBarState', () => {
     unmount();
     expect(observers[0].disconnect).toHaveBeenCalled();
   });
+
+  it('shows the long label only at an observed width that fits it', () => {
+    const observers: MockResizeObserver[] = [];
+    globalThis.ResizeObserver = class extends MockResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        super(callback);
+        observers.push(this);
+      }
+    } as unknown as typeof ResizeObserver;
+
+    let captured: ReturnType<typeof useStackedMemoryBarState> | undefined;
+
+    const Harness = () => {
+      captured = useStackedMemoryBarState({
+        used: 265 * 1024 ** 3,
+        total: 440 * 1024 ** 3,
+      });
+      return <div ref={captured.setContainerRef} />;
+    };
+
+    render(() => <Harness />);
+
+    // '60% (265 GB/440 GB)' renders 110.1px of text plus the chip's 8px of
+    // padding: the 113px Kubernetes clusters bar keeps the percentage.
+    observers[0].trigger(113);
+    expect(captured!.presentation().displaySublabel).toBe('265 GB/440 GB');
+    expect(captured!.presentation().showSublabel).toBe(false);
+    observers[0].trigger(119);
+    expect(captured!.presentation().showSublabel).toBe(true);
+  });
 });

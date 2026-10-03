@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   formatPowerOnHours,
   estimateTextWidth,
@@ -36,12 +36,75 @@ describe('formatPowerOnHours', () => {
 });
 
 describe('estimateTextWidth', () => {
-  it('estimates width based on character count', () => {
-    expect(estimateTextWidth('')).toBe(8);
-    expect(estimateTextWidth('a')).toBe(13.5);
-    expect(estimateTextWidth('abc')).toBe(24.5);
-    expect(estimateTextWidth('hello')).toBe(35.5); // 5 chars = 27.5 + 8
-    expect(estimateTextWidth('hello world')).toBe(68.5); // 11 chars = 60.5 + 8
+  // jsdom has no layout, so these read the measured fallback advances
+  // (macOS system font at 10px) rather than a live probe.
+  it('returns zero for empty text', () => {
+    expect(estimateTextWidth('')).toBe(0);
+  });
+
+  it('sums per-glyph advances and rounds up', () => {
+    expect(estimateTextWidth('a')).toBe(6); // 5.89
+    expect(estimateTextWidth('abc')).toBe(19); // 5.89 + 6.51 + 5.9 = 18.3
+  });
+
+  it('tells wide glyphs from narrow ones at the same length', () => {
+    expect(estimateTextWidth('888')).toBe(21); // 3 x 6.88
+    expect(estimateTextWidth('...')).toBe(11); // 3 x 3.43
+    expect(estimateTextWidth('MMM')).toBe(28); // 3 x 9.08
+    expect(estimateTextWidth('iii')).toBe(9); // 3 x 2.86
+  });
+
+  it('measures detail at normal weight after the semibold value', () => {
+    // 60% is 23.7 semibold, " (265 GB/440 GB)" 86.89 at normal weight. The
+    // browser renders that label 110.1px wide.
+    expect(estimateTextWidth('60%', { detail: ' (265 GB/440 GB)' })).toBe(111);
+    expect(estimateTextWidth('265 GB')).toBe(38);
+    expect(estimateTextWidth('', { detail: '265 GB' })).toBe(37);
+  });
+
+  it('scales with the label font size', () => {
+    expect(estimateTextWidth('sda1 50%')).toBe(52); // 51.03
+    expect(estimateTextWidth('sda1 50%', { fontPx: 9 })).toBe(46); // 45.93
+  });
+});
+
+describe('estimateTextWidth with layout', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
+
+  it('reads glyph advances from one hidden probe and reuses them', async () => {
+    // A stand-in font: digits 8px, capitals 9px, everything else 4px, each
+    // probe cell holding its glyph sixteen times.
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      const text = this.textContent ?? '';
+      const advance = /\d/.test(text[0]) ? 8 : /[A-Z]/.test(text[0]) ? 9 : 4;
+      return { width: text.length * advance } as DOMRect;
+    });
+    vi.resetModules();
+    const { estimateTextWidth: measured } = await import('@/utils/format');
+
+    // 8 digits, 4 capitals, 7 others.
+    expect(measured('60%', { detail: ' (265 GB/440 GB)' })).toBe(8 * 8 + 4 * 9 + 7 * 4);
+    // U+0020..U+007E at both weights, plus the ten tabular digits.
+    expect(rect).toHaveBeenCalledTimes(95 + 10 + 95);
+    expect(document.body.childElementCount).toBe(0);
+
+    measured('73%', { detail: ' (475 GB/648 GB)' });
+    expect(rect).toHaveBeenCalledTimes(95 + 10 + 95);
+  });
+
+  it('keeps the measured table when a stubbed layout reports every box alike', async () => {
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 100,
+    } as DOMRect);
+    vi.resetModules();
+    const { estimateTextWidth: measured } = await import('@/utils/format');
+
+    expect(measured('60%', { detail: ' (265 GB/440 GB)' })).toBe(111);
   });
 });
 

@@ -1,18 +1,25 @@
 {
   "version": 1,
-  "base_sha": "0e90236d3bb901dc84d4d07e70d4d2a09d5e6705",
-  "verified_at": "2026-10-02T23:55:48Z",
+  "base_sha": "74fd189fd03098b7ed94d806b15f570722048670",
+  "verified_at": "2026-10-03T10:27:38Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/Table.tsx"
+    "frontend-modern/src/components/Workloads/metricBarModel.ts",
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts",
+    "frontend-modern/src/components/Workloads/stackedMemoryBarModel.ts",
+    "frontend-modern/src/utils/format.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/Table.tsx": "8e5029d5ee9dddc86a4733fa1e7249793cdbedb135f3634e75112f8fb3b327c9"
+    "frontend-modern/src/components/Workloads/metricBarModel.ts": "1c312bae85ff75b042fb502586662eebc91bc8b5d54054890e2f3bba155d5505",
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts": "c7719b5646d60cb4683b10d9dd0567729d346dd95e003cb8bb62be33b3d39ac1",
+    "frontend-modern/src/components/Workloads/stackedMemoryBarModel.ts": "7b2395cc5082ca1fdfb1a47aa0cc6a0f130e87ff57df3827f9f46a29cd704d7a",
+    "frontend-modern/src/utils/format.ts": "eed4e6a02476120a262b412120c158ac93583e2d6cec9dd39915253777605261"
   },
   "routes": [
     "/proxmox/overview",
     "/proxmox/storage",
     "/proxmox/replication",
+    "/proxmox/backups/date",
     "/proxmox/ceph",
     "/proxmox/mail",
     "/docker/overview",
@@ -40,61 +47,46 @@
     "/vmware/health",
     "/vmware/activity",
     "/standalone/machines",
-    "/standalone/availability",
-    "/alerts/overview",
-    "/alerts/history",
-    "/alerts/thresholds",
-    "/actions",
-    "/settings/infrastructure",
-    "/settings/monitoring",
-    "/settings/pulse-intelligence",
-    "/settings/organization",
-    "/settings/security-users",
-    "/settings/security-webhooks"
+    "/standalone/availability"
   ],
   "viewports": [
     {
       "width": 1440,
-      "height": 900
-    },
-    {
-      "width": 1280,
-      "height": 900
+      "height": 1400
     },
     {
       "width": 900,
-      "height": 900
+      "height": 1400
     },
     {
       "width": 700,
-      "height": 900
+      "height": 1400
     },
     {
       "width": 560,
-      "height": 900
+      "height": 1400
     },
     {
       "width": 390,
-      "height": 900
+      "height": 1400
     }
   ],
   "states": [
-    "Mock stack on origin/main plus this change; Playwright sweep of every table on the routes above at all six viewports, before and after, recording computed th/td padding per cell and leaf elements with scrollWidth > clientWidth under hidden overflow (455 table states compared)",
-    "Default TableCell/TableHead with no caller padding keep 8px/12px horizontal and 2px/6px vertical padding (Settings infrastructure source and agent tables unchanged at 12px/12px/6px/6px)",
-    "Platform tables (Proxmox nodes, Docker hosts and containers, Kubernetes clusters/nodes/deployments/pods, TrueNAS systems, vSphere, Machines): cells 12px -> 8px horizontal at 700px and up and 8px -> 6px at 560/390px; header cells keep the stylesheet 6px horizontal and drop to 2px vertical, header rows 29px -> 21px; row height 32px unchanged; clipped-cell count improved in 89 table states, unchanged in 362; the 4 states counted worse are live mock-value drift (relative-time and usage labels) with identical or wider content boxes",
-    "Physical Disks table (Proxmox > Storage > Physical Disks): cells 8px -> 4px horizontal at 390px and 12px -> 6px at 700px, matching the composed px-1 sm:px-1.5 lg:px-2; clipped cells at 390px 93 -> 18; detail row 12px -> 16px horizontal at 700px and 1440px",
-    "Storage pools table unchanged at 6px/8px cell padding across 390, 560 and 700px",
-    "Inline detail rows (Proxmox node, Kubernetes controller, TrueNAS system expansions): detail cell padding 12px/12px/2px/2px -> 0, detail panel inset now only its own px-2 sm:px-4; incident timeline panel in Alert History gets its p-3",
-    "Alerts overview stats table: dot column right padding 12px -> 0 and value column 12px -> 6px at 700px and up as its classes name; Alert History header cells 12px -> 8px horizontal; AI cost table (Settings > Pulse Intelligence) Est. USD column 12px -> 4px as its px-1 names",
-    "Workloads table header cells now 6px/8px to match their raw td data cells; Proxmox replication compact-mode !px-1 override still applies at 390px",
-    "Reactive case: switching a cell class between px-1 and a non-padding class re-resolves the base padding (unit test)"
+    "Mock stack on origin/main plus this change, Chromium, system font: Playwright sweep of every table on the 32 routes above at all five viewports (160 loads, 2,579 metric bars), recording th/td descendants with scrollWidth > clientWidth under hidden overflow and, per bar, observed width, rendered label, and the label's Range width plus padding",
+    "Same sweep on unmodified origin/main against the same backend process for a bar-by-bar comparison: 24 stacked memory bars showed a long label that did not fit, overflowing by 0.8px to 7.5px (3 on Kubernetes clusters at 560px, 4 on Proxmox overview at 900px, 16 on Docker overview and 1 on Kubernetes nodes at 1440px), and 3 inline per-disk labels were clipped on Proxmox overview at 900px",
+    "After the change none of those clip at any viewport: the 24 bars show the percentage alone and the inline disk slots show the percentage",
+    "Long labels at comfortable widths are kept: 550 bars show the long form against 567 before; of the 17 fewer, 24 are the clipped ones, 14 Proxmox guest disk bars at 900px gained the long form with 2.5px to 5.5px to spare, and 7 memory bars dropped it (5 on vSphere at 900px that had 1.0px to 2.8px to spare, 2 on Kubernetes nodes at 1440px that overflowed by under 0.5px)",
+    "Kubernetes clusters memory bar at 560px: 112.98px wide, shows the percentage; the same bar shows the long label at 900px (152.92px) and 1440px (182.11px) and returns to the percentage when the window narrows again",
+    "Still clipped and not changed here: the storage usage bar on /proxmox/storage (EnhancedStorageBar, which has no fit decision and does not use the estimator) clips at 390px (72 rows) and by up to 2.3px at 700px (19 rows), the same before and after",
+    "Every glyph forced to Verdana (10% wider than the system font): 2,219 bars on the 11 bar-bearing routes, 433 long labels, none clipped. Every glyph forced to Arial (7% narrower): 799 long labels, none clipped. The estimator follows the rendered font in both directions",
+    "WebKit, system font, same 11 routes: 2,219 bars, 550 long labels, none clipped",
+    "One-time glyph probe measured on the 429-bar Proxmox overview: 1.7 ms; about 110 ns per estimate afterwards"
   ],
   "interactions": [
-    "Load each route at 1440, 1280, 900, 700, 560 and 390px and run the padding and clip sweep over all tables",
-    "Click Physical Disks on Proxmox > Storage at 390, 560, 700 and 1440px and expand the first disk row",
-    "Expand the first node row on Proxmox > Overview, the first deployment row on Kubernetes > Workloads, the first host row on Docker > Overview and the first system row on TrueNAS > Overview at 390, 560, 700 and 1440px",
-    "Expand the first alert row incident timeline on Alerts > History at 1440px",
-    "Compare before and after JSON sweeps per route, tab, viewport and table; re-measure the four states counted worse three times each",
-    "Revert and restore the change on the running dev server to A/B the Kubernetes clusters memory bar label at 560px"
+    "Load each route at 1440, 900, 700, 560 and 390px, wait for row and bar counts to settle, and run the clip sweep and bar inventory",
+    "Stash the change, repeat the full sweep on origin/main against the same backend process, restore the change and compare bar by bar",
+    "Hover the Kubernetes clusters memory bar at 560px while it shows the percentage alone and read used and free from its tooltip",
+    "Resize one loaded Kubernetes overview page through 560, 700, 900, 1440 and back to 560px and read the memory bar label at each width",
+    "Repeat the sweep on the bar-bearing routes with a global Verdana override, a global Arial override, and in WebKit"
   ]
 }
