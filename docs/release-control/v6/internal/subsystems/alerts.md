@@ -3236,3 +3236,25 @@ The monitor delegates recovery eligibility to persisted occurrence/destination
 receipts even when an old retry remains or restart has lost RAM cooldown state.
 The partial-destination monitor control establishes a real local HTTP 200/503
 split and preserves the newer firing and the old recipient's recovery.
+
+### Notification activity reports each evidence source independently
+
+The existing Notifications activity card distinguishes an initial or pending
+read from a confirmed empty window. Held/deferred event reads have their own
+loading and unavailable state; a failed read withdraws their prior rows and
+keeps the warning until a later successful read. Only the current refresh owns
+those states, and disposed readers cannot publish late completions. A slow
+held-event read does not delay delivery attempts or disable their refresh.
+
+A delivery-attempt failure withdraws only attempt rows, not independently
+readable held events. Conversely, missing held evidence does not hide readable
+attempts or imply that no notifications were held. The combined empty state
+requires both sources to be readable and no refresh pending. Retention, event
+limits, queue actions, permissions and notification delivery policy are unchanged.
+
+`useNotificationDeliveryLog.test.tsx`, `useAlertDestinationsTabState.test.tsx`
+and `AlertDeliveryLogCard.test.tsx` exercise independent failure, recovery,
+initial loading and current-request ownership; the production Notifications
+tab browser fixture verifies the connected read/retry states at desktop and
+phone widths. These are synthetic frontend controls, not recipient delivery
+or containing-release acceptance.

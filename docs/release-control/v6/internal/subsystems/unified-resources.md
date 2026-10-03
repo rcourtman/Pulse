@@ -23,6 +23,36 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Guest disk freshness presentation
+
+Existing workload disk evidence retains its source reason through the row,
+breakdown and Overview. `prev-` values are explicitly last-known, while a
+deferral with no previous disks explains the missing observation without a
+measured percentage. Lock/uncertain-completion deferrals must not become an
+install/restart recommendation. Human-readable Overview status remains visible
+without filesystem rows and is cleared by a same-identity fresh observation.
+The shared presentation and mounted regressions plus the production-component
+`browser-tests/guest-disk-deferral.cjs` fixture verify this client behaviour;
+they do not prove native QGA coordination, History freshness or delivery.
+
+
+### Narrow controller and backup summaries retain their source facts
+
+Kubernetes controller row expansions expose supplied kind-specific targets,
+counts, absolute timestamps, valid elapsed durations and namespace/cluster when
+responsive rows hide those columns. Missing facts are omitted and the ordinary
+pluralisation model handles singular targets. Job/CronJob timestamp regressions
+and the production composed-table browser fixture verify this existing summary.
+
+Proxmox Coverage uses latestBackup for completed independent backup evidence,
+with guest-local snapshots retained separately. Responsive backup-server, host
+and guest rows allocate space through existing canonical weighted-width helpers;
+archive format is presentation only, with the provider identifier retained in
+hover and search. The recovery-model, table and guest regressions plus desktop/
+phone browser rendering verify attribution, visible facts and source composition.
+These frontend improvements change no collector, API authority or native status.
+
+
 ### Resource evidence fallback access boundaries
 
 When the existing resource-facet reader receives a final HTTP 401/403, its
@@ -599,6 +629,29 @@ about the same disk cannot diverge.
 144. `frontend-modern/src/features/vmware/VmwarePageSurface.tsx`
 
 ## Shared Boundaries
+
+### REST facets and container table projection
+
+The unified-resource REST mapper carries PMG metadata, per-source status,
+server action-readiness refusals and technology at the same top-level paths
+used by canonical websocket rows. Existing platformData compatibility paths
+remain; transport order must not decide whether mail counters or lifecycle
+refusal explanations are present. A replaced REST snapshot clears removed
+facets instead of retaining old counters or refusal reasons. Mapping does not
+invent capabilities or bypass planning, review, server authorisation or execution.
+`useUnifiedResources.test.ts` checks actual lifecycle refusal consumers for stale,
+failed and server-denied observations alongside a no-invented-grant control.
+
+The Docker phone container projection keeps identity, state when applicable,
+CPU, memory and update; restart counts remain in the existing detail expansion
+and return at mobile width. Images retain image, size and update verdict on
+phones; host and consumers stay reachable in detail. Hidden header/body columns
+are symmetric. Swarm rollout tokens render as words with raw state retained in
+the title; task starts use the shared relative-time primitive with their exact
+timestamp retained. Native table/model/guardrail tests and the production
+`browser-tests/proxmox-docker-rows.cjs` exercise these surfaces without executing
+a container action or claiming native appliance or release acceptance.
+
 
 ### PBS host history correlation
 

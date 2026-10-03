@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { guestDiskDeferrals } from '@/components/Workloads/__fixtures__/guestDiskDeferrals';
 import {
   getWorkloadsGuestBackupStatusPresentation,
   getWorkloadsGuestBackupTooltip,
@@ -8,6 +9,18 @@ import {
 } from '@/utils/workloadGuestPresentation';
 
 describe('workloadGuestPresentation', () => {
+  it.each(guestDiskDeferrals)(
+    'explains %s with and without retained disk evidence',
+    (reason, message) => {
+      expect(getWorkloadGuestDiskStatusMessage(reason)).toBe(message);
+      expect(getWorkloadGuestDiskStatusMessage(`prev-${reason}`)).toBe(
+        `Using last known disk stats. ${message}`,
+      );
+      expect(message).not.toContain('may not be installed');
+      expect(message).not.toContain('may need to be restarted');
+    },
+  );
+
   it('returns canonical guest backup status presentation', () => {
     expect(getWorkloadsGuestBackupStatusPresentation('fresh')).toEqual({
       color: 'text-green-600 dark:text-green-400',

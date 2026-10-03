@@ -15,6 +15,23 @@
 
 ## Purpose
 
+### Update History consent does not infer the backup's restore scope
+
+The confirmation names the observed running server separately from the selected
+entry's pre-/post-update versions. No version threshold or free-form notes stand
+in for actual scope: the current History API does not describe the manifest or
+active-store layout. Explain that installation-only recovery leaves active stores
+in place but may restore independent installation files; legacy recovery can
+also replace install-local configuration/data. Do not promise a settings/alerts
+rewind. Full-state recovery still requires a stopped service and a consistent
+backup of every active store, via the existing shipped recovery instructions.
+
+Opening/cancelling consent sends no rollback request, pending consent rejects
+duplicate actions and cancellation, and a rejected request retains the warning
+and refreshes history. Mounted UpdateHistory tests and the production-CSS offline
+browser fixture exercise those states; neither proves a binary/data rollback.
+
+
 ### Demo transactions share the service host, not just a workflow queue
 
 Stable demo update and recovery keep their existing publication/activation,

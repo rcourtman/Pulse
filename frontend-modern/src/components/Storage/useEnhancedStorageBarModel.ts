@@ -3,6 +3,7 @@ import type { ZFSPool } from '@/types/api';
 import { getMetricColorClass } from '@/utils/metricThresholds';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import {
+  getStorageBarCompactLabel,
   getStorageBarLabel,
   getStorageBarTooltipRows,
   getStorageBarUsagePercent,
@@ -23,6 +24,7 @@ export const useEnhancedStorageBarModel = (options: UseEnhancedStorageBarModelOp
     getMetricColorClass(usagePercent(), 'disk', options.thresholds?.()),
   );
   const label = createMemo(() => getStorageBarLabel(options.used(), options.total()));
+  const compactLabel = createMemo(() => getStorageBarCompactLabel(options.used(), options.total()));
   const tooltipRows = createMemo(() =>
     getStorageBarTooltipRows(options.used(), options.free(), options.total()),
   );
@@ -32,6 +34,7 @@ export const useEnhancedStorageBarModel = (options: UseEnhancedStorageBarModelOp
     usagePercent,
     barColor,
     label,
+    compactLabel,
     tooltipRows,
     zfsSummary,
   };

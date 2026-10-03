@@ -152,7 +152,7 @@ export const DockerImagesTable: Component<
                   kind="text"
                   sort={sort}
                   sortKey="host"
-                  class="platform-table-mobile-w-15 md:w-[18%]"
+                  class="platform-table-phone-hidden md:w-[18%]"
                 >
                   Host
                 </PlatformSortableTableHead>
@@ -160,7 +160,7 @@ export const DockerImagesTable: Component<
                   kind="text"
                   sort={sort}
                   sortKey="usedBy"
-                  class="platform-table-mobile-w-15 md:w-[24%]"
+                  class="platform-table-phone-hidden md:w-[24%]"
                 >
                   Used by
                 </PlatformSortableTableHead>
@@ -168,7 +168,7 @@ export const DockerImagesTable: Component<
                   kind="numeric-value"
                   sort={sort}
                   sortKey="size"
-                  class="platform-table-mobile-w-15 md:w-[12%]"
+                  class="platform-table-mobile-w-20 md:w-[12%]"
                 >
                   Size
                 </PlatformSortableTableHead>
@@ -176,7 +176,7 @@ export const DockerImagesTable: Component<
                   kind="badge"
                   sort={sort}
                   sortKey="update"
-                  class="platform-table-mobile-w-15 md:w-[16%]"
+                  class="platform-table-mobile-w-25 md:w-[16%]"
                 >
                   <PlatformResponsiveTableLabel compact="Update" full="Update check" />
                 </PlatformSortableTableHead>
@@ -211,13 +211,15 @@ export const DockerImagesTable: Component<
                               />
                             }
                           />
+                          {/* Host and consumers fit the row expansion on a phone; the
+                              row keeps the image, its size and the update verdict. */}
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content platform-table-phone-hidden`}
                           >
                             {dockerHostName(resource)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content platform-table-phone-hidden`}
                           >
                             <span
                               class="inline-block max-w-[20rem] truncate"

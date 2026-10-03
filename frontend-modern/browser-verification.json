@@ -1,23 +1,136 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "227657b1b0d6924e98da9382f812bb0cb1874f57",
-  "verified_at": "2026-10-03T04:13:25.499572Z",
-  "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts"
-  ],
+  "verified_at": "2026-10-03T14:13:34.794Z",
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx": "44f939bd8accdb5662f2f99a2c4d6324d965ca520414d0a0db8daba790af04d9",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "41dadd17f930115374facc8f7a9dc46f3e4eab69e41e4375c90f9a5f57022fe8",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "ee9482a2076b86e62c85bffe0ce816a6ccd542ec3b07a85e829a1cc07dd8b1de",
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts": "a39e66fc3ca772f0394ad0b5a74feee67a80daac3fdc604d014cadb52cda02b6"
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "bd8ca98831f1da1dfb1b9fd38019940a86626be38e52977d06af8c9a5d611a71",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "5b48d53997488fc88c8735f959a325fc242992acba8d4bc7f1f51169ef8398b5",
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts": "f68f8843a64b120d535f6557ef039a246dd65eb2a30d6e4abef223d5dd086de2",
+    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx": "f6bb9a340a77fe749b4a5d0921055397815068008259f5ab9bded7172d750235",
+    "frontend-modern/src/components/Workloads/DiskList.tsx": "b80ffe047b61760061f95a9adc85c3cd3e0cf68674214a64d1d911681f81b240",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "8f5d8ff247f1f9ed3077e20b55d0dca47994ff7f571d90463fc8b7ee68237bcc"
   },
+  "playwright_version": "1.56.1",
+  "results": [
+    {
+      "name": "desktop",
+      "browser_version": "141.0.7390.37",
+      "viewport": {
+        "width": 1365,
+        "height": 900
+      },
+      "checks": [
+        "vm-locked: retained row, tooltip, drawer, list and identity",
+        "vm-locked: no previous disk values and no fresh percentage",
+        "lock-unverified: retained row, tooltip, drawer, list and identity",
+        "lock-unverified: no previous disk values and no fresh percentage",
+        "agent-busy: retained row, tooltip, drawer, list and identity",
+        "agent-busy: no previous disk values and no fresh percentage",
+        "agent-cooldown: retained row, tooltip, drawer, list and identity",
+        "agent-cooldown: no previous disk values and no fresh percentage",
+        "agent-response-incomplete: retained row, tooltip, drawer, list and identity",
+        "agent-response-incomplete: no previous disk values and no fresh percentage",
+        "agent-capacity: retained row, tooltip, drawer, list and identity",
+        "agent-capacity: no previous disk values and no fresh percentage",
+        "invalid-guest-key: retained row, tooltip, drawer, list and identity",
+        "invalid-guest-key: no previous disk values and no fresh percentage",
+        "agent-timeout: retained row, tooltip, drawer, list and identity",
+        "agent-timeout: no previous disk values and no fresh percentage",
+        "permission-denied: existing unavailable case remains distinct",
+        "agent-disabled: existing unavailable case remains distinct",
+        "agent-not-running: existing unavailable case remains distinct",
+        "no-data: existing unavailable case remains distinct",
+        "vm-stopped: existing unavailable case remains distinct",
+        "no-status: existing unavailable case remains distinct",
+        "agent-error: existing unavailable case remains distinct",
+        "same-VM fresh resumption removes notice and updates values in both row modes without remount"
+      ],
+      "page_errors": []
+    },
+    {
+      "name": "phone",
+      "browser_version": "26.0",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "checks": [
+        "vm-locked: retained row, tooltip, drawer, list and identity",
+        "vm-locked: no previous disk values and no fresh percentage",
+        "lock-unverified: retained row, tooltip, drawer, list and identity",
+        "lock-unverified: no previous disk values and no fresh percentage",
+        "agent-busy: retained row, tooltip, drawer, list and identity",
+        "agent-busy: no previous disk values and no fresh percentage",
+        "agent-cooldown: retained row, tooltip, drawer, list and identity",
+        "agent-cooldown: no previous disk values and no fresh percentage",
+        "agent-response-incomplete: retained row, tooltip, drawer, list and identity",
+        "agent-response-incomplete: no previous disk values and no fresh percentage",
+        "agent-capacity: retained row, tooltip, drawer, list and identity",
+        "agent-capacity: no previous disk values and no fresh percentage",
+        "invalid-guest-key: retained row, tooltip, drawer, list and identity",
+        "invalid-guest-key: no previous disk values and no fresh percentage",
+        "agent-timeout: retained row, tooltip, drawer, list and identity",
+        "agent-timeout: no previous disk values and no fresh percentage",
+        "permission-denied: existing unavailable case remains distinct",
+        "agent-disabled: existing unavailable case remains distinct",
+        "agent-not-running: existing unavailable case remains distinct",
+        "no-data: existing unavailable case remains distinct",
+        "vm-stopped: existing unavailable case remains distinct",
+        "no-status: existing unavailable case remains distinct",
+        "agent-error: existing unavailable case remains distinct",
+        "same-VM fresh resumption removes notice and updates values in both row modes without remount"
+      ],
+      "page_errors": []
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "tmp/guest-disk-deferral-proof/desktop-retained-backup.png",
+      "sha256": "6c10970b4c64a784e088067e08fec003a0cf7ca5ef8617b9d91c5a2196bac7ba"
+    },
+    {
+      "path": "tmp/guest-disk-deferral-proof/desktop-uncertain-timeout.png",
+      "sha256": "f57806ae4c631f1acdb12d466457876ab3e0c94d706bf34fb685ab1254786d1c"
+    },
+    {
+      "path": "tmp/guest-disk-deferral-proof/desktop-fresh-resumption.png",
+      "sha256": "770cd0c083a92263ff834befc594ea4caf7c1a0849534655f3d2853b7ccd1bb6"
+    },
+    {
+      "path": "tmp/guest-disk-deferral-proof/phone-retained-backup.png",
+      "sha256": "c79fea8c81dd71f32fcb578725e5bf9ee5ef75e9a8ca4117ab39f67f3b0a753b"
+    },
+    {
+      "path": "tmp/guest-disk-deferral-proof/phone-uncertain-timeout.png",
+      "sha256": "b77012b0d47357f602e5ecd770437b75359944e79ac0c5fcb6930a350293de68"
+    },
+    {
+      "path": "tmp/guest-disk-deferral-proof/phone-fresh-resumption.png",
+      "sha256": "6bc91549730fb30f64f2ff2f2a0f5d5e3fd8a29147fa50081907da78bc4fa339"
+    }
+  ],
+  "limitation": "Synthetic same-VM observations through production components and CSS; no native QGA/backup, History sample, installation or release acceptance.",
+  "base_sha": "d4da7ffefdf91db52043aa2a5b5d1c3e16d13ca9",
+  "changed_paths": [
+    "frontend-modern/src/utils/workloadGuestPresentation.ts",
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts",
+    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx",
+    "frontend-modern/src/components/Workloads/DiskList.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx"
+  ],
   "routes": [
-    "Existing PBS/resource detail Overview change history",
-    "Existing resource detail Manage action history"
+    "Existing workload row and guest Overview filesystem evidence, shared disk breakdown tooltip/list; synthetic same-VM props through production components, not a new product route"
+  ],
+  "states": [
+    "Eight fixed lock/uncertain/request/capacity/identity deferral reasons with retained and no previous disk data",
+    "Seven distinct permission/disabled/unavailable cases",
+    "Same-VM fresh 75 percent resumption removes notices without row remount"
+  ],
+  "interactions": [
+    "Real desktop hover breakdown with readable freshness context",
+    "Desktop click and phone touch open the existing row disclosure into production Overview",
+    "Same-VM observation replacement, bars/sparklines and fresh resumption with no guest commands"
   ],
   "viewports": [
     {
@@ -28,25 +141,5 @@
       "width": 390,
       "height": 844
     }
-  ],
-  "states": [
-    "Final facet HTTP 403 withdraws embedded snapshot events/counts instead of reintroducing denied evidence",
-    "Denied filtered facets do not fall back to the unfiltered bundle",
-    "Retry retains denial while pending; fresh successful response restores events and clears guidance",
-    "First action-history HTTP 503 stays visible in Manage with retry and no false empty state",
-    "Initial facet HTTP 503 retains applicable embedded evidence; snapshot-only table rows still make no remote reads",
-    "All fourteen final screenshots inspected in desktop Chromium and dark touch phone WebKit; Playwright 1.56.1 matches the integration lock"
-  ],
-  "interactions": [
-    "Remount full production resource drawer with denied/transient reads",
-    "Activate scoped Retry with keyboard Enter",
-    "Apply and clear Change kind filter",
-    "Switch between Overview and Manage"
-  ],
-  "limitations": [
-    "Synthetic HTTP responses and PBS snapshots through real production drawer/client/CSS, not appliance authorisation, reporter cause, release or installed recovery acceptance.",
-    "401 withdrawal is unit-covered; real client login redirection is not overridden or browser-proved.",
-    "Action client existing 401/402/403 unavailable-plan responses are unchanged. Only thrown read failures retain actionable error presentation.",
-    "Independent reader authorisation remains independent; this is not a global session revocation broadcast."
   ]
 }

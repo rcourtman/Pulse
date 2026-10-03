@@ -277,7 +277,19 @@ export const ALERT_DESTINATIONS_DELIVERY_LOG_TITLE = 'Recent delivery activity';
 export const ALERT_DESTINATIONS_DELIVERY_LOG_EMPTY =
   'No alert deliveries were attempted in this window.';
 export const ALERT_DESTINATIONS_DELIVERY_LOG_UNAVAILABLE =
-  'Pulse could not read the delivery log, so recent delivery activity cannot be shown.';
+  'Pulse could not read the delivery log. Refresh to check delivery attempts.';
+
+export function getAlertDestinationsHeldEventsUnavailable() {
+  return 'Pulse could not read held or deferred notifications. Refresh to try again.';
+}
+
+export function getAlertDestinationsDeliveryLogLoading() {
+  return 'Loading delivery attempts...';
+}
+
+export function getAlertDestinationsHeldEventsLoading() {
+  return 'Loading held and deferred notifications...';
+}
 
 export function getAlertDestinationsDeliveryLogTitle() {
   return ALERT_DESTINATIONS_DELIVERY_LOG_TITLE;
