@@ -1,7 +1,11 @@
 package api
 
 import (
+	"os"
+	"os/exec"
+	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -198,7 +202,38 @@ func TestNormalizeSegment(t *testing.T) {
 // could copy a short segment into a stack buffer and hide the allocation.
 var normalizeSegmentSink string
 
+// allocIsolationEnv names the test that a child process re-runs on its own.
+const allocIsolationEnv = "PULSE_TEST_ALLOC_ISOLATION"
+
+// measureAllocsInIsolation reports whether the calling test should take its
+// testing.AllocsPerRun measurements now. AllocsPerRun diffs the process-wide
+// malloc counter, so in a full internal/api run it also counts allocations by
+// parallel tests and by goroutines that earlier tests left running; CI once saw
+// normalizeRoute("/") report 419 allocations per call that way. In the parent,
+// it re-runs only the calling test in a child process of the same test binary,
+// where nothing else allocates, fails if the child fails, and returns false.
+// In that child, it returns true.
+func measureAllocsInIsolation(t *testing.T) bool {
+	t.Helper()
+	if os.Getenv(allocIsolationEnv) == t.Name() {
+		return true
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^"+regexp.QuoteMeta(t.Name())+"$", "-test.v")
+	cmd.Env = append(os.Environ(), allocIsolationEnv+"="+t.Name())
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("isolated allocation check failed: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "--- PASS: "+t.Name()) {
+		t.Fatalf("isolated allocation check did not run %s:\n%s", t.Name(), out)
+	}
+	return false
+}
+
 func TestNormalizeSegment_DoesNotAllocate(t *testing.T) {
+	if !measureAllocsInIsolation(t) {
+		return
+	}
 	for _, seg := range []string{
 		"12345",
 		"550e8400-e29b-41d4-a716-446655440000",
@@ -269,6 +304,9 @@ func TestNormalizeRoute(t *testing.T) {
 // The root and empty paths must return before splitting. Without the fast
 // path, "/" still normalizes to "/" but allocates a split slice on every call.
 func TestNormalizeRoute_RootFastPathDoesNotAllocate(t *testing.T) {
+	if !measureAllocsInIsolation(t) {
+		return
+	}
 	for _, path := range []string{"/", ""} {
 		if allocs := testing.AllocsPerRun(100, func() { _ = normalizeRoute(path) }); allocs != 0 {
 			t.Errorf("normalizeRoute(%q) allocated %v times per call, want 0", path, allocs)
