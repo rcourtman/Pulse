@@ -1,23 +1,67 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "227657b1b0d6924e98da9382f812bb0cb1874f57",
-  "verified_at": "2026-10-03T04:13:25.499572Z",
+  "base_sha": "697ad83e19fa5e8afee634c212c945600d2292b4",
+  "verified_at": "2026-10-03T06:30:17.630790Z",
   "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts"
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts",
+    "frontend-modern/src/components/Settings/UpdateHistorySection.tsx",
+    "frontend-modern/src/components/Storage/DiskDetail.tsx",
+    "frontend-modern/src/components/Storage/DiskList.tsx",
+    "frontend-modern/src/components/Storage/EnhancedStorageBar.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx",
+    "frontend-modern/src/components/Storage/useDiskDetailModel.ts",
+    "frontend-modern/src/components/Storage/useEnhancedStorageBarModel.ts",
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts",
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts",
+    "frontend-modern/src/features/storageBackups/rowPresentation.ts",
+    "frontend-modern/src/features/storageBackups/storageBarPresentation.ts",
+    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx": "44f939bd8accdb5662f2f99a2c4d6324d965ca520414d0a0db8daba790af04d9",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "41dadd17f930115374facc8f7a9dc46f3e4eab69e41e4375c90f9a5f57022fe8",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "ee9482a2076b86e62c85bffe0ce816a6ccd542ec3b07a85e829a1cc07dd8b1de",
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts": "a39e66fc3ca772f0394ad0b5a74feee67a80daac3fdc604d014cadb52cda02b6"
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "5356c4527e5bccaf86d1dbcaf808cdbeacfce05c8bd58879ab8f90287db1cca8",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts": "79a9a4414958bbd3034bc145ea5f5b5a1f58a52af4ff8de8b46f18888f5aed51",
+    "frontend-modern/src/components/Settings/UpdateHistorySection.tsx": "39e7f5daa49bd18fd71d91a09a06da47ec3abc5496108d3715020180ca439e52",
+    "frontend-modern/src/components/Storage/DiskDetail.tsx": "04e5bacb4900cc77a94fdb804363048ed53f4b84dc1c0e9610878a106a1db1a6",
+    "frontend-modern/src/components/Storage/DiskList.tsx": "47da15179f6c7e98583d9db2a858790233660f8dc4eb9ea85681f262b50514f5",
+    "frontend-modern/src/components/Storage/EnhancedStorageBar.tsx": "ed72a33e754e96ebd03374c34f9732b02411cd9055667f4e0051d6f7e66ab653",
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx": "09417822bd543ddbc312d0c15a4ea74971066d6623d421d889858e56262b9d3d",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx": "7b61e9fac5e3a9fbae831a3cf907a71f1be7158f06bfe7a9fe7d16fce7a2c928",
+    "frontend-modern/src/components/Storage/useDiskDetailModel.ts": "ee5059bb3a7e0069561e4f103e2fd89101e096ad32b3b27c6f4777c26c1388f8",
+    "frontend-modern/src/components/Storage/useEnhancedStorageBarModel.ts": "d03daecfe22ede32e46edc74a20e4ac11d732d4f9ca202c0b6f36c22a590aa44",
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx": "7787854145257e13bc347c2513f89e595060e606857a9a7c4ae6c0a897b6c639",
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx": "f6f1b090580e4bea0d6496b908f72049c886c4faeee7aca3a3b11e9417c67df7",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "adbae773cc485f5dc16d1d316bbd5e1b1ace6be24404861ce02bf7dd8890bb25",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "786be66c40d33006edc1eda234df083ee68e0296103882ff108711026dd2ea29",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "6a546a5c1e8a9bbe6a2bdeac61c988a8e9f35cf96888adff245a5efd7017769e",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "fdc9fc2720ed04771f5c9d271f8972a4dece25e165064183fcf59678466a970e",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "b872437fb4cfb61b07e0c949ae6f323d6fd3f2622e57480931f7ef74fafe79c2",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "dc2641e74f12ed01b5e2a1424f2223c8ca136fa4e0321dd49a79e5ce458fc3cd",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "2ab0f6c58e18337f05ea85082ed5c465a625c5388ff82987eec41bbbe3005915",
+    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts": "4aab84754245dda70c3b3be3e81b15875a8664d38c8d0325329b2074b6c26fd5",
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts": "4366372e6acf67ac62e03a2c9c34e599d304724a1c79e17b60503bdae9aa6fe3",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts": "fc637ecfee6ffff80ee826bdb8ff546ef0dd8ffa5cd0790c19b1fdcf71dcfb65",
+    "frontend-modern/src/features/storageBackups/rowPresentation.ts": "cabd37e3f736467aecff68359fcb97be08bcabbe5c5ec6e0a0da2fe67d2e3261",
+    "frontend-modern/src/features/storageBackups/storageBarPresentation.ts": "562eac2212378e98823717f712c791133cebf1f44bd71c75c7db097b244f6cc0",
+    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts": "2a93a0176b912283c77b384ee2c66c4bc62c21a04b645eb93917a41740ad2d6e"
   },
   "routes": [
-    "Existing PBS/resource detail Overview change history",
-    "Existing resource detail Manage action history"
+    "Existing storage pool and physical-disk tables / disk expansion",
+    "Existing Kubernetes controller table / production resource summary expansion",
+    "Existing Proxmox coverage, By date, PBS/node tables and guest row",
+    "Existing Settings Update History confirmation"
   ],
   "viewports": [
     {
@@ -27,26 +71,31 @@
     {
       "width": 390,
       "height": 844
+    },
+    {
+      "width": 768,
+      "height": 900
     }
   ],
   "states": [
-    "Final facet HTTP 403 withdraws embedded snapshot events/counts instead of reintroducing denied evidence",
-    "Denied filtered facets do not fall back to the unfiltered bundle",
-    "Retry retains denial while pending; fresh successful response restores events and clears guidance",
-    "First action-history HTTP 503 stays visible in Manage with retry and no false empty state",
-    "Initial facet HTTP 503 retains applicable embedded evidence; snapshot-only table rows still make no remote reads",
-    "All fourteen final screenshots inspected in desktop Chromium and dark touch phone WebKit; Playwright 1.56.1 matches the integration lock"
+    "Completed backup stays 13d old alongside a separate fresh 30m guest snapshot; missing independent backup remains unit-covered",
+    "Structured ZFS scrub/resilver activity badges render at desktop/intermediate width; phone retains Degraded/Online and measured 59% capacity",
+    "Disk table verdict keeps full SMART reason in the expanded header without phone overflow",
+    "Job and CronJob absolute timestamps, elapsed duration, target, schedule, suspension and last-success remain reachable from phone row expansion",
+    "Consent names running and selected historical versions separately and declares absent restore scope; legacy and installation-only effects are distinguished",
+    "Rejected rollback keeps consent and error toast; pending actions cannot be duplicated or cancelled",
+    "All sixteen final screenshots inspected; Playwright 1.56.1 matches integration lock, light desktop/intermediate Chromium and dark touch phone WebKit"
   ],
   "interactions": [
-    "Remount full production resource drawer with denied/transient reads",
-    "Activate scoped Retry with keyboard Enter",
-    "Apply and clear Change kind filter",
-    "Switch between Overview and Manage"
+    "Expand/collapse real resource and disk rows",
+    "Open consent using keyboard Enter, cancel and return focus without a rollback write",
+    "Reject one synthetic rollback POST, then hold/accept a second while checking disabled duplicate/cancel and Escape behaviour",
+    "Select existing backup projections with independent archive and guest snapshot dates"
   ],
   "limitations": [
-    "Synthetic HTTP responses and PBS snapshots through real production drawer/client/CSS, not appliance authorisation, reporter cause, release or installed recovery acceptance.",
-    "401 withdrawal is unit-covered; real client login redirection is not overridden or browser-proved.",
-    "Action client existing 401/402/403 unavailable-plan responses are unchanged. Only thrown read failures retain actionable error presentation.",
-    "Independent reader authorisation remains independent; this is not a global session revocation broadcast."
+    "Synthetic observations and HTTP responses through production components and CSS in a local Vite preview. Not native appliance data/authorisation, reporter cause, released availability, actual rollback, Tailscale or SSE acceptance.",
+    "The History API exposes no restore-scope metadata; no version heuristic or free-form note establishes scope. The UI conservatively says it is unknown.",
+    "Full provider identifiers remain titles/search targets. Some long row names and secondary intermediate-width fields intentionally truncate; this does not prove every native estate or every value fits.",
+    "The frontend graph is unchanged and its seven high GHSA-vfj7-8cjw-p6xm findings remain; browser/component/build proof is not audit clearance."
   ]
 }

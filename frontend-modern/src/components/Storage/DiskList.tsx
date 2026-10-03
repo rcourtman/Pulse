@@ -55,7 +55,6 @@ import {
   PHYSICAL_DISK_HEADER_SIZE_CLASS,
   PHYSICAL_DISK_HEADER_TEMP_CLASS,
   PHYSICAL_DISK_HEALTH_LABEL_CLASS,
-  PHYSICAL_DISK_HEALTH_SUMMARY_CLASS,
   PHYSICAL_DISK_HEALTH_WRAP_CLASS,
   PHYSICAL_DISK_DEVICE_TEXT_CLASS,
   PHYSICAL_DISK_LIFE_CLASS,
@@ -72,8 +71,10 @@ import {
   PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS,
   PHYSICAL_DISK_TABLE_ROW_SELECTED_CLASS,
   PHYSICAL_DISK_TABLE_ROW_STYLE,
-  getPhysicalDiskColumnWidthPercent,
+  getPhysicalDiskCellPaddingClass,
+  getPhysicalDiskColumnWidthStyle,
   getPhysicalDiskEmptyStatePresentation,
+  getPhysicalDiskHealthCompactLabel,
   getPhysicalDiskHealthStatus,
   getPhysicalDiskHealthSummary,
   getPhysicalDiskHostLabel,
@@ -117,11 +118,18 @@ export const DiskList: Component<DiskListProps> = (props) => {
     baseClass: string,
     columnId: PhysicalDiskTableColumnId,
     visibleClass: 'table-column' | 'table-cell',
-  ) =>
-    `${baseClass} ${isPhysicalDiskColumnVisible(layoutMode(), columnId) ? visibleClass : 'hidden'}`.trim();
-  const columnStyle = (columnId: PhysicalDiskTableColumnId) => ({
-    width: `${getPhysicalDiskColumnWidthPercent(layoutMode(), columnId)}%`,
-  });
+  ) => {
+    const visibility = isPhysicalDiskColumnVisible(layoutMode(), columnId)
+      ? visibleClass
+      : 'hidden';
+    // Rendered cells and headers shed the shared primitives' desktop padding
+    // on the phone layouts; `<col>` elements carry no padding.
+    const padding =
+      visibleClass === 'table-cell' ? getPhysicalDiskCellPaddingClass(layoutMode()) : '';
+    return `${baseClass} ${padding} ${visibility}`.replace(/\s+/g, ' ').trim();
+  };
+  const columnStyle = (columnId: PhysicalDiskTableColumnId) =>
+    getPhysicalDiskColumnWidthStyle(layoutMode(), columnId);
   const { getDiskTemperatureThresholds } = useAlertsActivation();
   const model = useDiskListModel({
     disks: () => props.disks,
@@ -327,6 +335,11 @@ export const DiskList: Component<DiskListProps> = (props) => {
                 const status = createMemo(() => getPhysicalDiskHealthStatus(data()));
                 const hostLabel = createMemo(() => getPhysicalDiskHostLabel(data(), disk));
                 const healthSummary = createMemo(() => getPhysicalDiskHealthSummary(status()));
+                const healthCompactLabel = createMemo(() =>
+                  getPhysicalDiskHealthCompactLabel(status().label),
+                );
+                const healthLabelClass = () =>
+                  `${PHYSICAL_DISK_HEALTH_LABEL_CLASS} ${status().tone}`;
                 const isSelected = () => model.selectedDisk()?.id === disk.id;
                 const summarySeriesId = createMemo(() => resolvePhysicalDiskMetricResourceId(disk));
                 const isSummaryHighlighted = () =>
@@ -446,15 +459,30 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         data-storage-column="health"
                       >
                         <div class={PHYSICAL_DISK_HEALTH_WRAP_CLASS}>
-                          <span class={`${PHYSICAL_DISK_HEALTH_LABEL_CLASS} ${status().tone}`}>
-                            {status().label}
-                          </span>
-                          <Show when={healthSummary()}>
+                          {/* The row shows the verdict word only; the reason is the
+                              cell's title here and is spelled out in the disk drawer.
+                              The phone projection of the table container shows the
+                              shorter word; the tone stays on each span so the rendered
+                              label is the styled element in either projection. */}
+                          <Show
+                            when={healthCompactLabel() !== status().label}
+                            fallback={
+                              <span class={healthLabelClass()} title={healthSummary() || undefined}>
+                                {status().label}
+                              </span>
+                            }
+                          >
                             <span
-                              class={PHYSICAL_DISK_HEALTH_SUMMARY_CLASS}
-                              title={healthSummary()}
+                              class={`${healthLabelClass()} platform-table-label-compact`}
+                              title={healthSummary() || undefined}
                             >
-                              {healthSummary()}
+                              {healthCompactLabel()}
+                            </span>
+                            <span
+                              class={`${healthLabelClass()} platform-table-label-full`}
+                              title={healthSummary() || undefined}
+                            >
+                              {status().label}
                             </span>
                           </Show>
                         </div>
