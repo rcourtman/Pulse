@@ -5,6 +5,7 @@ import { updateStore } from '@/stores/updates';
 import { Button } from '@/components/shared/Button';
 import { Dialog } from '@/components/shared/Dialog';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { getShippedDocUrl } from '@/utils/docsLinks';
 
 const HISTORY_LIMIT = 20;
 
@@ -45,7 +46,7 @@ const statusPresentation = (status: string): { label: string; className: string 
   }
 };
 
-// A rollback restores the backup taken before this update was applied, so it
+// A rollback uses the backup taken before this update was applied, so it
 // is only offered where that backup is still retained on disk (the backend
 // clears backup_path when retention prunes it) and the update actually landed.
 const canRollBack = (entry: UpdateHistoryEntry): boolean =>
@@ -89,7 +90,7 @@ export const UpdateHistorySection: Component = () => {
           Update History
         </h4>
         <p class="mt-1 text-xs text-muted">
-          Updates applied through Pulse, with rollback to the backup taken before each one.
+          Updates applied through Pulse, with version rollback using a retained backup.
         </p>
       </div>
 
@@ -187,14 +188,30 @@ export const UpdateHistorySection: Component = () => {
                 </h2>
               </div>
               <div class="px-6 py-4 space-y-3 text-sm text-base-content">
-                <p>
-                  This restores the binary, configuration, and data from the backup taken before the
-                  update to {formatVersionLabel(entry().version_to)} on{' '}
-                  {formatTimestamp(entry().timestamp)}.
+                <p class="text-muted">
+                  Running now: Pulse {formatVersionLabel(updateStore.versionInfo()?.version || '')}.
                 </p>
                 <p>
-                  Settings and alert changes made since that backup will be reverted, and Pulse will
-                  restart to complete the rollback.
+                  This requests an installation rollback using the backup taken before the update to{' '}
+                  {formatVersionLabel(entry().version_to)} on {formatTimestamp(entry().timestamp)}.
+                  Pulse will restart if the rollback succeeds.
+                </p>
+                <p>
+                  Restore scope is not reported for this backup. A scope-aware server keeps active
+                  runtime data in place and restores only the binary and independent installation
+                  files. Older recovery can also replace install-local data and configuration,
+                  reverting later changes.
+                </p>
+                <p>
+                  Do not assume this will undo settings or alerts. Full-state recovery requires
+                  Pulse to be stopped and a consistent backup of every active store.{' '}
+                  <a
+                    class="text-primary underline"
+                    href={`${getShippedDocUrl('AUTO_UPDATE.md')}#manual-rollback`}
+                  >
+                    Read the recovery instructions
+                  </a>
+                  .
                 </p>
               </div>
               <div class="px-6 py-4 bg-surface-alt border-t border-border flex items-center justify-end gap-3">

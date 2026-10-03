@@ -21,6 +21,28 @@
 
 ## Purpose
 
+### Backup identity, phone storage and History consent composition
+
+The Proxmox Coverage last-backup pointer selects completed PBS snapshots or PVE
+backup files, never guest-local snapshots. Guest snapshots remain listed as
+restore evidence but cannot make an old independent backup look current.
+Archive detail uses its format (or filename fallback), preserving the full
+provider volid for hover and search in both Coverage and By date.
+
+Phone pool/disk rows preserve health and identity while using weighted widths,
+consistent gutters and compact capacity/health labels. Full disk risk reasons
+move into the existing expanded header; the ZFS activity badge uses supplied
+scan data only when rebuild is reported and keeps the full summary as its title.
+Collection-independent, organisation-owned disk History remains intact.
+
+The UpdateHistory confirmation is a version-rollback consent, not a full-state
+recovery promise. Its current API exposes no verified restore-scope metadata;
+copy must retain installation-only and legacy differences and direct full-state
+recovery to the stopped-service procedure. Regressions cover these distinctions,
+archive/snapshot attribution and storage values; the composed browser fixture
+checks real table/drawer rendering, not native or installed recovery.
+
+
 ### Disk History is independent of current collection
 
 The existing physical-disk History catalog is selected by disk family, not by

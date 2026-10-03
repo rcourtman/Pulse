@@ -1,4 +1,4 @@
-import type { Accessor } from 'solid-js';
+import { Show, type Accessor } from 'solid-js';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
@@ -6,7 +6,10 @@ import { ProgressBar } from '@/components/shared/ProgressBar';
 import { TableHead } from '@/components/shared/Table';
 import { getTableSortIndicator } from '@/components/shared/tableSortPresentation';
 import { WorkloadTypeBadge as SharedWorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
-import { PlatformTableRelativeTimeValue } from '@/features/platformPage/sharedPlatformPage';
+import {
+  PlatformTableRelativeTimeValue,
+  formatPlatformTableRelativeTimeValue,
+} from '@/features/platformPage/sharedPlatformPage';
 
 import {
   getRecoveryAgeBand,
@@ -219,7 +222,15 @@ export function RowMetricBar(props: {
   );
 }
 
-export function ProxmoxBackupAgeText(props: { artifact: RecoverableArtifact }) {
+// Phone columns are too narrow for "18h ago", so the compact form drops the
+// suffix ("18h", "now") and keeps the full age band and timestamp on hover.
+export function formatCompactBackupAge(createdAt: string): string {
+  const relative = formatPlatformTableRelativeTimeValue(createdAt);
+  if (relative === 'just now') return 'now';
+  return relative.replace(/ ago$/, '');
+}
+
+export function ProxmoxBackupAgeText(props: { artifact: RecoverableArtifact; compact?: boolean }) {
   const band = () => getRecoveryAgeBand(props.artifact.createdMs);
   const title = () => {
     const parts = [recoveryAgeTitleByBand[band()], props.artifact.createdAt].filter(Boolean);
@@ -228,7 +239,12 @@ export function ProxmoxBackupAgeText(props: { artifact: RecoverableArtifact }) {
 
   return (
     <span class={`font-semibold tabular-nums ${recoveryAgeClassByBand[band()]}`} title={title()}>
-      <PlatformTableRelativeTimeValue value={props.artifact.createdAt} />
+      <Show
+        when={props.compact}
+        fallback={<PlatformTableRelativeTimeValue value={props.artifact.createdAt} />}
+      >
+        {formatCompactBackupAge(props.artifact.createdAt)}
+      </Show>
     </span>
   );
 }
