@@ -21,6 +21,32 @@
 
 ## Purpose
 
+### Disk History is independent of current collection
+
+The existing physical-disk History catalog is selected by disk family, not by
+whether the latest snapshot contains temperature or extended SMART values.
+Temperature and ATA reallocated-sector charts, or temperature and NVMe
+endurance/spare charts, query only the already-resolved canonical disk target.
+A missing current field must not hide stored observations. An empty series is
+shown as no history samples, never a fabricated zero or current-value fallback.
+Overview continues to report current collection availability; explicit
+unavailable/unsupported I/O still suppresses the existing live I/O section.
+
+Catalog entries retain their identity across matching snapshots so ordinary
+current-temperature changes cannot remount charts, drop inspection or restart
+History reads. The shared chart owner still invalidates reads and inspection
+when the explicit target or range changes; a late cancelled response cannot
+populate its replacement. This changes neither disk correlation nor collector,
+retention, permission or entitlement policy, and proves no appliance recovery.
+
+Verification: `DiskDetail.test.tsx` and `useDiskDetailModel.test.ts` pin the
+catalog and matching-snapshot boundary; `DiskDetail.history-collection.test.tsx`
+uses the actual chart owner to cover absent current fields, stored zero versus
+empty, NVMe/ATA catalogs, request counts, preserved inspection and late former
+target responses. `frontend-modern/browser-tests/disk-history-collection.cjs`
+checks the production components/client/CSS with synthetic API data on desktop
+Chromium and touch/dark phone WebKit, not native NAS or installed acceptance.
+
 ### Independent physical disk temperature
 
 Disk Overview displays a finite positive reported temperature even when the

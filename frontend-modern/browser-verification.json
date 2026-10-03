@@ -1,27 +1,16 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "90c436c83d616eccbe544bf3737b13c3b6251e53",
-  "verified_at": "2026-10-02T23:38:43Z",
+  "base_sha": "b6a42d8a4f329a1f3d7359d8d64b17c385006ed7",
+  "verified_at": "2026-10-03T00:38:42Z",
   "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts",
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts",
-    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx"
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "63429552c461f36d4f5af06ac2ecd612b2a84630bf82e2e5d8311653519585d1",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "0e313b23f06c2c5fa139f2a8f1acd70299a047ab20da88016ec1aa01b5a50b4d",
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "c7afd1510b7249021eb2af2a7dcd5fe71e5183bed019ade505489a2f46eb9635",
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts": "fa04600d900f51395493d1d3a51d578d84d13adb64cc5a159322a61877854bd0",
-    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts": "1ac0ffb9ee287a9da04fbf24e9953dbcbf4e55de906241e7702266808da2243d",
-    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx": "161617fb877870ce0729dcb8312762b81d6eb4bd5cb3835023fed543b88ff02d"
+    "frontend-modern/src/features/storageBackups/diskDetailPresentation.ts": "31c71a2d696f1b74d55b855220885619bbeebc0b75a1f34354cc5b794ba49375"
   },
   "routes": [
-    "PBS resource detail History in existing platform tables",
-    "Availability fleet open resource detail"
+    "Existing Storage physical disk detail History"
   ],
   "viewports": [
     {
@@ -34,19 +23,23 @@
     }
   ],
   "states": [
-    "Same-ID replacement updates PBS heading, current CPU and history target without remounting the History body or losing the 7-day selection",
-    "Lost metrics target withdraws the History body and returning target restores the selected tab",
-    "Selecting another canonical resource starts on its own Overview and uses only its explicit History target",
-    "An open availability check changes from Up to Down with the current fleet snapshot",
-    "Selecting Check B after Check A changes header, endpoint and availability together",
-    "Removal of the selected check closes details; reintroduction does not reopen it",
-    "Desktop light Chromium and phone dark WebKit have no page overflow or uncaught page errors"
+    "Stored ATA temperature and measured-zero reallocated sectors render when current temperature and SMART are absent",
+    "Matching current snapshot updates keep the same chart owners and add zero History reads",
+    "Current field loss keeps stored samples and selected 7-day range; no unavailable live I/O is shown",
+    "Overview reports present collection unavailability instead of the earlier stored temperature",
+    "Empty temperature history is an explicit no-samples state, not a zero, while stored reallocated zero remains visible",
+    "NVMe uses its own explicit disk target and stored temperature/endurance/spare series without current SMART fields",
+    "No resolvable identity withdraws History and issues no guessed-target request",
+    "Keyboard desktop and touch phone inspection show real stored readings",
+    "All screenshots inspected with animations disabled; selected tab, light/dark layouts and page width agree with content",
+    "Playwright 1.56.1 matches the integration lock; no page errors or off-origin data reads"
   ],
   "interactions": [
-    "Select History and 7-day range",
-    "Replace PBS snapshot, withdraw and restore metrics target",
-    "Select PBS B and open its History",
-    "Open Check A, publish failed replacement, then select Check B",
-    "Remove and restore selected check"
+    "Open History from unavailable current Overview",
+    "Restore, update and remove current fields",
+    "Change 24h/7d/1h ranges",
+    "Inspect by keyboard or phone tap",
+    "Select NVMe B",
+    "Clear disk identity"
   ]
 }
