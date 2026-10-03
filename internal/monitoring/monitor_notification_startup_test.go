@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -178,4 +179,42 @@ func TestNewRestoresSavedNotificationChoices(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Real PBS breach -> recovery -> new breach, with one callback deliberately
+// held at its asynchronous consumer boundary. No clocks or manager maps change.
+func TestMonitorResolvedSnapshotKeepsRefiringPBSDelivery(t *testing.T) {
+	endpoint, receipts := occurrenceEndpoint(t)
+	n := occurrenceNotifier(t, t.TempDir(), endpoint)
+	a, pbs := occurrenceManager(t)
+	m := &Monitor{alertManager: a, notificationMgr: n}
+	m.wireExternalAlertCallbacks(nil)
+	entered, release := make(chan struct{}), make(chan struct{})
+	var releaseOnce sync.Once
+	t.Cleanup(func() { releaseOnce.Do(func() { close(release) }) })
+	unsubscribe := a.SubscribeResolvedCallback(func(string) { close(entered); <-release })
+	t.Cleanup(unsubscribe)
+	a.CheckPBS(pbs)
+	first := awaitOccurrenceRows(t, n, 1)[0].Alerts[0]
+	pbs.CPU = 0
+	a.CheckPBS(pbs)
+	select {
+	case <-entered:
+	case <-time.After(3 * time.Second):
+		t.Fatal("resolution callback did not start")
+	}
+	pbs.CPU = 95
+	a.CheckPBS(pbs)
+	awaitOccurrenceRows(t, n, 2)
+	active := a.GetActiveAlerts()
+	if len(active) != 1 || active[0].ID != first.ID || active[0].StartTime.Equal(first.StartTime) {
+		t.Fatalf("not a new recurring PBS occurrence: %+v", active)
+	}
+	current := active[0].Clone()
+	releaseOnce.Do(func() { close(release) })
+	remaining := awaitOccurrenceRows(t, n, 1)
+	if !remaining[0].Alerts[0].StartTime.Equal(current.StartTime) {
+		t.Fatal("delayed resolution kept the wrong occurrence")
+	}
+	assertOccurrenceHTTP(t, n, receipts, current)
 }

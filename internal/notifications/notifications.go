@@ -1580,9 +1580,24 @@ func (n *NotificationManager) dispatchResolvedAlerts(alertList []*alerts.Alert) 
 // the grouping window or waiting in the queue), so sending a recovery
 // notification would reference an alert that was never announced.
 func (n *NotificationManager) CancelAlert(alertID string) bool {
+	return n.cancelAlert(alertID, nil)
+}
+
+// CancelResolvedAlert cancels firing work for one resolved occurrence, without
+// deleting a newer occurrence's grouping entries or delivery cooldown.
+// ID-wide cancellation remains available for explicit administrative callers.
+func (n *NotificationManager) CancelResolvedAlert(alert *alerts.Alert) bool {
+	if alert == nil || alert.ID == "" || alert.StartTime.IsZero() {
+		return false
+	}
+	return n.cancelAlert(alert.ID, &alert.StartTime)
+}
+
+func (n *NotificationManager) cancelAlert(alertID string, start *time.Time) bool {
 	n.mu.Lock()
 	queue := n.queue
-	_, firingDelivered := n.lastNotified[alertID]
+	record, firingDelivered := n.lastNotified[alertID]
+	firingDelivered = firingDelivered && (start == nil || record.alertStart.Equal(*start))
 
 	removed := 0
 	if len(n.pendingAlerts) > 0 {
@@ -1591,7 +1606,7 @@ func (n *NotificationManager) CancelAlert(alertID string) bool {
 			if pending == nil {
 				continue
 			}
-			if pending.ID == alertID {
+			if pending.ID == alertID && (start == nil || pending.StartTime.Equal(*start)) {
 				removed++
 				continue
 			}
@@ -1613,14 +1628,21 @@ func (n *NotificationManager) CancelAlert(alertID string) bool {
 	}
 
 	// Clean up cooldown record for resolved alert
-	delete(n.lastNotified, alertID)
+	if start == nil || record.alertStart.Equal(*start) {
+		delete(n.lastNotified, alertID)
+	}
+	remaining := len(n.pendingAlerts)
 	n.mu.Unlock()
 
 	// Cancel any queued notifications containing this alert
 	cancelledPending := 0
 	if queue != nil {
 		var err error
-		cancelledPending, err = queue.CancelByAlertIdentifiers([]string{alertID})
+		if start == nil {
+			cancelledPending, err = queue.CancelByAlertIdentifiers([]string{alertID})
+		} else {
+			cancelledPending, err = queue.CancelByAlertOccurrence(alertID, *start)
+		}
 		if err != nil {
 			log.Error().Err(err).Str("alertID", alertID).Msg("failed to cancel queued notifications")
 		}
@@ -1630,7 +1652,7 @@ func (n *NotificationManager) CancelAlert(alertID string) bool {
 
 	log.Debug().
 		Str("alertID", alertID).
-		Int("remaining", len(n.pendingAlerts)).
+		Int("remaining", remaining).
 		Bool("firingNeverDelivered", firingNeverDelivered).
 		Msg("removed resolved alert from pending notifications and cooldown map")
 

@@ -4634,3 +4634,33 @@ proof lives in `internal/truenas/provider_test.go`
 (`TestMaxTrueNASSystemTemperaturePrefersCoresOverSynthesisedAggregate`). This
 is source-level proof, not reporter acceptance or appliance confirmation
 (#2122).
+
+### Recovery callbacks retain the resolved occurrence
+
+`wireExternalAlertCallbacks` binds the occurrence-qualified recovery callback,
+not the legacy ID-only callback. The monitor uses its immutable alert/start/end
+snapshot for AI recovery and for exact notification cancellation, so a delayed
+recovery cannot remove a newer firing admitted under the same reusable ID.
+AI receives a separate clone. An ID-only websocket removal is omitted when the
+manager already exposes that ID as active; the regular state stream continues
+to own current alert truth. The legacy local ID adapter resolves a snapshot once
+and fails closed when no resolved record exists; it is not the live delivery
+binding. No browser payload, retention or notification routing contract changes.
+
+`monitor_alert_handling_test.go` and
+`monitor_notification_startup_test.go` covers a delayed ID-adapter cancellation
+with queue restart/readback, and a real PBS breach/recovery/new breach held at
+the callback boundary. Both require the replacement firing's exact ID/start to
+reach a loopback HTTP destination with one sent row and one cancelled old row.
+No clock, reducer map or configured cooldown is altered. This establishes local
+source-connected delivery, not the outstanding natural flapping cooldown check,
+a native appliance result or containing stable availability.
+
+Recovery eligibility is destination-receipt-owned, not the cancellation helper's
+pending-work count or the RAM cooldown marker. After partial delivery/restart,
+a cancelled retry at one destination cannot suppress a recovery to another
+that actually accepted the same occurrence. The connected
+`TestMonitorDelayedPartialResolutionKeepsDestinationRecovery` retains a real
+HTTP 200/503 split, reopens the persistent queue, and requires the old accepted
+destination's recovery plus the new firing, with no recovery to the unannounced
+destination. Quiet hours and disabled recovery controls still apply.

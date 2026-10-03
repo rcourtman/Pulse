@@ -8433,3 +8433,14 @@ update commands and credential authority unchanged.
 `internal/api/onboarding_handlers.go` changed only the human-readable pairing
 readiness messages so they name Settings > Pulse Mobile. No agent
 registration, lifecycle or install path changed.
+
+### Monitor recovery callback ownership
+
+The monitor's external alert wiring uses a captured resolved-occurrence
+snapshot for notification cancellation. Re-enrolled or refiring resources keep
+their new occurrence's queued notification even when an older recovery callback
+arrives late under the same ID. Agent registration, deletion/tombstones,
+authorisation and continuity evidence are unchanged. The connected callback
+wiring control in `monitor_notification_startup_test.go` verifies the shared
+monitor boundary against real alert evaluation and local HTTP delivery; it does
+not claim host re-enrolment or installed-agent acceptance.

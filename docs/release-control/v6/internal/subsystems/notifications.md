@@ -1054,3 +1054,27 @@ regression establish frontend control preservation, not provider delivery.
 Formatting-only follow-up retains this warning-level contract. The production-component
 browser matrix was rerun after formatting at desktop and narrow widths, including
 all/critical/warning save/reload, cancel, and warning webhook creation.
+
+### Resolution cancellation is occurrence-qualified
+
+The monitor's delayed recovery path calls `CancelResolvedAlert` with the
+captured ID/start-time snapshot. It removes only that occurrence's pending
+in-memory grouping members and cooldown record. Persistent
+`CancelByAlertOccurrence` shares the existing per-ID delivery gates and
+cancellation machinery, but matches both ID and start time: pending, sending,
+failed and dead-letter firing rows are cancelled or rewritten without removing
+a recurring incident or unrelated members/operational links in a mixed row.
+Missing occurrence identity is a no-op. The explicit identifier-wide API, audit
+history, destination receipts, retry budget, recovery rows and best-effort
+in-flight semantics remain unchanged.
+
+`queue_occurrence_cancellation_test.go` verifies all four row states after a
+fresh database reopen, nanosecond-distinct occurrences, operational-link and
+failed-attempt preservation, missing-identity safety, grouping/cooldown retention
+and the unchanged ID-wide API. Monitor connected controls additionally require
+HTTP acceptance of the surviving occurrence through the autonomous queue.
+
+The live monitor does not interpret pending-only cancellation counts as
+recipient acceptance. Per-occurrence/per-destination receipts remain the sole
+recovery admission proof, including partial delivery and lost RAM markers after
+restart; an unannounced destination receives no recovery.

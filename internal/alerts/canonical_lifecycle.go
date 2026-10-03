@@ -603,7 +603,7 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 		recoveryEvidenceRef,
 	)
 	m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
-	m.safeCallResolvedAlertCallback(existing, storageKey, true)
+	m.safeCallResolvedAlertCallback(resolvedAlert, storageKey, true)
 	return result, true
 }
 
@@ -863,7 +863,7 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 			recoveryEvidenceRef,
 		)
 		m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
-		m.safeCallResolvedAlertCallback(existing, storageKey, true)
+		m.safeCallResolvedAlertCallback(resolvedAlert, storageKey, true)
 		return result, true
 	}
 }
