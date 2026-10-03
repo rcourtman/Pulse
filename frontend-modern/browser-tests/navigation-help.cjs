@@ -85,7 +85,15 @@ const { chromium, webkit } = require('playwright');
       }));
       assert.ok(geometry.localScroll);
       assert.ok(geometry.outer <= geometry.viewport + 1);
-      if (width === 390) assert.ok(geometry.table > geometry.wrapper);
+      if (width === 390 && geometry.table > geometry.wrapper + 1) {
+        const movement = await inventory.evaluate((table) => {
+          table.parentElement.scrollLeft = 180;
+          return table.parentElement.scrollLeft;
+        });
+        assert.ok(movement > 0, 'wide tables must remain locally scrollable');
+      } else {
+        assert.ok(geometry.table <= geometry.wrapper + 1, 'wrapped table must fit its container');
+      }
       await page.screenshot({ path: path.join(artifacts, `${engine}-truenas.png`) });
 
       await page.getByRole('link', { name: '← All documentation' }).click();
