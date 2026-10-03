@@ -27,7 +27,9 @@ history. No queue schema, retry budget, recovery selection or schedule changes.
 `TestNotificationCooldownReceiptOrdering` verifies older, unknown and equal-start
 completion ordering, including legacy zero starts. The connected
 `TestLateFiringHTTPReceiptPreservesCurrentCooldown` holds an older HTTP response
-while the newer firing completes through the persistent sender. It verifies that
+while the newer firing completes through the persistent sender. Both snapshots
+are admitted before ordinary queue activation, so one discovered batch can
+complete concurrently without adding another dispatcher. It verifies that
 the ordinary repeat adds no queue row, a current severity increase still reaches
 the receiver, and both occurrence/destination receipts survive queue reopen.
 This is loopback source acceptance, not native delivery, restart cooldown

@@ -88,7 +88,7 @@ func TestLateFiringHTTPReceiptPreservesCurrentCooldown(t *testing.T) {
 	t.Cleanup(server.Close)
 	dir := t.TempDir()
 	webhook := WebhookConfig{ID: "ops", URL: server.URL + "/hook", Enabled: true, Service: "generic"}
-	m := NewNotificationManagerWithDataDir("", dir)
+	m := NewNotificationManagerWithDeferredQueue("", dir)
 	t.Cleanup(m.Stop)
 	t.Cleanup(unblock) // Release an in-flight provider before waiting for shutdown.
 	m.webhookClient = server.Client()
@@ -100,16 +100,20 @@ func TestLateFiringHTTPReceiptPreservesCurrentCooldown(t *testing.T) {
 	old := &alerts.Alert{ID: "recurring-cpu", ResourceName: "cpu-node", Type: "cpu",
 		Level: alerts.AlertLevelCritical, Message: "older firing", StartTime: time.Now().UTC().Add(-time.Minute)}
 	m.SendAlert(old)
-	select {
-	case <-oldArrived:
-	case <-time.After(10 * time.Second):
-		t.Fatal("old firing did not reach the HTTP receiver")
-	}
 	current := old.Clone()
 	current.StartTime = time.Now().UTC()
 	current.Level = alerts.AlertLevelWarning
 	current.Message = "current warning firing"
 	m.SendAlert(current)
+	// Workers run concurrently within one discovered batch, but discovery waits
+	// for that batch to finish. Admit both snapshots before normal activation so
+	// the HTTP ordering is possible without a second dispatcher or clock edits.
+	m.StartQueueProcessing()
+	select {
+	case <-oldArrived:
+	case <-time.After(10 * time.Second):
+		t.Fatal("old firing did not reach the HTTP receiver")
+	}
 	wait := func(condition func() bool) {
 		t.Helper()
 		deadline := time.Now().Add(10 * time.Second)
@@ -147,9 +151,18 @@ func TestLateFiringHTTPReceiptPreservesCurrentCooldown(t *testing.T) {
 		return stats["sent"] == 3
 	})
 	mu.Lock()
-	count := len(bodies)
+	received := append([]string(nil), bodies...)
 	mu.Unlock()
-	require.Equal(t, 3, count)
+	require.Len(t, received, 3)
+	for _, message := range []string{"older firing", "current warning firing", "current critical firing"} {
+		count := 0
+		for _, body := range received {
+			if strings.Contains(body, message) {
+				count++
+			}
+		}
+		require.Equal(t, 1, count, "receiver must see exactly one %s", message)
+	}
 	m.Stop()
 	// The old completion still owns a durable recovery receipt, independently
 	// of which occurrence owns the transient repeat-delivery cooldown.
