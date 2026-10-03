@@ -7,6 +7,7 @@ import {
 } from '@/features/storageBackups/diskPresentation';
 import {
   getDiskDetailAttributeCards,
+  getDiskDetailHealthPresentation,
   getDiskDetailHistoryCharts,
 } from '@/features/storageBackups/diskDetailPresentation';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -29,6 +30,7 @@ export const useDiskDetailModel = (options: UseDiskDetailModelOptions) => {
     getDiskDetailAttributeCards(diskData(), getDiskTemperatureThresholds(diskData().type)),
   );
   const historyCharts = createMemo(() => getDiskDetailHistoryCharts(diskData()));
+  const healthPresentation = createMemo(() => getDiskDetailHealthPresentation(diskData()));
   const metricResourceId = createMemo(() => historyResourceId());
   const collectionMessages = createMemo(() => getPhysicalDiskCollectionMessages(diskData()));
   const liveIOAvailable = createMemo(() => {
@@ -43,6 +45,7 @@ export const useDiskDetailModel = (options: UseDiskDetailModelOptions) => {
     historyResourceId,
     attributeCards,
     historyCharts,
+    healthPresentation,
     metricResourceId,
     collectionMessages,
     liveIOAvailable,

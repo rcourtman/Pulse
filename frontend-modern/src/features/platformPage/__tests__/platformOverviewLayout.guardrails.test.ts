@@ -322,7 +322,7 @@ describe('platform overview layout guardrails', () => {
       expect(source).toContain('platform-table-mobile-w-30');
     }
     expect(dockerImagesTableSource).toMatch(
-      /sortKey="size"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[12%\]"/,
+      /sortKey="size"[\s\S]{0,120}?class="platform-table-mobile-w-20 md:w-\[12%\]"/,
     );
     expect(dockerServicesTableSource).toMatch(
       /sortKey="mode"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[8%\]"/,

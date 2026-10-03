@@ -101,6 +101,47 @@ describe('storage row presentation', () => {
     expect(getCompactStoragePoolProtectionTitle(record)).not.toContain('without parity');
   });
 
+  it('shows a zfs rebuild as its activity word and keeps the sentence as the title', () => {
+    const resilvering = {
+      ...baseRecord(),
+      rebuildInProgress: true,
+      protectionLabel: 'ZFS pool tank is resilvering',
+      details: {
+        zfsPool: { state: 'DEGRADED', scan: 'resilver in progress', devices: [] },
+      },
+    } as unknown as StorageRecord;
+    expect(getCompactStoragePoolProtectionLabel(resilvering)).toBe('Resilvering');
+    expect(getCompactStoragePoolProtectionTitle(resilvering)).toBe('ZFS pool tank is resilvering');
+
+    const scrubbing = {
+      ...baseRecord(),
+      rebuildInProgress: true,
+      protectionLabel: 'ZFS pool tank scrub is running (45.2%)',
+      protectionSummary: 'ZFS pool tank scrub is running (45.2%)',
+      details: {
+        zfsPool: {
+          state: 'ONLINE',
+          scan: '',
+          scanDetails: { function: 'SCRUB', state: 'SCANNING', percentage: 45.2 },
+          devices: [],
+        },
+      },
+    } as unknown as StorageRecord;
+    expect(getCompactStoragePoolProtectionLabel(scrubbing)).toBe('Scrubbing 45%');
+    expect(getCompactStoragePoolProtectionTitle(scrubbing)).toBe(
+      'ZFS pool tank scrub is running (45.2%)',
+    );
+
+    // A rebuild without zfs scan data keeps the label its platform supplied.
+    const parity = {
+      ...baseRecord(),
+      rebuildInProgress: true,
+      protectionLabel: 'Parity sync 12%',
+    } as unknown as StorageRecord;
+    expect(getCompactStoragePoolProtectionLabel(parity)).toBe('Parity sync 12%');
+    expect(getCompactStoragePoolProtectionTitle(parity)).toBe('Parity sync 12%');
+  });
+
   it('derives zfs issue fallback from pool state and errors', () => {
     const record = {
       ...baseRecord(),

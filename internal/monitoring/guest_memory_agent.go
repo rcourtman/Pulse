@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -91,6 +92,12 @@ func (m *Monitor) getVMAgentMemoryAvailability(ctx context.Context, client PVECl
 		}
 	} else {
 		return proxmox.LinuxMemoryAvailability{}, fmt.Errorf("guest agent meminfo fallback unsupported")
+	}
+
+	if errors.Is(err, proxmox.ErrGuestAgentDeferred) {
+		// A coordination pause is not a failed guest observation. Preserve the
+		// last successful cache and its original timestamp for normal resumption.
+		return proxmox.LinuxMemoryAvailability{}, err
 	}
 
 	m.rrdCacheMu.Lock()

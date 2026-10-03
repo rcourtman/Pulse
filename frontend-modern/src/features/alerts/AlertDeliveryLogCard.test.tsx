@@ -273,7 +273,7 @@ describe('AlertDeliveryLogCard', () => {
     expect(screen.queryByRole('list')).not.toBeInTheDocument();
   });
 
-  it('hides held rows during an outage and restores their current state on recovery', () => {
+  it('hides held rows when their own read fails and restores them on recovery', () => {
     const [unavailable, setUnavailable] = createSignal(false);
     const [heldEvents, setHeldEvents] = createSignal<AlertEvent[]>([
       {
@@ -290,7 +290,8 @@ describe('AlertDeliveryLogCard', () => {
     render(() => (
       <AlertDeliveryLogCard
         log={{ ...log, entries: [] }}
-        unavailable={unavailable()}
+        unavailable={false}
+        heldEventsUnavailable={unavailable()}
         refreshing={false}
         onRefresh={vi.fn()}
         webhooks={[]}
@@ -300,7 +301,9 @@ describe('AlertDeliveryLogCard', () => {
 
     expect(screen.getByText('Deferred')).toBeInTheDocument();
     setUnavailable(true);
-    expect(screen.getByRole('alert')).toHaveTextContent(/could not read the delivery log/);
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /could not read held or deferred notifications/,
+    );
     expect(screen.queryByRole('list')).not.toBeInTheDocument();
     expect(screen.queryByText('nas-quiet (usage)')).not.toBeInTheDocument();
     expect(screen.queryByText(/No alert deliveries were attempted/)).not.toBeInTheDocument();
@@ -330,6 +333,108 @@ describe('AlertDeliveryLogCard', () => {
     ));
 
     expect(screen.getByRole('alert')).toHaveTextContent(/could not read the delivery log/);
+    expect(screen.queryByText(/No alert deliveries were attempted/)).not.toBeInTheDocument();
+  });
+  it('keeps independently readable held evidence when delivery attempts are unavailable', () => {
+    render(() => (
+      <AlertDeliveryLogCard
+        log={log}
+        unavailable={true}
+        refreshing={false}
+        heldEvents={[
+          {
+            id: 7,
+            type: 'notification_deferred',
+            alertId: 'held-known',
+            occurredAt: '2026-10-03T10:00:00Z',
+            reason: 'quiet_hours:performance',
+          },
+        ]}
+        onRefresh={vi.fn()}
+        webhooks={webhooks}
+      />
+    ));
+    expect(screen.getByRole('alert')).toHaveTextContent(/could not read the delivery log/);
+    expect(screen.getByText('held-known')).toBeInTheDocument();
+    expect(screen.getByText('Quiet hours')).toBeInTheDocument();
+    expect(screen.queryByText('Delivered')).not.toBeInTheDocument();
+    expect(screen.queryByText(/No alert deliveries were attempted/)).not.toBeInTheDocument();
+  });
+
+  it('reports missing held evidence without hiding readable attempts', () => {
+    render(() => (
+      <AlertDeliveryLogCard
+        log={log}
+        unavailable={false}
+        refreshing={false}
+        heldEventsUnavailable={true}
+        heldEvents={[
+          {
+            id: 8,
+            type: 'notification_suppressed',
+            alertId: 'stale-held',
+            occurredAt: '2026-10-03T10:00:00Z',
+          },
+        ]}
+        onRefresh={vi.fn()}
+        webhooks={webhooks}
+      />
+    ));
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /could not read held or deferred notifications/,
+    );
+    expect(screen.getByText('Delivered')).toBeInTheDocument();
+    expect(screen.getByText('Ops Discord')).toBeInTheDocument();
+    expect(screen.queryByText('stale-held')).not.toBeInTheDocument();
+  });
+
+  it('does not claim an empty activity window while held evidence is pending', () => {
+    render(() => (
+      <AlertDeliveryLogCard
+        log={{ ...log, entries: [] }}
+        unavailable={false}
+        refreshing={false}
+        refreshingHeldEvents={true}
+        onRefresh={vi.fn()}
+        webhooks={[]}
+      />
+    ));
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Loading held and deferred notifications...',
+    );
+    expect(screen.queryByText(/No alert deliveries were attempted/)).not.toBeInTheDocument();
+    // A slow held read must not prevent a new delivery-attempt refresh.
+    expect(screen.getByRole('button', { name: 'Refresh delivery status' })).toBeEnabled();
+  });
+
+  it('does not claim an empty activity window when held evidence is unavailable', () => {
+    render(() => (
+      <AlertDeliveryLogCard
+        log={{ ...log, entries: [] }}
+        unavailable={false}
+        refreshing={false}
+        heldEventsUnavailable={true}
+        onRefresh={vi.fn()}
+        webhooks={[]}
+      />
+    ));
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /could not read held or deferred notifications/,
+    );
+    expect(screen.queryByText(/No alert deliveries were attempted/)).not.toBeInTheDocument();
+  });
+
+  it('labels the initial attempt read as loading rather than empty', () => {
+    render(() => (
+      <AlertDeliveryLogCard
+        log={null}
+        unavailable={false}
+        refreshing={true}
+        onRefresh={vi.fn()}
+        webhooks={[]}
+      />
+    ));
+    expect(screen.getByRole('status')).toHaveTextContent('Loading delivery attempts...');
     expect(screen.queryByText(/No alert deliveries were attempted/)).not.toBeInTheDocument();
   });
 });

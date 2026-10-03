@@ -28,6 +28,7 @@ describe('useEnhancedStorageBarModel', () => {
 
     expect(result.usagePercent()).toBe(40);
     expect(result.label()).toBe('40% (400 B/1000 B)');
+    expect(result.compactLabel()).toBe('40%');
     expect(result.tooltipRows()).toEqual([
       { label: 'Used', value: '400 B' },
       { label: 'Free', value: '600 B' },

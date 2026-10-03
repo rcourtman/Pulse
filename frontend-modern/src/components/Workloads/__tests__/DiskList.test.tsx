@@ -3,6 +3,8 @@ import { render, screen, cleanup } from '@solidjs/testing-library';
 import { DiskList } from '../DiskList';
 import { buildWorkloadsDiskPresentation, getWorkloadsDiskUsagePercent } from '../diskListModel';
 import type { Disk } from '@/types/api';
+import { createSignal } from 'solid-js';
+import { guestDiskDeferrals } from '../__fixtures__/guestDiskDeferrals';
 
 function makeDisk(overrides: Partial<Disk> = {}): Disk {
   return {
@@ -46,7 +48,10 @@ describe('DiskList', () => {
         'agent-not-running',
         'Guest agent not running. Install and start qemu-guest-agent in the VM.',
       ],
-      ['agent-timeout', 'Guest agent timeout. Agent may need to be restarted.'],
+      [
+        'agent-timeout',
+        'Guest request timed out. Completion is uncertain. Do not restart the guest agent during a backup.',
+      ],
       [
         'permission-denied',
         'Permission denied. Check that your Pulse user/token has VM.Monitor permission (PVE 8) or VM.GuestAgent.Audit permission (PVE 9).',
@@ -59,6 +64,11 @@ describe('DiskList', () => {
       ],
       ['agent-error', 'Error communicating with guest agent.'],
       ['no-data', 'No disk data available from Proxmox API.'],
+      ['vm-stopped', 'Guest filesystem stats unavailable while the VM is stopped.'],
+      [
+        'no-status',
+        'Guest filesystem stats unavailable because Pulse could not read the VM status from Proxmox.',
+      ],
       [
         'prev-no-filesystems',
         'Using last known disk stats. No filesystems found. VM may be booting or using a Live ISO.',
@@ -78,6 +88,30 @@ describe('DiskList', () => {
   });
 
   describe('rendering disks', () => {
+    it.each(guestDiskDeferrals)(
+      'keeps retained values and explains %s until fresh data resumes',
+      (reason, message) => {
+        const [disks, setDisks] = createSignal([makeDisk()]);
+        const [status, setStatus] = createSignal<string | undefined>(`prev-${reason}`);
+        render(() => <DiskList disks={disks()} diskStatusReason={status()} />);
+        expect(screen.getByText(`Using last known disk stats. ${message}`)).toBeInTheDocument();
+        expect(screen.getByText('50%')).toBeInTheDocument();
+        setDisks([makeDisk({ used: 80530636800, usage: 75 })]);
+        setStatus(undefined);
+        expect(screen.queryByText(/Using last known/)).not.toBeInTheDocument();
+        expect(screen.getByText('75%')).toBeInTheDocument();
+      },
+    );
+
+    it.each(guestDiskDeferrals)(
+      'explains %s without claiming previous values when none exist',
+      (reason, message) => {
+        render(() => <DiskList disks={[]} diskStatusReason={reason} />);
+        expect(screen.getByText('-')).toHaveAttribute('title', message);
+        expect(screen.queryByText(/Using last known/)).not.toBeInTheDocument();
+      },
+    );
+
     it('renders a single disk with correct label, usage, and type', () => {
       const disk = makeDisk({ mountpoint: '/data', type: 'xfs' });
       render(() => <DiskList disks={[disk]} />);

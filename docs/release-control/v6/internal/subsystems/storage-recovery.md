@@ -21,6 +21,28 @@
 
 ## Purpose
 
+### Backup identity, phone storage and History consent composition
+
+The Proxmox Coverage last-backup pointer selects completed PBS snapshots or PVE
+backup files, never guest-local snapshots. Guest snapshots remain listed as
+restore evidence but cannot make an old independent backup look current.
+Archive detail uses its format (or filename fallback), preserving the full
+provider volid for hover and search in both Coverage and By date.
+
+Phone pool/disk rows preserve health and identity while using weighted widths,
+consistent gutters and compact capacity/health labels. Full disk risk reasons
+move into the existing expanded header; the ZFS activity badge uses supplied
+scan data only when rebuild is reported and keeps the full summary as its title.
+Collection-independent, organisation-owned disk History remains intact.
+
+The UpdateHistory confirmation is a version-rollback consent, not a full-state
+recovery promise. Its current API exposes no verified restore-scope metadata;
+copy must retain installation-only and legacy differences and direct full-state
+recovery to the stopped-service procedure. Regressions cover these distinctions,
+archive/snapshot attribution and storage values; the composed browser fixture
+checks real table/drawer rendering, not native or installed recovery.
+
+
 ### Disk History is independent of current collection
 
 The existing physical-disk History catalog is selected by disk family, not by
@@ -377,6 +399,20 @@ command-capable profile.
 34. `frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts`
 
 ## Shared Boundaries
+
+### Operator storage vocabulary without identity changes
+
+Storage topology names preserve Proxmox plugin vocabulary, including LVM-Thin,
+NFS, SMB/CIFS, iSCSI, ZFS and BTRFS. Explicit topology overrides still win.
+Only a storage explicitly marked shared whose retained location is the synthetic
+cluster/shared marker reads Shared, with the supplied reporting-node count when
+more than one node is present. Node-local storage and shared storage with a
+real native location keep that location. This is host-label presentation, not
+resource consolidation: IDs, parent/node hints, ownership evidence, metrics
+targets, alerts, health and recovery authority are unchanged. Adapter/presentation
+regressions and the production storage table browser fixture verify labels
+without treating shared capacity as a backup or demonstrating native recovery.
+
 
 - After password configuration has been persisted and the runtime local-admin identity changes, authorizer synchronisation must also occur if subsequent API-token persistence fails. Development first-run reset must clear the configured-admin bypass only on successful auth reset, not on its persistence-failure rollback path. No role-store deletion or migration is part of this recovery.
 

@@ -15,6 +15,26 @@
 
 ## Purpose
 
+### Guest disk status updates retain row ownership
+
+Disk deferral copy follows reactive same-VM props in the existing row and drawer,
+without new guest commands, client polling, History writes or row remounts. Retained
+values are labelled rather than replaced with invented fresh percentages; fresh
+observations update values and remove the status. Mounted row/list/drawer controls
+and `browser-tests/guest-disk-deferral.cjs` verify same-row ownership in bar and
+sparkline modes with desktop and phone CSS. This is client behaviour proof, not
+native backup coordination, new History samples or a fleet performance result.
+
+### Phone workload identity weights
+
+The existing phone guest projection allocates 38 percent to the name cell,
+which includes disclosure, status and backup controls, while normalising every
+remaining visible metric weight. Narrow/mobile/desktop modes and windowing
+ownership remain unchanged. Guest column regressions verify the sums and the
+production composed-table browser fixture checks identity and all configured
+metric tracks at narrow width; this is readability, not a throughput claim.
+
+
 ### Bounded confidence/priority work in broadcast grouping — issue #2199
 
 The general identity matcher retains every confidence, reason, ordering and
@@ -300,6 +320,21 @@ the existing bounded HTTP client and artifact-size checks.
 120. `frontend-modern/src/utils/__tests__/resourceStateAdapters.test.ts`
 
 ## Shared Boundaries
+
+### Multi-disk Bars summary
+
+The existing vertical-bars workload/node disk cell shows the fullest measured
+disk's percentage beside equal-weight per-disk micro-bars. Its title retains
+the actual mount and percentage. Unknown/invalid usage cannot produce a new
+summary; an aggregate fallback must not masquerade as measured member usage.
+The displayed maximum uses the existing shared disk measurement and threshold
+logic; no collector, sorting key, metric units, History request, resampling or
+performance threshold changes. `StackedDiskBar.test.tsx` and the model branch
+controls cover real/unknown measurements and unchanged per-member bars.
+`browser-tests/proxmox-docker-rows.cjs` checks the actual label, bars and title
+at desktop and phone widths; this is presentation proof, not native collection
+or a measured fleet performance improvement.
+
 
 1. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts` shared with `unified-resources`: the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 2. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts` shared with `unified-resources`: resource detail mappers are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.

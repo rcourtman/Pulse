@@ -2,6 +2,8 @@ package monitoring
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -1169,5 +1171,32 @@ func TestGracePeriodGuestContributesNoMemorySample(t *testing.T) {
 
 	if got := history.GetGuestMetrics("vm-grace", "memory", time.Hour); len(got) != 0 {
 		t.Fatalf("grace-period guest recorded %d memory sample(s): %+v", len(got), got)
+	}
+}
+
+func TestBackupLockMemoryTrustKeepsNativeEvidenceWithoutAgentReads(t *testing.T) {
+	const gib = uint64(1024 * 1024 * 1024)
+	for _, native := range []bool{false, true} {
+		t.Run(fmt.Sprintf("native-%t", native), func(t *testing.T) {
+			m := &Monitor{}
+			client := &vmMemoryTrustStubClient{stubPVEClient: &stubPVEClient{}, vmAgentMemAvailable: 5 * gib}
+			status := &proxmox.VMStatus{Status: "running", Agent: proxmox.VMAgentField{Value: 1}, Lock: "backup", MaxMem: 8 * gib, Mem: 8 * gib}
+			if native {
+				status.MemInfo = &proxmox.VMMemInfo{Total: 8 * gib, Available: 5 * gib}
+			}
+			_, used, source := m.resolveGuestStatusMemory(context.Background(), client, "fixture", "guest", "node", 105, "fixture:node:105", status, nil, 8*gib, "", &VMMemoryRaw{})
+			if client.vmAgentMemCalls != 0 || strings.HasPrefix(source, "guest-agent-meminfo") {
+				t.Fatalf("backup used fresh/cached guest-agent evidence: calls=%d source=%s", client.vmAgentMemCalls, source)
+			}
+			if native && (used != 3*gib || source != "available-field") {
+				t.Fatalf("current native memory lost: %d %s", used, source)
+			}
+			status.Lock = ""
+			status.MemInfo = nil
+			_, _, source = m.resolveGuestStatusMemory(context.Background(), client, "fixture", "guest", "node", 105, "fixture:node:105", status, nil, 8*gib, "", &VMMemoryRaw{})
+			if client.vmAgentMemCalls != 1 || source != "guest-agent-meminfo" {
+				t.Fatalf("unlocked memory did not resume: %d %s", client.vmAgentMemCalls, source)
+			}
+		})
 	}
 }
