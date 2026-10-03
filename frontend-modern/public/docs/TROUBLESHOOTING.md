@@ -413,7 +413,7 @@ consequential, manually redacted error.
 ### TrueNAS
 
 #### "TrueNAS service unavailable"
-- Ensure TrueNAS was added in **Settings → TrueNAS** with a valid HTTPS URL,
+- Ensure TrueNAS was added in **Settings → Infrastructure → Platform connections** with a valid HTTPS URL,
   API key, and the username that owns the key.
 - Check that the TrueNAS system is reachable from the Pulse server (default
   HTTPS port).
@@ -424,7 +424,10 @@ consequential, manually redacted error.
 #### TrueNAS pools/datasets not appearing
 - TrueNAS data appears in the unified resource model and may take one configured
   polling cycle (60 seconds by default) to appear.
-- Check **Infrastructure** (TrueNAS host), **Storage** (pools/datasets), and **Recovery** (snapshots/replication).
+- Open **TrueNAS → Overview** for the appliance, **TrueNAS → Storage**
+  (`/truenas/storage`) for pools, datasets and disks, and **TrueNAS → Protection**
+  (`/truenas/protection`) for snapshots and replication. These are tabs within
+  TrueNAS, not separate top-level Storage or Recovery pages.
 - For data that stops refreshing, use the [TrueNAS polling checks](TRUENAS.md#stale-truenas-data)
   before testing or restarting. A stale badge is not proof of an invalid key,
   and a successful connection test is not proof that collection has recovered.
@@ -432,8 +435,38 @@ consequential, manually redacted error.
 ### Navigation (v6)
 
 #### Old bookmarks don't work
-- Legacy URLs (`/proxmox`, `/docker`, `/kubernetes`, `/hosts`, `/services`) are not supported in v6.
-- Update bookmarks to canonical routes. See [Migration Guide](MIGRATION_UNIFIED_NAV.md).
+
+Current Pulse uses platform navigation. `/proxmox`, `/docker` and `/kubernetes`
+are supported; do not replace them with the retired task-based routes.
+Open Pulse at its base URL and use the menu to find the relevant page:
+
+| Menu | Entry route |
+| --- | --- |
+| Proxmox | `/proxmox/overview` |
+| Docker | `/docker/overview` |
+| Kubernetes | `/kubernetes/overview` |
+| TrueNAS | `/truenas/overview` |
+| vSphere | `/vmware/overview` |
+| Machines | `/standalone/machines` |
+
+The short-lived top-level `/workloads`, `/storage` and `/recovery` layout is
+retired. `/infrastructure` now opens the default workspace, not the former
+unified host page. For old `/hosts` or `/services` bookmarks, select the current
+platform or Machines page instead of assuming an automatic redirect. PBS
+backups are under **Proxmox → Backups**, and TrueNAS snapshots and replication
+are under **TrueNAS → Protection**.
+
+Platform-connected hosts can appear under their platform rather than Machines.
+If a menu or expected resource is missing, check its saved connection and last
+successful collection in **Settings → Infrastructure**; a missing page alone
+does not prove a host was deleted. Do not delete connections or re-enrol agents
+just to repair a bookmark.
+
+If menu navigation works but reloading the same URL returns a proxy 404, check
+the proxy's route handling using [Reverse Proxy Configuration](REVERSE_PROXY.md).
+For the current layout, see [FAQ](FAQ.md#how-is-navigation-organised-in-pulse-v6).
+The [unified-navigation migration](MIGRATION_UNIFIED_NAV.md) is historical,
+not a guide to the current menu.
 
 ### Relay / Mobile
 
