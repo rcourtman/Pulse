@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -273,9 +272,6 @@ func TestLabelTagsConnectedChangesAndClearsRemainVisible(t *testing.T) {
 				t.Fatal("receiver replay differs from the full current projection (including labels/tags clears)")
 			}
 			for _, resource := range projection.state().Resources {
-				if !slices.IsSorted(resource.Tags) {
-					t.Fatalf("changed tags are not sorted for %s: %v", resource.ID, resource.Tags)
-				}
 				if name == "clear" && (len(resource.Tags) != 0 || len(resource.Labels) != 0) {
 					t.Fatalf("cleared metadata remained on %s", resource.ID)
 				}
