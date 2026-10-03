@@ -64,7 +64,6 @@ interface GuestDrawerOverviewProps {
 export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
   const protectionPresentation = () =>
     getWorkloadsGuestProtectionPresentation({
-      backupInProgress: props.guest.backupInProgress,
       ageLabel: props.backupPresentation?.ageLabel,
       ageClass: props.backupPresentation?.ageClass,
     });
@@ -88,9 +87,17 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                 : undefined,
           }),
           makeDetailRow('Primary IP', props.ipAddresses[0]),
-          makeDetailRow('Protection', protectionPresentation().label, {
+          // Starting or ending an operation is not evidence of a completed
+          // backup. Keep its activity separate from the last completed age.
+          makeDetailRow('Last completed backup', protectionPresentation().label, {
             tone: protectionPresentation().tone,
+            wrap: true,
           }),
+          makeDetailRow(
+            'Backup activity',
+            props.guest.backupInProgress ? 'Running · not completed yet' : null,
+            { tone: 'warning', wrap: true },
+          ),
           makeDetailRow(
             'Identified service',
             props.discoveryIdentifiedSummary

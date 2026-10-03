@@ -45,12 +45,8 @@ describe('workloadGuestPresentation', () => {
   });
 
   it('returns canonical compact protection context for object drawers', () => {
-    expect(getWorkloadsGuestProtectionPresentation({ backupInProgress: true })).toEqual({
-      label: 'Backup running',
-      tone: 'success',
-    });
     expect(getWorkloadsGuestProtectionPresentation({})).toEqual({
-      label: 'No backup found',
+      label: 'No completed backup found',
       tone: 'danger',
     });
     expect(
@@ -59,6 +55,12 @@ describe('workloadGuestPresentation', () => {
         ageClass: 'text-yellow-600',
       }),
     ).toEqual({ label: '3d ago', tone: 'warning' });
+    expect(
+      getWorkloadsGuestProtectionPresentation({
+        ageLabel: 'Today',
+        ageClass: 'text-green-600',
+      }),
+    ).toEqual({ label: 'Today', tone: 'success' });
   });
 
   it('presents a running backup as its own state, keeping the completed age', () => {

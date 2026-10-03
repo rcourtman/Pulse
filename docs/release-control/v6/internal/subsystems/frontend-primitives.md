@@ -22,7 +22,7 @@
 
 ### Guest disk deferral and retained observations
 
-The existing workload row, disk breakdown tooltip/list and guest Overview use
+The existing workload row, disk breakdown tooltip and guest Overview use
 one presentation for the fixed guest-read reason vocabulary. Operation locks,
 unverified lock clearance, an in-flight request, cooldown, incomplete response
 and capacity deferrals are not evidence that QGA is missing. Invalid VM identity
@@ -38,11 +38,35 @@ updates values without remounting the row. Permission, disabled-agent and actual
 unavailable cases retain their own explanations.
 
 Verification: `workloadGuestPresentation.test.ts`, the mounted `GuestRow`,
-`DiskList`, `StackedDiskBar` and `GuestDrawerOverview.filesystems` regressions,
+`StackedDiskBar` and `GuestDrawerOverview.filesystems` regressions,
 and `browser-tests/guest-disk-deferral.cjs` cover the fixed reasons, retained/no
 previous data and fresh resumption with production components and CSS on desktop
 Chromium and touch WebKit. Synthetic observations do not establish the native
 command-ID cause, guest thaw, fresh History collection or containing release.
+
+The legacy Workloads `DiskList` is exercised only by tests/fixtures, not a
+shipped caller. Its empty-state title is not evidence of readable touch guidance;
+the shipped guest Overview supplies the readable pre-sample explanation.
+
+### Completed guest backup evidence versus current activity
+
+The guest Overview keeps the last completed backup age and its existing
+threshold-derived tone visible independently of current backup activity.
+Starting a backup must not hide absent or old completed evidence or turn it
+green. A separate cautionary activity row reports a running backup as not yet
+completed. Ending that activity without a new completed timestamp does not
+manufacture protection. A new completed timestamp updates the existing drawer
+without remounting it. Both values wrap at phone widths, rather than requiring
+hover to distinguish them.
+
+Verification: the mounted `GuestDrawer.test.tsx` backup regressions,
+`workloadGuestPresentation.test.ts` and production full-drawer fixture
+`browser-tests/guest-backup-protection.cjs` cover VM/CT missing, stale and fresh
+completion evidence, concurrent activity, stopped activity with no completion,
+and later completed observations. They preserve independent disk-lock/timeout
+guidance and existing touch/keyboard collapse. Synthetic observations establish
+presentation, not native task success, archive restorability, QGA/thaw or release
+availability; those require their own containing native and delivery evidence.
 
 
 ### Composed operator tables and conservative rollback consent

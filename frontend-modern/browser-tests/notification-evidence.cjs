@@ -117,9 +117,9 @@ const held = [
           requests.push({ path: url.pathname, query: url.search, mode });
           if (mode.startsWith('hold-'))
             await new Promise((resolve) => releases.push({ isHeld, resolve }));
-          if (mode.endsWith('denied'))
+          if (mode.endsWith('denied') || mode.endsWith('unavailable'))
             return route.fulfill({
-              status: isHeld ? 403 : 503,
+              status: isHeld && mode.endsWith('denied') ? 403 : 503,
               json: { error: 'Synthetic unavailable evidence' },
             });
           return route.fulfill({
@@ -240,6 +240,30 @@ const held = [
             assert.equal(await empty.count(), 0);
           },
         );
+        await check(
+          'The CI locator matches the 503 warning after the held row is withdrawn',
+          async () => {
+            heldMode = 'unavailable';
+            await refresh.focus();
+            await page.keyboard.press('Enter');
+            await heldWarning.waitFor();
+            const broadTexts = await page.getByText('Deferred').allTextContents();
+            const exactBadgeCount = await activity.getByText('Deferred', { exact: true }).count();
+            assert.deepEqual(broadTexts, [
+              'Pulse could not read held or deferred notifications. Refresh to try again.',
+            ]);
+            assert.equal(exactBadgeCount, 0);
+            assert.equal(await activity.getByText('Delivered', { exact: true }).count(), 1);
+            checks.push({ label: 'Observed broad versus exact status match', broadTexts, exactBadgeCount });
+          },
+        );
+        await capture('held-503-ci-locator');
+        await check('A healthy refresh restores the held row before permission withdrawal', async () => {
+          heldMode = 'known';
+          await refresh.click();
+          await activity.getByText('Deferred', { exact: true }).waitFor();
+          await heldWarning.waitFor({ state: 'hidden' });
+        });
         await check(
           'Held-event 403 withdraws held rows and warns without hiding delivered evidence',
           async () => {
