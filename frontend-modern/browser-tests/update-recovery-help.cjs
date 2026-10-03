@@ -39,7 +39,11 @@ const { chromium, webkit } = require('playwright');
       await page.getByRole('link', { name: '← All documentation' }).click();
       await page.getByRole('link', { name: 'Automatic updates', exact: true }).click();
       await page.getByRole('heading', { name: 'Rollback', exact: true }).waitFor();
-      if (tone === 'dark') await page.evaluate(() => document.documentElement.classList.add('dark'));
+      if (tone === 'dark') await page.evaluate(async () => {
+        document.documentElement.classList.add('dark');
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        await Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => {})));
+      });
       const article = await page.locator('article').innerText();
       for (const text of ['Roll back from Update History', 'successful in-app update',
         'not necessarily a complete backup', 'Copy errors can leave a partial snapshot',
@@ -48,11 +52,15 @@ const { chromium, webkit } = require('playwright');
       assert.ok(!article.includes('There is no rollback UI'));
       assert.ok(!article.includes('sudo rm -rf'));
       const scope = page.getByRole('heading', { name: 'What an update snapshot contains', exact: true });
-      await scope.scrollIntoViewIfNeeded();
+      await scope.evaluate((heading) => heading.scrollIntoView({ block: 'start' }));
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
       await page.screenshot({ path: path.join(artifacts, `${engine}-scope.png`) });
       const manual = page.getByRole('heading', { name: 'Manual Rollback', exact: true });
-      await manual.scrollIntoViewIfNeeded();
+      await manual.evaluate((heading) => heading.scrollIntoView({ block: 'start' }));
+      await page.waitForFunction(() => {
+        const heading = document.getElementById('manual-rollback');
+        return heading && heading.getBoundingClientRect().top >= 0 && heading.getBoundingClientRect().top < 10;
+      });
       await page.screenshot({ path: path.join(artifacts, `${engine}-manual.png`) });
 
       await page.getByRole('link', { name: 'audit storage and safe recovery', exact: true }).click();
