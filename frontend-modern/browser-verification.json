@@ -1,39 +1,28 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "7127054c659913b75abe302c5d377b8b6f49e9f2",
-  "verified_at": "2026-10-03T08:47:10.724Z",
+  "base_sha": "2d6a10ab59d327b461ef762ec69a9c5d0440929a",
+  "verified_at": "2026-10-03T11:37:53.905511Z",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx",
-    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts",
-    "frontend-modern/src/features/docker/DockerImagesTable.tsx",
-    "frontend-modern/src/features/docker/DockerServicesTable.tsx",
-    "frontend-modern/src/features/docker/DockerTasksTable.tsx",
-    "frontend-modern/src/features/docker/dockerContainerTableModel.ts",
-    "frontend-modern/src/features/storageBackups/resourceStoragePresentation.ts",
-    "frontend-modern/src/features/storageBackups/storageAdapters.ts",
-    "frontend-modern/src/hooks/useUnifiedResources.ts"
+    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryLog.ts",
+    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx": "54f1f84dac768c6e0e333254d5c65e59751fa78b5ac55826cdaa37085a73c608",
-    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts": "9fde1740e300724ef9cab4a3b036c942bdab6e5d2060f262606b27f4b1a40ea6",
-    "frontend-modern/src/features/docker/DockerImagesTable.tsx": "29284b34d9631f118a449da1c274b1028e3cea57aed37a3ac056e48e05b2b613",
-    "frontend-modern/src/features/docker/DockerServicesTable.tsx": "5a153e4b3533849ae952dadb50e512fadb87fcc9fba05403509168d8bb5caba6",
-    "frontend-modern/src/features/docker/DockerTasksTable.tsx": "58cf1656ba22475b52dc9a582a4d8f0cc8c01f38bfb3775518edac73dbf22b80",
-    "frontend-modern/src/features/docker/dockerContainerTableModel.ts": "b821b9caf65d5c247e543a6d6dbf0925f735b617c6393066d0f8c15a10e05e72",
-    "frontend-modern/src/features/storageBackups/resourceStoragePresentation.ts": "933723fb9afeeb53afa46946a346daca19d50c0d61a81fc0730498ebd8c09bb2",
-    "frontend-modern/src/features/storageBackups/storageAdapters.ts": "daa85c5d99903d5a5fb10070837106b91f06ad130cae320472b2d980b979fb48",
-    "frontend-modern/src/hooks/useUnifiedResources.ts": "166e45835c56d00f1a3ddbc37f7127348a0e36dc7c42c921f972db7750c603c6"
+    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx": "cac90b57e94b42360989262b550c9b0beaca8dd6eecdd7f7882911bb49de9fc2",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryLog.ts": "e8ce66a9ca6ae82861a9d03a7d565f6c246f9b5fc547e7c2e64f0a3e6bd12014",
+    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts": "eaf519a7f205be0b0e88ea17b19552f30afef025251262a1ea1b8896442e2673",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "9278ab7cf249eea451040b722b244d1447b05c07557d641187fa51f3bc88a225",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "5afa5dbce8eb1602377b7b27f6298438da76e3ebf2f80986677c9988bf36c96c"
   },
   "routes": [
-    "Existing Proxmox Mail Gateway table through production REST mapper",
-    "Existing storage-pool table through production adapter",
-    "Existing Docker container, image, Swarm service and task tables",
-    "Existing multi-disk Bars cell"
+    "Existing Alerts Notifications tab through production DestinationsTab, destination state, notification/alert API adapters and activity card, under synthetic read-only responses"
   ],
   "viewports": [
     {
-      "width": 1440,
+      "width": 1365,
       "height": 900
     },
     {
@@ -42,19 +31,18 @@
     }
   ],
   "states": [
-    "PMG REST-first queue 11, canonical in-memory store hydration then newer REST queue 19, removed PMG facet withdrawn",
-    "LVM-Thin and NFS plugin names; explicit shared cluster location reads Shared (3), local node remains pve2",
-    "Phone container identity, State/CPU/memory/Updates remain visible; Restarts 7 reachable by touch disclosure",
-    "Image phone projection keeps size and verdict; Host/Used by headers and cells hidden together",
-    "Swarm raw rollback_started reads as Rollback started; every word fits phone cell and Running heading uses Run; raw rollout and placement in keyboard/touch disclosure",
-    "Task started time reads as relative time on desktop with original timestamp retained; phone hides the started column",
-    "Fullest measured disk label 92% with /data evidence and unchanged two equal-weight member bars"
+    "Initial attempt and held-event reads pending without an empty claim",
+    "Successful attempts do not wait for held events; refresh remains usable",
+    "Both completed empty reads establish the empty window",
+    "Independent readable attempts and held-event rows",
+    "Held-event HTTP403 clears its rows and warns, without hiding attempt evidence",
+    "Pending held retry retains the warning until success",
+    "Attempt HTTP503 clears only attempt evidence, preserving readable held rows",
+    "Both failures warn without empty claims; successful reads clear warnings"
   ],
   "interactions": [
-    "REST-first load before in-memory canonical-store hydration",
-    "Canonical store hydration, newer REST refresh, removed facet refresh and restored observation",
-    "Touch container row expansion, keyboard Enter on Swarm disclosure and touch service row expansion",
-    "Fixture-only tab switching between production tables; no mutation clicked"
+    "Desktop keyboard Enter and phone touch refresh through the real existing Notifications tab",
+    "Partial failure, pending retry and recovery via synthetic API replies; no mutation"
   ],
   "browsers": [
     {
@@ -67,13 +55,35 @@
     }
   ],
   "playwright_version": "1.56.1",
-  "checks": 40,
-  "screenshots": 18,
-  "command": "pulse-worker-browser frontend-modern/browser-tests/proxmox-docker-rows.cjs",
-  "evidence": "browser-tests/proxmox-docker-rows.cjs and invocation browser-verified-result.json / browser-images.json",
-  "limitations": [
-    "Synthetic REST and canonical in-memory store hydration, not a native websocket wire or appliance test",
-    "Not backend adoption, authorisation grant, mutative lifecycle execution, installed recovery or release acceptance",
-    "Seven high braces advisory findings in unchanged dependency graph remain unresolved; offline browser proof does not clear required audit"
+  "checks": 20,
+  "screenshots": [
+    {
+      "path": "tmp/notification-evidence-proof/desktop-held-pending.png",
+      "sha256": "58ddaf1dae1e797e6f938c3e74b705fe75276eaf560de307fe7bfe1644c2df21"
+    },
+    {
+      "path": "tmp/notification-evidence-proof/desktop-held-unavailable.png",
+      "sha256": "fe343a2b7eb67ae1283e4eb411462073e3db26d36d226ef62d9fd49cf9a095c7"
+    },
+    {
+      "path": "tmp/notification-evidence-proof/desktop-attempts-unavailable.png",
+      "sha256": "a4ae26cc87b0bbf91b4dc3150f375a10c6701201deed4eaa3bdfbfce08ade4de"
+    },
+    {
+      "path": "tmp/notification-evidence-proof/phone-held-pending.png",
+      "sha256": "66262c32b745e68f32aba48db19dee2a03c7c62d763efd765ed4da154ec9e00f"
+    },
+    {
+      "path": "tmp/notification-evidence-proof/phone-held-unavailable.png",
+      "sha256": "534cd02e8b5392bd5e73d7f4a7a3d8e2a78596a230d055daef4479ecf0d1fdbc"
+    },
+    {
+      "path": "tmp/notification-evidence-proof/phone-attempts-unavailable.png",
+      "sha256": "09652b8023be5e527712d42384e9fee8e114575026aefaf703e62cfa30bc0884"
+    }
+  ],
+  "proof_script": "frontend-modern/browser-tests/notification-evidence.cjs",
+  "limits": [
+    "Synthetic source/UI evidence only, not notification receipt, native provider delivery, release availability or dependency advisory clearance"
   ]
 }

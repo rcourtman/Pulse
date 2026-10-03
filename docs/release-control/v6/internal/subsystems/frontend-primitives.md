@@ -7908,3 +7908,21 @@ kind normalisation, the kind switch, the email-only payload, and the plain
 cover the gating, the reduced form, the pinned fields, and the saved payload.
 This is a presentation and form-state boundary; the schedule API contract,
 report rendering, and email delivery are unchanged.
+
+### Notifications activity has independent evidence-read states
+
+The Notifications tab composes the delivery-log card with both attempt-read
+and held/deferred-event loading and unavailable state from its owned reader.
+Pending or failed evidence is never rendered as a confirmed empty activity
+window. Each failed source withdraws its own rows without hiding independently
+readable rows from the other source. Source-specific warnings have `role="alert"`
+and loading text has `role="status"`; a slow held-event read does not block the
+existing attempt-refresh button. Recovery clears a warning only after a
+successful read, without remounting the destination editors or changing their
+unfinished input.
+
+The connected Notifications browser fixture uses the real tab/state/API/card
+chain at desktop and phone widths with keyboard/touch refresh, class-dark CSS,
+403/503 controls and pending recovery. Unit controls separately cover current
+request ownership and disposal. No mutation, route, navigation entry, queue
+policy, permission or recipient-delivery contract is added by these states.

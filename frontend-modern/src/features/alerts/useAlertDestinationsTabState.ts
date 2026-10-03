@@ -53,6 +53,8 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
     deliveryLogUnavailable,
     refreshingDeliveryLog,
     heldEvents,
+    heldEventsUnavailable,
+    refreshingHeldEvents,
     loadDeliveryLog,
   } = useNotificationDeliveryLog();
   const webhookState = useAlertWebhookDestinationsState({
@@ -173,6 +175,8 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
     deliveryLogUnavailable,
     deliveryNeedsAttention,
     heldEvents,
+    heldEventsUnavailable,
+    refreshingHeldEvents,
     dismissTerminalFailures,
     dismissingTerminalFailures,
     handleRetry,
