@@ -1,46 +1,52 @@
 {
   "version": 1,
-  "base_sha": "78796b411c1f37f57b303cae9fab5ddaa13e1121",
-  "verified_at": "2026-10-02T22:13:00Z",
   "result": "passed",
+  "base_sha": "90c436c83d616eccbe544bf3737b13c3b6251e53",
+  "verified_at": "2026-10-02T23:38:43Z",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/ReportingPanel.tsx",
-    "frontend-modern/src/components/Settings/reportingSchedulesModel.ts",
-    "frontend-modern/src/components/Settings/useReportingPanelState.ts"
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/ReportingPanel.tsx": "fbf12a7025b520e1f4ba99144f88a35778e9360f982b72bba251797361504afb",
-    "frontend-modern/src/components/Settings/reportingSchedulesModel.ts": "69fe58abb763e528ac3e3dfe5c50b969038e905fcf46974209cac29d1bc77e83",
-    "frontend-modern/src/components/Settings/useReportingPanelState.ts": "cc102740cf6eec47b8f3e5b4c9d6c24e1017d7ffd14bd653d25bfd45fc88b1af"
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "63429552c461f36d4f5af06ac2ecd612b2a84630bf82e2e5d8311653519585d1",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "0e313b23f06c2c5fa139f2a8f1acd70299a047ab20da88016ec1aa01b5a50b4d",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "c7afd1510b7249021eb2af2a7dcd5fe71e5183bed019ade505489a2f46eb9635",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts": "fa04600d900f51395493d1d3a51d578d84d13adb64cc5a159322a61877854bd0",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts": "1ac0ffb9ee287a9da04fbf24e9953dbcbf4e55de906241e7702266808da2243d",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx": "161617fb877870ce0729dcb8312762b81d6eb4bd5cb3835023fed543b88ff02d"
   },
   "routes": [
-    "/settings/support/reporting"
+    "PBS resource detail History in existing platform tables",
+    "Availability fleet open resource detail"
   ],
   "viewports": [
     {
-      "width": 1280,
+      "width": 1365,
       "height": 900
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
-    "Pro licence active with advanced_reporting; Scheduled reports header mentions the Patrol weekly summary because sessionCapabilities.assistantEnabled is true",
-    "Create schedule form opened: Report type select present with Performance report selected; cadence, format, resources, tag filter, delivery, retention, attach and save-copy controls visible",
-    "Report type switched to Patrol weekly summary: form reduced to name, timezone, weekday, time, email recipients and Enabled; help text explains the email and that nothing is saved to disk; name placeholder reads Patrol weekly summary",
-    "Saved schedule row: Weekly Patrol, Monday at 09:00, scope Patrol activity, last 7 days, delivery Email config recipients; API record carries kind patrol_digest and format email",
-    "Run now without an email destination: Last run shows Failed with the server message naming Settings > Notifications",
-    "Edit reopens the saved schedule with Report type Patrol weekly summary selected",
-    "375px: form fields stack full width, table shows name with cadence line, no horizontal clipping"
+    "Same-ID replacement updates PBS heading, current CPU and history target without remounting the History body or losing the 7-day selection",
+    "Lost metrics target withdraws the History body and returning target restores the selected tab",
+    "Selecting another canonical resource starts on its own Overview and uses only its explicit History target",
+    "An open availability check changes from Up to Down with the current fleet snapshot",
+    "Selecting Check B after Check A changes header, endpoint and availability together",
+    "Removal of the selected check closes details; reintroduction does not reopen it",
+    "Desktop light Chromium and phone dark WebKit have no page overflow or uncaught page errors"
   ],
   "interactions": [
-    "Click Create schedule",
-    "Change Report type select to Patrol weekly summary",
-    "Type schedule name Weekly Patrol and click Save schedule",
-    "Click Run now on the saved schedule and reload",
-    "Click Edit on the saved schedule",
-    "Resize viewport to 375x812 and scroll through the form and table"
+    "Select History and 7-day range",
+    "Replace PBS snapshot, withdraw and restore metrics target",
+    "Select PBS B and open its History",
+    "Open Check A, publish failed replacement, then select Check B",
+    "Remove and restore selected check"
   ]
 }

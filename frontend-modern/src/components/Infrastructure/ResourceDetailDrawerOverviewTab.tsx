@@ -352,8 +352,9 @@ export const ResourceAccessDisclosure: Component<{
 export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOverviewTabProps> = (
   props,
 ) => {
-  const { resource, drawer } = props;
-  const showPlatformId = shouldShowResourcePlatformId(resource);
+  const resource = () => props.resource;
+  const { drawer } = props;
+  const showPlatformId = () => shouldShowResourcePlatformId(resource());
   const pbsJobHealthEvidence = () => buildPbsJobHealthEvidenceModel(drawer.pbsData());
   const compactTableRow = () => props.presentation === 'table-row';
   const shouldRenderChangeHistorySection = () =>
@@ -363,14 +364,14 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
     drawer.resourceTimelineCount() > 0 ||
     Boolean(drawer.facetBundleError());
   const attentionItems = () => {
-    const items = (resource.alerts ?? []).map((alert) => ({
+    const items = (resource().alerts ?? []).map((alert) => ({
       id: alert.id,
       message: alert.message,
       severity: alert.level,
     }));
     const healthIssue = drawer.healthIssue();
     if (healthIssue && !items.some((item) => item.message === healthIssue.primary)) {
-      const severity = /critical|failed|faulted|error/i.test(resource.status)
+      const severity = /critical|failed|faulted|error/i.test(resource().status)
         ? 'critical'
         : 'warning';
       items.unshift(
@@ -389,19 +390,19 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
       <DrawerAttentionSection items={attentionItems()} />
       <TechnicalDetailsSection dataTestId="resource-technical-details">
         <InlineResourceSummaryTables
-          resource={resource}
+          resource={resource()}
           drawer={drawer}
-          showPlatformId={showPlatformId}
+          showPlatformId={showPlatformId()}
           content="all"
           dataTestId="resource-technical-summary-section"
         />
       </TechnicalDetailsSection>
 
-      <Show when={resource.availability || (resource.availabilityChecks?.length ?? 0) > 0}>
+      <Show when={resource().availability || (resource().availabilityChecks?.length ?? 0) > 0}>
         <div class="flex flex-wrap gap-3 [&>*]:min-w-[240px] [&>*]:flex-1">
           <AvailabilityProbeStatusCards
-            availability={resource.availability}
-            checks={resource.availabilityChecks}
+            availability={resource().availability}
+            checks={resource().availabilityChecks}
           />
         </div>
       </Show>
@@ -690,7 +691,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   contentClass="mt-3 space-y-3"
                   dataTestId="resource-investigation-context"
                 >
-                  <ResourceInvestigationContextTables resource={resource} drawer={drawer} />
+                  <ResourceInvestigationContextTables resource={resource()} drawer={drawer} />
                 </SupportDisclosure>
               </Show>
 
@@ -706,7 +707,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   contentClass="mt-3 space-y-3"
                   dataTestId="resource-service-details-section"
                 >
-                  <Show when={resource.type === 'docker-host'}>
+                  <Show when={resource().type === 'docker-host'}>
                     <div class="rounded border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-sky-900">
                       <div class="mb-2 flex items-center justify-between gap-2">
                         <div class="text-[11px] font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300">
@@ -860,7 +861,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   <Show when={drawer.pbsData()}>
                     {(pbs) => {
                       const connection = getServiceHealthPresentation(
-                        resource.status,
+                        resource().status,
                         pbs().connectionHealth,
                       );
                       return (
@@ -887,10 +888,10 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                             <Show when={pbs().version}>
                               <InfoCardKeyValueRow label="Version" value={pbs().version} />
                             </Show>
-                            <Show when={pbs().uptimeSeconds || resource.uptime}>
+                            <Show when={pbs().uptimeSeconds || resource().uptime}>
                               <InfoCardKeyValueRow
                                 label="Uptime"
-                                value={formatUptime(pbs().uptimeSeconds ?? resource.uptime ?? 0)}
+                                value={formatUptime(pbs().uptimeSeconds ?? resource().uptime ?? 0)}
                               />
                             </Show>
                             <Show when={drawer.pbsActiveTaskCount() > 0}>
@@ -1109,7 +1110,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                   <Show when={drawer.pmgData()}>
                     {(pmg) => {
                       const connection = getServiceHealthPresentation(
-                        resource.status,
+                        resource().status,
                         pmg().connectionHealth,
                       );
                       return (
@@ -1136,10 +1137,10 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                             <Show when={pmg().version}>
                               <InfoCardKeyValueRow label="Version" value={pmg().version} />
                             </Show>
-                            <Show when={pmg().uptimeSeconds || resource.uptime}>
+                            <Show when={pmg().uptimeSeconds || resource().uptime}>
                               <InfoCardKeyValueRow
                                 label="Uptime"
-                                value={formatUptime(pmg().uptimeSeconds ?? resource.uptime ?? 0)}
+                                value={formatUptime(pmg().uptimeSeconds ?? resource().uptime ?? 0)}
                               />
                             </Show>
                             <Show when={drawer.showPmgMailFlowDetail()}>
@@ -1241,7 +1242,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
               </Show>
 
               <Show when={drawer.hasHostDetails()}>
-                <HostDetailsDisclosure resource={resource} drawer={drawer} class="h-full" />
+                <HostDetailsDisclosure resource={resource()} drawer={drawer} class="h-full" />
               </Show>
             </div>
           </TechnicalDetailsDisclosure>

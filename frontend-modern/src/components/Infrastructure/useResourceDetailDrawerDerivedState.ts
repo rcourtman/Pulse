@@ -117,35 +117,34 @@ interface UseResourceDetailDrawerDerivedStateOptions {
 export const useResourceDetailDrawerDerivedState = (
   options: UseResourceDetailDrawerDerivedStateOptions,
 ) => {
+  const resource = () => options.resource;
   const {
-    resource,
     resolveResourceLabel: resolveResourceLabelInput,
     debugEnabled,
     discoveryFeatureEnabled,
     resourceIntelligence,
   } = options;
 
-  const displayName = createMemo(() => getPreferredInfrastructureDisplayName(resource));
-  const kubernetesClusterName = createMemo(() => getPreferredResourceClusterName(resource) ?? '');
+  const displayName = createMemo(() => getPreferredInfrastructureDisplayName(resource()));
+  const kubernetesClusterName = createMemo(() => getPreferredResourceClusterName(resource()) ?? '');
   const resolveResourceLabel = (resourceId: string): string =>
     resolveResourceLabelInput?.(resourceId)?.trim() || resourceId;
-  const statusIndicator = createMemo(() => getAgentStatusIndicator({ status: resource.status }));
-  const healthIssue = createMemo(() => getResourceHealthIssuePresentation(resource));
-  const lastSeen = createMemo(() => formatRelativeTime(resource.lastSeen));
-  const lastSeenAbsolute = createMemo(() => formatAbsoluteTime(resource.lastSeen));
+  const statusIndicator = createMemo(() => getAgentStatusIndicator({ status: resource().status }));
+  const healthIssue = createMemo(() => getResourceHealthIssuePresentation(resource()));
+  const lastSeen = createMemo(() => formatRelativeTime(resource().lastSeen));
+  const lastSeenAbsolute = createMemo(() => formatAbsoluteTime(resource().lastSeen));
 
-  const platformBadge = createMemo(() => getPlatformBadge(resource.platformType));
-  const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
-  const typeBadge = createMemo(() => getTypeBadge(resource.type));
-  const platformData = createMemo(() => resource.platformData as PlatformData | undefined);
-  const unifiedSourceBadges = createMemo(() =>
-    getUnifiedSourceBadges(
-      Array.isArray(resource.sources) && resource.sources.length > 0
-        ? resource.sources
-        : (platformData()?.sources ?? []),
-    ),
-  );
-  const systemIdentityBadges = createMemo(() => getInfrastructureSystemIdentityBadges(resource));
+  const platformBadge = createMemo(() => getPlatformBadge(resource().platformType));
+  const sourceBadge = createMemo(() => getSourceBadge(resource().sourceType));
+  const typeBadge = createMemo(() => getTypeBadge(resource().type));
+  const platformData = createMemo(() => resource().platformData as PlatformData | undefined);
+  const unifiedSourceBadges = createMemo(() => {
+    const sources = resource().sources;
+    return getUnifiedSourceBadges(
+      Array.isArray(sources) && sources.length > 0 ? sources : (platformData()?.sources ?? []),
+    );
+  });
+  const systemIdentityBadges = createMemo(() => getInfrastructureSystemIdentityBadges(resource()));
   const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
   const headerBadges = createMemo(() =>
     dedupeResourceBadges([
@@ -157,41 +156,42 @@ export const useResourceDetailDrawerDerivedState = (
           : [platformBadge(), sourceBadge()]),
     ]),
   );
-  const policyBadges = createMemo(() => getResourcePolicyBadges(resource.policy));
-  const policyRedactions = createMemo(() => getResourcePolicyRedactionLabels(resource.policy));
+  const policyBadges = createMemo(() => getResourcePolicyBadges(resource().policy));
+  const policyRedactions = createMemo(() => getResourcePolicyRedactionLabels(resource().policy));
   const governanceSummary = createMemo(() =>
-    requiresGovernedResourceDisplay(resource.policy)
-      ? getResourcePolicyGovernedSummary(resource)
-      : (resource.aiSafeSummary?.trim() ?? ''),
+    requiresGovernedResourceDisplay(resource().policy)
+      ? getResourcePolicyGovernedSummary(resource())
+      : (resource().aiSafeSummary?.trim() ?? ''),
   );
   const hasGovernanceData = createMemo(
     () =>
-      !hasDefaultResourcePolicyPosture(resource.policy) &&
+      !hasDefaultResourcePolicyPosture(resource().policy) &&
       (policyBadges().length > 0 || Boolean(governanceSummary())),
   );
 
   const agentMeta = createMemo(
-    () => resource.agent ?? (platformData()?.agent as AgentPlatformData | undefined),
+    () => resource().agent ?? (platformData()?.agent as AgentPlatformData | undefined),
   );
   const kubernetesMeta = createMemo(
-    () => resource.kubernetes ?? (platformData()?.kubernetes as KubernetesPlatformData | undefined),
+    () =>
+      resource().kubernetes ?? (platformData()?.kubernetes as KubernetesPlatformData | undefined),
   );
   const vmwareData = createMemo(
-    () => resource.vmware ?? (platformData()?.vmware as ResourceVMwareMeta | undefined),
+    () => resource().vmware ?? (platformData()?.vmware as ResourceVMwareMeta | undefined),
   );
   const kubernetesCapabilityBadges = createMemo(() =>
     buildKubernetesCapabilityBadges(kubernetesMeta()?.metricCapabilities),
   );
 
-  const proxmoxNode = createMemo(() => toNodeFromProxmox(resource));
+  const proxmoxNode = createMemo(() => toNodeFromProxmox(resource()));
   const proxmoxNetworkInterfaces = createMemo(
     () =>
-      resource.proxmox?.networkInterfaces ??
+      resource().proxmox?.networkInterfaces ??
       (platformData()?.proxmox as { networkInterfaces?: HostNetworkInterface[] } | undefined)
         ?.networkInterfaces ??
       [],
   );
-  const agentInfo = createMemo(() => toAgentFromResource(resource, agentMeta()));
+  const agentInfo = createMemo(() => toAgentFromResource(resource(), agentMeta()));
   const temperatureRows = createMemo(() => buildTemperatureRows(agentInfo()?.sensors));
   const customSensorRows = createMemo(() => buildCustomSensorRows(agentInfo()?.sensors));
 
@@ -225,7 +225,7 @@ export const useResourceDetailDrawerDerivedState = (
   const resourceDependents = createMemo(() => resourceIntelligence()?.dependents ?? []);
   const resourceCorrelations = createMemo(() => resourceIntelligence()?.correlations ?? []);
   const resourceRelationships = createMemo(
-    () => options.resourceRelationships?.() ?? resource.relationships ?? [],
+    () => options.resourceRelationships?.() ?? resource().relationships ?? [],
   );
   const hasMeaningfulResourceIntelligence = createMemo(() => {
     const intel = resourceIntelligence();
@@ -257,8 +257,9 @@ export const useResourceDetailDrawerDerivedState = (
     if (intel && hasMeaningfulResourceIntelligence()) {
       summary.push(formatResourceAnalysisSummary(intel.health.grade, intel.health.score));
     }
-    if (resource.policy?.routing.scope && !hasDefaultResourcePolicyPosture(resource.policy)) {
-      summary.push(`Routing ${getResourceRoutingScopeLabel(resource.policy.routing.scope)}`);
+    const policy = resource().policy;
+    if (policy?.routing.scope && !hasDefaultResourcePolicyPosture(policy)) {
+      summary.push(`Routing ${getResourceRoutingScopeLabel(policy.routing.scope)}`);
     }
 
     return summary.join(' · ');
@@ -287,7 +288,7 @@ export const useResourceDetailDrawerDerivedState = (
   );
   const sourceSummary = createMemo(() => buildSourceSummary(mergedSources(), sourceStatus()));
 
-  const identityView = createMemo(() => buildResourceIdentityView(resource));
+  const identityView = createMemo(() => buildResourceIdentityView(resource()));
   const identityAliasValues = createMemo(() => identityView().identityAliasValues);
   const identityIpValues = createMemo(() => identityView().identityIpValues);
   const primaryIdentityRows = createMemo(() => identityView().primaryIdentityRows);
@@ -295,7 +296,7 @@ export const useResourceDetailDrawerDerivedState = (
   const aliasPreviewValues = createMemo(() => identityView().aliasPreviewValues);
   const hasAliasOverflow = createMemo(() => identityView().hasAliasOverflow);
   const hasMergedSources = createMemo(() => mergedSources().length > 1);
-  const discoveryConfig = createMemo(() => toDiscoveryConfig(resource));
+  const discoveryConfig = createMemo(() => toDiscoveryConfig(resource()));
   const discoveryContextSummary = createMemo(() => buildDiscoveryContextSummary(discoveryConfig()));
   const discoverySourceKey = createMemo(() => {
     if (!discoveryFeatureEnabled()) return null;
@@ -314,6 +315,7 @@ export const useResourceDetailDrawerDerivedState = (
     source: discoverySourceKey,
     initialValue: null,
     cacheKey: (key) => `resource-detail-discovery:${key.type}:${key.agent}:${key.resource}`,
+    retainPreviousValueOnSourceChange: false,
     fetcher: async (key) => {
       try {
         return await getDiscovery(key.type, key.agent, key.resource);
@@ -342,43 +344,43 @@ export const useResourceDetailDrawerDerivedState = (
   const hasHostDetails = createMemo(() => hostDetailCards().length > 0);
   const hostDetailSummary = createMemo(() => buildHostDetailSummary(hostDetailCards()));
   const hasServiceDetails = createMemo(
-    () => resource.type === 'docker-host' || Boolean(pbsData()) || Boolean(pmgData()),
+    () => resource().type === 'docker-host' || Boolean(pbsData()) || Boolean(pmgData()),
   );
   const serviceDetailsSummary = createMemo(() => {
     return getServiceDetailsSummary({
-      resourceType: resource.type,
+      resourceType: resource().type,
       docker: dockerHostData(),
       pbs: pbsData(),
       pmg: pmgData(),
     });
   });
   const vmwareDetailSections = createMemo(() =>
-    buildVMwareDetailSections(resource.type, vmwareData()),
+    buildVMwareDetailSections(resource().type, vmwareData()),
   );
   const hasVMwareDetails = createMemo(() => vmwareDetailSections().length > 0);
   const vmwareDetailsSummary = createMemo(() =>
-    buildVMwareDetailsSummary(resource.type, vmwareData()),
+    buildVMwareDetailsSummary(resource().type, vmwareData()),
   );
-  const trueNASDetailSections = createMemo(() => buildTrueNASDetailSections(resource));
+  const trueNASDetailSections = createMemo(() => buildTrueNASDetailSections(resource()));
   const hasTrueNASDetails = createMemo(() => trueNASDetailSections().length > 0);
-  const trueNASDetailsSummary = createMemo(() => buildTrueNASDetailsSummary(resource));
-  const kubernetesDetailSections = createMemo(() => buildKubernetesDetailSections(resource));
+  const trueNASDetailsSummary = createMemo(() => buildTrueNASDetailsSummary(resource()));
+  const kubernetesDetailSections = createMemo(() => buildKubernetesDetailSections(resource()));
   const hasKubernetesDetails = createMemo(() => kubernetesDetailSections().length > 0);
-  const kubernetesDetailsSummary = createMemo(() => buildKubernetesDetailsSummary(resource));
-  const metricsHistoryTarget = createMemo(() => getResourceMetricsHistoryTarget(resource));
+  const kubernetesDetailsSummary = createMemo(() => buildKubernetesDetailsSummary(resource()));
+  const metricsHistoryTarget = createMemo(() => getResourceMetricsHistoryTarget(resource()));
   const metricsHistoryCurrentMetrics = createMemo(() =>
-    getResourceMetricsHistoryCurrentMetrics(resource),
+    getResourceMetricsHistoryCurrentMetrics(resource()),
   );
-  const metricsHistoryGroups = createMemo(() => getResourceMetricsHistoryGroups(resource));
-  const hasMetricsHistory = createMemo(() => resourceSupportsMetricsHistory(resource));
+  const metricsHistoryGroups = createMemo(() => getResourceMetricsHistoryGroups(resource()));
+  const hasMetricsHistory = createMemo(() => resourceSupportsMetricsHistory(resource()));
   const hasDiscoveryTab = createMemo(
     () =>
       discoveryFeatureEnabled() &&
-      isPulseAgentPlatformResource(resource) &&
+      isPulseAgentPlatformResource(resource()) &&
       Boolean(discoveryConfig()),
   );
 
-  const relatedLinks = createMemo(() => buildRelatedLinks(resource, displayName()));
+  const relatedLinks = createMemo(() => buildRelatedLinks(resource(), displayName()));
   const accessSummary = createMemo(() =>
     buildAccessSummary({
       hasWebInterface: Boolean(discoveryConfig()),
@@ -396,7 +398,7 @@ export const useResourceDetailDrawerDerivedState = (
   const identityMatchInfo = createMemo(() => buildIdentityMatchInfo(platformData()));
   const debugBundle = createMemo(() =>
     buildResourceDebugBundle({
-      resource,
+      resource: resource(),
       platformData: platformData(),
       sourceStatus: sourceStatus(),
       identityMatchInfo: identityMatchInfo(),
@@ -410,14 +412,14 @@ export const useResourceDetailDrawerDerivedState = (
       ...(hasMetricsHistory() ? [{ id: 'history' as DrawerTab, label: 'History' }] : []),
       { id: 'manage' as DrawerTab, label: 'Manage' },
       ...(hasDiscoveryTab() ? [{ id: 'discovery' as DrawerTab, label: 'Discovery' }] : []),
-      ...(resource.type === 'pmg' ? [{ id: 'mail' as DrawerTab, label: 'Mail' }] : []),
-      ...(resource.type === 'k8s-cluster'
+      ...(resource().type === 'pmg' ? [{ id: 'mail' as DrawerTab, label: 'Mail' }] : []),
+      ...(resource().type === 'k8s-cluster'
         ? [{ id: 'namespaces' as DrawerTab, label: 'Namespaces' }]
         : []),
-      ...(resource.type === 'k8s-cluster'
+      ...(resource().type === 'k8s-cluster'
         ? [{ id: 'deployments' as DrawerTab, label: 'Deployments' }]
         : []),
-      ...(resource.type === 'docker-host' && dockerSwarmClusterKey()
+      ...(resource().type === 'docker-host' && dockerSwarmClusterKey()
         ? [{ id: 'swarm' as DrawerTab, label: 'Swarm' }]
         : []),
     ];
