@@ -1,12 +1,14 @@
 name: Dependency Advisory Watch
 
-# A new npm advisory against an unchanged lockfile fails the required
+# A new npm advisory against an unchanged lockfile used to fail the required
 # "Audit complete frontend dependency graph" step in build-and-test.yml on
 # every pull request to that branch. On 30 Sep-1 Oct 2026 two advisories did
 # exactly that to main, release/v6.4 and release/v6.5 at once, and nothing
-# owned the fix. This watch runs the same audit daily against main and every
-# active release line, fails when any of them would block, and names the
-# branch, the advisories and the fix in the step summary. Scheduled workflows
+# owned the fix. Since 3 Oct 2026 that step only warns for a pull request that
+# leaves the lockfile alone, so this watch is where such an advisory fails: it
+# runs the same audit daily against main and every active release line with
+# NPM_AUDIT_REQUIRE_RESULT=true, fails on any finding, and names the branch,
+# the advisories and the fix in the step summary. Scheduled workflows
 # only run on the default branch. The audit needs only each line's
 # frontend-modern/package.json and package-lock.json, so this job reads those
 # two files with git and never checks out, installs or executes another

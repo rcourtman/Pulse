@@ -4788,17 +4788,17 @@ borrowing the local dev-runtime orchestration tests. The canonical
 `npm audit` after a clean install, through `scripts/npm-audit-retry.sh`. The
 production-only `npm audit --omit=dev` is deliberately not on that
 per-pull-request path: it audits a subset of the same packages, so it can only
-report a subset of the same advisories, and because the complete audit fails
-the job on any finding, the production step could only ever execute in the
-cases where it was already guaranteed clean. The dev-versus-production split
+report a subset of the same advisories under the same blocking rule, so a
+production step could never block a change the complete audit lets through. The dev-versus-production split
 is reported instead by the scheduled `npm-audit` job in
 `.github/workflows/security-scan.yml`, which covers every npm workspace and
 informs rather than blocks delivery. That runner exists because
 `npm audit` exits non-zero both for a real advisory and for an unreachable
 advisory endpoint: on 2026-09-03 registry.npmjs.org returned 503s and timeouts
 for over an hour and no pull request could land, including changes that touch
-no JavaScript. It separates the two and nothing else. A conclusive result is
-acted on immediately and any vulnerability at any severity still fails, even
+no JavaScript. It separates the two, and decides whether a finding blocks the change by
+whether the change moves the dependency graph. A conclusive result is
+acted on immediately and any vulnerability at any severity is a finding, even
 if the same response also carries a transport error, so a severity threshold
 must never be introduced; only an unreachable endpoint is
 retried. A nonempty package-finding map or any positive integer
@@ -4835,13 +4835,29 @@ by attempt count or by budget, the run fails if the change touches
 `frontend-modern/package.json`, `frontend-modern/package-lock.json`, or the
 runner itself, because then the answer is genuinely unknown and the runner may
 never be relaxed under cover of its own tolerant mode, and warns without
-failing when it does not, because the dependency graph is then identical to the base commit that
-already produced a passing answer. Advisories published later against
-unchanged dependencies are the responsibility of Dependabot security updates
-and the scheduled scan, not of a per-pull-request audit.
-`scripts/tests/test-npm-audit-retry.sh` pins
-that split, including that a real advisory fails even when the tolerant mode
-is active, that an unparseable or unrecognised report is never read as
+failing when it does not, because the dependency graph is then identical to its
+base commit. The same split governs a finding. A change that moves the graph,
+or edits the runner, fails on any finding. A change that leaves
+`package.json` and `package-lock.json` untouched warns instead, still printing
+every finding, because any advisory it sees is one its base commit already has
+and only a dependency change can remove it. Only `NPM_AUDIT_REQUIRE_RESULT=false`
+selects that mode; an empty or unrecognised value keeps the strict verdict. On
+3 October 2026 the unpatched `braces` advisory `GHSA-vfj7-8cjw-p6xm`, reached
+only through the dev-only `tailwindcss` 3 and `jscpd` 4 chains with a clean
+`--omit=dev` audit, failed the required Frontend check on every open pull
+request, Go-only ones included, which made nothing safer and blocked every
+fix. Advisories against unchanged dependencies are owned by the jobs that audit
+the graph as it stands: the scheduled `npm-audit` scan and the daily
+`dependency-advisory-watch.yml`, which keep the strict default and fail on any
+finding, and Dependabot security updates;
+`scripts/tests/test_dependency_advisory_watch.py` runs the real runner with the
+watch's own environment and proves an advisory that only warns a pull request
+fails the watch.
+`scripts/tests/test-npm-audit-retry.sh` and
+`scripts/tests/test_npm_audit_retry.py` pin that split, including that a real
+advisory fails whenever the graph moves or the mode value is not exactly
+`false`, that an inherited advisory warns and is still named, that an
+unparseable or unrecognised report is never read as
 clean, and that neither a hung attempt nor an exhausted budget can outlive
 its bound. `frontend-modern/src/security/__tests__/dependencySecurity.test.ts`
 pins the known safe floors for advisories remediated by commit `6ba85a185`,
