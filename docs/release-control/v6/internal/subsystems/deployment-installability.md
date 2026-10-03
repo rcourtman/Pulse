@@ -15,6 +15,36 @@
 
 ## Purpose
 
+### Demo transactions share the service host, not just a workflow queue
+
+Stable demo update and recovery keep their existing publication/activation,
+exact-tag installer signing key, Tailscale, pinned SSH and environment boundaries.
+The mutating paths now share the Relay host's existing
+`/var/lib/pulse-deploy/relay/deploy.lock` and one retained systemd transaction.
+Every successful path, including a healthy no-op, needs a complete 300-second
+local/public/Relay health, version, service PID/restart and new-journal-crash
+window. Readiness is separate. Missing observations fail closed.
+
+Before installation or runtime-profile mutation, stop only Pulse and durably
+capture its executable, unit/drop-ins and entire persistent data estate. Refuse
+insufficient space rather than prune backups/databases. A failed healthy change
+restores that complete estate and observes another 300 seconds; the original
+operation still fails. An unhealthy recovery baseline is never claimed as a
+healthy rollback. Retain its original generated demo history, all snapshots and
+failed/uncertain terminal evidence privately. An unresolved estate blocks later
+mutation. No source-worker production capability, package upgrade, Relay copy
+activation or credential is added.
+
+SSH observes, but never owns or cancels, the systemd child. Durable intent
+precedes submission; the exact request identity is not replayed after a lost
+response. Forward cancellation initiates restoration; recovery ignores
+TERM/INT/HUP until its watch and terminal receipt are retained. Child, stop,
+observer and workflow deadlines cover both full windows. A later browser or
+network check must not stop a committed or unrelated service in another SSH
+session. These connected source controls do not establish native systemd,
+signed installed forward/reverse acceptance, ingress enforcement or customer
+recovery. See [demo transaction acceptance](../DEMO_RUNTIME_TRANSACTION.md).
+
 ### Superseded pull request validation
 
 Build and Test and Core E2E cancel an older run for the same pull request when
@@ -732,6 +762,8 @@ release-latency optimization.
 23. `.github/workflows/update-demo-server.yml`
 23a. `.github/workflows/recover-demo-server.yml`
 23b. `.github/scripts/recover-demo-runtime.sh`
+23c. `.github/scripts/demo-runtime-transaction.py`
+23d. `.github/scripts/dispatch-demo-runtime.py`
 23c. `.github/scripts/resolve-demo-runtime-profile.sh`
 24. `.github/workflows/validate-release-assets.yml`
 25. `.github/workflows/install-sh-smoke.yml`
