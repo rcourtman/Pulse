@@ -23,6 +23,18 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Backup server counts retain their inventory availability
+
+The existing PBS server/datastore row takes backup-inventory read availability
+separately from the current canonical resource's health, capacity and identity.
+A pending or failed PBS read renders loading/unavailable count text, not zero
+backups on an otherwise healthy server. Only a fulfilled inventory establishes
+its observed count. Independently readable resources and the existing correlated
+drawer target are unchanged. `ProxmoxBackupsTable.test.tsx` covers the combined
+count lifecycle; `browser-tests/backup-inventory.cjs` verifies production rows
+and source notices on desktop/phone. This changes no resource identity, native
+provider assessment or permission policy.
+
 ### Guest disk freshness presentation
 
 Existing workload disk evidence retains its source reason through the row,
