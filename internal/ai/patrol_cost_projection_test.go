@@ -231,3 +231,33 @@ func TestBlockOnExhaustedBudget_SetsPatrolBlockedState(t *testing.T) {
 		t.Fatalf("non-budget failures must not block, got %q", other.lastBlockedCause)
 	}
 }
+
+func TestProjectPatrolCost_HistoryCarriesPromptCacheBuckets(t *testing.T) {
+	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
+	runs := []PatrolRunRecord{
+		{StartedAt: now.Add(-6 * time.Hour), TriggerReason: string(TriggerReasonScheduled), InputTokens: 10_000, OutputTokens: 4_000, CacheCreationInputTokens: 20_000, CacheReadInputTokens: 100_000},
+		{StartedAt: now.Add(-12 * time.Hour), TriggerReason: string(TriggerReasonScheduled), InputTokens: 12_000, OutputTokens: 4_000, CacheCreationInputTokens: 22_000, CacheReadInputTokens: 110_000},
+		{StartedAt: now.Add(-18 * time.Hour), TriggerReason: string(TriggerReasonScheduled), InputTokens: 14_000, OutputTokens: 4_000, CacheCreationInputTokens: 24_000, CacheReadInputTokens: 120_000},
+	}
+	got := ProjectPatrolCost(PatrolCostProjectionInput{
+		Provider:        "anthropic",
+		Model:           "claude-sonnet-5",
+		IntervalMinutes: 360,
+		BudgetUSD30d:    20,
+		Runs:            runs,
+		Now:             now,
+	})
+	if got.PerRunSource != PatrolCostPerRunSourceHistory || got.HistoryRunCount != 3 {
+		t.Fatalf("expected history-based estimate, got %+v", got)
+	}
+	if got.PerRunInputTokens != 12_000 || got.PerRunCacheCreationInputTokens != 22_000 || got.PerRunCacheReadInputTokens != 110_000 {
+		t.Fatalf("expected median cache buckets, got in=%d creation=%d read=%d", got.PerRunInputTokens, got.PerRunCacheCreationInputTokens, got.PerRunCacheReadInputTokens)
+	}
+	if got.CacheWriteUSDPerMTok != 2.5 || got.CacheReadUSDPerMTok != 0.2 {
+		t.Fatalf("expected Anthropic cache rates on the projection, got %+v", got)
+	}
+	// 0.012M*2.00 + 0.004M*10.00 + 0.022M*2.50 + 0.11M*0.20 = 0.141 per run.
+	if got.PerRunUSD < 0.140 || got.PerRunUSD > 0.142 {
+		t.Fatalf("per-run cost %.4f should price cache reads at a tenth of input", got.PerRunUSD)
+	}
+}

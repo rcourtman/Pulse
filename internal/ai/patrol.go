@@ -162,9 +162,11 @@ type PatrolRunRecord struct {
 	TriageFlags      int  `json:"triage_flags"`                 // Number of deterministic flags found
 	TriageSkippedLLM bool `json:"triage_skipped_llm,omitempty"` // Legacy: true for older quiet-triage runs
 	// AI Analysis details
-	AIAnalysis   string `json:"ai_analysis,omitempty"`   // Display-safe AI run analysis summary
-	InputTokens  int    `json:"input_tokens,omitempty"`  // Tokens sent to AI
-	OutputTokens int    `json:"output_tokens,omitempty"` // Tokens received from AI
+	AIAnalysis               string `json:"ai_analysis,omitempty"`                 // Display-safe AI run analysis summary
+	InputTokens              int    `json:"input_tokens,omitempty"`                // Tokens sent to AI
+	OutputTokens             int    `json:"output_tokens,omitempty"`               // Tokens received from AI
+	CacheCreationInputTokens int    `json:"cache_creation_input_tokens,omitempty"` // Prompt-cache writes, disjoint from InputTokens
+	CacheReadInputTokens     int    `json:"cache_read_input_tokens,omitempty"`     // Prompt-cache reads, disjoint from InputTokens
 	// Tool call traces
 	ToolCalls     []ToolCallRecord `json:"tool_calls,omitempty"`
 	ToolCallCount int              `json:"tool_call_count"`
@@ -211,6 +213,8 @@ type patrolRunRecordJSON struct {
 	AIAnalysis                string                              `json:"ai_analysis,omitempty"`
 	InputTokens               int                                 `json:"input_tokens,omitempty"`
 	OutputTokens              int                                 `json:"output_tokens,omitempty"`
+	CacheCreationInputTokens  int                                 `json:"cache_creation_input_tokens,omitempty"` // Prompt-cache writes, disjoint from InputTokens
+	CacheReadInputTokens      int                                 `json:"cache_read_input_tokens,omitempty"`     // Prompt-cache reads, disjoint from InputTokens
 	ToolCalls                 []ToolCallRecord                    `json:"tool_calls,omitempty"`
 	ToolCallCount             int                                 `json:"tool_call_count"`
 }
@@ -343,6 +347,8 @@ func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
 		AIAnalysis:                normalized.AIAnalysis,
 		InputTokens:               normalized.InputTokens,
 		OutputTokens:              normalized.OutputTokens,
+		CacheCreationInputTokens:  normalized.CacheCreationInputTokens,
+		CacheReadInputTokens:      normalized.CacheReadInputTokens,
 		ToolCalls:                 normalized.ToolCalls,
 		ToolCallCount:             normalized.ToolCallCount,
 	})
@@ -396,6 +402,8 @@ func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
 		AIAnalysis:                payload.AIAnalysis,
 		InputTokens:               payload.InputTokens,
 		OutputTokens:              payload.OutputTokens,
+		CacheCreationInputTokens:  payload.CacheCreationInputTokens,
+		CacheReadInputTokens:      payload.CacheReadInputTokens,
 		ToolCalls:                 payload.ToolCalls,
 		ToolCallCount:             payload.ToolCallCount,
 	})

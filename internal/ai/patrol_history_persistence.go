@@ -78,6 +78,8 @@ func (a *PatrolHistoryPersistenceAdapter) SavePatrolRunHistory(runs []PatrolRunR
 			AIAnalysis:                normalized.AIAnalysis,
 			InputTokens:               normalized.InputTokens,
 			OutputTokens:              normalized.OutputTokens,
+			CacheCreationInputTokens:  normalized.CacheCreationInputTokens,
+			CacheReadInputTokens:      normalized.CacheReadInputTokens,
 			ToolCalls:                 convertAIToolCallsToConfig(normalized.ToolCalls),
 			ToolCallCount:             normalized.ToolCallCount,
 		})
@@ -137,6 +139,8 @@ func (a *PatrolHistoryPersistenceAdapter) LoadPatrolRunHistory() ([]PatrolRunRec
 			AIAnalysis:                r.AIAnalysis,
 			InputTokens:               r.InputTokens,
 			OutputTokens:              r.OutputTokens,
+			CacheCreationInputTokens:  r.CacheCreationInputTokens,
+			CacheReadInputTokens:      r.CacheReadInputTokens,
 			ToolCalls:                 convertConfigToolCallsToAI(r.ToolCalls),
 			ToolCallCount:             r.ToolCallCount,
 		})

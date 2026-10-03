@@ -371,7 +371,9 @@ func (s *Service) recordChatTurnCost(loop *AgenticLoop, requestModel, contextSco
 	}
 	inputTokens := loop.GetTotalInputTokens()
 	outputTokens := loop.GetTotalOutputTokens()
-	if inputTokens == 0 && outputTokens == 0 {
+	cacheCreationTokens := loop.GetTotalCacheCreationTokens()
+	cacheReadTokens := loop.GetTotalCacheReadTokens()
+	if inputTokens == 0 && outputTokens == 0 && cacheCreationTokens == 0 && cacheReadTokens == 0 {
 		return
 	}
 	providerName := ""
@@ -381,15 +383,17 @@ func (s *Service) recordChatTurnCost(loop *AgenticLoop, requestModel, contextSco
 		}
 	}
 	store.Record(cost.UsageEvent{
-		Timestamp:     time.Now(),
-		Provider:      providerName,
-		RequestModel:  requestModel,
-		UseCase:       "chat",
-		ContextScope:  strings.TrimSpace(contextScope),
-		ToolCallCount: loop.GetTotalToolCalls(),
-		InputTokens:   inputTokens,
-		OutputTokens:  outputTokens,
-		SessionID:     strings.TrimSpace(sessionID),
+		Timestamp:                time.Now(),
+		Provider:                 providerName,
+		RequestModel:             requestModel,
+		UseCase:                  "chat",
+		ContextScope:             strings.TrimSpace(contextScope),
+		ToolCallCount:            loop.GetTotalToolCalls(),
+		InputTokens:              inputTokens,
+		OutputTokens:             outputTokens,
+		CacheCreationInputTokens: cacheCreationTokens,
+		CacheReadInputTokens:     cacheReadTokens,
+		SessionID:                strings.TrimSpace(sessionID),
 	})
 }
 
@@ -2779,6 +2783,10 @@ type PatrolResponse struct {
 	Content      string `json:"content"`
 	InputTokens  int    `json:"input_tokens"`
 	OutputTokens int    `json:"output_tokens"`
+	// Prompt-cache buckets summed across the loop's turns; disjoint from
+	// InputTokens, see providers.ChatResponse.
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`
 }
 
 // ExecutePatrolStream creates a temporary agentic loop for patrol execution.
@@ -2924,8 +2932,10 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 			}
 		}
 		return &PatrolResponse{
-			InputTokens:  tempLoop.GetTotalInputTokens(),
-			OutputTokens: tempLoop.GetTotalOutputTokens(),
+			InputTokens:              tempLoop.GetTotalInputTokens(),
+			OutputTokens:             tempLoop.GetTotalOutputTokens(),
+			CacheCreationInputTokens: tempLoop.GetTotalCacheCreationTokens(),
+			CacheReadInputTokens:     tempLoop.GetTotalCacheReadTokens(),
 		}, err
 	}
 
@@ -2971,9 +2981,11 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 	callback(StreamEvent{Type: "done", Data: doneData})
 
 	return &PatrolResponse{
-		Content:      contentBuilder.String(),
-		InputTokens:  tempLoop.GetTotalInputTokens(),
-		OutputTokens: tempLoop.GetTotalOutputTokens(),
+		Content:                  contentBuilder.String(),
+		InputTokens:              tempLoop.GetTotalInputTokens(),
+		OutputTokens:             tempLoop.GetTotalOutputTokens(),
+		CacheCreationInputTokens: tempLoop.GetTotalCacheCreationTokens(),
+		CacheReadInputTokens:     tempLoop.GetTotalCacheReadTokens(),
 	}, nil
 }
 

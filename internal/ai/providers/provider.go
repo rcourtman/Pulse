@@ -146,6 +146,12 @@ type ChatResponse struct {
 	ToolCalls        []ToolCall `json:"tool_calls"`            // Tool invocations
 	InputTokens      int        `json:"input_tokens,omitempty"`
 	OutputTokens     int        `json:"output_tokens,omitempty"`
+	// CacheCreationInputTokens and CacheReadInputTokens are the prompt-cache
+	// buckets a provider reports beside InputTokens (Anthropic). InputTokens
+	// stays the provider's ordinary, uncached input count, so the three never
+	// overlap; the cost ledger prices each bucket at its own rate.
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`
 }
 
 func (r ChatResponse) NormalizeCollections() ChatResponse {
@@ -273,6 +279,9 @@ type DoneEvent struct {
 	ToolCalls    []ToolCall `json:"tool_calls"`
 	InputTokens  int        `json:"input_tokens,omitempty"`
 	OutputTokens int        `json:"output_tokens,omitempty"`
+	// Prompt-cache buckets, disjoint from InputTokens; see ChatResponse.
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`
 }
 
 func (e DoneEvent) NormalizeCollections() DoneEvent {

@@ -21,12 +21,26 @@ type UsageEvent struct {
 	ToolCallCount int       `json:"tool_call_count,omitempty"`
 	InputTokens   int       `json:"input_tokens,omitempty"`
 	OutputTokens  int       `json:"output_tokens,omitempty"`
-	TargetType    string    `json:"target_type,omitempty"`
-	TargetID      string    `json:"target_id,omitempty"`
-	FindingID     string    `json:"finding_id,omitempty"`
+	// CacheCreationInputTokens and CacheReadInputTokens are prompt-cache
+	// buckets reported beside InputTokens (Anthropic); they never overlap it.
+	CacheCreationInputTokens int    `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     int    `json:"cache_read_input_tokens,omitempty"`
+	TargetType               string `json:"target_type,omitempty"`
+	TargetID                 string `json:"target_id,omitempty"`
+	FindingID                string `json:"finding_id,omitempty"`
 	// SessionID ties chat-session spend (turns, compaction, title calls)
 	// together so per-session cost can be summed for the drawer footer.
 	SessionID string `json:"session_id,omitempty"`
+}
+
+// TokenUsage returns the event's counts by billing bucket.
+func (e UsageEvent) TokenUsage() TokenUsage {
+	return TokenUsage{
+		InputTokens:              int64(e.InputTokens),
+		OutputTokens:             int64(e.OutputTokens),
+		CacheCreationInputTokens: int64(e.CacheCreationInputTokens),
+		CacheReadInputTokens:     int64(e.CacheReadInputTokens),
+	}
 }
 
 // Persistence defines the storage contract for usage history.
@@ -151,7 +165,7 @@ func (s *Store) SessionCostUSD(sessionID string) (usd float64, known bool) {
 		}
 		matched = true
 		provider, model := ResolveProviderAndModel(e.Provider, e.RequestModel, e.ResponseModel)
-		eventUSD, eventKnown, _ := EstimateUSD(provider, model, int64(e.InputTokens), int64(e.OutputTokens))
+		eventUSD, eventKnown, _ := EstimateUsageUSD(provider, model, e.TokenUsage())
 		if !eventKnown {
 			return 0, false
 		}
@@ -231,7 +245,7 @@ func (s *Store) GetSummary(days int) Summary {
 	pmTotals := make(map[pmKey]*ProviderModelSummary)
 	dailyTotals := make(map[string]*DailySummary)
 
-	var totalInput, totalOutput int64
+	var totalInput, totalOutput, totalCacheCreation, totalCacheRead int64
 
 	for _, e := range events {
 		provider, model := ResolveProviderAndModel(e.Provider, e.RequestModel, e.ResponseModel)
@@ -244,11 +258,15 @@ func (s *Store) GetSummary(days int) Summary {
 		}
 		pm.InputTokens += int64(e.InputTokens)
 		pm.OutputTokens += int64(e.OutputTokens)
+		pm.CacheCreationInputTokens += int64(e.CacheCreationInputTokens)
+		pm.CacheReadInputTokens += int64(e.CacheReadInputTokens)
 
 		totalInput += int64(e.InputTokens)
 		totalOutput += int64(e.OutputTokens)
+		totalCacheCreation += int64(e.CacheCreationInputTokens)
+		totalCacheRead += int64(e.CacheReadInputTokens)
 
-		usd, known, _ := EstimateUSD(provider, model, int64(e.InputTokens), int64(e.OutputTokens))
+		usd, known, _ := EstimateUsageUSD(provider, model, e.TokenUsage())
 		if known {
 			pm.EstimatedUSD += usd
 			pm.PricingKnown = true
@@ -262,6 +280,8 @@ func (s *Store) GetSummary(days int) Summary {
 		}
 		ds.InputTokens += int64(e.InputTokens)
 		ds.OutputTokens += int64(e.OutputTokens)
+		ds.CacheCreationInputTokens += int64(e.CacheCreationInputTokens)
+		ds.CacheReadInputTokens += int64(e.CacheReadInputTokens)
 		if known {
 			ds.EstimatedUSD += usd
 		}
@@ -269,7 +289,7 @@ func (s *Store) GetSummary(days int) Summary {
 
 	providerModels := make([]ProviderModelSummary, 0, len(pmTotals))
 	for _, pm := range pmTotals {
-		pm.TotalTokens = pm.InputTokens + pm.OutputTokens
+		pm.TotalTokens = pm.InputTokens + pm.CacheCreationInputTokens + pm.CacheReadInputTokens + pm.OutputTokens
 		providerModels = append(providerModels, *pm)
 	}
 	sort.Slice(providerModels, func(i, j int) bool {
@@ -281,7 +301,7 @@ func (s *Store) GetSummary(days int) Summary {
 
 	daily := make([]DailySummary, 0, len(dailyTotals))
 	for _, ds := range dailyTotals {
-		ds.TotalTokens = ds.InputTokens + ds.OutputTokens
+		ds.TotalTokens = ds.InputTokens + ds.CacheCreationInputTokens + ds.CacheReadInputTokens + ds.OutputTokens
 		daily = append(daily, *ds)
 	}
 	sort.Slice(daily, func(i, j int) bool {
@@ -289,10 +309,12 @@ func (s *Store) GetSummary(days int) Summary {
 	})
 
 	totals := ProviderModelSummary{
-		Provider:     "all",
-		InputTokens:  totalInput,
-		OutputTokens: totalOutput,
-		TotalTokens:  totalInput + totalOutput,
+		Provider:                 "all",
+		InputTokens:              totalInput,
+		OutputTokens:             totalOutput,
+		CacheCreationInputTokens: totalCacheCreation,
+		CacheReadInputTokens:     totalCacheRead,
+		TotalTokens:              totalInput + totalCacheCreation + totalCacheRead + totalOutput,
 	}
 
 	for _, pm := range providerModels {
@@ -415,44 +437,60 @@ func (s *Store) GetPersistenceStatus() (lastError error, lastSaveTime time.Time,
 
 // ProviderModelSummary is a rollup for a provider/model pair.
 type ProviderModelSummary struct {
-	Provider     string  `json:"provider"`
-	Model        string  `json:"model"`
-	InputTokens  int64   `json:"input_tokens"`
-	OutputTokens int64   `json:"output_tokens"`
-	TotalTokens  int64   `json:"total_tokens"`
-	EstimatedUSD float64 `json:"estimated_usd,omitempty"`
-	PricingKnown bool    `json:"pricing_known"`
+	Provider     string `json:"provider"`
+	Model        string `json:"model"`
+	InputTokens  int64  `json:"input_tokens"`
+	OutputTokens int64  `json:"output_tokens"`
+	// Prompt-cache buckets, disjoint from InputTokens; TotalTokens counts
+	// every token in and out, cached or not.
+	CacheCreationInputTokens int64   `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     int64   `json:"cache_read_input_tokens,omitempty"`
+	TotalTokens              int64   `json:"total_tokens"`
+	EstimatedUSD             float64 `json:"estimated_usd,omitempty"`
+	PricingKnown             bool    `json:"pricing_known"`
 }
 
 // DailySummary is a rollup for a single day across all providers.
 type DailySummary struct {
-	Date         string  `json:"date"`
-	InputTokens  int64   `json:"input_tokens"`
-	OutputTokens int64   `json:"output_tokens"`
-	TotalTokens  int64   `json:"total_tokens"`
-	EstimatedUSD float64 `json:"estimated_usd,omitempty"`
+	Date         string `json:"date"`
+	InputTokens  int64  `json:"input_tokens"`
+	OutputTokens int64  `json:"output_tokens"`
+	// Prompt-cache buckets, disjoint from InputTokens; TotalTokens counts
+	// every token in and out, cached or not.
+	CacheCreationInputTokens int64   `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     int64   `json:"cache_read_input_tokens,omitempty"`
+	TotalTokens              int64   `json:"total_tokens"`
+	EstimatedUSD             float64 `json:"estimated_usd,omitempty"`
 }
 
 // UseCaseSummary is a rollup for a use-case (e.g. "chat", "patrol").
 type UseCaseSummary struct {
-	UseCase      string  `json:"use_case"`
-	InputTokens  int64   `json:"input_tokens"`
-	OutputTokens int64   `json:"output_tokens"`
-	TotalTokens  int64   `json:"total_tokens"`
-	EstimatedUSD float64 `json:"estimated_usd,omitempty"`
-	PricingKnown bool    `json:"pricing_known"`
+	UseCase      string `json:"use_case"`
+	InputTokens  int64  `json:"input_tokens"`
+	OutputTokens int64  `json:"output_tokens"`
+	// Prompt-cache buckets, disjoint from InputTokens; TotalTokens counts
+	// every token in and out, cached or not.
+	CacheCreationInputTokens int64   `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     int64   `json:"cache_read_input_tokens,omitempty"`
+	TotalTokens              int64   `json:"total_tokens"`
+	EstimatedUSD             float64 `json:"estimated_usd,omitempty"`
+	PricingKnown             bool    `json:"pricing_known"`
 }
 
 // TargetSummary is a rollup for a Pulse target (e.g. vm/container/node).
 type TargetSummary struct {
-	TargetType   string  `json:"target_type"`
-	TargetID     string  `json:"target_id"`
-	Calls        int64   `json:"calls"`
-	InputTokens  int64   `json:"input_tokens"`
-	OutputTokens int64   `json:"output_tokens"`
-	TotalTokens  int64   `json:"total_tokens"`
-	EstimatedUSD float64 `json:"estimated_usd,omitempty"`
-	PricingKnown bool    `json:"pricing_known"`
+	TargetType   string `json:"target_type"`
+	TargetID     string `json:"target_id"`
+	Calls        int64  `json:"calls"`
+	InputTokens  int64  `json:"input_tokens"`
+	OutputTokens int64  `json:"output_tokens"`
+	// Prompt-cache buckets, disjoint from InputTokens; TotalTokens counts
+	// every token in and out, cached or not.
+	CacheCreationInputTokens int64   `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     int64   `json:"cache_read_input_tokens,omitempty"`
+	TotalTokens              int64   `json:"total_tokens"`
+	EstimatedUSD             float64 `json:"estimated_usd,omitempty"`
+	PricingKnown             bool    `json:"pricing_known"`
 }
 
 // Summary is returned by the cost summary API.
@@ -473,10 +511,12 @@ type Summary struct {
 
 func summarizeUseCases(events []UsageEvent) []UseCaseSummary {
 	type totals struct {
-		input  int64
-		output int64
-		usd    float64
-		known  bool
+		input         int64
+		output        int64
+		cacheCreation int64
+		cacheRead     int64
+		usd           float64
+		known         bool
 	}
 
 	perUseCase := make(map[string]*totals)
@@ -493,10 +533,12 @@ func summarizeUseCases(events []UsageEvent) []UseCaseSummary {
 
 		t.input += int64(e.InputTokens)
 		t.output += int64(e.OutputTokens)
+		t.cacheCreation += int64(e.CacheCreationInputTokens)
+		t.cacheRead += int64(e.CacheReadInputTokens)
 
 		provider, model := ResolveProviderAndModel(e.Provider, e.RequestModel, e.ResponseModel)
 
-		usd, known, _ := EstimateUSD(provider, model, int64(e.InputTokens), int64(e.OutputTokens))
+		usd, known, _ := EstimateUsageUSD(provider, model, e.TokenUsage())
 		if known {
 			t.usd += usd
 			t.known = true
@@ -506,12 +548,14 @@ func summarizeUseCases(events []UsageEvent) []UseCaseSummary {
 	out := make([]UseCaseSummary, 0, len(perUseCase))
 	for useCase, t := range perUseCase {
 		out = append(out, UseCaseSummary{
-			UseCase:      useCase,
-			InputTokens:  t.input,
-			OutputTokens: t.output,
-			TotalTokens:  t.input + t.output,
-			EstimatedUSD: t.usd,
-			PricingKnown: t.known,
+			UseCase:                  useCase,
+			InputTokens:              t.input,
+			OutputTokens:             t.output,
+			CacheCreationInputTokens: t.cacheCreation,
+			CacheReadInputTokens:     t.cacheRead,
+			TotalTokens:              t.input + t.cacheCreation + t.cacheRead + t.output,
+			EstimatedUSD:             t.usd,
+			PricingKnown:             t.known,
 		})
 	}
 
@@ -540,11 +584,13 @@ func summarizeTargets(events []UsageEvent) []TargetSummary {
 		targetID   string
 	}
 	type totals struct {
-		calls  int64
-		input  int64
-		output int64
-		usd    float64
-		known  bool
+		calls         int64
+		input         int64
+		output        int64
+		cacheCreation int64
+		cacheRead     int64
+		usd           float64
+		known         bool
 	}
 
 	perTarget := make(map[key]*totals)
@@ -563,9 +609,11 @@ func summarizeTargets(events []UsageEvent) []TargetSummary {
 		t.calls++
 		t.input += int64(e.InputTokens)
 		t.output += int64(e.OutputTokens)
+		t.cacheCreation += int64(e.CacheCreationInputTokens)
+		t.cacheRead += int64(e.CacheReadInputTokens)
 
 		provider, model := ResolveProviderAndModel(e.Provider, e.RequestModel, e.ResponseModel)
-		usd, known, _ := EstimateUSD(provider, model, int64(e.InputTokens), int64(e.OutputTokens))
+		usd, known, _ := EstimateUsageUSD(provider, model, e.TokenUsage())
 		if known {
 			t.usd += usd
 			t.known = true
@@ -575,14 +623,16 @@ func summarizeTargets(events []UsageEvent) []TargetSummary {
 	out := make([]TargetSummary, 0, len(perTarget))
 	for k, t := range perTarget {
 		out = append(out, TargetSummary{
-			TargetType:   k.targetType,
-			TargetID:     k.targetID,
-			Calls:        t.calls,
-			InputTokens:  t.input,
-			OutputTokens: t.output,
-			TotalTokens:  t.input + t.output,
-			EstimatedUSD: t.usd,
-			PricingKnown: t.known,
+			TargetType:               k.targetType,
+			TargetID:                 k.targetID,
+			Calls:                    t.calls,
+			InputTokens:              t.input,
+			OutputTokens:             t.output,
+			CacheCreationInputTokens: t.cacheCreation,
+			CacheReadInputTokens:     t.cacheRead,
+			TotalTokens:              t.input + t.cacheCreation + t.cacheRead + t.output,
+			EstimatedUSD:             t.usd,
+			PricingKnown:             t.known,
 		})
 	}
 

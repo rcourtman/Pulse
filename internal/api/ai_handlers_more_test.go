@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -717,5 +718,76 @@ func TestBuildPatrolDigestReportsAvailability(t *testing.T) {
 	setUnexportedField(t, handler.defaultAIService, "patrolService", patrol)
 	if _, available := handler.BuildPatrolDigest(context.Background(), 45); !available {
 		t.Fatal("digest must report available once a Patrol service exists")
+	}
+}
+
+// Pulse #2350: the usage export must carry the prompt-cache buckets and price
+// them at the provider's cache rates, in both formats.
+func TestHandleExportAICostHistoryCarriesPromptCacheBuckets(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+	store := handler.defaultAIService.CostStore()
+	if store == nil {
+		t.Fatal("expected the AI service to own a cost store")
+	}
+	store.Record(cost.UsageEvent{
+		Timestamp:                time.Now(),
+		Provider:                 "anthropic",
+		RequestModel:             "anthropic:claude-sonnet-5",
+		UseCase:                  "patrol",
+		InputTokens:              100_000,
+		OutputTokens:             10_000,
+		CacheCreationInputTokens: 200_000,
+		CacheReadInputTokens:     1_000_000,
+	})
+	// 0.1M*2.00 + 0.01M*10.00 + 0.2M*2.50 + 1.0M*0.20 at Anthropic cache rates.
+	const wantUSD = 1.0
+
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/cost/export?days=7&format=json", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleExportAICostHistory(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("json export status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var exported struct {
+		Events []struct {
+			cost.UsageEvent
+			EstimatedUSD float64 `json:"estimated_usd"`
+			PricingKnown bool    `json:"pricing_known"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &exported); err != nil {
+		t.Fatalf("decode json export: %v", err)
+	}
+	if len(exported.Events) != 1 {
+		t.Fatalf("expected one exported event, got %d", len(exported.Events))
+	}
+	got := exported.Events[0]
+	if got.CacheCreationInputTokens != 200_000 || got.CacheReadInputTokens != 1_000_000 || got.InputTokens != 100_000 {
+		t.Fatalf("json export lost cache buckets: %+v", got.UsageEvent)
+	}
+	if !got.PricingKnown || got.EstimatedUSD < wantUSD-1e-6 || got.EstimatedUSD > wantUSD+1e-6 {
+		t.Fatalf("json export estimated_usd = %f (known=%v), want %f", got.EstimatedUSD, got.PricingKnown, wantUSD)
+	}
+
+	req = newLoopbackRequest(http.MethodGet, "/api/ai/cost/export?days=7&format=csv", nil)
+	rec = httptest.NewRecorder()
+	handler.HandleExportAICostHistory(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("csv export status = %d: %s", rec.Code, rec.Body.String())
+	}
+	lines := strings.Split(strings.TrimSpace(rec.Body.String()), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected header and one row, got %d lines: %q", len(lines), rec.Body.String())
+	}
+	if !strings.Contains(lines[0], "input_tokens,output_tokens,cache_creation_input_tokens,cache_read_input_tokens,estimated_usd,") {
+		t.Fatalf("csv header missing cache columns after output_tokens: %s", lines[0])
+	}
+	if !strings.Contains(lines[1], ",100000,10000,200000,1000000,1.000000,true,") {
+		t.Fatalf("csv row missing cache buckets or cache-rate pricing: %s", lines[1])
 	}
 }

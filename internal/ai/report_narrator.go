@@ -225,15 +225,17 @@ func (s *Service) Narrate(ctx context.Context, in reporting.NarrativeInput) (rep
 			providerName = provider.Name()
 		}
 		costStore.Record(cost.UsageEvent{
-			Timestamp:     time.Now(),
-			Provider:      providerName,
-			RequestModel:  model,
-			ResponseModel: resp.Model,
-			UseCase:       reportNarratorUseCase,
-			InputTokens:   resp.InputTokens,
-			OutputTokens:  resp.OutputTokens,
-			TargetType:    in.ResourceType,
-			TargetID:      in.ResourceID,
+			Timestamp:                time.Now(),
+			Provider:                 providerName,
+			RequestModel:             model,
+			ResponseModel:            resp.Model,
+			UseCase:                  reportNarratorUseCase,
+			InputTokens:              resp.InputTokens,
+			OutputTokens:             resp.OutputTokens,
+			CacheCreationInputTokens: resp.CacheCreationInputTokens,
+			CacheReadInputTokens:     resp.CacheReadInputTokens,
+			TargetType:               in.ResourceType,
+			TargetID:                 in.ResourceID,
 		})
 	}
 

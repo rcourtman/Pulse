@@ -6334,3 +6334,12 @@ metrics target, health threshold, persistence or recovery authority changes.
 cover repeated paths/groups, direct children, scoped legacy snapshots, missing
 ownership and live target replacement. Synthetic presentation proof does not
 establish native appliance, installation or recovery acceptance.
+
+### Prompt-cache usage buckets open no storage or recovery path
+
+The AI usage ledger and Patrol run records gain two optional integer fields
+(`cache_creation_input_tokens`, `cache_read_input_tokens`) in the files
+Pulse already writes, with `omitempty` encoding so existing records load
+unchanged and older builds ignore the fields. `internal/api/ai_handlers.go`
+reads them for the usage export only. No new file, directory, retention
+window, backup, migration or recovery authority is introduced.
