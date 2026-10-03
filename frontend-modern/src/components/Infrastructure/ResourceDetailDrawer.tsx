@@ -219,7 +219,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             <Show when={presentation() !== 'table-row'}>
               <MaintenanceVerificationSection resourceId={props.resource.id} />
             </Show>
-            <Show when={drawer.actionAuditAvailable()}>
+            <Show when={drawer.actionAuditAvailable() || drawer.actionAuditError()}>
               <ResourceActionHistory
                 audits={drawer.sortedActionAudits()}
                 count={drawer.actionAuditCount()}

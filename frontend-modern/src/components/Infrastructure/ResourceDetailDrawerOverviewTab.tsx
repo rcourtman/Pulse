@@ -526,7 +526,10 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             </Show>
 
             <Show when={drawer.facetBundleError()}>
-              <div class="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-700 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
+              <div
+                role="alert"
+                class="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-700 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200"
+              >
                 <div class="flex items-start justify-between gap-2">
                   <span>{drawer.facetBundleError()}</span>
                   <button
@@ -543,9 +546,11 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             <Show
               when={drawer.sortedResourceTimeline().length > 0}
               fallback={
-                <div class="mt-3 rounded border border-dashed border-border bg-surface-hover px-2 py-2 text-[10px] text-muted">
-                  No events yet.
-                </div>
+                <Show when={!drawer.facetBundleError()}>
+                  <div class="mt-3 rounded border border-dashed border-border bg-surface-hover px-2 py-2 text-[10px] text-muted">
+                    No events yet.
+                  </div>
+                </Show>
               }
             >
               <div class="mt-3 space-y-2">
